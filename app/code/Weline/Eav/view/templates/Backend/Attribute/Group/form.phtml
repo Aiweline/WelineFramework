@@ -1,0 +1,172 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='page-content'>
+        <div class='container-fluid'>
+            <!-- start page message -->
+            <div class='row'>
+                <template>Weline_Component::message.phtml</template>
+            </div> <!-- end message -->
+            <div class='row'>
+                <div class='col-12'>
+                    <div class='card'>
+                        <div class='card-body'>
+                            <h4 class='card-title'>
+                                <lang>属性组</lang>
+                                <notempty name='group'>编辑
+                                    <else/>
+                                    添加
+                                </notempty>
+                            </h4>
+                            <p class='card-title-desc'>
+                                <lang>属性组表单</lang>
+                            </p>
+                            <p class='card-title-desc'>
+                                <lang>属性组信息编辑。</lang>
+                            </p>
+                            <form class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                                <!--基础信息-->
+                                <div class='row'>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationName'>
+                                                <lang>组名</lang>
+                                            </label>
+                                            <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
+                                                   id='validationName' placeholder='@lang{组名}'
+                                                   value='{{group.name}}' name='name'
+                                                   required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationCode'>
+                                                <lang>组代码</lang>
+                                            </label>
+                                            <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
+                                                   id='validationCode' placeholder='@lang{组代码}'
+                                                   value='{{group.code}}' name='code'
+                                                   required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationEntity'>
+                                                <lang>实体</lang>
+                                            </label>
+                                            <select type='text' class='form-control' name='entity_id' data-parsley-minlength='3'
+                                                    id='validationEntity'
+                                                    required=''>
+                                                <foreach name='entities'>
+                                                    <option value='{{v.entity_id}}' @if{group.entity_id== v.entity_id=> 'selected'}>{{v.name}}</option>
+                                                </foreach>
+                                            </select>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationSet'>
+                                                <lang>属性集</lang>
+                                            </label>
+                                            <select type='text' class='form-control' name='set_id' data-parsley-minlength='3'
+                                                    id='validationSet'
+                                                    required='required' data-selected='{{group.set_id}}'>
+                                                <if condition="group_set">
+                                                    <option value="{{group_set.set_id}}" selected>{{group_set.name}}</option>
+                                                </if>
+                                            </select>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class='btn btn-primary' type='submit'>
+                                    <empty
+                                        name='group'>
+                                        <lang>添加</lang>
+                                        <else/>
+                                        <lang>编辑</lang>
+                                    </empty>
+                                </button>
+                                <notempty name='group'>
+                                    <a class='btn btn-info' href="@backend-url('*/backend/attribute/group/add')">
+                                        <lang>继续新增</lang>
+                                    </a>
+                                </notempty>
+                            </form>
+                        </div>
+                    </div>
+                </div> <!-- end col -->
+            </div> <!-- end row -->
+        </div> <!-- container-fluid -->
+    </div>
+    <!-- end main content-->
+</div>
+<!-- END layout-wrapper -->
+<script>
+    let validationEntity = $('#validationEntity')
+    validationEntity.change(function () {
+        let selectedOption = $(this).find(':selected').val();
+        renderAttributeSet(selectedOption)
+    });
+    // 初始化
+    let initSelected = validationEntity.find(':selected').val()
+    let validationSet = $('#validationSet')
+    if(!validationSet.find(':selected').val()){
+        renderAttributeSet(initSelected)
+    }
+
+    function renderAttributeSet(entity_id) {
+        $.get("@backend-url('*/backend/attribute/set/api-search')?entity_id=" + entity_id).then((res) => {
+            let items = res['items']
+            validationSet.empty()
+            for (const itemsKey in items) {
+                let item = items[itemsKey]
+                let selected = '';
+                if (validationSet.attr('data-selected') === item.set_id) {
+                    selected = 'selected';
+                }
+                validationSet.append("<option value='" + item.set_id + "' " + selected + ">" + window.lang(item.name) + "</option>")
+            }
+        })
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+{
+  "name": "aiweline/weline-framework",
+  "description": "微蓝WelineFramework框架！",
+  "homepage": "https://gitee.com/aiweline/WelineFramework",
+  "keywords": [
+    "weline",
+    "WelineFramework",
+    "framework",
+    "web",
+    "ORM",
+    "app",
+    "php",
+    "php8"
+  ],
+  "type": "project",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "秋枫雁飞",
+      "email": "aiweline@qq.com",
+      "homepage": "https://gitee.com/aiweline"
+    }
+  ],
+  "require": {
+    "php": "^8.1",
+    "ext-iconv": "*",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "ext-exif": "*",
+    "ext-fileinfo": "*",
+    "ext-simplexml": "*",
+    "ext-dom": "*",
+    "ext-libxml": "*",
+    "ext-zip": "*",
+    "ext-gd": "*",
+    "phpunit/phpunit": "^9.5.6",
+    "symfony/intl": "^5.2",
+    "symfony/polyfill-intl-icu": "^1.23",
+    "jdorn/sql-formatter": "^1.2",
+    "wikimedia/less.php": "^3.1",
+    "mrclay/jsmin-php": "^2.4",
+    "guzzlehttp/guzzle": "^7.4",
+    "friendsofphp/php-cs-fixer": "^3.8",
+    "rinvex/countries": "^8.1",
+    "studio-42/elfinder": "*",
+    "weline/module-theme-fancy": "*",
+    "weline/module-backend": "*",
+    "weline/module-admin": "*",
+    "weline/module-acl": "*",
+    "weline/module-cron": "*",
+    "weline/module-i18n": "*",
+    "weline/module-url-manager": "*",
+    "weline/module-frontend": "*",
+    "weline/module-indexer": "*",
+    "weline/module-system-config": "*",
+    "weline/module-warm-cache": "*",
+    "weline/module-installer": "*",
+    "weline/module-module-router": "*",
+    "weline/module-module-manager": "*",
+    "weline/module-maintenance": "*",
+    "weline/module-developer-workspace": "*",
+    "weline/module-cache-manager": "*",
+    "weline/module-component": "*",
+    "weline/module-smtp": "*",
+    "weline/module-theme": "*",
+    "weline/framework": "*",
+    "weline/module-backend-theme-upzet": "*",
+    "weline/module-taglib": "*",
+    "weline/module-queue": "*",
+    "weline/module-file-manager": "*",
+    "weline/module-el-finder-file-manager": "*",
+    "weline/module-media-manager": "*"
+  },
+  "opcache-autoloader": true,
+  "apcu-autoloader": true,
+  "optimize-autoloader": true,
+  "classmap-authoritative": true,
+  "autoload": {
+    "psr-4": {
+      "Weline\\": [
+        "app/code/Weline/",
+        "vendor/weline/"
+      ],
+      "Weline\\Framework\\": [
+        "vendor/weline/framework",
+        "app/code/Weline/Framework"
+      ],
+      "": [
+        "app/code/",
+        "generated/code/"
+      ]
+    },
+    "psr-0": {
+      "": [
+        "app/code/",
+        "generated/code/"
+      ]
+    },
+    "classmap": [
+      "app/code/",
+      "extend/",
+      "generated/code/"
+    ]
+  },
+  "require-dev": {
+    "symfony/var-dumper": "^6.1"
+  },
+  "repositories": {
+    "packagist": {
+      "type": "composer",
+      "url": "https://packagist.org"
+    }
+  }
+}

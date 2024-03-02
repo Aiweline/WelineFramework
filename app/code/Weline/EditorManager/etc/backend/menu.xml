@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Weline_EditorManager::main" name="editor_manager_main" title="编辑器管理器" action=""
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-content-save-edit"
+         order="1"/>
+</menus>

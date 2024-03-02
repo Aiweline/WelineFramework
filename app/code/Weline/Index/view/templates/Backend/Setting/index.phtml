@@ -1,0 +1,230 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('网站设置') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0">
+                                <lang>网站应用</lang>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);">
+                                            <lang>系统</lang>
+                                        </a></li>
+                                    <li class="breadcrumb-item active">
+                                        <lang>网站应用</lang>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="cart-title">
+                                <div class="card-title-desc">
+                                    <div class='row'>
+                                        <div class='col-12 d-flex gap-4 card-body'>
+                                            <div class="btn-group border-1 border-cyan">
+                                                <a class="gap-4 btn btn-default @if{req.position=='header'=>'text-info'}"
+                                                   href="@backend-url('*/backend/setting')?position=header&search={{req.search}}">
+                                                    <lang>头部</lang>
+                                                </a>
+                                            </div>
+                                            <div class="btn-group border-1 border-cyan">
+                                                <a class="gap-4 btn btn-default @if{req.position=='footer'=>'text-info'}"
+                                                   href="@backend-url('*/backend/setting')?position=footer&search={{req.search}}">
+                                                    <lang>底部</lang>
+                                                </a>
+                                            </div>
+                                            <div class="btn-group border-1 border-cyan">
+                                                <a class="gap-4 btn btn-default @if{req.position=='global'=>'text-info'}"
+                                                   href="@backend-url('*/backend/setting')?position=global&search={{req.search}}">
+                                                    <lang>全局</lang>
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <div class='col-6'>
+                                            <div class="col-md-6">
+                                                <block class='Weline\Component\Block\Form\Search' id='setting-search'
+                                                       action='*/backend/setting'
+                                                       method='get'
+                                                       keyword='search' value=''
+                                                       params='position'
+                                                       placeholder='请输入你想要查找的配置信息'></block>
+                                            </div>
+                                        </div>
+                                        <div class='col-6'>
+                                            <block class="Weline\Component\Block\OffCanvas"
+                                                   template="Weline_Component::off-canvas.phtml"
+                                                   title="新增配置对"
+                                                   cache="0"
+                                                   id="setting_add"
+                                                   action="*/backend/setting/add"
+                                                   target-tag="a"
+                                                   icon="mdi mdi-plus"
+                                                   submit-button-text="保存"
+                                                   submit-button-class="btn btn-primary"
+                                                   target-button-text="新增配置对"
+                                                   target-button-class="btn btn-primary"
+                                                   flush-button-text="刷新"
+                                                   flush-button-class="btn btn -default"
+                                                   flush="1"
+                                                   save="1"
+                                                   save-form="#setting-add-form"
+                                                   close-button-show="1"
+                                                   close-button-text="取消"
+                                                   direction="right"
+                                                   class-names="w-75"
+                                                   off-canvas-body-style=""
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body row d-flex">
+                                <foreach name="settings" item="setting">
+                                    <!--一行三列 边框-->
+                                    <div class="col-3 gap-4 float-left border-1 border-primary">
+                                        <div class="card-body">
+                                            <div class="align-items-center">
+                                                <div class="flex-grow-4">
+                                                    <h3 class="card-title">{{setting.name}}</h3>
+                                                    <h5 class="card-title">{{setting.key}}</h5>
+                                                    <div class="card">
+                                                        <div class="card-text">
+                                                            {{setting.value}}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-shrink-0">
+                                                    <block class="Weline\Component\Block\OffCanvas"
+                                                           template="Weline_Component::off-canvas.phtml"
+                                                           title="编辑配置对"
+                                                           cache="0"
+                                                           id="setting_add"
+                                                           vars="setting"
+                                                           action="*/backend/setting/edit"
+                                                           action-params="{id:setting.settings_id}"
+                                                           target-tag="a"
+                                                           icon="mdi mdi-pencil"
+                                                           submit-button-text="保存"
+                                                           submit-button-class="btn btn-primary btn-sm"
+                                                           target-button-text="编辑"
+                                                           target-button-class="btn btn-primary btn-sm"
+                                                           flush-button-text="刷新"
+                                                           flush-button-class="btn btn -default"
+                                                           flush="1"
+                                                           save="1"
+                                                           save-form="#setting-edit-form"
+                                                           close-button-show="1"
+                                                           close-button-text="取消"
+                                                           direction="right"
+                                                           class-names="w-75"
+                                                           off-canvas-body-style=""
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </foreach>
+                            </div>
+                        </div>
+                        <var>pagination</var>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

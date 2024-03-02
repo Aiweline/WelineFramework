@@ -1,0 +1,10 @@
+[方法]
+exec
+putenv
+symlink
+proc_opengit
+proc_get_status
+[拓展]
+ext-exif
+ext-fileinfo
+ext-xsl

@@ -1,0 +1,257 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet" />
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css' />
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>Eav > 属性组</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>系统配置</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/attribute')">
+                                            <lang>Eav</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <a href="@backend-url('*/backend/attribute')">
+                                            <lang>属性</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <a href="@backend-url('*/backend/attribute/group')">
+                                            <lang>属性组</lang>
+                                        </a>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>Eav属性组</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>Eav属性归组</lang>
+                                </p>
+                                <p class="card-title-desc">
+                                    <lang>将属性归组方便管理</lang>
+                                </p>
+                                <div class='table-rep-plugin'>
+                                    <!-- search form -->
+                                    <div class='row'>
+                                        <div class='col-6'>
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='attribute-group-search' action='*/backend/attribute/group'
+                                                   method='get' keyword='search' value='' placeholder='请输入属性组关键词回车搜素'>
+                                            </block>
+                                        </div>
+                                        <div class='col-6'>
+                                            <!--                                            <a class="btn btn-primary pull-right" href="@backend-url('*/backend/attribute/group/add')"><lang>添加</lang></a>-->
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   template='Weline_Component::off-canvas.phtml' cache='0'
+                                                   id='off_canvas_attribute_group_add'
+                                                   action='*/backend/attribute/group/add' submit-button-text='保存'
+                                                   target-button-text='添加组' target-button-class='btn btn-success'
+                                                   title='添加属性组' close-button-show='1' close-button-text='关闭'
+                                                   direction='right' class-names='w-75' off-canvas-body-style='' />
+                                        </div>
+                                    </div>
+                                    <!-- end search form -->
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='1'>
+                                                    <lang>ID</lang>
+                                                </th>
+                                                <th data-priority='4'>
+                                                    <lang>所属实体</lang>
+                                                </th>
+                                                <th data-priority='4'>
+                                                    <lang>组名</lang>
+                                                </th>
+                                                <th data-priority='2'>
+                                                    <lang>代码</lang>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <lang>所属属性集</lang>
+                                                </th>
+                                                <th data-priority='5'>
+                                                    <lang>创建时间</lang>
+                                                </th>
+                                                <th data-priority='6'>
+                                                    <lang>更新时间</lang>
+                                                </th>
+                                                <th data-priority='7'>
+                                                    <?= __('操作') ?>
+                                                </th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <foreach name="groups" item="group" key="key">
+                                                <tr>
+                                                    <td class='co-name'>{{group.group_id}}</td>
+                                                    <td class='co-name'>
+                                                        ID:{{group.entity_id|0}}-{{group.entity_local_name|group.entity_name}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        <local
+                                                                model='Weline\Eav\Model\EavAttribute\Group\LocalDescription'
+                                                                field='name' id='group.group_id' name="group-name">
+                                                            {{group.local_name|group.name}}
+                                                        </local>
+                                                    </td>
+                                                    <td class='co-name'>{{group.code}}</td>
+                                                    <td class='co-name'>
+                                                        <local
+                                                                model='Weline\Eav\Model\EavAttribute\Set\LocalDescription'
+                                                                field='name' id='group.set_id' name="set-name">
+                                                            {{group.set_local_name|group.set_name}}
+                                                        </local></td>
+                                                    <td class='co-name'>{{group.create_time}}</td>
+                                                    <td class='co-name'>{{group.update_time}}</td>
+                                                    <td class='co-name'>
+                                                        <div class="d-flex gap-2">
+                                                            <block class='Weline\Component\Block\OffCanvas'
+                                                                   template='Weline_Component::off-canvas.phtml'
+                                                                   cache='0' id='off_canvas_attribute_group_edit'
+                                                                   action='*/backend/attribute/group/edit'
+                                                                   vars='group'
+                                                                   action-params='{group_id: group.group_id}'
+                                                                   submit-button-text='保存' target-button-text='修改'
+                                                                   target-button-class='btn btn-info' title='编辑属性'
+                                                                   close-button-show='1' close-button-text='关闭'
+                                                                   direction='right' class-names='w-75'
+                                                                   off-canvas-body-style='' />
+                                                            <a class='btn btn-danger' href="@backend-url('*/backend/attribute/group/delete',
+                                                                ['id'=>$group['group_id']])">
+                                                                <lang>删除</lang>
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </foreach>
+                                            </tbody>
+                                        </table>
+                                        {{pagination}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>
+                            document.write(new Date().getFullYear())
+                        </script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+
+</html>

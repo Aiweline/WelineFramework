@@ -1,0 +1,568 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Framework\Manager\ObjectManager;
+
+$themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+    <!-- twitter-bootstrap-wizard css -->
+    <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?> class='bg-transparent'>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper overflow-hidden">
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class='card'>
+        <div class='card-body overflow-hidden'>
+            <form action="@backend-url('*/backend/attribute/edit')" class="form-horizontal bg-transparent p-tb-20">
+                <div class="row g-3 align-items-center">
+                    <div class="col-lg-4 col-md-6 col-sm-12">
+                        <!--代码-->
+                        <div class='form-group'>
+                            <label class='visually-hidden' for='code'>
+                                <lang>属性代码</lang>
+                            </label>
+                            <div class='input-group'>
+                                <div class='input-group-text'>属性代码</div>
+                                <input type='text' class='form-control' id='code' name='code' value='{{attribute.code}}' readonly>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6 col-sm-12">
+                        <!--名称-->
+                        <div class='form-group'>
+                            <label class='visually-hidden' for='name'>
+                                <lang>名称</lang>
+                            </label>
+                            <div class='input-group'>
+                                <div class='input-group-text'>名称</div>
+                                <input type='text' class='form-control' id='name' name='name' value='{{attribute.name}}'>
+                                <!--<a class='input-group-text link-info gap-1' style="cursor: pointer" data-bs-toggle='offcanvas'
+                                   data-bs-target='#offcanvasButtonAttributeNameTranslate' aria-controls='offcanvasButtonAttributeNameTranslate'><i class="ri-translate"></i>翻译</a>-->
+                                <block class='Weline\Component\Block\OffCanvas'
+                                       template='Weline_Eav::Attribute/Edit/off-canvas.phtml'
+                                       cache='300'
+                                       id='off_canvas_attribute_translate'
+                                       action='*/backend/attribute/translate'
+                                       vars='attribute'
+                                       action-params='{attribute_code: attribute.code, entity_id: attribute.entity_id}'
+                                       submit-button-text='保存'
+                                       target-button-text='修改'
+                                       title='编辑属性'
+                                       close-button-show='1'
+                                       close-button-text='关闭'
+                                       direction='right'
+                                       class-names='w-75'
+                                       off-canvas-body-style=''
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class='col-lg-4 col-md-6 col-sm-12'>
+                        <!--状态-->
+                        <div class='form-group'>
+                            <label class='visually-hidden' for='is_enable'>
+                                <lang>状态</lang>
+                            </label>
+                            <div class='input-group'>
+                                <div class='input-group-text'>状态</div>
+                                <select class='form-control' name='is_enable' id='is_enable'>
+                                    <option value='1' @if{attribute.is_enable==='1'=>'selected'}>启用</option>
+                                    <option value='0' @if{attribute.is_enable==='0'=>'selected'}>禁用</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <!--如果有配置项-->
+                    <has name="attribute.has_option">
+                        <!--选项列表/选项卡片/选项卡片列表-->
+                        <div class='form-group col-12'>
+                            <div class='row'>
+                                <div class='col-12'>
+                                    <div class='card'>
+                                        <div class='card-body'>
+                                            <div class="form-group d-flex justify-content-md-between">
+                                                <h4 class='card-title'>
+                                                    <lang>属性配置项</lang>
+                                                </h4>
+                                                <!--生成option添加按钮-->
+                                                <a id='addOption' class='text-center' data-bs-toggle='offcanvas'
+                                                   data-bs-target='#offcanvasOptionAdd' aria-controls='offcanvasOptionAdd'>
+                                                                <span class='text-info'>
+                                                                    <i class='mdi mdi-plus font-weight-500 fs-2'></i>
+                                                                </span>
+                                                </a>
+                                            </div>
+                                            <div class='table-responsive'>
+                                                <table class='table table-editable table-nowrap align-middle table-edits'>
+                                                    <thead>
+                                                    <tr>
+                                                        <th>
+                                                            <lang>属性代码</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>名称</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>更新时间</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>创建时间</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>操作</lang>
+                                                        </th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody id="attributeOptions">
+                                                    <notempty name="options">
+                                                        <foreach name="options">
+                                                            <tr data-id='{{v.code}}'>
+                                                                <td data-field='code' style='width: 80px'>{{v.code}}</td>
+                                                                <td data-field='name'>{{v.name}}</td>
+                                                                <td data-field='update_time'>{{v.update_time}}</td>
+                                                                <td data-field='create_time'>{{v.create_time}}</td>
+                                                                <td style='width: 100px'>
+                                                                    <a class='btn btn-outline-secondary btn-sm edit' title='@lang{编辑}'>
+                                                                        <i class='fas fa-pencil-alt'></i>
+                                                                    </a>
+                                                                    <a class='btn btn-outline-secondary btn-sm delete' title='@lang{删除}'>
+                                                                        <i class='mdi mdi-delete text-danger'></i>
+                                                                    </a>
+                                                                </td>
+                                                            </tr>
+                                                        </foreach>
+                                                        <else/>
+                                                        <tr>
+                                                            <td colspan='5' class='text-center'><span
+                                                                    class='help-block'><lang>暂无配置项。</lang></span>
+                                                            </td>
+                                                        </tr>
+                                                    </notempty>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div> <!-- end col -->
+                            </div> <!-- end row -->
+                        </div>
+                    </has>
+                    <!--操作按钮-->
+                    <div class='form-group'>
+                        <button type='submit' class='btn btn-primary pull-right'>
+                            <lang>保存</lang>
+                        </button>
+                        <a class='btn btn-default pull-right' href="@backend-url('*/backend/attribute')">
+                            <lang>取消</lang>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/footer.phtml)
+
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+
+<has name="attribute.has_option==1">
+    <!-- Table Editable plugin -->
+    <script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
+    <script src='@static(Weline_Eav::/js/pages/attribute-edit/table-editable.init.js)'></script>
+    <!-- 添加弹窗 -->
+    <div class='offcanvas offcanvas-bottom w-100' tabindex='-1' id='offcanvasOptionAdd'
+         aria-labelledby='offcanvasOptionAddLabel'>
+        <div class='offcanvas-header'>
+            <h5 id='offcanvasButtonAttributeNameTranslateLabel'>
+                <lang>添加配置项</lang>
+            </h5>
+            <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas'
+                    aria-label='@lang{关闭}'></button>
+        </div>
+        <div class='offcanvas-body'>
+            <!-- 使用网格系统布局 -->
+            <div class='row'>
+                <div class='col-sm-6 col-md-4 col-lg-3'>
+                    <div class='form-group required'>
+                        <label for='name' data-toggle='tooltip'
+                               title='@lang{每个配置项名称}'>
+                            <lang>配置项</lang>
+                        </label>
+                        <input type='text' class='form-control' id='name'
+                               placeholder='@lang{请输入配置项名称}' required>
+                    </div>
+                </div>
+                <div class='col-sm-6 col-md-4 col-lg-3'>
+                    <div class='form-group required'>
+                        <label for='code' data-toggle='tooltip'
+                               title='@lang{每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。}'>
+                            <lang>代码</lang>
+                        </label>
+                        <input type='text' class='form-control' id='code'
+                               placeholder='@lang{请输入代码}' required>
+                    </div>
+                </div>
+                <div class='col-sm-6 col-md-4 col-lg-3 d-flex align-items-end'>
+                    <div class='form-group'>
+                        <button type='button' class='btn btn-primary' href='' onclick='addRow(event)'>
+                            <lang>添加</lang>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            let attributeOptions = $('#attributeOptions');
+            let offcanvasOptionAdd = $('#offcanvasOptionAdd')
+            const getAllOptionCodesData = function () {
+                let data = []
+                attributeOptions.find('tr[data-id]').each(function (index, el) {
+                    data.push({
+                        code: $(el).attr('data-id'),
+                        name: $(el).find("td[data-field='name']").text(),
+                        update_time: $(el).find("td[data-field='update_time']").text(),
+                        create_time: $(el).find("td[data-field='create_time']").text()
+                    })
+                })
+                return data
+            }
+
+            function renderEditTable() {
+                let editTable = $('.table-edits tr')
+                editTable.off()
+                var pickers = {};
+                editTable.editable({
+                    edit: function (values) {
+                        $('.edit i', this)
+                            .removeClass('fa-pencil-alt')
+                            .addClass('fa-save')
+                            .attr('title', '@lang{保存}');
+                    },
+                    save: function (values) {
+                        // 直接
+                        $('.edit i', this)
+                            .removeClass('fa-save')
+                            .addClass('fa-pencil-alt')
+                            .attr('title', '@lang{编辑}');
+
+                        if (this in pickers) {
+                            pickers[this].destroy();
+                            delete pickers[this];
+                        }
+                        let dataTr = $(this)
+                        // 使用ajax将配置项保存到数据库
+                        console.log('使用ajax将配置项保存到数据库')
+                        console.log(dataTr)
+                        $.ajax({
+                            url:'@backend-url("*/backend/attribute/option/edit")',
+                            type:'POST',
+                            data: Object.assign(values,{
+                                attribute_code:'{{attribute.code}}',
+                                entity_id:'{{attribute.entity_id}}',
+                                origin_code:dataTr.attr('data-id')
+                            }),
+                            dataType: 'json',
+                            success: function (data) {
+                                if(data['code']===1){
+                                    // 提示修改成功
+                                    Swal.fire({
+                                        title: '@lang{修改提示}',
+                                        text: data['msg'],
+                                        icon:'success',
+                                        confirmButtonColor: '#3085d6',
+                                        confirmButtonText: '@lang{好的}'
+                                    })
+                                }else{
+                                    // 提示编辑失败
+                                    Swal.fire({
+                                        title: '@lang{编辑提示}',
+                                        text: data['msg'],
+                                        icon:'error',
+                                        confirmButtonColor: '#d33',
+                                        confirmButtonText: '@lang{重试}'
+                                    })
+                                }
+                            }
+                        })
+                    },
+                    cancel: function (values) {
+                        $('.edit i', this)
+                            .removeClass('fa-save')
+                            .addClass('fa-pencil-alt')
+                            .attr('title', '@lang{编辑}');
+
+                        if (this in pickers) {
+                            pickers[this].destroy();
+                            delete pickers[this];
+                        }
+                    }
+                });
+            }
+            renderEditTable()
+
+            const editRowEvent = function (event) {
+                attributeOptions.find('a.delete').off()
+                attributeOptions.find('a.delete').on('click', (e) => {
+                    let target = $(e.currentTarget)
+                    let parent = target.parent().parent()
+                    Swal.fire({
+                        title: '@lang{通知}',
+                        text: '@lang{你确定要删除这个配置项么?}',
+                        icon: 'warning',
+                        confirmButtonText: '@lang{好的}',
+                        cancelButtonText: '@lang{取消}',
+                        showCancelButton: true
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            $.ajax({
+                                url: '@backend-url("*/backend/attribute/option/delete")?isAjax=1',
+                                type: 'POST',
+                                data: {code: parent.attr('data-id'), attribute_code: '{{attribute.code}}', entity_id: '{{attribute.entity_id}}'},
+                                async: true,
+                                success: function (result) {
+                                    if (result.code === 1) {
+                                        Swal.fire({
+                                            title: '@lang{通知}',
+                                            text: result.msg,
+                                            icon: 'success',
+                                            confirmButtonText: '@lang{好的}'
+                                        })
+                                        parent.remove()
+                                    } else if (result.code === 0) {
+                                        Swal.fire({
+                                            title: '@lang{通知}',
+                                            text: result.msg,
+                                            icon: 'warning',
+                                            confirmButtonText: '@lang{好的}'
+                                        })
+                                    }
+                                }
+                            })
+                        }
+                    })
+                    renderEditTable();
+                })
+            }
+            editRowEvent()
+
+            async function addRow(event) {
+                event.preventDefault();
+                var $this = $(event.currentTarget);
+
+                // 读取输入的值
+                let code = offcanvasOptionAdd.find('#code').val();
+                // 检测是否已经存在code
+                let all_options = getAllOptionCodesData()
+                let breakFlag = false;
+                for (let all_option of all_options) {
+                    if (all_option.code === code) {
+                        await Swal.fire({
+                            title: '@lang{数据校验}',
+                            text: '@lang{填写的配置项已经存在，需要替换么！}',
+                            icon: 'warning',
+                            confirmButtonText: '@lang{替换}',
+                            cancelButtonText: '@lang{再次编辑}',
+                            showCancelButton: true
+                        }).then((result) => {
+                            // 确认替换
+                            if (result.isConfirmed) {
+                                // 删除原来的配置项
+                                attributeOptions.find('tr[data-id="' + code + '"]').remove()
+                            } else {
+                                breakFlag = true;
+                            }
+                        })
+                    }
+                }
+                if (breakFlag) {
+                    return;
+                }
+                // 新增一条配置项到数据库
+                let name = offcanvasOptionAdd.find('#name').val();
+                let data = {
+                    'code': code,
+                    'name': name,
+                    'entity_id':'{{attribute.entity_id}}',
+                    'attribute_code':'{{attribute.code}}'
+                }
+                // ajax请求添加配置项到数据库
+                let canAdd = false;
+                await $.ajax({
+                    type: 'post',
+                    url: '@backend-url("*/backend/attribute/option/add")',
+                    data: data,
+                    dataType: 'json',
+                    success: function (data) {
+                        if(data['code']===0){
+                            // 提示添加失败
+                            Swal.fire({
+                                title: '@lang{操作失败}',
+                                text: data['msg'],
+                                icon: 'error',
+                                confirmButtonText: '@lang{重新编辑}'
+                            })
+                        }else{
+                            canAdd = true;
+                        }
+                    }
+                })
+                // 添加成功后重新加载选择配置项
+                if (canAdd) {
+                    // 清理添加输入框
+                    offcanvasOptionAdd.find('#code').val('')
+                    offcanvasOptionAdd.find('#name').val('')
+                    let create_time = new Date().toLocaleString()
+                    var $row = $(`<tr data-id='${code}' style='cursor: pointer;'>
+                                                                <td data-field='code' style='width: 80px'>${code}</td>
+                                                                <td data-field='name'>${name}</td>
+                                                                <td data-field='update_time'>${create_time}</td>
+                                                                <td data-field='create_time'>${create_time}</td>
+                                                                <td style='width: 100px'>
+                                                                    <a class='btn btn-outline-secondary btn-sm edit' title='Edit'>
+                                                                        <i class='fas fa-pencil-alt'></i>
+                                                                    </a>
+                                                                    <a class='btn btn-outline-secondary btn-sm delete' title='@lang{删除}'>
+                                                                         <i class='mdi mdi-delete text-danger'></i>
+                                                                    </a>
+                                                                </td>
+                                                            </tr>`);
+                    attributeOptions.append($row);
+                    editRowEvent()
+                    renderEditTable();
+                }
+            }
+            // 实时监听输入框#code 和 #name 检索数据库中配置项是否已经存在
+            /*延迟期间最多执行一次：优化输入请求过多ajax*/
+            function debounce(func, delay) {
+                let timeoutId;
+                return function (...args) {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
+                    timeoutId = setTimeout(() => {
+                        func.apply(this, args);
+                        timeoutId = null;
+                    }, delay);
+                };
+            }
+
+            function throttle(func, delay) {
+                let timeoutId;
+                let lastExecTime = 0;
+                return function (...args) {
+                    const elapsedTime = new Date().getTime() - lastExecTime;
+                    if (elapsedTime > delay) {
+                        lastExecTime = new Date().getTime();
+                        func.apply(this, args);
+                    } else {
+                        clearTimeout(timeoutId);
+                        timeoutId = setTimeout(() => {
+                            lastExecTime = new Date().getTime();
+                            func.apply(this, args);
+                            timeoutId = null;
+                        }, delay - elapsedTime);
+                    }
+                };
+            }
+
+            let codeInput = offcanvasOptionAdd.find('#code')
+            let nameInput = offcanvasOptionAdd.find('#name')
+            /*监听属性代码是否可用*/
+            const debounceInputOptionCode = debounce((e) => {
+                let search = $(e.target).val()
+                $.ajax({
+                    url: '@backend-url("*/backend/attribute/option/search")?field=code&limit=1&search=' + search +
+                        '&entity_id={{attribute.entity_id}}&attribute_code={{attribute.code}}',
+                    success: function (res) {
+                        if (res['msg']) {
+                            Swal.fire(
+                                {
+                                    title: '警告！',
+                                    text: res['msg'],
+                                    icon: 'error',
+                                    dangerMode: true,
+                                    confirmButtonText: '@lang{好的}'
+                                }
+                            )
+                            return false;
+                        }
+                        let items = res['items']
+                        if (items.length) {
+                            codeInput.removeClass('border-success')
+                            codeInput.addClass('border-danger')
+                        } else {
+                            codeInput.removeClass('border-danger')
+                            codeInput.addClass('border-success')
+                        }
+                    }
+                })
+            }, 500);
+            offcanvasOptionAdd.find('#code').on('input', debounceInputOptionCode)
+            /*监听属性名称是否可用*/
+            const debounceInputOptionName = debounce((e) => {
+                let search = $(e.target).val()
+                $.ajax({
+                    url:`@backend-url('*/backend/attribute/option/search')?field=name&limit=1&search=` + search +
+                        '&entity_id={{attribute.entity_id}}&attribute_code={{attribute.code}}',
+                    success: function (res) {
+                        if (res['msg']) {
+                            Swal.fire(
+                                {
+                                    title: '警告！',
+                                    text: res['msg'],
+                                    icon: 'error',
+                                    dangerMode: true,
+                                    confirmButtonText: '@lang{好的}'
+                                }
+                            )
+                            return false;
+                        }
+                        let items = res['items']
+                        if (items.length) {
+                            nameInput.removeClass('border-success')
+                            nameInput.addClass('border-danger')
+                        } else {
+                            nameInput.removeClass('border-danger')
+                            nameInput.addClass('border-success')
+                        }
+                    }
+                })
+            }, 500);
+            offcanvasOptionAdd.find('#name').on('input', debounceInputOptionName)
+        </script>
+    </div>
+</has>
+</body>
+</html>

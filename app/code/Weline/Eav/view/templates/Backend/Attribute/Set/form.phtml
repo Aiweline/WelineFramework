@@ -1,0 +1,156 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='page-content'>
+        <div class='container-fluid'>
+            <!-- start page message -->
+            <div class='row'>
+                <template>Weline_Component::message.phtml</template>
+            </div> <!-- end message -->
+            <div class='row'>
+                <div class='col-12'>
+                    <div class='card'>
+                        <div class='card-body'>
+                            <form id="set-edit" onsubmit='submitData()' class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                                <!--基础信息-->
+                                <has name="set">
+                                    <input name='set_id' type='hidden' value='{{set.set_id}}'/>
+                                </has>
+                                <div class='row'>
+                                    <div class='col-md-4'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationName'>
+                                                <lang>属性集名</lang>
+                                            </label>
+                                            <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
+                                                   id='validationName' placeholder='@lang{属性集名}'
+                                                   value='{{set.name}}' name='name'
+                                                   required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-4'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationCode'>
+                                                <lang>属性集代码</lang>
+                                            </label>
+                                            <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
+                                                   id='validationCode' placeholder='@lang{属性集代码}'
+                                                   value='{{set.code}}' name='code'
+                                                   required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-4'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='validationEntity'>
+                                                <lang>实体</lang>
+                                            </label>
+                                            <select type='text' class='form-control' name='entity_id' data-parsley-minlength='3'
+                                                    id='validationEntity'
+                                                    required=''>
+                                                <foreach name='entities'>
+                                                    <option value='{{v.entity_id}}' @if{set.entity_id=== v.entity_id=> 'selected'}>{{v.name}}</option>
+                                                </foreach>
+                                            </select>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class='btn btn-primary' type='submit'>
+                                    <empty
+                                        name='set'>
+                                        <lang>添加</lang>
+                                        <else/>
+                                        <lang>编辑</lang>
+                                    </empty>
+                                </button>
+                                <notempty name='set'>
+                                    <a class='btn btn-info' href="@backend-url('*/backend/attribute/set/add')">
+                                        <lang>继续新增</lang>
+                                    </a>
+                                </notempty>
+                            </form>
+                        </div>
+                    </div>
+                </div> <!-- end col -->
+            </div> <!-- end row -->
+        </div> <!-- container-fluid -->
+    </div>
+    <!-- End Page-content -->
+    <!-- end main content-->
+    <!-- Sweet Alerts js -->
+    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+    <!-- Sweet alert init js-->
+    <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+    <script>
+        function submitData() {
+            // 阻止默认事件
+            event.preventDefault();
+            let form = $('#set-edit')
+            // 获取form的action值
+            let action = form.attr('action');
+            // 发送请求
+            $.post(action,form.serializeArray(), function (data) {
+                // 处理响应
+                if (data['id']) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: data.msg,
+                        confirmButtonText: '@lang{好的}',
+                    }).then(function(){
+                        window.parent.location.reload();
+                    })
+                }else if (data['msg']) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '@lang{修改通知}',
+                        text: data.msg,
+                        confirmButtonText: '@lang{好的}',
+                    })
+                }
+            })
+        }
+    </script>
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+</body>
+</html>

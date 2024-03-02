@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Weline_Eav::eav" name="eav_manager" title="Eav" action=""
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-package-variant"
+         order="99"/>
+    <add source="Weline_Eav::eav_entity" name="eav_entity" title="实体" action="/eav/backend/entity"
+         parent="Weline_Eav::eav"
+         icon="mdi mdi-adjust"
+         order="1"/>
+    <add source="Weline_Eav::eav_attribute" name="eav_attribute" title="属性" action="/eav/backend/attribute"
+         parent="Weline_Eav::eav"
+         icon="mdi mdi-apache-kafka"
+         order="2"/>
+    <add source="Weline_Eav::eav_attribute_group" name="eav_attribute_group" title="属性组" action="/eav/backend/attribute/group"
+         parent="Weline_Eav::eav"
+         icon="mdi mdi-select-group"
+         order="3"/>
+    <add source="Weline_Eav::eav_attribute_set" name="eav_attribute_set" title="属性集" action="/eav/backend/attribute/set"
+         parent="Weline_Eav::eav"
+         icon="mdi mdi-package-variant"
+         order="4"/>
+</menus>

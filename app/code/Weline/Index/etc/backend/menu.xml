@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Aiweline_Index::main" name="index" title="初始页应用" action=""
+         parent="Weline_Backend::system_module"
+         icon="mdi mdi-home-import-outline"
+         order="99"/>
+    <add source="Aiweline_Index::setting" name="index" title="设置" action="index/backend/setting"
+         parent="Aiweline_Index::main"
+         icon="mdi mdi-home-import-outline"
+         order="99"/>
+    <add source="Aiweline_Index::contact" name="contact" title="联系管理" action=""
+         parent="Weline_Backend::system_module"
+         icon="mdi mdi-home-import-outline"
+         order="99"/>
+</menus>

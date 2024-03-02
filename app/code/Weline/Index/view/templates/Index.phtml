@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+    <block>Weline\Frontend\Block\Header\Base</block>
+    <meta charset='utf-8'/>
+    <title>@lang{WelineFramework 框架欢迎你!}</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta name='description' content=' '/>
+    <meta name='keywords' content='@lang{WelineFramework} @lang{Framework} @lang{Weline}'/>
+    <meta content='Pichforest' name='weline aiweline'/>
+
+    <link rel='shortcut icon' href='@static{images/favicon.ico}'>
+
+    <!-- Bootstrap css -->
+    <link rel='stylesheet' href='@static{css/bootstrap.min.css}' type='text/css' id='bootstrap-style'/>
+
+    <!-- Material Icon Css -->
+    <link rel='stylesheet' href='@static{css/materialdesignicons.min.css}' type='text/css'/>
+
+    <!-- Unicon Css -->
+    <link rel='stylesheet' href='https://unicons.iconscout.com/release/v4.0.0/css/line.css'/>
+
+    <!-- Swiper Css -->
+    <link rel='stylesheet' href='@static{css/tiny-slider.css}' type='text/css'/>
+    <link rel='stylesheet' href='@static{css/swiper.min.css}' type='text/css'/>
+
+    <!-- Custom Css -->
+    <link rel='stylesheet' href='@static{css/style.min.css}' type='text/css'/>
+    <link rel='stylesheet' href='@static{css/demo.css}' type='text/css'/>
+
+    <!-- colors -->
+    <link href='@static{css/colors/default.css}' rel='stylesheet' type='text/css' id='color-opt'/>
+
+</head>
+
+<body data-bs-spy='scroll' data-bs-target='#navbar' data-bs-offset='71'>
+
+<!-- light-dark mode button -->
+<a href='javascript: void(0);' id='mode' class='mode-btn text-white rounded-end'>
+    <i class='uil uil-brightness mode-dark mx-auto'></i>
+    <i class='uil uil-moon bx-spin mode-light'></i>
+</a>
+
+<!-- START  NAVBAR -->
+<nav class='navbar navbar-expand-lg fixed-top navbar-custom sticky sticky-light' id='navbar'>
+    <div class='container-fluid'>
+
+        <!-- LOGO -->
+        <a class='navbar-brand logo text-uppercase' href=''>
+            <img src='@static{images/logo-dark.png}' class='logo-light' alt='' height='40'>
+            <img src='@static{images/logo-light.png}' class='logo-dark' alt='' height='40'>
+        </a>
+
+        <button class='navbar-toggler' type='button' data-bs-toggle='collapse' data-bs-target='#navbarCollapse'
+                aria-controls='navbarCollapse' aria-expanded='false' aria-label='@lang{导航条}'>
+            <span class='mdi mdi-menu'></span>
+        </button>
+
+        <div class='collapse navbar-collapse' id='navbarCollapse'>
+            <ul class='navbar-nav ms-auto' id='navbar-navlist'>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#home'>
+                        <lang>首页</lang>
+                    </a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#service'>
+                        <lang>服务</lang>
+                    </a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#features'>
+                        <lang>特性</lang>
+                    </a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#pricing'>@lang{免费}</a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#app'>@lang{应用}</a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#team'>@lang{团队}</a>
+                </li>
+                <li class='nav-item'>
+                    <a class='nav-link' href='#contact'>@lang{联系}</a>
+                </li>
+            </ul>
+            <div class='ms-auto'>
+                <a href='@admin-url("admin")' class='btn bg-gradiant'>
+                    <lang>后台</lang>
+                </a>
+                <a href='' class='btn bg-gradiant'>
+                    <lang>登录</lang>
+                </a>
+            </div>
+
+        </div>
+    </div>
+</nav>
+<!-- END NAVBAR -->
+
+
+<!-- home section -->
+<section class='home-5' id='home' style='background-image: url(@static{/images/home/home5-bg.png});'>
+    <!-- start container -->
+    <div class='container'>
+        <div class='row align-items-center'>
+            <div class='col-lg-6'>
+                <div class='waav'>
+                    <span style='--a:1'>欢</span>
+                    <span style='--a:2'>迎</span>
+                    <span style='--a:3'>使</span>
+                    <span style='--a:4'>用</span>
+                    <span style='--a:5'>本</span>
+                    <span style='--a:6'>框</span>
+                    <span style='--a:7'>架</span>
+                </div>
+                <h1 class='mt-3'>快速开发你的互联网应用！</h1>
+                <p class='text-muted mt-3'>
+                    快速灵活的Web开发体验。<br>
+                    快速：<br>
+                    模板标签化控制、数据库（主主从，模块主从，主分库，模块分库）、缓存支持对接各种常用内容缓存服务、语言级别视图缓存等。<br>
+                    灵活：<br>
+                    在不修改核心代码情况下实现核心代码功能修改。支持事件和插件机制，事件可接受特定事件数据进行修改，插件和修改任意类的public修饰的方法。<br>
+                    开发愿景：<br>
+                    解决框架优雅与性能不能共存问题。<br>
+                    Api接口特性：<br>
+                    和PC一样支持前后端路由，隐秘Restful风格API.方法限制仅需要在方法名上写上限制方法，例如：getPost()，访问/post路由只能get请求。<br>
+                    又例如：article文章路径，具有get,post,delete,put等，只需要写一个类控制器，类方法具有：get()、post()、delete()、put()。真正做到api对象化。<br>
+                    更多体验：请<a href="https://gitee.com/aiweline/WelineFramework.git">下载源码</a>
+                </p>
+
+                <form class='mt-5'>
+                    <div class='row align-items-center'>
+                        <div class='col-8'>
+                            <div class='form-group'>
+                                <input type='text' class='form-control' placeholder='邮箱'
+                                       aria-label='workspace foe anywhere' aria-describedby='basic-addon2'>
+                            </div>
+                        </div>
+                        <div class='col-4 p-0'>
+                            <button class='btn btn-big btn-primary'>
+                                <lang>快速开始</lang>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <div class='d-flex align-items-center mt-5'>
+                    <div class='flex-shrink-0'>
+                        <div class='more-profile d-flex'>
+                            <div class='avatar-sm top-child m-0'>
+                                <img src='@static{images/user/aiweline.png}' alt='' class='img-fluid avatar-sm'>
+                            </div>
+                            <div class='avatar-sm top-child'>
+                                <img src='@static{images/user/xiejuan.png}' alt='' class='img-fluid avatar-sm'>
+                            </div>
+                        </div>
+                    </div>
+                    <div class='flex-grow-1 ms-3'>
+                        <h6 class='mb-0'>1250+
+                            <lang>用户</lang>
+                        </h6>
+                        <p class='fw-semibold mb-0 text-muted'>看过WelineFramework框架 <a href="https://gitee.com/aiweline/WelineFramework.git">Gitee码云项目</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class='col-lg-6'>
+                <img src='@static{images/apps/admin.png}' alt='' class='img-fluid'>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</section>
+<!-- end home section -->
+<!-- cta section -->
+<section class='section cta' id='build'>
+    <div class='bg-overlay-gradiant'></div>
+    <!-- start container -->
+    <div class='container position-relative'>
+        <div class='row'>
+            <div class='col-lg-6'>
+                <div class='py-5'>
+                    <h1 class='display-4 text-white'>立即构建你的项目。</h1>
+                    <p class='text-white-50 mt-3 f-18'>
+                        使用Composer一键安装项目，并快速开始你的第一个应用模组插件创建。<br>
+                        <code>
+                            composer create-project aiweline/weline-framework WelineFramework --prefer-dist
+                        </code>
+                    </p>
+                    <!--<div class='d-flex mt-4 '>
+                        <div class='app-store'>
+                            <a href=''><img src='@static{images/img-appstore.png}' alt='' class='img-fluid'></a>
+                        </div>
+                        <div class='googleplay'>
+                            <a href=''><img src='@static{images/img-googleplay.png}' alt='' class='img-fluid ms-3'></a>
+                        </div>
+                    </div>-->
+                </div>
+            </div>
+            <div class='col-lg-6'>
+                <div class='cta-phone-image'>
+                    <img src='@static{images/cta-bg.webp}' alt='' class=' img-fluid'>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</section>
+<!-- end section -->
+
+<!-- service section -->
+<section class='section service bg-light' id='service'>
+    <div class='container'>
+        <div class='row justify-content-center'>
+            <div class='col-lg-6'>
+                <div class='title text-center mb-5'>
+                    <h6 class='mb-0 fw-bold text-primary'>
+                        <lang>WelineFramework框架有什么特性？</lang>
+                    </h6>
+                    <h2 class='f-40'>能够给你带来什么样的体验!</h2>
+                    <div class='border-phone'>
+                        <p class='text-muted'>
+                            使用这个框架可以灵活的修改或者使用这个框架开发各种固定的模组插件，通常这种插件是可以解决某些方面的特定功能的。
+                            同时模组是支持热拔插的，可以根据现有需求灵活启用或者关闭，这个维护过程仅仅几秒而已。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class='row justify-content-between'>
+            <div class='col-lg-4'>
+                <div class='service-box text-center'>
+                    <div class='service-icon p-4'
+                         style='background-image: url(@static{/images/service/bomb.png}); background-repeat: no-repeat; background-position: center;'>
+                        <i class='mdi mdi-security text-gradiant f-30'></i>
+                    </div>
+
+                    <div class='service-content mt-4'>
+                        <a href=''>
+                            <h5 class='fw-bold'>高度灵活</h5>
+                        </a>
+                        <p class='text-muted'>
+                            可以在不修改框架源代码，或者其他模块源代码的情况实现代码修改机制。这为框架或者其他模块代码的维护升级提供了可能。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class='col-lg-4 pt-4 pt-lg-0'>
+                <div class='service-box text-center shadow'>
+                    <div class='service-icon p-4'
+                         style='background-image: url(@static{/images/service/bomb.png}); background-repeat: no-repeat; background-position: center;'>
+                        <i class='mdi mdi-lightbulb-on text-gradiant f-30'></i>
+                    </div>
+
+                    <div class='service-content mt-4'>
+                        <a href=''>
+                            <h5 class='fw-bold'>快速将你的主意实现</h5>
+                        </a>
+                        <p class='text-muted'>
+                            框架前后端或者Api接口可以位于同一个模组中，这使得框架能够快速开发各种功能，使你的想法快速被实现。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class='col-lg-4 pt-4 pt-lg-0'>
+                <div class='service-box text-center'>
+                    <div class='service-icon p-4'
+                         style='background-image: url(@static{/images/service/bomb.png}); background-repeat: no-repeat; background-position: center;'>
+                        <i class='mdi mdi-google-nearby text-gradiant f-30'></i>
+                    </div>
+
+                    <div class='service-content mt-4'>
+                        <a href=''>
+                            <h5 class='fw-bold'>设计和主题</h5>
+                        </a>
+                        <p class='text-muted'>
+                            框架支持主题定制功能，可以将模组中的模板用主题特性随意修改。模板本身还支持嵌套等操作，几乎可以不适用任何php代码的同时可以任意调换模板位置或者替换原有模板，来做到主题布局变更。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<!-- end section -->
+
+
+<!-- start features -->
+<div class='section features' id='features'>
+    <!-- start container -->
+    <div class='container'>
+        <div class='row justify-content-center'>
+            <div class='col-lg-6'>
+                <div class='title text-center mb-5'>
+                    <h6 class='mb-0 fw-bold text-primary'>技术特性</h6>
+                    <h2 class='f-40'>WelineFramework技术特性</h2>
+                    <p class='text-muted'>
+                        Composer，内存缓存，数据库模型，预编译模板，事件插件机制，各类驱动自定义实现，命令行支持。
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class='row justify-content-center'>
+            <div class='col-lg-12'>
+                <ul class='nav nav-pills mb-3 justify-content-center' id='pills-tab' role='tablist'>
+                    <li class='nav-item' role='presentation'>
+                        <button class='nav-link active' id='pills-home-tab' data-bs-toggle='pill'
+                                data-bs-target='#pills-home' type='button' role='tab' aria-controls='pills-home'
+                                aria-selected='true'>新特性
+                        </button>
+                    </li>
+                    <li class='nav-item' role='presentation'>
+                        <button class='nav-link' id='pills-profile-tab' data-bs-toggle='pill'
+                                data-bs-target='#pills-profile' type='button' role='tab' aria-controls='pills-profile'
+                                aria-selected='false'>主要特性
+                        </button>
+                    </li>
+
+                </ul>
+                <div class='tab-content mt-5' id='pills-tabContent'>
+                    <div class='tab-pane fade show active' id='pills-home' role='tabpanel'
+                         aria-labelledby='pills-home-tab'>
+                        <div class='row align-items-center'>
+                            <div class='col-lg-4'>
+                                <div class='features-item text-start text-lg-end'>
+                                    <div class='icon avatar-sm text-center ms-lg-auto rounded-circle'>
+                                        <i class='mdi mdi-message-alert-outline f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>主题功能</h5>
+                                        <p>实现对各个模组插件的模板片段进行修改，或者全部修改，或者嵌套其他模板，几乎没有任何限制。</p>
+                                    </div>
+                                </div>
+
+                                <div class='features-item text-start text-lg-end mt-5'>
+                                    <div class='icon avatar-sm text-center ms-lg-auto rounded-circle'>
+                                        <i class='mdi mdi-autorenew f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>数据分库</h5>
+                                        <p>支持分库位置：主框架，模组。主框架配置位置/app/etc/env.php,模组配置位置etc/env.php。</p>
+                                    </div>
+                                </div>
+
+                                <div class='features-item text-start text-lg-end mt-5'>
+                                    <div class='icon avatar-sm text-center ms-lg-auto rounded-circle'>
+                                        <i class='mdi mdi-eyedropper f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>支持Composer安装</h5>
+                                        <p>
+                                            组件以及框架都支持Composer安装，包管理更加方便快捷。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='col-lg-4'>
+                                <!--仓库挂件-->
+                                <script src='https://gitee.com/aiweline/WelineFramework/widget_preview' async defer></script>
+                                <div id='osc-gitee-widget-tag'></div>
+                                <style>
+                                    .osc_pro_color {
+                                        color: #4183c4 !important;
+                                    }
+
+                                    .osc_panel_color {
+                                        background-color: #ffffff !important;
+                                    }
+
+                                    .osc_background_color {
+                                        background-color: #ffffff !important;
+                                    }
+
+                                    .osc_border_color {
+                                        border-color: #e3e9ed !important;
+                                    }
+
+                                    .osc_desc_color {
+                                        color: #666666 !important;
+                                    }
+
+                                    .osc_link_color * {
+                                        color: #9b9b9b !important;
+                                    }
+                                </style>
+                                <!--                                <img src='@static{images/features/phone.png}' alt='' class='img-fluid'>-->
+                            </div>
+                            <div class='col-lg-4'>
+                                <div class='features-item'>
+                                    <div class='icon avatar-sm text-center rounded-circle'>
+                                        <i class='mdi mdi-lifebuoy f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>接口支持前后端安全模式</h5>
+                                        <p>
+                                            前台和后台接口模式，可以创建隐秘接口。
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class='features-item mt-5'>
+                                    <div class='icon avatar-sm text-center rounded-circle'>
+                                        <i class='mdi mdi-dropbox f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>实用ORM模型</h5>
+                                        <p>
+                                            框架ORM模型支持通用查询外，可以对表结构进行修改，支持环境模式和索引等。
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class='features-item mt-5'>
+                                    <div class='icon avatar-sm text-center rounded-circle'>
+                                        <i class='mdi mdi-flask f-24'></i>
+                                    </div>
+                                    <div class='content mt-3'>
+                                        <h5>模板Taglib标签</h5>
+                                        <p>
+                                            模板标签简介快速，支持多种格式，以免标签冲突。另外标签支持自定义。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</div>
+<!-- end features -->
+
+
+<!-- start testimonial -->
+<section class='section bg-light testimonial' id='testimonial'>
+    <!-- start container -->
+    <div class='container'>
+        <div class='row align-items-center'>
+            <div class='col-lg-4'>
+                <div class='title'>
+                    <p class=' text-primary fw-bold mb-0'>关注代码仓库<i
+                                class='mdi mdi-cellphone-iphone'></i>
+                    </p>
+                    <h3>实时学习框架源码!</h3>
+                    <p class='text-muted'>
+                        每一个项目的发展离不开大家的长久支持，你们的支持是项目发展的动力。
+                    </p>
+                    <button class='btn bg-gradiant'><a href="https://gitee.com/aiweline/WelineFramework.git"></a><i
+                                class='mdi mdi-arrow-right'></i></button>
+                </div>
+            </div>
+            <div class='col-lg-8'>
+                <div class='testi-slider' id='testi-slider'>
+                    <!-- slider item -->
+                    <div class='item '>
+                        <div class='testi-box position-relative overflow-hidden'>
+                            <div class='row align-items-center'>
+                                <div class='col-md-5'>
+                                    <img src='@static{images/modules/model.png}' alt='' class='img-fluid'>
+                                </div>
+                                <div class='col-md-7'>
+                                    <div class='p-4'>
+                                        <div class='d-flex align-items-center'>
+                                            <div class='flex-shrink-0'>
+                                                <div class='avatar'>
+                                                    <img src='@static{images/user/aiweline.png}' alt=''
+                                                         class='img-fluid rounded-circle'>
+                                                </div>
+                                            </div>
+                                            <div class='flex-grow-1 ms-3'>
+                                                <p class='f-14 mb-0 text-dark fw-bold'><span
+                                                            class='text-muted fw-normal'>评论者</span> 秋枫雁飞
+                                                </p>
+                                                <div class='date'>
+                                                    <p class='text-muted mb-0 f-14'>2022年9月14日 <span>10:55
+                                                                下午</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class='mt-3'>
+                                            <h5 class='fw-bold'>强大的ORM</h5>
+                                            <p class='text-muted f-14'>
+                                                模型即查询，简单高效，支持sql组装后附加，以及直接支持形如where("concat(o.id,o.name) like
+                                                '%demo%'"')的复杂sql。
+                                            </p>
+                                            <a href='@url{' dev/tool'}'>
+                                            <button class='btn btn-sm bg-gradiant'><i
+                                                        class='mdi mdi-plus f-16 align-middle'></i>
+                                                阅读开发文档
+                                            </button>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='back-image position-absolute end-0 bottom-0'>
+                                <img src='@static{images/testi/rating-image.png}' alt='' class='img-fluid'>
+                            </div>
+
+                        </div>
+                    </div>
+                    <!-- slider item -->
+                    <div class='item'>
+                        <div class='testi-box position-relative overflow-hidden'>
+                            <div class='row align-items-center'>
+                                <div class='col-md-5'>
+                                    <img src='@static{images/modules/construct.png}' alt='' class='img-fluid'>
+                                </div>
+                                <div class='col-md-7'>
+                                    <div class='p-4'>
+                                        <div class='d-flex align-items-center'>
+                                            <div class='flex-shrink-0'>
+                                                <div class='avatar'>
+                                                    <img src='@static{images/user/aiweline.png}' alt=''
+                                                         class='img-fluid rounded-circle'>
+                                                </div>
+                                            </div>
+                                            <div class='flex-grow-1 ms-3'>
+                                                <p class='f-14 mb-0 text-dark fw-bold'><span
+                                                            class='text-muted fw-normal'>评论者 </span> 秋枫雁飞
+                                                </p>
+                                                <div class='date'>
+                                                    <p class='text-muted mb-0 f-14'>2021年1月28日 <span>10:25
+                                                                上午</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class='mt-3'>
+                                            <h5 class='fw-bold'>模组目录结构</h5>
+                                            <p class='text-muted f-14'>
+                                                图片中是一个Aiweline_Demo的目录结构，结构清晰明了，很容易辨别。严格来说一个module其实只需要etc/env.php和register
+                                                .php两个文件，放置在app/code/Aiweline/Demo目录下即可被识别成为一个模组Module.
+                                            </p>
+                                            <a href='@url{"dev/tool"}'>
+                                                <button class='btn btn-sm bg-gradiant'><i
+                                                            class='mdi mdi-plus f-16 align-middle'></i>
+                                                    阅读开发文档
+                                                </button>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='back-image position-absolute end-0 bottom-0'>
+                                <img src='@static{images/testi/rating-image.png}' alt='' class='img-fluid'>
+                            </div>
+
+                        </div>
+                    </div>
+                    <!-- slider item -->
+
+                    <div class='item'>
+                        <div class='testi-box position-relative overflow-hidden'>
+                            <div class='row align-items-center'>
+                                <div class='col-md-5'>
+                                    <img src='@static{images/modules/controller.png}' alt='' class='img-fluid'>
+                                </div>
+                                <div class='col-md-7'>
+                                    <div class='p-4'>
+                                        <div class='d-flex align-items-center'>
+                                            <div class='flex-shrink-0'>
+                                                <div class='avatar'>
+                                                    <img src='@static{images/user/aiweline.png}' alt=''
+                                                         class='img-fluid rounded-circle'>
+                                                </div>
+                                            </div>
+                                            <div class='flex-grow-1 ms-3'>
+                                                <p class='f-14 mb-0 text-dark fw-bold'><span
+                                                            class='text-muted fw-normal'>评论者 </span> 秋枫雁飞
+                                                </p>
+                                                <div class='date'>
+                                                    <p class='text-muted mb-0 f-14'>2022年9月14日 <span>10:25
+                                                                下午</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class='mt-3'>
+                                            <h5 class='fw-bold'>控制器结构</h5>
+                                            <p class='text-muted f-14'>
+                                                只需要在Controller目录下新建一个类继承Weline\Framework\App\Controller\FrontendController前端控制器，便可以根据方法识别页面。
+                                            </p>
+                                            <a href='@url{"dev/tool"}'>
+                                                <button class='btn btn-sm bg-gradiant'><i
+                                                            class='mdi mdi-plus f-16 align-middle'></i>
+                                                    阅读开发文档
+                                                </button>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='back-image position-absolute end-0 bottom-0'>
+                                <img src='@static{images/testi/rating-image.png}' alt='' class='img-fluid'>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- slider item -->
+                    <div class='item '>
+                        <div class='testi-box position-relative overflow-hidden'>
+                            <div class='row align-items-center'>
+                                <div class='col-md-5'>
+                                    <img src='@static{images/modules/template.png}' alt='' class='img-fluid'>
+                                </div>
+                                <div class='col-md-7'>
+                                    <div class='p-4'>
+                                        <div class='d-flex align-items-center'>
+                                            <div class='flex-shrink-0'>
+                                                <div class='avatar'>
+                                                    <img src='@static{images/user/aiweline.png}' alt=''
+                                                         class='img-fluid rounded-circle'>
+                                                </div>
+                                            </div>
+                                            <div class='flex-grow-1 ms-3'>
+                                                <p class='f-14 mb-0 text-dark fw-bold'><span
+                                                            class='text-muted fw-normal'>评论者</span> 秋枫雁飞
+                                                </p>
+                                                <div class='date'>
+                                                    <p class='text-muted mb-0 f-14'>2022年9月14日 <span>10:35
+                                                                下午</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class='mt-3'>
+                                            <h5 class='fw-bold'>前台模板标签</h5>
+                                            <p class='text-muted f-14'>
+                                                支持url构造标签的形式如图。更多的标签请参阅开发文档，或者阅读：app/code/Weline/Framework/View/Taglib.php标签库文件。
+                                            </p>
+                                            <a href='@url{"dev/tool"}'>
+                                                <button class='btn btn-sm bg-gradiant'><i
+                                                            class='mdi mdi-plus f-16 align-middle'></i>
+                                                    阅读开发文档
+                                                </button>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='back-image position-absolute end-0 bottom-0'>
+                                <img src='@static{images/testi/rating-image.png}' alt='' class='img-fluid'>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</section>
+<!-- end testimonial -->
+
+
+<!-- pricing section -->
+<section class='section pricing' id='pricing'>
+    <div class='container'>
+        <div class='row justify-content-center'>
+            <div class='col-lg-6'>
+                <div class='title text-center mb-5'>
+                    <h6 class='mb-0 fw-bold text-primary'>你关心的费用问题！</h6>
+                    <h2 class="f-40">价格计划</h2>
+                    <p class="text-muted">
+                        关于产品生态收费计划：产品收费是为了能够持续提供更好的服务。当然，绝大部分功能是开源免费的，收费的部分你后续可以到商场中进行选择购买（目前商场计划正在上线中）。
+                    </p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="row align-items-center">
+            <div class="col-lg-4">
+                <div class="price-item shadow-sm overflow-hidden">
+                    <div class="price-up-box active p-4">
+                        <div class="badge bg-primary fw-normal f-14">基础</div>
+                        <div class="price-tag mt-2">
+                            <h2 class="text-white mb-0 f-40"><sup class="f-22 fw-normal">$</sup>00<sup
+                                        class="f-16 fw-normal"> /月</sup></h2>
+                        </div>
+                        <p class="text-white-50 mb-1">开源代码</p>
+                        <p class="text-white-50 mb-0">所有开源代码提供，但后续不支持咨询服务。</p>
+                    </div>
+                    <div class="border border-3"></div>
+
+                    <div class="price-down-box p-4">
+                        <ul class="list-unstyled ">
+                            <li><i class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>
+                                框架源码
+                            </li>
+                            <li class="mt-2"><i
+                                        class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>
+                                自带拓展
+                            </li>
+                            <li class="mt-2"><i
+                                        class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>
+                                没有任何域名限制
+                            </li>
+                            <li class="mt-2"><i
+                                        class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>
+                                win/linux双系统支持
+                            </li>
+                            <li class="mt-2"><i
+                                        class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>No
+                                基础论坛系统模组
+                            </li>
+                            <li class="mt-2"><i
+                                        class="mdi mdi-check-circle f-20 align-middle me-2 text-primary"></i>
+                                前后台模板源码
+                            </li>
+
+                        </ul>
+                        <a href="" class="btn btn-sm text-primary mt-3"><i class="mdi mdi-check-all me-2"></i>
+                            你的计划
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 ">
+                <div class="price-item shadow-sm overflow-hidden mt-4 mt-lg-0">
+                    <div class="topbar-header bg-primary py-2 text-center">
+                        <h6 class="mb-0 text-white fw-normal">推荐计划</h6>
+                    </div>
+                    <div class="price-up-box p-4">
+                        <div class="badge bg-primary fw-normal f-14">快速开始</div>
+                        <div class="price-tag mt-2">
+                            <h2 class="text-dark mb-0 f-40"><sup class="f-22 fw-normal">￥</sup>190
+                                <sup class="f-16 fw-normal"> /月</sup>
+                            </h2>
+                        </div>
+                        <p class="text-muted mb-1">咨询服务</p>
+                        <p class="text-muted mb-0">提供框架使用过程中的咨询服务。</p>
+                    </div>
+                    <div class="border border-3"></div>
+
+                    <div class='price-down-box p-4'>
+                        <ul class='list-unstyled '>
+                            <li><i class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                框架源码
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                自带拓展
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                没有任何域名限制
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                win/linux双系统支持
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>No
+                                基础论坛系统模组
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                前后台模板源码
+                            </li>
+
+                        </ul>
+                        <a href='' class='btn btn-sm btn-primary mt-3'><i class='mdi mdi-check-all me-2'></i>立即购买</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="price-item shadow-sm overflow-hidden mt-4 mt-lg-0">
+                    <div class="price-up-box p-4">
+                        <div class="badge bg-primary fw-normal f-14">专业定制</div>
+                        <div class="price-tag mt-2">
+                            <h2 class="text-dark mb-0 f-40"><sup class="f-22 fw-normal">￥</sup>2900<sup
+                                        class="f-16 fw-normal"> /月</sup></h2>
+                        </div>
+                        <p class="text-muted mb-1">定制服务</p>
+                        <p class="text-muted mb-0">定制任何你想要的服务，此为定金。</p>
+                    </div>
+                    <div class="border border-3"></div>
+
+                    <div class='price-down-box p-4'>
+                        <ul class='list-unstyled '>
+                            <li><i class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                框架源码
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                自带拓展
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                没有任何域名限制
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                win/linux双系统支持
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>No
+                                基础论坛系统模组
+                            </li>
+                            <li class='mt-2'><i
+                                        class='mdi mdi-check-circle f-20 align-middle me-2 text-primary'></i>
+                                前后台模板源码
+                            </li>
+
+                        </ul>
+                        <a href='' class='btn btn-sm btn-primary mt-3'><i class='mdi mdi-check-all me-2'></i>立即购买</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<!-- end pricing -->
+
+
+<!-- slider section -->
+<section class="section app-slider bg-light" id="app">
+    <!-- start container -->
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="title text-center mb-5">
+                    <h6 class="mb-0 fw-bold text-primary">框架应用示例</h6>
+                    <h2 class="f-40">展示使用框架构建的一些应用</h2>
+                    <p class="text-muted">
+                        一些开发特性的示例，能够让你很快了解到框架的基本运作原理。【点击进入了解应用】
+                    </p>
+                    <div class='sample'>
+                        <div class='debug'>
+                            <hook>add_link</hook>
+                            <a href="<?= $this->getUrl('/hello/helloworld/p') ?>" target='_blank'
+                               onclick='openWindow(this.href,this.text)'>调试样式</a>
+                            <a href='/hello/helloworld/ex' target='_blank' onclick="openWindow(this.href,'异常调试')">异常调试</a>
+                            <a href='/hello/helloworld/demo' target='_blank' onclick="openWindow(this.href,'Demo')">Demo</a>
+                            <a href='/hello/helloworld/model' target='_blank' onclick="openWindow(this.href,'model')">model</a>
+                            <a href='/hello/helloworld/cache' target='_blank' onclick="openWindow(this.href,'Cache')">Cache</a>
+                            <a href='/hello/helloworld/session' target='_blank' onclick="openWindow(this.href,'Session')">Session</a>
+                            <a href='/hello/helloworld/plugin' target='_blank' onclick="openWindow(this.href,'Plugin')">Plugin</a>
+                            <a href='/hello/helloworld/observer' target='_blank' onclick="openWindow(this.href,'Observer')">Observer</a>
+                            <a href='/hello/helloworld/i18n' target='_blank' onclick="openWindow(this.href,'I18n')">I18n</a>
+                            <a href='/hello/helloworld/hook' target='_blank' onclick="openWindow(this.href,'Hook')">前端Hook钩子</a>
+                            <a href="@admin-url('admin')" target='_blank' onclick='openWindow(this.href,this.text)'>后台</a>
+                            <a href="@backend-api('admin/rest/V1/index')" target='_blank' onclick='openWindow(this.href,this.text)'>后台api</a>
+                            <a href="@api('hello/rest/v1/index/index')" target='_blank' onclick="openWindow(this.href,'前台api')">前台api</a>
+                            <a href='index/upload' target='_blank' onclick="openWindow(this.href,'演示传输文件')">上传</a>
+                            <a href='/index/index/moduleTemplateFetch' target='_blank' onclick="openWindow(this.href,'调用其他Module模板文件')">调用其他Module模板文件</a>
+                            <a href='/index/index/ComposerVendorModuleTemplate' target='_blank'
+                               onclick="openWindow(this.href,'调用其他Module模板文件')">调用composer安装的第三方Module模板文件</a>
+                        </div>
+                        <div class='debug'>
+                            <a href="<?php echo $this->getAdminUrl('websitemonitoring/index/index') ?>" target='_blank'
+                               onclick="openWindow(this.href,'测试Composer加载的模组控制器')">测试Composer加载的模组控制器</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="swiper-container">
+                    <!--<div class="fream-phone ">
+                        <img src="@static{images/testi/phone-fream.png}" alt="" class="img-fluid">
+                    </div>-->
+                    <div class="swiper-wrapper">
+                        <div class='swiper-slide border-radius'>
+                            <a href="@url{'bbs'}"><img src='@static{images/apps/command.png}' alt='' class='img-fluid'></a>
+                        </div>
+                        <div class='swiper-slide border-radius'>
+                            <a href="@url{'bbs'}"><img src='@static{images/apps/admin.png}' alt='' class='img-fluid'></a>
+                        </div>
+                        <div class="swiper-slide border-radius">
+                            <a href="@url{'bbs'}"><img src='@static{images/apps/bbs.png}' alt='' class='img-fluid'></a>
+                        </div>
+                    </div>
+
+
+                    <!-- navigation buttons -->
+                    <div class="swiper-pagination"></div>
+                </div>
+            </div>
+        </div>
+        <!-- end container -->
+    </div>
+</section>
+<!-- end section -->
+
+<!-- team section -->
+<section class="section team" id="team">
+    <!-- start container -->
+<!--    <div class="container">-->
+<!--        <div class="row justify-content-center">-->
+<!--            <div class="col-lg-8">-->
+<!--                <div class="title text-center mb-5">-->
+<!--                    <h6 class="mb-0 fw-bold text-primary">Weline团队</h6>-->
+<!--                    <h2 class="f-40">自身技术群体!</h2>-->
+<!--                    <p class="text-muted">-->
+<!--                        我们的代码贡献者来源国内Gitee开源平台--一个专精于国内代码自治的专业托管平台。-->
+<!--                    </p>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+<!---->
+<!--        <div class="row justify-content-center mt-4">-->
+<!--            <div class="col-lg-3 col-md-6">-->
+<!--                <div class="team-box text-end">-->
+<!--                    <div class="row justify-content-end">-->
+<!--                        <div class="col-lg-9 col-10">-->
+<!--                            <div class="team-image">-->
+<!--                                <img src="@static{images/team/img1.png}" alt="" class="img-fluid">-->
+<!--                            </div>-->
+<!--                            <div class="team-icon ">-->
+<!--                                <div class="d-flex mt-2">-->
+<!--                                    <div class="social-icon facebook mx-2">-->
+<!--                                        <a href=""> <i class="mdi mdi-facebook f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon instagram mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-instagram f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon twitter mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-twitter f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon linkedin mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-linkedin f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                </div>-->
+<!--                            </div>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                    <div class="team-info position-absolute">-->
+<!--                        <h6>Cody Fisher <span class="f-14 text-muted fw-normal">/ owner</span></h6>-->
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!---->
+<!--            <div class="col-lg-3 col-md-6">-->
+<!--                <div class="team-box">-->
+<!--                    <div class="row justify-content-end">-->
+<!--                        <div class="col-lg-9 col-10">-->
+<!--                            <div class="team-image text-end">-->
+<!--                                <img src="@static{images/team/img4.png}" alt="" class="img-fluid">-->
+<!--                            </div>-->
+<!--                            <div class="team-icon">-->
+<!--                                <div class="d-flex mt-2">-->
+<!--                                    <div class="social-icon facebook mx-2">-->
+<!--                                        <a href=""> <i class="mdi mdi-facebook f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon instagram mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-instagram f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon twitter mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-twitter f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon linkedin mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-linkedin f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                </div>-->
+<!--                            </div>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                    <div class="team-info position-absolute">-->
+<!--                        <h6>Emily Coper <span class="f-14 text-muted fw-normal">/ Desiger</span></h6>-->
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!---->
+<!--            <div class="col-lg-3 col-md-6">-->
+<!--                <div class="team-box">-->
+<!--                    <div class="row justify-content-end">-->
+<!--                        <div class="col-lg-9 col-10">-->
+<!--                            <div class="team-image text-end">-->
+<!--                                <img src="@static{images/team/img3.png}" alt="" class="img-fluid">-->
+<!--                            </div>-->
+<!--                            <div class="team-icon">-->
+<!--                                <div class="d-flex mt-2">-->
+<!--                                    <div class="social-icon facebook mx-2">-->
+<!--                                        <a href=""> <i class="mdi mdi-facebook f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon instagram mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-instagram f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon twitter mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-twitter f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon linkedin mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-linkedin f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                </div>-->
+<!--                            </div>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                    <div class="team-info position-absolute">-->
+<!--                        <h6>Nick Obron <span class="f-14 text-muted fw-normal">/ Devloper</span></h6>-->
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!---->
+<!--            <div class="col-lg-3 col-md-6">-->
+<!--                <div class="team-box">-->
+<!--                    <div class="row justify-content-end">-->
+<!--                        <div class="col-lg-9 col-10">-->
+<!--                            <div class="team-image text-end">-->
+<!--                                <img src="@static{images/team/img2.png}" alt="" class="img-fluid">-->
+<!--                            </div>-->
+<!--                            <div class="team-icon">-->
+<!--                                <div class="d-flex mt-2">-->
+<!--                                    <div class="social-icon facebook mx-2">-->
+<!--                                        <a href=""> <i class="mdi mdi-facebook f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon instagram mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-instagram f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon twitter mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-twitter f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                    <div class="social-icon linkedin mx-2">-->
+<!--                                        <a href=""><i class="mdi mdi-linkedin f-20"></i></a>-->
+<!--                                    </div>-->
+<!--                                </div>-->
+<!--                            </div>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                    <div class="team-info position-absolute">-->
+<!--                        <h6>Simmy roy <span class="f-14 text-muted fw-normal">/ Manager</span></h6>-->
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!---->
+<!--        </div>-->
+<!--    </div>-->
+    <!-- end container -->
+</section>
+<!-- end section -->
+
+<!-- contact section -->
+<section class="section contact overflow-hidden" id="contact">
+    <!-- start container -->
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="title text-center mb-5">
+                    <h6 class="mb-0 fw-bold text-primary">联系</h6>
+                    <h2 class="f-40">获取支持!</h2>
+                    <p class="text-muted">
+                        如有需要或者疑问，请联系。
+                    </p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="row align-items-center">
+            <div class="col-lg-5">
+                <div class="contact-box">
+                    <div class="mb-4">
+                        <h4 class=" fw-semibold mb-1">需要支持！</h4>
+                        <p class="text-muted">联系我们解决疑惑或者软件安装实施。</p>
+                    </div>
+
+                    <div class="custom-form mt-4 ">
+                        <form method="post" name="myForm" onsubmit="return validateForm()">
+                            <p id="error-msg" style="opacity: 1;">
+<<<<<<< HEAD
+                                <!-- <div class="alert alert-warning">*Please enter a Name*</div> -->
+=======
+                                <!-- <div class="alert alert-warning">*请输入称呼*</div> -->
+>>>>>>> dev
+                            </p>
+
+                            <div id="simple-msg"></div>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <div class="form-group">
+                                        <input name="name" id="name" type="text" class="form-control contact-form"
+                                               placeholder="姓名">
+                                    </div>
+                                </div>
+                                <div class="col-lg-6">
+                                    <div class="form-group">
+                                        <input name="email" id="email" type="email"
+                                               class="form-control contact-form" placeholder="邮箱">
+                                    </div>
+                                </div>
+<<<<<<< HEAD
+=======
+                                <div class="col-lg-6">
+                                    <div class="form-group">
+                                        <input name="phone" id="phone" type="phone"
+                                               class="form-control contact-form" placeholder="手机">
+                                    </div>
+                                </div>
+>>>>>>> dev
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-12">
+                                    <div class="form-group mt-2">
+                                        <input type="text" class="form-control contact-form" id="subject"
+                                               placeholder="需求概括...">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-12">
+                                    <div class="form-group mt-2">
+                                            <textarea name="comments" id="comments" rows="4"
+                                                      class="form-control contact-form h-auto"
+                                                      placeholder="需求详情描述..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row my-2">
+                                <div class="col-lg-12 d-grid">
+                                    <input type="submit" id="submit" name="send"
+                                           class="submitBnt btn btn-rounded btn-primary" value="发送留言">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+
+            </div>
+            <div class="col-lg-7">
+                <div class="m-5">
+                    <div class="position-relative">
+                        <div class="contact-map">
+                            <div style='width: 100%'>
+                                <iframe width='100%' height='600' frameborder='0' scrolling='no' marginheight='0' marginwidth='0'
+                                        src='https://map.baidu.com/search/%E6%88%90%E9%83%BD%E5%B8%82%E9%BE%99%E7%A5%A5%E4%BD%B3%E8%8B%91%E4%BA%8C%E6%9C%9F%E5%8C%97%E9%97%A8/@11589343.125,3552878,19z?querytype=s&da_src=shareurl&wd=%E6%88%90%E9%83%BD%E5%B8%82%E9%BE%99%E7%A5%A5%E4%BD%B3%E8%8B%91%E4%BA%8C%E6%9C%9F%E5%8C%97%E9%97%A8&c=75&src=0&pn=0&sug=0&l=13&b=(11531294,3537156;11641374,3576612)&from=webmap&biz_forward=%7B%22scaler%22:1,%22styles%22:%22pl%22%7D&device_ratio=1'>
+                                    <a href='https://www.maps.ie/distance-area-calculator.html'>measure area map</a></iframe>
+                            </div>
+                        </div>
+                        <div class="map-shape"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="mdi mdi-google-maps f-50 text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="mb-1">地址</h5>
+                        <p class="f-14 mb-0 text-muted">成都市双流区龙祥佳苑二期</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mt-4 mt-lg-0">
+                    <div class="flex-shrink-0">
+                        <i class="mdi mdi-email f-50 text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="mb-1">邮箱</h5>
+                        <p class="f-14 mb-0 text-muted">邮箱: aiweline@qq.com</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mt-4 mt-lg-0">
+                    <div class="flex-shrink-0">
+                        <i class="mdi mdi-phone f-50 text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="mb-1">电话</h5>
+                        <p class="f-14 mb-0 text-muted">17113909631</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</section>
+<!-- end section -->
+
+
+<!-- footer section -->
+<section class=" section footer bg-dark overflow-hidden">
+    <div class="bg-arrow">
+        <img src="@static{images/home/arrow-bg.png}" alt="" class="">
+    </div>
+    <!-- container -->
+    <div class="container">
+        <div class="row ">
+            <div class="col-lg-4">
+                <a class="navbar-brand logo f-30 text-white fw-bold" href="index.html">
+                    <img src='@static{images/logo-dark.png}' class='logo-light' alt='' height='40'>
+<!--                    <img src='@static{images/logo-light.png}' class='logo-dark' alt='' height='40'>-->
+                </a>
+                <p class="text-white-50 mt-2 mb-0">
+                    如需持续关注我们，请关注码云仓库 <a href="https://gitee.com/aiweline/WelineFramework.git">Weline</a>
+                </p>
+
+                <div class="footer-icon mt-4">
+                    <div class=" d-flex align-items-center">
+                        <a href="" class="me-2 avatar-sm text-center" data-bs-toggle="tooltip"
+                           data-bs-placement="top" title="Facebook">
+                            <i class="mdi mdi-facebook f-24 align-middle text-primary"></i>
+                        </a>
+                        <a href="" class="mx-2 avatar-sm text-center" data-bs-toggle="tooltip"
+                           data-bs-placement="top" title="twitter">
+                            <i class="mdi mdi-twitter f-24 align-middle text-primary"></i>
+                        </a>
+                        <a href="" class="mx-2 avatar-sm text-center" data-bs-toggle="tooltip"
+                           data-bs-placement="top" title="googleplay">
+                            <i class="mdi mdi-google-play f-24 align-middle text-primary"></i>
+                        </a>
+                        <a href="" class="mx-2 avatar-sm text-center">
+                            <i class="mdi mdi-linkedin f-24 align-middle text-primary" data-bs-toggle="tooltip"
+                               data-bs-placement="top" title="linkedin"></i>
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="col-md-2 ">
+                <div class="text-start mt-4 mt-lg-0">
+                    <h5 class="text-white fw-bold">产品</h5>
+                    <ul class="footer-item list-unstyled footer-link mt-3">
+                        <li><a href="#features">特性</a></li>
+                        <li><a href="#pricing">价格</a></li>
+                        <li><a href="#build">快速开始</a></li>
+                        <li><a href="#contact">联系我们</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="col-md-2 ">
+                <div class="text-start">
+                    <h5 class="text-white fw-bold">政策</h5>
+                    <ul class="footer-item list-unstyled footer-link mt-3">
+                        <li><a href="">安全与隐私</a></li>
+                        <li><a href="">市场</a></li>
+                        <li><a href="">条款和条件</a></li>
+                        <li><a href="">合集</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <h5 class="text-white">订阅</h5>
+                <div class="input-group my-4">
+                    <input type="text" class="form-control p-3" placeholder="订阅" aria-label="subscribe"
+                           aria-describedby="basic-addon2">
+                    <a href="" class="input-group-text bg-primary text-white px-4" id="basic-addon2">Go</a>
+                </div>
+                <p class="mb-0 text-white-50">
+                    发布版本时会通知到你订阅消息中。
+                </p>
+            </div>
+        </div>
+    </div>
+    <!-- end container -->
+</section>
+
+<section class="bottom-footer py-4">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <p class="mb-0 text-center text-muted">©
+                    <script>document.write(new Date().getFullYear())</script>
+                    主题
+                    <i class="mdi mdi-heart text-danger"></i> 由 <a
+                            href="http://www.bootstrapmb.com" target="_blank" class="text-muted">Aiweline团队提供.</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+<!-- end footer -->
+
+<!-- Style switcher -->
+<div class="style-switcher" id="style-switcher" onclick="toggleSwitcher()" style="left: -189px;">
+    <div>
+        <h6>选择主题颜色</h6>
+        <ul class="pattern list-unstyled mb-0">
+            <li>
+                <a class="color1" href="javascript: void(0);" onclick="setColor('default')"></a>
+            </li>
+            <li>
+                <a class="color2" href="javascript: void(0);" onclick="setColor('blue')"></a>
+            </li>
+            <li>
+                <a class="color3" href="javascript: void(0);" onclick="setColor('warning')"></a>
+            </li>
+        </ul>
+    </div>
+    <div class="bottom">
+        <a href="javascript: void(0);" class="settings rounded-end"><i class="uil uil-setting text-white"
+                                                                       style="display: inline; line-height: 46px;"></i></a>
+    </div>
+</div>
+<!-- end switcher-->
+
+
+<!--Bootstrap Js-->
+<script src="@static{js/bootstrap.bundle.min.js}"></script>
+
+<!-- Slider Js -->
+<script src="@static{js/tiny-slider.js}"></script>
+<script src="@static{js/swiper.min.js}"></script>
+
+<!-- <script src="@static{js/smooth-scroll.polyfills.min.js}"></script> -->
+
+<!-- counter -->
+<!-- <script src="@static{js/counter.init.js}"></script> -->
+
+<!-- App Js -->
+<script src="@static{js/app.js}"></script>
+<js>js/demo.js</js>
+<script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+</script>
+
+
+</body>
+
+</html>
