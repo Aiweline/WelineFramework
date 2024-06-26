@@ -55,7 +55,6 @@
     "weline/module-indexer": "*",
     "weline/module-system-config": "*",
     "weline/module-warm-cache": "*",
-    "weline/module-installer": "*",
     "weline/module-module-router": "*",
     "weline/module-module-manager": "*",
     "weline/module-maintenance": "*",

@@ -7,7 +7,7 @@
  * 论坛：https://bbs.aiweline.com
  */
 
-use Weline\Installer\Runner;
+use Weline\Framework\System\Runner;
 
 require 'bootstrap.php';
 $runner = new Runner();
