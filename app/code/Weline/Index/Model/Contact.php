@@ -11,7 +11,7 @@ declare(strict_types=1);
  * 日期：2023/6/17 10:35:03
  */
 
-namespace Aiweline\Index\Model;
+namespace Weline\Index\Model;
 
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Setup\Data\Context;
@@ -25,6 +25,7 @@ class Contact extends \Weline\Framework\Database\Model
     public const fields_PHONE   = 'phone';
     public const fields_OBJECT  = 'object';
     public const fields_MESSAGE = 'message';
+    public const indexer = 'weline_indexer';
 
     /**
      * @inheritDoc
@@ -47,13 +48,14 @@ class Contact extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
+        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()
                   ->addColumn(
                       self::fields_ID,
                       TableInterface::column_type_INTEGER,
                       0,
-                      'primary key auto_increment',
+                      'auto_increment',
                       'ID'
                   )
                   ->addColumn(
@@ -91,6 +93,10 @@ class Contact extends \Weline\Framework\Database\Model
                       'not null',
                       '内容'
                   )
+                ->addConstraints('
+                     unique index e_phone (email,phone) using btree comment "电话唯一索引",
+                     primary key (contact_id,email) using btree comment "测试主键索引"
+                ')
                   ->create();
         }
     }

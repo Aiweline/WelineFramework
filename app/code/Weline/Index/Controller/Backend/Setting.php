@@ -1,6 +1,6 @@
 <?php
 
-namespace Aiweline\Index\Controller\Backend;
+namespace Weline\Index\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 

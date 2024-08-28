@@ -1,6 +1,6 @@
 <?php
 
-namespace Aiweline\Index\Model\Backend;
+namespace Weline\Index\Model\Backend;
 
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
