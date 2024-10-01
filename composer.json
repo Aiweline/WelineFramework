@@ -67,7 +67,9 @@
     "weline/module-backend-theme-upzet": "*",
     "weline/module-taglib": "*",
     "weline/module-queue": "*",
+    "weline/module-eav": "*",
     "weline/module-file-manager": "*",
+    "weline/module-editor-manager": "*",
     "weline/module-el-finder-file-manager": "*",
     "weline/module-media-manager": "*"
   },

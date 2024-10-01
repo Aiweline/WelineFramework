@@ -2,7 +2,7 @@
 
 namespace Weline\SessionManager\Model;
 
-use Weline\Framework\Database\Db\Ddl\Table;
+use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -36,8 +36,8 @@ class Session extends Model
         //        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()
-                ->addColumn(self::fields_ID, Table::column_type_VARCHAR, 128, 'primary key', 'Session ID')
-                ->addColumn(self::fields_SESSION_DATA, Table::column_type_TEXT, 65535, "", 'Session数据')
+                ->addColumn(self::fields_ID, TableInterface::column_type_VARCHAR, 128, 'primary key', 'Session ID')
+                ->addColumn(self::fields_SESSION_DATA, TableInterface::column_type_TEXT, 65535, "", 'Session数据')
                 ->create();
         }
     }

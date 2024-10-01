@@ -13,12 +13,13 @@ declare(strict_types=1);
 
 namespace Weline\Index\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 class Contact extends \Weline\Framework\Database\Model
 {
+    public string $table = 'weline_contact';
     public const fields_ID      = 'contact_id';
     public const fields_EMAIL   = 'email';
     public const fields_NAME    = 'name';
@@ -55,7 +56,7 @@ class Contact extends \Weline\Framework\Database\Model
                       self::fields_ID,
                       TableInterface::column_type_INTEGER,
                       0,
-                      'auto_increment',
+                      'primary key auto_increment',
                       'ID'
                   )
                   ->addColumn(
@@ -93,10 +94,7 @@ class Contact extends \Weline\Framework\Database\Model
                       'not null',
                       '内容'
                   )
-                ->addConstraints('
-                     unique index e_phone (email,phone) using btree comment "电话唯一索引",
-                     primary key (contact_id,email) using btree comment "测试主键索引"
-                ')
+                ->addIndex(TableInterface::index_type_UNIQUE, 'e_phone', self::fields_EMAIL.','.self::fields_PHONE, '唯一邮箱')
                   ->create();
         }
     }
