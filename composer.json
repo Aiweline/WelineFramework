@@ -23,7 +23,7 @@
     }
   ],
   "require": {
-    "php": "^8.1",
+    "php": "^8.2",
     "ext-iconv": "*",
     "ext-json": "*",
     "ext-pdo": "*",
@@ -71,7 +71,8 @@
     "weline/module-file-manager": "*",
     "weline/module-editor-manager": "*",
     "weline/module-el-finder-file-manager": "*",
-    "weline/module-media-manager": "*"
+    "weline/module-media-manager": "*",
+    "phpoffice/phpspreadsheet": "^3.3"
   },
   "opcache-autoloader": true,
   "apcu-autoloader": true,
@@ -106,11 +107,5 @@
   },
   "require-dev": {
     "symfony/var-dumper": "^6.1"
-  },
-  "repositories": {
-    "packagist": {
-      "type": "composer",
-      "url": "https://packagist.org"
-    }
   }
 }

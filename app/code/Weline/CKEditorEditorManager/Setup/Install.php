@@ -2,15 +2,12 @@
 
 namespace Weline\CKEditorEditorManager\Setup;
 
-use Weline\EditorManager\Model\BackendUserConfig;
+use Weline\Backend\Model\BackendUserConfig;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\InstallInterface;
 
 class Install implements InstallInterface
 {
-    /**
-     * @var \Weline\EditorManager\Model\BackendUserConfig
-     */
     private BackendUserConfig $backendUserConfig;
 
     public function __construct(BackendUserConfig $backendUserConfig)
