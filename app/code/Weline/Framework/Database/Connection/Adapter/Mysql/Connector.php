@@ -47,7 +47,9 @@ final class Connector extends Query implements ConnectorInterface
         try {
             //初始化一个Connection对象
             $this->link = new PDO($dsn, $this->configProvider->getUsername(), $this->configProvider->getPassword(), $this->configProvider->getOptions());
-            $this->link->exec($this->configProvider->getPreSql());
+            if($this->configProvider->getPreSql()){
+                $this->link->exec($this->configProvider->getPreSql());
+            }
 //            $this->link->exec("set names {$this->configProvider->getCharset()} COLLATE {$this->configProvider->getCollate()}");
         } catch (PDOException $e) {
             throw new LinkException($e->getMessage());
