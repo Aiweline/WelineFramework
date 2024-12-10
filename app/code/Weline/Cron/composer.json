@@ -1,0 +1,24 @@
+{
+  "name": "weline/module-cron",
+  "description": "WelineFramework cron(计划任务)",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1",
+    "mtdowling/cron-expression": "^1.2"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Cron\\": ""
+    },
+    "psr-0": {
+      "Weline\\Cron\\": ""
+    }
+  },
+  "license": "MIT"
+}

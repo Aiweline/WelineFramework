@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+
+<head><w:block class='Weline\Backend\Block\Header\Base' template='Weline_Admin::header/base.phtml'/>
+    <meta charset="utf-8"/>
+    <title>Weline - Responsive Bootstrap 5 Admin Dashboard | Docs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="Premium Multipurpose Admin & WelineFramework" name="description"/>
+    <meta content="秋枫雁飞(aiweline)" name="author"/>
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="@static(assets/images/favicon.ico)">
+
+    <!-- Bootstrap Css -->
+    <link href="@static(assets/css/bootstrap.min.css)" rel="stylesheet" type="text/css"/>
+    <!-- Icons Css -->
+    <link href="@static(assets/css/icons.min.css)" rel="stylesheet" type="text/css"/>
+    <!-- App Css-->
+    <link href="@static(assets/css/app.min.css)" rel="stylesheet" type="text/css"/>
+
+</head>
+
+<body data-sidebar="dark">
+
+<!-- Begin page -->
+<div id="layout-wrapper">
+
+    <header id="page-topbar">
+        <div class="navbar-header">
+            <div class="d-flex">
+                <!-- LOGO -->
+                <div class="navbar-brand-box">
+                    <a href="@admin-url('admin/template/upzet/help/index.html')" class="logo logo-light">
+                            <span class="logo-sm">
+                                <img src="@static(assets/images/logo-sm.png)" alt="" height="22">
+                            </span>
+                        <span class="logo-lg">
+                                <img src="@static(assets/images/logo-light.png)" alt="" height="24">
+                            </span>
+                    </a>
+                </div>
+
+                <button type="button" class="btn btn-sm px-3 font-size-24 header-item waves-effect" id="vertical-menu-btn">
+                    <i class="mdi mdi-backburger"></i>
+                </button>
+
+            </div>
+
+            <div class="d-flex">
+
+                <div class="d-inline-block">
+                    <h5><span class="badge badge-danger float-right">v1.0.0</span></h5>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <div class="vertical-menu">
+
+        <div data-simplebar class="h-100">
+
+            <!--- Sidemenu -->
+            <div id="sidebar-menu">
+                <!-- Left Menu Start -->
+                <ul class="metismenu list-unstyled" id="side-menu">
+                    <li class="menu-title">Docs</li>
+
+                    <li>
+                        <a href="@admin-url('admin/template/upzet/help/index.html')" class="waves-effect">
+                            <i class="mdi mdi-file-document-box-outline"></i>
+                            <span>Getting Started</span>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/setup.html')" class=" waves-effect">
+                            <i class="mdi mdi-settings-outline"></i>
+                            <span>Setup</span>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/plugins.html')" class=" waves-effect">
+                            <i class="mdi mdi-apps"></i>
+                            <span>Plugins</span>
+                        </a>
+                    </li>
+
+                    <li class="menu-title">Layouts</li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/vertical.html')" class=" waves-effect">
+                            <i class="mdi mdi-flip-horizontal"></i>
+                            <span>Vertical</span>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/horizontal.html')" class=" waves-effect">
+                            <i class="mdi mdi-flip-vertical"></i>
+                            <span>Horizontal</span>
+                        </a>
+                    </li>
+
+                    <li class="menu-title">Themes</li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/dark.html')" class=" waves-effect">
+                            <i class="mdi mdi-weather-night"></i>
+                            <span>Dark Version</span>
+                        </a>
+                    </li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/rtl.html')" class=" waves-effect">
+                            <i class="mdi mdi-web"></i>
+                            <span>RTL Version</span>
+                        </a>
+                    </li>
+
+                    <li class="menu-title">Other</li>
+
+                    <li>
+                        <a href="@backend-url('admin/template/upzet/help/changelog.html')" class=" waves-effect">
+                            <i class="mdi mdi-format-list-bulleted"></i>
+                            <span>Changelog</span>
+                        </a>
+                    </li>
+
+                </ul>
+
+            </div>
+            <!-- Sidebar -->
+        </div>
+    </div>
+    <!-- Left Sidebar End -->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-flex align-items-center justify-content-between">
+                            <h4 class="mb-0 font-size-18">Getting Started</h4>
+
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Docs</a></li>
+                                    <li class="breadcrumb-item active">Getting Started</li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="p-lg-3">
+                            <h5 class="mt-0 mb-3">Introduction</h5>
+
+                            <p>Weline is a fully featured premium admin template built on top of awesome
+                                <strong>Bootstrap 5.0.1</strong>. It's crafted using modern web technologies
+                                <strong>HTML5, CSS3 </strong>and <strong>jQuery</strong>. The theme includes
+                                beautiful dashboard, many
+                                ready to use hand crafted components, UI elements, widgets, pages, etc. The
+                                components could
+                                be used very easily on any page. The theme is fully responsive and customizable.
+                                Apexy helps you to create your next Bootstrap even faster then before. It can be
+                                used to create a Saas based interfase, administrator dashboard or anything you want
+                                to build on the web. Apexy helps your team moving faster and saving development
+                                costs.
+                            </p>
+
+                        </div>
+
+                        <div class="p-lg-3">
+                            <h5 class="mt-0 mb-2">Structure</h5>
+
+                            <p>Extract the zip file you received after purchase and you would find the exact below
+                                files and folders:
+                            </p>
+
+                            <pre class="mb-0">
+
+├── admin
+    ├── src directory
+        ├── assets
+            ├── fonts
+            ├── images
+            ├── js
+            └── scss
+                ├── custom
+                ├── _variables.scss
+                ├── _variables-dark.scss
+                ├── app.scss
+                ├── app-dark.scss
+                ├── bootstrap.scss
+                ├── bootstrap-dark.scss
+                └── icons.scss
+        ├── partials
+            ├── body.html
+            ├── footer.html
+            ├── head-css.html
+            ├── horizontal.html
+            ├── main.html
+            ├── menu.html
+            ├── page-title.html
+            ├── right-sidebar.html
+            ├── sidebar.html
+            ├── title-meta.html
+            ├── topbar.html
+            └── vendor-scripts.html
+        └── all html pages
+    ├── gulpfile.js
+    ├── package.json
+    └── yarn.lock
+                                        </pre>
+
+                        </div> <!-- end padding-->
+                    </div>
+                    <!--end card body-->
+                </div> <!-- end card-->
+
+
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-right d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> by <a href="https://www.aiweline.com" target="_blank"
+                                                                                         class="text-muted">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!-- JAVASCRIPT -->
+<script src="@static(assets/libs/jquery/jquery.min.js)"></script>
+<script src="@static(assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
+<script src="@static(assets/libs/metismenu/metisMenu.min.js)"></script>
+<script src="@static(assets/libs/simplebar/simplebar.min.js)"></script>
+<script src="@static(assets/libs/node-waves/waves.min.js)"></script>
+
+<script src="@static(assets/js/origin-app.js)"></script>
+
+</body>
+
+</html>

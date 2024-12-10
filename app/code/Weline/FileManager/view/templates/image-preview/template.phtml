@@ -1,0 +1,140 @@
+<!-- 图片预览 -->
+<style media="screen">
+    .file-target-preview {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem
+    }
+
+    .drag-item {
+        display: block;
+        position: relative;
+        float: left;
+        width: <?= $this->getData('width') ?? 50 ?>px;
+        height: <?= $this->getData('height') ?? 50 ?>px;
+        border: 1px solid #CCC;
+    }
+
+    .close {
+        position: absolute;
+        right: 0;
+        width: 17px;
+        height: 17px;
+        z-index: 1;
+        text-align: center;
+        line-height: 17px;
+        background: transparent;
+        opacity: 0.5
+    }
+
+    .drag-item:hover .close {
+        opacity: 1;
+        color: red;
+    }
+
+    .drag-pic {
+        max-width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        margin: auto;
+    }
+</style>
+<div id="{{target}}-preview" class="file-target-preview">
+    <foreach name="value_items" key="k">
+        <div class="drag-item" draggable="true">
+            <div class="close" onclick="delSelectedImage(event)">x</div>
+            <img data-src="{{v.path}}" src="{{v.url}}" alt="{{v.pathInfo.name}}"
+                 title="{{v.pathInfo.name}}({{v.pathInfo.size}})"
+                 class="drag-pic img-responsive"
+                 draggable="false"
+                 data-file="">
+        </div>
+    </foreach>
+</div>
+<!-- 图片放大modal -->
+<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
+     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-zoom-modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <lang>预览</lang>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-zoom-close-modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="{{target}}-zoom-preview-image-body">
+                <img src="" alt="" title="">
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<js:part name="drag-sort"/>
+<script type="text/javascript">
+    var dragSort = new DragSort({
+        id: '{{target}}-preview', // 拖动父级div框的ID
+        drag: 'drag-item', //拖动元素
+        times: '1000', // 动画时长（默认一秒钟）
+        callback: function () {
+            flushSelectedImage();
+        }
+    })
+
+    function addSelectedImage(event) {
+        var node = document.getElementById('{{target}}-preview')
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+        <div class="drag-item" draggable="true">
+            <div class="close" onclick="delSelectedImage(event)">x</div>
+            <img data-src="" src="" alt="" class="drag-pic img-responsive" draggable="false" data-file="">
+        </div>
+`;
+        var html = wrapper.firstChild;
+        node.appendChild(html)
+    }
+
+    function delSelectedImage(event) {
+        // 点击删除当前元素的父级元素
+        event.currentTarget.parentElement.parentElement.removeChild(event.currentTarget.parentElement);
+        // 刷新目标value
+        flushSelectedImage()
+    }
+
+    function flushSelectedImage() {
+        // 刷新目标value
+        let urls = '';
+        let imgs = $('#{{target}}-preview').find('img')
+        for (let i = 0; i < imgs.length; i++) {
+            if (urls) {
+                urls += ','
+            }
+            urls += imgs[i].getAttribute('data-src')
+        }
+        let targetEle = $('#{{target}}')
+        switch ('{{params.setAttr}}'){
+            case 'text':
+                targetEle.text(urls).trigger('change').trigger('input');
+                break;
+            default:
+                targetEle.val(urls).trigger('change').trigger('input');
+        }
+
+    }
+
+    flushSelectedImage()
+
+    $('#{{target}}-preview').on('click', 'img', function () {
+        let src = '/pub/media/' + $(this).attr('data-src');
+        let zoomModal = $('#{{target}}-zoom-modal');
+        let zoomPreviewImageBody = $('#{{target}}-zoom-preview-image-body');
+        zoomPreviewImageBody.empty()
+        zoomPreviewImageBody.append(`<img src="${src}" class="img-fluid" alt="">`)
+        zoomModal.modal('show')
+    })
+</script>

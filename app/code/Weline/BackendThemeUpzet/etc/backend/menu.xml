@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--开发工具-->
+    <add source="Weline_AdminThemeUpzet::upzet" name="admin_template_upzet" title="Upzet" action=""
+         parent="Weline_Backend::origin_template" icon="mdi mdi-file-document-multiple" order="200021"/>
+    <add source="Weline_AdminThemeUpzet::template_upzet" name="admin_template_upzet_demo" title="模板" action="admin/template/upzet"
+         parent="Weline_AdminThemeUpzet::upzet" icon="mdi mdi-file-document-multiple" order="200021"/>
+    <add source="Weline_AdminThemeUpzet::template_upzet_help" name="admin_template_upzet_help" title="帮助" action="admin/template/upzet/help"
+         parent="Weline_AdminThemeUpzet::upzet" icon="mdi mdi-file-document-multiple" order="200022"/>
+</menus>

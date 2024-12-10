@@ -1,0 +1,23 @@
+{
+  "name": "weline/module-eav",
+  "description": "WelineFramework eav module",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Eav\\": ""
+    },
+    "psr-0": {
+      "Weline\\Eav\\": ""
+    }
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,158 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='main-content'>
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <!--消息-->
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!--end row-->
+                <div class="row">
+                    <div class='col-lg-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>路由表</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>静态路由管理：可定制属于自己的静态url来提升seo。</lang>
+                                </p>
+                                <form class='needs-validation' method="post" action="@admin-url('url-manager/backend/rewriter')" novalidate>
+                                    <input type="hidden" name="url_identify" value="{{url.identify}}">
+                                    <input type="hidden" name="url_id" value="{{url.url_id}}">
+                                    <input type="hidden" name="origin_path" value="{{url.path}}">
+                                    <div class='row'>
+                                        <div class='col-md-4'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='path'>
+                                                    <lang>路径</lang>
+                                                </label>
+                                                <input type='text' class='form-control disabled' id='path' name="path"
+                                                       placeholder='@lang{输入路径}' value='{{url.path}}' required @if{url.path=>'disabled'}>
+                                                <div class='valid-tooltip'>
+                                                    <lang>输入路径正确</lang>
+                                                </div>
+                                                <div class='invalid-tooltip'>
+                                                    <lang>请输入路径</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='col-md-4'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='rewrite'>
+                                                    <lang>重写路径</lang>
+                                                </label>
+                                                <input type='text' class='form-control' id='rewrite' name="rewrite"
+                                                       placeholder='@lang{输入路径}' value='{{url.rewrite_path}}' required>
+                                                <div class='valid-tooltip'>
+                                                    <lang>输入路径正确</lang>
+                                                </div>
+                                                <div class='invalid-tooltip'>
+                                                    <lang>请输入重写路径</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!--                                        <div class='col-md-4'>-->
+                                        <!--                                            <div class='mb-3 position-relative'>-->
+                                        <!--                                                <input class='form-check form-switch' type='checkbox' id='keep_origin' switch='bool' checked>-->
+                                        <!--                                                <label class='form-label' for='switch3' data-on-label='Yes'-->
+                                        <!--                                                       data-off-label='No'></label>-->
+                                        <!--                                            </div>-->
+                                        <!--                                        </div>-->
+                                    </div>
+                                    <button class='btn btn-primary' type='submit'>
+                                        <lang>重写路由</lang>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class='footer'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <div class='col-sm-6'>
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class='col-sm-6'>
+                        <div class='text-sm-end d-none d-sm-block'>
+                            Crafted with <i class='mdi mdi-heart text-danger'></i> By <a
+                                    href='https://www.aiweline.com/'>秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+@template(Weline_Admin::common/footer.phtml)
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<!-- validation init -->
+<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js)'></script>
+</body>
+</html>

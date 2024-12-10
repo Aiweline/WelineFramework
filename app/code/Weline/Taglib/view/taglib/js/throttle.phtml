@@ -1,0 +1,20 @@
+<script>
+    function throttle(func, delay) {
+        let timeoutId;
+        let lastExecTime = 0;
+        return function (...args) {
+            const elapsedTime = new Date().getTime() - lastExecTime;
+            if (elapsedTime > delay) {
+                lastExecTime = new Date().getTime();
+                func.apply(this, args);
+            } else {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    lastExecTime = new Date().getTime();
+                    func.apply(this, args);
+                    timeoutId = null;
+                }, delay - elapsedTime);
+            }
+        };
+    }
+</script>

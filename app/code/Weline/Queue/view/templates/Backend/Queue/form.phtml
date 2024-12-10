@@ -1,0 +1,582 @@
+<?php
+
+/**@var \Weline\Framework\View\Template $this */
+
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Framework\Manager\ObjectManager;
+
+$themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+    <!-- twitter-bootstrap-wizard css -->
+    <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
+    <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
+    <style>
+        .input-group-addon {
+            display: inline-block;
+            width: 40px;
+            height: 38px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        span.required {
+            color: red
+        }
+    </style>
+
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?> class='bg-transparent'>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div class="layout-wrapper overflow-hidden " id="QueuePage">
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class='card'>
+        <div class='card-body overflow-hidden'>
+            <div id='progress-wizard' class='twitter-bs-wizard'>
+                <ul class='twitter-bs-wizard-nav nav-justified'>
+                    <!--                    选择队列类型-->
+                    <li class='nav-item nav-link' :class="{active:activeName=='progress-select-queueData'}"
+                        @click="changeNav('progress-select-queueData')" scope="queue" name="progress"
+                        value="progress-select-queueData">
+                        <span class='step-number'>01</span>
+                        <span class='step-title'>
+                                <lang>选择队列类型</lang>
+                            </span>
+                        <span class='help-block' v-if="params.type_id !== ''">
+                                <lang>你选择了</lang>
+                                <span class='text-primary'
+                                      v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'"></span>
+                            </span>
+                    </li>
+                    <!--                    选择队列类型-->
+                    <li class='nav-item nav-link' :class="{active:activeName=='progress-params'}"
+                        @click="changeNav('progress-params')" scope="queue" name="progress"
+                        value="progress-params">
+                        <span class='step-number'>02</span>
+                        <span class='step-title'>
+                                <lang>设置队列参数</lang>
+                            </span>
+                        <span class='help-block' v-if="params.type_id!==''">
+                                <lang>请设置队列属性</lang>
+                            </span>
+                    </li>
+                    <!--                   属性组-->
+                    <li class='nav-item nav-link' :class="{active:activeName=='progress-confirm'}"
+                        @click="changeNav('progress-confirm')"
+                        value="progress-confirm">
+                        <span class='step-number'>03</span>
+                        <span class='step-title'>
+                                <lang>确认队列</lang>
+                            </span>
+                        <span class='help-block' v-if="params.group_id!==''">
+                                <lang>你即将确认创建队列，请确认队列信息。</lang>
+                            </span>
+                    </li>
+
+                </ul>
+
+                <div id='bar' class='progress mt-5'>
+                    <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
+                </div>
+                <div class='tab-content twitter-bs-wizard-tab-content'>
+                    <!--队列类型结果-->
+                    <div class='tab-pane' :class="{active:activeName=='progress-select-queueData'}">
+                        <input type='hidden' name='progress' value='progress-select-queueData'>
+                        <input type='hidden' name='next_progress' value='progress-params'>
+                        <div class='row'>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <div class='input-group'>
+                                    <input type='search' class='form-control rounded' id='search-queueData'
+                                           placeholder='@lang{请输入要查找的队列类型名或者队列类型代码}'
+                                           aria-label='@lang{请输入要查找的队列类型名或者队列类型代码}'
+                                           v-model="QueueTypesSearchVal"
+                                           @input="renderSearchQueueTypes()"
+                                           aria-describedby='search-addon'/>
+                                    <button type='button' class='btn btn-outline-primary'
+                                            @click='renderSearchQueueTypes()'>
+                                        <lang>搜索队列类型</lang>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='row'>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <div class='input-group'>
+                                    <p class='text-info m-0 text-break'>
+                                        <if condition='module or dir'>
+                                            <b>
+                                                <lang>来源:</lang>
+                                            </b>
+                                            {{name}}
+                                            <b>
+                                                <lang>参数：</lang>
+                                            </b>
+                                            <lang>【</lang>
+                                            <lang>module：</lang>
+                                            {{module}}
+                                            <lang>
+                                                <lang>,</lang>
+                                                <lang>dir：</lang>
+                                                {{dir}}
+                                                <lang>】</lang>
+                                            </lang>
+                                        </if>
+                                    </p>
+                                </div>
+                                <b>
+                                    <lang>请选择任务类型：</lang>
+                                </b>
+                                <div class='input-group'>
+                                    <select id='search-queueData-result'
+                                            scope='queue'
+                                            class='form-select form-control rounded' size='30' name='type_id'
+                                            data-style='btn-primary' data-width='fit'
+                                            aria-label='@lang{搜索【队列类型】结果}'
+                                            v-model='params.type_id' aria-describedby='search-addon' required>
+                                        <option v-for='v in queue_types' :value='v.type_id' :label='v.name' :tip='v.tip'
+                                                v-bind:selected='v.type_id == params.type_id'
+                                                @click="changeTypeTip(v)">
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <b>
+                                    <lang>队列类型提醒：</lang>
+                                </b>
+                                <div class='input-group'>
+                                    <p v-html="tip"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <!--上一步 下一步 当前没有上一步-->
+                        <div class='row'>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <button type='button' class='btn btn-outline-primary pull-right'
+                                        @click='changeNav("progress-params")'>
+                                    <lang>下一步</lang>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!--参数选择-->
+                    <div class='tab-pane' :class="{active:activeName=='progress-params'}">
+                        <div class="row">
+                            <div class='mx-auto col-md-4 mb-3'>
+                                <div class='input-group gap-2 required'>
+                                    <!--必填星号-->
+                                    <label for='queueName' class='control-label'><span class='text-danger'>*</span>
+                                        <lang>队列名称</lang>
+                                    </label>
+                                    <input type='text' v-model='params.name' class='w-100 form-control' id='queueName'
+                                           required scope='queue' name='name'>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='row' id="queueParamsForm">
+
+                        </div>
+                        <!--上一步 下一步-->
+                        <div class='row'>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <button type='button' class='btn btn-outline-primary pull-left'
+                                        @click='changeNav("progress-select-queueData")'>
+                                    <lang>上一步</lang>
+                                </button>
+                                <button type='button' class='btn btn-outline-primary pull-right'
+                                        @click='changeNav("progress-confirm")'>
+                                    <lang>下一步</lang>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!--确认信息-->
+                    <div class='tab-pane' :class="{active:activeName=='progress-confirm'}">
+                        <div class='row'>
+                            <b>
+                                <h2>
+                                    <lang>队列信息总览：</lang>
+                                </h2>
+                                <hr>
+                            </b>
+                            <p>
+                                <label>
+                                    <lang>队列名称：</lang>
+                                </label>
+                                <span v-text="params.name"></span>
+                            </p>
+                            <p>
+                                <label>
+                                    <lang>队列类型：</lang>
+                                </label>
+                                <span v-text="'('+ findLabel(queue_types,params.type_id,'type_id','name')+')'"></span>
+                            </p>
+                            <p>
+                                <label>
+                                    <lang>执行类：</lang>
+                                </label>
+                                <span class="text-primary"
+                                      v-text="findLabel(queue_types,params.type_id,'type_id','class')"></span>
+                            </p>
+                            <hr>
+                            <p>
+                                <b class="font-size-18">
+                                    <lang>参数信息：</lang>
+                                </b>
+                                <br>
+                            <div v-for='attribute in params.attributes'>
+                                <label v-text='attribute.name+":"'></label>
+                                <span v-text='attribute.value_alias'></span>
+                            </div>
+                            </p>
+                        </div>
+                        <!--上一步 下一步-->
+                        <div class='row'>
+                            <div class='mx-auto col-lg-6 mt-2 mb-4'>
+                                <button type='button' class='btn btn-outline-primary pull-left'
+                                        @click='changeNav("progress-params",false)'>
+                                    <lang>上一步</lang>
+                                </button>
+                                <div v-if="(activeName=='progress-confirm')">
+                                    <button class='btn btn-primary pull-right' @click='submitQueue'>
+                                        <lang>提交</lang>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+
+@template(Weline_Admin::common/footer.phtml)
+<!-- twitter-bootstrap-wizard js -->
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js)'></script>
+
+<!-- Table Editable plugin -->
+<script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
+
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.js)'></script>
+
+<!-- form wizard init -->
+<script src='@static(Weline_Queue::backend/js/pages/form-wizard.init.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+<w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
+<js:part name="debounce"/>
+<script>
+    var QueuePage = new Vue({
+        el: '#QueuePage',
+        data: {
+            tip: '',
+            dir: '{{dir}}',
+            module: '{{module}}',
+            queueName: '{{queueData.name}}',
+            params: {
+                id: '{{queueData.queue_id}}', //队列ID
+                type_id: '{{queueData.type_id}}', //选择队列类型ID
+                attributes: [], //队列属性
+                name: '{{queueData.name}}',
+            },
+            activeName: '{{queueData.progress|"progress-select-queueData"}}', //导航选中名称
+            QueueTypesSearchVal: '', //搜队列类型名称
+            queue_types: <?= isset($queue_types) ? json_encode($queue_types) : '[]' ?>,
+            typeAttributeParams: [],
+            types: <?= isset($types) ? json_encode($types) : '[]' ?>,
+            clickedParamsProcess: false,
+        },
+        mounted() {
+            this.activeName = '{{queueData.progress|"progress-select-queueData"}}';
+            if (this.params.type_id) {
+                this.renderSearchQueueTypeAttributes();
+            }
+            // 自动选中提示
+            if (this.params.type_id) {
+                for (var i = 0; i < this.queue_types.length; i++) {
+                    if (this.queue_types[i].type_id == this.params.type_id) {
+                        this.changeTypeTip(this.queue_types[i])
+                        break;
+                    }
+                }
+            }
+        },
+        updated() {
+
+        },
+        methods: {
+            changeTypeTip(t) {
+                this.tip = t.tip
+                this.queueName = t.name
+                this.clickedParamsProcess = false
+            },
+            // 提交
+            submitQueue() {
+                if (!this.params.type_id) {
+                    Swal.fire({
+                        title: '@lang{请先选择队列类型再操作！}',
+                        text: '@lang{当前队列类型为空！无法创建属性！}',
+                        icon: 'warning',
+                        confirmButtonText: '@lang{好的}'
+                    })
+                    return false
+                }
+                $.ajax({
+                    type: 'POST',
+                    url: "@backend-url('*/backend/queue/form')?module="+this.module+"&dir="+this.dir,
+                    data: this.params,
+                    success: function (res) {
+                        if (res.code === 200) {
+                            Swal.fire({
+                                title: res.msg,
+                                icon: 'success',
+                                confirmButtonText: '@lang{好的}'
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    showLoading()
+                                    window.parent.location.reload();
+                                }
+                            })
+                        } else {
+                            Swal.fire({
+                                title: '@lang{队列创建失败!}',
+                                text: JSON.stringify(res.msg),
+                                icon: 'error',
+                                confirmButtonText: '@lang{好的}'
+                            })
+                        }
+                    }
+                })
+            },
+            debounceChange: debounce(function (code, type_id, set_id, group_id) {
+                if (!type_id) {
+                    Swal.fire({
+                        title: '@lang{请先选择队列类型再操作！}',
+                        text: '@lang{当前队列类型为空！无法创建属性！}',
+                        icon: 'warning',
+                        confirmButtonText: '@lang{好的}'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            this.activeName = 'progress-select-queueData';
+                        }
+                    })
+                    return false
+                }
+                $.ajax({
+                    type: "get",
+                    url: '@backend-url("*/backend/queue/search")?field=code&limit=1&search=' + code + '&type_id=' + type_id + '&set_id=' + set_id + '&group_id=' + group_id,
+                    dataType: "json",
+                    success: (res) => {
+                        if (res.items.length > 0) {
+                            Swal.fire({
+                                title: '@lang{属性已存在！}',
+                                text: '@lang{该属性已存在！}',
+                                icon: 'warning',
+                                confirmButtonText: '@lang{好的}'
+                            }).then(function (result) {
+                                if (result.isConfirmed) {
+                                    $('#progress-queueData-code').css({border: 'red 1px solid'});
+                                }
+                            })
+                        } else {
+                            $('#progress-queueData-code').css({border: 'green 1px solid'});
+                        }
+                    },
+                    error: (res) => {
+                        console.log(res)
+                    }
+                })
+            }, 500),
+            // 查询code是否可用
+            checkCode(e) {
+                this.debounceChange(this.params.code, this.params.type_id, this.params.set_id, this.params.group_id)
+            },
+            /*队列类型搜索*/
+            renderSearchQueueTypes: debounce(function (e) {
+                $.ajax({
+                    url: '@backend-url("*/backend/queue/searchType")?q=' + this.QueueTypesSearchVal + '&module={{module}}&dir={{dir}}',
+                    success: (res) => {
+                        this.queue_types = res['data'];
+                    }
+                })
+            }, 500),
+
+            /* 队列类型属性搜索渲染 */
+            renderSearchQueueTypeAttributes(e) {
+                showLoading()
+                let queue_id = '';
+                if (this.params.id) {
+                    queue_id = '&queue_id=' + this.params.id
+                }
+                $.ajax({
+                    url: '@backend-url("*/backend/queue/typeAttributes")?id=' +
+                        this.params.id + '&type_id=' + this.params.type_id,
+                    success: (res) => {
+                        if (res['msg']) {
+                            Swal.fire({
+                                title: '警告！',
+                                text: res['msg'],
+                                icon: 'error',
+                                dangerMode: true,
+                                confirmButtonText: '@lang{好的}'
+                            })
+                            return false;
+                        }
+                        let html = '';
+                        let queueParamsForm = $('#queueParamsForm')
+                        queueParamsForm.html(html)
+                        for (var i = 0; i < res['data'].length; i++) {
+                            html += `<div class='gap-2 col-lg-4 col-md-6 col-sm-12'>
+${res['data'][i].html}
+                                </div>`;
+                        }
+                        if ('' === html) {
+                            html = '<lang>队列无属性，可以直接进行下一步提交。</lang>'
+                        }
+                        queueParamsForm.html(html)
+                        this.typeAttributeParams = res['data'];
+                        hideLoading()
+                    }
+                })
+            },
+            //查找label
+            findLabel(arr, id, key, name) {
+                let label = '';
+                arr.forEach((item) => {
+                    if (item[key] == id) {
+                        label = item[name]
+                    }
+                })
+                return label
+            },
+            //     改变属性类型
+            changeType(arr, id) {
+                let find_item = {}
+                arr.forEach((item) => {
+                    if (item.type_id == Number(id)) {
+                        this.params.has_option = item.is_swatch;
+                        this.stopable = item.is_swatch;
+                        find_item = item;
+                    }
+                });
+                this.debounceSaveType(find_item);
+                this.activeAttrItem = find_item;
+            },
+            changeNav(name, reload = true) {
+                if(this.clickedParamsProcess){
+                    reload = false
+                }
+                this.activeName = name;
+                if (name === 'progress-params' && this.params.type_id !== '' && reload) {
+                    this.clickedParamsProcess = true
+                    this.renderSearchQueueTypeAttributes();
+                }
+                if (name === 'progress-confirm') {
+                    let queueParamsForm = $('#queueParamsForm')
+                    // 检查队列名字
+                    if (!this.params.name) {
+                        const queueName = $('#queueName')
+                        this.changeNav('progress-params')
+                        $('html, body').animate({
+                            scrollTop: queueName.offset().top - 10 // 减去10是为了确保输入框上方有一点空间
+                        }, 500);
+                        queueName.focus().css({border: 'red 1px solid'})
+                        return false
+                    }
+                    // 读取form中的属性输入框参数
+                    let inputs = queueParamsForm.find('*[scope="queue"]')
+                    this.params.attributes = []
+                    inputs.each((index, item) => {
+                        item = $(item)
+                        // 如果存在必填项没有填写则跳转到对应的输入框，并将border边框设置红色
+                        if (item.attr('required')) {
+                            if (!item.val() || (typeof item.val() === 'object' && item.val().length === 0)) {
+                                item.focus();
+                                this.changeNav('progress-params', false)
+                                $('html, body').animate({
+                                    scrollTop: item.offset().top - 10 // 减去10是为了确保输入框上方有一点空间
+                                }, 500);
+                                item.css({border: 'red 1px solid'});
+                                Swal.fire({
+                                    title: '警告！',
+                                    text: '@lang(请填写必填项: )' + item.attr('title'),
+                                    icon: 'error',
+                                    dangerMode: true,
+                                    confirmButtonText: '@lang{好的}'
+                                })
+                                return false
+                            }
+                        }
+                        let model_class_data = item.attr('model_class_data')
+                        if (model_class_data) {
+                            model_class_data = JSON.parse(model_class_data)
+                        }
+                        // 动态的模型数据应该从选项中拉取
+                        let options = item.find('option')
+                        model_class_data = {}
+                        options.each((index, itemOption) => {
+                            itemOption = $(itemOption)
+                            model_class_data[itemOption.val()] = itemOption.text()
+                        })
+
+                        let alias = item.val();
+                        if (model_class_data) {
+                            if (typeof item.val() === 'object') {
+                                alias = '';
+                                item.val().forEach((i) => {
+                                    if (model_class_data[i]) {
+                                        alias += model_class_data[i] + ',';
+                                    }
+                                })
+                            } else {
+                                if (model_class_data[alias]) {
+                                    alias = model_class_data[alias]
+                                }
+                            }
+                        }
+                        this.params.attributes.push({
+                            name: item.attr('title'),
+                            code: item.attr('name'),
+                            value: item.val(),
+                            value_alias: alias
+                        })
+                    })
+                }
+            },
+        },
+    })
+</script>
+<w:data-field url="@backend-url('backend/user-data')" container-id="QueuePage" event="input change click"/>
+</body>
+
+</html>

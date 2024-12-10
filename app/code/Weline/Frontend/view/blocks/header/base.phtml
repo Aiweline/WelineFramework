@@ -1,0 +1,187 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$host = $this->request->getBaseHost() . '/';
+//$http_host                               = explode('.', $this->request->getServer('HTTP_HOST'));
+//$domain                             = array_pop($http_host);
+//$domain                             = array_pop($http_host) .'.'. $domain;
+$base_host = $this->request->getPrePath();
+$base_router = $this->request->getRouterData('router');
+$current_module = $this->request->getModuleName();
+$env_model = \Weline\Framework\App\Env::getInstance()->getConfig('deploy');
+$theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
+$env_model_media_base_path_template = $host . (DEV ? '/{module}/view/statics/{path}' : '/static/' . $theme_path . '/{module}/view/statics/{path}');
+$token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
+?>
+<!--加载requirejs-->
+<?php if (DEV) : ?>
+    <!--    <script src="@static(Weline_Frontend::/libs/requirejs/2.3.6/requirejs.js)"></script>-->
+<?php
+else:
+    ?>
+    <!--    <script src="@static(Weline_Frontend::/libs/requirejs/2.3.6/requirejs.min.js)"></script>-->
+<?php
+endif;
+?>
+<!--加载require常用js模块-->
+<!--<script src='@static(Weline_Frontend::base/require.configs.js)'></script>-->
+<!--加载require常用js模块-->
+<js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
+<script>
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': '{{token}}'
+        }
+    });
+    $.ajaxPrefilter(function (options) {
+        // 检测url是否有参数，并给所有url加上isAjax参数
+        if (options.url.indexOf('?') < 0) {
+            options.url += '?isAjax=1';
+        } else {
+            options.url += '&isAjax=1';
+        }
+    });
+</script>
+<w:js>Weline_Frontend::/js/cookie.js</w:js>
+<script>
+    window.site = {
+        host: '{{host}}',
+        env_model: '{{env_model}}',
+        env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
+        base_host: '{{base_host}}',
+        base_router: '{{base_router}}',
+        i18n: <?= json_encode(Weline\Framework\Phrase\Parser::getWords())?>,
+        themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
+    }
+    window.path = (path) => {
+        path = path.replace('*', '{{base_router}}')
+        if (path.indexOf('//') === 0) {
+            path = path.slice(2)
+        }
+        if (path.indexOf('/') === 0) {
+            path = path.slice(1)
+        }
+        return path;
+    }
+    window.media = (path, module = '{{current_module}}') => {
+        return '{{env_model_media_base_path_template}}'.replace('{path}', window.path(path)).replace('{module}', module.replace('_', '/'))
+    }
+
+    window.url = (path) => {
+        return '{{host}}' + window.path(path);
+    }
+    window.frontend_url = (path) => {
+        return '{{host}}' + window.path(path);
+    }
+    window.api = (path) => {
+        return '{{host}}' + window.path(path);
+    }
+    window.frontend_api = (path) => {
+        return '{{host}}' + window.path(path);
+    }
+
+
+    function selectLanguage(lang) {
+        setCookie('WELINE-USER-LANG', lang, 7, {path: '/', domain: window.location.host});
+        let path = window.location.pathname;
+        if (path.startsWith('/{{local.code}}')) {
+            path = path.replace('/{{local.code}}', '/' + lang);
+        }
+        window.location.href = path + window.location.search
+    }
+
+    function selectCurrency(currency_code) {
+        setCookie('WELINE-USER-CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
+        let path = window.location.pathname;
+        if (path.startsWith('/{{local.code}}')) {
+            path = path.replace('/{{local.code}}', '');
+        }
+        if (path.startsWith('/{{currency.code}}')) {
+            path = path.replace('/{{currency.code}}', '/' + currency_code);
+        }
+        window.location.href = '/{{local.code}}/' + path + window.location.search
+    }
+
+    /**
+     * 通用打印函数
+     * @param data
+     */
+    function p(data) {
+        console.log(data)
+    }
+
+    /**
+     * 通用打印函数
+     * @param data
+     */
+    function d(data) {
+        console.log(data)
+    }
+
+    /**
+     * 翻译函数
+     * @param phrase
+     * @param arguments {*}
+     * @returns {*}
+     * @private
+     */
+    function phrase(phrase, arguments = null) {
+        if (window.site.i18n[phrase] !== undefined) {
+            phrase = window.site.i18n[phrase]
+        } else {
+            window.site.i18n[phrase] = phrase
+        }
+        if (arguments) {
+            switch (arguments.constructor) {
+                case String:
+                    phrase = phrase.replace(/%1/g, arguments)
+                    break;
+                case Object:
+                    for (let argument_key in arguments) {
+                        let arg = arguments[argument_key]
+                        let regExp = new RegExp(eval('/%' + argument_key + '/g'));
+                        phrase = phrase.replace(regExp, arg)
+                    }
+                    break;
+                case Array:
+                    for (let argument_key in arguments) {
+                        let arg = arguments[argument_key]
+                        argument_key = 1 + parseInt(argument_key)
+                        let regExp = new RegExp(eval('/%' + argument_key + '/g'));
+                        phrase = phrase.replace(regExp, arg)
+                    }
+                    break;
+            }
+        }
+        return phrase
+    }
+
+    /**
+     * 翻译短语函数
+     * @param word
+     * @param arguments {*}
+     * @returns {*}
+     * @private
+     */
+    function __(word, arguments = null) {
+        return phrase(word, arguments)
+    }
+
+    /**
+     * 翻译函数
+     * @param word
+     * @param arguments {*}
+     * @returns {*}
+     * @private
+     */
+    function lang(word, arguments = null) {
+        return phrase(word, arguments)
+    }
+
+</script>
+<!--加载配置页头-->
+<?php
+echo $this->getHeader()->getHtml();
+?>
+<hook>head</hook>

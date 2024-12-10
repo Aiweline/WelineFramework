@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Weline_I18n::i18n" name="i18n_manager" title="I18n国际化" action=""
+         parent="Weline_Backend::system_configuration"
+         icon="ri-translate"
+         order="99"/>
+    <add source="Weline_I18n::i18n_countries" name="i18n_countries" title="国家" action="/i18n/backend/countries"
+         parent="Weline_I18n::i18n"
+         icon="ri-global-fill"
+         order="1"/>
+    <add source="Weline_I18n::i18n_dictionaries" name="i18n_dictionaries" title="词典" action="/i18n/backend/dictionary"
+         parent="Weline_I18n::i18n"
+         icon="mdi mdi-bookshelf"
+         order="2"/>
+</menus>
