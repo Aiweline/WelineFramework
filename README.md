@@ -1,5 +1,6 @@
 #### 更新说明
 发行版本：
+
 v2.0 优化代码结构，内置服务器，优化框架升级，新增任务队列，计划任务，权限结构，标签结构后台参阅等。
 
 v1.3 自定义标签，优化内核，上线translate快速翻译标签。
@@ -99,7 +100,7 @@ composer create-project aiweline/weline-framework WelineFramework --prefer-dist
 
  **1、自带后台** 
 
- **1) acl权限管理。** get,post,delete,update等方法精细级别访问控制器。
+ **1) acl权限管理。** get,post,delete,update等方法精细级别访问控制器<acl>标签支持块级内容可视控制。
 
  **2）url管理。** 实现任何链接seo自由重写。
 
