@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--开发工具-->
+    <add source="Weline_DeveloperWorkspace::dev-tool" name="dev-tool" title="开发工具" action="dev/tool/admin"
+         parent="Weline_Backend::system_dev_configuration" icon="ri-code-box-line" order="20001"/>
+    <add source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试" action="dev/tool/admin/sandbox"
+         parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-code-tags-check" order="20004"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档管理器" action="dev/tool/admin/document"
+         parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="20002"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="开发文档前端" action="dev/tool/" is_backend="0"
+         parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="20003"/>
+</menus>

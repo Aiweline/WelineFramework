@@ -1,0 +1,120 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('I18n翻译') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class='row'>
+        <div class='col-12'>
+            <div class='card'>
+                <div class='card-body'>
+                    <div class='col-6'>
+                        <block class='Weline\Component\Block\Form\Search' id='translate-search'
+                               vars='req'
+                               cache='0'
+                               params='model,id,value,field'
+                               var-params='{search:req.search,model:req.model,id:req.id,value:req.value,field:req
+                               .field}'
+                               action='*/backend/taglib/local' method='get' keyword='search' value=''
+                               placeholder='@lang{请输入关键词}'></block>
+                    </div>
+                    <form role='form' class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                        <!--基础信息-->
+                        <div class='row form-group'>
+                            <foreach name="local_descriptions">
+                                <input type='hidden' name='description[{{v.local_code}}][local_code]' value='{{v.local_code}}'>
+                                <input type='hidden' name='description[{{v.local_code}}][{{id_field}}]' value='{{id}}'>
+                                <div class='col-lg-12'>
+                                    <div class='input-group mb-3'>
+                                        <div class='input-group-prepend'>
+                                            <span class='input-group-text' title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
+                                                {{v.local.flag}}
+                                            </span>
+                                        </div>
+                                        <input class='form-control' type='text' id='{{v.local_code}}-{{field}}-input'
+                                               placeholder='{{v[$field]}}' aria-label='{{v[$field]}}'
+                                               value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]'
+                                               required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='input-group-append'>
+                                            <span class='input-group-text' title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
+                                                {{v.local.name}}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </foreach>
+                        </div>
+                        <div class="form-group">
+                            <button class='btn btn-primary' type='submit'>
+                                <lang>提交</lang>
+                            </button>
+                        </div>
+                    </form>
+                    {{local_pagination}}
+                </div>
+            </div>
+        </div> <!-- end col -->
+    </div> <!-- end row -->
+</div>
+<!-- END layout-wrapper -->
+<script>
+    let validationEntity = $('#validationEntity')
+    validationEntity.change(function () {
+        let selectedOption = $(this).find(':selected').val();
+        renderAttributeSet(selectedOption)
+    });
+    // 初始化
+    let initSelected = validationEntity.find(':selected').val()
+    let validationSet = $('#validationSet')
+    renderAttributeSet(initSelected)
+
+    function renderAttributeSet(entity_id) {
+        $.get("@backend-url('*/backend/attribute/set/apiSearch')?entity_id=" + entity_id).then((res) => {
+            let items = res['items']
+            validationSet.empty()
+            for (const itemsKey in items) {
+                let item = items[itemsKey]
+                let selected = '';
+                if (validationSet.attr('data-selected') === item.set_id) {
+                    selected = 'selected';
+                }
+                validationSet.append("<option value='" + item.set_id + "' " + selected + ">" + window.lang(item.name) + "</option>")
+            }
+        })
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+* 文件信息
+* 作者：邹万才
+* 网名：秋枫雁飞(可以百度看看)
+* 网站：www.aiweline.com/bbs.aiweline.com
+* 工具：PhpStorm
+* 日期：2021/1/31
+* 时间：18:04
+* 版权：Copyright (c) 2021 AIWELINE (http://www.aiweline.com)
+* 描述：此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+*/
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+           elementFormDefault="qualified"
+           version="1.0">
+    <xs:element name="config">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="plugin" type="pluginDeclaration" minOccurs="0" maxOccurs="unbounded">
+                    <xs:unique name="uniqueInterceptorName">
+                        <xs:annotation>
+                            <xs:documentation>
+                                Interceptor name must be unique.
+                            </xs:documentation>
+                        </xs:annotation>
+                        <xs:selector xpath="interceptor"/>
+                        <xs:field xpath="@name"/>
+                    </xs:unique>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+        <xs:unique name="uniquePluginName">
+            <xs:annotation>
+                <xs:documentation>
+                    Plugin name must be unique.
+                </xs:documentation>
+            </xs:annotation>
+            <xs:selector xpath="plugin"/>
+            <xs:field xpath="@name"/>
+        </xs:unique>
+    </xs:element>
+
+    <xs:complexType name="pluginDeclaration">
+        <xs:annotation>
+            <xs:documentation>
+                Plugin declaration.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="interceptor" type="interceptorDeclaration" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="name" type="pluginName" use="required"/>
+        <xs:attribute name="class" type="pluginClass" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="interceptorDeclaration">
+        <xs:annotation>
+            <xs:documentation>
+                Interceptor declaration.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="instance" type="xs:string" use="optional"/>
+        <xs:attribute name="disabled" type="xs:boolean" use="optional"/>
+        <xs:attribute name="sort" type="xs:integer" use="optional"/>
+    </xs:complexType>
+    <xs:simpleType name="pluginName">
+        <xs:annotation>
+            <xs:documentation>
+                Plugin name can contain only [a-zA-Z0-9_].
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z0-9_]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="pluginClass">
+        <xs:annotation>
+            <xs:documentation>
+                Plugin class can contain only [a-zA-Z0-9_].
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z0-9_]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+</xs:schema>

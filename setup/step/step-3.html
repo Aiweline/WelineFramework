@@ -1,0 +1,25 @@
+<div class="container">
+    <div class="form-box"  >
+        <h2>Step 3: 环境初始化</h2>
+        <form id="init_env" action="/setup/installer.php" method="post" onsubmit="return false;"
+              onclick="checkEnv('init_env','init_env','✖')">
+            <div class="user-box">
+                <input type="text" name="admin" required="" value="admin_123">
+                <label>PC后台入口</label>
+            </div>
+            <div class="user-box">
+                <input type="text" name="api_admin" required="" value="rest_123">
+                <label>REST API后台入口</label>
+            </div>
+            <button value="提交" type="submit">
+                <span></span>
+                <span></span>
+                提交
+                <span></span>
+                <span></span>
+            </button>
+            <div class="console"></div>
+        </form>
+        <a id="next" class="next-button" href="/setup?step=step-4">下一步</a>
+    </div>
+</div>

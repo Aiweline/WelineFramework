@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Database::model_update_before">
+        <observer name="Weline_ModuleManager::model_update_before" instance="Weline\ModuleManager\Observer\ModelUpdateBefore" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Database::model_update_after">
+        <observer name="Weline_ModuleManager::model_update_after" instance="Weline\ModuleManager\Observer\ModelUpdateAfter" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Module::module_upgrade_before">
+        <observer name="Weline_ModuleManager::module_upgrade_before" instance="Weline\ModuleManager\Observer\ModuleUpdateBefore" disabled="false" shared="true"/>
+    </event>
+</config>

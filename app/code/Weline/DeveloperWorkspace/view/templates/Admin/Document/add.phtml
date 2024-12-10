@@ -1,0 +1,320 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>Weline Admin 管理面板</lang></title>
+    <!--模板Weline_Admin::common/head.phtml-->
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- jvectormap -->
+    <w:css>Weline_Admin::assets/libs/jqvmap/jqvmap.min.css</w:css>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
+</head>
+
+<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--加载中组件 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content" style="min-height: 800px">
+            <div class="container-fluid">
+                <div class='row'>
+                    <div class='col-xl-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>管理开发文档</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>开发文档编辑器 有新的开发文档时可以随时编辑</lang>
+                                </p>
+                                <form class='needs-validation' method="post"
+                                      action="@admin-url('dev/tool/admin/document/post')" novalidate>
+                                    <label>
+                                        <input type="text" class="sr-only" name="id" value="@var{$document['id']}">
+                                    </label>
+                                    <div class="row col">
+                                        <div class="col-6 pull-left">
+
+                                        </div>
+                                        <div class='col-6 pull-right'>
+                                            <button type='submit'
+                                                    class='btn btn-primary waves-effect waves-light pull-right'>
+                                                <lang>保存</lang>
+                                            </button>
+                                            <a href="javascript:window.history.back();"
+                                               class='btn btn-default waves-effect waves-light pull-right'>
+                                                <lang>返回</lang>
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='title'>
+                                                    <lang>标题</lang>
+                                                </label>
+                                                <input type='text' name='title' class='form-control' id='title'
+                                                       placeholder='@lang(标题)' value='@var($document.title)' required>
+                                                <div class='valid-feedback'>
+                                                    <lang>请输入标题</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='col-md-3'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label'
+                                                       for='author'>
+                                                    <lang>作者</lang>
+                                                </label>
+                                                <div class='input-group'>
+                                                    <div class='input-group-prepend'>
+                                                        <span class='input-group-text'
+                                                              id='authorPrepend'>@</span>
+                                                    </div>
+                                                    <select type='text' name='author_id' class='form-control'
+                                                            id='author'
+                                                            aria-describedby='authorPrepend' required>
+                                                        <foreach name="users">
+                                                            <if condition="document.author_id === v.user_id">
+                                                                <option value="{{v.user_id}}" selected>
+                                                                    {{v.username}}
+                                                                </option>
+                                                                <else/>
+                                                                <option value="{{v.user_id}}">
+                                                                    {{v.username}}
+                                                                </option>
+                                                            </if>
+                                                        </foreach>
+                                                    </select>
+                                                    <div class='invalid-tooltip'>
+                                                        <lang>请输入作者</lang>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='summary'>
+                                                    <lang>摘要</lang>
+                                                </label>
+                                                <textarea type='text' name='summary' class='form-control' id='summary'
+                                                          placeholder='@lang(摘要)'
+                                                          required>@var{$document->getSummary()}</textarea>
+                                                <div class='invalid-tooltip'>
+                                                    <lang>请输入摘要</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='col-md-3'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='category'>
+                                                    <lang>分类</lang>
+                                                </label>
+                                                <select type='text' name='category_id' class='form-control'
+                                                        id='category'>
+                                                    <w:foreach name='catalogs' item='v'>
+                                                        <w:if condition="document.category_id === v.id">
+                                                            <option value="@var{$v.id}" selected>
+                                                                <var>$v.name</var>
+                                                            </option>
+                                                            <w:else/>
+                                                            <option value="@var{$v.id}">
+                                                                <var>$v.name</var>
+                                                            </option>
+                                                        </w:if>
+                                                        <w:notempty name="$v.nodes">
+                                                            <w:foreach name="$v.nodes" item="node">
+                                                                <w:if condition="$document.category_id === $node.id">
+                                                                    <option value="@var{$node.id}"
+                                                                            selected>
+                                                                        <w:php>echo str_pad('-',$node['level']);</w:php>
+                                                                        <w:var>$node.name</w:var>
+                                                                    </option>
+                                                                    <w:else/>
+                                                                    <option value="@var{$node.id}">
+                                                                        <w:php>echo str_pad('-',$node['level']);</w:php>
+                                                                        <w:var>$node.name</w:var>
+                                                                    </option>
+                                                                </w:if>
+                                                            </w:foreach>
+                                                        </w:notempty>
+                                                    </w:foreach>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='row'>
+                                        <div class='col-md-12'>
+                                            <div class='mb-3 position-relative'>
+                                                <label class='form-label' for='elm1'>
+                                                    <lang>文章内容</lang>
+                                                </label>
+                                                <textarea id='elm1' name='content' class='form-control'
+                                                          required>@var{$document->getContent()}</textarea>
+                                                <div class='invalid-tooltip'>
+                                                    <lang>文章内容不能为空</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class='btn btn-primary waves-effect waves-light pull-right' type='submit'>
+                                        <lang>保存</lang>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- end card -->
+                    </div> <!-- end col -->
+                </div><!-- end row -->
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+<!--tinymce js-->
+<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
+
+<!-- init js -->
+<script>
+    /*
+Template Name: Weline -  Admin & WelineFramework
+Author: 秋枫雁飞(aiweline)
+Contact: 秋枫雁飞(aiweline) 1714255949@qq.com
+File: Form editor Js File
+*/
+
+    $(document).ready(function () {
+        if ($('#elm1').length > 0) {
+            tinymce.init({
+                selector: '#elm1',
+                language: 'zh_CN',
+                language_url: '@static(Weline_Admin::assets/libs/tinymce/langs/zh_CN.js)',
+                height: 300,
+                auto_focus: true,
+                branding: false, // 隐藏右下角的驱动字样
+                contextmenu: 'bold copy ',
+                draggable_modal: true,
+                skin: 'oxide-dark',
+                theme: 'silver',
+                automatic_uploads: true,
+                images_reuse_filename: true,//不用每次都上传，同一个文件不上传
+                images_upload_url: '@admin-url("dev/tool/admin/document/upload")',
+                /*images_upload_handler: function (blobInfo, succFun, failFun) {
+                    var xhr, formData;
+                    var file = blobInfo.blob();//转化为易于理解的file对象
+                    xhr = new XMLHttpRequest();
+                    xhr.withCredentials = false;
+                    xhr.open('POST', window.site.host+'@admin-url("dev/tool/admin/document/upload")');
+                    xhr.onload = function() {
+                        var json;
+                        if (xhr.status !== 200) {
+                            failFun('HTTP Error: ' + xhr.status);
+                            return;
+                        }
+                        json = JSON.parse(xhr.responseText);
+                        if (!json || typeof json.location != 'string') {
+                            failFun('Invalid JSON: ' + xhr.responseText);
+                            return;
+                        }
+                        succFun(json.location);
+                    };
+                    formData = new FormData();
+                    formData.append('file', file, file.name );//此处与源文档不一样
+                    xhr.send(formData);
+                },*/
+                images_upload_base_path: '/',
+                plugins: [
+                    'advlist autolink link image lists charmap print preview hr anchor pagebreak spellchecker',
+                    'searchreplace wordcount visualblocks visualchars code fullscreen insertdatetime media nonbreaking',
+                    'save table contextmenu directionality emoticons template paste textcolor'
+                ],
+                toolbar: 'insertfile undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | l      ink image | print preview media fullpage | forecolor backcolor emoticons',
+                style_formats: [
+                    {title: '@lang("粗体")', inline: 'b'},
+                    {title: '@lang("红色文字")', inline: 'span', styles: {color: '#ff0000'}},
+                    {title: '@lang("红色标题")', block: 'h1', styles: {color: '#ff0000'}},
+                    {title: '@lang("示例1")', inline: 'span', classes: 'example1'},
+                    {title: '@lang("示例2")', inline: 'span', classes: 'example2'},
+                    {title: '@lang("表格样式")'},
+                    {title: '@lang("表格行1")', selector: 'tr', classes: 'tablerow1'}
+                ]
+            });
+        }
+    });
+
+</script>
+
+<!-- parsleyjs -->
+<script src='@static(Weline_Admin::assets/libs/parsleyjs/parsley.min.js)'></script>
+<!-- validation init -->
+<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
+
+
+<!--页脚-->
+@template(Weline_Admin::common/footer.phtml)
+
+<!-- jquery.vectormap map -->
+<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
+
+</body>
+</html>
+
