@@ -1,0 +1,258 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>权限分配</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+    <!--树形选择-->
+    <link rel='stylesheet' href='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>Acl权限分配</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'>
+                                        <a href='javascript: void(0);'>
+                                            <lang>系统配置</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/acl')">
+                                            <lang>Acl权限管理</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/acl/role')">
+                                            <lang>Acl角色管理</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>Acl角色权限分配</lang>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>Acl权限管理</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>选择角色所管理的权限</lang>
+                                </p>
+                                <p>
+                                    <lang>当前角色</lang>
+                                    <b class="text-info">{{user_role.role_name}}</b>
+                                    <lang>正在为角色</lang>
+                                    <b class="text-info">{{assign_role.role_name}}</b>
+                                    <lang>分配权限</lang>
+                                </p>
+                                <div class='button-items mb-1 mt-1'>
+                                    <form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post">
+                                        <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
+                                        <button type='submit' id='save_button' class='btn btn-primary waves-effect waves-light'>
+                                            <lang>保存</lang>
+                                        </button>
+                                    </form>
+                                </div>
+                                <div id='acl' class='acl-container'>
+                                    <ul>
+                                        <foreach name='trees' item='tree'>
+                                            <?php
+                                            $attr = getLiAttr($tree);
+                                            ?>
+                                            <li id='{{tree.source_id}}' {{attr}}>{{tree.source_name}}
+                                                <if condition="tree.method">
+                                                    ({{tree.method}})
+                                                </if>
+                                                <?php
+                                                /**@var \Weline\Acl\Model\Acl $tree */
+                                                echo getTreeNode($tree);
+                                                ?>
+                                            </li>
+                                        </foreach>
+                                    </ul>
+                                    <?php
+                                    /**@var \Weline\Acl\Model\Acl $tree */
+                                    function getTreeNode(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $tree): string
+                                    {
+                                        $result = '';
+                                        if ($tree->getSub()) {
+                                            $result .= '<ul>';
+                                            /**@var \Weline\Acl\Model\Acl $sub */
+                                            foreach ($tree->getSub() as $sub) {
+                                                $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
+                                                $attr   = getLiAttr($sub);
+                                                $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sub->getSourceName()}{$method}";
+                                                $result .= getTreeNode($sub);
+                                                $result .= '</li>';
+                                            }
+                                            $result .= '</ul>';
+                                        }
+                                        return $result;
+                                    }
+
+                                    /**@@var \Weline\Acl\Model\Acl $acl */
+                                    function getLiAttr(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $acl): string
+                                    {
+                                        $type = $acl->getType() ? __($acl->getType()) : '';
+                                        $icon = $acl->getIcon();
+                                        if(empty($icon))
+                                            $icon = match ($type) {
+                                                'menus' => 'mdi mdi-microsoft-xbox-controller-menu',
+                                                'pc'    => 'mdi mdi-shield-link-variant-outline',
+                                                ''      => ''
+                                            };
+                                        if (empty($icon)) {
+                                            if ($acl->getMethod()) {
+                                                $icon = match (strtolower($acl->getMethod())) {
+                                                    'get'    => 'mdi mdi-eye-check-outline',
+                                                    'post'   => 'ri-save-3-line',
+                                                    'delete' => 'ri-delete-bin-6-line',
+                                                    'put'    => 'ri-edit-box-line',
+                                                    'update' => 'mdi mdi-autorenew',
+                                                    default  => 'fas fa-fingerprint'
+                                                };
+                                            }
+                                        }
+                                        $desc = $acl->getDocument()?__($acl->getDocument()):'';
+                                        if (empty($desc)) {
+                                            $desc = match ($type) {
+                                                'menus' => __('菜单'),
+                                                'pc'    => __('链接'),
+                                                ''      => __('其他')
+                                            };
+                                        }
+                                        $desc.="({$acl->getSourceId()})";
+                                        $access = $acl->getData('role_id') ? 'true' : 'false';
+//                                        $disabled = $acl->getData('a_role_id') ? 'false' : 'true';
+                                        return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":{$access},
+                                        \"icon\":\"$icon\"}' ";
+                                    }
+
+                                    ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+<!--树形选择-->
+<script src='@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)'></script>
+<script>
+    let aclData = $('#acl').jstree({
+        'core': {
+            'themes': {
+                'variant': 'large'
+            },
+            /* 'data': {
+                 'url': 'ajax_nodes.html',
+                 'data': function (node) {
+                     return {'id': node.id};
+                 }
+             }*/
+        },
+        'checkbox': {
+            'keep_selected_style': false
+        },
+        'plugins': [/*'wholerow', */'checkbox']
+    });
+    $('#save_button').on('click', function () {
+        let selectedNodes = $('#acl').jstree('get_selected', true);
+        $.each(selectedNodes, function () {
+            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + this.id + '">')
+        });
+    })
+</script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

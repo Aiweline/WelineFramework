@@ -1,0 +1,121 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en">
+<head>
+    <title>WelineFramework 登录面板</title>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body class="bg-pattern">
+<div class="bg-overlay"></div>
+<div class="account-pages my-5 pt-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-xl-4 col-lg-6 col-md-8">
+                <div class="card">
+                    <div class="card-body p-4">
+                        <div class="">
+                            <div class="text-center">
+                                <a href="@backend-url('')" class="">
+                                    <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
+                                         class="weline-logo auth-logo logo-dark mx-auto">
+                                    <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
+                                         class="weline-logo auth-logo logo-light mx-auto">
+                                </a>
+                            </div>
+                            <!-- end row -->
+                            <h4 class="font-size-18 text-muted mt-2 text-center"><?= __('欢迎回来！') ?></h4>
+                            <p class="mb-5 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
+                            <div class='row'>
+                                <!--消息-->
+                                <template>Weline_Component::message.phtml</template>
+                            </div>
+                            <form class="form-horizontal" action="<?= $this->getData('post_url') ?>" method="post">
+                                <?= $this->getFormKey($this->getData('post_url')) ?>
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-4">
+                                            <label class="form-label" for="username"><?= __('管理员') ?></label>
+                                            <input type="text" class="form-control" id="username" name="username" value=""
+                                                   placeholder="<?= __('输入管理员') ?>">
+                                        </div>
+                                        <div class="mb-4">
+                                            <label class="form-label" for="userpassword"><?= __('密码') ?></label>
+                                            <input type="password" class="form-control" id="userpassword"
+                                                   name="password" value=""
+                                                   placeholder="<?= __('输入密码') ?>">
+                                        </div>
+                                        <div class="row">
+                                            <?php if ($this->getData('need_backend_verification_code')) {
+                                                ?>
+                                                <div class="form-group">
+                                                    <img src="<?= $this->getData('backend_verification_code_url') ?>"
+                                                         alt="">
+                                                    <label class="form-control-label"><?= __('验证码：') ?>
+                                                        <input name="code" type="text" class="form-control" value=""
+                                                               placeholder="<?= __('请输入验证码！') ?>" required>
+                                                    </label>
+                                                </div>
+                                                <?php
+                                            } ?>
+                                            @template(Weline_Component::message.phtml)
+                                            <?php
+                                            /**@var \Weline\Framework\Session\Session $session */
+                                            $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+                                            ?>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col">
+                                                <div class="form-check">
+                                                    <input type="checkbox" class="form-check-input" name="remember"
+                                                           id="customControlInline" <? $session->getData('remember_expire_time')?"checked":'' ?>>
+                                                    <label class="form-label form-check-label d-flex align-items-center gap-1"
+                                                           for="customControlInline" title="@lang{记住我一个星期！}">
+                                                        <lang>记住我</lang>
+                                                        <span class="d-flex align-items-center" data-bs-toggle="tooltip" data-bs-title="@lang{保持登录一个星期。}"><i class=" ri-question-fill"></i></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-7">
+                                                <div class="text-md-end mt-3 mt-md-0">
+                                                    <a href="auth-recoverpw.html" class="text-muted"><i
+                                                                class="mdi mdi-lock"></i> <?= __('忘记密码？') ?></a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="d-grid mt-4">
+                                            <button class="btn btn-primary waves-effect waves-light <?php if ($session->getData('backend_disable_login')) echo 'disable' ?>"
+                                                    type="submit"><?= __('登 录') ?></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-5 text-center">
+                    <p class="text-white-50"><?= __('还没有账号？') ?> <a href="auth-register.html"
+                                                                         class="fw-medium text-primary"> <?= __('注册') ?> </a>
+                    </p>
+                    <p class="text-white-50">©
+                        <script>document.write(new Date().getFullYear())</script>
+                        Weline. Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                href="https://www.aiweline.com/">秋枫雁飞</a></p>
+                </div>
+            </div>
+        </div>
+        <!-- end row -->
+    </div>
+</div>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

@@ -1,0 +1,62 @@
+<script>
+    $("*[w-ajax]").on('click', function (event) {
+        event.preventDefault()
+        const target = $(this)
+        let reload = target.data('reload')
+        let action = target.attr('w-ajax')
+        let confirm = target.data('confirm')
+        let cancel = target.data('cancel')
+        let success_confirm = target.data('success-confirm')
+        let failure_confirm = target.data('failure-confirm')
+        let message = target.data('msg')
+        let method = target.data('method')
+        if (action.indexOf('?') < 0) {
+            action += '?isAjax=true'
+        } else {
+            action += '&isAjax=true'
+        }
+        if (message) {
+            Swal.fire({
+                title: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: confirm??'@lang{好的}',
+                cancelButtonText: cancel??'@lang{算了}'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    showLoading();
+                    let data = target.data()
+                    $.ajax({
+                        url: action,
+                        data: data,
+                        type: method,
+                        success: (res) => {
+                            if (!res.success) {
+                                Swal.fire({
+                                    title: res.title,
+                                    text: res.message,
+                                    icon: 'error',
+                                    confirmButtonText: success_confirm??'@lang{好的}'
+                                })
+                            } else {
+                                Swal.fire({
+                                    title: res.title,
+                                    text: __('操作成功!'),
+                                    icon: 'success',
+                                    confirmButtonText: failure_confirm??'@lang{好的}'
+                                })
+                            }
+                            if (reload) {
+                                location.reload()
+                            }
+                            hideLoading();
+                        }, error: function (res) {
+                            hideLoading();
+                            console.log(res)
+                        }
+                    })
+                }
+            })
+        }
+    })
+</script>

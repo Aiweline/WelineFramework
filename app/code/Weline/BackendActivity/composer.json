@@ -1,0 +1,23 @@
+{
+  "name": "weline/module-backend-activity",
+  "description": "后端日志记录组件。（Backend activity log module）。可以记录后端用户操作记录。",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\BackendActivity\\": ""
+    },
+    "psr-0": {
+      "Weline\\BackendActivity\\": ""
+    }
+  },
+  "license": "MIT"
+}

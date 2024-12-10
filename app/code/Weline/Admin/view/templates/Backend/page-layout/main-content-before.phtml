@@ -1,0 +1,46 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <title><lang>Weline Admin 管理面板</lang></title>
+</head>
+
+<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+<!--加载中组件 开始-->
+<w:template>Weline_Admin::common/page/loading.phtml</w:template>
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->

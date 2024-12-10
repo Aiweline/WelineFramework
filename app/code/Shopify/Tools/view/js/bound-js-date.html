@@ -1,0 +1,23 @@
+{% comment %}
+开始 购买到货时间
+{% endcomment %}
+<div class="product__meta--item product__vendor">
+    <label>Arrival at:</label>
+    <span id="shipping-arrival-date" style="color:red"></span>
+    <script>
+        function addDaysToDate(date, days) {
+            const result = new Date(date);
+            result.setDate(result.getDate() + days);
+            return result;
+        }
+
+        var today = new Date();
+        var threeDaysLater = addDaysToDate(today, 3);
+        var fiveDaysLater = addDaysToDate(today, 6);
+
+        document.getElementById("shipping-arrival-date").textContent = threeDaysLater.toLocaleDateString() + " to " + fiveDaysLater.toLocaleDateString();
+    </script>
+</div>
+{% comment %}
+结束 购买到货时间
+{% endcomment %}

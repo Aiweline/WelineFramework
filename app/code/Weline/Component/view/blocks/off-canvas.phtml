@@ -1,0 +1,118 @@
+<{{target_tag}} class='{{target_button_class}}' type='button' data-bs-toggle='offcanvas'
+data-bs-target='#{{id}}' aria-controls='{{id}}'>
+<has name='icon'>
+    <i class='{{icon}}'></i>
+</has>
+<lang>{{target_button_text}}</lang>
+</{{target_tag}}>
+<!-- {{id}} -->
+<div class='offcanvas {{class_names}}' tabindex='-1' id='{{id}}'
+     aria-labelledby='{{id}}Label'>
+    <div class='offcanvas-header'>
+        <h5 id='{{id}}Label'>
+            <has name='icon'>
+                <i class='{{icon}}'></i>
+            </has>
+            <lang>{{title}}</lang>
+        </h5>
+        <has name='close_button_show'>
+            <button type='button' class='btn-close text-reset {{submit_button_class}}' data-bs-dismiss='offcanvas'
+                    aria-label='{{close_button_text}}'></button>
+        </has>
+    </div>
+    <div class='offcanvas-body'>
+        <div class='position-relative w-100 h-100'>
+            <if condition='flush || save'>
+                <div class='btn btn-group-justified sticky-top pull-right gap-2 d-flex'>
+                    <if condition='flush'>
+                        <button class='{{flush_button_class}} pull-right ' onclick='{{id}}flushIframe()'>
+                            <lang>{{flush_button_text}}</lang>
+                        </button>
+                    </if>
+                    <if condition='save'>
+                        <button class='{{submit_button_class}} pull-right' id="{{id}}Save">
+                            <lang>{{submit_button_text}}</lang>
+                        </button>
+                    </if>
+                </div>
+            </if>
+            <iframe id='{{id}}Iframe' class='w-100 h-100'
+                    data-src='{{action}}'
+                    frameborder='0'></iframe>
+        </div>
+    </div>
+</div>
+<script>
+    //show.bs.offcanvas
+    $(function () {
+        $('#{{id}}').on('show.bs.offcanvas', function () {
+            var Iframe = $('#{{id}}Iframe')
+            Iframe.attr('src', Iframe.attr('data-src'))
+            if ('{{save}}' === '1') {
+                // Iframe加载完成后
+                Iframe.on('load', function () {
+                    <?php if (isset($save_form) and $save_form): ?>
+                    var form = Iframe.contents().find('body').find('{{save_form}}') ?? undefined;
+                    <?php else: ?>
+                    var form = Iframe.contents().find('body').find('form') ?? undefined;
+                    <?php endif; ?>
+                    if (form !== undefined && form.length > 0) {
+                        for (var i = 0; i < form.length; i++) {
+                            // 触发原生表单校验
+                            if ($(form[i]).find(':submit').length === 0) {
+                                form[i].insertAdjacentHTML('beforeend', '<input type="submit" class="sr-only">')
+                            }
+                        }
+                    } else {
+                        <?php if (DEBUG) {
+                   $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%1}", $save_form);
+                   echo " confirm({$msg});";
+                    }
+                        ?>
+                    }
+                })
+            }
+        })
+    })
+</script>
+<if condition='flush'>
+    <script>
+        $(function () {
+            window['{{id}}flushIframe'] = function () {
+                showLoading();
+                let iframe = $('#{{id}}Iframe');
+                iframe.attr('src', iframe.attr('src'))
+                hideLoading();
+            }
+        })
+    </script>
+</if>
+<if condition='save'>
+    <script>
+        $(function () {
+            $('#{{id}}Save').on('click', function () {
+                let iframe = $('#{{id}}Iframe');
+                <?php if ($save_form): ?>
+                var form = iframe.contents().find('body').find('{{save_form}}') ?? undefined;
+                <?php else: ?>
+                var form = iframe.contents().find('body').find('form') ?? undefined;
+                <?php endif; ?>
+
+                if (form !== undefined && form.length > 0) {
+                    for (var i = 0; i < form.length; i++) {
+                        let sub_form = $(form[i])
+                        sub_form.find(':submit').click()
+                        showLoading();
+                    }
+                    hideLoading();
+                } else {
+                    <?php if (DEBUG) {
+                    $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%1}", $save_form);
+                   echo " confirm({$msg});";
+                }
+                    ?>
+                }
+            })
+        })
+    </script>
+</if>

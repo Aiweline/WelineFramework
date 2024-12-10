@@ -1,0 +1,215 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='main-content'>
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'><?= __('URL管理') ?></h4>
+
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统配置') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('URL管理器') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('URL管理') ?></li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <div class='row'>
+                    <!--消息-->
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!--end row-->
+                <div class="row">
+                    <div class='col-lg-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>路由表</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    静态路由管理：可定制属于自己的静态url来提升seo。
+                                    <a class="btn btn-primary pull-right" href="@admin-url('url-manager/backend/rewriter/form')">
+                                        <lang>添加</lang>
+                                    </a>
+                                </p>
+                                <div class='table-responsive'>
+                                    <table class='table mb-0'>
+                                        <thead>
+                                        <tr>
+                                            <th>#ID</th>
+                                            <th>
+                                                <lang>URL ID</lang>
+                                            </th>
+                                            <th>
+                                                <lang>路径</lang>
+                                            </th>
+                                            <th>
+                                                <lang>指纹</lang>
+                                            </th>
+                                            <th>
+                                                <lang>重写路径</lang>
+                                            </th>
+                                            <th>
+                                                <lang>类型</lang>
+                                            </th>
+                                            <th>
+                                                <lang>创建时间</lang>
+                                            </th>
+                                            <th>
+                                                <lang>更新时间</lang>
+                                            </th>
+                                            <th>
+                                                <lang>是否已删除</lang>
+                                            </th>
+                                            <th>
+                                                <lang>操作</lang>
+                                            </th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <foreach name="rewrites">
+                                            <tr>
+                                                <td scope='row'>{{v.rewrite_id}}</td>
+                                                <td scope='row'>
+                                                    <if condition='v.url_id'>
+                                                        {{v.url_id}}
+                                                        <else/>
+                                                        <lang>自定义</lang>
+                                                    </if>
+                                                </td>
+                                                <td scope='row'>{{v.rewrite_path}}</td>
+                                                <td scope='row'>{{v.url_identify}}</td>
+                                                <td scope='row'>{{v.rewrite}}</td>
+                                                <td scope='row'>
+                                                    <if condition='v.type'>
+                                                        {{v.type}}
+                                                        <else/>
+                                                        <lang>前台</lang>
+                                                    </if>
+                                                </td>
+                                                <td scope='row'>{{v.create_time}}</td>
+                                                <td scope='row'>{{v.update_time}}</td>
+                                                <td scope='row'>
+                                                    <if condition="v.is_deleted">
+                                                        <lang>是</lang>
+                                                        <else/>
+                                                        <lang>否</lang>
+                                                    </if>
+                                                </td>
+                                                <td scope='row'>
+                                                    <a href="@admin-url('url-manager/backend/rewriter/form')?rewrite_id={{v.rewrite_id}}">
+                                                        <lang>编辑</lang>
+                                                    </a>
+                                                    <a href="@admin-url('url-manager/backend/rewriter/delete')?rewrite_id={{v.rewrite_id}}">
+                                                        <lang>删除</lang>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </foreach>
+                                        </tbody>
+                                    </table>
+                                    {{pagination}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class='footer'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <div class='col-sm-6'>
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class='col-sm-6'>
+                        <div class='text-sm-end d-none d-sm-block'>
+                            Crafted with <i class='mdi mdi-heart text-danger'></i> By <a
+                                    href='https://www.aiweline.com/'>秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
+<script src='@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)'></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

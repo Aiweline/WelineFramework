@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Backend::menu_upgrade" instance="Weline\Backend\Observer\UpgradeMenu" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Resource::compiler">
+        <observer name="Weline_Backend::compiler" instance="Weline\Backend\Observer\Compiler" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_View::header">
+        <observer name="Weline_Backend::header" instance="Weline\Backend\Observer\Header" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_View::footer">
+        <observer name="Weline_Backend::footer" instance="Weline\Backend\Observer\Footer" disabled="false" shared="true"/>
+    </event>
+</config>

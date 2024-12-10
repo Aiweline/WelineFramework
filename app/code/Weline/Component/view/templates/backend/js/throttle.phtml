@@ -1,0 +1,23 @@
+<script>
+    /*
+    * Throttling是一种确保函数不会超过特定执行频率的技术。例如，如果你希望某个函数每秒最多执行一次，就可以使用Throttling。
+    * */
+    function throttle(func, delay) {
+        let timeoutId;
+        let lastExecTime = 0;
+        return function (...args) {
+            const elapsedTime = new Date().getTime() - lastExecTime;
+            if (elapsedTime > delay) {
+                lastExecTime = new Date().getTime();
+                func.apply(this, args);
+            } else {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    lastExecTime = new Date().getTime();
+                    func.apply(this, args);
+                    timeoutId = null;
+                }, delay - elapsedTime);
+            }
+        };
+    }
+</script>

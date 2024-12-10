@@ -1,0 +1,346 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>Weline Admin 管理面板</lang></title>
+    <!--模板Weline_Admin::common/head.phtml-->
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- jvectormap -->
+    <w:css>Weline_Admin::assets/libs/jqvmap/jqvmap.min.css</w:css>
+    <!--树形插件-->
+    <css>Weline_Admin::/libs/bootstrap-treeview-master/dist/bootstrap-treeview.min.css</css>
+    <js>Weline_Admin::/libs/bootstrap-treeview-master/dist/bootstrap-treeview.min.js</js>
+    <!--switch开关-->
+    <css>Weline_Admin::/libs/bootstrap-switch/3.3.4/css/bootstrap3/bootstrap-switch.min.css</css>
+</head>
+
+<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--加载中组件 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content" style="min-height: 800px">
+            <div class="container-fluid">
+                <div class='row'>
+                    <h4 class='card-title'>
+                        <lang>开发文档->目录分类管理</lang>
+                    </h4>
+                    <p class='card-title-desc'>
+                        <lang>开发文档目录分类管理</lang>
+                    </p>
+                    <div class="col-12">
+                        <div class='card'>
+                            <div class='card-body'>
+                                <div class="btn-group pull-right">
+                                    <a href="@admin-url('dev/tool/admin/document/catalog')"
+                                       class='btn btn-warning waves-effect waves-light'>
+                                        <lang>继续添加</lang>
+                                    </a>
+                                    <button type='button'
+                                            onclick='window.location.href="@admin-url(' dev
+                                    /tool/admin/document')"' class='btn btn-dark waves-effect waves-light '>
+                                    <lang>返回</lang>
+                                    </button>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class='col-6'>
+                        <!--消息-->
+                        <template>Weline_Component::message.phtml</template>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <div class="panel">
+                                    <php>$catalog_id = $catalog->getId();</php>
+                                    <empty name="$catalog_id">
+                                        <h4 class="text-info">
+                                            <lang>新建分类</lang>
+                                        </h4>
+                                        <else/>
+                                        <h4 class="text-warning">
+                                            <lang>修改分类</lang>
+                                        </h4>
+                                    </empty>
+                                    <form class='needs-validation' method='post'
+                                          action="@admin-url('dev/tool/admin/document/catalog/post')" novalidate>
+                                        <div class='row col'>
+                                            <div class='col-6 pull-left'>
+
+                                            </div>
+                                            <div class='col-6 pull-right button-items'>
+                                                <button type='submit'
+                                                        class='btn btn-primary waves-effect waves-light pull-right'>
+                                                    <lang>保存</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class='row'>
+                                            <div class='col-md-6'>
+                                                <input type='text' name='id' class='form-control sr-only'
+                                                       value="@var{$catalog->getId()}">
+                                                <div class='mb-3 position-relative'>
+                                                    <label class='form-label' for='name'>
+                                                        <lang>目录名</lang>
+                                                    </label>
+                                                    <input type='text' name='name' class='form-control' id='name'
+                                                           placeholder='@lang(目录名)' value="@var{$catalog->getName()}"
+                                                           required>
+                                                    <div class='valid-feedback'>
+                                                        <lang>请输入目录名</lang>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class='col-md-3'>
+                                                <div class='mb-3 position-relative'>
+                                                    <label class='form-label'
+                                                           for='pid'>
+                                                        <lang>父级分类</lang>
+                                                    </label>
+                                                    <div class='input-group'>
+                                                        <div class='input-group-prepend'>
+                                                        <span class='input-group-text'
+                                                              id='pid-prepend'>@</span>
+                                                        </div>
+                                                        <select name='pid' class='form-control'
+                                                                id='pid'
+                                                                aria-describedby='pid-prepend' required>
+                                                            <option value="0-0">
+                                                                <lang>顶级分类</lang>
+                                                            </option>
+                                                            <foreach name="catalogs" item="v">
+                                                                <if condition="$catalog.pid === $v.id">
+                                                                    <option value="@var{$v.id}-@var{$v.level}" selected>
+                                                                        <var>$v.name</var>
+                                                                    </option>
+                                                                    <else/>
+                                                                    <option value="@var{$v.id}-@var{$v.level}">
+                                                                        <var>$v.name</var>
+                                                                    </option>
+                                                                </if>
+                                                                <notempty name="$v.nodes">
+                                                                    <foreach name="$v.nodes" item="node">
+                                                                        <if condition="$catalog.id === $node.pid">
+                                                                            <option value="@var{$node.id}-@var{$node.level}"
+                                                                                    selected>
+                                                                                <php>echo str_pad('-',$node['level']);</php>
+                                                                                <var>$node.name</var>
+                                                                            </option>
+                                                                            <else/>
+                                                                            <option value="@var{$node.id}-@var{$node.level}">
+                                                                                <php>echo str_pad('-',$node['level']);</php>
+                                                                                <var>$node.name</var>
+                                                                            </option>
+                                                                        </if>
+                                                                    </foreach>
+                                                                </notempty>
+                                                            </foreach>
+                                                        </select>
+                                                        <div class='valid-feedback'>
+                                                            <lang>请选择父级分类</lang>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class='mb-3 position-relative'>
+                                                    <label class='form-label'
+                                                           for='isActive'>
+                                                        <lang>是否启用</lang>
+                                                    </label>
+                                                    <div class='input-group'>
+                                                        <php>
+                                                            if(empty($catalog)){
+                                                            $checked = '';
+                                                            }else{
+                                                            $checked = $catalog->isActive()?'checked':'';
+                                                            }
+                                                        </php>
+                                                        <input type='checkbox' name='is_active' id="isActive"
+                                                               class='form-control is-active' @var($checked)/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class='col-md-12'>
+                                                <div class='mb-3 position-relative'>
+                                                    <label class='form-label' for='description'>
+                                                        <lang>简介</lang>
+                                                    </label>
+                                                    <textarea rows="5" type='text' name='description'
+                                                              class='form-control' id='description'
+                                                              placeholder='@lang(分类简介)' required>@var{$catalog->getDescription()}</textarea>
+                                                    <div class='valid-feedback'>
+                                                        <lang>请输入分类简介</lang>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='row col'>
+                                            <div class='col-6 pull-left'>
+
+                                            </div>
+                                            <div class='col-6 pull-right button-items'>
+                                                <button type='submit'
+                                                        class='btn btn-primary waves-effect waves-light pull-right'>
+                                                    <lang>保存</lang>
+                                                </button>
+                                                <button type='button'
+                                                        onclick='window.location.href="@admin-url(' dev
+                                                /tool/admin/document')"'
+                                                class='btn btn-default waves-effect waves-light pull-right '>
+                                                <lang>返回</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                    <div class='col-6'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <div class="panel">
+                                    <h4>分类管理</h4>
+                                    <div id="catalog-tree">
+                                    </div>
+                                    <script>
+                                        function renderTree() {
+                                            $.get({
+                                                url: '@admin-url("dev/tool/admin/document/catalog/tree")',
+                                            }).done(res => {
+                                                console.log(res)
+                                                $('#catalog-tree').treeview({
+                                                    data: res,
+                                                    enableLinks: true,
+                                                    expandIcon: 'glyphicon glyphicon-plus'
+                                                });
+                                            })
+                                        }
+
+                                        renderTree();
+                                    </script>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+
+                </div> <!-- end row -->
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+<!--tinymce js-->
+<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
+
+<!-- init js -->
+<script src='@static(Weline_Admin::assets/js/pages/form-editor.init.js)'></script>
+
+<!--页脚-->
+@template(Weline_Admin::common/footer.phtml)
+
+<!-- jquery.vectormap map -->
+<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
+<!--switch开关-->
+<js>Weline_Admin::/libs/bootstrap-switch/3.3.4/js/bootstrap-switch.min.js</js>
+<php>
+    if(empty($catalog->getId())){
+    $checked = 'false';
+    }else{
+    $checked = $catalog->isActive()?'true':'false';
+    }
+</php>
+<script>
+
+    $('#isActive').bootstrapSwitch({
+        state: @var{$checked},//开关状态
+        size: null,//尺寸 mini small large
+        animate: true,//开启动画效果
+        disabled: false,//禁用
+        readonly: false,
+        indeterminate: false,
+        inverse: false,//方向反转
+        radioAllOff: false,
+        onColor: 'primary',//开启颜色 primary、info，primary，warning，warning，default
+        offColor: 'warning',//关闭颜色 primary、info，primary，warning，warning，default
+        onText: '@lang(启用)',//开启时展示的文本
+        offText: '@lang(关闭)',//关闭时展示的文本
+        labelText: '&nbsp',//空白区域的文本
+        handleWidth: 'auto',
+        labelWidth: 'auto',
+        baseClass: 'bootstrap-switch',
+        wrapperClass: 'wrapper',
+        onInit: function onInit() {
+            let ele = $('#isActive')
+            if ('on' === ele.val()) {
+                ele.val(1)
+            } else {
+                ele.val(0)
+            }
+        },
+        onSwitchChange: function onSwitchChange(event, state) {
+            //切换时的回调 state
+            $('#isActive').val(state ? 1 : 0)
+        }
+    })
+</script>
+</body>
+</html>
+

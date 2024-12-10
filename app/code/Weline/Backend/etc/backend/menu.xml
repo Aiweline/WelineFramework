@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：面板-->
+    <add source="Weline_Backend::dashboard" name="system_dashboard" title="面板" action="admin" parent=""
+         icon="mdi mdi-monitor-dashboard" order="0"/>
+
+    <!--顶层：系统菜单-->
+    <add source="Weline_Backend::system_menu" name="system_menu" title="系统" action="" parent="" icon="ri-windows-line"
+         order="10000"/>
+
+    <!--顶层：模组-->
+    <add source="Weline_Backend::system_module" name="system_module" title="模组" action="" parent=""
+         icon="ri-apps-2-line me-2" order="20000"/>
+
+    <!--顶层：系统配置-->
+    <add source="Weline_Backend::system_configuration" name="system_configuration" title="系统配置" action="" parent=""
+         icon="dripicons-gear" order="80000"/>
+    <add source="Weline_Backend::user_config" name="system_configuration" title="用户配置" action=""
+         parent="Weline_Backend::system_configuration"
+         icon="dripicons-gear" order="80001"/>
+    <add source="Weline_Backend::user_config" name="system_configuration" title="后台配置" action=""
+         parent="Weline_Backend::system_configuration"
+         icon="dripicons-gear" order="80001"/>
+
+    <!--顶层：开发配置-->
+    <add source="Weline_Backend::system_dev_configuration" name="system_dev_configuration" title="开发配置" action=""
+         parent=""
+         icon="ri-terminal-box-line" order="90000"/>
+    <!--开发工具-->
+    <add source="Weline_Backend::origin_template" name="origin-template" title="后端模板库" action=""
+         parent="Weline_Backend::system_dev_configuration" icon="mdi mdi-view-module" order="20002"/>
+</menus>
