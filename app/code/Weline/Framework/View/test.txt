@@ -1,0 +1,5 @@
+E:\WelineFramework\AppProduct\app\code\Aiweline\Index\view\statics\
+进入【非】开发环境
+APP_CODE_PATH
+替换结果：/Aiweline/Index/view/statics
+替换结果：/Aiweline/Index/view/statics

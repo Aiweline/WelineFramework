@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Shopify_Controller::main" name="shopify_controller" title="Shopify控制" action=""
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-content-save-edit"
+         order="1"/>
+    <add source="Shopify_Controller::listing" name="shopify_controller_log" title="控制记录" action="*/backend/listing"
+         parent="Shopify_Controller::main"
+         icon="mdi mdi-content-save-edit"
+         order="1"/>
+    <add source="Shopify_Controller::cron" name="shopify_controller_cron" title="定时任务" action="*/backend/cron"
+         parent="Shopify_Controller::main"
+         icon="mdi mdi-content-save-edit"
+         order="1"/>
+    <add source="Shopify_Controller::data" name="shopify_controller_data" title="在线数据" action="*/backend/data"
+         parent="Shopify_Controller::main"
+         icon="mdi mdi-content-save-edit"
+         order="1"/>
+    <add source="Shopify_Controller::data_dashboard" name="shopify_controller_data_order" title="概览" action="*/backend/data/dashboard"
+         parent="Shopify_Controller::data"
+         icon="mdi mdi-menu"
+         order="1"/>
+    <add source="Shopify_Controller::data_product" name="shopify_controller_data_product" title="产品数据" action="*/backend/data/product"
+         parent="Shopify_Controller::data"
+         icon="mdi mdi-menu"
+         order="1"/>
+    <add source="Shopify_Controller::data_base" name="shopify_controller_data_base" title="基础数据" action="*/backend/data/base"
+         parent="Shopify_Controller::data"
+         icon="mdi mdi-menu"
+         order="1"/>
+    <add source="Shopify_Controller::data_order" name="shopify_controller_data_order" title="订单数据" action="*/backend/data/order"
+         parent="Shopify_Controller::data"
+         icon="mdi mdi-menu"
+         order="1"/>
+</menus>

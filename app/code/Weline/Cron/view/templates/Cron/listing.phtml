@@ -1,0 +1,302 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('计划任务调度管理器') ?></h4>
+
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('计划任务调度管理器') ?></li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <template>Weline_Component::message.phtml</template>
+                                <h4 class="card-title"><?= __('计划任务调度管理器') ?>:
+                                    <lang>一共有</lang>
+                                    <var>total</var>
+                                    <lang>条数据</lang>
+                                </h4>
+
+                                <!--<div class="table-responsive mCustomScrollbar" data-mcs-axis="yx" data-mcs-theme='dark'
+                                     style="height: 800px">-->
+                                <div class='table-responsive mCustomScrollbar' data-mcs-axis='x'
+                                     data-mcs-theme='dark'>
+                                    <table class="table table-editable table-nowrap align-middle table-edits">
+                                        <thead>
+                                        <tr>
+                                            <th>
+                                                <lang>ID</lang>
+                                            </th>
+                                            <th>
+                                                <lang>调度任务</lang>
+                                            </th>
+                                            <th>
+                                                <lang>执行名</lang>
+                                            </th>
+                                            <th>
+                                                <lang>进程ID</lang>
+                                            </th>
+                                            <th>
+                                                <lang>模组</lang>
+                                            </th>
+                                            <th>
+                                                <lang>执行类名</lang>
+                                            </th>
+                                            <th>
+                                                <lang>执行频率</lang>
+                                            </th>
+                                            <th>
+                                                <lang>调度状态</lang>
+                                            </th>
+                                            <th>
+                                                <lang>运行时长</lang>
+                                            </th>
+                                            <th>
+                                                <lang>阻塞时长（单位：秒）</lang>
+                                            </th>
+                                            <th>
+                                                <lang>阻塞超时解锁时长</lang>
+                                            </th>
+                                            <th>
+                                                <lang>阻塞解锁次数</lang>
+                                            </th>
+                                            <th>
+                                                <lang>上次运行时间</lang>
+                                            </th>
+                                            <th>
+                                                <lang>上次运行日期</lang>
+                                            </th>
+                                            <th>
+                                                <lang>预计下次运行日期</lang>
+                                            </th>
+                                            <th>
+                                                <lang>上次运行日期</lang>
+                                            </th>
+                                            <th>
+                                                <lang>运行次数</lang>
+                                            </th>
+                                            <th>
+                                                <lang>任务描述</lang>
+                                            </th>
+                                            <th>
+                                                <lang>运行时错误</lang>
+                                            </th>
+                                            <th>
+                                                <lang>运行时错误日期</lang>
+                                            </th>
+                                            <th>
+                                                <lang>创建时间</lang>
+                                            </th>
+                                            <th>
+                                                <lang>更新时间</lang>
+                                            </th>
+                                            <th><?= __('操作') ?></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <foreach name="tasks" item="task">
+                                            <tr>
+                                                <td>{{task.id}}</td>
+                                                <td>{{task.name}}</td>
+                                                <td>{{task.execute_name}}</td>
+                                                <td>{{task.pid}}</td>
+                                                <td>{{task.module}}</td>
+                                                <td>{{task.class}}</td>
+                                                <td>{{task.cron_time}}</td>
+                                                <td style="color: @if{task.status === 'success'=>'green'} @if{task.status ===
+                                                'lock'=>'red'} @if{task.status ===
+                                                'pending'=>'blue'}">{{task.status}}
+                                                </td>
+                                                <td>{{task.runtime}}</td>
+                                                <td class="@if{task.block_time=>'text-danger'}">
+                                                    <php>echo $task['block_time'];</php>
+                                                    s
+                                                </td>
+                                                <td>{{task.block_unlock_timeout}}
+                                                    <lang>分钟</lang>
+                                                </td>
+                                                <td class="@if{task.block_time=>'text-danger'}">{{ task.block_times }}
+                                                    <lang>次</lang>
+                                                </td>
+                                                <td>{{task.run_time}}</td>
+                                                <td>{{task.run_date}}</td>
+                                                <td>{{task.next_run_date}}</td>
+                                                <td>{{task.pre_run_date}}</td>
+                                                <td>{{task.run_times}}</td>
+                                                <td><span title="{{task.tip}}"><string>task.tip|20</string></span></td>
+                                                <td style="color: @if{task.runtime_error=>'red'}">
+                                                   <span title="{{task.runtime_error}}">
+                                                       <string>task.runtime_error|50</string>
+                                                   </span>
+                                                    <if condition="task.out_time">
+                                                        <lang>任务停止</lang>
+                                                            {{task.out_time}}
+                                                        <lang>小时</lang>
+                                                    </if>
+                                                </td>
+                                                <td style="color: @if{task.runtime_error_date=>'red'}">{{task.runtime_error_date}}</td>
+                                                <td>{{task.create_time}}</td>
+                                                <td>{{task.update_time}}</td>
+                                                <td>
+                                                    <if condition="task.status === 'block'">
+                                                        <form action="@backend-url('*/cron/unlock')" method="post">
+                                                            <input type="hidden" name="task_id" value="{{task.id}}">
+                                                            <button class='btn btn-primary'>
+                                                                <lang>解锁</lang>
+                                                            </button>
+                                                        </form>
+                                                        <else/>
+                                                        <form action="@backend-url('*/cron/lock')" method='post'>
+                                                            <input type='hidden' name='task_id' value='{{task.id}}'>
+                                                            <button class='btn btn-primary'>锁定 {{task.block_unlock_timeout}}
+                                                                <lang>分钟</lang>
+                                                            </button>
+                                                        </form>
+                                                    </if>
+                                                </td>
+                                            </tr>
+                                        </foreach>
+                                        </tbody>
+                                    </table>
+                                    <div>
+                                        <var>pagination</var>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<js>Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js</js>
+@template(Weline_Admin::common/footer.phtml)
+<script>
+    $('.form-switch').bind('input propertychange', (e) => {
+        let input = $(e.target);
+        let id = input.attr('id');
+        let value = input.is(':checked');
+        let url = '@admin-url("admin/system/cache/status")';
+        let data = {
+            identity: id,
+            cache: value
+        };
+        $.post(url, data, (res) => {
+            if (res.code === 200) {
+                input.prop('checked', res.data);
+                //SweetAlert 提示 成功 自动关闭
+                Swal.fire({
+                    title: '操作成功',
+                    text: '缓存状态已更新',
+                    type: 'success'
+                });
+            } else {
+                input.prop('checked', !res.data);
+            }
+        });
+    })
+</script>
+</body>
+</html>

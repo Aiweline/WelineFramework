@@ -1,0 +1,8 @@
+<w:block>Weline\Backend\Block\Footer\Base</w:block>
+<!--加载配置页脚-->
+<?php
+/**@var \Weline\Framework\View\Template $this */
+if($this->getFooter()){
+    echo $this->getFooter()->getHtml();
+}
+?>

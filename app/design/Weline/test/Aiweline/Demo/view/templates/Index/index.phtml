@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>欢迎加入 Weline Framework 的世界! 发现不一样的世界！【test主题】</title>
+    <link rel="Shortcut Icon" href="@static(/img/favicon.png)">
+    <?php
+    /**
+     * @var $this \Weline\Framework\View\Template
+     */
+    ?>
+    <link href="@static(/css/index.css)" type="text/css" rel="stylesheet">
+    <script src="@static(/js/demo.js)"></script>
+</head>
+<body>
+<div class="header">
+    <h1>欢迎加入 Weline Framework 的世界! 真挚邀请你，我们共筑一个不一样的世界！</h1>
+    <div class="img-box"><img src="@static(/img/logo.png)" alt=""></div>
+    <p class="official-p-sign">人生总要做点有意义的事儿，非是一定要成功，却是一定是在做，方可安心。【test主题】</p>
+    <p class="official-p">开发者：<a
+                href="https://www.baidu.com/s?wd=%E7%A7%8B%E6%9E%AB%E9%9B%81%E9%A3%9E&rsv_spt=1&rsv_iqid=0xc9e7de650008e85c&issp=1&f=8&rsv_bp=1&rsv_idx=2&ie=utf-8&rqlang=cn&tn=baiduhome_pg&rsv_enter=0&rsv_dl=tb&oq=%25E7%25A7%258B%25E9%25A3%258E%25E9%259B%2581%25E9%25A3%259E&rsv_btype=t&inputT=4314&rsv_t=61f3seQPG9m%2ForkDXbd7xxktyscr%2BUJZgQsaFj7Y9bIVVhR8C%2FyqdamWeYcWcYY7ody9&rsv_pq=b8515c4e001013e3&rsv_sug3=43&rsv_sug1=30&rsv_sug7=100&prefixsug=%25E7%25A7%258B%25E6%259E%25AB%25E9%259B%2581%25E9%25A3%259E&rsp=0&rsv_sug4=4935">秋枫雁飞</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;论坛：<a
+                href="http://bbs.aiweline.com" target="_blank">bbs.aiweline.com</a></p>
+    <?php
+    /**@var \Weline\Theme\Model\WelineTheme $theme */
+    $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class)->getActiveTheme();
+    ?>
+    <p class="official-p"> 主题：我其实已经被<?= $theme->getName() ?>
+        主题继承修改了,原来的我不是这个样子的，Weline_Theme为我提供了这个能力，
+        <?= $theme->getRelatePath(); ?>
+        里可以看到我的模板template</p>
+</div>
+<div class="feature">
+    <div class="feature-detail">
+        <h3>特色：</h3>
+        <p>1、功能代码可移植安装。</p>
+        <p>2、一个需求一个App应用，一个应用涵盖前后端源码。</p>
+        <p>3、无插件等复杂影响性能构建，源码可直接修改。</p>
+        <p>4、自定义ORM链式操作，每个Model即可查询也可当做单独的模型对象，支持数据Model热拔插，支持Model映射到数据库表，简化数据库操作。</p>
+        <p>5、更加灵活严谨的API开发体验。</p>
+        <p>
+            码云地址：<a href="https://gitee.com/aiweline/WelineFramework.git">https://gitee.com/aiweline/WelineFramework.git</a>。
+        </p>
+        <p>开发文档：
+            <a href='@url("dev/tool/")'>
+                <url>dev/tool/</url>
+            </a>
+        </p>
+        <p>线上演示：<a href='http://weline-framework-dev.aiweline.com/' target='_blank'>http://weline-framework-dev.aiweline.com/</a>
+        </p>
+    </div>
+</div>
+<div class="sample">
+    <div class="debug">
+        <hook>add_link</hook>
+        <a href="<?= $this->getUrl('/hello/helloworld/p') ?>" target="_blank" onclick="openWindow(this.href,this.text)">调试样式</a>
+        <a href='/hello/helloworld/ex' target='_blank' onclick="openWindow(this.href,'异常调试')">异常调试</a>
+        <a href='/hello/helloworld/demo' target='_blank' onclick="openWindow(this.href,'Demo')">Demo</a>
+        <a href='/hello/helloworld/model' target='_blank' onclick="openWindow(this.href,'model')">model</a>
+        <a href='/hello/helloworld/cache' target='_blank' onclick="openWindow(this.href,'Cache')">Cache</a>
+        <a href='/hello/helloworld/session' target='_blank' onclick="openWindow(this.href,'Session')">Session</a>
+        <a href='/hello/helloworld/i18n' target='_blank' onclick='openWindow(this.href,this.text)'>i18n国际化</a>
+        <a href='/hello/helloworld/plugin' target='_blank' onclick="openWindow(this.href,'Plugin')">Plugin</a>
+        <a href='/hello/helloworld/observer' target='_blank' onclick="openWindow(this.href,'Observer')">Observer</a>
+        <a href='/hello/helloworld/hook' target='_blank' onclick="openWindow(this.href,'Hook')">前端Hook钩子</a>
+        <a href="@admin-url('admin')" target='_blank' onclick='openWindow(this.href,this.text)'>后台</a>
+        <a href="@backend-api('admin/rest/V1/index')" target='_blank' onclick='openWindow(this.href,this.text)'>后台api</a>
+        <a href="@api('hello/rest/v1/index/index')" target='_blank' onclick="openWindow(this.href,'前台api')">前台api</a>
+        <a href='/index/index/moduleTemplateFetch' target='_blank' onclick="openWindow(this.href,'调用其他Module模板文件')">调用其他Module模板文件</a>
+        <a href='/index/index/getComposerVendorModuleTemplate' target='_blank'
+           onclick="openWindow(this.href,'调用其他Module模板文件')">调用composer安装的第三方Module模板文件</a>
+        <a href="<?php echo $this->getAdminUrl('/websitemonitoring/index/index'); ?>" target='_blank'
+           onclick="openWindow(this.href,'测试Composer加载的模组控制器')">测试Composer加载的模组控制器</a>
+        <a href="/upload" target="_blank" onclick="openWindow(this.href,'演示传输文件')">上传</a>
+    </div>
+</div>
+</body>
+</html>

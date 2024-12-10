@@ -1,0 +1,205 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('菜单管理') ?></h4>
+
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('菜单管理') ?></li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+
+                                <h4 class="card-title"><?= __('菜单编辑器') ?></h4>
+
+                                <!--<div class="table-responsive mCustomScrollbar" data-mcs-axis="yx" data-mcs-theme='dark'
+                                     style="height: 800px">-->
+                                <div class='table-responsive mCustomScrollbar' data-mcs-axis='x'
+                                     data-mcs-theme='dark'>
+                                    <table class="table table-editable table-nowrap align-middle table-edits">
+                                        <thead>
+                                        <tr>
+                                            <th><?= __('模块') ?></th>
+                                            <th><?= __('路由') ?></th>
+                                            <th><?= __('控制器信息') ?></th>
+                                            <th><?= __('操作') ?></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php
+                                        foreach ($this->getData('routers') as $module => $router) {
+                                            ?>
+                                            <tr data-id='@var{$module}' class="success">
+                                                <td colspan="3" style="font-weight: 700;font-size: 18px">@var{$module}
+                                                </td>
+                                            </tr>
+                                            <?php foreach ($router as $path => $value): ?>
+                                                <tr data-id='@var{$module}'>
+                                                    <td></td>
+                                                    <td data-field='path'>@var{$path}</td>
+                                                    <td data-field='info'>
+                                                        <?php foreach ($value as $key => $item):
+                                                            if (is_string($item)):
+                                                                ?>
+                                                                <span><?= $key ?>:<?= $item ?></span><br>
+                                                            <?php
+                                                            else:
+                                                                ?>
+                                                                <b><?= __('控制器类信息：') ?></b><br>
+                                                                <?php
+                                                                foreach ($item as $k => $v) {
+                                                                    ?>
+                                                                    <span><?= str_pad($k, 20, '-', 1) ?>:<?= $v ?></span>
+                                                                    <br>
+                                                                    <?php
+                                                                }
+                                                                ?>
+                                                            <?php
+                                                            endif;
+                                                            ?>
+                                                        <?php
+                                                        endforeach;
+                                                        ?>
+                                                    </td>
+                                                    <td style='width: 100px'>
+                                                        <notempty name="value.start_page_path">
+                                                            <a class='btn btn-primary btn-lg'
+                                                               href="<?= $this->getBackendUrl('backend/system/config/set?key=' . \Weline\Backend\Config\KeysInterface::key_start_page_path . '&value=' . $value['start_page_path']) ?>"
+                                                               title='<?= __('设为开始页面') ?>'>
+                                                                <?= __('设为开始页面') ?>
+                                                            </a>
+                                                        </notempty>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+
+                                            <?php
+                                        }
+                                        ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <?php
+                        $pagination = $this->getData('pagination');
+                        echo $pagination['html'] ?? '';
+                        ?>
+
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

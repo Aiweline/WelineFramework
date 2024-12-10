@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+    <plugin name="Weline_UrlManager::module_upgrade_plugin" class="Weline\Framework\Setup\Console\Setup\Upgrade">
+        <interceptor name="Weline_UrlManager::module_upgrade_execute_after_plugin"
+                     instance="Weline\UrlManager\Plugin\ModuleUpgradeExecuteAfterPlugin"
+                     disabled="false" sort="1"/>
+    </plugin>
+</config>

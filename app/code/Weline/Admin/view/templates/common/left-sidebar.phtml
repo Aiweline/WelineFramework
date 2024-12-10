@@ -1,0 +1,99 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+
+use Weline\Framework\Manager\ObjectManager;
+
+?>
+<?php
+$themeConfig = ObjectManager::getInstance('\Weline\Backend\Block\ThemeConfig');
+if (!$themeConfig->getThemeConfig('topnav')):
+    ?>
+    <div class="vertical-menu">
+        <div data-simplebar class="h-100">
+            <!--- Sidemenu -->
+            <div id="sidebar-menu">
+                <!-- Left Menu Start -->
+                <ul class="metismenu list-unstyled" id="side-menu">
+                    <?php
+                    /**@var \Weline\Backend\Model\Menu $menuModel */
+                    $menuModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Model\Menu::class);
+                    // 获取菜单类型的角色资源
+                    /**@var \Weline\Backend\Session\BackendSession $session */
+                    $session = ObjectManager::getInstance(\Weline\Backend\Session\BackendSession::class);
+                    /**@var \Weline\Backend\Model\BackendUser $user */
+                    $user = $session->getLoginUser();
+                    $role = $user->getRoleModel();
+
+                    /**@var \Weline\Acl\Model\RoleAccess $roleAccessModel */
+                    $roleAccessModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class);
+                    $roleAccessMenus = $menuModel->getMenuTreeByRole($role);
+
+                    /**@var \Weline\Framework\Http\Request $req */
+                    $req = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+                    $frontend_url_prefix = '/';
+                    $backend_url_prefix = $req->getUrlBuilder()->getBackendUrl('/');
+                    function renderMenu($menus, $backend_url_prefix, $frontend_url_prefix)
+                    {
+                        foreach ($menus as $menu) {
+                            if (!isset($menu['is_enable']) or !$menu['is_enable']) {
+                                continue;
+                            }
+                            echo "<li class='menu-title' data-source='{$menu['source_id']}'>";
+                            echo "<i class='{$menu['icon']}'></i><span>" . __($menu['source_name']) . "</span>";
+                            echo "</li>";
+
+                            if (isset($menu['children'])) {
+                                echo "<ul class='sub-acl' aria-expanded='false'>";
+                                renderSubMenu($menu['children'], $backend_url_prefix, $frontend_url_prefix);
+                                echo "</ul>";
+                            }
+                        }
+                    }
+
+                    function renderSubMenu(array $submenus, string $backend_url_prefix, string $frontend_url_prefix)
+                    {
+                        foreach ($submenus as $submenu) {
+                            if ($submenu['type'] !== 'menus') {
+                                continue;
+                            }
+
+                            $children = $submenu['children'] ?? [];
+                            $childCount = 0;
+                            foreach ($children as $child) {
+                                if ($child['type'] === 'menus') {
+                                    $childCount++;
+                                }
+                            }
+
+                            if ($childCount == 0) {
+                                $url_prefix = $submenu['is_backend'] ? $backend_url_prefix : $frontend_url_prefix;
+                                echo "<li data-source='{$submenu['source_id']}'>";
+                                echo "<a href='{$url_prefix}/{$submenu['route']}' data-source='{$submenu['source_id']}' class='waves-effect'>";
+                                echo "<i class='{$submenu['icon']}'></i><span>" . __($submenu['source_name']) . "</span>";
+                                echo "</a>";
+                                echo "</li>";
+                            } else {
+                                echo "<li data-source='{$submenu['source_id']}'>";
+                                echo "<a href='javascript: void(0);' data-source='{$submenu['source_id']}' class='has-arrow waves-effect'>";
+                                echo "<i class='{$submenu['icon']}'></i>";
+                                echo "<span class='badge rounded-pill bg-primary float-end'>{$childCount}</span>";
+                                echo "<span>" . __($submenu['source_name']) . "</span>";
+                                echo "</a>";
+                                echo "<ul class='sub-acl' aria-expanded='false'>";
+                                renderSubMenu($children, $backend_url_prefix,$frontend_url_prefix);
+                                echo "</ul>";
+                                echo "</li>";
+                            }
+                        }
+                    }
+
+                    // 调用函数生成菜单
+                    renderMenu($roleAccessMenus, $backend_url_prefix, $frontend_url_prefix);
+                    ?>
+                </ul>
+            </div>
+            <!-- Sidebar -->
+        </div>
+    </div>
+<?php
+endif; ?>

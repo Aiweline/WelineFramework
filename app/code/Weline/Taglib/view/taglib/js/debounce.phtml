@@ -1,0 +1,15 @@
+<script>
+    /*延迟期间最多执行一次：优化输入请求过多ajax*/
+    function debounce(func, delay) {
+        let timeoutId;
+        return function (...args) {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(() => {
+                func.apply(this, args);
+                timeoutId = null;
+            }, delay);
+        };
+    }
+</script>

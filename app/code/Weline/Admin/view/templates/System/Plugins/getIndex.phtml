@@ -1,0 +1,186 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Responsive Table css -->
+    <link href='assets/libs/admin-resources/rwd-table/rwd-table.min.css' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'><?= __('插件管理') ?></h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><?= __('系统') ?></a></li>
+                                    <li class='breadcrumb-item active'><?= __('插件管理') ?></li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+
+                                <h4 class='card-title'><?= __('插件管理') ?></h4>
+                                <p class='card-title-desc'><?= __('开发者使用插件功能修改函数的情况。') ?></p>
+                                <?php
+                                $plugins = $this->getData('plugins');
+                                ?>
+                                <div class='table-rep-plugin'>
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='1'><?= __('ID') ?></th>
+                                                <th data-priority='1'><?= __('插件类') ?></th>
+                                                <th data-priority='3'><?= __('示例类') ?></th>
+                                                <th data-priority='1'><?= __('是否禁用') ?></th>
+                                                <th data-priority='3'><?= __('是否共享') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php
+                                            foreach ($plugins as $file => $plugin) :
+                                                ?>
+                                                <tr>
+                                                    <th colspan="4" class='co-name'><?= __('插件配置文件：') ?><?= $file ?></th>
+                                                </tr>
+                                                <?php
+                                                foreach ($plugin as $name => $instances) {
+                                                    ?>
+                                                    <tr>
+                                                        <th colspan="4" class='co-name'><?= __('插件名：') ?><?= $name ?></th>
+                                                    </tr>
+                                                    <?php
+                                                    foreach ($instances as $key => $instance) {
+                                                        ?>
+                                                        <tr>
+                                                            <th class='co-name'><?= $key ?></th>
+                                                            <td><?= $instance['class'] ?></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td><?= $instance['plugins']['name'] ?></td>
+                                                            <td><?= $instance['plugins']['instance'] ?></td>
+                                                            <td><?= $instance['plugins']['disabled'] ?></td>
+                                                            <td><?= $instance['plugins']['sort'] ?></td>
+                                                        </tr>
+                                                        <?php
+                                                    }
+                                                    ?>
+                                                    <?php
+                                                }
+                                                ?>
+                                            <?php
+                                            endforeach;
+                                            ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                </div>
+
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='assets/libs/admin-resources/rwd-table/rwd-table.min.js'></script>
+
+<!-- Init js -->
+<script src='assets/js/pages/table-responsive.init.js'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

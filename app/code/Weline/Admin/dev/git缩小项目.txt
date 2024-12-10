@@ -1,0 +1,6 @@
+# 从历史中删除 target/ 这个文件夹
+git filter-branch --force --index-filter 'git rm -r  --cached --ignore-unmatch view/statics/assets/images/bg.jpg' --prune-empty --tag-name-filter cat-- --all
+# 执行仓库压缩
+git gc --prune=now
+# 推送到远程仓库
+git push origin --force --all

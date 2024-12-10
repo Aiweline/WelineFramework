@@ -1,0 +1,30 @@
+<div class='card'>
+    <div class='card-body'>
+        <div class='d-flex text-muted'>
+            <div class='flex-shrink-0 me-3 align-self-center'>
+                <div id='@var(id)' class='apex-charts' dir='ltr'></div>
+            </div>
+            <div class='flex-grow-1 overflow-hidden'>
+                <p class='mb-1'>
+                    <lang><var>title</var></lang>
+                </p>
+                <h5 class='mb-3'><var>total</var></h5>
+                <?php
+                if (isset($rate)) {
+                    ?>
+                    <p class='text-truncate mb-0'>
+                        <lang><var>tip</var></lang>
+                        <span class='@var(class) me-2'>
+                        <var>rate</var>%
+                        <i class='ri-arrow-right-@var(up_down)-line align-bottom ms-1'></i>
+                    </span>
+                    </p>
+                    <?php
+                }
+                ?>
+            </div>
+        </div>
+    </div>
+    <!-- end card-body -->
+</div>
+<!-- end card -->

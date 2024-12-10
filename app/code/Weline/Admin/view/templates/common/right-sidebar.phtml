@@ -1,0 +1,295 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!-- Right Sidebar -->
+<div class='right-bar'>
+    <div data-simplebar class='h-100'>
+        <div class='rightbar-title d-flex align-items-center px-3 py-4'>
+
+            <h5 class='m-0 me-2'><?= __('设置') ?></h5>
+
+            <a href="javascript:void(0);" class="right-bar-toggle ms-auto">
+                <i class="mdi mdi-close noti-icon"></i>
+            </a>
+        </div>
+
+        <!-- Settings -->
+        <hr class='mt-0'/>
+        <h6 class='text-center mb-0'><lang>系统配置</lang></h6>
+        <div class='p-4'>
+            <div class='mb-3'>
+                <div class='mt-4 mt-lg-0'>
+                    <h5 class='font-size-14 mb-3'>
+                        <lang>全局 默认/还原</lang>
+                    </h5>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-topbar'
+                               id='reset-theme'
+                               value=''>
+                        <label class='form-check-label' for='data-topbar-light'>
+                            <lang>还原</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='light-mode-switch'
+                               id='light-mode-radio'
+                               value='light' <?= $themeConfig->getThemeConfig('light-mode-switch') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-topbar-light'>
+                            <lang>明亮</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-topbar'
+                               id='dark-mode-radio'
+                               value='dark' <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-topbar-light'>
+                            <lang>暗黑</lang>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr class='mt-0'/>
+        <h6 class='text-center mb-0'><?= __('布局元素') ?></h6>
+        <div class='p-4'>
+            <div class='mb-3'>
+                <div class='mt-4 mt-lg-0'>
+                    <h5 class='font-size-14 mb-3'>
+                        <lang>导航栏</lang>
+                    </h5>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-topbar'
+                               id='data-topbar-light'
+                               value='light' <?= ($themeConfig->getThemeConfig('data-topbar') === 'light') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-topbar-light'>
+                            <lang>明亮</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-topbar'
+                               id='data-topbar-colored'
+                               value='colored' <?= ($themeConfig->getThemeConfig('data-topbar') === 'colored') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-topbar-colored'>
+                            <lang>有色</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-topbar'
+                               id='data-topbar-dark'
+                               value='dark' <?= ($themeConfig->getThemeConfig('data-topbar') === 'dark') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-topbar-dark'>
+                            <lang>暗黑</lang>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class='mb-3'>
+                <div class='mt-4 mt-lg-0'>
+                    <h5 class='font-size-14 mb-3'>
+                        <lang>侧边栏</lang>
+                    </h5>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-sidebar'
+                               id='data-sidebar-light'
+                               value='light' <?= ($themeConfig->getThemeConfig('data-sidebar') === 'light') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-sidebar-light'>
+                            <lang>明亮</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-sidebar'
+                               id='data-sidebar-dark'
+                               value='dark' <?= ($themeConfig->getThemeConfig('data-sidebar') === 'dark') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-sidebar-dark'>
+                            <lang>暗黑</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-sidebar-size'
+                               id='data-sidebar-size-default'
+                               value='' <?= ($themeConfig->getThemeConfig('data-sidebar-size') === '') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-sidebar-size-default'>
+                            <lang>默认尺寸</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-sidebar-size'
+                               id='data-sidebar-size-small'
+                               value='small' <?= ($themeConfig->getThemeConfig('data-sidebar-size') === 'small') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-sidebar-size-small'>
+                            <lang>小尺寸</lang>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class='mb-3'>
+                <div class='mt-4 mt-lg-0'>
+                    <h5 class='font-size-14 mb-3'>
+                        <lang>布局尺寸</lang>
+                    </h5>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-layout-size'
+                               id='data-layout-size-default'
+                               value='' <?= ($themeConfig->getThemeConfig('data-layout-size') === '') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-layout-size-default'>
+                            <lang>默认</lang>
+                        </label>
+                    </div>
+                    <div class='form-check form-check-inline'>
+                        <input class='form-check-input' type='radio' name='data-layout-size'
+                               id='data-layout-size-boxed'
+                               value='boxed' <?= ($themeConfig->getThemeConfig('data-layout-size') === 'boxed') ? 'checked' : '' ?>>
+                        <label class='form-check-label' for='data-layout-size-boxed'>
+                            <lang>盒子</lang>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='data-layout'
+                    <?= $themeConfig->getThemeConfig('data-layout') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="data-layout"
+                       title='@lang("默认无布局：开启后，设置水平布局，关闭后，设置垂直布局")'><?= __('水平布局') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='data-keep-enlarged'
+                    <?= $themeConfig->getThemeConfig('data-keep-enlarged') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="data-keep-enlarged"
+                       title='@lang("开启后，保持内容最大化")'><?= __('保持最大化') ?></label>
+            </div>
+
+            <div class='mb-3'>
+                <h5 class='font-size-14 mb-3'>
+                    <lang>布局类</lang>
+                </h5>
+                <div class='form-check form-check-inline'>
+                    <input class='form-check-input' type='radio' name='layout-class'
+                           id='layout-class-default'
+                           value='' <?= ($themeConfig->getThemeConfig('layout-class') === '') ? 'checked' : '' ?>>
+                    <label class='form-check-label' for='layout-class-default'>
+                        <lang>默认</lang>
+                    </label>
+                </div>
+                <div class='form-check form-check-inline'>
+                    <input class='form-check-input' type='radio' name='layout-class'
+                           id='layout-class-vertical-collpsed'
+                           value='vertical-collpsed' <?= ($themeConfig->getThemeConfig('layout-class') === 'vertical-collpsed') ? 'checked' : '' ?>>
+                    <label class='form-check-label' for='layout-class-vertical-collpsed'>
+                        <lang>垂直塌陷</lang>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <hr class="mt-0"/>
+        <h6 class='text-center mb-0'><?= __('菜单布局') ?></h6>
+        <div class='p-4'>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='light-sidebar'
+                    <?= $themeConfig->getThemeConfig('light-sidebar') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="light-sidebar"><?= __('菜单明亮') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='topnav'
+                    <?= $themeConfig->getThemeConfig('topnav') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="topnav"><?= __('页顶菜单') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='icon-sidebar'
+                    <?= $themeConfig->getThemeConfig('icon-sidebar') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="icon-sidebar"><?= __('图标菜单') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='layouts-compact-sidebar'
+                    <?= $themeConfig->getThemeConfig('layouts-compact-sidebar') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="layouts-compact-sidebar"><?= __('图文菜单') ?></label>
+            </div>
+        </div>
+
+        <hr class="mt-0"/>
+        <h6 class='text-center mb-0'><?= __('主题布局') ?></h6>
+        <div class='p-4'>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='horizontal_menu_top'
+                    <?= $themeConfig->getThemeConfig('horizontal_menu_top') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="horizontal_menu_top"><?= __('水平菜单置顶') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='boxed'
+                    <?= $themeConfig->getThemeConfig('boxed') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="boxed"><?= __('紧凑布局') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='horizontal-boxed'
+                    <?= $themeConfig->getThemeConfig('horizontal-boxed') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="horizontal-boxed"><?= __('水平紧凑布局') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='horizontal'
+                    <?= $themeConfig->getThemeConfig('horizontal') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="horizontal"><?= __('水平布局') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='layouts-hori-topbar-dark'
+                    <?= $themeConfig->getThemeConfig('layouts-hori-topbar-dark') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="layouts-hori-topbar-dark"><?= __('水平顶黑') ?></label>
+            </div>
+            <div class='form-check form-switch mb-3'>
+                <input class='form-check-input' type='checkbox'
+                       id='layouts-hori-boxed-width'
+                    <?= $themeConfig->getThemeConfig('layouts-hori-boxed-width') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="layouts-hori-boxed-width"><?= __('水平盒子') ?></label>
+            </div>
+        </div>
+        <hr class="mt-0"/>
+        <h6 class="text-center mb-0"><?= __('主题颜色') ?></h6>
+
+        <div class="p-4">
+            <div class="mb-2">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-1.png)" class="img-thumbnail"
+                     alt="layout-1">
+            </div>
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input theme-choice" type="checkbox" id="light-mode-switch"
+                    <?= $themeConfig->getThemeConfig('light-mode-switch') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="light-mode-switch"><?= __('明亮模式') ?></label>
+            </div>
+
+            <div class="mb-2">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-2.png)" class="img-thumbnail"
+                     alt="layout-2">
+            </div>
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input theme-choice" type="checkbox"
+                       id="dark-mode-switch" <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="dark-mode-switch"><?= __('暗黑模式') ?></label>
+            </div>
+
+            <div class="mb-2">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-3.png)" class="img-thumbnail"
+                     alt="layout-3">
+            </div>
+            <div class="form-check form-switch mb-5">
+                <input class="form-check-input theme-choice" type="checkbox"
+                       id="rtl-mode-switch" <?= $themeConfig->getThemeConfig('rtl-mode-switch') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="rtl-mode-switch"><?= __('RTL模式') ?></label>
+            </div>
+        </div>
+    </div> <!-- end slimscroll-menu-->
+</div>
+<!-- /Right-bar -->
+
+<!-- Right bar overlay-->
+<div class="rightbar-overlay"></div>

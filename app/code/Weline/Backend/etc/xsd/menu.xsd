@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+           elementFormDefault="qualified"
+           version="0.0.1">
+    <xs:element name="menus">
+        <xs:annotation>
+            <xs:documentation>
+                系统菜单
+            </xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="add" type="menuDeclaration" minOccurs="1" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+    <!--    菜单声明-->
+    <xs:complexType name="menuDeclaration">
+        <xs:annotation>
+            <xs:documentation>
+                菜单详情
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="source" type="xs:integer" use="required"/>
+        <xs:attribute name="title" type="xs:string" use="required"/>
+        <xs:attribute name="action" type="xs:string" use="required"/>
+        <xs:attribute name="parent" type="xs:string" use="optional"/>
+        <xs:attribute name="icon" type="xs:string" use="optional"/>
+        <xs:attribute name="is_backend" type="xs:string" use="optional"/>
+        <xs:attribute name="order" type="xs:integer" use="required"/>
+    </xs:complexType>
+</xs:schema>

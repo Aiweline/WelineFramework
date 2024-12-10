@@ -1,0 +1,63 @@
+<!--你可以在JavaScript的String原型链上添加两个函数，一个是escapeString用于转义字符串中的特殊字符，另一个是unescapeString用于反转义已转义的字符串。以下是这两个函数的实现：-->
+<script type="text/javascript">
+    String.prototype.escapeString = function () {
+        let output = '';
+        for (let i = 0; i < this.length; i++) {
+            switch (this[i]) {
+                case ' ':
+                    output += '\\ ';
+                    break;
+                case '\n':
+                    output += '\\n';
+                    break;
+                case '\t':
+                    output += '\\t';
+                    break;
+                case '\r':
+                    output += '\\r';
+                    break;
+                case '\b':
+                    output += '\\b';
+                    break;
+                case '\f':
+                    output += '\\f';
+                    break;
+                default:
+                    output += this[i];
+            }
+        }
+        return output;
+    };
+    String.prototype.unescapeString = function () {
+        let output = '';
+        for (let i = 0; i < this.length; i++) {
+            switch (this[i]) {
+                case '\\ ':
+                    output += ' ';
+                    break;
+                case '\\n':
+                    output += '\n';
+                    break;
+                case '\\t':
+                    output += '\t';
+                    break;
+                case '\\r':
+                    output += '\r';
+                    break;
+                case '\\b':
+                    output += '\b';
+                    break;
+                case '\\f':
+                    output += '\f';
+                    break;
+                default:
+                    output += this[i];
+            }
+        }
+        return output;
+    };
+</script>
+<!--这样，你就可以使用这两个函数来转义和反转义字符串了。例如：-->
+<!--<script  type="text/javascript">-->
+<!--    let myString = "Hello\nWorld!";console.log(myString.escapeString());  // 输出："Hello\\nWorld!"console.log(myString.unescapeString());  // 输出："Hello\nWorld!"-->
+<!--</script>-->

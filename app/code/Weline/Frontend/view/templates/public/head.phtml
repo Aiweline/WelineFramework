@@ -1,0 +1,48 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Frontend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Block\ThemeConfig::class);
+?>
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<meta charset="UTF-8">
+<title><?php echo $this->getData('title') ?? __('欢迎使用WelineFramework框架！'); ?></title>
+<!--元数据-->
+<meta content="<?php echo $this->getData('description'); ?>" name="description"/>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, shrink-to-fit=no'>
+<meta content="<?php echo $this->getData('title'); ?>" name='author'/>
+<meta content="<?php echo $this->getData('description'); ?>" name='description'/>
+<link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
+<link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
+<link rel="Bookmark" href="@static(Weline_Frontend::img/favicon.png)">
+<!--加载requirejs-->
+<?php if (DEV) : ?>
+    <!--        <script src="@static(Weline_Frontend::frontend/lib/requirejs/2.3.6/requirejs.js)"></script>-->
+<?php
+else:
+    ?>
+    <!--        <script src="@static(Weline_Frontend::frontend/lib/requirejs/2.3.6/requirejs.min.js)"></script>-->
+<?php
+endif;
+?>
+<!--加载require常用js模块-->
+<!--<script src="@static(Weline_Frontend::base/require.configs.js)"></script>-->
+<w:block class='Weline\Frontend\Block\Header\Base' template='Weline_Frontend::header/base.phtml'/>
+
+<!--css-->
+<!--loading-->
+<css>Weline_Frontend::/libs/loading/loading.css</css>
+<css>Weline_Frontend::/libs/font-awesome-4.7.0/css/font-awesome.min.css</css>
+<!-- Bootstrap Css -->
+<css>Weline_Frontend::libs/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
+<!--JS-->
+<js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
+<?php if (DEV): ?>
+    <!--        <script src="@static(Weline_Frontend::/libs/jquery/3.6.0/jquery.map)"></script>-->
+<?php endif; ?>
+<!--加载配置页头-->
+<?php
+echo $this->getHeader()->getHtml();
+?>

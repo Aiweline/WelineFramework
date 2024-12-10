@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--开发工具-->
+    <add source="Weline_UrlManager::url-manager" name="url-manager" title="URL管理器" action=""
+         parent="Weline_Backend::system_configuration" icon="mdi mdi-router" order="20001" is_backend="1"/>
+    <add source="Weline_UrlManager::url-manager-listing" name="url-manager-listing" title="URL路由列表" action="url-manager/backend/url/listing"
+         parent="Weline_UrlManager::url-manager" icon="mdi mdi-router" order="1" is_backend="1"/>
+    <add source="Weline_UrlManager::url-manager-rewrite" name="url-manager-rewrite" title="URL路由重写" action="url-manager/backend/rewriter"
+         parent="Weline_UrlManager::url-manager" icon="mdi mdi-lock-reset" order="2" is_backend="1"/>
+</menus>

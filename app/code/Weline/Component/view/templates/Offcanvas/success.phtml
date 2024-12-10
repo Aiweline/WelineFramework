@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>@lang{倒计时关闭页面...}</title>
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" id="bootstrap-style" rel="stylesheet"
+          type="text/css"/>
+</head>
+<body>
+<div class="card alert border mt-4 mt-lg-0 p-0 mb-0">
+    <div class="card-header bg-soft-success">
+        <div class="d-flex">
+            <div class="flex-grow-1">
+                <h5 class="font-size-16 text-success my-1">
+                    <lang>成功提示！</lang>
+                </h5>
+            </div>
+            <div class="flex-shrink-0">
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="text-center">
+            <div class="mb-4">
+                <i class="mdi mdi-checkbox-marked-circle-outline display-4 text-success"></i>
+            </div>
+            <h4 class="alert-heading font-18">
+                <lang>{{req.msg}}</lang>
+            </h4>
+            <p class="mb-0">{{req.content}}</p>
+            <p class="mb-0" id="countdown"></p>
+        </div>
+    </div>
+</div>
+<script>
+    // 设置倒计时时间（单位：毫秒）
+    var countdownTime = parseInt('{{time}}000');
+
+    // 获取倒计时元素
+    var countdownElement = document.getElementById('countdown');
+
+    // 倒计时函数
+    function countdown() {
+        // 减少剩余时间
+        countdownTime -= 1000;
+        // 更新倒计时元素的文本内容
+        countdownElement.textContent = '@lang{页面将在} ' + (countdownTime / 1000) + ' @lang{秒后关闭}';
+
+        // 如果剩余时间大于 0，则继续倒计时
+        if (countdownTime > 0) {
+            setTimeout(countdown, 1000);
+        } else {
+            // 关闭页面
+            var $ = parent.$;
+            let parentDocument = parent.$(window.parent.document)
+            let closeOffcanvasButton = parentDocument.find('.offcanvas-header button')
+            closeOffcanvasButton.click()
+            let reload = parseInt('{{reload}}')
+            if(reload){
+                parent.location.reload();
+            }
+        }
+    }
+
+    // 启动倒计时
+    countdown();
+</script>
+</body>
+</html>

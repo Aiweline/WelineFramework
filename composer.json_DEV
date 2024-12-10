@@ -1,0 +1,68 @@
+{
+  "name": "aiweline/weline-framework",
+  "description": "微蓝WelineFramework框架！",
+  "homepage": "https://gitee.com/aiweline/WelineFramework",
+  "keywords": [
+    "weline",
+    "WelineFramework",
+    "framework",
+    "web",
+    "ORM",
+    "app",
+    "php",
+    "php8"
+  ],
+  "type": "project",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "秋枫雁飞",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "require": {
+    "php": "^8.1",
+    "ext-iconv": "*",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "ext-exif": "*",
+    "ext-fileinfo": "*",
+    "phpunit/phpunit": "^9.5.6",
+    "ext-simplexml": "*",
+    "ext-dom": "*",
+    "ext-libxml": "*",
+    "ext-zip": "*",
+    "symfony/intl": "^5.2",
+    "symfony/polyfill-intl-icu": "^1.23",
+    "jdorn/sql-formatter": "^1.2",
+    "ext-gd": "*",
+    "wikimedia/less.php": "^3.1",
+    "mrclay/jsmin-php": "^2.4",
+    "guzzlehttp/guzzle": "^7.4",
+    "friendsofphp/php-cs-fixer": "^3.8",
+    "weline/framework": "^1.0.0",
+    "weline/module-website-monitoring": "^1.0.0",
+    "weline/module-theme-fancy": "^1.0",
+    "rinvex/countries": "^8.1"
+  },
+  "opcache-autoloader": true,
+  "apcu-autoloader": true,
+  "optimize-autoloader": true,
+  "classmap-authoritative": true,
+  "autoload": {
+    "psr-4": {
+      "Weline\\": "app/code/Weline/",
+      "Weline\\Framework\\":"vendor/weline/framework"
+    },
+    "psr-0": {
+      "": [
+        "app/code/",
+        "generated/code/"
+      ]
+    },
+    "classmap": [
+      "extend/"
+    ]
+  }
+}

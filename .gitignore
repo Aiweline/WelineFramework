@@ -1,0 +1,38 @@
+!.gitignore
+# 编辑器配置文件
+.idea
+.vscode
+# 流水线文件
+/.workflow
+# 开发文件
+/dev
+
+# 第三方
+/vendor/*
+
+# 配置文件
+/app/etc/
+
+# 安装锁文件
+/setup/install.lock
+
+# 系统自动生成，无需提交
+app/code/*/*/view/tpl/*
+app/code/Aiweline/*
+pub/static/*
+pub/media/*
+!pub/media/.gitkeep
+/var/*
+generated/code/*
+!generated/code/.gitkeep
+/generated/language/*
+/generated/routers/*
+/generated/commands.php
+/generated/functions.php
+.user.ini
+.phpunit.result.cache
+composer.lock
+
+# 代码美化
+.php_cs.cache
+.php-cs-fixer.cache
