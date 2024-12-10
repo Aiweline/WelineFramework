@@ -1,0 +1,225 @@
+############################################
+## 默认 index 文件
+
+    DirectoryIndex index.php
+
+<IfModule mod_php7.c>
+############################################
+## 调整PHP的内存以及执行时间
+
+    php_value memory_limit 756M
+    php_value max_execution_time 18000
+
+############################################
+## 在初始化自动加载之前禁用自动会话机制
+
+    php_flag session.auto_start off
+
+############################################
+    ## 启用html结果压缩
+
+    #php_flag zlib.output_compression on
+
+###########################################
+## 禁用用户代理验证以不中断多个图像上载
+
+    php_flag suhosin.session.cryptua off
+</IfModule>
+<IfModule mod_security.c>
+###########################################
+## 禁用后期处理以不中断多个图像上载
+
+    SecFilterEngine Off
+    SecFilterScanPOST Off
+</IfModule>
+
+<IfModule mod_deflate.c>
+
+############################################
+## 启用apache服务的文件压缩（要求Apache 2.x以上版本）
+## http://developer.yahoo.com/performance/rules.html#gzip
+
+    # 在所有内容上插入筛选器
+    SetOutputFilter DEFLATE
+    # 仅在选定内容类型上插入筛选器(要压缩的文件类型)
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/x-javascript application/json image/svg+xml
+
+    # Netscape（网景浏览器） 4.x存在的问题...
+    BrowserMatch ^Mozilla/4 gzip-only-text/html
+
+    # Netscape（网景浏览器） 4.06-4.08 存在的问题
+    BrowserMatch ^Mozilla/4\.0[678] no-gzip
+
+    # MSIE 伪装 Netscape, 但属正常
+    BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
+
+    # 不压缩图像
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png)$ no-gzip dont-vary # 仅图片不压缩
+    #SetEnvIfNoCase Request_URI .(?:gif|jpe?g|png|exe|t?gz|zip|bz2|sit|rar|pdf|mov|avi|mp3|mp4|rm)$ no-gzip dont-vary #设置不对压缩的文件
+
+    # 确保代理不会传递错误的内容
+    Header append Vary User-Agent env=!dont-vary
+
+</IfModule>
+
+<IfModule mod_ssl.c>
+
+############################################
+## 使HTTPS环境变量可用于CGI模式
+
+    SSLOptions StdEnvVars
+
+</IfModule>
+
+############################################
+## 使用HHVM（或任何其他）通过ProxyPassMatch处理apache2.4.6 CentOS build的解决方法
+## 请将其设置为虚拟主机配置级别
+
+##    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+############################################
+
+<IfModule mod_rewrite.c>
+
+############################################
+## 开启路由重写
+
+    Options +FollowSymLinks
+    RewriteEngine on
+
+############################################
+## 静态文件
+# 非pub目录请求，且如果加上pub目录判断是文件，则重写到pub目录，重新请求这个文件
+RewriteCond %{REQUEST_URI} !^/pub/.*$
+RewriteCond %{REQUEST_URI} ^/static/.*$
+RewriteCond %{DOCUMENT_ROOT}/pub/$1 -f
+RewriteRule ^(.*)$ /pub/$1 [L]
+
+RewriteCond %{THE_REQUEST} \s/pub/ [NC,OR]
+
+############################################
+## 可以设置你的代码目录位置
+## 相对于根目录的路径
+
+    #RewriteBase /WelineFramework/
+
+############################################
+## CGI 环境中的 HTTP authorization授权方案
+
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+############################################
+## 已禁用TRACE和TRACK HTTP方法以防止XSS攻击
+
+    RewriteCond %{REQUEST_METHOD} ^TRAC[EK]
+    RewriteRule .* - [L,R=405]
+
+############################################
+## 针对移动手持用户代理的重定向
+
+    #RewriteCond %{REQUEST_URI} !^/mobiledirectoryhere/.*$
+    #RewriteCond %{HTTP_USER_AGENT} "android|blackberry|ipad|iphone|ipod|iemobile|opera mobile|palmos|webos|googlebot-mobile" [NC]
+    #RewriteRule ^(.*)$ /mobiledirectoryhere/ [L,R=302]
+
+############################################
+## 从不重写现有文件、目录和链接
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-l
+
+############################################
+## 重写所有请求到index.php入口文件
+
+    RewriteRule .* index.php [L]
+#    RewriteRule ^(.*)$ /index.php?/$1 [L]
+
+</IfModule>
+
+
+############################################
+## 防止编码引起的服务器重写问题
+## 如果仍有问题，请使用第二行
+
+    AddDefaultCharset Off
+    #AddDefaultCharset UTF-8
+    AddType 'text/html; charset=UTF-8' html
+
+<IfModule mod_expires.c>
+
+############################################
+## 添加header默认过期时间
+
+    ExpiresDefault "access plus 1 year"
+    ExpiresByType text/html A0
+    ExpiresByType text/plain A0
+    <FilesMatch "\.(jpe?g|gif|png|bmp|js|css|woff|swf|ico|pdf|flv)$">
+            ExpiresActive On
+            ExpiresDefault "access plus 1 week"
+    </FilesMatch>
+
+</IfModule>
+
+###########################################
+## 拒绝访问根目录下的文件访问以隐藏敏感的应用程序信息
+    RedirectMatch 403 /\.git
+
+<Files composer.json>
+   Require all denied
+</Files>
+<Files composer.lock>
+    Require all denied
+</Files>
+<Files .gitignore>
+    Require all denied
+</Files>
+<Files .htaccess>
+    Require all denied
+</Files>
+<Files .htaccess.sample>
+    Require all denied
+</Files>
+<Files .php_cs.dist>
+    Require all denied
+</Files>
+<Files COPYING.txt>
+    Require all denied
+</Files>
+<Files LICENSE.txt>
+    Require all denied
+</Files>
+<Files LICENSE_AFL.txt>
+    Require all denied
+</Files>
+<Files nginx.conf.sample>
+    Require all denied
+</Files>
+<Files package.json>
+    Require all denied
+</Files>
+<Files php.ini.sample>
+    Require all denied
+</Files>
+<Files README.md>
+    Require all denied
+</Files>
+<Files .user.ini>
+    Require all denied
+</Files>
+
+# 对于应用程序未处理的404和403，返回纯404响应
+ErrorDocument 404 /pub/errors/404.php
+ErrorDocument 403 /pub/errors/404.php
+
+
+<IfModule mod_headers.c>
+
+    Header set X-UA-Compatible "IE=edge"
+
+    # `mod_headers` 无法根据内容匹配时
+    # `X-UA-Compatible` 应该只响应HTML文档文本内容，而非其他资源
+
+    <FilesMatch "\.(appcache|atom|bbaw|bmp|crx|css|cur|eot|f4[abpv]|flv|geojson|gif|htc|ico|jpe?g|js|json(ld)?|m4[av]|manifest|map|mp4|oex|og[agv]|opus|otf|pdf|png|rdf|rss|safariextz|svgz?|swf|topojson|tt[cf]|txt|vcard|vcf|vtt|webapp|web[mp]|webmanifest|woff2?|xloc|xml|xpi)$">
+        Header unset X-UA-Compatible
+    </FilesMatch>
+
+</IfModule>

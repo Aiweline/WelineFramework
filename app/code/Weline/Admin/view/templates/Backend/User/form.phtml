@@ -1,0 +1,194 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><if condition='user.user_id'><lang>编辑</lang><else/><lang>新增</lang></if><lang>用户</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>用户管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'>
+                                        <a href='javascript: void(0);'>
+                                            <lang>系统</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/user/listing')"><lang>管理员</lang></a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <if condition='user.user_id'>
+                                            <lang>编辑</lang>
+                                            <else/>
+                                            <lang>新增</lang>
+                                        </if>
+                                        <lang>管理员</lang>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>
+                                        <if condition='w_edit_user.user_id'>
+                                            <lang>编辑</lang>
+                                            <else/>
+                                            <lang>新增</lang>
+                                        </if>
+                                        系统管理员
+                                    </lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>
+                                        <if condition='w_edit_user.user_id'>
+                                            <lang>编辑</lang>
+                                            <else/>
+                                            <lang>新增</lang>
+                                        </if>
+                                        系统管理员
+                                    </lang>
+                                </p>
+                                <form id="user-data" class='needs-validation' action="{{action}}" method="post"
+                                      novalidate>
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='username'><lang>用户名</lang></label>
+                                                <input type='hidden' name="user_id" value='{{w_edit_user.user_id}}'>
+                                                <input type='text' scope="w_user" class='form-control' name="username" id='username'
+                                                       placeholder='@lang{请输入用户名}' value='{{w_edit_user.username}}'
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>用户名称验证成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入用户名称</lang>
+                                                </div>
+                                            </div>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='email'><lang>邮箱</lang></label>
+                                                <input type='text' scope="w_user" class='form-control' name="email" id='email'
+                                                       placeholder='@lang{请输入邮箱}' value='{{w_edit_user.email}}'
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>邮箱验证成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入用户邮箱</lang>
+                                                </div>
+                                            </div>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='password'><lang>密码</lang></label>
+                                                <input type='password' scope="w_user" class='form-control' name="password" id='password'
+                                                       placeholder='@lang{请输入密码}' value=''
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>密码输入验证成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入用户密码</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type='submit' class='btn btn-primary'><lang>提交</lang></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Init js -->
+<js:part name="debounce"/>
+<w:data-field url="@backend-url('backend/user-data')" container-id="user-data" event="input change click"/>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "weline/module-editor-manager",
+  "description": "WelineFramework 编辑器管理器控制插件",
+  "minimum-stability": "stable",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1",
+    "weline/module-media-manager": "v1.0.0"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\EditorManager\\": ""
+    },
+    "psr-0": {
+      "Weline\\EditorManager\\": ""
+    }
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,47 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="vertical-menu">
+
+    <div data-simplebar class="h-100">
+
+        <!--- Sidemenu -->
+        <div id='sidebar-menu'>
+            <!-- Left Menu Start -->
+            <ul class='metismenu list-unstyled mm-show' id='side-menu'>
+                <foreach name="catalogs" item="v">
+                    <li class='menu-title'>
+                        <var>$v['name']</var>
+                    </li>
+                    <php>$nodes = $v['nodes'];</php>
+                    <notempty name="nodes">
+                        <foreach name='nodes' item='node'>
+                            <li>
+                                <php>
+                                    $sub_level = $node['level']??1;
+                                    $sub_nodes = $node['nodes']??[];
+                                </php>
+                                <a href="@php{if($sub_nodes):echo 'javascript: void(0);';else:echo $node['href'];endif;}"
+                                   class='@if{$sub_nodes=>"has-arrow"} waves-effect'>
+                                    <i class='@var{$node["icon"]}'></i>
+                                    <span><var>$node['name']</var></span>
+                                </a>
+
+                                <if condition="$sub_nodes">
+                                    <ul class='sub-menu' aria-expanded='false'>
+                                        <foreach name='sub_nodes' item='sub_node'>
+                                            <li>
+                                                <a href="@var{$sub_node['href']}"><var>$sub_node['name']</var></a>
+                                            </li>
+                                        </foreach>
+                                    </ul>
+                                </if>
+                            </li>
+                        </foreach>
+                    </notempty>
+                </foreach>
+            </ul>
+        </div>
+        <!-- Sidebar -->
+    </div>
+</div>

@@ -1,0 +1,24 @@
+<!--实时翻译收集 START-->
+<if condition="env.translate_mode === 'online'">
+    <script>
+        let success_word = __('成功推送收集词汇！推送消息：%msg')
+        let error_word = __('推送收集词汇失败！推送消息：%1')
+        $.ajax({
+            url: window.frontend_url('i18n/frontend/word/collect'),
+            method: 'post',
+            dataType: 'json',
+            data: window.site.i18n,
+            success: function (res) {
+                if (200 === res.code) {
+                    console.log(__(success_word, res))
+                } else {
+                    console.log(__(error_word, res.msg))
+                }
+            },
+            error: function (res) {
+                console.log(__(error_word, JSON.stringify(res)))
+            }
+        })
+    </script>
+</if>
+<!--实时翻译收集 END-->

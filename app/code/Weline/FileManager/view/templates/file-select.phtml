@@ -1,0 +1,70 @@
+<!-- 图片预览 -->
+@template(Weline_FileManager::image-preview/template.phtml)
+<!-- Small modal -->
+<a type="button" data-bs-target="#{{target}}-select-modal" class="btn btn-primary btn-sm waves-effect waves-light"
+   data-bs-toggle="modal">{{title}}</a>
+<if condition="ext !== '*'"><br><span>@lang{允许的文件类型：}({{ext}})</span></if>
+<br>
+<span>@lang{允许的文件大小：}{{size_alias}}</span>
+<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog"
+     aria-labelledby="Elfinder" aria-hidden="true" id="{{target}}-select-modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down w-80">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {{title}} <if condition="ext !== '*'"><span class="text-danger">@lang{允许的文件类型：}({{ext}})</span></if>
+                    <span>@lang{允许的文件大小：}{{size_alias}}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-close-modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <iframe id="{{target}}-file-manager-iframe" class="w-100" style="min-height: 50vh" src="" scrolling="no"
+                        frameborder="0"></iframe>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<script>
+    var timer = null;
+    $('#{{target}}-select-modal').on('shown.bs.modal', () => {
+        const iframe = $("#{{target}}-file-manager-iframe");
+        if (iframe.attr('src') === '') {
+            iframe.attr('src', '{{connector}}')
+        }
+
+        function checkIframeLoaded() {
+            const iframe = $("#{{target}}-file-manager-iframe");
+            // Get a handle to the iframe element
+            // console.log(iframe)
+            let iframeDoc = iframe[0].contentDocument || undefined;
+            if (iframeDoc === undefined && iframe[0].contentWindow) {
+                iframeDoc = iframe[0].contentWindow.document;
+            }
+            if (iframeDoc !== undefined && iframeDoc.readyState === 'complete') {
+                const filemanager = $(iframeDoc).find('#{{code}}');
+                if (filemanager.length > 0) {
+                    const style = filemanager.attr('style')
+                    if (style) {
+                        iframe.css({height: filemanager.height() + 10 + 'px'})
+                        clearInterval(timer)
+                    }
+                }
+            }
+        }
+
+        timer = window.setInterval(() => {
+            checkIframeLoaded()
+        }, 100);
+        // 超过10秒则断开
+        setTimeout(function (){
+            clearInterval(timer)
+        },10000)
+    })
+    // 点击预览
+    $('#{{target}}-preview').on('click', '.img', function () {
+        let url = $(this).data('url')
+        let iframe = $("#{{target}}-file-manager-iframe");
+        iframe.attr('src', url)
+    })
+</script>

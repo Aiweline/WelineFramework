@@ -1,0 +1,89 @@
+<div class="container">
+    <div class="form-box"  >
+        <h2>Step 2: 数据库安装</h2>
+        <form id="db_form" action="/setup/installer.php" method="post" onsubmit="return false;"
+              onclick="checkEnv('db','db_form','✖')">
+            <div class="db-config-container">
+                <div class="db">
+                    <h2>生产数据库</h2>
+                    <div class="user-box">
+                        <input type="text" name="db[hostname]" required="" value="127.0.0.1">
+                        <label>主机</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[database]" required="" value="weline">
+                        <label>数据库</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[username]" required="" value="weline">
+                        <label>数据库用户</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="password" name="db[password]" required="" value="weline">
+                        <label>数据库密码</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[hostport]" required="" value="3306">
+                        <label>端口</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[prefix]" required="" value="m_">
+                        <label>表前缀</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[charset]" required="" value="utf8mb4">
+                        <label>字符集</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="db[type]" required="" value="mysql">
+                        <label>类型</label>
+                    </div>
+                </div>
+                <div class="sandbox_db">
+                    <h2>Debug调试数据库</h2>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[hostname]" required="" value="127.0.0.1">
+                        <label>主机</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[database]" required="" value="sandbox_weline">
+                        <label>数据库</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[username]" required="" value="sandbox_weline">
+                        <label>数据库用户</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="password" name="sandbox_db[password]" required="" value="sandbox_weline">
+                        <label>数据库密码</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[hostport]" required="" value="3306">
+                        <label>端口</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[prefix]" required="" value="m_">
+                        <label>表前缀</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[charset]" required="" value="utf8mb4">
+                        <label>字符集</label>
+                    </div>
+                    <div class="user-box">
+                        <input type="text" name="sandbox_db[type]" required="" value="mysql">
+                        <label>类型</label>
+                    </div>
+                </div>
+            </div>
+            <button value="提交" type="submit">
+                <span></span>
+                <span></span>
+                提交
+                <span></span>
+                <span></span>
+            </button>
+            <div class="console"></div>
+        </form>
+        <a id="next" class="next-button" href="/setup?step=step-3">下一步</a>
+    </div>
+</div>
