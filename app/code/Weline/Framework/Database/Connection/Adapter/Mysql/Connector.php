@@ -47,7 +47,7 @@ final class Connector extends Query implements ConnectorInterface
         try {
             //初始化一个Connection对象
             $this->link = new PDO($dsn, $this->configProvider->getUsername(), $this->configProvider->getPassword(), $this->configProvider->getOptions());
-            if($this->configProvider->getPreSql()){
+            if ($this->configProvider->getPreSql()) {
                 $this->link->exec($this->configProvider->getPreSql());
             }
 //            $this->link->exec("set names {$this->configProvider->getCharset()} COLLATE {$this->configProvider->getCollate()}");
@@ -225,5 +225,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['version'];
+    }
+
+    public function hasField(string $table, string $field): bool
+    {
+        # 使用 SHOW COLUMNS 检查字段
+        $query = "SHOW COLUMNS FROM {$table} LIKE '{$field}'";
+        $stmt = $this->link->prepare($query);
+        $stmt->execute();
+        return $stmt->rowCount() > 0;
     }
 }

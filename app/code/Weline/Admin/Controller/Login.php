@@ -71,7 +71,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
 
         $adminUsernameUser = $this->helper->getRequestBackendUser();
-        if (!$adminUsernameUser->getId()) {
+        if (!$adminUsernameUser->getIsEnabled()) {
+            $this->messageManager->addError(__('账户被禁用！'));
+            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+        }
+        if (!$adminUsernameUser->getId() or $adminUsernameUser->getIsDeleted()) {
             $this->messageManager->addError(__('账户不存在！'));
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
         }
