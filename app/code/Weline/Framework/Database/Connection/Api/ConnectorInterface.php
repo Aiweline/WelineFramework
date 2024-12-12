@@ -92,4 +92,6 @@ interface ConnectorInterface
     public function tableExist(string $table_name): bool;
 
     public function getVersion(): string;
+
+    public function hasField(string $table,string $field):bool;
 }

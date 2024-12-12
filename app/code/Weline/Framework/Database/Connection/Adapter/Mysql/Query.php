@@ -191,7 +191,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function group(string $fields): QueryInterface
     {
-        $this->group_by = 'group by ' . $fields;
+        $this->group_by = 'GROUP BY ' . $fields;
         return $this;
     }
 
@@ -201,8 +201,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function find(): QueryInterface
+    public function find(string $find_fields=''): QueryInterface
     {
+        if($find_fields){
+            $this->find_fields = $find_fields;
+        }
         $this->limit(1, 0);
         $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
@@ -239,11 +242,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         $this->additional_sql = $additional_sql;
         return $this;
-    }
-
-    public function fetchOrigin(): mixed
-    {
-        return $this->fetch();
     }
 
 

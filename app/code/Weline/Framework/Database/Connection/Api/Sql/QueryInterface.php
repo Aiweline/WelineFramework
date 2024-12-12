@@ -107,6 +107,48 @@ interface QueryInterface
     public function alias(string $table_alias_name): QueryInterface;
 
     /**
+     * @DESC          # 模糊查询
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2021/8/17 23:25
+     * 参数区：
+     *
+     * @param string $word
+     * @param string $fields
+     * @return QueryInterface
+     */
+    public function concat(string $fields,string $alias_field): QueryInterface;
+    /**
+     * @DESC          # 模糊查询
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2021/8/17 23:25
+     * 参数区：
+     *
+     * @param string $word
+     * @param string $fields
+     * @return QueryInterface
+     */
+    public function concat_like(string $fields,string $like_word): QueryInterface;
+
+
+    /**
+     * @DESC          # 组合字段
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2021/8/17 23:25
+     * 参数区：
+     *
+     * @param string $fields
+     * @param string $separator 默认json
+     * @return QueryInterface
+     */
+    public function group_concat(string $fields, string $concat_field, string $separator = 'json'): QueryInterface;
+
+    /**
      * @DESC          # 更新
      *
      * @AUTH    秋枫雁飞
@@ -269,7 +311,7 @@ interface QueryInterface
      * 参数区：
      * @return QueryInterface
      */
-    public function find(): QueryInterface;
+    public function find(string $find_fields = ''): QueryInterface;
 
     /**
      * @DESC          # 统计
