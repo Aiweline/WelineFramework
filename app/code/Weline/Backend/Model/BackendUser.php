@@ -30,6 +30,8 @@ class BackendUser extends \Weline\Framework\Database\Model
     public const fields_attempt_ip = 'attempt_ip';
     public const fields_attempt_times = 'attempt_times';
     public const fields_sess_id = 'sess_id';
+    public const fields_is_deleted = 'is_deleted';
+    public const fields_is_enabled = 'is_enabled';
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'email', 'username'];
@@ -48,6 +50,19 @@ class BackendUser extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        # 检查字段
+        if (!$setup->hasField(self::fields_is_enabled)) {
+            $setup->query("
+            alter table {$this->getTable()}
+    add is_enabled int default 1 null comment '是否启用' after attempt_ip;
+            ");
+        }
+        if (!$setup->hasField(self::fields_is_deleted)) {
+            $setup->query("
+    alter table {$this->getTable()}
+    add is_deleted int default 0 null comment '是否删除' after is_enabled;
+            ");
+        }
     }
 
     /**
@@ -70,6 +85,8 @@ class BackendUser extends \Weline\Framework\Database\Model
                 ->addColumn(self::fields_sess_id, TableInterface::column_type_VARCHAR, 32, '', '管理员Session ID')
                 ->addColumn(self::fields_attempt_times, TableInterface::column_type_INTEGER, 0, 'default 0', '尝试登录次数')
                 ->addColumn(self::fields_attempt_ip, TableInterface::column_type_VARCHAR, 255, '', '尝试登录IP')
+                ->addColumn(self::fields_is_enabled, TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
+                ->addColumn(self::fields_is_deleted, TableInterface::column_type_INTEGER, 1, 'default 0', '是否删除')
                 ->create();
 
             # 初始化超管和管理员账户
@@ -112,6 +129,28 @@ class BackendUser extends \Weline\Framework\Database\Model
     public function getUsername()
     {
         return $this->getData('username');
+    }
+
+    public function getIsDeleted(): bool
+    {
+        return (bool)$this->getData(self::fields_is_deleted);
+    }
+
+
+    public function setIsDeleted(bool $isDeleted = true): static
+    {
+        return $this->setData(self::fields_is_deleted, (int)$isDeleted);
+    }
+
+    public function getIsEnabled(): bool
+    {
+        return (bool)$this->getData(self::fields_is_enabled);
+    }
+
+
+    public function setIsEnabled(bool $isEnabled = true): static
+    {
+        return $this->setData(self::fields_is_enabled, (int)$isEnabled);
     }
 
     public function setUsername(string $username): BackendUser
@@ -190,8 +229,8 @@ class BackendUser extends \Weline\Framework\Database\Model
             return $role;
         }
         /**@var Role $role */
-        $role = ObjectManager::getInstance(Role::class);
-        $role = $role->load($this->getRole()->getRoleId() ?? '');
+        $role = clone ObjectManager::getInstance(Role::class);
+        $role = $role->load($this->getRole()->getRoleId() ?: 0);
         if ($role->getId()) $this->setData('role', $role);
         return $role;
     }

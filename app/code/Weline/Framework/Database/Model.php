@@ -11,10 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database;
 
-use Aiweline\AliDdnsServer\Cron\Ddns;
-use Weline\Backend\Model\Menu;
-use Weline\Framework\Manager\ObjectManager;
-
 abstract class Model extends AbstractModel implements ModelInterface
 {
     public function columns(): array
@@ -44,15 +40,6 @@ abstract class Model extends AbstractModel implements ModelInterface
         foreach ($columns as $column) {
             $this->where($column, "%{$key}%", 'like', $logic);
         }
-        return $this;
-    }
-
-    public function concat(string $key, string $columns = ''): static
-    {
-        if (!$columns) {
-            $columns = implode(',', $this->columns());
-        }
-        $this->where("CONCAT({$columns}) like '%{$key}%'");
         return $this;
     }
 

@@ -27,15 +27,18 @@ final class Connector extends Query implements ConnectorInterface
 {
     public function __construct(
         private readonly ConfigProviderInterface $configProvider
-    ) {
-        $this->db_name    = $this->configProvider->getDatabase();
+    )
+    {
+        $this->db_name = $this->configProvider->getDatabase();
     }
+
     protected ?PDO $link = null;
     protected ?Query $query = null;
+
     public function create(): static
     {
         $db_type = $this->configProvider->getDbType();
-        $dsn     = "{$db_type}:{$this->configProvider->getData('path')}";
+        $dsn = "{$db_type}:{$this->configProvider->getData('path')}";
         try {
             //初始化一个Connection对象
             $this->link = new PDO($dsn);
@@ -57,6 +60,7 @@ final class Connector extends Query implements ConnectorInterface
     {
         return $this->link;
     }
+
     public function reindex(string $table): bool
     {
         $table = str_replace('`', '', $table);
@@ -196,6 +200,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         return ObjectManager::getInstance(Table\Alter::class)->setConnection($this);
     }
+
     public function tableExist(string $table_name): bool
     {
         $table_name = trim($table_name, '`');
@@ -209,9 +214,18 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             return false;
         }
     }
+
     public function getVersion(): string
     {
         // 查询数据库版本号
         return $this->link->getAttribute(PDO::ATTR_CLIENT_VERSION);
+    }
+
+    public function hasField(string $table, string $field): bool
+    {
+        $field = trim($field, '`');
+        $sql = "SELECT count(1) as count FROM PRAGMA table_info({$table}) WHERE name='{$field}'";
+        $res = $this->query($sql)->fetch();
+        return ($res[0]['count'] ?? 0) > 0;
     }
 }
