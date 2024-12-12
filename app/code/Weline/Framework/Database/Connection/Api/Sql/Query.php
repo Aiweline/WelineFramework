@@ -37,6 +37,7 @@ abstract class Query implements QueryInterface
     public array $insert_update_where_fields = [];
     public array $joins = [];
     public string $fields = '*';
+    public string $find_fields = '';
     public array $single_updates = [];
     public array $updates = [];
     public array $wheres = [];
@@ -69,6 +70,48 @@ abstract class Query implements QueryInterface
     public function table(string $table_name): QueryInterface
     {
         $this->table = $this->getTable($table_name);
+        return $this;
+    }
+
+    public function concat_like(string $fields, string $like_word): QueryInterface
+    {
+        return $this->where("CONCAT({$fields}) like '{$like_word}'");
+    }
+
+    public function concat(string $fields, string $alias_field): QueryInterface
+    {
+        return $this->fields("CONCAT({$fields}) as '{$alias_field}'");
+    }
+
+    public function group_concat(string $fields, string $concat_field = '', string $separator = 'json', string $order_by = ''): QueryInterface
+    {
+        if (!$this->group_by) {
+            throw new DbException(__('group_by 不能为空！group_concat方法要求先使用->group()方法！'));
+        }
+        if ($order_by) {
+            $order_by = " ORDER BY {$order_by}";
+        }
+        if (empty($concat_field)) {
+            $concat_field = 'concat_field';
+        }
+        if ($separator == 'json') {
+            $count_sql = "CONCAT('[', GROUP_CONCAT(
+        JSON_OBJECT(";
+            $fields = explode(',', $fields);
+            foreach ($fields as $field) {
+                $field_name = $field;
+                if (str_contains($field, '.')) {
+                    $field_name = substr($field, strpos($field, '.') + 1, strlen($field));
+                }
+                $count_sql .= "'{$field_name}', {$field}, ";
+            }
+            $count_sql = substr($count_sql, 0, -2) . ")
+        {$order_by}
+    ), ']') as {$concat_field}";
+            $this->fields($this->fields.','.$count_sql);
+        } else {
+            $this->fields($this->fields.','."GROUP_CONCAT({$fields} SEPARATOR '{$separator}' ) as {$concat_field}");
+        }
         return $this;
     }
 
@@ -379,7 +422,7 @@ abstract class Query implements QueryInterface
 
     public function group(string $fields): QueryInterface
     {
-        $this->group_by = 'group by ' . $fields;
+        $this->group_by = 'GROUP BY ' . $fields;
         return $this;
     }
 
@@ -389,8 +432,11 @@ abstract class Query implements QueryInterface
         return $this;
     }
 
-    public function find(): QueryInterface
+    public function find(string $find_fields = ''): QueryInterface
     {
+        if ($find_fields) {
+            $this->find_fields = $find_fields;
+        }
         $this->limit(1, 0);
         $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
@@ -484,6 +530,21 @@ abstract class Query implements QueryInterface
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
+                if ($this->find_fields) {
+                    if($result){
+                        if (str_contains($this->find_fields, ',')) {
+                            $fields = explode(',', $this->find_fields);
+                            $fields_data = [];
+                            foreach ($fields as $field) {
+                                $fields_data[$field] = $result[$field] ?? null;
+                            }
+                            $result = $fields_data;
+                        } else {
+                            $result = $result[$this->find_fields] ?? null;
+                        }
+                    }
+                    break;
+                }
                 if ($model_class && empty($result)) {
                     $result = ObjectManager::make($model_class, ['data' => []], '__construct');
                 }
@@ -588,7 +649,7 @@ abstract class Query implements QueryInterface
     {
         # 提取$period中包含的数字
         $period_number = preg_replace('/\D/', '', $period);
-        if($period_number){
+        if ($period_number) {
             $period = str_replace($period_number, '{number}', $period);
         }
         $period_number = intval($period_number);

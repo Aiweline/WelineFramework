@@ -160,7 +160,7 @@ class Session implements SessionInterface
         if ($this->user) {
             return $this->user;
         }
-        $this->user = ObjectManager::getInstance($model)->load($this->session->get($this::login_KEY_ID) ?: '');
+        $this->user = ObjectManager::make($model)->load($this->session->get($this::login_KEY_ID) ?: '');
         return $this->user;
     }
 

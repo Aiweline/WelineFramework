@@ -111,7 +111,6 @@ class Acl implements TaglibInterface
                 }
                 $cache->set($cacheKey, $accesses);
             }
-
             if (!in_array($source, $accesses)) {
                 /**@var MessageManager $messageManager */
                 $messageManager = ObjectManager::getInstance(MessageManager::class);

@@ -208,6 +208,11 @@ class ModelSetup
         return $this->model->getConnection()->query($sql)->fetch();
     }
 
+    public function hasField(string $field)
+    {
+        return $this->model->getConnection()->getConnector()->hasField($this->getTable(), $field);
+    }
+
     public function getVersion(): string
     {
         return $this->model->getConnection()->getVersion();

@@ -30,7 +30,9 @@ if (!defined('BP')) {
     }
 }
 require BP . 'index.php';
-define('ENV_TEST', true);
+if(!defined('ENV_TEST')){
+    define('ENV_TEST', true);
+}
 class TestCore extends TestCase
 {
     use Boot;
