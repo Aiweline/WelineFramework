@@ -67,6 +67,10 @@ class App
         if (!defined('START_TIME')) {
             define('START_TIME', microtime(true));
         }
+        // 单元测试环境
+        if (!defined('ENV_TEST')) {
+            define('ENV_TEST', false);
+        }
         // 运行模式
         if (!defined('CLI')) {
             define('CLI', PHP_SAPI === 'cli');

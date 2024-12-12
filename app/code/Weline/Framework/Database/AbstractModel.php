@@ -35,6 +35,9 @@ use Weline\Framework\Manager\ObjectManager;
  * @method AbstractModel|QueryInterface page(int $page = 1, int $pageSize = 20)
  * @method AbstractModel|QueryInterface order(string $fields = 'main_table.create_time', string $sort = 'DESC')
  * @method AbstractModel|QueryInterface group(string $fields)
+ * @method AbstractModel|QueryInterface concat(string $fields,string $alias_field): QueryInterface;
+ * @method AbstractModel|QueryInterface concat_like(string $fields,string $like_word): QueryInterface;
+ * @method AbstractModel|QueryInterface group_concat(string $fields, string $concat_field, string $separator = 'json'): QueryInterface
  * @method AbstractModel|QueryInterface find()
  * @method int total(string $field = '*', string $alias = 'total_count')
  * @method AbstractModel|QueryInterface select()
@@ -809,9 +812,17 @@ abstract class AbstractModel extends DataObject
                 $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', ['model' => $this]);
                 // load之前事件
                 if ($this->getId()) {
-                    $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
+                    if($this->_unit_primary_keys){
+                        $query = $this->getQuery();
+                        foreach ($this->_unit_primary_keys as $unit_primary_key) {
+                            $query->where($unit_primary_key, $this->getData($unit_primary_key));
+                        }
+                        $query->delete()->fetch();
+                    }else{
+                        $this->getQuery()->where($this->_primary_key, $this->getId())->delete()->fetch();
+                    }
                 } elseif ($this->getQuery()->wheres) {
-                    $this->getQuery()->delete();
+                    $this->getQuery()->delete()->fetch();
                 } else {
                     throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                 }

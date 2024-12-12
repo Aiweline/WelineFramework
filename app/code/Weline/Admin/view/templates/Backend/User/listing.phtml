@@ -103,7 +103,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             </div>
                                         </div>
                                         <div class='col-6'>
-                                            <a class='btn btn-primary pull-right mt-1 mb-1' href="@backend-url('*/backend/user/add')">
+                                            <a class='btn btn-primary pull-right mt-1 mb-1'
+                                               href="@backend-url('*/backend/user/add')">
                                                 <lang>新增</lang>
                                             </a>
                                         </div>
@@ -127,6 +128,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <lang>头像</lang>
                                             </th>
                                             <th>
+                                                <lang>状态</lang>
+                                            </th>
+                                            <th>
                                                 <lang>创建时间</lang>
                                             </th>
                                             <th>
@@ -143,26 +147,79 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <td data-field='user_id'>{{v.user_id}}</td>
                                                 <td data-field='username'>{{v.username}}</td>
                                                 <td data-field='email'>{{v.email}}</td>
-                                                <td data-field='create_time'><if condition="v.avatar">{{v.avatar}}<else/><i class='fas fa-user-shield'></i></if></td>
+                                                <td data-field='create_time'>
+                                                    <if condition="v.avatar">{{v.avatar}}
+                                                        <else/>
+                                                        <i class='fas fa-user-shield'></i>
+                                                    </if>
+                                                </td>
+                                                <td data-field='status'>
+                                                    <if condition="v.is_deleted === 1">
+                                                            <span class="badge bg-danger">
+                                                                <lang>已删除</lang>
+                                                            </span>
+                                                        <else/>
+                                                        <if condition="v.is_enabled === 1">
+                                                                <span class="badge bg-success">
+                                                                    <lang>使用中...</lang>
+                                                                </span>
+                                                            <else/>
+                                                            <span class="badge bg-danger">
+                                                                <lang>已禁用</lang>
+                                                                </span>
+                                                        </if>
+                                                    </if>
+                                                </td>
                                                 <td data-field='create_time'>{{v.create_time}}</td>
                                                 <td data-field='update_time'>{{v.update_time}}</td>
                                                 <td>
                                                     <if condition="v.user_id !== 1">
                                                         <div class="d-flex gap-2">
-                                                            <form action="@backend-url('*/backend/user/delete')" method='post'>
-                                                                <input type='hidden' name='id' value='{{v.user_id}}'>
-                                                                <!--TODO 询问删除 -->
-                                                                <button type='submit' class='btn btn-danger btn-sm ajax-confirm'>
-                                                                    <lang>删除</lang>
-                                                                </button>
-                                                            </form>
-                                                            <a class='btn btn-info btn-sm'
-                                                               href="@backend-url('*/backend/user/edit')?id={{v.user_id}}">
-                                                                <lang>编辑</lang>
-                                                            </a>
+                                                            <acl source="Weline_Admin::system_user_delete_post">
+                                                                <form action="@backend-url('*/backend/user/delete')"
+                                                                      method='post'>
+                                                                    <input type='hidden' name='id'
+                                                                           value='{{v.user_id}}'>
+                                                                    <!--TODO 询问删除 -->
+                                                                    <button type='submit'
+                                                                            class='btn btn-danger btn-sm ajax-confirm'>
+                                                                        <lang>删除</lang>
+                                                                    </button>
+                                                                </form>
+                                                            </acl>
+                                                            <acl source="Weline_Admin::system_user_active_post">
+                                                                <form action="@backend-url('*/backend/user/active')"
+                                                                      method='post'>
+                                                                    <input type='hidden' name='id'
+                                                                           value='{{v.user_id}}'>
+                                                                    <button type='submit'
+                                                                            class='btn btn-success btn-sm ajax-confirm'>
+                                                                        <lang>激活</lang>
+                                                                    </button>
+                                                                </form>
+                                                            </acl>
+                                                            <acl source="Weline_Admin::system_user_inactive_post">
+                                                                <form action="@backend-url('*/backend/user/inActive')"
+                                                                      method='post'>
+                                                                    <input type='hidden' name='id'
+                                                                           value='{{v.user_id}}'>
+                                                                    <button type='submit'
+                                                                            class='btn btn-danger btn-sm ajax-confirm'>
+                                                                        <lang>禁用</lang>
+                                                                    </button>
+                                                                </form>
+                                                            </acl>
+                                                            <acl source="Weline_Admin::system_user_edit_post">
+                                                                <a class='btn btn-info btn-sm'
+                                                                   href="@backend-url('*/backend/user/edit')?id={{v.user_id}}">
+                                                                    <lang>编辑</lang>
+                                                                </a>
+                                                            </acl>
                                                         </div>
                                                         <else/>
-                                                        <b class="disabled"><lang>超级管理员</lang></b>
+                                                        <b class="disabled">
+                                                            <lang>超级管理员</lang>
+                                                        </b>
                                                     </if>
                                                 </td>
                                             </tr>
