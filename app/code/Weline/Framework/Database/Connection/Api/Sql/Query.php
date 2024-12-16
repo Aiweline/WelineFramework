@@ -543,11 +543,13 @@ abstract class Query implements QueryInterface
                             $result = $result[$this->find_fields] ?? null;
                         }
                     }
+                    $this->find_fields = '';
                     break;
                 }
                 if ($model_class && empty($result)) {
                     $result = ObjectManager::make($model_class, ['data' => []], '__construct');
                 }
+                $this->find_fields = '';
                 break;
             case 'insert':
                 $result = $this->getLink()->lastInsertId();
