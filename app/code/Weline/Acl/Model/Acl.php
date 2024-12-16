@@ -40,7 +40,7 @@ class Acl extends \Weline\Framework\Database\Model
 
     public const type_MENUS = 'menus';
 
-    public array $_unit_primary_keys = [self::fields_ACL_ID, self::fields_SOURCE_ID];
+    public array $_unit_primary_keys = [self::fields_SOURCE_ID];
 
 
     private Url $url;
@@ -226,7 +226,7 @@ class Acl extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-        if ($setup->tableExist()){
+        if ($setup->tableExist()) {
             $setup->query('TRUNCATE TABLE ' . $this->getTable());
         }
 //        $setup->dropTable();

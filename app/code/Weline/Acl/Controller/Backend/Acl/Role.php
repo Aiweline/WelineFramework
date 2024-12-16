@@ -153,8 +153,12 @@ class Role extends \Weline\Admin\Controller\BaseController
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_assign_post', '角色权限分配', '', '')]
     public function postAssign()
     {
+//        if(!$this->session->getLoginUsername() !== 'admin' ){
+//            $this->getMessageManager()->addError(__('仅允许超管分配权限！'));
+//            $this->redirect('*/backend/acl/role');
+//        }
         $role_id = $this->request->getPost('role_id');
-        $role = $this->role->clear()->load($role_id);
+        $role = $this->role->load($role_id);
         if (empty($role->getId())) {
             $this->getMessageManager()->addError(__('角色ID不存在！'));
             $this->redirect('*/backend/acl/role');
@@ -171,9 +175,9 @@ class Role extends \Weline\Admin\Controller\BaseController
         $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
         $roleAccessModel->beginTransaction();
         try {
-            $roleAccessModel->where(\Weline\Acl\Model\Role::fields_ROLE_ID, $role_id)->delete()->fetch();
+            $roleAccessModel->reset()->where(\Weline\Acl\Model\Role::fields_ROLE_ID, $role_id)->delete()->fetch();
             if ($acls) {
-                $roleAccessModel->reset()->insert($acls, [RoleAccess::fields_ROLE_ID, RoleAccess::fields_SOURCE_ID])->fetch();
+                $roleAccessModel->reset()->insert($acls,[\Weline\Acl\Model\Role::fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::fields_SOURCE_ID])->fetch();
             }
             $roleAccessModel->commit();
             $this->getMessageManager()->addSuccess(__('权限分配成功！'));
