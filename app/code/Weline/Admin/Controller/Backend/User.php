@@ -35,7 +35,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
             $aclModelFields = implode(',', $this->backendUser->getModelFields());
             $this->backendUser->where('CONCAT_WS(' . $aclModelFields . ')', '%' . $search . '%', 'like');
         }
-        $users = $this->backendUser->pagination()->select()->fetch();
+        $users = $this->backendUser->order()->pagination()->select()->fetch();
         $this->assign('users', $users->getItems());
         $this->assign('pagination', $users->getPagination());
         return $this->fetch();
@@ -154,6 +154,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $backendUser = ObjectManager::getInstance(BackendUser::class);
         $users = $backendUser
             ->joinModel(UserRole::class, 'ur', 'main_table.user_id=ur.user_id')
+            ->order('main_table.create_time')
             ->pagination()
             ->select()
             ->fetch();

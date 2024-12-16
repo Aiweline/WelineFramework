@@ -192,8 +192,7 @@ class RoleAccess extends \Weline\Framework\Database\Model
             ->joinModel(Acl::class, 'a', 'main_table.source_id=a.source_id')
             ->where('main_table.role_id', $roleModel->getId())
             ->select()
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
     }
 
     public function getRoleAccessListArray(Role $roleModel): array
