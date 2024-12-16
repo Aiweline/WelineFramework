@@ -35,8 +35,8 @@ use Weline\Framework\Manager\ObjectManager;
  * @method AbstractModel|QueryInterface page(int $page = 1, int $pageSize = 20)
  * @method AbstractModel|QueryInterface order(string $fields = 'main_table.create_time', string $sort = 'DESC')
  * @method AbstractModel|QueryInterface group(string $fields)
- * @method AbstractModel|QueryInterface concat(string $fields,string $alias_field): QueryInterface;
- * @method AbstractModel|QueryInterface concat_like(string $fields,string $like_word): QueryInterface;
+ * @method AbstractModel|QueryInterface concat(string $fields, string $alias_field): QueryInterface;
+ * @method AbstractModel|QueryInterface concat_like(string $fields, string $like_word): QueryInterface;
  * @method AbstractModel|QueryInterface group_concat(string $fields, string $concat_field, string $separator = 'json'): QueryInterface
  * @method AbstractModel|QueryInterface find()
  * @method int total(string $field = '*', string $alias = 'total_count')
@@ -202,7 +202,8 @@ abstract class AbstractModel extends DataObject
     }
 
     // 定义深度克隆逻辑
-    public function __clone() {
+    public function __clone()
+    {
         # 拷贝时克隆新的查询对象
         if ($this->_bind_query instanceof QueryInterface) {
             $this->_bind_query = clone $this->_bind_query;
@@ -213,9 +214,9 @@ abstract class AbstractModel extends DataObject
         }
     }
 
-    public function export(bool $is_download = true, string $output_file_name = '',array $columns = []): string
+    public function export(bool $is_download = true, string $output_file_name = '', array $columns = []): string
     {
-        return Tool::export(clone $this, $is_download, $output_file_name,$columns);
+        return Tool::export(clone $this, $is_download, $output_file_name, $columns);
     }
 
     public function getBindModelFields(): array
@@ -807,22 +808,27 @@ abstract class AbstractModel extends DataObject
             }
             if ($method == 'delete') {
                 $this->is_delete = true;
-                // 加载之前
-                $this->delete_before();
-                $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', ['model' => $this]);
-                // load之前事件
+                // load之前事件 FIXME 删除-》fetch多次导致删表所有数据问题
                 if ($this->getId()) {
-                    if($this->_unit_primary_keys){
+                    if ($this->_unit_primary_keys) {
                         $query = $this->getQuery();
                         foreach ($this->_unit_primary_keys as $unit_primary_key) {
+                            if(empty($this->getData($unit_primary_key))){
+                                throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
+                            }
                             $query->where($unit_primary_key, $this->getData($unit_primary_key));
                         }
-                        $query->delete()->fetch();
-                    }else{
-                        $this->getQuery()->where($this->_primary_key, $this->getId())->delete()->fetch();
+                        $query->delete();
+                    } else {
+                        if ($this->getId()) {
+                            $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
+                        } else {
+                            throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
+                        }
                     }
+                    $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
                 } elseif ($this->getQuery()->wheres) {
-                    $this->getQuery()->delete()->fetch();
+                    $this->getQuery()->delete();
                 } else {
                     throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                 }
@@ -853,6 +859,11 @@ abstract class AbstractModel extends DataObject
             $is_fetch = false;
             # 拦截fetch操作 注入返回的模型
             if ('fetch' === $method) {
+                if ($this->is_delete) {
+                    // 加载之前
+                    $this->delete_before();
+                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', ['model' => $this]);
+                }
                 # 如果是空数据更新
                 if (!trim($this->getQuery()->getPrepareSql(false))) {
                     return $this;
