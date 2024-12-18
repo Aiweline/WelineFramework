@@ -78,7 +78,7 @@ class JsPart implements \Weline\Taglib\TaglibInterface
             $cache = ObjectManager::getInstance(TaglibCacheFactory::class);
             $cache_key = 'js:part::' . $name;
             $content = $cache->get($cache_key);
-            if (!empty($content)) {
+            if (PROD and !empty($content)) {
                 return $content;
             }
             /**@var Template $template */
