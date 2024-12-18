@@ -490,7 +490,7 @@ trait SqlTrait
             case 'find':
             case 'select':
             default:
-                $sql = "SELECT {$this->fields} FROM {$this->table} {$alias} {$joins} {$wheres} {$this->group_by} {$this->having} {$order} {$this->additional_sql} {$this->limit}";
+                $sql = "SELECT {$this->fields} FROM {$this->table} {$alias} {$joins} {$wheres} {$this->group_by} {$this->having} {$this->additional_sql} {$order} {$this->limit}";
                 break;
         };
         # 预置sql

@@ -1,0 +1,64 @@
+<css>jquery-ui.min.css</css>
+<js>jquery-ui.min.js</js>
+<script defer>
+    $(function () {
+        let can_run = true
+        if(!window.debounce){
+            console.error('@lang{w-auto-complete: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>}')
+            can_run = false;
+        }
+        if ($ && !$.fn.autocomplete) {
+            console.error('@lang{w-auto-complete: jQueryUI组件未引入，请自行引入jquery-ui.min.js}')
+            can_run = false;
+        }
+        if(!can_run){
+            console.error('@lang{w-auto-complete: 标签需要上面提到的依赖：请引入依赖！}')
+            return
+        }
+        $('[w-auto-complete="true"]').each(function () {
+            let autocompleteInput = $(this)
+            let url = autocompleteInput.attr('w-url')
+            let value = autocompleteInput.attr('w-value-field')?? 'value';
+            let label = autocompleteInput.attr('w-label-field')?? 'label';
+            let selected_field = autocompleteInput.attr('w-selected-field')?? 'label';
+            let invalid_class = autocompleteInput.attr('w-invalid-class')?? 'is-invalid';
+            let valid_class = autocompleteInput.attr('w-valid-class')?? 'is-valid';
+            if (!url) {
+                console.log('w-auto-complete @lang{元素上w-url属性找不到！}')
+                return
+            }
+            // 查询店铺信息，
+            autocompleteInput.autocomplete({
+                source: debounce(function (request, response) {
+                    $.ajax({
+                        url: url + "?q=" + request.term, // 替换为你的搜索API端点
+                        dataType: "json",
+                        success: function (data) {
+                            // 假设服务器返回的数据格式为 [{ value: '建议1' }, { value: '建议2' }, ...]
+                            response($.map(data, function (item) {
+                                return {
+                                    label: item[label], // 显示在下拉列表中的文本
+                                    value: item[value]  // 选中后插入到输入框中的值
+                                };
+                            }));
+                        },
+                        error: function () {
+                            // 处理AJAX请求失败的情况
+                            response([]); // 返回空数组，不显示任何建议
+                        }
+                    });
+                }, 500),
+                select: function (event, ui) {
+                    // 当用户选择一个建议时，可以在这里执行额外操作
+                    // 例如，将选择的值发送到服务器或更新页面上的其他元素
+                    autocompleteInput.val(ui.item[selected_field]).attr('value', ui.item[selected_field])
+                    autocompleteInput.removeClass(invalid_class).addClass(valid_class);
+                }
+            });
+            // 可选：自定义autocomplete样式以匹配Bootstrap
+            autocompleteInput.autocomplete("widget").addClass("ui-widget ui-widget-content ui-corner-all");
+            autocompleteInput.autocomplete("widget").find("li").addClass("ui-menu-item").addClass("ui-corner-all");
+            autocompleteInput.autocomplete("widget").find("li a").addClass("ui-state-default");
+        });
+    })
+</script>
