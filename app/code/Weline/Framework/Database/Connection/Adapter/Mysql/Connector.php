@@ -235,4 +235,12 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $stmt->execute();
         return $stmt->rowCount() > 0;
     }
+    public function hasIndex(string $table, string $idx_name): bool
+    {
+        # 检查索引是否存在
+        $query = "SHOW INDEXES FROM {$table} WHERE Key_name = '{$idx_name}'";
+        $stmt = $this->link->prepare($query);
+        $stmt->execute();
+        return $stmt->rowCount() > 0;
+    }
 }
