@@ -94,4 +94,5 @@ interface ConnectorInterface
     public function getVersion(): string;
 
     public function hasField(string $table,string $field):bool;
+    public function hasIndex(string $table, string $idx_name):bool;
 }
