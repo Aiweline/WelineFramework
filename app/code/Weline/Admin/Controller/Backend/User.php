@@ -32,10 +32,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function listing()
     {
         if ($search = $this->request->getGet('search')) {
-            $aclModelFields = implode(',', $this->backendUser->getModelFields());
-            $this->backendUser->where('CONCAT_WS(' . $aclModelFields . ')', '%' . $search . '%', 'like');
+            $this->backendUser->concat_like('username,email',"%$search%");
         }
-        $users = $this->backendUser->order()->pagination()->select()->fetch();
+        $users = $this->backendUser->order()
+            ->pagination()
+            ->select()
+            ->fetch();
         $this->assign('users', $users->getItems());
         $this->assign('pagination', $users->getPagination());
         return $this->fetch();
