@@ -137,6 +137,9 @@ class Template extends DataObject
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
             $this->getData('req') ?? $this->setData('req', array_merge($this->request->getParams(), [
                 'url' => $this->request->getUrlBuilder()->getCurrentUrl(),
+                'query' => $this->request->getQuery(),
+                'query_string' => http_build_query($this->request->getQuery()),
+                'params'=>$this->request->getParams()
             ]));
             $this->getData('env') ?? $this->setData('env', Env::getInstance()->getConfig());
             $this->getData('local') ?? $this->setData('local', ['code' => Cookie::getLangLocal(), 'lang' => Cookie::getLang()]);
