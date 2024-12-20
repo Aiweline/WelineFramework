@@ -3,7 +3,7 @@
 <script defer>
     $(function () {
         let can_run = true
-        if(!window.debounce){
+        if (!window.debounce) {
             console.error('@lang{w-auto-complete: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>}')
             can_run = false;
         }
@@ -11,24 +11,46 @@
             console.error('@lang{w-auto-complete: jQueryUI组件未引入，请自行引入jquery-ui.min.js}')
             can_run = false;
         }
-        if(!can_run){
+        if (!can_run) {
             console.error('@lang{w-auto-complete: 标签需要上面提到的依赖：请引入依赖！}')
             return
         }
         $('[w-auto-complete="true"]').each(function () {
             let autocompleteInput = $(this)
             let url = autocompleteInput.attr('w-url')
-            let value = autocompleteInput.attr('w-value-field')?? 'value';
-            let label = autocompleteInput.attr('w-label-field')?? 'label';
-            let selected_field = autocompleteInput.attr('w-selected-field')?? 'label';
-            let invalid_class = autocompleteInput.attr('w-invalid-class')?? 'is-invalid';
-            let valid_class = autocompleteInput.attr('w-valid-class')?? 'is-valid';
+            let value = autocompleteInput.attr('w-value-field') ?? 'value';
+            let label = autocompleteInput.attr('w-label-field') ?? 'label';
+            let selected_field = autocompleteInput.attr('w-selected-field') ?? 'label';
+            let invalid_class = autocompleteInput.attr('w-invalid-class') ?? 'is-invalid';
+            let valid_class = autocompleteInput.attr('w-valid-class') ?? 'is-valid';
             if (!url) {
-                console.log('w-auto-complete @lang{元素上w-url属性找不到！}')
+                confirm('w-auto-complete @lang{元素上w-url属性找不到！}')
                 return
             }
-            // 查询店铺信息，
+            autocompleteInput.on('click', debounce(function () {
+                // 检查，如果存在则验证通过，不存在则验证失败
+                $.ajax({
+                    url: url + "?q=" + autocompleteInput.val(), // 替换为你的搜索API端点
+                    dataType: "json",
+                    success: function (data) {
+                        for (let i = 0; i < data.length; i++) {
+                            if (data[i][value] === autocompleteInput.val()) {
+                                autocompleteInput.removeClass(invalid_class).addClass(valid_class);
+                                return
+                            }
+                        }
+                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                    },
+                    error: function () {
+                        // 处理AJAX请求失败的情况
+                        response([]); // 返回空数组，不显示任何建议
+                        autocompleteInput.removeClass(valid_class).addClass(invalid_class);
+                    }
+                });
+            }, 500))
+            // 查询信息，
             autocompleteInput.autocomplete({
+                minChars: 0,
                 source: debounce(function (request, response) {
                     $.ajax({
                         url: url + "?q=" + request.term, // 替换为你的搜索API端点
@@ -42,9 +64,14 @@
                                 };
                             }));
                         },
+                        focus: function (event, ui) {
+                            // 阻止默认行为，防止光标跳转到第一个选项
+                            event.preventDefault();
+                        },
                         error: function () {
                             // 处理AJAX请求失败的情况
                             response([]); // 返回空数组，不显示任何建议
+                            autocompleteInput.removeClass(valid_class).addClass(invalid_class);
                         }
                     });
                 }, 500),
@@ -55,6 +82,9 @@
                     autocompleteInput.removeClass(invalid_class).addClass(valid_class);
                 }
             });
+            autocompleteInput.on('click', function () {
+                autocompleteInput.autocomplete('search', autocompleteInput.val());
+            })
             // 可选：自定义autocomplete样式以匹配Bootstrap
             autocompleteInput.autocomplete("widget").addClass("ui-widget ui-widget-content ui-corner-all");
             autocompleteInput.autocomplete("widget").find("li").addClass("ui-menu-item").addClass("ui-corner-all");
