@@ -54,8 +54,8 @@ abstract class EavModel extends Model implements EavInterface
                      $data = [],
     )
     {
-        $this->entity    = $entity;
-        $this->eavCache  = $eavCache->create();
+        $this->entity = $entity;
+        $this->eavCache = $eavCache->create();
         $this->attribute = $attribute;
         parent::__construct($data);
     }
@@ -115,14 +115,14 @@ abstract class EavModel extends Model implements EavInterface
             return $attribute;
         }
         # 特殊的实体ID
-        if($eav_entity_id){
+        if ($eav_entity_id) {
             $entity = clone $this;
             $entity = $entity->load($eav_entity_id);
-            if(!$entity->getId()){
+            if (!$entity->getId()) {
                 return null;
             }
             $this->attribute->current_setEntity($entity);
-        }else{
+        } else {
             $this->attribute->current_setEntity($this);
         }
         // 查找属性
@@ -146,7 +146,7 @@ abstract class EavModel extends Model implements EavInterface
     public function getAttributes(): array
     {
         // 获取缓存属性
-        $cache_key  = $this->getEntityCode().'_'.$this->getEavEntityId() . '-attributes';
+        $cache_key = $this->getEntityCode() . '_' . $this->getEavEntityId() . '-attributes';
         $attributes = $this->eavCache->get($cache_key);
         if ($attributes) {
             foreach ($attributes as &$attribute) {
@@ -340,6 +340,27 @@ abstract class EavModel extends Model implements EavInterface
         }
     }
 
+    public function getAttributeSets(): array
+    {
+        /**@var EavAttribute\Set $attributeSetsModel */
+        $attributeSetsModel = ObjectManager::getInstance(EavAttribute\Set::class);
+        return $attributeSetsModel->getEavEntitySet($this);
+    }
+
+    public function getAttributeSet(string $code): EavAttribute\Set
+    {
+        /**@var EavAttribute\Set $attributeSetsModel */
+        $attributeSetsModel = ObjectManager::getInstance(EavAttribute\Set::class);
+        return $attributeSetsModel->where('code', $code)->where('eav_entity_id', $this->getEavEntityId())->find()->fetch();
+    }
+
+    public function getAttributeGroups(): array
+    {
+        /**@var EavAttribute\Group $attributeSetsModel */
+        $attributeGroupsModel = ObjectManager::getInstance(EavAttribute\Group::class);
+        return $attributeGroupsModel->getEavEntityGroup($this);
+    }
+
     /**
      * @DESC          # Eav: 获取实体
      *
@@ -406,4 +427,5 @@ abstract class EavModel extends Model implements EavInterface
         $attribute->where('main_table.' . \Weline\Eav\Model\EavAttribute::fields_eav_entity_id, $this->eav_Entity()->getId());
         return $attribute;
     }
+
 }
