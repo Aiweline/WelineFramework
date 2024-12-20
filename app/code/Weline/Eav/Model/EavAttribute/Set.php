@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Model\EavAttribute;
 
+use Weline\Eav\EavModel;
 use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,11 +23,11 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Set extends \Weline\Framework\Database\Model
 {
-    public const fields_ID        = 'set_id';
-    public const fields_SET_ID    = 'set_id';
-    public const fields_code      = 'code';
+    public const fields_ID = 'set_id';
+    public const fields_SET_ID = 'set_id';
+    public const fields_code = 'code';
     public const fields_eav_entity_id = 'eav_entity_id';
-    public const fields_name      = 'name';
+    public const fields_name = 'name';
 
     public array $_unit_primary_keys = ['set_id', 'eav_entity_id', 'code'];
     public array $_index_sort_keys = ['set_id', 'eav_entity_id', 'code'];
@@ -54,14 +56,14 @@ class Set extends \Weline\Framework\Database\Model
 //        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable(__('属性集表'))
-                  ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'PRIMARY KEY auto_increment', __('属性集ID'))
-                  ->addColumn(self::fields_eav_entity_id, TableInterface::column_type_INTEGER, 0, 'not null', __('实体ID'))
-                  ->addColumn(self::fields_code, TableInterface::column_type_VARCHAR, 255, 'not null', __('属性集代码'))
-                  ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 255, 'not null', __('属性集名'))
-                  ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_code_and_eav_entity_id', [self::fields_code, self::fields_eav_entity_id])
-                  ->addIndex(TableInterface::index_type_KEY, 'idx_eav_entity_id', self::fields_eav_entity_id)
-                  ->addIndex(TableInterface::index_type_KEY, 'idx_code', self::fields_code)
-                  ->create();
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'PRIMARY KEY auto_increment', __('属性集ID'))
+                ->addColumn(self::fields_eav_entity_id, TableInterface::column_type_INTEGER, 0, 'not null', __('实体ID'))
+                ->addColumn(self::fields_code, TableInterface::column_type_VARCHAR, 255, 'not null', __('属性集代码'))
+                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 255, 'not null', __('属性集名'))
+                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_unique_code_and_eav_entity_id', [self::fields_code, self::fields_eav_entity_id])
+                ->addIndex(TableInterface::index_type_KEY, 'idx_eav_entity_id', self::fields_eav_entity_id)
+                ->addIndex(TableInterface::index_type_KEY, 'idx_code', self::fields_code)
+                ->create();
         }
     }
 
@@ -99,8 +101,8 @@ class Set extends \Weline\Framework\Database\Model
     {
         /**@var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $set            = $attributeModel->reset()->where(EavAttribute::fields_set_id, $this->getId())
-                                         ->find()->fetch();
+        $set = $attributeModel->reset()->where(EavAttribute::fields_set_id, $this->getId())
+            ->find()->fetch();
         if ($set->getId()) {
             return true;
         }
@@ -112,7 +114,7 @@ class Set extends \Weline\Framework\Database\Model
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
         $group = $group->reset()->where(EavAttribute::fields_set_id, $this->getId())
-                       ->find()->fetch();
+            ->find()->fetch();
         if ($group->getId()) {
             return true;
         }
@@ -126,19 +128,19 @@ class Set extends \Weline\Framework\Database\Model
         /**@var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
         $attribute->where(EavAttribute::fields_set_id, $this->getId())
-                  ->update(EavAttribute::fields_set_id, 0)
-                  ->fetch();
+            ->update(EavAttribute::fields_set_id, 0)
+            ->fetch();
         // 将使用此属性集的属性组ID设置为0
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
         $group->where(Group::fields_set_id, $this->getId())
-              ->update(Group::fields_set_id, 0)
-              ->fetch();
+            ->update(Group::fields_set_id, 0)
+            ->fetch();
     }
 
     function addLocalDescription()
     {
-        $lang    = Cookie::getLang();
+        $lang = Cookie::getLang();
         $idField = $this::fields_ID;
         $this->joinModel(
             \Weline\Eav\Model\EavAttribute\Set\LocalDescription::class,
@@ -158,7 +160,7 @@ class Set extends \Weline\Framework\Database\Model
      * 参数区：
      * @return \Weline\Eav\Model\EavAttribute
      */
-    public function getAttrbiuteModel():EavAttribute
+    public function getAttrbiuteModel(): EavAttribute
     {
         /**@var EavAttribute $attrbiute */
         $attrbiute = ObjectManager::getInstance(EavAttribute::class);
@@ -175,11 +177,17 @@ class Set extends \Weline\Framework\Database\Model
      * 参数区：
      * @return \Weline\Eav\Model\EavAttribute\Group
      */
-    public function getAttrbiuteSetGroupModel():Group
+    public function getAttrbiuteSetGroupModel(): Group
     {
         /**@var Group $group */
         $group = ObjectManager::getInstance(Group::class);
         $group->where(Group::fields_set_id, $this->getId());
         return $group;
+    }
+
+    public function getEavEntitySet(EavEntity|EavModel $entity): array
+    {
+        $query = clone $this->getQuery();
+        return $query->where('eav_entity_id', $entity->getEavEntityId())->select()->fetchArray();
     }
 }

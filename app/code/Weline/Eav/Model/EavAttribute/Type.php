@@ -699,10 +699,11 @@ class Type extends \Weline\Framework\Database\Model
     public static function processOptions(EavAttribute &$attribute, array &$options = []): array
     {
         $option_items = $options['options'] ?? [];
-        $values       = $options['values'] ?? [];
-        $type         = $attribute->getType();
+        $values = $options['values'] ?? [];
+        $type = $attribute->getType();
         # 模型默认的选项
-        if ($model_class_data = $type->getModelClassData()) {
+        $only_custom_options = $options['only_custom_options'] ?? true;
+        if (!$only_custom_options and $model_class_data = $type->getModelClassData()) {
             $model_class_data = json_decode($model_class_data, true);
             # 数组合并，兼容键是数字时的合并
             if ($model_class_data) {
@@ -722,9 +723,9 @@ class Type extends \Weline\Framework\Database\Model
                 throw new \Exception(__('模型类: %1 必须是 EavModelInterface 接口类的实例', $model_class));
             }
         }
-        $attrs       = $options['attrs'] ?? [];
+        $attrs = $options['attrs'] ?? [];
         $label_class = $options['label_class'] ?? '';
-        $attrs       = array_merge($attribute->getData(), [
+        $attrs = array_merge($attribute->getData(), [
             'field_type' => $type->getFieldType(),
             'length' => $type->getFieldLength(),
             'name' => $attribute->getCode(),
@@ -736,7 +737,7 @@ class Type extends \Weline\Framework\Database\Model
         ], $attrs);
         unset($attrs['frontend_attrs']);
         unset($attrs['type']);
-        return [$label_class, $attrs, $option_items, $values];
+        return [$label_class, $attrs, $option_items, $values, $only_custom_options];
     }
 
     /**
@@ -753,7 +754,7 @@ class Type extends \Weline\Framework\Database\Model
      */
     function getHtml(EavAttribute &$attribute, array &$options = []): string
     {
-        list($label_class, $attrs, $option_items, $values) = self::processOptions($attribute, $options);
+        list($label_class, $attrs, $option_items, $values, $only_custom_options) = self::processOptions($attribute, $options);
         # 提取配置值
         $value = null;
         if (isset($values[$attribute->getCode()])) {
@@ -767,17 +768,21 @@ class Type extends \Weline\Framework\Database\Model
                     $value = $this->getDefaultValue();
                 }
             } else {
-                $value = $this->getDefaultValue();
+                $default_value = $this->getValue();
+                if($default_value){
+                    $value = $default_value;
+                }else{
+                    $value = $this->getDefaultValue();
+                }
             }
         }
-
         # 如果有模型则直接返回模型
         if ($this->getModelClass()) {
             /** @var EavModelInterface $model */
             $model = ObjectManager::getInstance($this->getModelClass());
-            return $model->getHtml($attribute, $value, $label_class, $attrs, $option_items);
+            return $model->getHtml($attribute, $value, $label_class, $attrs, $option_items, $only_custom_options);
         } else {
-            $html    = '';
+            $html = '';
             $element = $this->getElement();
             switch ($element) {
                 case 'select':
@@ -821,8 +826,8 @@ class Type extends \Weline\Framework\Database\Model
 
     function processElementAttr(EavAttribute &$attribute, array &$attrs): string
     {
-        $type        = $attribute->getTypeModel();
-        $id          = $this->getCode() . '_' . $attribute->getCode() . '_' . $this->getId();
+        $type = $attribute->getTypeModel();
+        $id = $this->getCode() . '_' . $attribute->getCode() . '_' . $this->getId();
         $attrsString = ' id="' . $id . '" data-name="' . $type->getCode() . '" code="' . $attribute->getCode() . '" ';
         foreach ($attrs as $k => $v) {
             if (is_array($v)) {
@@ -859,30 +864,30 @@ class Type extends \Weline\Framework\Database\Model
 
     static function processLabel(EavAttribute &$attribute, string &$label_class, string &$html): void
     {
-        $type          = $attribute->getTypeModel();
-        $required      = $type->getRequired() ? '<span class="required">*</span>' : '';
-        $name          = __($attribute->getName());
-        $typeCode      = $type->getCode();
+        $type = $attribute->getTypeModel();
+        $required = $type->getRequired() ? '<span class="required">*</span>' : '';
+        $name = __($attribute->getName());
+        $typeCode = $type->getCode();
         $attributeCode = $attribute->getCode();
-        $dependence    = $attribute->getDependence() ? '<br>' . __('依赖：') . '<span class="text-info">' . $attribute->getDependence() . '</span>' : '';
-        $label         = <<<LABEL
+        $dependence = $attribute->getDependence() ? '<br>' . __('依赖：') . '<span class="text-info">' . $attribute->getDependence() . '</span>' : '';
+        $label = <<<LABEL
 <label title="$attributeCode-$name" data-type-code="$typeCode" class="' . $label_class . '">$required $name <span class="text-primary">$attributeCode</span>$dependence</label>
 LABEL;
-        $html          = $label . $html;
+        $html = $label . $html;
     }
 
     static function processDependence(EavAttribute &$attribute, string &$html): void
     {
-        $dependence    = $attribute->getDependence();
+        $dependence = $attribute->getDependence();
         $attributeCode = $attribute->getCode();
         if ($dependence) {
             /**@var Request $req */
-            $req      = ObjectManager::getInstance(Request::class);
+            $req = ObjectManager::getInstance(Request::class);
             $eavModel = Env::getInstance()->getModuleByName('Weline_Eav');
             if (isset($eavModel['router'])) {
-                $dependence       = explode(',', $dependence);
+                $dependence = explode(',', $dependence);
                 $eavDependenceUrl = $req->isBackend() ? $req->getUrlBuilder()->getBackendUrl($eavModel['router'] . '/backend/attribute/dependence') : $req->getUrlBuilder()->getUrl($eavModel['router'] . '/backend/attribute/dependence');
-                $js               = <<<PRE_JS
+                $js = <<<PRE_JS
 <script>
 $(function() {
 PRE_JS;
