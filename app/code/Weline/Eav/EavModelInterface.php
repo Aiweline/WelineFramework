@@ -30,9 +30,10 @@ interface EavModelInterface
      * @param mixed $label_class 示例：'control-label'
      * @param mixed $attrs 示例：['class'=>'form-control']
      * @param array $option_items  ['1'=>'是','0'=>'否']
+     * @param bool $only_custom_options  是否只显示自定义选项
      * @return string
      */
-    function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = []): string;
+    function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = [], bool $only_custom_options = true): string;
 
     /**
      * @DESC          # 模型数据

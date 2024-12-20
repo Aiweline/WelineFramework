@@ -65,7 +65,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function addLocalDescription()
     {
-        $lang    = Cookie::getLang();
+        $lang = Cookie::getLang();
         $idField = $this::fields_ID;
         $this->joinModel(
             \Weline\Eav\Model\EavAttribute\LocalDescription::class,
@@ -409,6 +409,28 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this->getData($this::value_key);
     }
 
+    public function getValueWithOptions(string|int $entity_id = null, bool $return_attribute = false, string $option_key = 'value'): array|Option
+    {
+        $optionModel = $this->getOptionModel();
+        $values = $this->getValue($entity_id, false);
+        if (!$values) {
+            return [];
+        }
+        $optionModel->where('option_id', $values, is_array($values) ? 'in' : '=')->select();
+        if (!$return_attribute) {
+            $options = $optionModel->fetchArray();
+            if ($option_key) {
+                $option_key_array = [];
+                foreach ($options as $option) {
+                    $option_key_array[$option['option_id']] = $option[$option_key];
+                }
+                return $option_key_array;
+            }
+            return $options;
+        }
+        return $optionModel->fetch();
+    }
+
     public function getSwatchValue(string|int $eav_entity_id = null, bool $object = false)
     {
         if (!$this->current_getEntity()->getId()) {
@@ -419,7 +441,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }
         $eav_entity_id = $eav_entity_id ?: $this->current_getEntity()->getId();
         if ($eav_entity_id) {
-            $attribute  = clone $this;
+            $attribute = clone $this;
             $valueModel = $this->w_getValueModel();
             $valueModel->setAttribute($this);
             $attribute->clearQuery()
@@ -435,10 +457,10 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 'v.value'
             );
             if ($attribute->getMultipleValued()) {
-                $values  = $attribute->select()->fetchArray();
+                $values = $attribute->select()->fetchArray();
                 $swatchs = [];
                 foreach ($values as $key => &$item) {
-                    $item      = $item['value'];
+                    $item = $item['value'];
                     $swatchs[] = [
                         'value' => $item['value'],
                         'is_swatch' => isset($item['is_swatch']) ? (bool)$item['is_swatch'] : false,
@@ -449,7 +471,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 }
                 $attribute->setData($this::swatch_value_key, $values);
             } else {
-                $value  = $attribute->find()->fetchArray()[0] ?? [];
+                $value = $attribute->find()->fetchArray()[0] ?? [];
                 $swatch = [
                     'value' => $value['value'],
                     'is_swatch' => isset($value['is_swatch']) ? (bool)$value['is_swatch'] : false,
@@ -497,10 +519,10 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this;
         }
         if (is_string($value) || is_int($value)) {
-            $valueModel     = $this->w_getValueModel();
+            $valueModel = $this->w_getValueModel();
             $valueModel->reset()->where(['entity_id' => $entity_id, 'attribute_id' => $this->getId()])
                 ->delete()->fetch();
-            $data           = ['entity_id' => $entity_id, 'attribute_id' => $this->getId(), 'value' => $value];
+            $data = ['entity_id' => $entity_id, 'attribute_id' => $this->getId(), 'value' => $value];
             $bindFieldsData = [];
             if ($swatch_image) {
                 $bindFieldsData['swatch_image'] = $swatch_image;
@@ -513,7 +535,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             }
             if ($bindFieldsData) {
                 $bindFieldsData['is_swatch'] = 1;
-                $data                        = array_merge($data, $bindFieldsData);
+                $data = array_merge($data, $bindFieldsData);
             }
             try {
                 $valueModel->reset()
@@ -528,7 +550,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             }
             $valueModel = $this->w_getValueModel();
             $valueModel->where(['entity_id' => $entity_id, 'attribute_id' => $this->getId()])->delete()->fetch();
-            $data           = [];
+            $data = [];
             $bindFieldsData = [];
             foreach ($value as $item) {
                 $data_tmp = ['entity_id' => $entity_id, 'value' => $item, 'attribute_id' => $this->getId()];
@@ -543,7 +565,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 }
                 if ($bindFieldsData) {
                     $data_tmp['is_swatch'] = 1;
-                    $data_tmp              = array_merge($data_tmp, $bindFieldsData);
+                    $data_tmp = array_merge($data_tmp, $bindFieldsData);
                 }
                 $data[] = $data_tmp;
             }
@@ -695,7 +717,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this->type;
         }
         /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
-        $typeModel  = ObjectManager::getInstance(Type::class);
+        $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
         return $this->type;
     }
@@ -703,7 +725,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public function resetTypeModel(): Type
     {
         /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
-        $typeModel  = ObjectManager::getInstance(Type::class);
+        $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
         return $this->type;
     }
@@ -725,16 +747,28 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }
     }
 
-    public function getHtml(array $options = [])
+    /**
+     * @param array $options ['options' => ['1' => '选项1', '2' => '选项2'], 'attrs' => ['class' => 'form-control'], 'label_class' => 'label-class','only_custom_options'=>false]
+     * @return string
+     * @throws \Exception
+     */
+    public function getHtml(array $options = [], string $save_option_field = 'option_id', string $option_show_field = 'value')
     {
-        $type    = $this->getTypeModel();
-        $options = $options ?: $this->getOptions();
+        $type = $this->getTypeModel();
+        if (!isset($options['options'])) {
+            foreach ($this->getOptions() as $option) {
+                $options['options'][$option[$save_option_field]] = $option[$option_show_field];
+            }
+        }
         try {
             if (!isset($options['values']) and isset($options['entity'])) {
                 $options['values'] = $this->getValue();
             }
         } catch (\Exception $e) {
             $options['values'] = [];
+        }
+        if($this->getId()){
+            $options['entity'] = $this;
         }
         return $type->getHtml($this, $options);
     }
