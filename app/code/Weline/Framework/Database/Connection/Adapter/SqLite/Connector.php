@@ -228,4 +228,12 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;
     }
+
+    public function hasIndex(string $table, string $idx_name): bool
+    {
+        $idx_name = trim($idx_name, '`');
+        $sql = "SELECT count(1) as count FROM PRAGMA index_list({$table}) WHERE name='{$idx_name}'";
+        $res = $this->query($sql)->fetch();
+        return ($res[0]['count'] ?? 0) > 0;
+    }
 }

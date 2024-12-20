@@ -39,10 +39,10 @@ class ModelSetup
      * @throws \Weline\Framework\App\Exception
      */
     public function __construct(
-        Printing   $printing,
+        Printing $printing,
     )
     {
-        $this->printing  = $printing;
+        $this->printing = $printing;
     }
 
     /**
@@ -210,14 +210,25 @@ class ModelSetup
 
     public function hasField(string $field)
     {
+        if (!$this->tableExist()) {
+            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！",$this->model->getTable()));
+        }
         return $this->model->getConnection()->getConnector()->hasField($this->getTable(), $field);
+    }
+
+    public function hasIndex(string $idx_name)
+    {
+        if (!$this->tableExist()) {
+            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！",$this->model->getTable()));
+        }
+        return $this->model->getConnection()->getConnector()->hasIndex($this->getTable(), $idx_name);
     }
 
     public function getVersion(): string
     {
         return $this->model->getConnection()->getVersion();
     }
-    
+
     public function getConnection(): ConnectionFactory
     {
         return $this->model->getConnection();
