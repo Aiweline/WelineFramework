@@ -100,7 +100,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <lang>Eav实体-属性管理</lang>
                                 </h4>
                                 <p class='card-title-desc'>
-                                    <lang>管理实体的属性</lang>
+                                    <lang>管理实体的属性</lang> <notempty name="entity">
+                                        <lang>您当前管理的属性实体是：</lang><span class="text-info">{{entity.name}}</span>
+                                    </notempty>
                                 </p>
                                 <div class='table-rep-plugin'>
                                     <!-- search form -->
@@ -126,7 +128,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                    target-button-text="添加"
                                                    target-button-class="btn btn-primary"
                                                    flush-button-text="刷新"
-                                                   flush-button-class="btn btn -default"
+                                                   flush-button-class="btn btn-default"
                                                    flush="1"
                                                    save="0"
                                                    save-form="#demo-form"

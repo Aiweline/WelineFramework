@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Model\EavAttribute;
 
+use Weline\Eav\EavModel;
 use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -179,5 +181,11 @@ class Group extends \Weline\Framework\Database\Model
         $attrbiute = ObjectManager::getInstance(EavAttribute::class);
         $attrbiute->where(EavAttribute::fields_group_id, $this->getId());
         return $attrbiute;
+    }
+
+    public function getEavEntityGroup(EavEntity|EavModel $entity): array
+    {
+        $query = clone $this->getQuery();
+        return $query->where('eav_entity_id', $entity->getEavEntityId())->select()->fetchArray();
     }
 }
