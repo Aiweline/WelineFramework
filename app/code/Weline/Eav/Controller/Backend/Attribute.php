@@ -47,6 +47,18 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
 
     public function index()
     {
+        if($entity_code = $this->request->getGet('entity_code')){
+            /**
+             * @var \Weline\Eav\Model\EavEntity $entityModel
+             */
+            $entityModel = ObjectManager::getInstance(EavEntity::class);
+            $entityModel->loadByCode($entity_code);
+            if(!$entityModel->getId()){
+                throw new Core(__('实体不存在'));
+            }
+            $this->eavAttribute->where('main_table.eav_entity_id', $entityModel->getId());
+            $this->assign('entity', $entityModel);
+        }
         $this->eavAttribute->addLocalDescription()
             ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
             ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
