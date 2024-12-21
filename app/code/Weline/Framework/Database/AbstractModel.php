@@ -813,7 +813,7 @@ abstract class AbstractModel extends DataObject
                     if ($this->_unit_primary_keys) {
                         $query = $this->getQuery();
                         foreach ($this->_unit_primary_keys as $unit_primary_key) {
-                            if(empty($this->getData($unit_primary_key))){
+                            if (empty($this->getData($unit_primary_key))) {
                                 throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                             }
                             $query->where($unit_primary_key, $this->getData($unit_primary_key));
@@ -1565,7 +1565,7 @@ PAGINATION;
         if ($fields === '*') {
             $model_fields = '';
             foreach ($model->getModelFields() as $modelField) {
-                if (in_array($modelField, $this->_join_model_fields)) {
+                if (in_array($modelField, $this->_join_model_fields) or str_contains($query->fields, $modelField)) {
                     $model_fields .= "`$alias`.$modelField as {$alias}_{$modelField},";
                     $this->_bind_model_fields["`$alias`" . $modelField] = "`$alias`.$modelField as {$alias}_{$modelField}";
                     $model->_bind_model_fields["`$alias`" . $modelField] = "`$alias`.$modelField as {$alias}_{$modelField}";
