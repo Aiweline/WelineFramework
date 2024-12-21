@@ -808,7 +808,7 @@ abstract class AbstractModel extends DataObject
             }
             if ($method == 'delete') {
                 $this->is_delete = true;
-                if($this->_unit_primary_keys){
+                if ($this->_unit_primary_keys) {
                     foreach ($this->_unit_primary_keys as $unit_primary_key) {
                         if (empty($this->getData($unit_primary_key))) {
                             throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
@@ -1672,4 +1672,24 @@ PAGINATION;
         }
         return $save_result;
     }
+
+    /**
+     * 叠加数字字段 inc
+     */
+    public function inc(string $field, int $num = 1): self
+    {
+        $old_num = $this->getData($field) ?? 0;
+        $old_num += $num;
+        $this->setData($field, $old_num);
+        return $this;
+    }
+
+    public function dec(string $field, int $num = 1): self
+    {
+        $old_num = $this->getData($field) ?? 0;
+        $old_num -= $num;
+        $this->setData($field, $old_num);
+        return $this;
+    }
+
 }
