@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database;
 
+use Weline\Framework\Database\Helper\Tool;
+use Weline\Framework\Manager\ObjectManager;
+
 abstract class Model extends AbstractModel implements ModelInterface
 {
     public function columns(): array
@@ -41,6 +44,13 @@ abstract class Model extends AbstractModel implements ModelInterface
             $this->where($column, "%{$key}%", 'like', $logic);
         }
         return $this;
+    }
+
+    public function total_fields(string $sql, string $fields, string $additional = '')
+    {
+        $sql = Tool::rm_sql_limit($sql);
+        $sql = "SELECT {$fields} FROM ({$sql}) AS total_no_limit {$additional}";
+        return $this->reset()->query($sql)->fetchArray();
     }
 
     /**
@@ -95,6 +105,9 @@ abstract class Model extends AbstractModel implements ModelInterface
             ->order($order_field, $order_sort);
         if ($parent_id) {
             $model->where($parent_id_field, $parent_id);
+        }
+        if ($selected) {
+            $model->where($selected_field, $selected, 'in');
         }
         $results = $model->select()
             ->fetchArray();
@@ -186,5 +199,20 @@ abstract class Model extends AbstractModel implements ModelInterface
         }
         return $model;
 
+    }
+
+    /**
+     * @DESC          # 获取全部数据
+     * @param bool $object
+     * @return array|mixed|AbstractModel|Connection\Api\Sql\QueryInterface
+     */
+    static function all(bool $object = false)
+    {
+        /** @var \Weline\Framework\Database\Model $model */
+        $model = ObjectManager::getInstance(static::class);
+        if ($object) {
+            return $model->select()->fetch();
+        }
+        return $model->select()->fetchArray();
     }
 }
