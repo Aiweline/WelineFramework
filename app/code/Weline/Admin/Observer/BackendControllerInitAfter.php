@@ -74,10 +74,8 @@ class BackendControllerInitAfter implements ObserverInterface
         foreach ($white_urls as &$white_url) {
             $white_url = $white_url['path'];
         }
-        if (!in_array(trim($this->request->getRouteUrlPath(), '/'), $white_urls)) {
-            /**@var Url $urlBuilder */
-            $urlBuilder = ObjectManager::getInstance(Url::class);
-            $this->getSession()->setData('referer', $urlBuilder->getCurrentUrl());
+        if (!in_array(trim($this->request->getRouteUrlPath(), '/'), $white_urls) and !$this->request->getParam('isIframe')) {
+            $this->getSession()->setData('referer', $this->request->getUrlPath());
         }
     }
 }

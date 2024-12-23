@@ -241,7 +241,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     continue;
                 }
                 # 跳过非PC
-                if ($access_source['type'] !== 'pc') {
+                if ($access_source['type'] !== 'menus') {
                     continue;
                 }
                 if (($method === 'get' || $method === '') && $route) {
