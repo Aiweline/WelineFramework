@@ -808,19 +808,19 @@ abstract class AbstractModel extends DataObject
             }
             if ($method == 'delete') {
                 $this->is_delete = true;
-                if ($this->_unit_primary_keys) {
+                // load之前事件
+                if ($this->getId()) {
+                    $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
+                } elseif ($this->getQuery()->wheres) { # 存在条件，则按照条件所指删除
+                    $this->getQuery()->delete();
+                } elseif ($this->_unit_primary_keys) { # 处理联合化主键的情况
                     foreach ($this->_unit_primary_keys as $unit_primary_key) {
                         if (empty($this->getData($unit_primary_key))) {
                             throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                         }
                         $query->where($unit_primary_key, $this->getData($unit_primary_key));
                     }
-                }
-                // load之前事件
-                if ($this->getId()) {
-                    $this->getQuery()->where($this->_primary_key, $this->getId())->delete();
-                } elseif ($this->getQuery()->wheres) {
-                    $this->getQuery()->delete();
+                    $query->delete();
                 } else {
                     throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                 }
