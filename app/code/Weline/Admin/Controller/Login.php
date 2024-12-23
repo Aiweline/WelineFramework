@@ -160,7 +160,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         $referer = Url::removeExtraDoubleSlashes($this->session->getData('referer'));
         if ($referer) {
-            if ($this->request->getUrlPath($referer) !== $this->request->getUrlPath()) {
+            if ($referer !== $this->request->getUrlPath()) {
                 $this->redirect($referer);
             }
         }
