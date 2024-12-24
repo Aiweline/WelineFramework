@@ -124,6 +124,20 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $params;
     }
 
+    public function setGet(string $key, mixed $value): static
+    {
+        $_GET[$key] = $value;
+        $this->setData($key, $value);
+        return $this;
+    }
+
+    public function setPost(string $key, mixed $value): static
+    {
+        $_POST[$key] = $value;
+        $this->setData($key, $value);
+        return $this;
+    }
+
     public function getBodyParam($key, mixed $default = null)
     {
         $params = $this->getBodyParams(true);
