@@ -45,12 +45,12 @@ trait SqlTrait
     public function getTable($table_name): string
     {
         if (str_contains($table_name, ' ')) {
-            $table_name   = preg_replace_callback('/\s+/', function ($matches) {
+            $table_name = preg_replace_callback('/\s+/', function ($matches) {
                 return ' ';
             }, $table_name);
-            $table_names  = explode(' ', $table_name);
-            $table_name   = $table_names[0];
-            $alias_name   = $table_names[1] ?? $this->table_alias;
+            $table_names = explode(' ', $table_name);
+            $table_name = $table_names[0];
+            $alias_name = $table_names[1] ?? $this->table_alias;
             $this->fields = str_replace('main_table.', $alias_name . '.', $this->fields);
             $this->alias($alias_name);
         }
@@ -135,6 +135,7 @@ trait SqlTrait
             $this->exceptionHandle(__('当前错误的条件操作符：%1 ,当前的条件数组：%2, 允许的条件符：%3', [$where_array[1], '["' . implode('","', $where_array) . '"]', '["' . implode('","', $this->conditions) . '"]']));
         }
     }
+
     /**
      * @DESC          # 准备sql
      *
@@ -146,7 +147,7 @@ trait SqlTrait
      */
     private function prepareSql($action): void
     {
-        $alias = $this->table_alias ? 'AS '.$this->table_alias : '';
+        $alias = $this->table_alias ? 'AS ' . $this->table_alias : '';
         if ($this->table == '') {
             $this->exceptionHandle(__('没有指定table表名！'));
         }
@@ -161,11 +162,11 @@ trait SqlTrait
         if (!empty($this->_index_sort_keys)) {
             $_index_sort_keys_wheres = [];
             foreach ($this->wheres as $where_key => $where) {
-                $where_cond  = $where[1];
+                $where_cond = $where[1];
                 $where_field = $where[0];
                 if (str_contains($where_field, '.')) {
                     $where_field_arr = explode('.', $where_field);
-                    $where_field     = array_pop($where_field_arr);
+                    $where_field = array_pop($where_field_arr);
                 }
                 if (in_array($where_field, $this->_index_sort_keys)) {
                     $_index_sort_keys_wheres[$where_field][] = $where;
@@ -182,16 +183,16 @@ trait SqlTrait
         }
         if ($this->wheres) {
             $wheres .= ' WHERE ';
-            $logic  = 'AND ';
+            $logic = 'AND ';
             foreach ($this->wheres as $key => $where) {
-                if(!str_contains((string)$where[0],'`')){
-                    if(str_contains($where[0],'.')){
-                        $where0items = explode('.',$where[0]);
-                        $where[0] = '`'.implode('`.`',$where0items).'`';
-                    }else{
+                if (!str_contains((string)$where[0], '`')) {
+                    if (str_contains($where[0], '.')) {
+                        $where0items = explode('.', $where[0]);
+                        $where[0] = '`' . implode('`.`', $where0items) . '`';
+                    } else {
                         // 如果$where[0]只有字母
-                        if (preg_match('/^[a-zA-Z]+$/', $where[0])){
-                            $where[0] = '`'.$where[0].'`';
+                        if (preg_match('/^[a-zA-Z]+$/', $where[0])) {
+                            $where[0] = '`' . $where[0] . '`';
                         }
                     }
                 }
@@ -240,9 +241,9 @@ trait SqlTrait
                                             if (is_string($in_where_key)) {
                                                 $in_where_key = preg_replace('/[^A-Za-z_]/', '', $in_where_key);
                                             }
-                                            $set_where_key_param                      = $param . '_' . str_replace(' ', '_', $where[1]) . '_' . $in_where_key;
+                                            $set_where_key_param = $param . '_' . str_replace(' ', '_', $where[1]) . '_' . $in_where_key;
                                             $this->bound_values[$set_where_key_param] = (string)$item;
-                                            $set_where                                .= $set_where_key_param . ',';
+                                            $set_where .= $set_where_key_param . ',';
                                         }
                                         $where[2] = rtrim($set_where, ',') . ')';
                                         break;
@@ -250,7 +251,7 @@ trait SqlTrait
                                 // no break
                                 default:
                                     $this->bound_values[$param] = (string)$where[2];
-                                    $where[2]                   = $param;
+                                    $where[2] = $param;
                             };
                             $wheres .= '(' . implode(' ', $where) . ') ' . $logic;
                         }
@@ -261,9 +262,9 @@ trait SqlTrait
         # 排序
         $order = '';
         foreach ($this->order as $field => $dir) {
-            if(!str_contains($field,'`')){
-                $fields = explode('.',$field);
-                $field = '`'.implode('`.`', $fields).'`';
+            if (!str_contains($field, '`')) {
+                $fields = explode('.', $field);
+                $field = '`' . implode('`.`', $fields) . '`';
             }
             $order .= "$field $dir,";
         }
@@ -277,8 +278,8 @@ trait SqlTrait
             case 'insert':
                 # sqlite 不支持数据库层面的检测，需要手动查询一次，如果有存在更新语句则，先查询已存在的记录，存在则更新，不存在则插入
                 # 取出需要更新的项目
-                $insert_items = $this->insert['insert']??[];
-                $insert_or_update_items = $this->insert['i_o_u']??[];
+                $insert_items = $this->insert['insert'] ?? [];
+                $insert_or_update_items = $this->insert['i_o_u'] ?? [];
                 unset($this->insert['i_o_u']);
                 unset($this->insert['origin']);
                 unset($this->insert['insert']);
@@ -288,13 +289,13 @@ trait SqlTrait
                     $exist_sql = "SELECT * FROM {$this->table} WHERE ";
                     foreach ($insert_or_update_items as $insert_key => $insert) {
                         $exist_sql .= '(';
-                        foreach ($this->insert_update_where_fields as $insert_update_where_field_k=>$insert_update_where_field) {
-                            $insert_update_where_field_key = ':' .md5('insert_update_where_'.$insert_update_where_field.'_'.$insert_update_where_field_k . '_' . $insert_key);
-                            if($insert_update_where_field == $this->identity_field and !isset($insert[$insert_update_where_field])){
+                        foreach ($this->insert_update_where_fields as $insert_update_where_field_k => $insert_update_where_field) {
+                            $insert_update_where_field_key = ':' . md5('insert_update_where_' . $insert_update_where_field . '_' . $insert_update_where_field_k . '_' . $insert_key);
+                            if ($insert_update_where_field == $this->identity_field and !isset($insert[$insert_update_where_field])) {
                                 continue;
                             }
                             $bound_filed_values[$insert_update_where_field_key] = $insert[$insert_update_where_field];
-                            $exist_sql .= '`'.$insert_update_where_field . '` = ' . $insert_update_where_field_key . ' AND ';
+                            $exist_sql .= '`' . $insert_update_where_field . '` = ' . $insert_update_where_field_key . ' AND ';
                         }
                         $exist_sql = rtrim($exist_sql, 'AND ') . ') OR ';
                     }
@@ -312,7 +313,7 @@ trait SqlTrait
                             # 设计一个联合键值字符串，用于比较插入数据和要更新的数据
                             $exist_update_value_key = '';
                             foreach ($this->insert_update_where_fields as $insert_update_where_field) {
-                                $exist_update_value_key .= $insert_update_where_field.'_' . $exist[trim($insert_update_where_field, '`')] . '_';
+                                $exist_update_value_key .= $insert_update_where_field . '_' . $exist[trim($insert_update_where_field, '`')] . '_';
                             }
                             $exist_update_value_key = rtrim($exist_update_value_key, '_');
 
@@ -320,7 +321,7 @@ trait SqlTrait
                             foreach ($insert_or_update_items as $insert_key => $insert) {
                                 $insert_data_value_key = '';
                                 foreach ($this->insert_update_where_fields as $update_field) {
-                                    $insert_data_value_key .= $update_field.'_' . $insert[trim($update_field, '`')] . '_';
+                                    $insert_data_value_key .= $update_field . '_' . $insert[trim($update_field, '`')] . '_';
                                 }
                                 $insert_data_value_key = rtrim($insert_data_value_key, '_');
                                 # 检测数据和需要更新的条件项值命中，说明需要更新
@@ -330,20 +331,20 @@ trait SqlTrait
                                     $exist_update_where = '';
                                     foreach ($this->insert_update_where_fields as $insert_update_where_field) {
                                         # 拼接联合键
-                                        $exist_update_where .= '`'.$insert_update_where_field . '` = ' . $this->quote((string)$insert[$insert_update_where_field]) . ' AND ';
+                                        $exist_update_where .= '`' . $insert_update_where_field . '` = ' . $this->quote((string)$insert[$insert_update_where_field]) . ' AND ';
                                         unset($insert[$insert_update_where_field]);
                                     }
                                     $exist_update_where = rtrim($exist_update_where, 'AND ');
-                                    if($insert){
+                                    if ($insert) {
                                         # 如果有打算更新的字段，则根据需要保留数据，其他字段数据排除
-                                        if(!empty($this->insert_update_fields)){
+                                        if (!empty($this->insert_update_fields)) {
                                             foreach ($insert as $field_key => $field_value) {
-                                                if(!in_array($field_key,$this->insert_update_fields)){
+                                                if (!in_array($field_key, $this->insert_update_fields)) {
                                                     unset($insert[$field_key]);
                                                 }
                                             }
                                         }
-                                        $insert_updates['WHERE '.$exist_update_where] = $insert;
+                                        $insert_updates['WHERE ' . $exist_update_where] = $insert;
                                     }
                                 }
                             }
@@ -360,9 +361,9 @@ trait SqlTrait
                             $insert_updates_index++;
                             $update_inserts_sql .= "UPDATE {$this->table} SET ";
                             foreach ($insert_update as $insert_update_field => $insert_update_value) {
-                                $insert_bound_key                      = ':' . md5("{$insert_update_field}_field_{$insert_update_where}_{$insert_updates_index}");
+                                $insert_bound_key = ':' . md5("{$insert_update_field}_field_{$insert_update_where}_{$insert_updates_index}");
                                 $this->bound_values[$insert_bound_key] = (string)$insert_update_value;
-                                $update_inserts_sql .='`'.$insert_update_field . '` = ' . $insert_bound_key . ', ';
+                                $update_inserts_sql .= '`' . $insert_update_field . '` = ' . $insert_bound_key . ', ';
                             }
                             $update_inserts_sql = rtrim($update_inserts_sql, ', ') . ' ' . $insert_update_where . '; ';
                         }
@@ -371,47 +372,47 @@ trait SqlTrait
 
                 # 主键为空时新增
                 $identity_inserts_sql = '';
-                $identity_inserts_fields = str_replace(['(', ')',' '], '', $this->fields);
+                $identity_inserts_fields = str_replace(['(', ')', ' '], '', $this->fields);
                 $identity_inserts_fields = explode(',', $identity_inserts_fields);
                 foreach ($identity_inserts_fields as $identity_inserts_field_key => $identity_inserts_field) {
                     $identity_inserts_field = str_replace(' ', '', $identity_inserts_field);
                     $identity_inserts_fields[$identity_inserts_field_key] = trim($identity_inserts_field, '`');
                 }
-                if(in_array($this->identity_field, $identity_inserts_fields)) {
+                if (in_array($this->identity_field, $identity_inserts_fields)) {
                     unset($identity_inserts_fields[array_search($this->identity_field, $identity_inserts_fields)]);
                 }
 
-                $identity_inserts_fields = '`'.implode('`,`', $identity_inserts_fields).'`';
+                $identity_inserts_fields = '`' . implode('`,`', $identity_inserts_fields) . '`';
                 $values = '';
                 foreach ($insert_items as $insert_key => $insert) {
                     $insert_key += 1;
-                    if($this->identity_field && empty($insert[$this->identity_field])) {
+                    if ($this->identity_field && empty($insert[$this->identity_field])) {
                         unset($insert[$this->identity_field]);
                         $identity_inserts_sql .= "INSERT INTO {$this->table} ({$identity_inserts_fields}) VALUES (";
                         foreach ($insert as $insert_field => $insert_value) {
-                            $insert_bound_key                      = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
+                            $insert_bound_key = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
                             $this->bound_values[$insert_bound_key] = (string)$insert_value;
                             $identity_inserts_sql .= "$insert_bound_key , ";
                         }
                         $identity_inserts_sql = rtrim($identity_inserts_sql, ', ');
                         $identity_inserts_sql .= '); ';
-                    }else{
-                        $values     .= '(';
+                    } else {
+                        $values .= '(';
                         foreach ($insert as $insert_field => $insert_value) {
-                            $insert_bound_key                      = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
+                            $insert_bound_key = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
                             $this->bound_values[$insert_bound_key] = (string)$insert_value;
-                            $values                                .= "$insert_bound_key , ";
+                            $values .= "$insert_bound_key , ";
                         }
                         $values = rtrim($values, ', ');
                         $values .= '),';
                     }
                 }
                 $values = rtrim($values, ',');
-                $sql    = $update_inserts_sql.$identity_inserts_sql;
-                if(!empty($values)){
+                $sql = $update_inserts_sql . $identity_inserts_sql;
+                if (!empty($values)) {
                     $sql .= "INSERT INTO {$this->table} {$this->fields} VALUES {$values}";
                 }
-                if(empty($values) && empty($identity_inserts_sql) && empty($update_inserts_sql)) {
+                if (empty($values) && empty($identity_inserts_sql) && empty($update_inserts_sql)) {
                     $this->sql = $sql;
                     return;
                 }
@@ -425,8 +426,8 @@ trait SqlTrait
                 if ($identity_values) {
                     $identity_values_str = '';
                     foreach ($identity_values as $key => $identityValue) {
-                        $identity_values_key                      = ':' . md5('update_identity_values_key'.$key);
-                        $identity_values_str                     .= $identity_values_key. ',';
+                        $identity_values_key = ':' . md5('update_identity_values_key' . $key);
+                        $identity_values_str .= $identity_values_key . ',';
                         $this->bound_values[$identity_values_key] = (string)$identityValue;
                     }
                     $identity_values_str = rtrim($identity_values_str, ',');
@@ -440,6 +441,12 @@ trait SqlTrait
 
                 # 配置更新语句
                 $updates = '';
+                # 累加累减
+                if ($this->dec_inc_updates) {
+                    foreach ($this->dec_inc_updates as $dec_inc_update_field => $dec_inc_update_value) {
+                        $updates .= "`$dec_inc_update_field` = `$dec_inc_update_field` {$dec_inc_update_value},";
+                    }
+                }
                 # 多条更新
                 if ($this->updates) {
                     # 存在$identity_values 表示多维数组更新
@@ -449,12 +456,12 @@ trait SqlTrait
                             $updates .= sprintf("`%s` = CASE `%s` \n", $column, $this->identity_field);
                             foreach ($this->updates as $update_key => $line) {
                                 # 主键值
-                                $update_key                                     += 1;
-                                $identity_field_column_key                      = ':' . md5("{$this->identity_field}_{$column}_key_{$update_key}");
+                                $update_key += 1;
+                                $identity_field_column_key = ':' . md5("{$this->identity_field}_{$column}_key_{$update_key}");
                                 $this->bound_values[$identity_field_column_key] = (string)$line[$this->identity_field];
 
                                 # 更新键值
-                                $identity_field_column_value                      = ':' . md5("update_{$column}_value_{$update_key}");
+                                $identity_field_column_value = ':' . md5("update_{$column}_value_{$update_key}");
                                 $this->bound_values[$identity_field_column_value] = (string)$line[$column];
                                 # 组装
                                 $updates .= sprintf('WHEN %s THEN %s ', $identity_field_column_key, $identity_field_column_value);
@@ -467,20 +474,22 @@ trait SqlTrait
                             throw new SqlParserException(__('更新条数大于一条时请使用示例更新：$query->table("demo")->identity("id")->update(["id"=>1,"name"=>"测试1"])->update(["id"=>2,"name"=>"测试2"])或者update中指定条件字段id：$query->table("demo")->update([["id"=>1,"name"=>"测试1"],["id"=>2,"name"=>"测试2"]],"id")'));
                         }
                         foreach ($this->updates[0] as $update_field => $field_value) {
-                            $update_key                      = ':' . md5($update_field);
-                            $update_field                    = $this->parserFiled($update_field);
+                            $update_key = ':' . md5($update_field);
+                            $update_field = $this->parserFiled($update_field);
                             $this->bound_values[$update_key] = (string)$field_value;
-                            $updates                         .= "`$update_field` = $update_key,";
+                            $updates .= "`$update_field` = $update_key,";
                         }
                     }
-                } elseif ($this->single_updates) {
+                }
+                if ($this->single_updates) {
                     foreach ($this->single_updates as $update_field => $update_value) {
-                        $update_field                    = $this->parserFiled($update_field);
-                        $update_key                      = ':' . md5($update_field);
+                        $update_field = $this->parserFiled($update_field);
+                        $update_key = ':' . md5($update_field);
                         $this->bound_values[$update_key] = (string)$update_value;
-                        $updates                         .= "`$update_field`=$update_key,";
+                        $updates .= "`$update_field`=$update_key,";
                     }
-                } else {
+                }
+                if (!$updates) {
                     throw new QueryException(__('无法解析更新数据！多记录更新数据：%1，单记录更新数据：%2', [var_export($this->updates, true), var_export($this->single_updates, true)]));
                 }
                 $updates = rtrim($updates, ',');
@@ -495,13 +504,13 @@ trait SqlTrait
         };
         # 预置sql
         $sql = $this::formatSql($sql);
-        $this->sql          =  $sql;
+        $this->sql = $sql;
 //        if (str_contains(strtolower($sql), 'r_role_id')) {
 //            dd($this->getPrepareSql());
 //        }
-        if(!$this->batch){
-            if(str_contains($sql,'main_table.*')){
-                file_put_contents('sql.sql', $sql.PHP_EOL,FILE_APPEND);
+        if (!$this->batch) {
+            if (str_contains($sql, 'main_table.*')) {
+                file_put_contents('sql.sql', $sql . PHP_EOL, FILE_APPEND);
             }
             $this->PDOStatement = $this->getLink()->prepare($sql);
         }
@@ -516,7 +525,7 @@ trait SqlTrait
         return $this->sql;
     }
 
-    public function quote(string $string):string|false
+    public function quote(string $string): string|false
     {
         return $this->getLink()->quote($string);
     }
@@ -535,7 +544,7 @@ trait SqlTrait
      */
     protected static function parserFiled(mixed &$field): mixed
     {
-        if(!is_array($field) && !is_string($field)){
+        if (!is_array($field) && !is_string($field)) {
             return $field;
         }
         if (is_string($field)) {
@@ -563,24 +572,24 @@ trait SqlTrait
                     $f = self::parserFiled($f);
                 }
                 $field = implode(',', $field);
-                if(str_contains($field, '``')){
+                if (str_contains($field, '``')) {
                     return str_replace('``', '`', $field);
                 }
                 return $field;
             }
-            if(str_starts_with($field, '"') || str_starts_with($field, "'")){
-                if(str_contains($field, '``')){
+            if (str_starts_with($field, '"') || str_starts_with($field, "'")) {
+                if (str_contains($field, '``')) {
                     return str_replace('``', '`', $field);
                 }
                 return $field;
             }
             # 如果没有空格，也没有.和等于符号【单纯字段】直接加上·
-            if(!str_contains($field, ' ') && !str_contains($field,'=')){
+            if (!str_contains($field, ' ') && !str_contains($field, '=')) {
 //                $field = str_replace('`', '', $field);
-                if(str_contains($field, '.')){
-                    $field =  '`' . str_replace('.', '`.`', $field) . '`';
+                if (str_contains($field, '.')) {
+                    $field = '`' . str_replace('.', '`.`', $field) . '`';
                 }
-                if(str_contains($field, '``')){
+                if (str_contains($field, '``')) {
                     return str_replace('``', '`', $field);
                 }
                 return $field;
@@ -588,36 +597,36 @@ trait SqlTrait
             $field = preg_replace('/\s+/', ' ', $field);
 //            $field = str_replace('`', '', $field);
             # 解决类似`main_table`.`parent_source is null的问题
-            $field_arr = explode(' ',$field);
+            $field_arr = explode(' ', $field);
             foreach ($field_arr as $field_arr_key => $field_arr_value) {
-                if(strtolower($field_arr_value) == 'as'){
-                    if(isset($field_arr[$field_arr_key+1])){
-                        $field_arr[$field_arr_key+1] = '`' . $field_arr[$field_arr_key+1] . '`';
+                if (strtolower($field_arr_value) == 'as') {
+                    if (isset($field_arr[$field_arr_key + 1])) {
+                        $field_arr[$field_arr_key + 1] = '`' . $field_arr[$field_arr_key + 1] . '`';
                     }
                 }
-                if(str_contains($field_arr_value, '.')){
-                    if(str_contains($field_arr_value ,'=')){
-                        $field_arr_value_arr = explode('=',$field_arr_value);
+                if (str_contains($field_arr_value, '.')) {
+                    if (str_contains($field_arr_value, '=')) {
+                        $field_arr_value_arr = explode('=', $field_arr_value);
                         $field_arr_value_arr[0] = self::parserFiled($field_arr_value_arr[0]);
                         $field_arr_value_arr[1] = self::parserFiled($field_arr_value_arr[1]);
-                        $field_arr_value = implode('=',$field_arr_value_arr);
-                    }else{
+                        $field_arr_value = implode('=', $field_arr_value_arr);
+                    } else {
                         $field_arr_value = '`' . str_replace('.', '`.`', $field_arr_value) . '`';
                     }
                     $field_arr_value = str_replace('``', '`', $field_arr_value);
                     $field_arr[$field_arr_key] = $field_arr_value;
                 }
             }
-            $field = implode(' ',$field_arr);
+            $field = implode(' ', $field_arr);
             $field = str_replace('`*`', '*', $field);
-        }elseif (is_array($field)) {
+        } elseif (is_array($field)) {
             foreach ($field as $field_key => $value) {
                 unset($field[$field_key]);
                 $field_key = self::parserFiled($field_key);
                 $field[$field_key] = $value;
             }
         }
-        if(str_contains($field, '``')){
+        if (str_contains($field, '``')) {
             return str_replace('``', '`', $field);
         }
         return $field;
@@ -643,14 +652,14 @@ trait SqlTrait
         throw new DbException($words);
     }
 
-    protected function getSqlWithBounds(string $sql, array $bindings=[], bool $format = false): string
+    protected function getSqlWithBounds(string $sql, array $bindings = [], bool $format = false): string
     {
-        if(empty($bindings)){
+        if (empty($bindings)) {
             $bindings = $this->bound_values;
         }
         foreach ($bindings as $key => $binding) {
             $binding = "'{$binding}'";
-            $sql    = str_replace($key, $binding, $sql);
+            $sql = str_replace($key, $binding, $sql);
         }
         if ($format) {
             return \SqlFormatter::format($sql);
