@@ -146,11 +146,11 @@ class Session implements SessionInterface
         return (bool)$this->session->get($this::login_KEY);
     }
 
-    public function login(\Weline\Framework\Database\Model $user, int $user_id): static
+    public function login(\Weline\Framework\Database\Model $user): static
     {
         $this->start($user->getSessionId());
-        $this->session->set($this::login_KEY, $user);
-        $this->session->set($this::login_KEY_ID, $user_id);
+        $this->session->set($this::login_KEY, $user->getUsername());
+        $this->session->set($this::login_KEY_ID, $user->getId());
         $this->session->set($this::login_USER_MODEL, $user::class);
         return $this;
     }
