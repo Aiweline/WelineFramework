@@ -509,9 +509,6 @@ trait SqlTrait
 //            dd($this->getPrepareSql());
 //        }
         if (!$this->batch) {
-            if (str_contains($sql, 'main_table.*')) {
-                file_put_contents('sql.sql', $sql . PHP_EOL, FILE_APPEND);
-            }
             $this->PDOStatement = $this->getLink()->prepare($sql);
         }
     }
