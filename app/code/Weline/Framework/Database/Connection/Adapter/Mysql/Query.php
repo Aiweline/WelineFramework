@@ -107,23 +107,22 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function update(array|string $field, int|string $value_or_condition_field = 'id'): QueryInterface
+    public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface
     {
-        if (empty($field)) {
-            throw new DbException(__('更新异常，不可更新空数据！'));
-        }
-        # 单条记录更新
-        if (is_string($field)) {
-            $this->single_updates[$field] = $value_or_condition_field;
-        } else {
-            // 设置数据更新依赖条件主键
-            if ($this->identity_field !== $value_or_condition_field) {
-                $this->identity_field = $value_or_condition_field;
-            }
-            if (is_string(array_key_first($field))) {
-                $this->updates[] = $field;
+        if ($field) {
+            # 单条记录更新
+            if (is_string($field)) {
+                $this->single_updates[$field] = $value_or_condition_field;
             } else {
-                $this->updates = $field;
+                // 设置数据更新依赖条件主键
+                if ($this->identity_field !== $value_or_condition_field) {
+                    $this->identity_field = $value_or_condition_field;
+                }
+                if (is_string(array_key_first($field))) {
+                    $this->updates[] = $field;
+                } else {
+                    $this->updates = $field;
+                }
             }
         }
         $this->fetch_type = __FUNCTION__;
@@ -226,15 +225,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         $this->fetch_type = __FUNCTION__;
         $this->prepareSql(__FUNCTION__);
-        return $this;
-    }
-
-    public function query(string $sql): QueryInterface
-    {
-        $this->reset();
-        $this->sql = $sql;
-        $this->fetch_type = __FUNCTION__;
-        $this->PDOStatement = $this->getLink()->prepare($sql);
         return $this;
     }
 

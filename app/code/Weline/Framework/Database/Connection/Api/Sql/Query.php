@@ -40,12 +40,14 @@ abstract class Query implements QueryInterface
     public string $find_fields = '';
     public array $single_updates = [];
     public array $updates = [];
+    public array $dec_inc_updates = [];
     public array $wheres = [];
     public array $bound_values = [];
     public string $limit = '';
     public array $order = [];
     public string $group_by = '';
     public string $having = '';
+    public string $test_code = '';
 
     public int $total = 0;
 
@@ -108,9 +110,9 @@ abstract class Query implements QueryInterface
             $count_sql = substr($count_sql, 0, -2) . ")
         {$order_by}
     ), ']') as {$concat_field}";
-            $this->fields($this->fields.','.$count_sql);
+            $this->fields($this->fields . ',' . $count_sql);
         } else {
-            $this->fields($this->fields.','."GROUP_CONCAT({$fields} SEPARATOR '{$separator}' ) as {$concat_field}");
+            $this->fields($this->fields . ',' . "GROUP_CONCAT({$fields} SEPARATOR '{$separator}' ) as {$concat_field}");
         }
         return $this;
     }
@@ -243,23 +245,22 @@ abstract class Query implements QueryInterface
         return $this;
     }
 
-    public function update(array|string $field, int|string $value_or_condition_field = 'id'): QueryInterface
+    public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface
     {
-        if (empty($field)) {
-            throw new DbException(__('更新异常，不可更新空数据！'));
-        }
-        # 单条记录更新
-        if (is_string($field)) {
-            $this->single_updates[$field] = $value_or_condition_field;
-        } else {
-            // 设置数据更新依赖条件主键
-            if ($this->identity_field !== $value_or_condition_field) {
-                $this->identity_field = $value_or_condition_field;
-            }
-            if (is_string(array_key_first($field))) {
-                $this->updates[] = $field;
+        if ($field) {
+            # 单条记录更新
+            if (is_string($field)) {
+                $this->single_updates[$field] = $value_or_condition_field;
             } else {
-                $this->updates = $field;
+                // 设置数据更新依赖条件主键
+                if ($this->identity_field !== $value_or_condition_field) {
+                    $this->identity_field = $value_or_condition_field;
+                }
+                if (is_string(array_key_first($field))) {
+                    $this->updates[] = $field;
+                } else {
+                    $this->updates = $field;
+                }
             }
         }
         $this->fetch_type = __FUNCTION__;
@@ -360,6 +361,39 @@ abstract class Query implements QueryInterface
                 $this->checkConditionString($where_array);
                 $this->wheres[] = $where_array;
             }
+        }
+        return $this;
+    }
+
+
+    /**
+     * @DESC          # 累减
+     * @param string $field
+     * @param float|int $value
+     * @return QueryInterface
+     */
+    public function dec(string $field, float|int $value = 1): QueryInterface
+    {
+        $this->dec_inc_updates[$field] = '-' . $value;
+        if (empty($this->fetch_type)) {
+            $this->fetch_type = 'update';
+            $this->prepareSql($this->fetch_type);
+        }
+        return $this;
+    }
+
+    /**
+     * @DESC          # 累加
+     * @param string $field
+     * @param float|int $value
+     * @return QueryInterface
+     */
+    public function inc(string $field, float|int $value = 1): QueryInterface
+    {
+        $this->dec_inc_updates[$field] = '+' . $value;
+        if (empty($this->fetch_type)) {
+            $this->fetch_type = 'update';
+            $this->prepareSql($this->fetch_type);
         }
         return $this;
     }
@@ -516,7 +550,14 @@ abstract class Query implements QueryInterface
             $origin_data = [];
         } else {
             $result = $this->PDOStatement->execute($this->bound_values);
-            $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+            // 检查是否有多个结果集
+            $origin_data = [];
+            do {
+                $origin_data[] = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+            } while ($this->PDOStatement->nextRowset());
+            if (count($origin_data) == 1) {
+                $origin_data = $origin_data[0];
+            }
         }
         $this->batch = false;
         $data = [];
@@ -531,7 +572,7 @@ abstract class Query implements QueryInterface
             case 'find':
                 $result = array_shift($data);
                 if ($this->find_fields) {
-                    if($result){
+                    if ($result) {
                         if (str_contains($this->find_fields, ',')) {
                             $fields = explode(',', $this->find_fields);
                             $fields_data = [];
@@ -618,6 +659,7 @@ abstract class Query implements QueryInterface
         foreach (self::init_vars as $init_field => $init_var) {
             $this->$init_field = $init_var;
         }
+        $this->_unit_primary_keys = [];
         $this->PDOStatement = null;
         $this->batch = false;
         return $this;
@@ -819,6 +861,12 @@ abstract class Query implements QueryInterface
         }
         // 关闭备份文件和数据库连接
         fclose($file);
+        return $this;
+    }
+
+    public function test(string $code = ''): static
+    {
+        $this->test_code = $code;
         return $this;
     }
 }
