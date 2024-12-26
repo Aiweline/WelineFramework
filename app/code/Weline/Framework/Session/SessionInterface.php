@@ -24,7 +24,7 @@ interface SessionInterface
 
     public function isLogin();
 
-    public function login(Model $user, int $user_id);
+    public function login(Model $user);
 
     public function getLoginUser(string $model): ?AbstractModel;
 
