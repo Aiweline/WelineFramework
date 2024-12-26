@@ -161,7 +161,7 @@ interface QueryInterface
      *
      * @return QueryInterface
      */
-    public function update(array|string $field, int|string $value_or_condition_field = 'id'): QueryInterface;
+    public function update(array|string $field = '', int|string $value_or_condition_field = 'id'): QueryInterface;
 
     /**
      * @DESC          # 表名设置
@@ -216,6 +216,22 @@ interface QueryInterface
      * @return QueryInterface
      */
     public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): QueryInterface;
+
+    /**
+     * @DESC          # 累减
+     * @param string $field
+     * @param float|int $value
+     * @return QueryInterface
+     */
+    public function dec(string $field, float|int $value = 1): QueryInterface;
+
+    /**
+     * @DESC          # 累加
+     * @param string $field
+     * @param float|int $value
+     * @return QueryInterface
+     */
+    public function inc(string $field, float|int $value = 1): QueryInterface;
 
     /**
      * @DESC          # 限制查询
