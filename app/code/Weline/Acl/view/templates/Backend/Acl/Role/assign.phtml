@@ -111,7 +111,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <div class='button-items mb-1 mt-1'>
                                     <form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post">
                                         <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
-                                        <button type='submit' id='save_button' class='btn btn-primary waves-effect waves-light'>
+                                        <button type='submit' id='save_button'
+                                                class='btn btn-primary waves-effect waves-light'>
                                             <lang>保存</lang>
                                         </button>
                                     </form>
@@ -143,7 +144,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             /**@var \Weline\Acl\Model\Acl $sub */
                                             foreach ($tree->getSub() as $sub) {
                                                 $method = $sub->getMethod() ? "({$sub->getMethod()})" : '';
-                                                $attr   = getLiAttr($sub);
+                                                $attr = getLiAttr($sub);
                                                 $result .= "<li id='{$sub->getSourceId()}' {$attr}>{$sub->getSourceName()}{$method}";
                                                 $result .= getTreeNode($sub);
                                                 $result .= '</li>';
@@ -158,33 +159,33 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     {
                                         $type = $acl->getType() ? __($acl->getType()) : '';
                                         $icon = $acl->getIcon();
-                                        if(empty($icon))
+                                        if (empty($icon))
                                             $icon = match ($type) {
                                                 'menus' => 'mdi mdi-microsoft-xbox-controller-menu',
-                                                'pc'    => 'mdi mdi-shield-link-variant-outline',
-                                                ''      => ''
+                                                'pc' => 'mdi mdi-shield-link-variant-outline',
+                                                '' => ''
                                             };
                                         if (empty($icon)) {
                                             if ($acl->getMethod()) {
                                                 $icon = match (strtolower($acl->getMethod())) {
-                                                    'get'    => 'mdi mdi-eye-check-outline',
-                                                    'post'   => 'ri-save-3-line',
+                                                    'get' => 'mdi mdi-eye-check-outline',
+                                                    'post' => 'ri-save-3-line',
                                                     'delete' => 'ri-delete-bin-6-line',
-                                                    'put'    => 'ri-edit-box-line',
+                                                    'put' => 'ri-edit-box-line',
                                                     'update' => 'mdi mdi-autorenew',
-                                                    default  => 'fas fa-fingerprint'
+                                                    default => 'fas fa-fingerprint'
                                                 };
                                             }
                                         }
-                                        $desc = $acl->getDocument()?__($acl->getDocument()):'';
+                                        $desc = $acl->getDocument() ? __($acl->getDocument()) : '';
                                         if (empty($desc)) {
                                             $desc = match ($type) {
                                                 'menus' => __('菜单'),
-                                                'pc'    => __('链接'),
-                                                ''      => __('其他')
+                                                'pc' => __('链接'),
+                                                '' => __('其他')
                                             };
                                         }
-                                        $desc.="({$acl->getSourceId()})";
+                                        $desc .= "({$acl->getSourceId()})";
                                         $access = $acl->getData('role_id') ? 'true' : 'false';
 //                                        $disabled = $acl->getData('a_role_id') ? 'false' : 'true';
                                         return " class='show_tooltip' title='{$desc}' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":{$access},
@@ -242,9 +243,50 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
              }*/
         },
         'checkbox': {
-            'keep_selected_style': false
+            'keep_selected_style': false,
+            'three_state': false, // 禁用三态选择
+            'cascade': '', // 禁用级联选择
         },
-        'plugins': [/*'wholerow', */'checkbox']
+        'plugins': ['wholerow', 'checkbox']
+    });
+    // 监听节点选择事件
+    $('#acl').on('select_node.jstree', function (e, data) {
+        var tree = $('#acl').jstree(true);
+        var node = data.node;
+
+        // 如果选择的是子节点（不是根节点）
+        if (node.parent !== '#') {
+            // 选择当前节点的父节点
+            var parentNode = tree.get_node(node.parent);
+            tree.select_node(parentNode, true);// 第二个参数 true 表示不触发事件
+        }
+    });
+    // 监听节点取消选择事件
+    $('#acl').on('deselect_node.jstree', function (e, data) {
+        var tree = $('#acl').jstree(true);
+        var node = data.node;
+
+        // 如果取消选择的是子节点（不是根节点）
+        if (node.parent !== '#') {
+            // 获取当前节点的父节点
+            var parentNode = tree.get_node(node.parent);
+
+            // 检查父节点是否有其他子节点被选择
+            var hasSelectedChildren = parentNode.children.some(function (childId) {
+                return tree.is_selected(childId);
+            });
+            // 如果没有其他子节点被选择，取消选择父节点
+            if (!hasSelectedChildren) {
+                tree.deselect_node(parentNode);
+            }
+        }
+        // 如果取消选择的是父节点
+        if (node.children.length > 0) {
+            // 取消选择当前节点的所有子节点
+            node.children.forEach(function (childId) {
+                tree.deselect_node(childId);
+            });
+        }
     });
     $('#save_button').on('click', function () {
         let selectedNodes = $('#acl').jstree('get_selected', true);
