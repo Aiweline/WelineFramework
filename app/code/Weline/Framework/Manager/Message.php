@@ -13,7 +13,7 @@ namespace Weline\Framework\Manager;
 
 use Weline\Framework\Session\Session;
 
-class MessageManager
+class Message
 {
     private Session $session;
 
