@@ -74,31 +74,32 @@ trait SqlTrait
         }
         # 查询字段列表转化sqlite支持的模式
         if (str_contains($sql, 'show full columns from ')) {
-            if(str_contains($sql,';')){
-                $sql_arr = explode(';',$sql);
+            if (str_contains($sql, ';')) {
+                $sql_arr = explode(';', $sql);
                 foreach ($sql_arr as &$item) {
-                    if(str_contains($item,'show full columns from ')){
-                        $item = str_replace('show full columns from ', 'PRAGMA table_info(', $item).')';
+                    if (str_contains($item, 'show full columns from ')) {
+                        $item = str_replace('show full columns from ', 'PRAGMA table_info(', $item) . ')';
                     }
                 }
-                $sql = implode(';',$sql_arr);
-            }else{
-                $sql = str_replace('show full columns from ', 'PRAGMA table_info(', $sql).');';
+                $sql = implode(';', $sql_arr);
+            } else {
+                $sql = str_replace('show full columns from ', 'PRAGMA table_info(', $sql) . ');';
             }
         }
         # order关键字段处理
-        if(DEV){
-            $dev_log_base_dir = BP.'/var/log/dev/sql/';
-            if(!is_dir($dev_log_base_dir)){
-                mkdir($dev_log_base_dir,775,true);
+        if (DEV) {
+            $dev_log_base_dir = BP . '/var/log/dev/sql/';
+            if (!is_dir($dev_log_base_dir)) {
+                mkdir($dev_log_base_dir, 775, true);
             }
-            file_put_contents($dev_log_base_dir.'sql_last.sql',$sql);
-            file_put_contents($dev_log_base_dir.'sql_all.sql',$sql.PHP_EOL,FILE_APPEND);
+            file_put_contents($dev_log_base_dir . 'sql_last.sql', $sql);
+            file_put_contents($dev_log_base_dir . 'sql_all.sql', $sql . PHP_EOL, FILE_APPEND);
         }
         return $sql;
     }
 
-    public static function convertMySQLToSQLite($mysqlSql) {
+    public static function convertMySQLToSQLite($mysqlSql)
+    {
         $statements = array_filter(array_map('trim', explode(';', $mysqlSql)));
         $convertedStatements = [];
 
@@ -155,6 +156,12 @@ trait SqlTrait
             if (preg_match('/^SET\s+NAMES\s+\w+/i', $statement)) {
                 $statement = ''; // 忽略 SET NAMES
             }
+
+            // 检查 SQL 语句中是否包含 COMMENT 语法
+            $statement = preg_replace('/COMMENT\s+\'[^\']*\'/i', '', $statement);
+
+            // 过滤掉 AFTER 语法
+            $statement = preg_replace('/AFTER\s+[^,;]+/i', '', $statement);
 
             // 其他常见替换规则
             $convertedStatements[] = $statement;
