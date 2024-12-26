@@ -224,7 +224,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function hasField(string $table, string $field): bool
     {
         $field = trim($field, '`');
-        $sql = "SELECT count(1) as count FROM PRAGMA table_info({$table}) WHERE name='{$field}'";
+        $sql = "SELECT name FROM pragma_table_info('{$table}') WHERE name LIKE '{$field}';";
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;
     }
@@ -232,7 +232,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function hasIndex(string $table, string $idx_name): bool
     {
         $idx_name = trim($idx_name, '`');
-        $sql = "SELECT count(1) as count FROM PRAGMA index_list({$table}) WHERE name='{$idx_name}'";
+        $sql = "SELECT name FROM pragma_index_list($table) WHERE name LIKE '{$idx_name}';";
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;
     }
