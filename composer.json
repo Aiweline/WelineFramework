@@ -84,17 +84,17 @@
   "classmap-authoritative": true,
   "autoload": {
     "psr-4": {
+      "": [
+        "app/code/",
+        "generated/code/"
+      ],
       "Weline\\": [
         "app/code/Weline/",
         "vendor/weline/"
       ],
       "Weline\\Framework\\": [
-        "vendor/weline/framework",
-        "app/code/Weline/Framework"
-      ],
-      "": [
-        "app/code/",
-        "generated/code/"
+        "app/code/Weline/Framework",
+        "vendor/weline/framework"
       ]
     },
     "psr-0": {
