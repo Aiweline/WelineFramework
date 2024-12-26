@@ -34,6 +34,7 @@ class Role extends \Weline\Admin\Controller\BaseController
         $this->role = $role;
     }
 
+    #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_listing', '角色列表', '', '')]
     function getIndex()
     {
         if ($search = $this->request->getGet('search')) {
