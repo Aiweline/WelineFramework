@@ -57,7 +57,7 @@ class Tool
     static function rm_sql_limit(string $sql): string
     {
         // 正则表达式匹配 LIMIT 子句（包括 OFFSET 的情况，支持大小写）
-        $pattern = '/(?i)\blimit\s+\d+\s+offset\s+\d+\b/';
+        $pattern = '/(?i)\s*LIMIT\s+\d+(\s*,\s*\d+)?(\s+OFFSET\s+\d+)?\b/';
         // 使用 preg_replace 删除匹配到的 LIMIT 子句
         $sql = preg_replace($pattern, '', $sql);
         return trim($sql, " ;\r\n") . "\r\n";
