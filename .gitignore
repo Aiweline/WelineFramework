@@ -31,7 +31,6 @@ generated/code/*
 /generated/functions.php
 .user.ini
 .phpunit.result.cache
-composer.lock
 
 # 代码美化
 .php_cs.cache
