@@ -32,7 +32,7 @@ class Activity extends BackendController
     {
         $search = $this->request->getGet('search');
         if ($search) {
-            $this->activityLog->where('concat(name,u.username,main_table.user_id,request_id,request_method,request_params,request_data,host,path,module,url,ip,user_agent,response,response_code)', "%$search%", 'like');
+            $this->activityLog->concat_like('name,u.username,main_table.user_id,request_id,request_method,request_params,request_data,host,path,module,url,ip,user_agent,response,response_code', "%$search%");
         }
         $logs = $this->activityLog
             ->joinModel(BackendUser::class, 'u', 'main_table.user_id=u.user_id')
