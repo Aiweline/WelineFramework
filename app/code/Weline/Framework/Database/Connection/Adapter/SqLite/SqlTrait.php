@@ -163,6 +163,9 @@ trait SqlTrait
             // 过滤掉 AFTER 语法
             $statement = preg_replace('/AFTER\s+[^,;]+/i', '', $statement);
 
+            // 过滤掉 AFTER 语法
+            $statement = str_replace('`*`', '*', $statement);
+
             // 其他常见替换规则
             $convertedStatements[] = $statement;
         }
