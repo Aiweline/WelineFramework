@@ -175,7 +175,7 @@ class Alter extends AbstractTable implements AlterInterface
                 $dump_sqls[] = $sql;
             } else {
                 try {
-                    $this->query->query($sql)->fetch();
+                    $this->query($sql)->fetch();
                 } catch (\Exception $exception) {
                     exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%1', $sql) . PHP_EOL);
                 }
@@ -189,7 +189,7 @@ class Alter extends AbstractTable implements AlterInterface
                 $dump_sqls[] = $sql;
             } else {
                 try {
-                    $this->query->query($sql);
+                    $this->query($sql);
                 } catch (\Exception $exception) {
                     exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%1', $sql) . PHP_EOL);
                 }
@@ -208,7 +208,7 @@ class Alter extends AbstractTable implements AlterInterface
                     $dump_sqls[] = $sql;
                 } else {
                     try {
-                        $this->query->query($sql)->fetch();
+                        $this->query($sql)->fetch();
                     } catch (\Exception $exception) {
                         exit(__('更新表注释错误：%1', $exception->getMessage()) . PHP_EOL);
                     }
@@ -291,7 +291,7 @@ class Alter extends AbstractTable implements AlterInterface
                 if ($dump_sql) {
                     $dump_sqls[] = $sql;
                 } else {
-                    $this->query->query($sql)->fetch();
+                    $this->query($sql)->fetch();
                 }
             } catch (\Exception $exception) {
                 exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%1', $sql) . PHP_EOL);
