@@ -51,6 +51,7 @@ use Weline\Framework\Manager\ObjectManager;
  *
  * @method AbstractModel|QueryInterface fetch(string $model_class = ''): mixed;
  * @method AbstractModel|QueryInterface reset()
+ * @method AbstractModel|QueryInterface test(string $test_code)
  * @method AbstractModel|QueryInterface beginTransaction()
  * @method AbstractModel|QueryInterface rollBack()
  * @method AbstractModel|QueryInterface commit()
@@ -1671,25 +1672,6 @@ PAGINATION;
             $this->setId($save_result);
         }
         return $save_result;
-    }
-
-    /**
-     * 叠加数字字段 inc
-     */
-    public function inc(string $field, int $num = 1): self
-    {
-        $old_num = $this->getData($field) ?? 0;
-        $old_num += $num;
-        $this->setData($field, $old_num);
-        return $this;
-    }
-
-    public function dec(string $field, int $num = 1): self
-    {
-        $old_num = $this->getData($field) ?? 0;
-        $old_num -= $num;
-        $this->setData($field, $old_num);
-        return $this;
     }
 
 }
