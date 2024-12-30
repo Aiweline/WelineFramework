@@ -11,11 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Adapter\SqLite;
 
-use Weline\Framework\Database\Connection\Api\ConnectorInterface;
-use Weline\Framework\Database\Exception\DbException;
-use Weline\Framework\Database\Exception\QueryException;
-use Weline\Framework\Database\Exception\SqlParserException;
-
 trait SqlTrait
 {
     use \Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
@@ -159,6 +154,11 @@ trait SqlTrait
 
             // 检查 SQL 语句中是否包含 COMMENT 语法
             $statement = preg_replace('/COMMENT\s+\'[^\']*\'/i', '', $statement);
+
+            // 兼容SHOW FULL COLUMNS FROM
+            if (preg_match('/SHOW\s+FULL\s+COLUMNS\s+FROM/i', $statement)) {
+                $statement = preg_replace('/SHOW\s+FULL\s+COLUMNS\s+FROM/i', 'PRAGMA table_info(', $statement) . ')';
+            }
 
             // 过滤掉 AFTER 语法
             $statement = preg_replace('/AFTER\s+[^,;]+/i', '', $statement);
