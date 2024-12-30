@@ -35,3 +35,5 @@ generated/code/*
 # 代码美化
 .php_cs.cache
 .php-cs-fixer.cache
+
+ssh_tools.jsonc
