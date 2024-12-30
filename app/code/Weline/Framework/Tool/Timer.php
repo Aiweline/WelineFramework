@@ -6,7 +6,7 @@ use DateTime;
 
 class Timer
 {
-    public static function offset_with_times_range(string &$date, string &$offset_type = 'day', int $offset = -1, int $times = 3, bool $need_time = false, array &$rang_times = []): string|array
+    public static function offset_with_times_range(string &$date, string &$offset_type = 'day', int $offset = -1, int $times = 4, bool $need_time = false, array &$rang_times = []): string|array
     {
         $offset_types = ['day', 'week', 'month', 'quarter'];
         if (!in_array($offset_type, $offset_types)) {
