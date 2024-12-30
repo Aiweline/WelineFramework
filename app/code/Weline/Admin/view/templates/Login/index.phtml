@@ -44,7 +44,8 @@
                                     <div class="col-md-12">
                                         <div class="mb-4">
                                             <label class="form-label" for="username"><?= __('管理员') ?></label>
-                                            <input type="text" class="form-control" id="username" name="username" value=""
+                                            <input type="text" class="form-control" id="username" name="username"
+                                                   value=""
                                                    placeholder="<?= __('输入管理员') ?>">
                                         </div>
                                         <div class="mb-4">
@@ -76,11 +77,13 @@
                                             <div class="col">
                                                 <div class="form-check">
                                                     <input type="checkbox" class="form-check-input" name="remember"
-                                                           id="customControlInline" <? $session->getData('remember_expire_time')?"checked":'' ?>>
+                                                           id="customControlInline" <?= $session->getData('remember_expire_time') ? "checked" : '' ?>>
                                                     <label class="form-label form-check-label d-flex align-items-center gap-1"
                                                            for="customControlInline" title="@lang{记住我一个星期！}">
                                                         <lang>记住我</lang>
-                                                        <span class="d-flex align-items-center" data-bs-toggle="tooltip" data-bs-title="@lang{保持登录一个星期。}"><i class=" ri-question-fill"></i></span>
+                                                        <span class="d-flex align-items-center" data-bs-toggle="tooltip"
+                                                              data-bs-title="@lang{保持登录一个星期。}"><i
+                                                                    class=" ri-question-fill"></i></span>
                                                     </label>
                                                 </div>
                                             </div>
