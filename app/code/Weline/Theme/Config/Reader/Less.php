@@ -28,7 +28,7 @@ class Less extends ResourceReader
         return Env::getInstance()->getConfig('theme');
     }
 
-    public function getFileList(\Closure $callback = null): array
+    public function getFileList(null|\Closure $callback = null): array
     {
         $callback = function ($data) {
             $need_data = [];
@@ -44,9 +44,9 @@ class Less extends ResourceReader
                                 }
                                 $need_data[] = [
                                     'module' => $vendor . '_' . $name,
-                                    'dir'    => $dir,
-                                    'area'   => $area,
-                                    'file'   => $dir_file->getRelate(),
+                                    'dir' => $dir,
+                                    'area' => $area,
+                                    'file' => $dir_file->getRelate(),
                                     'origin' => $dir_file->getOrigin(),
                                 ];
                             }
@@ -75,10 +75,10 @@ class Less extends ResourceReader
                 $related_file_path = str_replace(trim($module_info['base_path'], DS) . DS . 'view', '/', $less_file['dir']);
                 $related_file_path = str_replace('//', '/', $related_file_path);
                 $related_file_path = str_replace('//', '/', $related_file_path);
-                $file_path         = $this->fetchFile($module_name . '::' . $related_file_path);
-                $file_path         = str_replace('//', '/', $file_path);
-                $file_path         = str_replace('//', '/', $file_path);
-                $content           = str_replace($module_name, $file_path, $content);
+                $file_path = $this->fetchFile($module_name . '::' . $related_file_path);
+                $file_path = str_replace('//', '/', $file_path);
+                $file_path = str_replace('//', '/', $file_path);
+                $content = str_replace($module_name, $file_path, $content);
             }
             $this->config_resources[$area] .= $content;
         }

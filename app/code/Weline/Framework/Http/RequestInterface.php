@@ -31,7 +31,7 @@ interface RequestInterface
 
     public const CONTENT_TYPE = [
         'json' => 'application/json',
-        'xml'  => 'application/xml',
+        'xml' => 'application/xml',
     ];
 
     public const auth_TYPE_BEARER = 'bearer';
@@ -70,11 +70,11 @@ interface RequestInterface
      *
      * 参数区：
      *
-     * @param string|null $key
+     * @param string $key
      *
      * @return array|null
      */
-    public function getHeader(string $key = null);
+    public function getHeader(string $key = '');
 
     /**
      * @DESC         |获取Auth验证,默认方式 Bearer

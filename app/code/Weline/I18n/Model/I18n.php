@@ -35,14 +35,14 @@ class I18n
      * I18n 初始函数...
      *
      * @param Reader $reader
-     * @param array  $data
+     * @param array $data
      */
     public function __construct(
         Reader    $reader,
         I18NCache $i18nCache
     )
     {
-        $this->reader    = $reader;
+        $this->reader = $reader;
         $this->i18nCache = $i18nCache->create();
     }
 
@@ -115,9 +115,9 @@ class I18n
             # 排除非启用的语言包
             /**@var Scan $scan */
             $install_packs_path = glob(Env::path_LANGUAGE_PACK . '*' . DS . '*', GLOB_ONLYDIR);
-            $install_packs      = [];
+            $install_packs = [];
             foreach ($install_packs_path as $path) {
-                $path_arr        = explode(DS, $path);
+                $path_arr = explode(DS, $path);
                 $install_packs[] = array_pop($path_arr);
             }
         }
@@ -125,7 +125,7 @@ class I18n
         if ($width == 0 && $height == 0) {
             $no_scale = true;
         }
-        $locals      = [];
+        $locals = [];
         $lang_locals = $this->getLocals($lang_code);
         foreach (countries() as $code => $country) {
             $country = country($code);
@@ -133,9 +133,9 @@ class I18n
                 if ($installed && !in_array($locale, $install_packs)) {
                     continue;
                 }
-                $svg      = $country->getFlag();
-                $svg_xml  = simplexml_load_string($svg);
-                $o_width  = $svg_xml->attributes()->width ?? 42;
+                $svg = $country->getFlag();
+                $svg_xml = simplexml_load_string($svg);
+                $o_width = $svg_xml->attributes()->width ?? 42;
                 $o_height = $svg_xml->attributes()->height ?? 32;
                 if (!$no_scale) {
                     if ($width === 0) {
@@ -143,14 +143,14 @@ class I18n
                         $width = intval($o_width) / $scale;
                     }
                     if ($height === 0) {
-                        $scale  = intval($o_width) / $width;
+                        $scale = intval($o_width) / $width;
                         $height = intval($o_height) / $scale;
                     }
                 }
 
-                $svg_xml->attributes()->width  = $width;
+                $svg_xml->attributes()->width = $width;
                 $svg_xml->attributes()->height = $height;
-                $svg                           = $svg_xml->asXML();
+                $svg = $svg_xml->asXML();
                 if (isset($lang_locals[$locale])) {
                     $locals[$locale] = ['name' => $lang_locals[$locale], 'flag' => $svg];
                 }
@@ -170,9 +170,9 @@ class I18n
             # 排除非启用的语言包
             /**@var Scan $scan */
             $install_packs_path = glob(Env::path_LANGUAGE_PACK . '*' . DS . '*', GLOB_ONLYDIR);
-            $install_packs      = [];
+            $install_packs = [];
             foreach ($install_packs_path as $path) {
-                $path_arr        = explode(DS, $path);
+                $path_arr = explode(DS, $path);
                 $install_packs[] = array_pop($path_arr);
             }
         }
@@ -180,7 +180,7 @@ class I18n
         if ($width == 0 && $height == 0) {
             $no_scale = true;
         }
-        $locals      = [];
+        $locals = [];
         $lang_locals = $this->getLocals();
         foreach (countries() as $code => $country) {
             $country = country($code);
@@ -188,9 +188,9 @@ class I18n
                 if ($installed && !in_array($locale, $install_packs)) {
                     continue;
                 }
-                $svg      = $country->getFlag();
-                $svg_xml  = simplexml_load_string($svg);
-                $o_width  = $svg_xml->attributes()->width ?? 42;
+                $svg = $country->getFlag();
+                $svg_xml = simplexml_load_string($svg);
+                $o_width = $svg_xml->attributes()->width ?? 42;
                 $o_height = $svg_xml->attributes()->height ?? 32;
                 if (!$no_scale) {
                     if ($width === 0) {
@@ -198,14 +198,14 @@ class I18n
                         $width = intval($o_width) / $scale;
                     }
                     if ($height === 0) {
-                        $scale  = intval($o_width) / $width;
+                        $scale = intval($o_width) / $width;
                         $height = intval($o_height) / $scale;
                     }
                 }
 
-                $svg_xml->attributes()->width  = $width;
+                $svg_xml->attributes()->width = $width;
                 $svg_xml->attributes()->height = $height;
-                $svg                           = $svg_xml->asXML();
+                $svg = $svg_xml->asXML();
                 if (isset($lang_locals[$locale])) {
                     if ($display_locale_code === $locale) {
                         $name = $this->getLocaleName($locale, $locale);
@@ -237,9 +237,9 @@ class I18n
             $country = country($code);
             foreach ($country->getLocales() as $locale) {
                 if ($locale === $local_code) {
-                    $svg      = $country->getFlag();
-                    $svg_xml  = simplexml_load_string($svg);
-                    $o_width  = $svg_xml->attributes()->width ?? 42;
+                    $svg = $country->getFlag();
+                    $svg_xml = simplexml_load_string($svg);
+                    $o_width = $svg_xml->attributes()->width ?? 42;
                     $o_height = $svg_xml->attributes()->height ?? 32;
                     if (!$no_scale) {
                         if ($width === 0) {
@@ -247,15 +247,15 @@ class I18n
                             $width = intval($o_width) / $scale;
                         }
                         if ($height === 0) {
-                            $scale  = intval($o_width) / $width;
+                            $scale = intval($o_width) / $width;
                             $height = intval($o_height) / $scale;
                         }
                     }
 
-                    $svg_xml->attributes()->width  = $width;
+                    $svg_xml->attributes()->width = $width;
                     $svg_xml->attributes()->height = $height;
-                    $svg                           = $svg_xml->asXML();
-                    $local                         = ['name' => $lang_locals[$locale], 'flag' => $svg];
+                    $svg = $svg_xml->asXML();
+                    $local = ['name' => $lang_locals[$locale], 'flag' => $svg];
                     $this->i18nCache->set($cache_key, $local, 0);
                     return $local;
                 }
@@ -274,17 +274,17 @@ class I18n
      * 参数区：
      *
      * @param string $country_code
-     * @param int    $width
-     * @param int    $height
+     * @param int $width
+     * @param int $height
      *
      * @return mixed
      */
     public function getCountryFlag(string $country_code = 'CN', int $width = 42, int $height = 0): mixed
     {
-        $country  = country($country_code);
-        $svg      = $country->getFlag();
-        $svg_xml  = simplexml_load_string($svg);
-        $o_width  = $svg_xml->attributes()->width ?? 42;
+        $country = country($country_code);
+        $svg = $country->getFlag();
+        $svg_xml = simplexml_load_string($svg);
+        $o_width = $svg_xml->attributes()->width ?? 42;
         $o_height = $svg_xml->attributes()->height ?? 32;
         $no_scale = false;
         if ($width == 0 && $height == 0) {
@@ -296,12 +296,12 @@ class I18n
                 $width = intval($o_width) / $scale;
             }
             if ($height === 0) {
-                $scale  = intval($o_width) / $width;
+                $scale = intval($o_width) / $width;
                 $height = intval($o_height) / $scale;
             }
         }
 
-        $svg_xml->attributes()->width  = $width;
+        $svg_xml->attributes()->width = $width;
         $svg_xml->attributes()->height = $height;
         return $svg_xml->asXML();
     }
@@ -336,18 +336,18 @@ class I18n
             /**@var $i18n_file File */
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
-                    $handle  = fopen($i18n_file, 'r');
+                    $handle = fopen($i18n_file, 'r');
                     $is_utf8 = false;
-                    $line    = 1;
-                    while (($data = fgetcsv($handle)) !== false) {
+                    $line = 1;
+                    while (($data = fgetcsv($handle, 10000, ',', '"', '\\')) !== false) {
                         if (!isset($data[0])) {
                             throw new Exception(PHP_EOL . 'i18n翻译文件格式错误：' . $i18n_file . '错误行号：' . $line . '  错误消息：没有翻译原文' . PHP_EOL . '读取内容：' .
-                                                PHP_EOL . w_var_export($data, true));
+                                PHP_EOL . w_var_export($data, true));
                         }
                         $data[0] = trim($data[0]);
                         if (!isset($data[1])) {
                             throw new Exception(PHP_EOL . 'i18n翻译文件格式错误：' . $i18n_file . '错误行号：' . $line . '  错误消息：没有翻译内容' . PHP_EOL .
-                                                '读取内容：' . PHP_EOL . w_var_export($data, true));
+                                '读取内容：' . PHP_EOL . w_var_export($data, true));
                         }
                         $data[1] = trim($data[1]);
                         if (!$is_utf8) {
@@ -358,7 +358,7 @@ class I18n
                             }
                         }
                         $locals_words[$local][$data[0]] = $data[1];
-                        $line                           += 1;
+                        $line += 1;
                     }
 
                     fclose($handle);
@@ -406,7 +406,7 @@ class I18n
         $locals_words = $this->getLocalsWords();
         foreach ($locals_words as $local => $locals_word) {
             $words_filename = Env::path_TRANSLATE_FILES_PATH . $local . '.php';
-            $file           = new \Weline\Framework\System\File\Io\File();
+            $file = new \Weline\Framework\System\File\Io\File();
             $file->open($words_filename, $file::mode_w);
             $text = '<?php return ' . var_export($locals_word, true) . ';?>';
 
@@ -457,15 +457,15 @@ class I18n
      * 参数区：
      * @return \Weline\I18n\Model\Locals
      */
-    public function getActiveLocalsModel(string $target_local='zh_Hans_CN'): Locals
+    public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
     {
         $cache_key = __FUNCTION__;
-        $locals    = $this->i18nCache->get($cache_key);
+        $locals = $this->i18nCache->get($cache_key);
         if ($locals) {
             return $locals;
         }
         /**@var Locals $LocalsModel */
-        $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code',$target_local);
+        $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code', $target_local);
         return $LocalsModel;
     }
 }

@@ -105,9 +105,9 @@ class ConnectionFactory
      *
      * @return string
      */
-    public function getConnectorAdapter(ConfigProvider $configProvider=null): ConnectorInterface
+    public function getConnectorAdapter(null|ConfigProvider $configProvider = null): ConnectorInterface
     {
-        $configProvider = $configProvider?:$this->configProvider;
+        $configProvider = $configProvider ?: $this->configProvider;
         $driver_type = $configProvider->getDbType();
         $driverClass = "Weline\\Framework\\Database\\Connection\\Adapter\\" . ucfirst($driver_type) . '\\Connector';
         return ObjectManager::make($driverClass, ['configProvider' => $configProvider]);
@@ -120,12 +120,12 @@ class ConnectionFactory
 
     /**
      * @DESC          # 获取连接
+     * @return ConnectorInterface
      * @deprecated 函数已准备移除 使用 getConnector 代替
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/8/18 21:06
      * 参数区：
-     * @return ConnectorInterface
      */
     public function getConnection(): ConnectorInterface
     {
