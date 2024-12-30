@@ -20,7 +20,7 @@ class Less extends \Weline\Framework\Resource\Compiler
         $this->setReader(ObjectManager::getInstance(\Weline\Theme\Config\Reader\Less::class));
     }
 
-    public function compile(string $source_file = null, string $out_file = null)
+    public function compile(string $source_file = '', string $out_file = '')
     {
         p('等待编译开发...', 1);
     }

@@ -78,12 +78,12 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
      */
     public function scanVendorModules($vendor): array
     {
-        $modules        = [];
-        $app_modules    = glob(APP_CODE_PATH . $vendor . DS . '*' . DS . Register::register_file, GLOB_NOSORT);
+        $modules = [];
+        $app_modules = glob(APP_CODE_PATH . $vendor . DS . '*' . DS . Register::register_file, GLOB_NOSORT);
         $modules['app'] = $this->parseModules($app_modules);
         # 转化为composer供应商名称
-        $vendor_name         = Register::convertToComposerName($vendor);
-        $core_modules        = glob(VENDOR_PATH . $vendor_name . DS . '*' . DS . Register::register_file, GLOB_NOSORT);
+        $vendor_name = Register::convertToComposerName($vendor);
+        $core_modules = glob(VENDOR_PATH . $vendor_name . DS . '*' . DS . Register::register_file, GLOB_NOSORT);
         $modules['composer'] = $this->parseModules($core_modules);
         return $modules;
     }
@@ -96,24 +96,24 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
      * @DateTime: 2021/9/6 22:08
      * 参数区：
      *
-     * @param string        $file_or_dir
+     * @param string $file_or_dir
      * @param \Closure|null $callback
      *
      * @return array
      */
-    public function scanVendorModulesWithFiles(string $file_or_dir = '', \Closure $callback = null): array
+    public function scanVendorModulesWithFiles(string $file_or_dir = '', null|\Closure $callback = null): array
     {
         # 使用现有激活的模块进行文件扫描
-        $modules       = Env::getInstance()->getActiveModules();
+        $modules = Env::getInstance()->getActiveModules();
         $modules_files = [];
         foreach ($modules as $key => $module) {
-            $position  = $module['position'];
-            $name      = $module['name'];
+            $position = $module['position'];
+            $name = $module['name'];
             $base_path = $module['base_path'];
-            if('Weline_Framework' == $name) {
-                $framework_module_paths = glob($base_path.'*', GLOB_ONLYDIR);
+            if ('Weline_Framework' == $name) {
+                $framework_module_paths = glob($base_path . '*', GLOB_ONLYDIR);
                 foreach ($framework_module_paths as $framework_module_path) {
-                    $app_need_file_or_dir = $framework_module_path.DS . $file_or_dir;
+                    $app_need_file_or_dir = $framework_module_path . DS . $file_or_dir;
                     if (is_file($app_need_file_or_dir)) {
                         $modules_files[$name] = $app_need_file_or_dir;
                         continue;
@@ -190,24 +190,24 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
      * @DateTime: 2022/4/12 22:55
      * 参数区：
      *
-     * @param string        $file_or_dir 示例：*\Framework\*\etc\event.xml
+     * @param string $file_or_dir 示例：*\Framework\*\etc\event.xml
      * @param \Closure|null $callback
      *
      * @return array
      */
-    public function scanCodeFiles(string $file_or_dir = '', \Closure $callback = null): array
+    public function scanCodeFiles(string $file_or_dir = '', null|\Closure $callback = null): array
     {
-        $file_or_dir             = trim($file_or_dir, DS);
-        $file_or_dir_arr         = explode(DS, $file_or_dir);
+        $file_or_dir = trim($file_or_dir, DS);
+        $file_or_dir_arr = explode(DS, $file_or_dir);
         $file_or_dir_path_length = count($file_or_dir_arr);# 目录深度
-        $file_or_dir_last        = array_pop($file_or_dir_arr);
+        $file_or_dir_last = array_pop($file_or_dir_arr);
 
 
         $this->__init();
         $app_modules = $this->scanDirTree(APP_CODE_PATH);
         $this->__init();
-        $core_modules    = $this->scanDirTree(VENDOR_PATH);
-        $modules         = array_merge($core_modules, $app_modules);
+        $core_modules = $this->scanDirTree(VENDOR_PATH);
+        $modules = array_merge($core_modules, $app_modules);
         $vendors_modules = [];
         //        p($modules);
         /**@var File $file */
@@ -215,7 +215,7 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
             foreach ($files as $file) {
                 $file_arr = explode(DS, $file->getRelate());
                 if ($file_or_dir_path_length === count($file_arr) && $file_or_dir_last === $file->getBasename()) {
-                    $vendor                                                               = array_shift($file_arr);
+                    $vendor = array_shift($file_arr);
                     $vendors_modules[$vendor][implode('_', array_slice($file_arr, 0, 2))] = $file->getOrigin();
                 }
             }
@@ -236,31 +236,31 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
      * @DateTime: 2022/4/12 22:52
      * 参数区：
      *
-     * @param array         $pattern_dirs ['*\Framework\*\etc\event.xml','*\Framework\*\etc\module.xml']
+     * @param array $pattern_dirs ['*\Framework\*\etc\event.xml','*\Framework\*\etc\module.xml']
      * @param \Closure|null $callback
      *
      * @return array
      */
-    public function scanFilesWithPatternDirs(array $pattern_dirs = [], \Closure $callback = null): array
+    public function scanFilesWithPatternDirs(array $pattern_dirs = [], null|\Closure $callback = null): array
     {
         $vendors_modules = [];
         foreach ($pattern_dirs as $pattern_dir) {
-            $file_or_dir             = trim($pattern_dir, DS);
-            $file_or_dir_arr         = explode(DS, $file_or_dir);
+            $file_or_dir = trim($pattern_dir, DS);
+            $file_or_dir_arr = explode(DS, $file_or_dir);
             $file_or_dir_path_length = count($file_or_dir_arr);# 目录深度
-            $file_or_dir_last        = array_pop($file_or_dir_arr);
+            $file_or_dir_last = array_pop($file_or_dir_arr);
 
             $this->__init();
             $app_modules = $this->scanDirTree(APP_CODE_PATH);
             $this->__init();
             $core_modules = $this->scanDirTree(VENDOR_PATH);
-            $modules      = array_merge($core_modules, $app_modules);
+            $modules = array_merge($core_modules, $app_modules);
             /**@var File $file */
             foreach ($modules as $dir => $files) {
                 foreach ($files as $file) {
                     $file_arr = explode(DS, $file->getRelate());
                     if ($file_or_dir_path_length === count($file_arr) && $file_or_dir_last === $file->getBasename()) {
-                        $vendor                                                               = array_shift($file_arr);
+                        $vendor = array_shift($file_arr);
                         $vendors_modules[$vendor][implode('_', array_slice($file_arr, 0, 2))] = $file->getOrigin();
                     }
                 }
