@@ -26,7 +26,7 @@ class Reader extends DataObject
      * ModuleFileReader 初始函数...
      *
      * @param Scanner $scanner
-     * @param string  $path
+     * @param string $path
      */
     public function __construct(
         string $path = 'etc' . DS . 'module.xml',
@@ -56,7 +56,7 @@ class Reader extends DataObject
      *
      * @return array
      */
-    public function getFileList(\Closure $callback = null): array
+    public function getFileList(null|\Closure $callback = null): array
     {
         return $this->scanner->scanVendorModulesWithFiles($this->path, $callback);
     }
