@@ -1,0 +1,64 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "a7f8f0c19f8f8798ad1254274418471f",
+    "packages": [
+        {
+            "name": "weline/module-media-manager",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Aiweline/weline-module-media-manager.git",
+                "reference": "89183627d3c0dc3c422dd86b228db89b7992b83e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Aiweline/weline-module-media-manager/zipball/89183627d3c0dc3c422dd86b228db89b7992b83e",
+                "reference": "89183627d3c0dc3c422dd86b228db89b7992b83e",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.1"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-0": {
+                    "Weline\\MediaManager\\": ""
+                },
+                "psr-4": {
+                    "Weline\\MediaManager\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 媒体管理器",
+            "support": {
+                "issues": "https://github.com/Aiweline/weline-module-media-manager/issues",
+                "source": "https://github.com/Aiweline/weline-module-media-manager/tree/v1.0.0"
+            },
+            "time": "2023-10-03T12:23:43+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": "^8.1"
+    },
+    "platform-dev": [],
+    "plugin-api-version": "2.0.0"
+}
