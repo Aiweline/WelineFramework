@@ -83,7 +83,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->getRouterData('module_path');
     }
 
-    public function getHeader(string $key = null): array|string|null
+    public function getHeader(string $key = ''): array|string|null
     {
         if (empty($key)) {
             return $this->getServer(self::HEADER);
@@ -92,7 +92,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->getServer('HTTP_' . strtoupper($key));
     }
 
-    public function getParam(string $key, mixed $default = null, string $filter = null)
+    public function getParam(string $key, mixed $default = '', string $filter = '')
     {
         if ($result = $this->getData($key)) {
             return $result;

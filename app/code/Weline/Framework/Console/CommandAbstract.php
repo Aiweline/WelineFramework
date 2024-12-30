@@ -36,7 +36,7 @@ abstract class CommandAbstract implements CommandInterface
      *
      * @return string
      */
-    protected function getCommandPath(string $module_path, string $command = null): string
+    protected function getCommandPath(string $module_path, string $command = ''): string
     {
         $command_array = explode(':', $command);
         foreach ($command_array as &$command) {
