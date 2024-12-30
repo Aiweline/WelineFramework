@@ -26,17 +26,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 //        p($this->bound_values,1);
 //        p($this->getPrepareSql(true),1);
 //        p($this->getSql(true),1,1);
-        if($this->batch and $this->fetch_type == 'insert'){
-            $origin_data      = $this->getLink()->exec($this->getSql());
-            if($origin_data === false){
+        if ($this->batch and $this->fetch_type == 'insert') {
+            $origin_data = $this->getLink()->exec($this->getSql());
+            if ($origin_data === false) {
                 $result = false;
-            }else{
+            } else {
                 $result = $this->getLink()->lastInsertId();
             }
             $origin_data = [];
             $this->reset();
-        }else{
-            $result      = $this->PDOStatement->execute($this->bound_values);
+        } else {
+            $result = $this->PDOStatement->execute($this->bound_values);
             $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
         }
 
@@ -60,6 +60,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $result = $this->getLink()->lastInsertId();
                 break;
             case 'query':
+                if (str_contains($this->sql, 'PRAGMA table_info(')) {
+                    # 表结构兼容转化
+                    foreach ($data as &$datum) {
+                        $datum['Field'] = $datum['name'];
+                        $datum['Type'] = $datum['type'];
+                        $datum['Null'] = $datum['notnull'] ? 'NO' : 'YES';
+                        $datum['Key'] = $datum['pk'] ? 'PRI' : '';
+                        $datum['Default'] = $datum['dflt_value'];
+                        $datum['Extra'] = $datum['dflt_value'] ? 'DEFAULT' : '';
+                        $datum['Comment'] = '';
+                        $datum['Privileges'] = 'SELECT';
+                    }
+                }
             case 'select':
                 $result = $data;
                 break;
@@ -106,8 +119,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         $sql = self::formatSql($sql);
         $this->reset();
-        $this->sql          = $sql;
-        $this->fetch_type   = __FUNCTION__;
+        $this->sql = $sql;
+        $this->fetch_type = __FUNCTION__;
         $this->PDOStatement = $this->getLink()->prepare($sql);
         return $this;
     }
