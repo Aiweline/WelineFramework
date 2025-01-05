@@ -339,22 +339,31 @@ class I18n
                     $handle = fopen($i18n_file, 'r');
                     $is_utf8 = false;
                     $line = 1;
-                    while (($data = fgetcsv($handle, 10000, ',', '"', '\\')) !== false) {
+                    while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
                         if (!isset($data[0])) {
-                            throw new Exception(PHP_EOL . 'i18n翻译文件格式错误：' . $i18n_file . '错误行号：' . $line . '  错误消息：没有翻译原文' . PHP_EOL . '读取内容：' .
-                                PHP_EOL . w_var_export($data, true));
+                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%i18n_file 错误行号：%line  错误消息：没有翻译原文! 读取内容：%content', [
+                                    'i18n_file' => $i18n_file,
+                                    'line' => $line,
+                                    'content' => PHP_EOL . w_var_export($data, true)
+                                ]));
                         }
                         $data[0] = trim($data[0]);
                         if (!isset($data[1])) {
-                            throw new Exception(PHP_EOL . 'i18n翻译文件格式错误：' . $i18n_file . '错误行号：' . $line . '  错误消息：没有翻译内容' . PHP_EOL .
-                                '读取内容：' . PHP_EOL . w_var_export($data, true));
+                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%i18n_file 错误行号：%line  错误消息：没有翻译内容! 读取内容：%content', [
+                                    'i18n_file' => $i18n_file,
+                                    'line' => $line,
+                                    'content' => PHP_EOL . w_var_export($data, true)
+                                ]));
                         }
                         $data[1] = trim($data[1]);
                         if (!$is_utf8) {
                             if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
                                 $is_utf8 = true;
                             } else {
-                                throw new Exception('i18n翻译文件名未匹配到任何local代码：支持的local代码[' . w_var_export($locals_names, true) . ']');
+                                throw new Exception(__('i18n翻译文件 %i18n_file 未匹配到任何local代码：支持的local代码[%codes]', [
+                                    'i18n_file' => $i18n_file,
+                                    'codes' => w_var_export($locals_names, true),
+                                ]));
                             }
                         }
                         $locals_words[$local][$data[0]] = $data[1];
@@ -363,11 +372,50 @@ class I18n
 
                     fclose($handle);
                 } else {
-                    if (DEV) {
-                        throw new Exception('i18n翻译文件仅支持utf-8编码：' . $i18n_file);
+                    throw new Exception(__('i18n翻译文件 %i18n_file 未能找到可用翻译词，仅支持utf-8格式的文件。', [
+                            'i18n_file' => $i18n_file,
+                        ]
+                    ));
+                }
+            }
+        }
+        # 收集项目下的所有被__()函数包裹的翻译词
+        # --1 检索目录
+        // 定义要搜索的目录
+        $directories = [
+            BP . 'app',
+            BP . 'vendor',
+        ];
+        // 初始化翻译词数组
+        $translations = [];
+        // 遍历目录
+        foreach ($directories as $directory) {
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+
+            foreach ($iterator as $file) {
+                if ($file->isFile() && in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
+                    $content = file_get_contents($file->getPathname());
+                    // 使用正则表达式匹配__()
+                    if (preg_match_all('/__\(([\'"])(.*?)(?<!\\))\1/', $content, $matches)) {
+                        foreach ($matches[2] as $match) {
+                            // 提取第一个参数
+//                            $filename = str_replace(BP, '', $file->getPathname());
+                            $translations[$match] = $match;
+                        }
                     }
                 }
             }
+        }
+        if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
+            $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
+            $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
+            $file = fopen($default_local_file, 'w+');
+            $text = '<?php return ' . var_export($default_local_words, true) . ';';
+            fwrite($file, $text);
+            fclose($file);
+        }
+        if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
+            $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
         return $locals_words;
     }
