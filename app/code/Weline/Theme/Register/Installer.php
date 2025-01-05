@@ -32,7 +32,7 @@ class Installer implements RegisterInterface
      * Installer 初始函数...
      *
      * @param WelineTheme $welineTheme
-     * @param Printing    $printing
+     * @param Printing $printing
      */
     public function __construct(
         WelineTheme $welineTheme,
@@ -40,7 +40,7 @@ class Installer implements RegisterInterface
     )
     {
         $this->welineTheme = $welineTheme;
-        $this->printing    = $printing;
+        $this->printing = $printing;
     }
 
     /**
@@ -48,11 +48,11 @@ class Installer implements RegisterInterface
      *
      * 参数区：
      *
-     * @param string       $type
-     * @param string       $module_name
+     * @param string $type
+     * @param string $module_name
      * @param array|string $param
-     * @param string       $version
-     * @param string       $description
+     * @param string $version
+     * @param string $description
      *
      * @return string
      * @throws \ReflectionException
@@ -105,15 +105,15 @@ class Installer implements RegisterInterface
                 // 新安装
                 $this->welineTheme->clearQuery();
                 $res = $this->welineTheme->setId(0)
-                                         ->setIsActive(true)
-                                         ->save();
+                    ->setIsActive(true)
+                    ->save();
                 if (!$res) {
                     throw new Exception(__('主题注册失败！'));
                 }
             }
-            $this->printing->success($param['name'] . __(" 主题{$action_string}完成!"));
+            $this->printing->success($param['name'] . __("主题{$action_string}完成!"));
         } catch (\Exception $exception) {
-            $this->printing->error($param['name'] . __(" 主题{$action_string}异常!"));
+            $this->printing->error($param['name'] . __("主题{$action_string}异常!"));
             $this->printing->success($exception->getMessage());
             throw  $exception;
         }
