@@ -16,7 +16,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- jquery.mCustomScrollbar 插件 -->
     <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
     <!-- Responsive Table css -->
-    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
     <title><?= __('Weline Admin 管理面板') ?></title>
 </head>
 
@@ -33,12 +34,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 
     <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
     <!--页头工具条 结束-->
 
     <!-- ========== Topnav Start ========== -->
     <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
     <!--页头菜单栏 结束-->
 
     <!-- ========== Left Sidebar Start ========== -->
@@ -117,7 +118,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <!-- search form -->
                                     <div class='row'>
                                         <div class='col-12'>
-                                            <block class='Weline\Component\Block\Form\Search' id='installed-countries-listing-search'
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='installed-countries-listing-search'
                                                    action='*/backend/countries' method='get' keyword='search' value=''
                                                    placeholder='请输入国家'></block>
                                         </div>
@@ -140,43 +142,49 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             </thead>
                                             <tbody>
                                             <notempty name="locales">
-                                            <foreach name="locales" item="locale" key="key">
-                                                <tr>
-                                                    <td>{{key}}</td>
-                                                    <td class='co-name'>{{locale.code}}</td>
-                                                    <td class='co-name'>{{locale.name}}</td>
-                                                    <td class='co-name'>{{locale.country_code}}</td>
-                                                    <td class='co-name'>{{locale.country_name}}</td>
-                                                    <td class='co-name'>{{locale.flag}}</td>
-                                                    <td class='co-name'>{{locale.is_active}}</td>
-<!--                                                    <td class='co-name'>{{locale.is_install}}</td>-->
-                                                    <td class='co-name'>
-                                                        <div class="d-flex gap-2">
-                                                            <if condition="locale.is_active === 1">
-                                                                <a class="btn btn-primary"
-                                                                   href="@backend-url('*/backend/countries/locales/words')?code={{locale.code}}">
-                                                                    <lang>词典管理</lang>
-                                                                </a>
-                                                                <form action="@backend-url('*/backend/countries/locales/disable')" method='post'>
-                                                                    <input type='hidden' name='code' value='{{locale.code}}'>
-                                                                    <input type='submit' class='btn btn-warning' value='@lang(禁用)'>
-                                                                </form>
-                                                                <else/>
-                                                                <form action="@backend-url('*/backend/countries/locales/active')" method='post'>
-                                                                    <input type='hidden' name='code' value='{{locale.code}}'>
-                                                                    <input type='submit' class='btn btn-primary' value='@lang(启用)'>
-                                                                </form>
-                                                            </if>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </foreach>
+                                                <foreach name="locales" item="locale" key="key">
+                                                    <tr>
+                                                        <td>{{key}}</td>
+                                                        <td class='co-name'>{{locale.code}}</td>
+                                                        <td class='co-name'>{{locale.name}}</td>
+                                                        <td class='co-name'>{{locale.country_code}}</td>
+                                                        <td class='co-name'>{{locale.country_name}}</td>
+                                                        <td class='co-name'>{{locale.flag}}</td>
+                                                        <td class='co-name'>{{locale.is_active}}</td>
+                                                        <!--                                                    <td class='co-name'>{{locale.is_install}}</td>-->
+                                                        <td class='co-name'>
+                                                            <div class="d-flex gap-2">
+                                                                <if condition="locale.is_active === 1">
+                                                                    <a class="btn btn-primary"
+                                                                       href="@backend-url('*/backend/countries/locales/words')?code={{locale.code}}">
+                                                                        <lang>词典管理</lang>
+                                                                    </a>
+                                                                    <form action="@backend-url('*/backend/countries/locales/disable')"
+                                                                          method='post'>
+                                                                        <input type='hidden' name='code'
+                                                                               value='{{locale.code}}'>
+                                                                        <input type='submit' class='btn btn-warning'
+                                                                               value='@lang(禁用)'>
+                                                                    </form>
+                                                                    <else/>
+                                                                    <form action="@backend-url('*/backend/countries/locales/active')"
+                                                                          method='post'>
+                                                                        <input type='hidden' name='code'
+                                                                               value='{{locale.code}}'>
+                                                                        <input type='submit' class='btn btn-primary'
+                                                                               value='@lang(启用)'>
+                                                                    </form>
+                                                                </if>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </foreach>
                                             </notempty>
                                             </tbody>
                                         </table>
                                         <empty name='locales'>
                                             <lang>请</lang>
-                                            <a href="@backend-url('*/backend/countries/locales/install')?country_code={{req.country_code}}">
+                                            <a href="@backend-url('*/backend/countries/locales/install')?country_code={{req.params.country_code}}">
                                                 <lang>安装</lang>
                                             </a>
                                             <lang>地区列表</lang>

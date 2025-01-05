@@ -16,6 +16,7 @@ namespace Weline\I18n\Controller\Backend;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Cache\PhraseCache;
 use Weline\I18n\Cache\I18nCache;
@@ -39,7 +40,7 @@ class Countries extends BaseController
     )
     {
         parent::__construct($locale, $i18n);
-        $this->countries   = $countries
+        $this->countries = $countries
             ->joinModel(Name::class, 'cln', 'main_table.code=cln.' . Name::fields_COUNTRY_CODE, 'left');
         $this->localeNames = $localeName;
     }
@@ -48,9 +49,11 @@ class Countries extends BaseController
     {
         parent::__init();
         if ($search = $this->request->getGet('search')) {
+            $search = $this->countries->getConnection()->getConnector()->quote($search);
+            $search = trim($search, '\'');
             $code = $this->countries::fields_CODE;
             $name = Name::fields_DISPLAY_NAME;
-            $this->countries->where("CONCAT_WS(main_table.{$code},cln.{$name})", "%{$search}%", 'LIKE');
+            $this->countries->concat_like("main_table.{$code},cln.{$name}", "%{$search}%");
         }
         $this->countries->where('cln.' . $this->localeNames::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
     }
@@ -80,20 +83,20 @@ class Countries extends BaseController
      */
     public function getUpdate()
     {
-        $countries                = $this->i18n->getCountries(Cookie::getLangLocal());
-        $insert_countries         = [];
+        $countries = $this->i18n->getCountries(Cookie::getLangLocal());
+        $insert_countries = [];
         $insert_countries_display = [];
         foreach ($countries as $code => $country) {
-            $insert_countries[]         = [
-                \Weline\I18n\Model\Countries::fields_CODE       => $code,
-                \Weline\I18n\Model\Countries::fields_FLAG       => (string)$this->i18n->getCountryFlag($code),
-                \Weline\I18n\Model\Countries::fields_IS_ACTIVE  => 0,
+            $insert_countries[] = [
+                \Weline\I18n\Model\Countries::fields_CODE => $code,
+                \Weline\I18n\Model\Countries::fields_FLAG => (string)$this->i18n->getCountryFlag($code),
+                \Weline\I18n\Model\Countries::fields_IS_ACTIVE => 0,
                 \Weline\I18n\Model\Countries::fields_IS_INSTALL => 0,
             ];
             $insert_countries_display[] = [
-                Name::fields_COUNTRY_CODE        => $code,
+                Name::fields_COUNTRY_CODE => $code,
                 Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                Name::fields_DISPLAY_NAME        => $country,
+                Name::fields_DISPLAY_NAME => $country,
             ];
         }
         $this->countries->beginTransaction();
@@ -107,10 +110,10 @@ class Countries extends BaseController
                 $this->localeNames::fields_DISPLAY_NAME
             ])->fetch();
             $this->countries->commit();
-            $this->getMessageManager()->addSuccess(__('操作成功！更新%1记录。', count($insert_countries)));
+            Message::success(__('操作成功！更新%1记录。', count($insert_countries)));
         } catch (\Exception $exception) {
             $this->countries->rollBack();
-            $this->getMessageManager()->addException($exception);
+            Message::exception($exception);
         }
         $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/countries'));
     }
@@ -134,7 +137,7 @@ class Countries extends BaseController
                 if ($this->countries->getId()) {
                     $this->countries->setData($this->countries::fields_IS_INSTALL, 1)->save(true);
                     $this->getMessageManager()->addSuccess(__('成功安装!国家：%1(%2)', [$this->countries->getData($this->localeNames::fields_DISPLAY_NAME),
-                                                                                       $this->countries->getData($this->countries::fields_CODE)]));
+                        $this->countries->getData($this->countries::fields_CODE)]));
                 } else {
                     $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
                 }
@@ -153,15 +156,15 @@ class Countries extends BaseController
         $code = $this->request->getPost('code');
         try {
             $this->countries->clearQuery()->where($this->countries::fields_CODE, $code)
-                            ->find()
-                            ->fetch();
+                ->find()
+                ->fetch();
             if ($this->countries->getId()) {
                 $this->countries->setData($this->countries::fields_IS_INSTALL, 0)->save(true);
                 $this->countries->getLocaleModel()->where(Locale::fields_COUNTRY_CODE, $code)
-                                ->update([Locale::fields_IS_INSTALL => 0, Locale::fields_IS_ACTIVE => 0])
-                                ->fetch();
+                    ->update([Locale::fields_IS_INSTALL => 0, Locale::fields_IS_ACTIVE => 0])
+                    ->fetch();
                 $this->getMessageManager()->addSuccess(__('成功卸载!国家：%1(%2)', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                                                                                   $this->countries->getData($this->countries::fields_CODE)]));
+                    $this->countries->getData($this->countries::fields_CODE)]));
             } else {
                 $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
             }
@@ -186,7 +189,7 @@ class Countries extends BaseController
             }
             $this->countries->setData($this->countries::fields_IS_ACTIVE, 1)->save(true);
             $this->getMessageManager()->addSuccess(__('成功激活国家！国家：%1（%2）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                                                                                   $this->countries->getData($this->countries::fields_CODE)]));
+                $this->countries->getData($this->countries::fields_CODE)]));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
         }
@@ -209,10 +212,10 @@ class Countries extends BaseController
             }
             $this->countries->setData($this->countries::fields_IS_ACTIVE, 0)->save(true);
             $this->getMessageManager()->addSuccess(__('成功禁用国家！国家：%1（%2）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
-                                                                                   $this->countries->getData($this->countries::fields_CODE)]));
+                $this->countries->getData($this->countries::fields_CODE)]));
             // FIXME 禁用应当删除对应语言的翻译包
             $country_locales = $this->locale->where($this->locale::fields_COUNTRY_CODE, $code)->select()->fetch()->getItems();
-            $pack_dir        = Env::path_LANGUAGE_PACK;
+            $pack_dir = Env::path_LANGUAGE_PACK;
             /**@var System $system */
             $system = ObjectManager::getInstance(System::class);
             /**@var */
