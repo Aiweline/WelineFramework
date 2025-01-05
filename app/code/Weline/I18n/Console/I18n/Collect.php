@@ -32,7 +32,7 @@ class Collect implements \Weline\Framework\Console\CommandInterface
     )
     {
         $this->printing = $printing;
-        $this->i18n     = $i18n;
+        $this->i18n = $i18n;
     }
 
     /**
