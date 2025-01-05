@@ -23,9 +23,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
-//        p($this->bound_values,1);
-//        p($this->getPrepareSql(true),1);
-//        p($this->getSql(true),1,1);
+        if (Env::get('db_log.enabled') or DEBUG) {
+            $file = Env::get('db_log.file');
+            $data = [
+                'prepare_sql' => $this->getPrepareSql(false),
+                'sql' => $this->getSql(false),
+                'data' => $this->bound_values
+            ];
+            Env::log($file, json_encode($data));
+        }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
             if ($origin_data === false) {
@@ -36,10 +42,27 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $origin_data = [];
             $this->reset();
         } else {
+            # SQLITE 不支持多结果集：智能将SQL语句打散，并逐条执行后返回结果集
+            $sql = $this->getSqlWithBounds($this->sql);
+            // 使用正则表达式匹配SQL语句
+            preg_match_all('/((?:[^;\'"]|\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*")+);/', $sql, $matches);
             $result = $this->PDOStatement->execute($this->bound_values);
-            $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+            // $matches[0] 包含所有匹配的语句
+            $statements = $matches[0];
+            if (count($statements) == 1) {
+                $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $origin_data = [];
+                foreach ($statements as $statement) {
+                    $state_res = $this->getLink()->exec($statement);
+                    if ($state_res !== false) {
+                        $state_res = $this->getLink()->lastInsertId();
+                    }
+                    $origin_data[] = $state_res;
+                }
+            }
         }
-
+        $this->batch = false;
         # sqlite 不支持多结果集
         $data = [];
         if ($model_class) {
