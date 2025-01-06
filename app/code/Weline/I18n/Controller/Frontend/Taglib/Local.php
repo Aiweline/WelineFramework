@@ -10,13 +10,13 @@ declare(strict_types=1);
  * 日期：2023/7/2 13:39:02
  */
 
-namespace Weline\I18n\Controller\Backend\Taglib;
+namespace Weline\I18n\Controller\Frontend\Taglib;
 
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 
-class Local extends \Weline\Framework\App\Controller\BackendController
+class Local extends \Weline\Framework\App\Controller\FrontendController
 {
     public function get()
     {

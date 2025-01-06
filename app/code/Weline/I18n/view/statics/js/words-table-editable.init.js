@@ -29,7 +29,7 @@ $(function () {
             for (let i = 0; i < tds.length; i++) {
                 let i_data_field = $(tds[i]).attr('data-field')
                 if (i_data_field) {
-                    data[i_data_field] = $(tds[i]).text().replace(/^\s*|\s*$/g,'')
+                    data[i_data_field] = $(tds[i]).text().replace(/^\s*|\s*$/g, '')
                     data['word'] = $(tds[i]).attr('data-word')
                     data['code'] = $(tds[i]).attr('data-code')
                     data['country_code'] = $(tds[i]).attr('data-country-code')
@@ -43,10 +43,28 @@ $(function () {
                 dataType: 'json',
                 data: data,
                 success: async (res) => {
-                    console.log(res);
+                    if (res.code !== 200) {
+                        // 使用sweetalert2提示
+                        Swal.fire({
+                            title: __('提示'),
+                            text: res.msg,
+                            icon: 'error',
+                        });
+                    } else {
+                        Swal.fire({
+                            title: __('提示'),
+                            text: res.msg,
+                            icon: 'success',
+                        });
+                    }
                 }, error: (res) => {
                     console.log(res)
-                    confirm(res.msg)
+                    // 使用sweetalert2提示
+                    Swal.fire({
+                        title: __('提示'),
+                        text: __('保存失败'),
+                        icon: 'error',
+                    });
                 }
             })
             hideLoading();

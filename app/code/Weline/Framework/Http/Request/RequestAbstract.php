@@ -222,11 +222,11 @@ abstract class RequestAbstract extends RequestFilter
      *
      * 参数区：
      *
-     * @param string|null $key
+     * @param string $key
      *
      * @return string|array
      */
-    public function getServer(string $key = null): string|array
+    public function getServer(string $key = ''): string|array
     {
         $filter = RequestFilter::getInstance();
         $filter->init();
@@ -409,7 +409,7 @@ abstract class RequestAbstract extends RequestFilter
 
     public function getBaseHost(): string
     {
-        if((isset($_SERVER['WELINE-WEBSITE-URL']))) {
+        if ((isset($_SERVER['WELINE-WEBSITE-URL']))) {
             return $_SERVER['WELINE-WEBSITE-URL'];
         }
         $port = $this->getServer('SERVER_PORT');
