@@ -21,10 +21,10 @@ interface CacheFactoryInterface
      * @DateTime: 2022/4/14 23:17
      * 参数区：
      *
-     * @param string      $driver
+     * @param string $driver
      * @param string|null $tip
      *
      * @return CacheInterface
      */
-    public function create(string $driver = '', string $tip = null): CacheInterface;
+    public function create(string $driver = '', string $tip = ''): CacheInterface;
 }

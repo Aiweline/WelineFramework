@@ -16,7 +16,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- jquery.mCustomScrollbar 插件 -->
     <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
     <!-- Responsive Table css -->
-    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
     <title><?= __('Weline Admin 管理面板') ?></title>
 </head>
 
@@ -120,8 +121,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <!-- search form -->
                                     <div class='row'>
                                         <div class='col-12'>
-                                            <block class='Weline\Component\Block\Form\Search' id='installed-countries-listing-search'
-                                                   action='*/backend/countries' method='get' keyword='search' value='CN'
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='installed-countries-listing-search'
+                                                   action='*/backend/countries' method='get' keyword='search' value=''
                                                    placeholder='请输入国家'></block>
                                         </div>
                                     </div>
@@ -151,20 +153,29 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <td class='co-name'>
                                                         <div class="d-flex gap-2">
                                                             <if condition="country.is_active !== 1">
-                                                                <form action="@backend-url('*/backend/countries/active')" method="post">
-                                                                    <input type="hidden" name="code" value="{{country.code}}">
-                                                                    <input type="submit" class="btn btn-primary" value="@lang(启用)">
+                                                                <form action="@backend-url('*/backend/countries/active')"
+                                                                      method="post">
+                                                                    <input type="hidden" name="code"
+                                                                           value="{{country.code}}">
+                                                                    <input type="submit" class="btn btn-primary"
+                                                                           value="@lang(启用)">
                                                                 </form>
                                                                 <else/>
-                                                                <form action="@backend-url('*/backend/countries/disable')" method='post'>
-                                                                    <input type='hidden' name='code' value='{{country.code}}'>
-                                                                    <input type='submit' class='btn btn-warning' value='@lang(禁用)'>
+                                                                <form action="@backend-url('*/backend/countries/disable')"
+                                                                      method='post'>
+                                                                    <input type='hidden' name='code'
+                                                                           value='{{country.code}}'>
+                                                                    <input type='submit' class='btn btn-warning'
+                                                                           value='@lang(禁用)'>
                                                                 </form>
                                                             </if>
                                                             <if condition='country.is_install === 1'>
-                                                                <form action="@backend-url('*/backend/countries/uninstall')" method='post'>
-                                                                    <input type='hidden' name='code' value='{{country.code}}'>
-                                                                    <input type='submit' class='btn btn-danger' value='@lang(卸载)'>
+                                                                <form action="@backend-url('*/backend/countries/uninstall')"
+                                                                      method='post'>
+                                                                    <input type='hidden' name='code'
+                                                                           value='{{country.code}}'>
+                                                                    <input type='submit' class='btn btn-danger'
+                                                                           value='@lang(卸载)'>
                                                                 </form>
                                                                 <if condition="country.is_active === 1">
                                                                     <a class='btn btn-info'

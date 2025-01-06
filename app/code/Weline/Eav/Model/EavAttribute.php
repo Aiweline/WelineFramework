@@ -298,7 +298,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this->setData(self::fields_name, $name);
     }
 
-    public function hasOption(bool $has_option = null): bool|static
+    public function hasOption(bool|null $has_option = null): bool|static
     {
         if (is_bool($has_option)) {
             return $this->setData(self::fields_has_option, $has_option);
@@ -343,7 +343,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this;
     }
 
-    public function isSystem(bool $is_system = null): bool|static
+    public function isSystem(bool|null $is_system = null): bool|static
     {
         if (is_bool($is_system)) {
             return $this->setData(self::fields_is_system, $is_system);
@@ -351,7 +351,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return (bool)$this->getData(self::fields_is_system);
     }
 
-    public function isEnable(bool $is_enable = null): bool|static
+    public function isEnable(bool|null $is_enable = null): bool|static
     {
         if (is_bool($is_enable)) {
             return $this->setData(self::fields_is_enable, $is_enable);
@@ -369,7 +369,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this->setData(self::fields_multiple_valued, $is_multiple_valued ? '1' : '0');
     }
 
-    public function getValue(string|int $entity_id = null, bool $return_attribute = false)
+    public function getValue(string|int|null $entity_id = null, bool $return_attribute = false)
     {
         if (!$this->current_getEntity()->getId()) {
             throw new Exception(__('该属性没有entity实体！'));
@@ -409,7 +409,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this->getData($this::value_key);
     }
 
-    public function getValueWithOptions(string|int $entity_id = null, bool $return_attribute = false, string $option_key = 'value'): array|Option
+    public function getValueWithOptions(string|int|null $entity_id = null, bool $return_attribute = false, string $option_key = 'value'): array|Option
     {
         $optionModel = $this->getOptionModel();
         $values = $this->getValue($entity_id, false);
@@ -431,7 +431,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $optionModel->fetch();
     }
 
-    public function getSwatchValue(string|int $eav_entity_id = null, bool $object = false)
+    public function getSwatchValue(string|int|null $eav_entity_id = null, bool $object = false)
     {
         if (!$this->current_getEntity()->getId()) {
             throw new Exception(__('该属性没有entity实体！'));
@@ -767,7 +767,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         } catch (\Exception $e) {
             $options['values'] = [];
         }
-        if($this->getId()){
+        if ($this->getId()) {
             $options['entity'] = $this;
         }
         return $type->getHtml($this, $options);

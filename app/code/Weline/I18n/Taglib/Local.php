@@ -19,7 +19,7 @@ use Weline\Framework\View\Taglib;
 
 class Local implements \Weline\Taglib\TaglibInterface
 {
-    private $ids = [];
+    private static $ids = [];
 
     /**
      * @inheritDoc
@@ -66,20 +66,20 @@ class Local implements \Weline\Taglib\TaglibInterface
      */
     static function callback(): callable
     {
-        $ids = [];
-        return function ($tag_key, $config, $tag_data, $attributes) use ($ids) {
+        $ids = &self::$ids;
+        return function ($tag_key, $config, $tag_data, $attributes) use (&$ids) {
             # 这里可以做任何处理，然后返回对应处理后的内容
             $model = $attributes['model'];
             $field = $attributes['field'];
             /**@var Taglib $Taglib */
-            $Taglib    = ObjectManager::getInstance(Taglib::class);
+            $Taglib = ObjectManager::getInstance(Taglib::class);
             $origin_id = $attributes['id'];
             $parserId = '<?=(' . $Taglib->varParser($origin_id) . '?:\'' . str_replace('.', '-', $origin_id) . '\')?>';
-            $id        = 'local-off-canvas-'.$parserId;
-            if (in_array($id, $ids)) {
+            $idName = 'local-off-canvas-' . $parserId;
+            if (in_array($idName, $ids)) {
                 throw new Exception('local标签ID不允许重复！');
             }
-            $ids[] = $id;
+            $ids[] = $idName;
 
             $name = trim($tag_data[2] ?? '');
             /**@var Request $request */
@@ -87,24 +87,24 @@ class Local implements \Weline\Taglib\TaglibInterface
             if ($request->isBackend()) {
                 $action = $request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', ['model' => $model, 'field' => $field]);
             } else {
-                $action = $request->getUrlBuilder()->getUrl('i18n/taglib/local', ['model' => $model, 'field' => $field]);
+                $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', ['model' => $model, 'field' => $field]);
             }
-            $closeText  = __('关闭');
+            $closeText = __('关闭');
             $titileText = __('翻译窗口');
             return match ($tag_key) {
                 'tag' => <<<TAG
                     <a class='d-flex align-items-center link-info gap-1' style='cursor: pointer'
                         data-bs-toggle='offcanvas'
-                        data-bs-target='#{$id}' 
-                        aria-controls='{$id}'
+                        data-bs-target='#{$idName}' 
+                        aria-controls='{$idName}'
                         <span>{$name}</span>
                         <i class='ri-translate'></i>
                     </a>
-                    <!-- {$id} -->
-                    <div class='offcanvas  offcanvas-end w-75 h-100' tabindex='-1' id='{$id}' 
-                         aria-labelledby='{$id}Label'>
+                    <!-- {$idName} -->
+                    <div class='offcanvas  offcanvas-end w-75 h-100' tabindex='-1' id='{$idName}' 
+                         aria-labelledby='{$idName}Label'>
                         <div class='offcanvas-header'>
-                            <h5 id='{$id}Label'>
+                            <h5 id='{$idName}Label'>
                                 <lang>{$titileText}</lang>
                             </h5>
                             <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas'
@@ -112,7 +112,7 @@ class Local implements \Weline\Taglib\TaglibInterface
                         </div>
                         <div class='offcanvas-body'>
                             <div class='position-relative w-100 h-100 '>
-                                <iframe id='{$id}Iframe' class='w-100 h-100'
+                                <iframe id='{$idName}Iframe' class='w-100 h-100'
                                         data-src="{$action}&value={$name}&id={$parserId}"
                                         frameborder='0'></iframe>
                             </div>
@@ -120,9 +120,8 @@ class Local implements \Weline\Taglib\TaglibInterface
                     </div>
                     <script>
                         //show.bs.offcanvas
-                        $('#{$id}').on('show.bs.offcanvas', function (e) {
-                            console.log(e.target)
-                            let Iframe = $('#{$id}Iframe')
+                        $('#{$idName}').on('show.bs.offcanvas', function (e) {
+                            let Iframe = $('#{$idName}Iframe')
                             Iframe.attr('src', Iframe.attr('data-src'))
                         })
                     </script>

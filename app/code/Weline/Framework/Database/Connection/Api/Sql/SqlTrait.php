@@ -11,11 +11,13 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
+use http\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Exception\QueryException;
 use Weline\Framework\Database\Exception\SqlParserException;
+use Weline\Framework\Output\Log;
 
 trait SqlTrait
 {
@@ -32,6 +34,12 @@ trait SqlTrait
         'not in',
         'find_in_set',
         '=',
+    ];
+    private static $special_fields = [
+        'order',
+        'key',
+        'table',
+        'fields',
     ];
     public ConnectorInterface $connection;
     public string $db_name = 'default';
@@ -210,6 +218,9 @@ trait SqlTrait
                     default:
                         $param = ':' . str_replace('`', '_', $where[0]);
                         $param = str_replace(' ', '_', $param);
+                        $param = str_replace('(', '_', $param);
+                        $param = str_replace(')', '_', $param);
+                        $param = str_replace(',', '_', $param);
                         # 是sql的字段不添加字段引号(没有值则是sql)
                         if (null === $where[2]) {
                             $wheres .= '(' . $where[0] . ') ' . $logic;
@@ -257,6 +268,7 @@ trait SqlTrait
                         }
                 }
             }
+
             $wheres = rtrim($wheres, $logic);
         }
         # 排序
@@ -350,10 +362,12 @@ trait SqlTrait
                             }
                         }
                     }
+
                     # 其他不存在的，直接合并到插入
                     if (count($insert_or_update_items) > 0) {
                         $insert_items = array_merge($insert_items, $insert_or_update_items);
                     }
+
                     # 有变更则更新
                     if (count($insert_updates) > 0) {
                         $insert_updates_index = 0;
@@ -369,21 +383,21 @@ trait SqlTrait
                         }
                     }
                 }
-
                 # 主键为空时新增
                 $identity_inserts_sql = '';
                 $identity_inserts_fields = str_replace(['(', ')', ' '], '', $this->fields);
+
                 $identity_inserts_fields = explode(',', $identity_inserts_fields);
+
                 foreach ($identity_inserts_fields as $identity_inserts_field_key => $identity_inserts_field) {
                     $identity_inserts_field = str_replace(' ', '', $identity_inserts_field);
                     $identity_inserts_fields[$identity_inserts_field_key] = trim($identity_inserts_field, '`');
                 }
-                if (in_array($this->identity_field, $identity_inserts_fields)) {
-                    unset($identity_inserts_fields[array_search($this->identity_field, $identity_inserts_fields)]);
-                }
 
                 $identity_inserts_fields = '`' . implode('`,`', $identity_inserts_fields) . '`';
                 $values = '';
+                $has_identify_field_insert = false;
+                $has_no_identify_field_insert = false;
                 foreach ($insert_items as $insert_key => $insert) {
                     $insert_key += 1;
                     if ($this->identity_field && empty($insert[$this->identity_field])) {
@@ -396,6 +410,7 @@ trait SqlTrait
                         }
                         $identity_inserts_sql = rtrim($identity_inserts_sql, ', ');
                         $identity_inserts_sql .= '); ';
+                        $has_identify_field_insert = true;
                     } else {
                         $values .= '(';
                         foreach ($insert as $insert_field => $insert_value) {
@@ -405,7 +420,11 @@ trait SqlTrait
                         }
                         $values = rtrim($values, ', ');
                         $values .= '),';
+                        $has_no_identify_field_insert = true;
                     }
+                }
+                if ($has_identify_field_insert && $has_no_identify_field_insert) {
+                    throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
                 }
                 $values = rtrim($values, ',');
                 $sql = $update_inserts_sql . $identity_inserts_sql;
@@ -505,8 +524,8 @@ trait SqlTrait
         # 预置sql
         $sql = $this::formatSql($sql);
         $this->sql = $sql;
-//        if (str_contains(strtolower($sql), 'r_role_id')) {
-//            dd($this->getPrepareSql());
+//        if (str_contains(strtolower($sql), 'bo_CN')) {
+//            dd($this->getSql());
 //        }
         if (!$this->batch) {
             $this->PDOStatement = $this->getLink()->prepare($sql);
@@ -655,7 +674,7 @@ trait SqlTrait
             $bindings = $this->bound_values;
         }
         foreach ($bindings as $key => $binding) {
-            $binding = "'{$binding}'";
+            $binding = $this->quote($binding);
             $sql = str_replace($key, $binding, $sql);
         }
         if ($format) {
