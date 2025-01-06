@@ -53,7 +53,7 @@ trait TraitTemplate
     private function fetchClassObject(string $position): HtmlInterface|string
     {
         $is_backend = $this->request->isBackend();
-        $cache_key  = ($is_backend ? 'backend' : 'frontend') . "_{$position}_object";
+        $cache_key = ($is_backend ? 'backend' : 'frontend') . "_{$position}_object";
         if (PROD && $object = $this->viewCache->get($cache_key)) {
             return $object;
         }
@@ -83,8 +83,8 @@ trait TraitTemplate
             $fileName = str_replace($pre_module_name . '::', '', $fileName);
             # 替换掉当前模块的视图目录
             $module_base_path = $module_lists[$pre_module_name]['base_path'];
-            $view_dir         = $module_base_path . Data\DataInterface::dir . DS;
-            $template_dir     = $module_base_path . Data\DataInterface::dir . DS . Data\DataInterface::dir_type_TEMPLATE . DS;
+            $view_dir = $module_base_path . Data\DataInterface::dir . DS;
+            $template_dir = $module_base_path . Data\DataInterface::dir . DS . Data\DataInterface::dir_type_TEMPLATE . DS;
             if (PROD) {
                 $compile_dir = Env::path_framework_generated_complicate . DS . $module_lists[$pre_module_name]['path'] . Data\DataInterface::dir . DS;
             } else {
@@ -93,14 +93,14 @@ trait TraitTemplate
             # 文件目录
             $file_dir = str_replace($pre_module_name . '::', '', $file_dir);
         } else {
-            $view_dir     = $this->getRequest()->getModulePath() . 'view' . DS;
+            $view_dir = $this->getRequest()->getModulePath() . 'view' . DS;
             $template_dir = $view_dir . Data\DataInterface::view_TEMPLATE_DIR . DS;
             if (PROD) {
                 $module_path_arr = explode(DS, trim($this->getRequest()->getModulePath(), DS));
-                $module          = array_pop($module_path_arr);
-                $vendor          = array_pop($module_path_arr);
-                $module_path     = $vendor . DS . $module . DS;
-                $compile_dir     = Env::path_framework_generated_complicate . $module_path . Data\DataInterface::dir . DS;
+                $module = array_pop($module_path_arr);
+                $vendor = array_pop($module_path_arr);
+                $module_path = $vendor . DS . $module . DS;
+                $compile_dir = Env::path_framework_generated_complicate . $module_path . Data\DataInterface::dir . DS;
             } else {
                 $compile_dir = $view_dir . Data\DataInterface::view_TEMPLATE_COMPILE_DIR . DS;
             }
@@ -110,7 +110,7 @@ trait TraitTemplate
 
     public function processModuleSourceFilePath(string $type, string $source): array
     {
-        $t_f     = $type . DS . $source;
+        $t_f = $type . DS . $source;
         $t_f_arr = [];
         if ('/' !== DS) {
             $source = str_replace('/', DS, $source);
@@ -135,9 +135,9 @@ trait TraitTemplate
 
     public function fetchTagSourceFile(string $type, string $source)
     {
-        $source    = trim($source);
-        $cache_key = $type . '_' . $source.Cookie::getLangLocal();
-        $data      = '';
+        $source = trim($source);
+        $cache_key = $type . '_' . $source . Cookie::getLangLocal();
+        $data = '';
         switch ($type) {
             case DataInterface::dir_type_TEMPLATE:
                 if ($t_f = $this->viewCache->get($cache_key)) {
@@ -159,8 +159,8 @@ trait TraitTemplate
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
                         $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path        = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
-                        $t_f                  = str_replace($module_name . '::', '', $t_f);
+                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
+                        $t_f = str_replace($module_name . '::', '', $t_f);
                     }
                 }
                 $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
@@ -185,16 +185,16 @@ trait TraitTemplate
      *
      * @param string $type
      * @param string $source
-     * @param bool   $rand_version
+     * @param bool $rand_version
      *
      * @return bool|string|void
      * @throws Exception
      */
     public function fetchTagSource(string $type, string $source, bool $rand_version_with_system = true)
     {
-        $source    = trim($source);
-        $source    = trim($source, DS);
-        $cache_key = $type . '_' . $source.Cookie::getLangLocal();
+        $source = trim($source);
+        $source = trim($source, DS);
+        $cache_key = $type . '_' . $source . Cookie::getLangLocal();
         switch ($type) {
             case DataInterface::dir_type_STATICS:
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
@@ -203,8 +203,8 @@ trait TraitTemplate
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
                         $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                        $base_url_path        = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
-                        $t_f                  = str_replace($module_name . '::', '', $t_f);
+                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
+                        $t_f = str_replace($module_name . '::', '', $t_f);
                     } else {
                         throw new Exception(__('资源不存在：%1，模组：%2', [$source, $module_name]));
                     }
@@ -218,7 +218,7 @@ trait TraitTemplate
             case DataInterface::dir_type_BLOCKS:
             default:
                 $data = $this->viewCache->get($cache_key);
-                if (PROD &&$data&& is_file($data)) {
+                if (PROD && $data && is_file($data)) {
                     return $data;
                 }
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
@@ -230,7 +230,7 @@ trait TraitTemplate
         # 是否静态文件添加
         if ($rand_version_with_system and ($type === 'statics' && Env::getInstance()->getConfig('static_file_rand_version'))) {
             $version = random_int(10000, 100000);
-            $data    .= '?v=' . $version;
+            $data .= '?v=' . $version;
         }
         $this->viewCache->set($cache_key, $data);
         return $data;
@@ -252,6 +252,9 @@ trait TraitTemplate
 
     private function getModuleViewDir(string $module_view_dir_path, string $type, string $module_name)
     {
+        if (empty($module_view_dir_path)) {
+            return '';
+        }
         switch ($type) {
             case DataInterface::dir_type_TEMPLATE:
                 $path = $module_view_dir_path . DataInterface::view_TEMPLATE_DIR;
@@ -264,18 +267,18 @@ trait TraitTemplate
                 }
                 break;
             case DataInterface::dir_type_STATICS:
-                $cache_key = 'getViewDir' . $module_view_dir_path . $type.(PROD ? 'prod' : 'dev');
+                $cache_key = 'getViewDir' . $module_view_dir_path . $type . (PROD ? 'prod' : 'dev');
                 if ($cache_static_dir = $this->viewCache->get($cache_key)) {
                     return $cache_static_dir;
                 }
                 # 生产环境处理
                 if (PROD) {
-                    $module_view_dir_path_arr =  $path_arr = explode(DS, $module_view_dir_path);
+                    $module_view_dir_path_arr = $path_arr = explode(DS, $module_view_dir_path);
                     $view_dir = array_pop($module_view_dir_path_arr);
-                    $view_dir=   array_pop($module_view_dir_path_arr).DS.$view_dir;
+                    $view_dir = array_pop($module_view_dir_path_arr) . DS . $view_dir;
                     array_pop($module_view_dir_path_arr);
                     array_pop($module_view_dir_path_arr);
-                    $module_view_dir_path = implode(DS, $module_view_dir_path_arr).DS.str_replace('_', DS, $module_name).DS.$view_dir;
+                    $module_view_dir_path = implode(DS, $module_view_dir_path_arr) . DS . str_replace('_', DS, $module_name) . DS . $view_dir;
                 }
                 $path = $module_view_dir_path . DataInterface::view_STATICS_DIR . DS;
                 # 生产环境处理
@@ -335,9 +338,9 @@ trait TraitTemplate
      */
     protected function fetchFile(string $filename): mixed
     {
-        $cache_key = $filename.Cookie::getLangLocal();
+        $cache_key = $filename . Cookie::getLangLocal();
         $cache_filename = $this->viewCache->get($cache_key);
-        if ($cache_filename&&is_file($cache_filename)) {
+        if ($cache_filename && is_file($cache_filename)) {
             return $cache_filename;
         }
         /*---------观察者模式 检测文件是否被继承-----------*/

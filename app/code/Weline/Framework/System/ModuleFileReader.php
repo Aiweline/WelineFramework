@@ -26,7 +26,7 @@ class ModuleFileReader extends DataObject
      * ModuleFileReader 初始函数...
      *
      * @param Scanner $scanner
-     * @param string  $path
+     * @param string $path
      */
     public function __construct(
         Scanner $scanner,
@@ -34,7 +34,7 @@ class ModuleFileReader extends DataObject
     )
     {
         $this->scanner = $scanner;
-        $this->path    = $path;
+        $this->path = $path;
         parent::__construct();
     }
 
@@ -51,7 +51,7 @@ class ModuleFileReader extends DataObject
      *
      * @return array
      */
-    public function getFileList(\Closure $callback = null): array
+    public function getFileList(null|\Closure $callback = null): array
     {
         return $this->scanner->scanVendorModulesWithFiles($this->path, $callback);
     }
@@ -68,7 +68,7 @@ class ModuleFileReader extends DataObject
      *
      * @return array
      */
-    public function getFileListWithCodeDir(\Closure $callback = null): array
+    public function getFileListWithCodeDir(null|\Closure $callback = null): array
     {
         return $this->scanner->scanCodeFiles($this->path, $callback);
     }

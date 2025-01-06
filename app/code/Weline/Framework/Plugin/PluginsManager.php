@@ -36,7 +36,7 @@ class PluginsManager
         PluginCache     $pluginCache
     )
     {
-        $this->reader      = $reader;
+        $this->reader = $reader;
         $this->pluginCache = $pluginCache->create();
     }
 
@@ -86,7 +86,7 @@ class PluginsManager
             // 插件类排序 二维数组根据sort字段排序
             usort($type_plugins, function ($a, $b) {
                 return strnatcasecmp($a['sort'], $b['sort']);
-            } );            
+            });
             $plugin_listen_methods = [];
 
             try {
@@ -152,11 +152,11 @@ class PluginsManager
                                 $origin_is_in = false;
                                 if (!in_array($name, $plugin_listen_methods, true)) {
                                     $plugin_listen_methods[] = $name;
-                                    $origin_is_in            = true;
+                                    $origin_is_in = true;
                                 } elseif (!$origin_is_in) {
                                     if (!in_array($name, $plugin_listen_methods, true)) {
                                         $plugin_listen_methods[] = lcfirst($name);
-                                        $origin_is_in            = true;
+                                        $origin_is_in = true;
                                     }
                                 }
                                 // 还不在就创建
@@ -174,11 +174,11 @@ class PluginsManager
                                 $lcfirst_is_in = false;
                                 if (!in_array($lcfirst_name, $plugin_listen_methods, true)) {
                                     $plugin_listen_methods[] = $lcfirst_name;
-                                    $lcfirst_is_in           = true;
+                                    $lcfirst_is_in = true;
                                 } elseif (!$lcfirst_is_in) {
                                     if (!in_array($lcfirst_name, $plugin_listen_methods, true)) {
                                         $plugin_listen_methods[] = $lcfirst_name;
-                                        $lcfirst_is_in           = true;
+                                        $lcfirst_is_in = true;
                                     }
                                 }
                                 // 还不在就创建
@@ -196,11 +196,11 @@ class PluginsManager
         // 再检出前置、环绕、后置等方法信息（包含类和方法）
         $before_name = InterceptorInterface::LISTENER_BEFORE;
         $around_name = InterceptorInterface::LISTENER_AROUND;
-        $after_name  = InterceptorInterface::LISTENER_AFTER;
+        $after_name = InterceptorInterface::LISTENER_AFTER;
         foreach ($types_plugins_info as $type_class => $plugins_info) {
             $plugins_info[$before_name] = [];
             $plugins_info[$around_name] = [];
-            $plugins_info[$after_name]  = [];
+            $plugins_info[$after_name] = [];
             foreach ($plugins_info['plugins_methods'] as $plugin_class => $plugin_methods) {
                 foreach ($plugin_methods as $type_class_method => $type_class_method_plugin_methods) {
                     foreach ($type_class_method_plugin_methods as $type_class_method_plugin_method) {
@@ -208,18 +208,18 @@ class PluginsManager
                         if (is_int(strpos($type_class_method_plugin_method, $before_name))) {
                             $plugins_info[$before_name][] = [
                                 'instance' => $plugin_class,
-                                'method'   => $type_class_method_plugin_method,
+                                'method' => $type_class_method_plugin_method,
                             ];
                         } elseif (is_int(strpos($type_class_method_plugin_method, $around_name))) {
                             // 环绕
                             $plugins_info[$around_name][] = [
                                 'instance' => $plugin_class,
-                                'method'   => $type_class_method_plugin_method,
+                                'method' => $type_class_method_plugin_method,
                             ];
                         } elseif (is_int(strpos($type_class_method_plugin_method, $after_name))) {
                             $plugins_info[$after_name][] = [
                                 'instance' => $plugin_class,
-                                'method'   => $type_class_method_plugin_method,
+                                'method' => $type_class_method_plugin_method,
                             ];
                         }
                     }
@@ -236,7 +236,7 @@ class PluginsManager
                         foreach ($plugin_methods[$listen_method] as $plugin_method) {
                             $plugin_class_method_data = [
                                 'instance' => $plugin_class,
-                                'method'   => $plugin_method,
+                                'method' => $plugin_method,
                             ];
                             // 全部数据
                             $method_plugins_methods[$listen_method]['all'][] = $plugin_class_method_data;
@@ -256,7 +256,7 @@ class PluginsManager
                 }
             }
             $plugin_data['methods_plugins'] = $method_plugins_methods;
-            $types_plugins_info[$type]      = $plugin_data;
+            $types_plugins_info[$type] = $plugin_data;
         }
 //        p($types_plugins_info['Aiweline\Index\Controller\Index']);
         // 正式环境则缓存
@@ -294,15 +294,15 @@ class PluginsManager
      *
      * 参数区：
      *
-     * @param string      $type
-     * @param string      $method
+     * @param string $type
+     * @param string $method
      * @param string|null $code
      *
      * @return array|mixed
      * @throws \Weline\Framework\App\Exception
      * @throws \Weline\Framework\Exception\Core
      */
-    public function getPluginInfo(string $type, string $method, string $code = null): mixed
+    public function getPluginInfo(string $type, string $method, string $code = ''): mixed
     {
         // 避免多次读取
         if (isset($this->plugin_map[$type . $method])) {
@@ -344,7 +344,7 @@ class PluginsManager
      * 参数区：
      *
      * @param string $class
-     * @param bool   $cache
+     * @param bool $cache
      *
      * @return Proxy\Generator
      * @throws \Weline\Framework\Exception\Core
