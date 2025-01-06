@@ -55,6 +55,19 @@ abstract class RequestAbstract extends RequestFilter
 
     public function __init()
     {
+        # FIXME 兼容$_GET将”."替换成"_“的情况，暂不清楚$_POST情况，可能第一层键名也会有此情况
+        $query_str = $this->getServer('QUERY_STRING');
+        if(str_contains($query_str,'.')){
+            $query_str = str_replace('&amp;', '&', $query_str);
+            $query_str_arr = explode('&', $query_str);
+            foreach ($query_str_arr as $item) {
+                if(str_contains($item, '.')){
+                    $item = explode('=', $item);
+                    $_GET[$item[0]] = $item[1];
+                    unset($_GET[str_replace('.', '_', $item[0])]);
+                }
+            }
+        }
         if (empty($this->cache)) {
             $this->cache = ObjectManager::getInstance(RequestCache::class . 'Factory');
         }
