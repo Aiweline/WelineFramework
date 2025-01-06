@@ -102,14 +102,14 @@ class DbManager
      *
      * 参数区：
      *
-     * @param string              $connection_name 链接名称
-     * @param ConfigProvider|null $configProvider  链接资源配置
+     * @param string $connection_name 链接名称
+     * @param ConfigProvider|null $configProvider 链接资源配置
      *
      * @return ConnectionFactory
      * @throws \ReflectionException
      * @throws LinkException|\Weline\Framework\App\Exception
      */
-    public function create(string $connection_name = 'default', ConfigProvider $configProvider = null): ConnectionFactory
+    public function create(string $connection_name = 'default', null|ConfigProvider $configProvider = null): ConnectionFactory
     {
         $connection = $this->getConnection($connection_name);
         // 如果不更新连接配置，且已经存在连接就直接读取

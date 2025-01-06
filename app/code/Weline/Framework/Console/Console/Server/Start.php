@@ -39,7 +39,7 @@ class Start implements CommandInterface
 
         # 调用静态文件部署
         if (Env::get('deploy') !== 'dev') {
-            $this->printer->setup(__('启用PHP内置服务器需要将部署模式设置为dev，当前部署模式为 %1，是否继续(y/n)?', Env::get('deploy') ?? 'default'));
+            $this->printer->setup(__('启用PHP内置服务器需要将部署模式\'设置为dev，当前部署模式为 %1，是否继续(y/n)?', Env::get('deploy') ?? 'default'));
             $input = $this->system->input();
             if (strtolower(chop($input)) !== 'y' && strtolower(chop($input)) !== 'yes') {
                 $this->printer->setup('已为您取消操作！');

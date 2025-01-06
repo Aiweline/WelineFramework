@@ -36,7 +36,7 @@ class Compiler implements CompilerInterface
         return $this->eventsManager;
     }
 
-    public function compile(string $source_file = null, string $out_file = null)
+    public function compile(string $source_file = '', string $out_file = '')
     {
         $config_resources = $this->reader->getResourceFiles();
         foreach ($config_resources as $area => $config_resource) {
@@ -44,8 +44,8 @@ class Compiler implements CompilerInterface
                 'Framework_Resource::compiler',
                 ['data' => new DataObject(
                     [
-                        'area'      => $area,
-                        'type'      => $this->reader->getSourceType(),
+                        'area' => $area,
+                        'type' => $this->reader->getSourceType(),
                         'resources' => $config_resource
                     ]
                 )]
