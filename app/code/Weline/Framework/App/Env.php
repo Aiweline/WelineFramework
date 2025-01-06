@@ -96,7 +96,8 @@ class Env extends DataObject
     // 翻译词典 目录
     public const path_TRANSLATE_FILES_PATH = self::GENERATED_DIR . DS . 'language' . DS;
 
-    public const path_TRANSLATE_DEFAULT_FILE = self::GENERATED_DIR . DS . 'language' . DS . 'zh_Hans_CN.php';
+    public const default_LANGUAGE_CODE = 'zh_Hans_CN';
+    public const path_TRANSLATE_DEFAULT_FILE = self::GENERATED_DIR . DS . 'language' . DS . self::default_LANGUAGE_CODE . '.php';
 
     public const path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE = self::GENERATED_DIR . DS . 'language' . DS . 'words.php';
 
@@ -309,14 +310,26 @@ class Env extends DataObject
         return self::getInstance()->setConfig($name, $value);
     }
 
-    public static function log(string $filename, string $content, bool $append = true): bool
+    public static function log(string $filename, string $content, bool $append = true, bool $need_file_info = true, int $debug_level = 0): bool
     {
         $content = str_replace("\r\n", "\n", $content);
         $content = str_replace("\r", "\n", $content);
-        $content = '-------------------' . date('Y-m-d H:i:s') . '------------------------' . "\n" . $content . "\n" . '-------------------------' . date('Y-m-d H:i:s') . '------------------' . "\n";
+        $header_line = '-------------------------' . date('Y-m-d H:i:s') . ' ' . __('开始') . '------------------' . "\n";
+        $end_line = '-------------------------' . date('Y-m-d H:i:s') . ' ' . __('结束') . '------------------' . "\n";
+        if ($need_file_info) {
+            # 读取上级调用位置
+            $backtrace = debug_backtrace();
+            $backtrace = $backtrace[$debug_level];
+            $file = $backtrace['file'];
+            $line = $backtrace['line'];
+            $header_line .= '-------------------' . $file . ' line ' . $line . '------------------------' . "\n" . $header_line;
+            $end_line .= '-------------------' . $file . ' line ' . $line . '------------------------' . "\n" . $end_line;
+        }
+        $content = $header_line . "\n" . $content . "\n" . $end_line . "\n\n";
         if (!str_contains($filename, BP)) {
             $filename = BP . $filename;
         }
+        dd($filename);
         if (!is_file($filename)) {
             if (!is_dir(dirname($filename))) {
                 mkdir(dirname($filename), 0777, true);
@@ -327,6 +340,12 @@ class Env extends DataObject
         } else {
             return file_put_contents($filename, $content);
         }
+    }
+
+    public static function sql_log(string $filename, string $sql, bool $append = true, bool $need_file_info = true): bool
+    {
+        $sql = \SqlFormatter::format($sql);
+        return self::log($filename, $sql, $append, $need_file_info, 1);
     }
 
     /**

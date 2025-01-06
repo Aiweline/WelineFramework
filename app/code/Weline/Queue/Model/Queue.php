@@ -195,7 +195,7 @@ class Queue extends EavModel
     {
         if ($format) {
             $processString = '';
-            $process       = $this->getData(self::fields_process);
+            $process = $this->getData(self::fields_process);
             if ($process) {
                 $process = json_decode($process);
                 if (!$process) {
@@ -207,8 +207,8 @@ class Queue extends EavModel
                     } elseif (is_array($item)) {
                         $processString .= $key . ':' . ($isHtml ? '<br>' : PHP_EOL);
                         foreach ($item as $k => $v) {
-                            $k             += 1;
-                            $processString .= '&nbsp;&nbsp;&nbsp;&nbsp;' . $k . '、' . $v.($isHtml ? '<br>' : PHP_EOL);
+                            $k += 1;
+                            $processString .= '&nbsp;&nbsp;&nbsp;&nbsp;' . $k . '、' . $v . ($isHtml ? '<br>' : PHP_EOL);
                         }
                     }
                 }
@@ -298,7 +298,7 @@ class Queue extends EavModel
         return $this->getType()->getAttributes($options_data);
     }
 
-    public function getAttribute(string $code, int|string $entity_id = null, array $options_data = []): EavAttribute|null
+    public function getAttribute(string $code, int|string $entity_id = 0, array $options_data = []): EavAttribute|null
     {
         if ($entity_id) {
             $entity = ObjectManager::make($this::class)->load($entity_id);
@@ -346,20 +346,20 @@ class Queue extends EavModel
         /**@var EavAttribute $attr */
         foreach ($attributes as &$attr) {
             /**@var \Weline\Eav\Model\EavAttribute\Type $attrType */
-            $attrType        = $attr->getType();
+            $attrType = $attr->getType();
             $eav_model_class = $attrType->getModelClass();
-            $value           = $attr->getValue();
-            $options         = $attr->getOptions();
+            $value = $attr->getValue();
+            $options = $attr->getOptions();
             if (!empty($eav_model_class)) {
                 /**@var EavModelInterface $eav_model */
                 $eav_model = ObjectManager::make($eav_model_class);
-                $options   = $eav_model->getModelData([
+                $options = $eav_model->getModelData([
                     'entity' => &$this,
                     'value' => $value,
                     'attribute' => &$attr,
                     'attributes' => &$attributes,
                 ]) ?: $attr->getOptions();
-                $params    = [];
+                $params = [];
                 if (is_array($value)) {
                     foreach ($value as $i => $v) {
                         if (isset($options[$v])) {
