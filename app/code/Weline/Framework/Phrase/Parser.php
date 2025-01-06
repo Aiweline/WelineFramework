@@ -17,6 +17,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Parser
 {
+
+    public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
     protected static array $words = [];
 
@@ -75,11 +77,11 @@ class Parser
     public static function getWords()
     {
         // 仅加载一次翻译到对象self::$words
-        if (empty(self::$words)) {
+        if (empty(self::$words) and !self::$loaded) {
             // 先访问缓存
             /**@var \Weline\Framework\Cache\CacheInterface $phraseCache */
             $phraseCache = ObjectManager::getInstance(\Weline\Framework\Phrase\Cache\PhraseCache::class . 'Factory');
-            $translate_mode = Env::getInstance()->getConfig('translate_mode');
+            $translate_mode = Env::getInstance()->getConfig('translate_mode')?:'default';
 
             $cache_key = 'phrase_locale_words_' . Cookie::getLangLocal();
             # 非实时翻译
@@ -102,6 +104,7 @@ class Parser
                     }
                 }
             }
+            self::$loaded = true;
         }
         return self::$words ?? [];
     }

@@ -24,6 +24,8 @@ use Weline\I18n\Observer\ParserWordsRegister;
 
 class I18n
 {
+
+    private static array $local_words = [];
     /**
      * @var Reader
      */
@@ -220,7 +222,7 @@ class I18n
         return $locals;
     }
 
-    public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 42, int $height = 0)
+    public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 42, int $height = 0): array
     {
         $cache_key = 'getCountryFlagWithLocal' . $local_code . $width . $height;
         if ($data = $this->i18nCache->get($cache_key)) {
@@ -321,11 +323,26 @@ class I18n
      *
      * 参数区：
      *
+     * @param bool $cache
      * @return array
      * @throws Exception
      */
-    public function getLocalsWords()
+    public function getLocalsWords(bool $cache = true): array
     {
+        if (self::$local_words and $cache) {
+            return self::$local_words;
+        }
+        if ($cache) {
+            $all_locals_words_file = Env::path_TRANSLATE_FILES_PATH . 'default.php';
+            if (!file_exists($all_locals_words_file)) {
+                touch($all_locals_words_file);
+            }
+            $all_locals_words = (array)(include $all_locals_words_file);
+            if (!empty($all_locals_words)) {
+                self::$local_words = $all_locals_words;
+                return $all_locals_words;
+            }
+        }
         // 所有语言
         $locals_names = Locales::getNames();
         // 所有语言对应存在的翻译词
@@ -434,6 +451,11 @@ class I18n
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
+        if ($locals_words) {
+            $text = '<?php return ' . w_var_export($locals_words, true) . ';';
+            file_put_contents(Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE, $text);
+        }
+        self::$local_words = $locals_words;
         return $locals_words;
     }
 
@@ -444,18 +466,17 @@ class I18n
      *
      * @param string $local_code
      *
-     * @return array|mixed
+     * @return array
      * @throws Exception
      */
-    public function getLocalWords(string $local_code = 'zh_Hans_CN')
+    public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {
         $words = [];
         if (isset($this->getLocalsWords()[$local_code])) {
-            $words = $this->getLocalsWords()[$local_code];
+            $words = (array)($this->getLocalsWords()[$local_code]);
         } elseif (isset($this->getLocalsWords()['zh_Hans_CN'])) {
-            $words = $this->getLocalsWords()['zh_Hans_CN'];
+            $words = (array)($this->getLocalsWords()['zh_Hans_CN']);
         }
-
         return $words;
     }
 

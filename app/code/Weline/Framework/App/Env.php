@@ -329,7 +329,6 @@ class Env extends DataObject
         if (!str_contains($filename, BP)) {
             $filename = BP . $filename;
         }
-        dd($filename);
         if (!is_file($filename)) {
             if (!is_dir(dirname($filename))) {
                 mkdir(dirname($filename), 0777, true);
