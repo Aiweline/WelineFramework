@@ -13,5 +13,5 @@ namespace Weline\Framework\Resource;
 
 interface CompilerInterface
 {
-    public function compile(string $source_file = null, string $out_file = null);
+    public function compile(string $source_file = '', string $out_file = '');
 }

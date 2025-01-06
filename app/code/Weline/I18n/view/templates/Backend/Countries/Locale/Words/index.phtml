@@ -16,7 +16,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- jquery.mCustomScrollbar 插件 -->
     <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
     <!-- Responsive Table css -->
-    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
     <!-- Sweet Alert-->
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
     <title><?= __('Weline Admin 管理面板') ?></title>
@@ -87,7 +88,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     </li>
                                     <li class='breadcrumb-item active'>
                                         <a href="@backend-url('*/backend/countries/locale/words')?country_code={{req
-                                        .country_code}}&code={{req.code}}">
+                                        .country_code}}&code={{req.params.code}}">
                                             <lang>词典</lang>
                                         </a>
                                     </li>
@@ -112,10 +113,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <p class='card-title-desc'>
                                     <lang>根据地区翻译来自前端采集到的词.</lang>
                                 <p>
-                                    <lang>只需要在前端或者后端刷新页面，或者使用命令：php bin/m cache:warm 也可以收集到大部分词。</lang>
+                                    <lang>只需要在前端或者后端刷新页面，或者使用命令：php bin/w i18n:collect
+                                        也可以收集到大部分词。
+                                    </lang>
                                 </p>
                                 <p>
-                                    <lang>提示：使用词典收集功能请先开启在线收集词语功能。开启命令：php bin/m translate:model:set online</lang>
+                                    <lang>提示：使用词典收集功能请先开启在线收集词语功能。开启命令：php bin/w
+                                        translate:model:set online
+                                    </lang>
                                 </p>
                                 </p>
                                 <p class="card-title-desc">
@@ -124,18 +129,18 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </p>
                                 <p class='card-title-desc'>
                                     <lang>操作：</lang>
-                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.country_code}}&code={{req
+                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
                                     .code}}">
                                         <lang>更新</lang>
                                     </a>
                                     <span class='fas fa-question-circle' data-trigger='hover' data-toggle='popover'
                                           data-content='@lang(刷新来自前端采集到的词。)'></span>
-                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.country_code}}&code={{req
+                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
                                     .code}}">
                                         <lang>导出语言包</lang>
                                         <lang>（尚未开发）</lang>
                                     </a>
-                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.country_code}}&code={{req
+                                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
                                     .code}}">
                                         <lang>导入语言包</lang>
                                         <lang>（尚未开发）</lang>
@@ -145,7 +150,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     .code}}">
                                         <lang>发布</lang>
                                     </a>
-                                    <lang>在线收集词典功能状态：</lang><lang>{{translate_mode}}</lang>
+                                    <lang>在线收集词典功能状态：</lang>
+                                    <lang>{{translate_mode}}</lang>
                                     <a class="text-info" href="@backend-url('*/backend/countries/locale/words/enable')?country_code={{req
                                     .country_code}}&code={{req
                                     .code}}">
@@ -172,7 +178,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <!-- search form -->
                                     <div class='row'>
                                         <div class='col-12'>
-                                            <block class='Weline\Component\Block\Form\Search' id='translate-words-search'
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='translate-words-search'
                                                    action='*/backend/countries/locale/words'
                                                    method='get'
                                                    keyword='search' value=''
@@ -205,21 +212,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                             </a>
                                                         </td>
                                                         <td class='co-name'>{{word.word}}</td>
-                                                        <td data-field='translate' data-word='{{word.word}}' data-code="{{req.code}}"
-                                                            data-country-code="{{req.country_code}}" data-md5="{{word.md5}}" class='co-name'>{{word
-                                                            .translate}}</td>
+                                                        <td data-field='translate' data-word='{{word.word}}'
+                                                            data-code="{{req.params.code}}"
+                                                            data-country-code="{{req.params.country_code}}"
+                                                            data-md5="{{word.md5}}" class='co-name'>{{word
+                                                            .translate}}
+                                                        </td>
                                                         <td class='co-name'>{{word.create_time}}</td>
                                                         <td class='co-name'>{{locale.update_time}}</td>
                                                         <td class='co-action'>
                                                             <a class='btn btn-outline-secondary btn-sm word-restore'
                                                                data-md5='{{word.md5}}'
-                                                               data-code='{{req.code}}'
-                                                               data-country-code='{{req.country_code}}'
+                                                               data-code='{{req.params.code}}'
+                                                               data-country-code='{{req.params.country_code}}'
                                                                title='@lang{恢复}'>
                                                                 <i class='mdi mdi-restore-alert'
                                                                    data-md5='{{word.md5}}'
-                                                                   data-code='{{req.code}}'
-                                                                   data-country-code='{{req.country_code}}'></i>
+                                                                   data-code='{{req.params.code}}'
+                                                                   data-country-code='{{req.params.country_code}}'></i>
                                                             </a>
                                                         </td>
                                                     </tr>
@@ -230,7 +240,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         <empty name='words'>
                                             <lang>请</lang>
                                             <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req
-                                            .country_code}}&code={{req.code}}">
+                                            .params.country_code}}&code={{req.params.code}}">
                                                 <lang>更新（收集）</lang>
                                             </a>
                                             <lang>词典</lang>
