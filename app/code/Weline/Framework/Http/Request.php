@@ -9,7 +9,6 @@
 
 namespace Weline\Framework\Http;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Request\RequestFilter;
 use Weline\Framework\Manager\ObjectManager;
