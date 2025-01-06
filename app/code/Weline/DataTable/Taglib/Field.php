@@ -52,7 +52,7 @@ class Field implements TaglibInterface
             $sort_name = 'sort.' . $origin_sort_name;
             $current = $req->getGet('current', '');
             $current_sort_name = $current ? 'sort.' . $current : '';
-            $order = strtolower($req->getGet($current_sort_name, 'desc'));
+            $order = $current_sort_name ? strtolower($req->getGet($current_sort_name, 'desc')) : 'desc';
             $url = $attrs['url'] ?? '';
             $content = $tag_data[2] ?? '';
             $icon_str = '';
