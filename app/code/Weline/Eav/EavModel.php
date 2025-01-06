@@ -106,7 +106,7 @@ abstract class EavModel extends Model implements EavInterface
     /**
      * @inheritDoc
      */
-    public function getAttribute(string $code, int|string $eav_entity_id = null): EavAttribute|null
+    public function getAttribute(string $code, int|string $entity_id = 0): EavAttribute|null
     {
         // 如果已经有属性则直接返回
         /**@var EavAttribute $attribute */
@@ -115,9 +115,9 @@ abstract class EavModel extends Model implements EavInterface
             return $attribute;
         }
         # 特殊的实体ID
-        if ($eav_entity_id) {
+        if ($entity_id) {
             $entity = clone $this;
-            $entity = $entity->load($eav_entity_id);
+            $entity = $entity->load($entity_id);
             if (!$entity->getId()) {
                 return null;
             }

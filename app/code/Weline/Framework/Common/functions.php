@@ -35,18 +35,18 @@ use Weline\Framework\View\Cache\ViewCache;
 if (!function_exists('getStringBetweenContents')) {
     function getStringBetweenContents(string $str, string $startDelimiter, string $endDelimiter): array
     {
-        $contents             = [];
+        $contents = [];
         $startDelimiterLength = strlen($startDelimiter);
-        $endDelimiterLength   = strlen($endDelimiter);
-        $startFrom            = $contentStart = $contentEnd = 0;
+        $endDelimiterLength = strlen($endDelimiter);
+        $startFrom = $contentStart = $contentEnd = 0;
         while (false !== ($contentStart = strpos($str, $startDelimiter, $startFrom))) {
             $contentStart += $startDelimiterLength;
-            $contentEnd   = strpos($str, $endDelimiter, $contentStart);
+            $contentEnd = strpos($str, $endDelimiter, $contentStart);
             if (false === $contentEnd) {
                 break;
             }
             $contents[] = substr($str, $contentStart, $contentEnd - $contentStart);
-            $startFrom  = $contentEnd + $endDelimiterLength;
+            $startFrom = $contentEnd + $endDelimiterLength;
         }
 
         return $contents;
@@ -61,12 +61,12 @@ if (!function_exists('__')) {
      * @DateTime: 2021/8/16 22:48
      * 参数区：
      *
-     * @param string            $words
+     * @param string $words
      * @param array|string|null $args
      *
      * @return string
      */
-    function __(string $words, array|string|int $args = null): string
+    function __(string $words, array|string|int $args = ''): string
     {
         return \Weline\Framework\Phrase\Parser::parse($words, $args);
     }
@@ -107,8 +107,8 @@ if (!function_exists('w_var_export')) {
     {
         $export = var_export($expression, true);
         $export = preg_replace('/^([ ]*)(.*)/m', '$1$1$2', $export);
-        $array  = preg_split("/\r\n|\n|\r/", $export);
-        $array  = preg_replace(['/\s*array\s\($/', '/\)(,)?$/', '/\s=>\s$/'], [null, ']$1', ' => ['], $array);
+        $array = preg_split("/\r\n|\n|\r/", $export);
+        $array = preg_replace(['/\s*array\s\($/', '/\)(,)?$/', '/\s=>\s$/'], [null, ']$1', ' => ['], $array);
         $export = join(PHP_EOL, array_filter(['['] + $array));
         if ($return) {
             return $export;
@@ -188,9 +188,9 @@ if (!function_exists('framework_view_process_block')) {
             /**@var CacheInterface $cache */
             $cache = ObjectManager::getInstance(ViewCache::class)->create();
             /**@var Request $request */
-            $request   = ObjectManager::getInstance(Request::class);
+            $request = ObjectManager::getInstance(Request::class);
             $cache_key = $block_class . '_' . json_encode(array_merge($request->getParams(), $params));
-            $result    = $cache->get($cache_key) ?: '';
+            $result = $cache->get($cache_key) ?: '';
 //            if($block_class == 'Weline\Admin\Block\Backend\Page\Topnav'){
 //                p($result,1);
 //                p(ObjectManager::make($block_class, ['data' => $params])->render());

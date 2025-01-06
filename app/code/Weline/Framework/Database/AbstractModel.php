@@ -546,13 +546,13 @@ abstract class AbstractModel extends DataObject
      * @DateTime: 2022/12/24 2:03
      * 参数区：
      *
-     * @param array|string|null $field
+     * @param array|string $field
      * @param string $condition_field
      *
      * @return $this
      * @throws Null
      */
-    public function update(array|string $field = null, int|string|null $value_or_condition_field = ''): static
+    public function update(array|string $field = '', int|string $value_or_condition_field = ''): static
     {
         if (empty($value_or_condition_field)) {
             $value_or_condition_field = $this->_primary_key;
@@ -586,7 +586,7 @@ abstract class AbstractModel extends DataObject
      *
      * @return bool
      */
-    public function save(array|bool|AbstractModel $data = [], string|array $sequence = null): bool|int
+    public function save(array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
         if (is_object($data)) {
             $this->setModelData($data->getModelData());

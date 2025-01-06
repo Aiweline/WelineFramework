@@ -19,9 +19,9 @@ abstract class Model extends AbstractModel implements ModelInterface
     public function columns(): array
     {
         $cache_key = $this->getTable() . '_columns';
-        if ($columns = $this->_cache->get($cache_key)) {
-            return $columns;
-        }
+//        if ($columns = $this->_cache->get($cache_key)) {
+//            return $columns;
+//        }
         $columns = $this->query("SHOW FULL COLUMNS FROM {$this->getTable()} ")->fetchArray();
         $this->_cache->set($cache_key, $columns);
         return $columns;

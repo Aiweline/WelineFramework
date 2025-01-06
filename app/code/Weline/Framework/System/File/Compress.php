@@ -38,22 +38,22 @@ class Compress
      *
      * 参数区：
      *
-     * @param string      $path
+     * @param string $path
      * @param string|null $to_path
      * @param string|null $zip_base_path
      *
      * @return string
      * @throws Exception
      */
-    public function compression(string $path, string $to_path = null, string $zip_base_path = null)
+    public function compression(string $path, string $to_path = '', string $zip_base_path = '')
     {
-        $path            = rtrim($path, DS);
+        $path = rtrim($path, DS);
         $this->base_path = $zip_base_path ? $zip_base_path : dirname($path);
-        $parent_dir      = dirname($path);
-        $filename        = $parent_dir . DS . '.zip';
+        $parent_dir = dirname($path);
+        $filename = $parent_dir . DS . '.zip';
         if ($to_path) {
             $parent_dir_arr = explode(DS, $path);
-            $filename       = $to_path . '.zip';
+            $filename = $to_path . '.zip';
         }
         if ($this->zipArchive->open($filename, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
             try {
@@ -126,7 +126,7 @@ class Compress
      * 参数区：
      *
      * @param string $file_name 添加的字符串在压缩包里的命名 支持路径命名 比如：add/string.txt
-     * @param string $string    添加的字符串文本内容 比如：'Is file content'
+     * @param string $string 添加的字符串文本内容 比如：'Is file content'
      *
      * @return $this
      */
@@ -142,12 +142,12 @@ class Compress
      *
      * 参数区：
      *
-     * @param string      $zip_file
+     * @param string $zip_file
      * @param string|null $out_dir
      *
      * @return $this
      */
-    public function deCompression(string $zip_file, string $out_dir = null)
+    public function deCompression(string $zip_file, string $out_dir = '')
     {
         /*
          通过ZipArchive的对象处理zip文件

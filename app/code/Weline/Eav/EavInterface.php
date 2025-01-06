@@ -16,9 +16,9 @@ use Weline\Eav\Model\EavAttribute;
 
 interface EavInterface
 {
-    const  entity_code            = '';
-    const  entity_name            = '';
-    const  eav_entity_id_field_type   = '';
+    const  entity_code = '';
+    const  entity_name = '';
+    const  eav_entity_id_field_type = '';
     const  eav_entity_id_field_length = 0;
 
     /**
@@ -80,7 +80,7 @@ interface EavInterface
      * @return mixed
      */
     public function addAttribute(string $code, string $name, string $type, bool $multi_value = false, bool $has_option = false, bool $is_system = false,
-                                 bool   $is_enable = true, string $group_code='default', string $set_code='default'): bool;
+                                 bool   $is_enable = true, string $group_code = 'default', string $set_code = 'default'): bool;
 
     /**
      * @DESC          # 设置属性
@@ -104,8 +104,8 @@ interface EavInterface
      * @DateTime: 2023/3/6 21:36
      * 参数区：
      *
-     * @param string $code         属性代码
-     * @param bool   $remove_value 卸载该属性【所有值】
+     * @param string $code 属性代码
+     * @param bool $remove_value 卸载该属性【所有值】
      *
      * @return bool
      */
@@ -119,13 +119,13 @@ interface EavInterface
      * @DateTime: 2023/3/6 20:53
      * 参数区：
      *
-     * @param string          $code      属性的代码
+     * @param string $code 属性的代码
      *
-     * @param int|string|null $eav_entity_id 实体的具体ID【例如产品ID,分类ID,具体要看实体是哪个】
+     * @param int|string $entity_id 实体的具体ID【例如产品ID,分类ID,具体要看实体是哪个】
      *
      * @return \Weline\Eav\Model\EavAttribute|null
      */
-    public function getAttribute(string $code, int|string $eav_entity_id = null): EavAttribute|null;
+    public function getAttribute(string $code, int|string $entity_id = 0): EavAttribute|null;
 
     /**
      * @DESC          # 返回多个属性
