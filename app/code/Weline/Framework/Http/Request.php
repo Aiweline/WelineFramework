@@ -203,6 +203,49 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->checkResult($key, $result);
     }
 
+    public function getGetByPre(string $pre_key, bool $filter_value = false): array
+    {
+        $data = [];
+        foreach ($_GET as $key_ => $item) {
+            if ($filter_value and empty($item)) {
+                continue;
+            }
+            if (str_starts_with($key_, $pre_key)) {
+                $key_ = str_replace($pre_key, '', $key_);
+                $data[$key_] = $item;
+            }
+        }
+        return $data;
+    }
+
+    public function setGetByPre(string $pre_key, array $data = []): self
+    {
+        foreach ($_GET as $g_key => $item) {
+            if (str_starts_with($g_key, $pre_key)) {
+                unset($_GET[$g_key]);
+            }
+        }
+        foreach ($data as $key => $value) {
+            $_GET[$pre_key . $key] = $value;
+        }
+        return $this;
+    }
+
+    public function unsetGetByPrekey(string $pre_key): self
+    {
+        foreach ($_GET as $g_key => $item) {
+            if (str_starts_with($g_key, $pre_key)) {
+                unset($_GET[$g_key]);
+            }
+        }
+        return $this;
+    }
+
+    public function hasGet(string $key): bool
+    {
+        return isset($_GET[$key]);
+    }
+
     private function checkResult(string $key, mixed &$result): mixed
     {
         if ($this->check_param) {
