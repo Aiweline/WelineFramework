@@ -190,9 +190,6 @@ abstract class Query implements QueryInterface
                 }
             }
             $this->insert_need_fields = $insert_need_fields;
-            if (in_array('display_locale_code', $update_where_fields)) {
-                \Weline\Framework\App\Env::log('sql1', implode(',', $insert_need_fields), false);
-            }
             # 区分更新或者插入
             foreach ($this->insert['origin'] as $item) {
                 # 检测个数据是否有需要更新的字段以及更新依据字段的字段数据
@@ -556,7 +553,7 @@ abstract class Query implements QueryInterface
                 'sql' => $this->getSql(false),
                 'data' => $this->bound_values
             ];
-            Env::log($file, json_encode($data));
+            Env::log($file, $this->getSql(false));
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
