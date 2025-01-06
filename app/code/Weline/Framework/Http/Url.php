@@ -183,19 +183,33 @@ class Url implements UrlInterface
         if (empty($url)) {
             $url = $this->request->getBaseUrl();
         }
-        $param_split_string = '?';
+        $url_params = [];
         if (strpos($url, '?') !== false) {
-            $param_split_string = '&';
+            $url_arrs = explode('?', $url);
+            $url_query = $url_arrs[1];
+            $url_params = explode('&', $url_query);
+            foreach ($url_params as $key => $url_param) {
+                unset($url_params[$key]);
+                $url_param_arr = explode('=', $url_param);
+                $url_params[$url_param_arr[0]] = $url_param_arr[1];
+            }
+            $url = $url_arrs[0];
+        }
+        if($url_params){
+            if($params){
+                $params = array_merge($url_params,$params);
+            }else{
+                $params = $url_params;
+            }
         }
         if ($params) {
             if ($merge_params) {
-                $url .= $param_split_string . http_build_query(array_merge($this->request->getGet(), $params));
+                $url .= '?'.http_build_query(array_merge($this->request->getGet(), $params));
             } else {
-                $url .= $param_split_string . http_build_query($params);
+                $url .= '?'.http_build_query($params);
             }
-        } else {
-            $url .= ($this->request->getGet() && $merge_params) ? $param_split_string . http_build_query($this->request->getGet()) : '';
         }
+
         return self::removeExtraDoubleSlashes($url);
     }
 
@@ -224,8 +238,9 @@ class Url implements UrlInterface
         return self::removeExtraDoubleSlashes($this->getUrlOrigin($s, $use_forwarded_host) . '/' . ($s['ORIGIN_REQUEST_URI'] ?? $s['REQUEST_URI']));
     }
 
-    public function getCurrentUrl(): string
+    public function getCurrentUrl(array $params = []): string
     {
-        return self::removeExtraDoubleSlashes($this->getUrlOrigin($_SERVER, false) . '/' . ($_SERVER['ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI']));
+        $url = self::removeExtraDoubleSlashes($this->getUrlOrigin($_SERVER, false) . '/' . ($_SERVER['ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI']));
+        return $this->extractedUrl($params, true, $url);
     }
 }
