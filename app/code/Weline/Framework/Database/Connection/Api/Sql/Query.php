@@ -173,9 +173,10 @@ abstract class Query implements QueryInterface
             }
             # 需要插入的字段
             $insert_need_fields = array_merge($this->_unit_primary_keys, $this->insert_update_where_fields);
-
+            $this->insert_need_fields = $insert_need_fields;
             # 检测要更新的字段主键对应值是否存在，如果存在且非数字，那么插入的数据认为是无法自增的，需要的字段要包含主键
             $first_insert_item = $this->insert['origin'][0] ?? [];
+            $first_insert_item_keys = array_keys($first_insert_item);
             if (!isset($first_insert_item[$this->identity_field]) or is_numeric($first_insert_item[$this->identity_field])) {
                 foreach ($insert_need_fields as $insert_need_field_key => $insert_need_field) {
                     if ($insert_need_field == $this->identity_field) {
@@ -184,12 +185,19 @@ abstract class Query implements QueryInterface
                     }
                 }
             }
+            # 调整$this->insert_need_fields字段顺序
+            foreach ($first_insert_item_keys as $first_insert_item_key_index => $first_insert_item_key) {
+                $this->insert_need_fields[$first_insert_item_key_index] = $first_insert_item_key;
+            }
+            # 如果长度不一致报错
+            if (count($this->insert_need_fields) != count($first_insert_item_keys)) {
+                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%1，实际字段: %2', [implode(',', $insert_need_fields), implode(',', $first_insert_item_keys)]));
+            }
             foreach ($first_insert_item as $f => $fv) {
                 if (!in_array($f, $insert_need_fields)) {
                     $insert_need_fields[] = $f;
                 }
             }
-            $this->insert_need_fields = $insert_need_fields;
             # 区分更新或者插入
             foreach ($this->insert['origin'] as $item) {
                 # 检测个数据是否有需要更新的字段以及更新依据字段的字段数据
@@ -220,7 +228,6 @@ abstract class Query implements QueryInterface
                 }
             }
         }
-
 
         # 获取字段
         $fields = '(';
