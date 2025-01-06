@@ -26,10 +26,6 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
      * @var I18n
      */
     private I18n $i18n;
-    /**
-     * @var \Weline\Framework\Http\Request
-     */
-    private Request $request;
 
     /**
      * GetWordsFile 初始函数...
@@ -37,12 +33,10 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
      * @param I18n $i18n
      */
     public function __construct(
-        I18n $i18n,
-        Request $request
+        I18n $i18n
     )
     {
         $this->i18n = $i18n;
-        $this->request = $request;
     }
 
     /**
