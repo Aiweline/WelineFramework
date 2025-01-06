@@ -191,7 +191,7 @@ class Url implements UrlInterface
             foreach ($url_params as $key => $url_param) {
                 unset($url_params[$key]);
                 $url_param_arr = explode('=', $url_param);
-                $url_params[$url_param_arr[0]] = $url_param_arr[1];
+                $url_params[$url_param_arr[0]] = $url_param_arr[1]??'';
             }
             $url = $url_arrs[0];
         }
