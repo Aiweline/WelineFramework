@@ -414,7 +414,7 @@ class App
      *
      * 参数区：
      */
-    public function install()
+    public function install(): void
     {
         require BP . 'setup/index.php';
     }
