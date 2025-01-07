@@ -189,9 +189,10 @@ abstract class Query implements QueryInterface
             foreach ($first_insert_item_keys as $first_insert_item_key_index => $first_insert_item_key) {
                 $this->insert_need_fields[$first_insert_item_key_index] = $first_insert_item_key;
             }
+            $this->insert_need_fields = array_unique($this->insert_need_fields);
             # 如果长度不一致报错
             if (count($this->insert_need_fields) != count($first_insert_item_keys)) {
-                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%1，实际字段: %2', [implode(',', $insert_need_fields), implode(',', $first_insert_item_keys)]));
+                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%1，实际字段: %2', [implode(',', $this->insert_need_fields), implode(',', $first_insert_item_keys)]));
             }
             foreach ($first_insert_item as $f => $fv) {
                 if (!in_array($f, $insert_need_fields)) {

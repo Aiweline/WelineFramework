@@ -332,10 +332,12 @@ class I18n
         if (self::$local_words and $cache) {
             return self::$local_words;
         }
+        $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
         if ($cache) {
-            $all_locals_words_file = Env::path_TRANSLATE_FILES_PATH . 'default.php';
             if (!file_exists($all_locals_words_file)) {
                 touch($all_locals_words_file);
+                $text = '<?php return ' . w_var_export([], true) . ';';
+                file_put_contents($all_locals_words_file, $text);
             }
             $all_locals_words = (array)(include $all_locals_words_file);
             if (!empty($all_locals_words)) {
