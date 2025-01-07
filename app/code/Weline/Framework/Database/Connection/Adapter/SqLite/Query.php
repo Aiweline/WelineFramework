@@ -21,6 +21,23 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 {
     use SqlTrait;
 
+    public function splitSqlStatements($sql)
+    {
+        // 正则表达式匹配不在引号内的分号
+        $pattern = '/;(?=(?:[^\'"]|\'[^\']*\'|"[^"]*")*$)/';
+
+        // 使用正则表达式拆分SQL语句
+        $statements = preg_split($pattern, $sql);
+
+        // 去除每个语句的前后空格
+        $statements = array_map('trim', $statements);
+
+        // 过滤掉空语句
+        $statements = array_filter($statements);
+
+        return $statements;
+    }
+
     public function fetch(string $model_class = ''): mixed
     {
         if (Env::get('db_log.enabled') or DEBUG) {
@@ -44,12 +61,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         } else {
             # SQLITE 不支持多结果集：智能将SQL语句打散，并逐条执行后返回结果集
             $sql = $this->getSqlWithBounds($this->sql);
-            // 使用正则表达式匹配SQL语句
-            preg_match_all('/((?:[^;\'"]|\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*")+);/', $sql, $matches);
-            $result = $this->PDOStatement->execute($this->bound_values);
-            // $matches[0] 包含所有匹配的语句
-            $statements = $matches[0];
+            $statements = $this->splitSqlStatements($sql);
             if (count($statements) == 1) {
+                $result = $this->PDOStatement->execute($this->bound_values);
                 $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
             } else {
                 $origin_data = [];
