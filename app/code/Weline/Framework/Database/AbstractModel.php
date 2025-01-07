@@ -1626,6 +1626,7 @@ PAGINATION;
         } else {
             $check_result = $this->unique_data;
         }
+
         # 存在更新
         if (isset($check_result[$this->_primary_key])) {
             # 新增更新依赖主键

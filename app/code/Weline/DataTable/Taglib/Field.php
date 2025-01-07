@@ -65,9 +65,12 @@ class Field implements TaglibInterface
             $sorts = $req->getGetByPre('sort.');
             if (!$multi) { # 非多字段排序，卸载掉其他字段，保留current指定的排序
                 foreach ($sorts as $key => $sort) {
-                    if ($key != $current_sort_name) {
-                        $sorts[$key] = '';
+                    if ($key != $current) {
+                        $sorts['sort.'.$key] = '';
+                    }else{
+                        $sorts['sort.'.$key] = $sort;
                     }
+                    unset($sorts[$key]);
                 }
             }
             $url_params = array_merge($url_params, $sorts);
