@@ -64,7 +64,7 @@ class Collect implements CommandInterface
                     $taskObject = ObjectManager::getInstance($task);
                     if($taskObject instanceof \Weline\Cron\CronTaskInterface){
                         $this->cronTask->clearData()
-                            ->setData(CronTask::fields_NAME, $taskObject->name(), true)
+                            ->setData(CronTask::fields_NAME, $taskObject->name())
                             ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
                             ->setData(CronTask::fields_CLASS, $taskObject::class)
                             ->setData(CronTask::fields_TIP, $taskObject->tip())
