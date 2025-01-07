@@ -264,6 +264,14 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->getMethod() === self::POST;
     }
 
+    public function getFile(string $key = '')
+    {
+        if ($key) {
+            return $_FILES[$key] ?? null;
+        }
+        return $_FILES;
+    }
+
     public function isGet(bool $set_get = false): bool
     {
         if ($set_get) {
