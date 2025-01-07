@@ -49,6 +49,7 @@
 
             // 获取点击元素的位置
             const rect = deleteElement.getBoundingClientRect();
+            const msg = deleteElement.getAttribute('msg');
 
             // 计算相对于整个文档的位置
             let offsetX = window.scrollX || document.documentElement.scrollLeft;
@@ -94,6 +95,9 @@
             // 设置确认框的位置
             confirmation.style.left = `${confirmationLeft}px`;
             confirmation.style.top = `${confirmationTop}px`;
+
+            // 设置确认框的文本
+            confirmation.innerHTML = `<div>${msg}</div>`;
 
             // 创建“确认”按钮
             const confirmButton = document.createElement('button');
