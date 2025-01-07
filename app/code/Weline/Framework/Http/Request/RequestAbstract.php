@@ -63,8 +63,10 @@ abstract class RequestAbstract extends RequestFilter
             foreach ($query_str_arr as $item) {
                 if(str_contains($item, '.')){
                     $item = explode('=', $item);
-                    $_GET[$item[0]] = $item[1];
-                    unset($_GET[str_replace('.', '_', $item[0])]);
+                    if(str_contains($item[0], '.')){
+                        $_GET[$item[0]] = $item[1];
+                        unset($_GET[str_replace('.', '_', $item[0])]);
+                    }
                 }
             }
         }
