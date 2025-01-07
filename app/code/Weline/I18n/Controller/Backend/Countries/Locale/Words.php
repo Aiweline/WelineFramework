@@ -16,6 +16,7 @@ namespace Weline\I18n\Controller\Backend\Countries\Locale;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Cache\PhraseCache;
 use Weline\I18n\Cache\I18nCache;
@@ -68,7 +69,7 @@ class Words extends BaseController
                 $this->dictionary->commit();
             } catch (\Exception $exception) {
                 $this->dictionary->rollBack();
-                $this->getMessageManager()->addException($exception);
+                Message::exception($exception);
                 $this->redirect('*/backend/countries/locales', $this->request->getParams());
             }
         }
@@ -103,7 +104,7 @@ class Words extends BaseController
             ->find()
             ->fetch();
         if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('该区域未激活或者未安装！'));
+            Message::warning(__('该区域未激活或者未安装！'));
         }
         $this->assign('locale', $locale);
         // 如果存在搜索
@@ -265,7 +266,10 @@ REGISTER_CONTENT;
         if (!is_file($pack_file)) {
             touch($pack_file);
         }
-        $locale_dictionaries = $this->localeDictionary->where($this->localeDictionary::fields_LOCALE_CODE, $code)->select()->fetchArray();
+        $locale_dictionaries = $this->localeDictionary
+            ->where($this->localeDictionary::fields_LOCALE_CODE, $code)
+            ->select()
+            ->fetchArray();
         $pack_file_content = '';
         foreach ($locale_dictionaries as $locale_dictionary) {
             $pack_file_content .= $locale_dictionary['word'] . ',' . $locale_dictionary['translate'] . PHP_EOL;
@@ -278,13 +282,13 @@ REGISTER_CONTENT;
         /**@var \Weline\Framework\Cache\CacheInterface $phrase */
         $phrase = ObjectManager::getInstance(PhraseCache::class . 'Factory');
         $phrase->clear();
-        $this->getMessageManager()->addSuccess(__('成功清理i18n缓存！'));
+        Message::success(__('成功清理i18n缓存！'));
         // 清理生成的模板缓存文件
         /**@var System $system */
         $system = ObjectManager::getInstance(System::class);
         $system->exec('rm -rf ' . Env::path_framework_generated_complicate);
-        $this->getMessageManager()->addSuccess(__('成功清理系统模板缓存文件！'));
-        $this->getMessageManager()->addSuccess(__('成功发布！'));
+        Message::success(__('成功清理系统模板缓存文件！'));
+        Message::success(__('成功发布！'));
         $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
     }
 
