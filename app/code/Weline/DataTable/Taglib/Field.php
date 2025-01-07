@@ -26,7 +26,7 @@ class Field implements TaglibInterface
             'name' => true,
             'sortable' => false,
             'url' => false,
-            'sort' => false,
+            'multi' => false,
             'icon' => false,
         ];
     }
@@ -46,39 +46,54 @@ class Field implements TaglibInterface
         return function ($tag_key, $config, $tag_data, $attrs) {
             /** @var Request $req */
             $req = ObjectManager::getInstance(Request::class);
+            # url构造参数
+            $url_params = $_GET;
+
             $name = $attrs['name'] ?? '';
+            $multi = boolval($attrs['multi'] ?? false);
             $sortable = boolval($attrs['sortable'] ?? self::default_sortable);
-            $origin_sort_name = ($attrs['sort'] ?? $name);
-            $sort_name = 'sort.' . $origin_sort_name;
+            $sort_name = 'sort.' . $name;
+
+            $url_params['current'] = $name;
+
             $current = $req->getGet('current', '');
             $current_sort_name = $current ? 'sort.' . $current : '';
+
             $order = $current_sort_name ? strtolower($req->getGet($current_sort_name, 'desc')) : 'desc';
+
+            # 获取所有排序
+            $sorts = $req->getGetByPre('sort.');
+            if (!$multi) { # 非多字段排序，卸载掉其他字段，保留current指定的排序
+                foreach ($sorts as $key => $sort) {
+                    if ($key != $current_sort_name) {
+                        $sorts[$key] = '';
+                    }
+                }
+            }
+            $url_params = array_merge($url_params, $sorts);
+
             $url = $attrs['url'] ?? '';
             $content = $tag_data[2] ?? '';
+
+            # 当前字段可排序时显示排序图标，并且当前字段如果被激活，则显示当前排序状态
             $icon_str = '';
-            $field_active = $sort_name == $current_sort_name;
+            $field_active = $sort_name == $current_sort_name; # 当前字段是否激活
             if ($sortable) {
                 $icon_str = "<i class=\"fa fa-sort{{icon}}\"></i>";
                 # 排序取反
                 $icon_status = '';
                 if ($order and $field_active) {
                     $order = $order == 'asc' ? 'desc' : 'asc';
-                    $icon_status = $order == 'asc' ? '-down' : '-up';
+                    $icon_status = $order == 'asc' ? '-down' : '-asc';
                 }
                 $icon_str = str_replace('{{icon}}', $icon_status, $icon_str);
             }
             # 生成各个字段排序url
             # -- 排序修改成 当前字段
-            $params['current'] = $origin_sort_name;
-            $params['sort.' . $origin_sort_name] = $order;
-            # 卸载其他排序
-            foreach ($_GET as $key => $item) {
-                if (str_contains($key, 'sort.')) {
-                    unset($_GET[$key]);
-                }
-            }
-            $url = $url ?: $req->getUrlBuilder()->getCurrentUrl($_GET, false);
-            $url = $req->getUrlBuilder()->extractedUrl($params, true, $url);
+            $url_params['sort.' . $url_params['current']] = $order;
+
+            $url = $url ?: $req->getUrlBuilder()->getCurrentUrl($url_params, false);
+            $url = $req->getUrlBuilder()->extractedUrl($url_params, false, $url);
             $start = <<<DOC
 <div data-field="$name" data-sort-field="$sort_name" class="table-head-item border-1">
 DOC;
