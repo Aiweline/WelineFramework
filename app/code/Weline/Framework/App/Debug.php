@@ -20,7 +20,7 @@ class Debug
     {
         # 无值看看是否有键名
         if (!$value) {
-            return (bool)($_ENV['w-debug'][$env_key] ?? false);
+            return isset($_ENV['w-debug'][$env_key]);
         }
         # 有值看看值是否相等
         $env_value = $_ENV['w-debug'][$env_key] ?? null;
