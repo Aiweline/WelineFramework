@@ -4,16 +4,10 @@ namespace Weline\Framework\App;
 
 class Debug
 {
-    public static function env(string $env_key, mixed $value = ''): mixed
+    public static function env(string $env_key, mixed $value = null): mixed
     {
-        # 有值设置值
-        if ($value) {
-            $_ENV['w-debug'][$env_key] = $value;
-            return true;
-        } else {
-            # 无值获取环境值
-            return $_ENV['w-debug'][$env_key] ?? null;
-        }
+        $_ENV['w-debug'][$env_key] = $value;
+        return $value;
     }
 
     public static function target(string $env_key, mixed $value = ''): mixed
