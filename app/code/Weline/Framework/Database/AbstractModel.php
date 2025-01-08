@@ -625,7 +625,7 @@ abstract class AbstractModel extends DataObject
         if ($this->_primary_key and $this->getId()) {
             $this->unique_data[$this->_primary_key] = $this->getId();
         }
-        if (Debug::target('ddd','123')) {
+        if (Debug::target('ddd')) {
             dd($this->unique_data);
         }
 //        dd($this->unique_data);
