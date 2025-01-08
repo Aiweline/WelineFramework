@@ -47,7 +47,6 @@ abstract class Query implements QueryInterface
     public array $order = [];
     public string $group_by = '';
     public string $having = '';
-    public string $test_code = '';
 
     public int $total = 0;
 
@@ -885,12 +884,6 @@ abstract class Query implements QueryInterface
         }
         // 关闭备份文件和数据库连接
         fclose($file);
-        return $this;
-    }
-
-    public function test(string $code = ''): static
-    {
-        $this->test_code = $code;
         return $this;
     }
 }
