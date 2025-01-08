@@ -10,6 +10,7 @@
 namespace Weline\Framework\Database;
 
 use Weline\BackendActivity\Model\BackendActivityLog;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Cache\DbModelCache;
@@ -1626,7 +1627,6 @@ PAGINATION;
         } else {
             $check_result = $this->unique_data;
         }
-
         # 存在更新
         if (isset($check_result[$this->_primary_key])) {
             # 新增更新依赖主键
@@ -1647,6 +1647,7 @@ PAGINATION;
                     unset($data[$f]);
                 }
             }
+
             # 条件中有主键时，去除主键
             if ($this->force_check_fields and !in_array($this->_primary_key, $this->force_check_fields)) {
                 unset($data[$this->_primary_key]);
