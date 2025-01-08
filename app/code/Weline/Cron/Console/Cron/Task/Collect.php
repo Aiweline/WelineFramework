@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Cron\Console\Cron\Task;
 
 use Weline\Cron\Model\CronTask;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
