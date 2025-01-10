@@ -46,6 +46,7 @@ class AiGenerateReview implements CronTaskInterface
      */
     function execute(): string
     {
+        sleep(50);
         return '不执行！';
         $url = 'https://www.aiweline.com/zh_Hans_CN/ai/v1/chat/completions?q=';
         $q = "
