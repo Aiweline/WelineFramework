@@ -32,19 +32,21 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
     public function create(string $name): array
     {
         if (!$this->exist($name)) {
-            $base_project_dir       = BP;
+            $base_project_dir = BP;
             $base_project_disk_name = substr($base_project_dir, 0, 2);
-            # FIXME bat弹窗问题 有vbs版本可以解决此问题，先不处理
-            $php_binary = PHP_BINARY;
-            $bat_string = "
-@echo off
-Rem WelineFramework框架 Window计划任务脚本
-$base_project_disk_name && cd $base_project_dir && $php_binary bin/m cron:task:run
-";
-            $bat_file   = Env::path_framework_generated . $name . '-cron.bat';
-            file_put_contents($bat_file, $bat_string);
-            $create_command = "SCHTASKS /Create /TN $name /TR $bat_file /SC MINUTE";
-            $data           = $this->system->win_exec($create_command);
+            $php_binary = PHP_BINARY; // 确保路径安全
+            $command = "cmd /c \"\" $base_project_disk_name  && cd $base_project_dir && $php_binary bin/m cron:task:run\"\"";
+            $vbs_string = <<<VBS
+Set WshShell = CreateObject("WScript.Shell") 
+command = "$command"
+WshShell.Run command, 0, True
+Set WshShell = Nothing
+VBS;
+            $vbs_file = Env::path_framework_generated . $name . '-cron.vbs';
+            file_put_contents($vbs_file, $vbs_string);
+            // 创建计划任务
+            $create_command = "SCHTASKS /Create /TN \\$name /TR \"$vbs_file\" /SC MINUTE /F";
+            $data = $this->system->win_exec($create_command);
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => []];
@@ -63,8 +65,8 @@ $base_project_disk_name && cd $base_project_dir && $php_binary bin/m cron:task:r
     public function remove(string $name): array
     {
         # 删除脚本
-        if (Env::path_framework_generated . $name . '-cron.bat') {
-            unlink(Env::path_framework_generated . $name . '-cron.bat');
+        if (Env::path_framework_generated . $name . '-cron.vbs') {
+            unlink(Env::path_framework_generated . $name . '-cron.vbs');
         }
         if ($this->exist($name)) {
             $data = $this->system->win_exec("schtasks /Delete /tn $name /F");
