@@ -625,9 +625,7 @@ abstract class AbstractModel extends DataObject
         if ($this->_primary_key and $this->getId()) {
             $this->unique_data[$this->_primary_key] = $this->getId();
         }
-        if (Debug::target('ddd')) {
-            dd($this->unique_data);
-        }
+
 //        dd($this->unique_data);
         // 如果强制检测更新，但是没有任何条件则使用联合主键的方式进行条件装配
         if ($this->force_check_flag && empty($this->unique_data)) {
