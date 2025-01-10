@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
 use http\Env;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Exception\DbException;
@@ -271,6 +272,7 @@ trait SqlTrait
 
             $wheres = rtrim($wheres, $logic);
         }
+
         # 排序
         $order = '';
         foreach ($this->order as $field => $dir) {
@@ -402,7 +404,9 @@ trait SqlTrait
                     $insert_key += 1;
                     if ($this->identity_field && empty($insert[$this->identity_field])) {
                         unset($insert[$this->identity_field]);
-                        $identity_inserts_sql .= "INSERT INTO {$this->table} ({$identity_inserts_fields}) VALUES (";
+                        $insert_fields = array_keys($insert);
+                        $insert_fields = '`' . implode('`,`', $insert_fields) . '`';
+                        $identity_inserts_sql .= "INSERT INTO {$this->table} ({$insert_fields}) VALUES (";
                         foreach ($insert as $insert_field => $insert_value) {
                             $insert_bound_key = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
                             $this->bound_values[$insert_bound_key] = (string)$insert_value;
@@ -426,6 +430,7 @@ trait SqlTrait
                 if ($has_identify_field_insert && $has_no_identify_field_insert) {
                     throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
                 }
+
                 $values = rtrim($values, ',');
                 $sql = $update_inserts_sql . $identity_inserts_sql;
                 if (!empty($values)) {
