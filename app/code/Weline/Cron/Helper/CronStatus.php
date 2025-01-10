@@ -26,9 +26,6 @@ enum CronStatus: string
         if($current>$total){
             $current = $total;
         }
-        if(empty($total)){
-            $total = 1;
-        }
         if ($scoall) echo PHP_EOL;
         $percentage      = (int)round(($current / $total) * 100);
         if(empty($percentage)){

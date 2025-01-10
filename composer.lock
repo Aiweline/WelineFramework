@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6f3525b91721b8f7537489f0ebadf7d3",
+    "content-hash": "145beb360f7583d29c5749f94e11d7e1",
     "packages": [
         {
             "name": "brick/math",
@@ -1922,6 +1922,63 @@
                 "source": "https://github.com/php-http/multipart-stream-builder/tree/1.4.2"
             },
             "time": "2024-09-04T13:22:54+00:00"
+        },
+        {
+            "name": "phpclassic/php-shopify",
+            "version": "v1.2.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/phpclassic/php-shopify.git",
+                "reference": "628b137a33a2c416c299699e48a970b2161f6074"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/phpclassic/php-shopify/zipball/628b137a33a2c416c299699e48a970b2161f6074",
+                "reference": "628b137a33a2c416c299699e48a970b2161f6074",
+                "shasum": "",
+                "mirrors": [
+                    {
+                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
+                        "preferred": true
+                    }
+                ]
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "php": ">=5.6"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^5.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "PHPShopify\\": "lib/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Tareq Mahmood",
+                    "email": "tareqtms@yahoo.com"
+                }
+            ],
+            "description": "PHP SDK for Shopify API",
+            "homepage": "https://github.com/phpclassic/php-shopify",
+            "keywords": [
+                "php",
+                "sdk",
+                "shopify"
+            ],
+            "support": {
+                "issues": "https://github.com/phpclassic/php-shopify/issues",
+                "source": "https://github.com/phpclassic/php-shopify/tree/v1.2.11"
+            },
+            "time": "2024-10-19T08:41:38+00:00"
         },
         {
             "name": "phpmailer/phpmailer",
