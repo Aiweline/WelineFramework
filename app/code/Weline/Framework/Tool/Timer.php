@@ -35,7 +35,7 @@ class Timer
                 $dateTime->modify($offset . ' day');
                 $dayStart = $dateTime->format('Y-m-d ' . $start_time);
                 // 这一年的第几天
-                $dayNumber = $dateTime->format('z').__('天');
+                $dayNumber = (intval($dateTime->format('z')) + 1) . __('天');
                 return [
                     'start' => $dayStart,
                     'end' => '',
@@ -53,7 +53,7 @@ class Timer
                 $dateTime->modify('this week sunday');
                 $weekEnd = $dateTime->format('Y-m-d ' . $end_time);
                 // 一年中的第几周
-                $weekNumber = $dateTime->format('W').__('周');
+                $weekNumber = $dateTime->format('W') . __('周');
                 return [
                     'start' => $weekStart,
                     'end' => $weekEnd,
@@ -67,7 +67,7 @@ class Timer
                 $dateTime->modify('last day of this month');
                 $monthEnd = $dateTime->format('Y-m-t ' . $end_time);
                 // 一年中的第几个月
-                $monthNumber = $dateTime->format('m').__('月');
+                $monthNumber = $dateTime->format('m') . __('月');
                 return [
                     'start' => $monthStart,
                     'end' => $monthEnd,
@@ -91,7 +91,7 @@ class Timer
                 $firstDayOfQuarter = date('Y-m-d ' . $start_time, strtotime("$year-$startMonth-01"));
                 $lastDayOfQuarter = date('Y-m-t ' . $end_time, strtotime("$year-$endMonth-01"));
                 // 一年中的第几个季度
-                $quarterNumber = $quarter.__('季度');
+                $quarterNumber = $quarter . __('季度');
                 return ['start' => $firstDayOfQuarter, 'end' => $lastDayOfQuarter, 'i' => $quarterNumber];
             default:
                 return $date;
