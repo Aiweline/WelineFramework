@@ -12,8 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
+use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Model\CronTask;
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -63,9 +63,9 @@ class Collect implements CommandInterface
                 foreach ($tasks as $task) {
                     /**@var \Weline\Cron\CronTaskInterface $taskObject */
                     $taskObject = ObjectManager::getInstance($task);
-                    if($taskObject instanceof \Weline\Cron\CronTaskInterface){
+                    if($taskObject instanceof CronTaskInterface){
                         $this->cronTask->clearData()
-                            ->setData(CronTask::fields_NAME, $taskObject->name())
+                            ->setData(CronTask::fields_NAME, $taskObject->name(), true)
                             ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
                             ->setData(CronTask::fields_CLASS, $taskObject::class)
                             ->setData(CronTask::fields_TIP, $taskObject->tip())

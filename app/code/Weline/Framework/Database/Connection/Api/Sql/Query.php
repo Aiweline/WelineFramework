@@ -13,6 +13,7 @@ namespace Weline\Framework\Database\Connection\Api\Sql;
 
 use PDO;
 use PDOStatement;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Exception\DbException;
@@ -129,6 +130,7 @@ abstract class Query implements QueryInterface
                 $this->insert_update_fields = $update_fields;
             }
         }
+
         # 更新依据条件
         if (is_string($update_where_fields) and $update_where_fields) {
             $update_where_fields = explode(',', $update_where_fields);
@@ -138,12 +140,14 @@ abstract class Query implements QueryInterface
         }
         # 如果没有忽略主键，则需要添加主键
         if (!$ignore_primary_key) {
-            if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
+            if (empty($this->insert_update_where_fields) and !in_array($this->identity_field, $this->insert_update_where_fields)) {
                 $this->insert_update_where_fields[] = $this->identity_field;
             }
-            foreach ($this->_unit_primary_keys as $unit_primary_key) {
-                if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
-                    $this->insert_update_where_fields[] = $unit_primary_key;
+            if(empty($this->insert_update_where_fields)){
+                foreach ($this->_unit_primary_keys as $unit_primary_key) {
+                    if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
+                        $this->insert_update_where_fields[] = $unit_primary_key;
+                    }
                 }
             }
             # 倒序

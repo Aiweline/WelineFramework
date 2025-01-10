@@ -81,7 +81,7 @@ interface AlterInterface
      *
      * @return AlterInterface
      */
-    public function addColumn(string $field_name, string $after_column, string $type, ?int $length, string $options, string $comment): AlterInterface;
+    public function addColumn(string $field_name, string $after_column, string $type, string|int $length, string $options, string $comment): AlterInterface;
 
     /**
      * @DESC          # 添加索引
