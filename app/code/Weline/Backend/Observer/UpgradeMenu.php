@@ -176,6 +176,7 @@ class UpgradeMenu implements ObserverInterface
         foreach ($all_menus as $menu) {
             $acl_items[] = [
                 Acl::fields_SOURCE_ID => $menu['source'],
+                Acl::fields_ORDER => $menu['order'],
                 Acl::fields_PARENT_SOURCE => $menu['parent_source'],
                 Acl::fields_TYPE => 'menus',
                 Acl::fields_CLASS => '',
