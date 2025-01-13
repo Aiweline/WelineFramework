@@ -77,7 +77,8 @@
     "openai-php/client": "^0.9.2",
     "phpstan/phpstan": "*",
     "ext-curl": "*",
-    "phpclassic/php-shopify": "^1.2"
+    "phpclassic/php-shopify": "^1.2",
+    "ecomphp/tiktokshop-php": "^2.6"
   },
   "opcache-autoloader": true,
   "apcu-autoloader": true,
