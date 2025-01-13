@@ -127,7 +127,7 @@ class Response implements ResponseInterface
     }
 
     /*下载*/
-    public function download(string $file, string $name = ''): void
+    public function download(string $file, string $name = '', bool $is_delete = false): void
     {
         if (empty($name)) {
             $name = basename($file);
@@ -142,7 +142,10 @@ class Response implements ResponseInterface
             header('Pragma: public');
             header('Content-Length: ' . filesize($file));
             readfile($file);
-            exit;
+            if ($is_delete) {
+                unlink($file);
+            }
+            exit(0);
         }
         exit(__('文件不存在！'));
     }
