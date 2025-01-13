@@ -125,4 +125,25 @@ class Response implements ResponseInterface
         Header('Content-Type:application/json; charset=utf-8');
         return json_encode($data);
     }
+
+    /*下载*/
+    public function download(string $file, string $name = ''): void
+    {
+        if (empty($name)) {
+            $name = basename($file);
+        }
+        if (is_file($file)) {
+            header('Content-Description: File Transfer');
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename=' . $name);
+            header('Content-Transfer-Encoding: binary');
+            header('Expires: 0');
+            header('Cache-Control: must-revalidate');
+            header('Pragma: public');
+            header('Content-Length: ' . filesize($file));
+            readfile($file);
+            exit;
+        }
+        exit(__('文件不存在！'));
+    }
 }
