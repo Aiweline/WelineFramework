@@ -13,6 +13,7 @@ namespace Weline\Framework\Http;
 use JetBrains\PhpStorm\NoReturn;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
 class Response implements ResponseInterface
@@ -127,7 +128,7 @@ class Response implements ResponseInterface
     }
 
     /*下载*/
-    public function download(string $file, string $name = '', bool $is_delete = false): void
+    public function download(string $file, string $name = '', bool $is_delete = false, bool $exit = true): void
     {
         if (empty($name)) {
             $name = basename($file);
@@ -145,8 +146,11 @@ class Response implements ResponseInterface
             if ($is_delete) {
                 unlink($file);
             }
-            exit(0);
+        } else {
+            Message::error(__('文件不存在！'));
         }
-        exit(__('文件不存在！'));
+        if ($exit) {
+            exit();
+        }
     }
 }
