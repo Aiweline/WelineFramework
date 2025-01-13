@@ -49,7 +49,13 @@
 
             // 获取点击元素的位置
             const rect = deleteElement.getBoundingClientRect();
-            const msg = deleteElement.getAttribute('msg');
+            let msg = deleteElement.getAttribute('msg');
+            if (!msg) {
+                msg = deleteElement.getAttribute('w-msg');
+                if (!msg) {
+                    msg = __('确认删除吗？');
+                }
+            }
 
             // 计算相对于整个文档的位置
             let offsetX = window.scrollX || document.documentElement.scrollLeft;
