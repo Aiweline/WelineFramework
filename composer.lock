@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "145beb360f7583d29c5749f94e11d7e1",
+    "content-hash": "48dc91057499beae36024d6e722361df",
     "packages": [
         {
             "name": "brick/math",
@@ -516,6 +516,69 @@
                 }
             ],
             "time": "2022-12-30T00:23:10+00:00"
+        },
+        {
+            "name": "ecomphp/tiktokshop-php",
+            "version": "v2.6.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/EcomPHP/tiktokshop-php.git",
+                "reference": "b9eddb28007008a383cb313a2e1de4690e0ab661"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/EcomPHP/tiktokshop-php/zipball/b9eddb28007008a383cb313a2e1de4690e0ab661",
+                "reference": "b9eddb28007008a383cb313a2e1de4690e0ab661",
+                "shasum": "",
+                "mirrors": [
+                    {
+                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
+                        "preferred": true
+                    }
+                ]
+            },
+            "require": {
+                "ext-json": "*",
+                "guzzlehttp/guzzle": "^7.3|^6.5",
+                "php": "^7.2|^8.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^8|^9"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "2.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "EcomPHP\\TiktokShop\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Jin",
+                    "email": "j@sax.vn",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Unofficial Tiktok Shop API Client in PHP",
+            "support": {
+                "issues": "https://github.com/EcomPHP/tiktokshop-php/issues",
+                "source": "https://github.com/EcomPHP/tiktokshop-php/tree/v2.6.1"
+            },
+            "funding": [
+                {
+                    "url": "",
+                    "type": "custom"
+                }
+            ],
+            "time": "2024-12-10T03:28:46+00:00"
         },
         {
             "name": "evenement/evenement",
