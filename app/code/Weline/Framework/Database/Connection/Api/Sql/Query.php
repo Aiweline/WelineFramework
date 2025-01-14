@@ -143,7 +143,7 @@ abstract class Query implements QueryInterface
             if (empty($this->insert_update_where_fields) and !in_array($this->identity_field, $this->insert_update_where_fields)) {
                 $this->insert_update_where_fields[] = $this->identity_field;
             }
-            if(empty($this->insert_update_where_fields)){
+            if (empty($this->insert_update_where_fields)) {
                 foreach ($this->_unit_primary_keys as $unit_primary_key) {
                     if (!in_array($unit_primary_key, $this->insert_update_where_fields)) {
                         $this->insert_update_where_fields[] = $unit_primary_key;
@@ -559,13 +559,9 @@ abstract class Query implements QueryInterface
     {
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
-            $data = [
-                'prepare_sql' => $this->getPrepareSql(false),
-                'sql' => $this->getSql(false),
-                'data' => $this->bound_values
-            ];
-            Env::log($file, $this->getSql(false));
+            Env::log($file, $this->sql);
         }
+
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
             if ($origin_data === false) {
@@ -642,9 +638,9 @@ abstract class Query implements QueryInterface
         return $result;
     }
 
-    public function fetchArray(): mixed
+    public function fetchArray(): array
     {
-        return $this->fetch();
+        return $this->fetch() ?: [];
     }
 
 
