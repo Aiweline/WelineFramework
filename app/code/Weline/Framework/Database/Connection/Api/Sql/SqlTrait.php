@@ -321,6 +321,7 @@ trait SqlTrait
                     $existsQuery = $this->getLink()->prepare($exist_sql);
                     $existsQuery->execute($bound_filed_values);
                     $exists = $existsQuery->fetchAll();
+
                     if (count($exists) > 0) {
                         # 对比数据是否有变更
                         foreach ($exists as $exist) {
@@ -430,7 +431,6 @@ trait SqlTrait
                 if ($has_identify_field_insert && $has_no_identify_field_insert) {
                     throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
                 }
-
                 $values = rtrim($values, ',');
                 $sql = $update_inserts_sql . $identity_inserts_sql;
                 if (!empty($values)) {
