@@ -12,8 +12,6 @@ namespace Weline\Framework\Cache;
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
 
-use function PHPUnit\Framework\isInstanceOf;
-
 class CacheFactory implements CacheFactoryInterface
 {
     public const driver_NAMESPACE = Env::framework_name . '\\Framework\\Cache\\Driver\\';

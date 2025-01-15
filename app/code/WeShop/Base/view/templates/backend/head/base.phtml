@@ -1,0 +1,12 @@
+@template(Weline_Admin::common/head.phtml)
+<!--<w:js>WeShop_Base::lib/js/htmx.min.js</w:js>-->
+<script>
+    $(function () {
+        $('.table-responsive').responsiveTable({
+            addDisplayAllBtn: 'btn btn-secondary',
+            addfocusbtn: true,
+            i18n: {focus: __('聚焦'), display: __('展示'), displayAll: __('全部展示')}
+        });
+        $('.btn-toolbar [data-toggle=dropdown]').attr('data-bs-toggle', "dropdown");
+    });
+</script>
