@@ -25,6 +25,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Helper\Data as SetupHelper;
 use Weline\Framework\Setup\Data\Setup as SetupData;
 use Weline\Framework\Setup\Data\Context as SetupContext;
+use const _PHPStan_4afa27bf8\__;
 
 class Handle implements HandleInterface, RegisterInterface
 {
@@ -86,14 +87,14 @@ class Handle implements HandleInterface, RegisterInterface
         SetupData   $setup_data,
     )
     {
-        $this->modules      = Env::getInstance()->getModuleList();
-        $this->old_modules  = $this->modules;
-        $this->helper       = $helper;
-        $this->system       = $system;
-        $this->printer      = $printer;
-        $this->compress     = $compress;
+        $this->modules = Env::getInstance()->getModuleList();
+        $this->old_modules = $this->modules;
+        $this->helper = $helper;
+        $this->system = $system;
+        $this->printer = $printer;
+        $this->compress = $compress;
         $this->setup_helper = $setup_helper;
-        $this->setup_data   = $setup_data;
+        $this->setup_data = $setup_data;
     }
 
     /**
@@ -112,20 +113,20 @@ class Handle implements HandleInterface, RegisterInterface
         if ($remove_script) {
             $remove_object = ObjectManager::getInstance($remove_script);
 
-            $version       = $this->modules[$module]['version'] ?? '1.0.0';
+            $version = $this->modules[$module]['version'] ?? '1.0.0';
             $setup_context = new \Weline\Framework\Setup\Data\Context($module, $version);
             $this->setup_data->setModuleContext($setup_context);
             $this->printer->note($remove_object->setup($this->setup_data, $setup_context));
         } else {
-            $this->printer->warning('模块卸载脚本不存在，已跳过卸载脚本！', '卸载');
+            $this->printer->warning(__('模块卸载脚本不存在，已跳过卸载脚本！'), __('卸载'));
         }
-        $this->printer->note('2、备份应用程序...');
+        $this->printer->note(__('2、备份应用程序...'));
         $module_path = $this->modules[$module]['base_path'] . DS;
 
         $zip = $this->compress->compression("{$module_path}", APP_CODE_PATH . $module, APP_CODE_PATH);
 
         $this->printer->note($zip);
-        $this->printer->note('3、卸载应用代码...');
+        $this->printer->note(__('3、卸载应用代码...'));
 
         $this->printer->note($module_path);
         $this->system->exec("rm $module_path -rf");
@@ -167,7 +168,7 @@ class Handle implements HandleInterface, RegisterInterface
         }
 
         if (DEV) {
-            $this->printer->error($module_name . '：处理...', '开发');
+            $this->printer->error($module_name . __('：处理...'), '开发');
         }
         if (!isset($param['base_path'])) {
             throw new Exception(__('尚未设置基础路径！%1', 'base_path'));
@@ -180,7 +181,7 @@ class Handle implements HandleInterface, RegisterInterface
         }
         # 检测位置
         $base_path = $param['base_path'] ?? $param;
-        $position  = 'app';
+        $position = 'app';
         if (str_contains($base_path, VENDOR_PATH)) {
             $position = 'composer';
         }
@@ -199,9 +200,9 @@ class Handle implements HandleInterface, RegisterInterface
         /**@var ModelManager $modelManager */
         $modelManager = ObjectManager::getInstance(ModelManager::class);
         // 检测配置文件完整
-        $router   = '';
+        $router = '';
         $filepath = $param['base_path'] . DS . DataInterface::file_etc_Env;
-        $env      = [];
+        $env = [];
         if (is_file($filepath)) {
             $env = (array)require $filepath;
             if (!isset($env['router'])) {
@@ -213,13 +214,15 @@ class Handle implements HandleInterface, RegisterInterface
             $env = $this->getEnv($module_name, $env);
         }                                          // 如果文件不存在则读取模块名字作为router
         $router = strtolower($env['router'] ?: '');
+        $namespace = str_replace(DS, '\\', $param['dir_path']);
+        $namespace = rtrim($namespace, '\\');
         # 模块数据
         $module = new Module();
         $module->setStatus(true)
             ->setPosition($position)
             ->setName($module_name)
             ->setRouter($router)
-            ->setNamespacePath(str_replace('_', '\\', $param['module_name']))
+            ->setNamespacePath($namespace)
             ->setBasePath($param['base_path'])
             ->setPath($param['dir_path'])
             ->setVersion($version ?: '1.0.0')
@@ -231,15 +234,15 @@ class Handle implements HandleInterface, RegisterInterface
                 $module->setStatus(false);
                 $this->printer->warning(str_pad($module->getName(), 45) . __('已禁用！'));
             } else {
-                $old_version = $this->modules[$module->getName()]['version']??'1.0.0';
+                $old_version = $this->modules[$module->getName()]['version'] ?? '1.0.0';
                 $module['upgrading'] = $this->helper->isUpgrade($old_version, $module->getVersion());
                 $this->setupModel($module);
             }
         } else {
-            $this->printer->setup("扩展{$module->getName()}安装中...");
+            $this->printer->setup(__("扩展%1安装中...", $module->getName()));
             // 全新安装
             $module->setStatus(true);
-            $module['installing']              = true;
+            $module['installing'] = true;
             $this->modules[$module->getName()] = $module->getData();
             $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
         }
@@ -288,7 +291,7 @@ class Handle implements HandleInterface, RegisterInterface
             'module_version' => $module->getVersion(),
             'module_description' => $module->getDescription()
         ], '__construct');
-        $modelManager  = $this->getModuleManager();
+        $modelManager = $this->getModuleManager();
         // 已经存在模块则更新
         if ($this->helper->isInstalled($this->old_modules, $module->getName())) {
             if ($this->helper->isDisabled($this->modules, $module->getName())) {
@@ -296,7 +299,7 @@ class Handle implements HandleInterface, RegisterInterface
                 $this->printer->warning(str_pad($module->getName(), 45) . __('已禁用！'));
             } else {
                 // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
-                $old_version = $this->old_modules[$module->getName()]['version']??'1.0.0';
+                $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
                 if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
                     $this->printer->note(__('扩展 %1 升级中...', $module->getName()));
                     $this->printer->setup(__('升级 %1 到 %2', [$old_version, $module->getVersion()]));
@@ -338,12 +341,12 @@ class Handle implements HandleInterface, RegisterInterface
      */
     public function setupInstall(Module $module): Module
     {
-        $setup_context   = ObjectManager::make(SetupContext::class, [
+        $setup_context = ObjectManager::make(SetupContext::class, [
             'module_name' => $module->getName(),
             'module_version' => $module->getVersion(),
             'module_description' => $module->getDescription()
         ], '__construct');
-        $setup_dir       = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
+        $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
         $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
         if (is_dir($setup_dir) && DEV) {
             $this->printer->setup($setup_dir . '：升级目录...', '开发');
@@ -356,7 +359,7 @@ class Handle implements HandleInterface, RegisterInterface
         # 更新
         if (isset($module['upgrading']) and $module['upgrading']) {
             // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
-            $old_version = $this->old_modules[$module->getName()]['version']??'1.0.0';
+            $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
             if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
                 $this->printer->note(__('扩展 %1 升级中...', $module->getName()));
                 $this->printer->setup(__('升级 %1 到 %2', [$old_version, $module->getVersion()]));

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归Weline所有。
  * 作者：Admin
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -10,18 +10,18 @@ declare(strict_types=1);
  * 日期：2023/5/10 23:02:49
  */
 
-namespace Aiweline\AliDdnsServer\Controller\Backend;
+namespace Weline\AliDdnsServer\Controller\Backend;
 
-use Aiweline\AliDdnsServer\Model\DdnsDomains;
+use Weline\AliDdnsServer\Model\DdnsDomains;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 
-#[Acl('Aiweline_AliDdnsServer::manager', '阿里云DDns', '', '阿里云动态域名解析管理')]
+#[Acl('Weline_AliDdnsServer::manager', '阿里云DDns', '', '阿里云动态域名解析管理')]
 class DdnsList extends \Weline\Framework\App\Controller\BackendController
 {
     /**
-     * @var \Aiweline\AliDdnsServer\Model\DdnsDomains
+     * @var \Weline\AliDdnsServer\Model\DdnsDomains
      */
     private DdnsDomains $ddnsDomains;
 
@@ -29,7 +29,7 @@ class DdnsList extends \Weline\Framework\App\Controller\BackendController
     {
         $this->ddnsDomains = $ddnsDomains;
     }
-    #[Acl('Aiweline_AliDdnsServer::ddnslist', '动态域名列表', '', '动态域名解析列表','Aiweline_AliDdnsServer::manager')]
+    #[Acl('Weline_AliDdnsServer::ddnslist', '动态域名列表', '', '动态域名解析列表','Weline_AliDdnsServer::manager')]
     function index()
     {
         if($search= $this->request->getGet('search')){
@@ -40,7 +40,7 @@ class DdnsList extends \Weline\Framework\App\Controller\BackendController
         $this->assign('pagination',$this->ddnsDomains->getPagination());
         return $this->fetch();
     }
-    #[Acl('Aiweline_AliDdnsServer::ddnslist_add', '添加', '', '添加动态域名解析','Aiweline_AliDdnsServer::ddnslist')]
+    #[Acl('Weline_AliDdnsServer::ddnslist_add', '添加', '', '添加动态域名解析','Weline_AliDdnsServer::ddnslist')]
     function add()
     {
         // get请求返回表单
@@ -61,7 +61,7 @@ class DdnsList extends \Weline\Framework\App\Controller\BackendController
         }
         $this->redirect('*/backend/ddnslist/edit',['id'=>$this->ddnsDomains->getId()]);
     }
-    #[Acl('Aiweline_AliDdnsServer::ddnslist_edit', '编辑', '', '编辑动态域名解析','Aiweline_AliDdnsServer::ddnslist')]
+    #[Acl('Weline_AliDdnsServer::ddnslist_edit', '编辑', '', '编辑动态域名解析','Weline_AliDdnsServer::ddnslist')]
     function edit()
     {
 
@@ -93,7 +93,7 @@ class DdnsList extends \Weline\Framework\App\Controller\BackendController
         $this->redirect('*/backend/ddnslist');
     }
 
-    #[Acl('Aiweline_AliDdnsServer::ddnslist_delete', '删除', '', '删除动态域名解析','Aiweline_AliDdnsServer::ddnslist')]
+    #[Acl('Weline_AliDdnsServer::ddnslist_delete', '删除', '', '删除动态域名解析','Weline_AliDdnsServer::ddnslist')]
     function getDelete()
     {
         $id = $this->request->getGet('id');
