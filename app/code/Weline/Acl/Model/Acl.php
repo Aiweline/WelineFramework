@@ -22,6 +22,7 @@ class Acl extends \Weline\Framework\Database\Model
 {
     public const fields_ID = 'source_id';
     public const fields_ACL_ID = 'acl_id';
+    public const fields_ORDER = 'order';
     public const fields_SOURCE_ID = 'source_id';
     public const fields_SOURCE_NAME = 'source_name';
     public const fields_DOCUMENT = 'document';
@@ -56,6 +57,16 @@ class Acl extends \Weline\Framework\Database\Model
     public function setAclId(string $acl_id): static
     {
         return $this->setData(self::fields_ACL_ID, $acl_id);
+    }
+
+    public function setOrder(int $order): static
+    {
+        return $this->setData(self::fields_ORDER, $order);
+    }
+
+    public function getOrder(): int
+    {
+        return (int)$this->getData(self::fields_ORDER);
     }
 
     public function setSourceName(string $source_name): static
@@ -218,7 +229,14 @@ class Acl extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        if (!$setup->hasField(self::fields_ORDER)) {
+            $setup->alterTable()->addColumn(
+                self::fields_ORDER,
+                self::fields_ACL_ID,
+                TableInterface::column_type_INTEGER,
+                11, 'default 0', '排序'
+            )->alter();
+        }
     }
 
     /**
@@ -236,6 +254,11 @@ class Acl extends \Weline\Framework\Database\Model
                     self::fields_ACL_ID,
                     TableInterface::column_type_INTEGER,
                     null, 'primary key auto_increment', 'ACL权限ID'
+                )
+                ->addColumn(
+                    self::fields_ORDER,
+                    TableInterface::column_type_INTEGER,
+                    null, 'default 0', '排序'
                 )
                 ->addColumn(
                     self::fields_SOURCE_ID,
