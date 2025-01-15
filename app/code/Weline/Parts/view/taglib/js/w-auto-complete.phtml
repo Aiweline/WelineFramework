@@ -1,5 +1,6 @@
 <css>jquery-ui.min.css</css>
 <js>jquery-ui.min.js</js>
+<js:part name="debounce"/>
 <script defer>
     $(function () {
         let can_run = true
@@ -43,13 +44,12 @@
                     },
                     error: function () {
                         // 处理AJAX请求失败的情况
-                        response([]); // 返回空数组，不显示任何建议
                         autocompleteInput.removeClass(valid_class).addClass(invalid_class);
                     }
                 });
             }, 500))
             // 查询信息，
-            autocompleteInput.autocomplete({
+            const autocompleteInputFunc = {
                 minChars: 0,
                 source: debounce(function (request, response) {
                     $.ajax({
@@ -81,10 +81,8 @@
                     autocompleteInput.val(ui.item[selected_field]).attr('value', ui.item[selected_field])
                     autocompleteInput.removeClass(invalid_class).addClass(valid_class);
                 }
-            });
-            autocompleteInput.on('click', function () {
-                autocompleteInput.autocomplete('search', autocompleteInput.val());
-            })
+            };
+            autocompleteInput.autocomplete(autocompleteInputFunc);
             // 可选：自定义autocomplete样式以匹配Bootstrap
             autocompleteInput.autocomplete("widget").addClass("ui-widget ui-widget-content ui-corner-all");
             autocompleteInput.autocomplete("widget").find("li").addClass("ui-menu-item").addClass("ui-corner-all");
