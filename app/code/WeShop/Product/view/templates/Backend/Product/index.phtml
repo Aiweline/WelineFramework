@@ -1,0 +1,354 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <link href='@static(Weline_Eav::css/product.css)' rel='stylesheet' type='text/css'/>
+
+    <title>
+        <?= __('Weline Admin 管理面板') ?>
+    </title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>店铺 > 产品管理</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>系统配置</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/store')">
+                                            <lang>店铺</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/product')">
+                                            <lang>产品</lang>
+                                        </a>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>产品管理</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>管理产品</lang>
+                                </p>
+                                <div class='table-rep-plugin'>
+                                    <!-- search form -->
+                                    <div class='row'>
+                                        <div class='col-6'>
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='entity-product-search' action='*/backend/product' method='get'
+                                                   keyword='search' value=''
+                                                   placeholder='请输入产品关键词回车搜索'></block>
+                                        </div>
+                                        <div class='col-6'>
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   template='Weline_Component::off-canvas.phtml'
+                                                   cache='0'
+                                                   id='offcanvasRightproductForm'
+                                                   action="*/backend/product/add"
+                                                   submit-button-text='保存'
+                                                   flush='1'
+                                                   target-button-text='新增产品'
+                                                   target-button-class='btn btn-primary'
+                                                   title='新增产品'
+                                                   save="0"
+                                                   close-button-show='1'
+                                                   close-button-text='关闭'
+                                                   direction='right'
+                                                   class-names='w-75'
+                                                   off-canvas-body-style=''/>
+                                        </div>
+                                    </div>
+                                    <!-- end search form -->
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='3'>
+                                                    <?= __('ID') ?>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <?= __('图片') ?>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <?= __('名称') ?>
+                                                </th>
+                                                <th data-priority='1'>
+                                                    <?= __('SKU') ?>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <?= __('创建时间') ?>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <?= __('更新时间') ?>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <?= __('操作') ?>
+                                                </th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <foreach name="products" item="product" key="key">
+                                                <tr>
+                                                    <td class='co-name'>{{product.product_id}}</td>
+                                                    <td class='co-name'>
+                                                        <file-view id="product-image-view" type="image" vars="product"
+                                                                   value="product.image"/>
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        <local
+                                                                model="WeShop\Product\Model\Product\LocalDescription"
+                                                                field="name" id="product.product_id"
+                                                                name="product-title">
+                                                            {{product.local_name|product.name}}
+                                                        </local>
+                                                    </td>
+                                                    <td>{{product.sku}}</td>
+                                                    <td class='co-name'>
+                                                        <if condition="product.status"><span
+                                                                    class="text-success">启用</span>
+                                                            <else/>
+                                                            <span class="text-danger">禁用</span>
+                                                        </if>
+                                                    </td>
+                                                    <td class='co-name'>{{product.create_time}}</td>
+                                                    <td class='co-name'>{{product.update_time}}</td>
+                                                    <td class='co-name'>
+                                                        <div class="d-flex gap-2">
+                                                            <block class='Weline\Component\Block\OffCanvas'
+                                                                   template='Weline_Component::off-canvas.phtml'
+                                                                   target-tag='button'
+                                                                   target-button-class="btn btn-info"
+                                                                   cache='0' id='off_canvas_product_edit'
+                                                                   action="*/backend/product/edit" vars="product"
+                                                                   action-params="{product_id: product.product_id}"
+                                                                   submit-button-text='保存' target-button-text='修改'
+                                                                   title='编辑产品' close-button-show='1'
+                                                                   close-button-text='关闭' direction='right'
+                                                                   class-names='w-75' off-canvas-body-style=''/>
+                                                            <if condition="product.parent_id == 0">
+                                                                <button class="btn btn-danger" w-ajax="@backend-url('*/backend/product/delete',
+                                                                ['product_id'=>$product['product_id']])"
+                                                                        data-msg="@lang{你确定要删除么？}"
+                                                                        data-method="post">
+                                                                    <lang>删除</lang>
+                                                                </button>
+                                                            </if>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </foreach>
+                                            </tbody>
+                                        </table>
+                                        {{pagination}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- 配置项弹窗 -->
+<div id='optionConfig' class='modal fade' tabindex='-1' aria-labelledby='#optionConfig' aria-hidden='true'>
+    <div class='modal-dialog modal-xl'>
+        <div class='modal-content'>
+            <div class='modal-header'>
+                <h5 class='modal-title' id='optionConfigLabel'>
+                    <lang>属性配置项弹窗</lang>
+                </h5>
+                <button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='@lang{关闭}'></button>
+            </div>
+            <div class='modal-body'>
+                <h5>配置属性的配置项</h5>
+                <div>
+                    <table>
+                        <thread>
+                            <th>代码</th>
+                            <th>配置项</th>
+                            <th>所属实体代码</th>
+                            <th>创建时间</th>
+                            <th>更新时间</th>
+                            <th>操作</th>
+                        </thread>
+
+                        <tbody id="productOption">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class='modal-footer'>
+                <button type='button' class='btn btn-light waves-effect' data-bs-dismiss='modal'>
+                    <lang>关闭</lang>
+                </button>
+                <button type='button' class='btn btn-primary waves-effect waves-light'>
+                    <lang>保存更改</lang>
+                </button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div>
+<script>
+    $('#optionConfig').on('show.bs.modal', function (event) {
+        showLoading();
+        // 触发的按钮
+        let button = event.relatedTarget
+        let product_code = button.getproduct('data-code')
+        let entity_id = button.getproduct('data-entity_id')
+        $.ajax({
+            url: '@backend-url("*/backend/product/option/search")?entity_id={entity_id}&product_code={product_code}'.replace
+            ('{entity_id}', entity_id).replace('{product_code}', product_code)
+            , success: (res) => {
+                let productOption = $('#productOption')
+                productOption.empty()
+                let options = res['option']
+                if (options) {
+                    for (let option in options) {
+                        console.log()
+                        productOption.append()
+                    }
+                }
+                productOption.append('')
+                console.log(res)
+            }
+        })
+        hideLoading();
+    })
+    $("*[w-ajax]").on('click', function (event) {
+        event.preventDefault()
+        const target = $(this)
+        let reload = target.data('reload')
+        let action = target.attr('w-ajax')
+        if (action.indexOf('?') < 0) {
+            action += '?isAjax=true'
+        } else {
+            action += '&isAjax=true'
+        }
+        let data = target.data()
+        $.ajax({
+            url: action,
+            data: data,
+            success: (res) => {
+                if (res.status !== 200) {
+                    Swal.fire({
+                        title: res.title,
+                        text: res.message,
+                        icon: 'error',
+                        confirmButtonText: '@lang{好的}'
+                    })
+                } else {
+                    Swal.fire({
+                        title: res.title,
+                        text: __('操作成功!'),
+                        icon: 'success',
+                        confirmButtonText: '@lang{好的}'
+                    })
+                }
+                if (reload) {
+                    location.reload()
+                }
+            }, error: function (res) {
+                console.log(res)
+            }
+        })
+    })
+</script>
+<!-- 配置项弹窗 -->
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
