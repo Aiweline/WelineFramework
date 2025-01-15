@@ -421,7 +421,7 @@ interface QueryInterface
      *
      * @return array
      */
-    public function fetchArray(): mixed;
+    public function fetchArray(): array;
 
     /**
      * @DESC          # 清理特定条件
