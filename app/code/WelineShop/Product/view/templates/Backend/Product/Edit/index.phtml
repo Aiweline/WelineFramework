@@ -1,0 +1,1218 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Framework\Manager\ObjectManager;
+
+$themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+    <!-- twitter-bootstrap-wizard css -->
+    <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <js:part name="debounce"/>
+    <style>
+        .product-image-close {
+            border: 1px dashed;
+            position: relative;
+            margin: 0.5rem;
+        }
+
+        .product-image-close > span {
+            position: absolute;
+            transition: 0.3s;
+            top: -0.5rem;
+            right: -0.5rem;
+            font-size: 1rem;
+            font-weight: bold;
+            color: red;
+            line-height: 1rem;
+            text-align: center;
+            width: 1rem;
+            height: 1rem;
+            content: 'X';
+        }
+
+        .product-image-close > span:hover {
+            color: red;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?> class='bg-transparent'>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper overflow-hidden">
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class='card'>
+        <div class='card-body overflow-hidden'>
+            <div id='progress-wizard' class='twitter-bs-wizard'>
+                <ul class='twitter-bs-wizard-nav nav-justified'>
+                    <li class='nav-item'>
+                        <a href='#product_base_info'
+                           class='nav-link @if{product.progress==="product_base_info"=>"active"}'
+
+                           name="progress"
+                           value="product_base_info"
+                           data-index="0"
+                           data-toggle='tab'>
+                            <span class='step-number'>01</span>
+                            <span class='step-title'><lang>基础信息</lang></span>
+                            <span class='help-block'>
+                                            <lang>类型</lang>
+                                            <span class='text-primary'>
+                                                <if condition="product.parent_id">子产品<else/>主产品</if>
+                                            </span>
+                            </span>
+                        </a>
+                    </li>
+                    <li class='nav-item'>
+                        <a href='#attributes'
+                           class='nav-link @if{product.progress==="attributes"=>"active"}'
+
+                           name="progress"
+                           value="attributes"
+                           data-index="1"
+                           data-toggle='tab'>
+                            <span class='step-number'>02</span>
+                            <span class='step-title'><lang>属性</lang></span>
+                            <span class='help-block'>
+                                <lang>你选择了</lang>
+                                <span class='text-primary' id="set_name_text">{{product.set_name}}</span>
+                                <lang>属性集</lang>
+                            </span>
+                        </a>
+                    </li>
+                    <li class='nav-item'>
+                        <a href='#configurable_attributes'
+                           class='nav-link @if{product.progress==="configurable_attributes"=>"active"}'
+                           data-progress='configurable_attributes'
+                           name="progress"
+                           value="configurable_attributes"
+                           data-index="2"
+                           data-toggle='tab'>
+                            <span class='step-number'>03</span>
+                            <span class='step-title'><lang>配置信息（可选）</lang></span>
+                            <span class='help-block'>
+                                <notempty name='product.configurable_attributes'><lang>你选择了</lang></notempty>
+                                <span class='text-primary' id="configurable_attributes_text">{{product.configurable_attributes}}</span>
+                            </span>
+                        </a>
+                    </li>
+                    <li class='nav-item'>
+                        <a href='#seo'
+                           class='nav-link @if{product.progress==="seo"=>"active"}'
+                           data-progress='{{product.progress}}'
+
+                           name="progress"
+                           value="seo"
+                           data-index="3"
+                           data-toggle='tab'>
+                            <span class='step-number'>04</span>
+                            <span class='step-title'>SEO信息</span>
+                            <span class='help-block'>
+                                <span id="seo_name_help">
+                                    <has name='product.meta_name'>
+                                        <lang>已创建</lang>
+                                    <else/>
+                                        <lang>待创建</lang>
+                                    </has>
+                                </span>
+                                <span class='text-primary' id="seo_name_text">{{product.meta_name}}</span>
+                            </span>
+                        </a>
+                    </li>
+                </ul>
+
+                <div id='bar' class='progress mt-5'>
+                    <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
+                </div>
+                <form id="productForm" action='{{action}}' method='post' class="needs-validation" novalidate=''>
+                    <div class='tab-content twitter-bs-wizard-tab-content'>
+                        <div class='tab-pane @if{product.progress==="product_base_info"=>"active"}'
+                             id='product_base_info'>
+                            <div class='row'>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="name" class="form-label">
+                                        <lang>产品名</lang>
+                                    </label>
+                                    <input type='text' class='form-control rounded' id='name'
+                                           placeholder='@lang{请输入产品名}' name="name" value="{{product.name}}"
+                                           required autocomplete/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入产品名</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="sku" class="form-label">
+                                        <lang>SKU</lang>
+                                    </label>
+                                    <input type='text' class='form-control rounded' id='sku'
+                                           placeholder='@lang{请输入SKU}' name="sku" value="{{product.sku}}"
+                                           data-origin-value="{{product.sku}}"
+                                           event="change input"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入SKU</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="spu" class="form-label">
+                                        <lang>SPU</lang>
+                                    </label>
+                                    <input type='text' class='form-control rounded' id='spu'
+                                           placeholder='@lang{请输入SPU}' name="spu" value="{{product.spu}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入SPU</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="cost" class="form-label">
+                                        <lang>成本价</lang>
+                                    </label>
+                                    <input type='number' step="0.01" class='form-control rounded'
+                                           id='cost'
+                                           placeholder='@lang{请输入成本价}' name="cost" value="{{product.cost}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="price" class="form-label">
+                                        <lang>价格</lang>
+                                    </label>
+                                    <input type='number' step="0.01" class='form-control rounded'
+                                           id='price'
+                                           placeholder='@lang{请输入价格}' name="price" value="{{product.price}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="weight" class="form-label">
+                                        <lang>重量</lang>
+                                    </label>
+                                    <input type='number' step="0.01" class='form-control rounded'
+                                           id='weight'
+                                           placeholder='@lang{请输入重量}' name="weight" value="{{product.weight}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="stock" class="form-label">
+                                        <lang>库存</lang>
+                                    </label>
+                                    <input type='number' step="1" class='form-control rounded'
+                                           id='stock'
+                                           placeholder='@lang{请输入库存}' name="stock" value="{{product.stock}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="product-status" class="form-label">
+                                        <lang>状态</lang>
+                                    </label>
+                                    <select type='number' step="1" class='form-control rounded'
+                                            id='product-status'
+                                            name="status"
+                                            required>
+                                        <option value="1" @if{product.status== 1=>'selected'}>
+                                            <lang>启用</lang>
+                                        </option>
+                                        <option value="0" @if{product.status== 0=>'selected'}>
+                                            <lang>禁用</lang>
+                                        </option>
+                                    </select>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class='row'>
+                                <div class='col-lg-4 mt-2 mb-4 mx-12'>
+                                    <label for="image" class="form-label">
+                                        <lang>主图</lang>
+                                    </label>
+                                    <input type='hidden' class='form-control rounded' id='image'
+                                           placeholder='@lang{请选择主图}' name="image" value="{{product.image}}"
+                                           required/>
+                                    <file-manager target='#image'
+                                                  title='选择产品图片'
+                                                  vars='product'
+                                                  path='product/'
+                                                  value='product.image'
+                                                  multi='0'
+                                                  ext="jpg,jpeg,png,gif"
+                                                  size="204800"
+                                                  w='50'
+                                                  h='50'/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入产品名</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-4 mt-2 mb-4 mx-12'>
+                                    <label for="images" class="form-label">
+                                        <lang>子图</lang>
+                                    </label>
+                                    <input type='hidden' class='form-control rounded' id='images'
+                                           placeholder='@lang{请选择图片}' name="images" value="{{product.images}}"
+                                           required/>
+                                    <file-manager target='#images'
+                                                  title='选择产品图片'
+                                                  vars='product'
+                                                  path='product/'
+                                                  value='product.images'
+                                                  multi='1'
+                                                  ext="jpg,jpeg,png,gif"
+                                                  size="204800"
+                                                  w='50'
+                                                  h='50'/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入SKU</lang>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class='row'>
+                                <div class='col-lg-6 mt-2 mb-6 mx-12'>
+                                    <label for="short_description" class="form-label">
+                                        <lang>简述</lang>
+                                    </label>
+                                    <textarea editor="1" type='text' class='form-control rounded editor'
+                                              id='short_description'
+                                              placeholder='@lang{请输入简述}' name="short_description" rows="5"
+                                              required>{{product.short_description}}</textarea>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-6 mt-2 mb-6 mx-12'>
+                                    <label for="description" class="form-label">
+                                        <lang>详情</lang>
+                                    </label>
+                                    <textarea editor="1" type='text' class='form-control rounded editor'
+                                              id='description'
+                                              placeholder='@lang{请输入详情内容}' name="description" rows="8"
+                                              required>{{product.description}}</textarea>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='tab-pane @if{product.progress==="attributes"=>"active"}' id='attributes'>
+                            <div class='row'>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="set_id" class="form-label">
+                                        <lang>属性集</lang>
+                                    </label>
+                                    <select name="set_id" id="set_id" type="number"
+                                            class="form-control" list="Sets"
+                                            event="click change"
+                                            placeholder='@lang{属性集}'
+                                            value="{{product.set_id}}"
+                                            disabled
+                                            required>
+                                        <option value="0">@lang{--请选择--}</option>
+                                        <foreach name="sets" item="v">
+                                            <option value="{{ v.set_id }}" @if{v.set_id==product.set_id=>'selected'}>
+                                                {{ v.name }}(ID:{{ v.set_id }})
+                                            </option>
+                                        </foreach>
+                                    </select>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入属性集</lang>
+                                    </div>
+                                </div>
+                                <!--渲染属性集属性-->
+                            </div>
+                            <div id="attributes-container">
+
+                            </div>
+                        </div>
+                        <div class='tab-pane  @if{product.progress==="configurable_attributes"=>"active"}'
+                             id='configurable_attributes'>
+                            <div id="selectAttribute"></div>
+                            <div id="configurableProducts"></div>
+                            <input type="hidden" name="configurableProductItems" id="configurableProductItems"
+                                   value="{{product.configurableProducts}}">
+                        </div>
+                        <div class='tab-pane' id='seo'>
+                            <div class='row'>
+                                <div class='col-lg-6 mt-2 mb-6'>
+                                    <label for="meta_name" class="form-label">
+                                        <lang>Meta元数据名</lang>
+                                    </label>
+                                    <input type='text' class='form-control rounded' id='meta_name'
+                                           placeholder='@lang{请输入Meta元数据名}' name="meta_name"
+                                           value="{{product.meta_name}}"
+                                           required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                    <script>
+                                        $(document).ready(function () {
+                                            $("#meta_name").on('input', function () {
+                                                console.log($(this).val());
+                                                if ($(this).val()) {
+                                                    $('#seo_name_help').text('@lang{已创建}');
+                                                    $('#seo_name_text').text($(this).val());
+                                                } else {
+                                                    $('#seo_name_help').text('@lang{待创建}');
+                                                    $('#seo_name_text').text($(this).val());
+                                                }
+                                            })
+                                        })
+                                    </script>
+                                </div>
+                                <div class='col-lg-6 mt-2 mb-6'>
+                                    <label for="meta_description" class="form-label">
+                                        <lang>Meta元数据描述</lang>
+                                    </label>
+                                    <textarea type='text' class='form-control rounded'
+                                              id='meta_description'
+                                              placeholder='@lang{请输入Meta元数据名}' name="meta_description" rows="8"
+
+                                              required>{{product.meta_description}}</textarea>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                </form>
+            </div>
+            <ul class='pager wizard twitter-bs-wizard-pager-link'>
+                <li class='previous'><a href='javascript: void(0);'>
+                        <lang>返回上一步</lang>
+                    </a></li>
+                <li class='next'><a href='javascript: void(0);'>
+                        <lang>下一步</lang>
+                    </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+
+@template(Weline_Admin::common/footer.phtml)
+<!-- twitter-bootstrap-wizard js -->
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js)'></script>
+
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.js)'></script>
+
+<!-- form wizard init -->
+<script src='@static(Gvanda_Product::js/product/form-wizard.init.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script>
+    $(document).ready(function () {
+        showLoading()
+        $('#set_name_text').text($(this).find('option:selected').text());
+        let set_id = $(this).val();
+        $.ajax({
+            url: '@backend-url("*/backend/product/set-group-attributes")',
+            data: {set_id: set_id},
+            success: function (data) {
+                let attribute_container = $('#attributes-container')
+                attribute_container.empty()
+                // 渲染组属性
+                let simpleAttributeTemplate = '';
+                let configurableAttributeTemplate = ``;
+                for (let i = 0; i < data.length; i++) {
+                    window.setAttributeData = data
+                    // 属性组
+                    let group = data[i]
+                    if (group.attributes.length === 0) {
+                        continue;
+                    }
+                    configurableAttributeTemplate += `
+<div class="card">
+<div class="card-title">${group.name}</div>
+<div class='row'>`
+                    simpleAttributeTemplate += `<div class="card">
+<div class="card-title">${group.name}</div>
+<div class='row'>`;
+                    let is_disable = true;
+                    if ("@if{product.parent_id=>'true'|'false'}" === 'false') {
+                        is_disable = false;
+                    }
+                    for (let index in group.attributes) {
+                        let attribute = group.attributes[index]
+                        // 特殊图片图片属性排除
+                        if (attribute.code === 'image' || attribute.code === 'images') {
+                            continue
+                        }
+                        if (attribute.has_option === 1) {
+                            let optionsTemplate = '';
+                            for (let j in attribute.options) {
+                                let option = attribute.options[j]
+                                optionsTemplate += `<option value="${option.option_id}">${option.code}</option>`;
+                            }
+                            let multiValueAttr = '';
+                            if (attribute.is_multi === 1) {
+                                multiValueAttr = 'multiple';
+                            }
+                            // 编辑不能更改
+                            let selectTemplate = `
+                            <select  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}   id="${attribute.code}" type="number"
+                                            class="form-control"
+                                            placeholder='@lang{请输入}${attribute.name}'
+                                            value="${attribute.name}"
+                                            event="change"
+                                            ${multiValueAttr}
+                                            required>
+                                            ${optionsTemplate}
+                                    </select>
+                            `;
+                            if (is_disable) {
+                                selectTemplate = `
+                            <select  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs} disabled='disabled'  id="${attribute.code}" type="number"
+                                            class="form-control"
+                                            placeholder='@lang{请输入}${attribute.name}'
+                                            value="${attribute.name}"
+                                            ${multiValueAttr}
+                                            required>
+                                            ${optionsTemplate}
+                                    </select>
+                            `;
+                            }
+
+                            simpleAttributeTemplate += `
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="${attribute.code}" class="form-label">
+                                        ${attribute.name}
+                                    </label>
+                                    ${selectTemplate}
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入</lang>${attribute.name}
+                                    </div>
+                                </div>
+                        `;
+                            let configurableOptionsTemplate = '';
+                            // 可配置项
+                            for (let j in attribute.options) {
+                                let option = attribute.options[j]
+                                let image = '';
+                                let color = '';
+                                let text = option.code;
+                                if (option.swatch_image) {
+                                    let swatch_image_id = 'swatch_image-' + attribute.attribute_id + '-' + attribute.entity_id + '-' + attribute.group_id + '-' + option.code + '-' + option.option_id;
+                                    image = `<div onclick="generateFileManagerModal('${swatch_image_id}')" style="border: 1px dashed;padding:0.5rem " >
+<img  src="/media/image/${option.swatch_image}" style="width: 20px; height: 20px;" id="${swatch_image_id}-image-preview">
+<input id="${swatch_image_id}" type="hidden" value="${option.swatch_image}" data-input-id="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}" onchange="changeSwatchImage(this)">
+</div>`;
+                                }
+                                if (option.swatch_text) {
+                                    text = option.swatch_text;
+                                }
+                                if (option.swatch_color) {
+                                    color = `<div style="background-color: ${option.swatch_color};width: 20px;height: 20px"></div>`;
+                                }
+                                let optionValue = encodeURIComponent(JSON.stringify({
+                                    option_id: option.option_id,
+                                    value: option.value,
+                                    code: option.code,
+                                    "swatch-image": option.swatch_image,
+                                    "swatch-color": option.swatch_color,
+                                    "swatch-text": option.swatch_text
+                                }));
+                                configurableOptionsTemplate += `
+                                <div class="form-check form-check-inline d-flex">
+                                    <input class="form-check-input"
+                                        type="checkbox"
+
+                                        data-attribute-attribute-id="${attribute.attribute_id}"
+                                        data-attribute-entity-id="${attribute.entity_id}"
+                                        data-attribute-group-id="${attribute.group_id}"
+                                        data-attribute-code="${attribute.code}"
+                                        data-attribute-name="${attribute.name}"
+                                        data-option-id="${option.option_id}"
+                                        data-option-swatch-image="${option.swatch_image}"
+                                        data-option-swatch-color="${option.swatch_color}"
+                                        data-option-swatch-text="${option.swatch_text}"
+                                        data-option-value="${option.value}"
+                                        data-option-code="${option.code}"
+                                        data-name="${option.code}"
+                                        name="configurable[${attribute.group_id}][${attribute.attribute_id}][${option.option_id}]"
+                                        value="${optionValue}"
+                                        id="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}">
+                                    <label class="form-check-label d-flex gap-1" for="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}">
+                                        ${color}
+                                        ${text}
+                                    </label>
+                                    ${image}
+                                </div>
+                                `;
+                            }
+                            if (configurableOptionsTemplate) {
+                                configurableAttributeTemplate += `
+                                    <div class="mt-4 mt-lg-0" style="width: auto">
+                                        <div class="card-body d-flex flex-row gap-2 align-items-baseline">
+                                            <h5 class="font-size-14">${attribute.name}</h5>
+                                            ${configurableOptionsTemplate}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        } else {
+                            simpleAttributeTemplate += `
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="${attribute.code}" class="form-label">
+                                        ${attribute.name}
+                                    </label>
+                                    <input  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}
+                                            id="${group.code}-${group.set_id}-${attribute.entity_id}-${attribute.code}" type="number"
+                                            class="form-control"
+                                            placeholder='@lang{请输入}${attribute.name}'
+                                            value="" event="change"
+                                            required/>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入</lang>${attribute.name}
+                                    </div>
+                                </div>
+                        `;
+                        }
+                    }
+                    simpleAttributeTemplate += `</div></div>`;
+                    if (configurableAttributeTemplate) {
+                        configurableAttributeTemplate += `</div></div>`
+                    }
+                }
+                // 回填模板到attributes-container
+                attribute_container.empty().html(simpleAttributeTemplate);
+                let selectAttribute = $('#selectAttribute')
+                if (configurableAttributeTemplate) {
+                    selectAttribute.empty().html(configurableAttributeTemplate);
+                } else {
+                    selectAttribute.empty().html('@lang{暂无可配置项}');
+                }
+            }
+        }).then((res) => {
+            // 监听可配置项选择,然后生成子产品
+            generateConfigurableProduct()
+            $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
+                generateConfigurableProduct()
+            })
+            hideLoading()
+        })
+    })
+
+    // 监听可配置项选择,然后生成子产品
+    $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
+        generateConfigurableProduct()
+    })
+
+    // 笛卡尔积
+    function cartesianProduct(arrays) {
+        return arrays.reduce(function (a, b) {
+            var result = [];
+            a.forEach(function (x) {
+                b.forEach(function (y) {
+                    result.push(x.concat([y]));
+                });
+            });
+            return result;
+        }, [[]]);
+    }
+
+    function generateConfigurableProduct() {
+        // 查找selectAttribute下面所有的checkbox类型为input且被选中的
+        let cartesianAttributesData = []
+        let attributeOptionsSelected = []
+        $("#selectAttribute").find("input[type='checkbox']:checked").each(function () {
+            // 处理每个被选中的 checkbox 元素
+            let option = $(this);
+            let swatch_image_id = 'swatch_image-' + option.data('attribute-attribute-id') + '-' + option.data('attribute-entity-id') + '-' + option.data('attribute-group-id') + '-' + option.data('option-value') + '-' + option.data('option-id');
+            let attribute_code = option.data('attribute-code');
+            let attribute_name = option.data('attribute-name');
+            if (!attributeOptionsSelected[attribute_code]) {
+                attributeOptionsSelected[attribute_code] = []
+            }
+            // 重新刷新时不应该刷掉之前选择的图片
+            let swatch_image = $(`#${swatch_image_id}`).val();
+            if (!swatch_image) {
+                attributeOptionsSelected[attribute_code].push({
+                    'code': attribute_code + '-' + option.data('option-code'),
+                    'attribute_id': option.data('attribute-attribute-id'),
+                    'name': attribute_name + '-' + option.data('name'),
+                    'swatch_image_id': swatch_image_id,
+                    'swatch_image': option.data('option-swatch-image'),
+                    'swatch_color': option.data('option-swatch-color'),
+                    'swatch_text': option.data('option-swatch-text')
+                });
+            }
+            if (swatch_image) {
+                attributeOptionsSelected[attribute_code].push({
+                    'code': attribute_code + '-' + option.data('option-code'),
+                    'attribute_id': option.data('attribute-attribute-id'),
+                    'name': attribute_name + '-' + option.data('name'),
+                    'swatch_image_id': swatch_image_id,
+                    'swatch_image': swatch_image,
+                    'swatch_color': option.data('option-swatch-color'),
+                    'swatch_text': option.data('option-swatch-text')
+                });
+            }
+
+        });
+        for (let key in attributeOptionsSelected) {
+            cartesianAttributesData.push(attributeOptionsSelected[key])
+        }
+        // 生成笛卡尔乘积子产品
+        let cartesianProductSkus = cartesianProduct(cartesianAttributesData)
+        // 渲染可编辑表格
+        let configurableProductItems = [];
+        let baseAttributes = {};
+        $('#product_base_info').find('input, select, textarea').each(function () {
+            let name = $(this).attr('name')
+            if (name) {
+                baseAttributes[$(this).attr('name')] = $(this).val()
+            }
+        })
+        for (let i in cartesianProductSkus) {
+            let cartesianProductSku = cartesianProductSkus[i]
+            let sku = '';
+            let name = '';
+            let swatch_image_ids = [];
+            let swatch_images = [];
+            for (let j in cartesianProductSku) {
+                sku += cartesianProductSku[j]['code'] + '-'
+                name += cartesianProductSku[j]['name'] + '-'
+                swatch_image_ids.push(cartesianProductSku[j]['swatch_image_id'])
+                if (cartesianProductSku[j]['swatch_image']) {
+                    swatch_images.push(cartesianProductSku[j]['swatch_image'])
+                }
+            }
+            if (sku) {
+                sku = sku.slice(0, -1)
+            }
+            if (name) {
+                name = name.slice(0, -1)
+            }
+
+            let baseAttributesInfo = Object.assign({}, baseAttributes)
+            // 读取基础属性
+            if (sku) {
+                baseAttributesInfo['sku'] = $('#sku').attr('value') + '-' + sku
+            } else {
+                baseAttributesInfo['sku'] = $('#sku').attr('value')
+            }
+            baseAttributesInfo['name'] = $('#name').attr('value') + '-' + name
+            baseAttributesInfo['swatch_image_ids'] = swatch_image_ids
+            baseAttributesInfo['swatch_images'] = swatch_images
+            let base_image = baseAttributesInfo['image']
+            baseAttributesInfo['image'] = []
+            if (swatch_images.length > 0) {
+                swatch_images.forEach(function (swatch_image) {
+                    baseAttributesInfo['image'].push(swatch_image)
+                })
+            } else {
+                baseAttributesInfo['image'].push(base_image)
+            }
+            configurableProductItems.push(baseAttributesInfo)
+        }
+        let configurableProductsTableTemplate = '';
+        window.configurableProductItems = configurableProductItems
+        for (let i in configurableProductItems) {
+            let configurableProduct = configurableProductItems[i]
+            // 渲染图
+            let images = '';
+            let images_src = '';
+            if (configurableProduct['image'].length > 0) {
+                configurableProduct['image'].forEach(function (image_src, index) {
+                    images = `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${configurableProduct.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${configurableProduct.sku}" onclick="generateFileManagerModal('${configurableProduct.sku}-${index}-origin')" id="${configurableProduct.sku}-${index}-origin" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(image_src)}" ></div>` + images;
+                    images_src = image_src + ',' + images_src;
+                })
+                // 如果最后有,号，删除最后一个,号
+                if (images_src[images_src.length - 1] === ',') {
+                    images_src = images_src.slice(0, -1)
+                }
+            }
+            configurableProductsTableTemplate += `
+                <tr data-id="${configurableProduct.sku}">
+                    <td data-product_id="product_id" data-id="0">0</td>
+                    <td class="d-flex" data-preview="image-preview" data-id="${configurableProduct.sku}-image" id="${configurableProduct.sku}-image-preview">${images}</td>
+                    <td style="display: none" id="${configurableProduct.sku}-image" data-field="image" data-swatch="${configurableProduct.swatch_image_ids}" id="${configurableProduct.sku}-image">${images_src}</td>
+                    <td data-field="name">${configurableProduct.name}</td>
+                    <td data-field="price">${configurableProduct.price}</td>
+                    <td data-field="sku" id="child-sku-${configurableProduct.sku}">${configurableProduct.sku}</td>
+                    <td data-field="stock">${configurableProduct.stock}</td>
+                    <td>
+                        <a class="btn btn-outline-secondary btn-sm edit" title="@lang{编辑}">
+                            <i class="fas fa-pencil-alt"></i>
+                        </a>
+                    </td>
+                </tr>
+            `;
+        }
+        if (!configurableProductsTableTemplate) {
+            configurableProductsTableTemplate = '@lang{没有可配置项}';
+        }
+        let configurableProductsTable = `<div class="table-responsive">
+<table class="table table-bordered table-hover table-editable table-nowrap align-middle table-edits">
+            <thead>
+                <tr>
+                    <th><lang>产品ID</lang></th>
+                    <th><lang>图片</lang></th>
+<!--                    <th><lang>图片值</lang></th>-->
+                    <th><lang>标题</lang></th>
+                    <th><lang>价格</lang></th>
+                    <th>SKU</th>
+                    <th><lang>库存</lang></th>
+                    <th><lang>操作</lang></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${configurableProductsTableTemplate}
+            </tbody>
+</div>
+            `;
+        let configurableProductsContainer = $('#configurableProducts')
+        configurableProductsContainer.empty().html(configurableProductsTable);
+        renderConfigurableProductEditTable()
+        // 统计生成了多少个产品，更新到导航
+        let configurableProductsCount = configurableProductsContainer.find('tr').length - 1
+        $('#configurable_attributes_text').text('@lang{你创建了}' + configurableProductsCount + '@lang{个产品}')
+        // 检测子产品skus是否可用
+        checkChildSkus()
+        // 拖拽排序
+        window.configurableProductItems.forEach(function (configurableProduct) {
+            addDragItem(configurableProduct.sku)
+        })
+    }
+
+    function renderConfigurableProductEditTable() {
+        // 初始化可编辑
+        let editTable = $('.table-edits tr')
+        editTable.off()
+        var pickers = {};
+        editTable.editable({
+            /*dropdowns: {
+                gender: ['Male', 'Female']
+            },*/
+            edit: function (values) {
+                $('.edit i', this)
+                    .removeClass('fa-pencil-alt')
+                    .addClass('fa-save')
+                    .attr('title', '@lang{保存}');
+            },
+            save: function (values) {
+                // 直接
+                $('.edit i', this)
+                    .removeClass('fa-save')
+                    .addClass('fa-pencil-alt')
+                    .attr('title', '@lang{编辑}');
+
+                if (this in pickers) {
+                    pickers[this].destroy();
+                    delete pickers[this];
+                }
+            },
+            cancel: function (values) {
+                $('.edit i', this)
+                    .removeClass('fa-save')
+                    .addClass('fa-pencil-alt')
+                    .attr('title', '@lang{编辑}');
+
+                if (this in pickers) {
+                    pickers[this].destroy();
+                    delete pickers[this];
+                }
+            }
+        });
+    }
+
+</script>
+<script>
+    /**打开文件选择器*/
+    function generateFileManagerModal(id, multi = 0, changeEle = null) {
+        // 获取
+        let target_id = encodeURIComponent(id)
+        let url = `@file-manager-connector{title='文件管理器' path='media/products/' ext='jpg,png,gif,webp' w='50' h='50' size='204800'}&multi=${multi}&target=` + target_id + '&close=' + target_id + '-close';
+        let modal = $(`<div class="modal fade bs-example-modal-center bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="@lang{文件管理器}" aria-modal="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-md-down">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <lang>选择产品图片</lang> <span class="text-danger"><lang>允许的文件类型：</lang>(jpg,png,gif,webp)</span>
+                                        <span><lang>允许的最大文件大小：</lang>200 KB</span>
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" id="${id}-close" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body" style="padding: 0">
+                                    <iframe id="${id}-images-file-manager-iframe" class="w-100" src="${url}" scrolling="no" frameborder="0" style="min-height: 420px;"></iframe>
+                                </div>
+                            </div><!-- /.modal-content -->
+                        </div><!-- /.modal-dialog -->
+                </div>`)
+        modal.modal('show')
+        modal.on('hidden.bs.modal', function () {
+            modal.remove()
+        })
+        modal.on('shown.bs.modal', function () {
+            modal.find('iframe').on('load', function () {
+            })
+        })
+    }
+
+    function changeSwatchImage(e) {
+        let target = $(e)
+        let src = target.val()
+        let real_src = '/media/image/' + encodeURIComponent(src)
+        // 替换商品中和
+        let swatch_id = target.attr('id')
+        $('#' + swatch_id + '-image-preview').attr('src', real_src)
+        let targetAttr = $('#' + target.attr('data-input-id'))
+        targetAttr.attr('data-option-swatch-image', src)
+        targetAttr.val(encodeURIComponent(JSON.stringify({
+            option_id: targetAttr.attr('data-option-id'),
+            value: targetAttr.attr('data-option-value'),
+            code: targetAttr.attr('data-option-code'),
+            'swatch-image': targetAttr.attr('data-option-swatch-image'),
+            'swatch-color': targetAttr.attr('data-option-swatch-color'),
+            'swatch-text': targetAttr.attr('data-option-swatch-text'),
+        })))
+        window.configurableProductItems.forEach(function (product, index) {
+            // 如果swatch_id在product.swatch_image_ids中，则替换产品sku所在行的image信息
+            let product_row = $('tr[data-id="' + product.sku + '"')
+            if (product.swatch_image_ids.includes(swatch_id)) {
+                // 如果image里面已经有图片则检查当前图片是否已在其中，已存在则不重复添加
+                if (!product.image.includes(src)) {
+                    product.image.unshift(src)
+                    product_row.find('td[data-field="image"]').text(product.image.join(','))
+                    let imgs = '';
+                    product.image.forEach(function (item, index) {
+                        imgs += `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${product.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${product.sku}" onclick="generateFileManagerModal('${swatch_id}-${index}')" id="${product.sku}-${index}" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(item)}" ></div>`
+                    })
+                    product_row.find('td[data-preview="image-preview"]').html(imgs)
+                    window.configurableProductItems[index] = product
+                }
+            }
+        })
+    }
+
+    function changeSwatchImageForProduct(e) {
+        let target = $(e)
+        let sku = target.data('sku')
+        let swatch_id = target.data('swatch-id')
+        let product_row = $('tr[data-id="' + sku + '"')
+        let image = product_row.find('td[data-field="image"]')
+        let changed_image = target.val()
+        let image_text = changed_image + ',' + image.text()
+        let images = image_text.split(',')
+        window.configurableProductItems.forEach(function (product, index) {
+                if (product.sku === sku) {
+                    product.image = images
+                    let imgs = '';
+                    product.image.forEach(function (item, index) {
+                        imgs += `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${product.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${product.sku}" onclick="generateFileManagerModal('${swatch_id}-${index}')" id="${product.sku}-${index}" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(item)}" ></div>`
+                    })
+                    product_row.find('td[data-preview="image-preview"]').html(imgs)
+                    window.configurableProductItems[index] = product
+                }
+            }
+        )
+    }
+
+    function deleteImage(e) {
+        let target = $(e)
+        let image = target.parent().find('img').attr('src')
+        image = image.replace('/media/image/', '')
+        let sku = target.data('sku')
+        window.configurableProductItems.forEach(function (product, index) {
+                if (product.sku === sku && product.image.includes(image)) {
+                    // 删除
+                    product.image = product.image.filter(item => item !== image)
+                    let imgs = '';
+                    product.image.forEach(function (item, index) {
+                        imgs += `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${product.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${product.sku}" onclick="generateFileManagerModal('${product.sku}-${index}')" id="${product.sku}-${index}" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(item)}" ></div>`
+                    })
+
+                    let product_row = $('tr[data-id="' + sku + '"')
+                    product_row.find('td[data-preview="image-preview"]').html(imgs)
+                    product_row.find('td[data-field="image"]').text(product.image.join(','))
+                    window.configurableProductItems[index] = product
+                }
+            }
+        )
+    }
+</script>
+<!--检测产品名信息-->
+<js:part name="debounce"/>
+<script>
+    /*监听名称是否可用*/
+    const debounceProductName = debounce((e) => {
+        let target = $(e.target)
+        let name = target.val()
+        $.ajax({
+            url: '@backend-url("*/backend/product/search-by")?field=name&value=' + name,
+            success: function (res) {
+                if (res.product_id) {
+                    target.removeClass('border-success')
+                    target.addClass('border-danger')
+                    target.attr('valid', 'false')
+                } else {
+                    target.removeClass('border-danger')
+                    target.addClass('border-success')
+                    target.attr('valid', 'true')
+                    if ($('#sku').data('origin-value') === '') {
+                        // 如果sku为空，则将文本转化为sku
+                        name = name.replace(/ /g, '-')
+                        $('#sku').val(name)
+                    }
+                }
+            },
+            error: function (res) {
+                console.log(res)
+            }
+        })
+    }, 500);
+    $('#name').on('input', debounceProductName)
+    /*监听sku*/
+    const debounceProductSku = debounce((e) => {
+        let target = $(e.target)
+        let sku = target.val()
+        $.ajax({
+            url: '@backend-url("*/backend/product/search-by")?field=sku&value=' + sku,
+            success: function (res) {
+                if (res.product_id) {
+                    target.removeClass('border-success')
+                    target.addClass('border-danger')
+                    target.attr('valid', 'false')
+                } else {
+                    target.removeClass('border-danger')
+                    target.addClass('border-success')
+                    target.attr('valid', 'true')
+                }
+            },
+            error: function (res) {
+                console.log(res)
+            }
+        })
+    }, 500);
+    $('#sku').on('input', debounceProductSku)
+
+    // 检查子产品SKU可用性
+    function checkChildSkus() {
+        let skus = Array.from($('td[data-field="sku"]').map(function () {
+            return $(this).text()
+        }))
+        $.ajax({
+            url: '@backend-url("*/backend/product/check-batch-sku")',
+            dataType: 'json',
+            type: 'post',
+            data: {
+                skus: skus
+            },
+            success: function (res) {
+                // 将sku存在的产品进行行标红
+                let exist = false
+                for (let sku in res) {
+                    let sku_exist = res[sku]
+                    if (sku_exist === 1) {
+                        $('#child-sku-' + sku).addClass('text-danger').attr('valid', 'false')
+                        exist = true
+                    }
+                }
+                // 提醒用户
+                if (exist) {
+                    Swal.fire({
+                        title: '@lang{警告！}',
+                        text: '@lang{子产品有部分SKU已存在!请确保产品SKU唯一性。}',
+                        icon: 'error',
+                        confirmButtonText: '@lang{好的}'
+                    })
+                }
+            },
+            error: function (res) {
+                console.log(res)
+            }
+        })
+    }
+
+    // 验证表单提交
+    $('#productForm').on('submit', function (e) {
+        let valid = true;
+        // 检查主sku可用性
+        $.ajax({
+            url: '@backend-url("*/backend/product/search-by")?field=sku&value=' + $('#sku').val(),
+            dataType: 'json',
+            type: 'get',
+            async: false,
+            success: function (res) {
+                let target = $('#sku')
+                if (res.product_id) {
+                    target.removeClass('border-success')
+                    target.addClass('border-danger')
+                    target.attr('valid', 'false')
+                    valid = false
+                    // 提示用户
+                    Swal.fire({
+                        title: '@lang{警告！}',
+                        text: `@lang{主SKU:} ${target.val()} @lang{已存在!}`,
+                        icon: 'error',
+                        confirmButtonText: '@lang{好的}'
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            target.focus()
+                            $('#progress-wizard').find('a[href="#product_base_info"]').tab('show')
+                        }
+                    })
+                    valid = false
+                } else {
+                    target.removeClass('border-danger')
+                    target.addClass('border-success')
+                    target.attr('valid', 'true')
+                }
+            },
+            error: function (res) {
+                valid = false
+                console.log(res)
+            }
+        })
+        if (!valid) {
+            e.preventDefault()
+            return false
+        }
+        $('*[valid="false"]').each(function () {
+            let target = $(this)
+            let name = $('label[for="' + target.attr('id') + '"]').text()
+            if (!name) {
+                name = '@lang{SKU:}' + target.text()
+            }
+            // 提示用户
+            Swal.fire({
+                title: '@lang{警告！}',
+                text: `${name} @lang{已存在!}`,
+                icon: 'error',
+                confirmButtonText: '@lang{好的}'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    target.focus()
+                    $('#progress-wizard').find('a[href="#configurable_attributes"]').tab('show')
+                }
+            })
+            valid = false
+        })
+        if (!valid) {
+            e.preventDefault()
+            return false
+        }
+        showLoading();
+    })
+</script>
+<js:part name="drag-sort"/>
+<script>
+    function addDragItem(sku) {
+        new DragSort({
+            id: sku + '-image-preview', // 拖动父级div框的ID
+            drag: 'drag-item', //拖动元素
+            times: '500', // 动画时长（默认一秒钟）
+            callback: function () {
+                // 刷新目标value
+                let urls = '';
+                let imgs = $('#' + sku + '-image-preview').find('img')
+                for (let i = 0; i < imgs.length; i++) {
+                    if (urls) {
+                        urls += ','
+                    }
+                    urls += imgs[i].getAttribute('src').replace('/pub/media/', '')
+                }
+                let product_row = $('tr[data-id="' + sku + '"')
+                product_row.find('td[data-field="image"]').text(urls)
+            }
+        })
+    }
+
+</script>
+<w:editor-manager container-id="progress-wizard" submit=""/>
+<w:data-field url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
+</body>
+</html>
