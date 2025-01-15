@@ -1,7 +1,7 @@
 # weline-module-ali-ddns-server
 
 #### 介绍
-Aiweline提供的基于WelineFramework框架的阿里云Ddns解析服务，支持ipv4和ipv6，支持多域名批量解析。
+Weline提供的基于WelineFramework框架的阿里云Ddns解析服务，支持ipv4和ipv6，支持多域名批量解析。
 
 #### 软件架构
 软件架构说明

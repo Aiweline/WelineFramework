@@ -12,7 +12,6 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Controller\Backend\Attribute;
 
-use Gvanda\Store\Model\Store;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;

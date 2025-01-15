@@ -54,6 +54,8 @@ class EavEntity extends Model
         $modules = Env::getInstance()->getActiveModules();
         $eavs = [];
         foreach ($modules as $module) {
+            d($module);
+            d($moduleFileReader->readClass(new Module($module), 'Model'));
             $eavs = array_merge($eavs, $moduleFileReader->readClass(new Module($module), 'Model'));
         }
         foreach ($eavs as $eav) {

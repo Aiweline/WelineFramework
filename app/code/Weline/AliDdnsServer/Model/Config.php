@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归Weline所有。
  * 作者：Admin
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -10,7 +10,7 @@ declare(strict_types=1);
  * 日期：2023/5/10 22:42:22
  */
 
-namespace Aiweline\AliDdnsServer\Model;
+namespace Weline\AliDdnsServer\Model;
 
 class Config extends \Weline\SystemConfig\Model\SystemConfig
 {
@@ -27,12 +27,12 @@ class Config extends \Weline\SystemConfig\Model\SystemConfig
         return $this->setConfig($key, $value);
     }
 
-    function getConfig(string $key, string $module = 'Aiweline_AliDdnsServer', string $area = self::area_BACKEND): mixed
+    function getConfig(string $key, string $module = 'Weline_AliDdnsServer', string $area = self::area_BACKEND): mixed
     {
         return parent::getConfig($key, $module, $area);
     }
 
-    function setConfig(string $key, string $value, $module = 'Aiweline_AliDdnsServer', string $area = self::area_BACKEND): bool
+    function setConfig(string $key, string $value, $module = 'Weline_AliDdnsServer', string $area = self::area_BACKEND): bool
     {
         return parent::setConfig($key, $value, $module, $area);
     }
