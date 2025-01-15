@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Gvanda_Store::main" name="main" title="店铺" action=""
+         parent="Gvanda_Shop::main"
+         icon="ri-store-3-line"
+         order="1"/>
+    <add source="Gvanda_Store::listing" name="main" title="列表" action="shop-store/backend/store"
+         parent="Gvanda_Store::main"
+         icon="ri-store-3-line"
+         order="1"/>
+</menus>
