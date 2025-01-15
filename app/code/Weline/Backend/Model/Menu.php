@@ -279,7 +279,13 @@ class Menu extends \Weline\Framework\Database\Model
                     $roleAccessSources,
                     'source_name'
                 );
-
+            // 未在ACL控制列表内的菜单
+            $menus = $this->joinModel(Acl::class, 'acl', 'main_table.source=acl.source_id')
+                ->where(self::fields_SOURCE, $roleAccessSources, 'not in')
+                ->where(Acl::fields_ACL_ID . ' is null')
+                ->select()
+                ->getSql();
+            dd($menus);
         } else {
             $aclTree = self::Acl()
                 ->getTree(
@@ -310,8 +316,8 @@ class Menu extends \Weline\Framework\Database\Model
     protected function getRoleAccessSources(Role $role): mixed
     {
         /**@var RoleAccess $roleSourceModel */
-        $roleSourceModel   = ObjectManager::getInstance(RoleAccess::class);
-        $roleAccess        = $roleSourceModel->where(RoleAccess::fields_ROLE_ID, $role->getId(0))->select()->fetchArray();
+        $roleSourceModel = ObjectManager::getInstance(RoleAccess::class);
+        $roleAccess = $roleSourceModel->where(RoleAccess::fields_ROLE_ID, $role->getId(0))->select()->fetchArray();
         $roleAccessSources = [];
         foreach ($roleAccess as $roleAccess) {
             $roleAccessSources[] = $roleAccess[RoleAccess::fields_SOURCE_ID];
