@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统配置-->
+    <add source="Gvanda_Product::catalog" name="catalog" title="目录" action=""
+         parent="Gvanda_Shop::main"
+         icon="mdi mdi-package-variant"
+         order="1"/>
+    <add source="Gvanda_Product::product" name="product" title="产品" action="/*/backend/product"
+         parent="Gvanda_Product::catalog"
+         icon="ri-product-hunt-fill"
+         order="1"/>
+    <add source="Gvanda_Product::category" name="category" title="分类" action="/*/backend/category"
+         parent="Gvanda_Product::catalog"
+         icon="fas fa-clipboard-list"
+         order="2"/>
+</menus>
