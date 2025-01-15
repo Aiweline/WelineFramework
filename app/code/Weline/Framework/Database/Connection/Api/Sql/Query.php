@@ -510,9 +510,17 @@ abstract class Query implements QueryInterface
             $this->sql = "SELECT COUNT({$field}) AS $alias FROM (" . $this->sql . ") as total_records";
             $this->query($this->sql);
         } else {
-            $this->fields = "count({$field}) as `{$alias}`";
-            $this->limit(1, 0);
-            $this->prepareSql('find');
+            # 聚合查询
+            if($this->group_by){
+                $this->prepareSql('select');
+                $preSql = $this->getSql();
+                $sql = "select count({$field}) as `{$alias}` from ({$preSql}) limit 1";
+                $this->sql = $sql;
+            }else{
+                $this->fields = "count({$field}) as `{$alias}`";
+                $this->limit(1, 0);
+                $this->prepareSql('find');
+            }
         }
         $this->fetch_type = 'find';
         $result = $this->fetch();
