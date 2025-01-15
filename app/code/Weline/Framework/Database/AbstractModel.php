@@ -651,22 +651,22 @@ abstract class AbstractModel extends DataObject
         $model_event_name = str_replace('\\', '_', $this::class);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', ['model' => $this]);
         $this->getQuery()->beginTransaction();
-//        try {
-        if ($this->force_check_flag) {
-            $save_result = $this->checkUpdateOrInsert();
-        } else {
-            $save_result = $this->getQuery()->clearQuery()->insert($this->getModelData())->fetch();
+        try {
+            if ($this->force_check_flag) {
+                $save_result = $this->checkUpdateOrInsert();
+            } else {
+                $save_result = $this->getQuery()->clearQuery()->insert($this->getModelData())->fetch();
+            }
+            if (!$this->getId()) {
+                $this->setData($this->_primary_key, $save_result);
+            }
+            $this->getQuery()->commit();
+        } catch (\Exception $exception) {
+            $this->getQuery()->rollBack();
+            $msg = __('保存数据出错! ');
+            $msg .= __('消息: %1', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %1', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %1', $this->getQuery()->getSql());
+            throw new Exception($msg);
         }
-        if (!$this->getId()) {
-            $this->setData($this->_primary_key, $save_result);
-        }
-        $this->getQuery()->commit();
-//        } catch (\Exception $exception) {
-//            $this->getQuery()->rollBack();
-//            $msg = __('保存数据出错! ');
-//            $msg .= __('消息: %1', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %1', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %1', $this->getQuery()->getLastSql());
-//            throw new ModelException($msg);
-//        }
 
         // save之后事件
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_after', ['model' => $this]);
@@ -1639,6 +1639,7 @@ PAGINATION;
             }
             # 获取变更数据
             $data = $this->getModelChangedData();
+
             if (!$data) {
                 return $check_result[$this->_primary_key];
             }
@@ -1656,6 +1657,7 @@ PAGINATION;
             if (empty($data)) {
                 return $check_result[$this->_primary_key];
             }
+
             $save_result = $this->getQuery()
                 ->where($this->unique_data)
                 ->update($data)
