@@ -133,21 +133,4 @@ class Role extends \Weline\Framework\Database\Model
         $roleAccess = ObjectManager::getInstance(RoleAccess::class);
         return $roleAccess->getRoleAccessList($this);
     }
-
-    /**
-     * @DESC          # 获取角色不能访问的资源
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2023/1/27 23:16
-     * 参数区：
-     * @return array
-     * @throws null
-     */
-    function getNoAccessSources(): array
-    {
-        /**@var \Weline\Acl\Model\RoleAccess $roleAccess */
-        $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-        return $roleAccess->getRoleNotAccessList($this);
-    }
 }
