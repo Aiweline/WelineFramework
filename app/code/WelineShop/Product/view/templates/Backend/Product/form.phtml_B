@@ -1,0 +1,517 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>
+        <?= __('产品管理') ?>
+    </title>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <w:js>Weline_Backend::backend/lib/vue/vue2.6.11.js</w:js>
+    <js:part name="debounce"/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='container-fluid'>
+        <!-- start page message -->
+        <div class='row'>
+            <template>Weline_Component::message.phtml</template>
+        </div> <!-- end message -->
+        <div class='card-body'>
+            <div class='needs-validation'>
+                <div class="sticky-top">
+                    <button class='btn btn-default pull-right' v-on:click.stop='flush'>
+                        <lang>刷新</lang>
+                    </button>
+                    <button class='btn btn-primary pull-right' v-on:click.stop='save'>
+                        <lang>保存</lang>
+                    </button>
+                </div>
+                <div class='row'>
+                    <div class='col-12'>
+                        <!-- 固有属性 -->
+                        <div class='card' id="productFixedAttributes">
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>产品基础信息</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>产品的固有属性</lang>
+                                </p>
+                                <!--基础信息-->
+                                <div class='row'>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='name'>
+                                                <lang>标题</lang>
+                                            </label>
+                                            <input scope="product" type='text' class='form-control' maxlength='128'
+                                                   @input='changeScope($event,"name")'
+                                                   data-parsley-minlength='3' id='name' placeholder='@lang{标题}'
+                                                   v-model="product.name" required=''/>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                            <div class='invalid-feedback'>
+                                                <lang>请正确填写产品标题！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='sku'>
+                                                <lang>SKU</lang>
+                                            </label>
+                                            <input scope="product" type='text' class='form-control' maxlength='60'
+                                                   @input='changeScope($event,"sku")'
+                                                   data-parsley-minlength='3' id='sku'
+                                                   placeholder='@lang{产品SKU}'
+                                                   v-model='product.sku' required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                            <div class='invalid-feedback'>
+                                                <lang>请正确填写SKU!</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='stock'>
+                                                <lang>库存</lang>
+                                            </label>
+                                            <input scope="product" type='number' step="1" class='form-control'
+                                                   @input='changeScope($event,"stock")'
+                                                   maxlength='60'
+                                                   data-parsley-minlength='3' id='stock'
+                                                   placeholder='@lang{产品库存}'
+                                                   v-model='product.stock' required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                            <div class='invalid-feedback'>
+                                                <lang>请正确填写库存!</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='price'>
+                                                <lang>价格</lang>
+                                            </label>
+                                            <input scope="product" type='number' step="0.01" class='form-control'
+                                                   maxlength='60'
+                                                   data-parsley-minlength='3' id='price'
+                                                   placeholder='@lang{产品价格}'
+                                                   @input='changeScope($event,"price")'
+                                                   v-model='product.price' required=''>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                            <div class='invalid-feedback'>
+                                                <lang>请正确填写价格!</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='col-md-3'>
+                                        <div class='mb-3'>
+                                            <label class='form-label' for='selectSet'>
+                                                <lang>产品属性集</lang>
+                                            </label>
+                                            <select scope="product" type='text' class='form-control'
+                                                    data-parsley-minlength='1' id='selectSet' required='required'
+                                                    @change="handleSetSelectChange($event,'set_id')"
+                                                    v-model='product.set_id'>
+                                                <option value="" @if{product.set_id==''=> 'selected'}>
+                                                    <lang>--请选择属性集--</lang>
+                                                </option>
+                                                <foreach name="sets">
+                                                    <option value="{{v.set_id}}" @if{product.set_id=== v.set_id=>
+                                                        'selected'}>{{v.name}}
+                                                    </option>
+                                                </foreach>
+                                            </select>
+                                            <div class='valid-feedback'>
+                                                <lang>填写正确！</lang>
+                                            </div>
+                                            <div class='invalid-feedback'>
+                                                <lang>产品属性集必填！</lang>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                    <div class='container-fluid' id="attributes">
+                        <!-- 属性信息 -->
+                        <div class='col-12' v-for="group in groups">
+                            <div class='card'>
+                                <div class='card-body'>
+                                    <h4 class='card-title' v-text="@lang{group.local_name?group.local_name:group.name}">
+                                    </h4>
+                                    <p class='card-title-desc'>
+                                        <lang>产品的属性信息</lang>
+                                    </p>
+                                    <div class="row">
+                                        <div class='col-md-3' v-for="attribute in group.attributes"
+                                             v-if="attribute.has_option==0 && attribute.multiple_valued==0">
+                                            <div class='mb-3'>
+                                                <label class='form-label'
+                                                       :for='"attribute"+group.code+"_"+attribute.code'
+                                                       v-text="attribute.local_name?attribute.local_name:attribute.name">
+                                                </label>
+                                                <input scope='product' class='form-control'
+                                                       @input='changeScope($event,"attribute*"+group.code+"*"+attribute.code)'
+                                                       :placeholder='attribute.local_name?attribute.local_name:attribute.name'
+                                                       v-model='product["attribute*"+group.code+"*"+attribute.code]'
+                                                       :value="'attribute_'+group.code+'_'+attribute.code"
+                                                       :id="'attribute_'+attribute.code"
+                                                       v-bind="attribute.frontend_attrs">
+                                                <div v-show="attribute.code === 'image'">
+                                                    <file-manager target='#attribute_image'
+                                                                  title='选择产品图片'
+                                                                  var='product'
+                                                                  path='product/'
+                                                                  value='product.image'
+                                                                  multi='0'
+                                                                  ext="jpg,jpeg,png,gif"
+                                                                  w='50'
+                                                                  h='50' />
+                                                </div>
+                                                <div v-show="attribute.code === 'images'">
+                                                    <file-manager target='#attribute_images'
+                                                                  title='选择产品图片'
+                                                                  var='product'
+                                                                  path='product/'
+                                                                  value='product.image'
+                                                                  multi='0'
+                                                                  ext="jpg,jpeg,png,gif"
+                                                                  w='50'
+                                                                  h='50' />
+                                                </div>
+                                                <span class="help-block" v-text="attribute.type_name"></span>
+                                                <div class='valid-feedback'>
+                                                    <lang>填写正确！</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请正确填写产品标题！</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- end col -->
+                    </div> <!-- end row -->
+                    <div class='container-fluid' id="configurableAttributes">
+                        <div class='col-12'>
+                            <!-- 属性信息 -->
+                            <div class='card'>
+                                <div class='card-body'>
+                                    <h4 class='card-title d-flex justify-content-between'>
+                                        <lang>产品属性信息</lang>
+                                        <button id="configurableProductCreateButton" class="btn btn-primary pull-right"
+                                                type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#configurableAttributeSelectContainer"
+                                                aria-expanded="false"
+                                                value="1"
+                                                scope="product"
+                                                v-on:click="changeScope($event,'configurableAttributeSelectContainer')"
+                                                aria-controls="configurableProduct">
+                                            @lang{创建可配置产品}
+                                        </button>
+                                    </h4>
+                                    <div id="configurableAttributeSelectContainer" class="collapse">
+                                        <div class="card-body d-flex justify-content-end sticky-top">
+                                            <button id="generateConfigurableProductButton"
+                                                    class="btn btn-info"
+                                                    type="button"
+                                                    scope="product"
+                                                    v-on:click="changeScope($event,'generateConfigurableProductButton')">
+                                                <lang>生成子产品</lang>
+                                            </button>
+                                        </div>
+                                        <div id="configurableAttributeSelect" class="d-flex">
+                                            <!-- 属性信息 -->
+                                            <div class="card card-body"
+                                                 v-for="configurableAttribute in configurableAttributes">
+                                                <h5 class="font-size-14 mb-3"
+                                                    v-text="configurableAttribute.local_name?configurableAttribute.local_name:configurableAttribute.name"></h5>
+                                                <div class="d-flex">
+                                                    <div class="col d-flex gap-4">
+                                                        <div class="form-check mb-2"
+                                                             v-for="option in configurableAttribute.options">
+                                                            <input scope="product"
+                                                                   :data-attribute-local-name="configurableAttribute.local_name"
+                                                                   :data-attribute-name="configurableAttribute.name"
+                                                                   :data-attribute-code="configurableAttribute.code"
+                                                                   :data-attribute-id="configurableAttribute.attribute_id"
+                                                                   type="checkbox"
+                                                                   class="form-check-input"
+                                                                   :value='"configurable*"+configurableAttribute.code+"*"+option.code'
+                                                                   :name='"configurable*"+configurableAttribute.code+"*"+option.code'
+                                                                   :id="configurableAttribute.code+option.code"
+                                                                   :data-option-id="option.option_id"
+                                                                   @change="changeCheckbox($event,'configurable*'+configurableAttribute.code+'*'+option.code)"
+                                                                   :checked="product['configurable*'+configurableAttribute.code+'*'+option.code]=='true'?true:false">
+                                                            <label class="form-check-label"
+                                                                   :for="configurableAttribute.code+option.code"
+                                                                   v-text="option.value"></label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!--生成子产品可编辑表格-->
+                                        <div class="card card-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-striped">
+                                                    <thead>
+                                                    <tr>
+                                                        <th>
+                                                            <lang>名称</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>SKU</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>价格</lang>
+                                                        </th>
+                                                        <th>
+                                                            <lang>库存</lang>
+                                                        </th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <tr v-for="configurableProduct in configurableProducts">
+                                                        <td>
+                                                            <input type="text" class="form-control"
+                                                                   v-model="configurableProduct.name">
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control"
+                                                                   v-model="configurableProduct.sku">
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control"
+                                                                   v-model="configurableProduct.price">
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control"
+                                                                   v-model="configurableProduct.stock">
+                                                        </td>
+                                                    </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- end col -->
+                    </div> <!-- end row -->
+                </div>
+            </div>
+        </div>
+    </div> <!-- container-fluid -->
+</div>
+<!-- END layout-wrapper -->
+@template(Weline_Admin::common/footer.phtml)
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+
+<!--自动搜索data-scope属性的元素，并保存value到对应的scope-->
+<!--<w:---data-field url="@backend-url('backend/user-data')" container-id="product"/>-->
+<script>
+    // 笛卡尔积
+    function cartesianProduct(arrays) {
+        return arrays.reduce(function (a, b) {
+            var result = [];
+            a.forEach(function (x) {
+                b.forEach(function (y) {
+                    result.push(x.concat([y]));
+                });
+            });
+            return result;
+        }, [[]]);
+    }
+</script>
+<script>
+    var app = new Vue({
+            el: '#layout-wrapper',
+            data: {
+                product: {},
+                groups: {},
+                configurableAttributes: {},
+                configurableProducts: []
+            },
+            methods: {
+                // 使用debounce对方法进行包装
+                debouncedMethod: debounce((e, name, value) => {
+                    // 需要进行防抖处理的逻辑
+                    $.ajax({
+                        url: "@backend-url('backend/user-data')",
+                        type: 'POST',
+                        data: {
+                            scope: e.target.getAttribute('scope'),
+                            value: value,
+                            name: name,
+                        },
+                        success: function (data) {
+                            console.log(data)
+                        }
+                    })
+                    // 在这里执行您的逻辑
+                }, 500),
+                changeScope: function (e, name) {
+                    this.debouncedMethod(e, name, this.product[name]);
+                },
+                changeCheckbox: function (e, name) {
+                    this.product[name] = $(e.target).is(":checked");
+                    this.changeScope(e, name)
+                },
+                flush: function () {
+                    location.reload();
+                },
+                save: function () {
+                    console.log(this.product, 22222)
+                },
+                handleSetSelectChange: function (e, name, type) {
+                    var that = this;
+                    // 监听选择属性集selectSet
+                    showLoading()
+                    $.ajax({
+                        url: "@backend-url('*/backend/product/set-group-attributes')?id=" + this.product.set_id,
+                        type: 'GET',
+                        async: true,
+                        success: function (res) {
+                            console.log(res)
+                            that.groups = res;
+                            // 提取可配置属性
+                            let configurableAttributes = [];
+                            res.forEach(function (group) {
+                                for (let attribute of group.attributes) {
+                                    if (attribute.has_option === 1 && attribute.multiple_valued === 0) {
+                                        configurableAttributes.push(attribute)
+                                    }
+                                }
+                            })
+                            console.log(configurableAttributes, 'configurableAttributes')
+                            that.configurableAttributes = configurableAttributes
+                        },
+                        error: function (res) {
+                            console.log(res)
+                            // 使用Swal提示
+                            Swal.fire({
+                                type: 'error',
+                                title: '@lang{发生错误...}',
+                                text: '@lang{发生错误了...}',
+                            })
+                        }
+                    }).done(function (res) {
+                        hideLoading()
+                    })
+                    // 保存
+                    if (!type) {
+                        this.changeScope(e, name)
+                    }
+
+                },
+            },
+            mounted: function () {
+                this.product = <?=json_encode($product1)?>;
+                var that = this
+                // 可配置属性
+                var collapseElementList = [].slice.call($('#attributes').find('.collapse'))
+                var collapseList = collapseElementList.map(function (collapseEl) {
+                    return new bootstrap.Collapse(collapseEl)
+                })
+                $('#selectSet').trigger('change')
+                this.handleSetSelectChange(1, 'set_id', 1)
+                // 如果有configurableAttributeSelectContainer，就加载可配置属性
+                console.log(this.product, 'configurableAttributeSelectContainer')
+                if (this.product.hasOwnProperty('configurableAttributeSelectContainer')) {
+                    $('#configurableProductCreateButton').trigger('click')
+                }
+                $('#generateConfigurableProductButton').on('click', function (e) {
+                    // 从configurableAttributeSelect查出已选择的属性值
+                    let selectedAttributes = []
+                    let configurableAttributeSelectInputs = $('#configurableAttributeSelect').find('input:checked')
+                    for (let i = 0; i < configurableAttributeSelectInputs.length; i++) {
+                        let input = configurableAttributeSelectInputs[i]
+                        selectedAttributes.push({
+                            'code': input.getAttribute('data-attribute-code'),
+                            'name': input.getAttribute('data-attribute-name'),
+                            'value': input.getAttribute('value'),
+                            'id': input.getAttribute('data-attribute-id'),
+                            'option_id': input.getAttribute('data-option-id'),
+                            'local_name': input.getAttribute('data-attribute-local-name')
+                        })
+                    }
+                    // 生成笛卡尔乘积数据
+                    let cartesianAttributesPreData = {}
+                    for (let i = 0; i < selectedAttributes.length; i++) {
+                        let attribute = selectedAttributes[i].value.split('*')
+                        if (!cartesianAttributesPreData[attribute[1]]) {
+                            cartesianAttributesPreData[attribute[1]] = []
+                        }
+                        cartesianAttributesPreData[attribute[1]].push(attribute[1] + '-' + attribute[2])
+                    }
+                    console.log(cartesianAttributesPreData, 'cartesianAttributesPreData')
+                    let cartesianAttributesData = []
+                    for (let key in cartesianAttributesPreData) {
+                        cartesianAttributesData.push(cartesianAttributesPreData[key])
+                    }
+                    console.log(cartesianAttributesData)
+                    let cartesianProductSkus = cartesianProduct(cartesianAttributesData)
+                    console.log(cartesianProductSkus)
+                    // 提取产品固定属性
+                    let configurableProducts = []
+                    for (let i = 0; i < cartesianProductSkus.length; i++) {
+                        let sku = cartesianProductSkus[i].join('-')
+                        let product = JSON.parse(JSON.stringify(that.product))
+                        let base_sku = product.sku
+                        product.sku = base_sku + '-' + sku
+                        configurableProducts.push(product)
+                    }
+                    that.configurableProducts = configurableProducts
+                })
+                // generateConfigurableProductButton，就加载产品
+                if (that.product.hasOwnProperty('generateConfigurableProductButton')) {
+                    $('#generateConfigurableProductButton').trigger('click')
+                }
+            }
+        },
+    )
+</script>
+</body>
+
+</html>
