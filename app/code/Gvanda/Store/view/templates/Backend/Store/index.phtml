@@ -1,0 +1,303 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <!--基础-->
+    @template(Gvanda_Base::/backend/head/base.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
+    <!-- Sweet Alert-->
+    <link href="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)" rel="stylesheet" type="text/css"/>
+    <title><?= __('店铺管理') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>商城>店铺管理</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>商城</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/store')">
+                                            <lang>店铺</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/store')">
+                                            <lang>列表</lang>
+                                        </a>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>商城-店铺管理</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>管理店铺</lang>
+                                </p>
+                                <div class='table-rep-plugin'>
+                                    <!-- search form -->
+                                    <div class='row'>
+                                        <div class='col-6'>
+                                            <block class='Weline\Component\Block\Form\Search' id='shop-store-search'
+                                                   action='*/backend/store' method='get' keyword='q' value=''
+                                                   placeholder='请输入店铺关键词回车搜索'></block>
+                                        </div>
+                                        <div class='col-6'>
+                                            <block class="Weline\Component\Block\OffCanvas"
+                                                   template="Weline_Component::off-canvas.phtml"
+                                                   cache="300"
+                                                   id="store_add_canvas"
+                                                   action="*/backend/store/add"
+                                                   target-tag="button"
+                                                   icon="mdi mdi-plus"
+                                                   submit-button-text="保存"
+                                                   target-button-text="添加"
+                                                   target-button-class="btn btn-primary"
+                                                   title="店铺添加"
+                                                   close-button-show="1"
+                                                   close-button-text="取消"
+                                                   direction="right"
+                                                   class-names="w-75"
+                                                   off-canvas-body-style=""
+                                            />
+                                        </div>
+                                    </div>
+                                    <!-- end search form -->
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='1'>
+                                                    <lang>店铺ID</lang>
+                                                </th>
+                                                <th data-priority='2'>
+                                                    <lang>店铺名</lang>
+                                                </th>
+                                                <th data-priority='3'>
+                                                    <lang>图片</lang>
+                                                </th>
+                                                <th data-priority='4'><?= __('代码') ?></th>
+                                                <th data-priority='5'><?= __('网站') ?></th>
+                                                <th data-priority='6'><?= __('启用') ?></th>
+                                                <th data-priority='6'><?= __('地址') ?></th>
+                                                <th data-priority='6'><?= __('手机') ?></th>
+                                                <th data-priority='6'><?= __('邮箱') ?></th>
+                                                <th><?= __('开业时间') ?></th>
+                                                <th><?= __('休息时间') ?></th>
+                                                <th data-priority='6'><?= __('详情') ?></th>
+                                                <th data-priority='6'><?= __('维度') ?></th>
+                                                <th data-priority='6'><?= __('经度') ?></th>
+                                                <th><?= __('地区码') ?></th>
+                                                <th><?= __('创建时间') ?></th>
+                                                <th><?= __('更新时间') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <foreach name="stores" item="store" key="key">
+                                                <tr style="vertical-align: middle;">
+                                                    <td class='co-name'>{{store.store_id}}</td>
+                                                    <td class='co-name'>
+                                                        <local model="Gvanda\Store\Model\Store\LocalDescription"
+                                                               field="name" id="store.store_id" name="store-name">
+                                                            {{store.local_name|store.name}}
+                                                        </local>
+                                                    </td>
+                                                    <td><has name="store.image"><img src="/media/image/{{store.image}}?w=50&h=50" alt="{{store.name}}"></has></td>
+                                                    <td>{{store.code}}</td>
+                                                    <td class='co-name'>
+                                                        <if condition="store.status"><span
+                                                                    class="text-success">启用</span>
+                                                            <else/>
+                                                            <span class="text-danger">禁用</span></if>
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.address}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.phone}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.email}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.website}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.opening_hours}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.closing_hours}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.description}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.latitude}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.longitude}}
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        {{store.local}}
+                                                    </td>
+                                                    <td class='co-name'>{{store.create_time}}</td>
+                                                    <td class='co-name'>{{store.update_time}}</td>
+                                                    <td class='co-name'>
+                                                        <div class="d-flex gap-2">
+                                                            <block class='Weline\Component\Block\OffCanvas'
+                                                                   template='Weline_Component::off-canvas.phtml'
+                                                                   cache='0'
+                                                                   id='off_canvas_store_edit'
+                                                                   action="*/backend/store/edit"
+                                                                   target-tag="a"
+                                                                   vars="store"
+                                                                   action-params="{id: store.store_id}"
+                                                                   submit-button-text='保存'
+                                                                   target-button-text='修改'
+                                                                   target-button-class='text-info'
+                                                                   title='编辑店铺'
+                                                                   close-button-show='1'
+                                                                   close-button-text='关闭'
+                                                                   direction='right'
+                                                                   class-names='w-75'
+                                                                   off-canvas-body-style=''
+                                                            />
+                                                            <a class="store-delete-btn text-danger" type="button"
+                                                               data-id="{{store.store_id}}">
+                                                                <lang>删除</lang>
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </foreach>
+                                            </tbody>
+                                        </table>
+                                        {{pagination}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
+@template(Weline_Admin::common/footer.phtml)
+<script>
+    //Warning Message
+    $('.store-delete-btn').click(function () {
+        let id = $(this).attr('data-id');
+        Swal.fire({
+            title: "@lang{你确定？}",
+            text: "@lang{您将无法恢复此操作！}",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#ff3d60",
+            cancelButtonColor: "#1cbb8c",
+            confirmButtonText: "@lang{是的，删除它！}",
+            cancelButtonText: "@lang{取消}"
+        }).then(function (result) {
+            if (result.value) {
+                // 删除操作
+                $.ajax({
+                    url: '@backend-url("*/backend/store/delete")',
+                    type: 'POST',
+                    data: {id: id},
+                    success: function (data) {
+                        if (data.status === true) {
+                            Swal.fire("@lang{已删除！}", data.message, "success");
+                            window.location.reload();
+                        } else {
+                            Swal.fire("@lang{错误！}", data.message, "error");
+                            window.location.reload();
+                        }
+                    }
+                })
+            }
+        });
+    });
+</script>
+</body>
+</html>
