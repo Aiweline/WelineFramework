@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归Weline所有。
  * 作者：Admin
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -10,10 +10,10 @@ declare(strict_types=1);
  * 日期：2023/5/10 22:35:25
  */
 
-namespace Aiweline\AliDdnsServer\Cron;
+namespace Weline\AliDdnsServer\Cron;
 
-use Aiweline\AliDdnsServer\Model\Config;
-use Aiweline\AliDdnsServer\Model\DdnsDomains;
+use Weline\AliDdnsServer\Model\Config;
+use Weline\AliDdnsServer\Model\DdnsDomains;
 use AlibabaCloud\Client\AlibabaCloud;
 use AlibabaCloud\Client\Exception\ClientException;
 use AlibabaCloud\Client\Exception\ServerException;
@@ -27,11 +27,11 @@ class Ddns implements \Weline\Cron\CronTaskInterface
     const accessSecret = 'accessSecret';
 
     /**
-     * @var \Aiweline\AliDdnsServer\Model\DdnsDomains
+     * @var \Weline\AliDdnsServer\Model\DdnsDomains
      */
     private DdnsDomains $ddnsDomains;
     /**
-     * @var \Aiweline\AliDdnsServer\Model\Config
+     * @var \Weline\AliDdnsServer\Model\Config
      */
     private Config $config;
     /**

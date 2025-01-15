@@ -8,13 +8,6 @@
 
 namespace Weline\Framework\Database\Model;
 
-use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Cache\DbModelCache;
-use Weline\Framework\Database\ModelInterface;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Db\Setup;
 use Weline\Framework\System\File\Data\File;
 use Weline\Framework\System\File\Scanner;
 

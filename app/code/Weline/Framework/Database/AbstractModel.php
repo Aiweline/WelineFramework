@@ -9,8 +9,6 @@
 
 namespace Weline\Framework\Database;
 
-use Weline\BackendActivity\Model\BackendActivityLog;
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Cache\DbModelCache;

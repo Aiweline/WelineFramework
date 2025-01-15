@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归Weline所有。
  * 作者：Admin
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -10,7 +10,7 @@ declare(strict_types=1);
  * 日期：2023/5/10 22:40:03
  */
 
-namespace Aiweline\AliDdnsServer\Model;
+namespace Weline\AliDdnsServer\Model;
 
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Setup\Data\Context;
