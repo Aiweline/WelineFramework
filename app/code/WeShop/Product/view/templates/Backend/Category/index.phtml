@@ -1,0 +1,237 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <link href='@static(Weline_Eav::css/category.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('分类') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <breadcrumb model='Weline\Backend\Model\Menu' order_field="order" name_field='title'/>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <breadcrumb model="Weline\Backend\Model\Menu" order_field='order' name_field="title"/>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>产品管理</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>管理产品</lang>
+                                </p>
+                                <div class='table-rep-plugin'>
+                                    <!-- search form -->
+                                    <div class='row'>
+                                        <div class='col-6'>
+                                            <block class='Weline\Component\Block\Form\Search'
+                                                   id='entity-category-search'
+                                                   action='*/backend/category' method='get' keyword='search' value=''
+                                                   placeholder='请输入分类关键词回车搜索'></block>
+                                        </div>
+                                        <div class='col-6'>
+                                            <button class='btn btn-primary pull-right' type='button'
+                                                    data-bs-toggle='offcanvas'
+                                                    data-bs-target='#offcanvasRightCategoryForm'
+                                                    aria-controls='offcanvasRightCategoryForm'>
+                                                <lang>添加</lang>
+                                            </button>
+                                            <!-- offcanvasRightCategoryForm -->
+                                            <div class='offcanvas offcanvas-end w-75' tabindex='-1'
+                                                 id='offcanvasRightCategoryForm'
+                                                 aria-labelledby='offcanvasRightCategoryFormLabel'>
+                                                <div class='offcanvas-header'>
+                                                    <h5 id='offcanvasRightCategoryFormLabel'>
+                                                        <lang>添加分类</lang>
+                                                    </h5>
+                                                    <button type='button' class='btn-close text-reset'
+                                                            data-bs-dismiss='offcanvas'
+                                                            aria-label='@lang{关闭}'></button>
+                                                </div>
+                                                <div class='offcanvas-body w-100 h-100 overflow-hidden'>
+                                                    <div class="position-relative w-100 h-100 ">
+                                                        <!--写一个刷新iframe的按钮-->
+                                                        <!--<div class='btn btn-group-justified sticky-top'>
+                                                            <button class='btn btn-info pull-right' onclick='flushIframe()'>
+                                                                <lang>刷新</lang>
+                                                            </button>
+                                                        </div>-->
+                                                        <iframe id='categoryAddIframe' class='w-100 h-100'
+                                                                data-src="@backend-url('*/backend/category/add')"
+                                                                frameborder='0'></iframe>
+                                                        <script>
+                                                            function flushIframe() {
+                                                                let iframe = $('#categoryAddIframe');
+                                                                iframe.attr('src', iframe.attr('src'))
+                                                            }
+                                                        </script>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <script>
+                                                //show.bs.offcanvas
+                                                let offcanvasRightCategoryForm = $('#offcanvasRightCategoryForm')
+                                                offcanvasRightCategoryForm.on('show.bs.offcanvas', function () {
+                                                    let categoryAddIframe = $('#categoryAddIframe')
+                                                    categoryAddIframe.attr('src', categoryAddIframe.attr('data-src'))
+                                                })
+                                            </script>
+                                        </div>
+                                    </div>
+                                    <!-- end search form -->
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='1'>
+                                                    <lang>ID</lang>
+                                                </th>
+                                                <th data-priority='3'><?= __('名称') ?></th>
+                                                <th data-priority='3'><?= __('位置') ?></th>
+                                                <th data-priority='3'><?= __('创建时间') ?></th>
+                                                <th data-priority='3'><?= __('更新时间') ?></th>
+                                                <th data-priority='3'><?= __('操作') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <foreach name="categories" item="category" key="key">
+                                                <tr>
+                                                    <td class='co-name'>{{category.category_id}}</td>
+                                                    <td class='co-name'>
+                                                        <local model="WeShop\Product\Model\Category\LocalDescription"
+                                                               id="category
+                                                        .category_id" field="name">
+                                                            {{category.local_name|category.name}}
+                                                        </local>
+                                                    </td>
+                                                    <td>{{category.position}}</td>
+                                                    <td class='co-name'>{{category.create_time}}</td>
+                                                    <td class='co-name'>{{category.update_time}}</td>
+                                                    <td class='co-name'>
+                                                        <div class="d-flex gap-2">
+                                                            <block class='Weline\Component\Block\OffCanvas'
+                                                                   template='Weline_Component::off-canvas.phtml'
+                                                                   cache='0'
+                                                                   id='off_canvas_category_edit'
+                                                                   action='*/backend/category/edit'
+                                                                   vars='category'
+                                                                   action-params='{id: category.category_id}'
+                                                                   submit-button-text='保存'
+                                                                   target-button-text='修改'
+                                                                   title='编辑分类'
+                                                                   close-button-show='1'
+                                                                   close-button-text='关闭'
+                                                                   direction='right'
+                                                                   class-names='w-75'
+                                                                   off-canvas-body-style=''
+                                                            />
+                                                            <a class='text-danger delete' href="@backend-url('*/backend/category/delete',
+                                                                ['id'=>$category['category_id']])">
+                                                                <lang>删除</lang>
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </foreach>
+                                            </tbody>
+                                        </table>
+                                        {{pagination}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+<script>
+    $('a.delete').click(async function () {
+            showLoading()
+            await Swal.fire({
+                title: '@lang{确定删除吗?}',
+                text: "@lang{删除后不可恢复}",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: '@lang{确定}',
+                cancelButtonText: '@lang{取消}'
+            }).then(function (result) {
+                hideLoading()
+                return !!result.value;
+            })
+        }
+    )
+</script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

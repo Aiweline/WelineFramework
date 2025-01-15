@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 本文件由 秋枫雁飞 编写，所有解释权归Weline所有。
  * 作者：Admin
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
@@ -10,13 +10,13 @@ declare(strict_types=1);
  * 日期：2023/5/10 23:05:09
  */
 
-namespace Aiweline\AliDdnsServer\Controller\Backend;
+namespace Weline\AliDdnsServer\Controller\Backend;
 
 class Config extends \Weline\Framework\App\Controller\BackendController
 {
-    private \Aiweline\AliDdnsServer\Model\Config $config;
+    private \Weline\AliDdnsServer\Model\Config $config;
 
-    function __construct(\Aiweline\AliDdnsServer\Model\Config $config)
+    function __construct(\Weline\AliDdnsServer\Model\Config $config)
     {
         $this->config = $config;
     }

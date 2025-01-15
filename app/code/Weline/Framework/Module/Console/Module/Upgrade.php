@@ -155,8 +155,8 @@ class Upgrade extends CommandAbstract
         $i += 1;
         // 扫描代码
         $this->printer->note($i . '、清理模板缓存', '系统');
-        $modules = Env::getInstance()->getModuleList();
-        foreach ($modules as $module) {
+        list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+        foreach ($origin_vendor_modules as $module) {
             $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
             if (is_dir($tpl_dir)) {
                 $this->system->exec("rm -rf {$tpl_dir}");
@@ -164,7 +164,7 @@ class Upgrade extends CommandAbstract
         }
         $i += 1;
         $this->printer->note($i . '、清理缓存...');
-        /**@var $cacheManagerConsole \Weline\CacheManager\Console\Cache\Flush */
+        /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Flush */
         $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
         $cacheManagerConsole->execute();
         $this->system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
@@ -181,7 +181,7 @@ class Upgrade extends CommandAbstract
                 require $module['register'];
             }
         }
-        $modules = Env::getInstance()->getModuleList(true);
+        $modules = Env::getInstance()->getModuleList();
         foreach ($modules as $module) {
             if (!isset($dependencyModules[$module['name']])) {
                 $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');

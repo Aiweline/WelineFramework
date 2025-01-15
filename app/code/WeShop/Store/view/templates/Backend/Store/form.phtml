@@ -1,0 +1,353 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(WeShop_Base::/backend/head/base.phtml)
+    <title><?= __('商铺信息') ?></title>
+    <!-- Plugins css -->
+    <link href="@static(WeShop_Base::lib/dropzone/min/dropzone.min.css)" rel="stylesheet" type="text/css"/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='container-fluid'>
+        <!-- start page message -->
+        <div class='row'>
+            <template>Weline_Component::message.phtml</template>
+        </div>
+        <!-- end message -->
+        <div class='row'>
+            <div class='col-12'>
+                <div class='card'>
+                    <div class='card-body'>
+                        <h4 class='card-title'>
+                            <lang>商铺</lang>
+                            <notempty name='store'>
+                                <lang>编辑</lang>
+                                <else/>
+                                <lang>添加</lang>
+                            </notempty>
+                        </h4>
+                        <p class='card-title-desc'>
+                            <lang>新增商铺</lang>
+                        </p>
+                        <form class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                            <has name="store">
+                                <input type="hidden" name="store_id" value="{{store.store_id}}">
+                            </has>
+                            <!--基础信息-->
+                            <div class='row'>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationName'>
+                                            <lang>商铺名</lang>
+                                        </label>
+                                        <input type='text' class='form-control' maxlength='128'
+                                               data-parsley-minlength='3'
+                                               id='validationName' placeholder='@lang{商铺名}'
+                                               value='{{store.name}}' name='name'
+                                               required=''>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请正确填写商铺名！</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='storeCode'>
+                                            <lang>店铺编码</lang>
+                                        </label>
+                                        <input type='text' name="code" id='storeCode' value="{{store.code}}" class='form-control'
+                                               placeholder='@lang{商铺唯一标识码}'>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>父商铺必选！</lang>
+                                        </div>
+                                    </div>
+                                    <js:part name="debounce"/>
+                                    <script>
+                                        // 检测编码是否重复
+                                        $('#storeCode').on('input', debounce(function () {
+                                            let code = $(this).val();
+                                            $.ajax({
+                                                url: '@backend-url("*/backend/store/ajax-code-exist")',
+                                                type: 'POST',
+                                                dataType: 'json',
+                                                data: {code: code}
+                                            }).done(function (res) {
+                                                let input = $('#storeCode')
+                                                if (input.next()) {
+                                                    input.next().remove()
+                                                }
+                                                if (res) {
+                                                    input.css({border: "1px solid green"});
+                                                } else {
+                                                    input.css({border: "1px solid red"});
+                                                }
+                                            })
+                                        }, 500))
+                                    </script>
+                                </div>
+                                <!--店铺LOGO-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='image'>
+                                            <lang>Logo</lang>
+                                        </label>
+                                        <input type='hidden' class='form-control' name='image'
+                                               data-parsley-minlength='5'
+                                               id='image'
+                                               required='required' value="{{store.image}}"/>
+                                        <file-manager title="从图库选择" vars="store" target='#image' path='store/logo'
+                                                      value='store.image' w="50" h="50" multi="0"
+                                                      ext="png,jpeg,jpg,webp,svg,ico"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺Logo成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺Logo</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='local'>
+                                            <lang>默认地区码</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='local'
+                                               data-parsley-minlength='1'
+                                               id='local'
+                                               required='required' value="{{store.local}}" list="LocalsList"/>
+                                        <datalist id="LocalsList">
+                                            <foreach name="locals">
+                                                <option value="{{v.code}}">{{v.display_name}}</option>
+                                            </foreach>
+                                        </datalist>
+                                        <span class="help-block">
+                                            更多区域，请到<a href="/i18n/backend/countries">i18n</a>安装。
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='status'>
+                                            <lang>状态</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='status'
+                                               data-parsley-minlength='1'
+                                               required='required' value="{{store.status|0}}"/>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationStoreAddress'>
+                                            <lang>地址</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='address'
+                                               data-parsley-minlength='5'
+                                               id='validationStoreAddress'
+                                               required='required' value="{{store.address}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺地址</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--手机-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='phone'>
+                                            <lang>手机</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='phone'
+                                               data-parsley-minlength='5'
+                                               id='phone'
+                                               required='required' value="{{store.phone}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺手机成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺手机</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--邮箱-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='email'>
+                                            <lang>邮箱</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='email'
+                                               data-parsley-minlength='3'
+                                               id='email'
+                                               required='required' value="{{store.email}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺邮箱成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺邮箱</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--网站-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='website'>
+                                            <lang>网站（域名）</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='website'
+                                               data-parsley-minlength='5'
+                                               id='website'
+                                               required='required' value="{{store.website}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺网站成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺网站</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--店铺开售时间-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='opening_hours'>
+                                            <lang>开售时间</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='opening_hours'
+                                               data-parsley-minlength='5'
+                                               id='opening_hours'
+                                               required='required' value="{{store.opening_hours}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺开售时间成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺开售时间</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--店铺关闭时间-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='closing_hours'>
+                                            <lang>关闭时间</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='closing_hours'
+                                               data-parsley-minlength='5'
+                                               id='closing_hours'
+                                               required='required' value="{{store.closing_hours}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺关闭时间成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺关闭时间</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--店铺详情-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='description'>
+                                            <lang>店铺详情</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='description'
+                                               data-parsley-minlength='5'
+                                               id='description'
+                                               required='required' value="{{store.description}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺店铺详情成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺店铺详情</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--店铺纬度-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='latitude'>
+                                            <lang>纬度</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='latitude'
+                                               data-parsley-minlength='5'
+                                               id='latitude'
+                                               required='required' value="{{store.latitude}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺纬度成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺纬度</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--店铺经度-->
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='longitude'>
+                                            <lang>经度</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='longitude'
+                                               data-parsley-minlength='5'
+                                               id='longitude'
+                                               required='required' value="{{store.longitude}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>设置商铺经度成功</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置商铺经度</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class='btn btn-primary' type='submit'>
+                                <empty
+                                        name='store'>
+                                    <lang>添加</lang>
+                                    <else/>
+                                    <lang>编辑</lang>
+                                </empty>
+                            </button>
+                            <notempty name='store'>
+                                <a class='btn btn-info' href="@backend-url('*/backend/store/add')">
+                                    <lang>继续新增</lang>
+                                </a>
+                            </notempty>
+                        </form>
+                    </div>
+                </div>
+            </div> <!-- end col -->
+        </div> <!-- end row -->
+    </div> <!-- container-fluid -->
+    <!-- end main content-->
+</div>
+<!-- END layout-wrapper -->
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
