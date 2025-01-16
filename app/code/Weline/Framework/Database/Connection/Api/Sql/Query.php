@@ -514,8 +514,9 @@ abstract class Query implements QueryInterface
             if($this->group_by){
                 $this->prepareSql('select');
                 $preSql = $this->getSql();
-                $sql = "select count({$field}) as `{$alias}` from ({$preSql}) limit 1";
+                $sql = "select count({$field}) as `{$alias}` from ({$preSql}) as total_records";
                 $this->sql = $sql;
+                $this->query($this->sql);
             }else{
                 $this->fields = "count({$field}) as `{$alias}`";
                 $this->limit(1, 0);
