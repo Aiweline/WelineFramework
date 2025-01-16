@@ -253,7 +253,7 @@ trait SqlTrait
                                             if (is_string($in_where_key)) {
                                                 $in_where_key = preg_replace('/[^A-Za-z_]/', '', $in_where_key);
                                             }
-                                            $set_where_key_param = $param . '_' . str_replace(' ', '_', $where[1]) . '_' . $in_where_key;
+                                            $set_where_key_param = $param . '_' . $in_where_key . '_' . str_replace(' ', '_', $where[1]);
                                             $this->bound_values[$set_where_key_param] = (string)$item;
                                             $set_where .= $set_where_key_param . ',';
                                         }
