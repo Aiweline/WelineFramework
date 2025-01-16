@@ -17,7 +17,7 @@ class Debug
             if (!isset($_ENV['w-debug'])) {
                 return false;
             }
-            if(array_key_exists($env_key, $_ENV['w-debug'])){
+            if (array_key_exists($env_key, $_ENV['w-debug'])) {
                 return true;
             }
             return false;
@@ -29,5 +29,19 @@ class Debug
         } else {
             return false;
         }
+    }
+
+    public static function log(mixed $content = '', bool $append = true): bool
+    {
+        $log = Env::VAR_DIR . '/log/' . Env::log_path_DEBUG . '.log';
+        if (!is_dir(dirname($log))) {
+            mkdir(dirname($log), 0777, true);
+        }
+        if(!is_string($content)){
+            $content = w_var_export($content, true);
+        }
+        $content .= PHP_EOL;
+        file_put_contents($log, $content, $append ? FILE_APPEND : 0);
+        return true;
     }
 }
