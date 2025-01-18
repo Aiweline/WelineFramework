@@ -63,24 +63,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-12'>
                         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
                             <h4 class='mb-sm-0'>
-                                <lang>商城>店铺管理</lang>
+                                <lang>商城 > 店铺管理</lang>
                             </h4>
 
                             <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>商城</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/store')">
-                                            <lang>店铺</lang>
-                                        </a>
-                                    </li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/store')">
-                                            <lang>列表</lang>
-                                        </a>
-                                    </li>
-                                </ol>
+                                <breadcrumb model="Weline\Backend\Model\Menu"
+                                            id_field="menu_id"
+                                            parent_field="pid"
+                                            order_field="order"
+                                            name_field="title"
+                                />
                             </div>
 
                         </div>
@@ -95,21 +87,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-12'>
                         <div class='card'>
                             <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>商城-店铺管理</lang>
-                                </h4>
-                                <p class='card-title-desc'>
-                                    <lang>管理店铺</lang>
-                                </p>
                                 <div class='table-rep-plugin'>
                                     <!-- search form -->
-                                    <div class='row'>
-                                        <div class='col-6'>
+                                    <div class='row d-flex align-items-center justify-content-between'>
+                                        <div class='col-2'>
                                             <block class='Weline\Component\Block\Form\Search' id='shop-store-search'
                                                    action='*/backend/store' method='get' keyword='q' value=''
                                                    placeholder='请输入店铺关键词回车搜索'></block>
                                         </div>
-                                        <div class='col-6'>
+                                        <div class='col-1 text-end'>
                                             <block class="Weline\Component\Block\OffCanvas"
                                                    template="Weline_Component::off-canvas.phtml"
                                                    cache="300"
