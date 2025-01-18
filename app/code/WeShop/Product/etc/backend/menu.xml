@@ -3,6 +3,10 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--顶层：系统配置-->
+    <add source="WeShop_Shop::main" name="catalog" title="WeShop商城" action=""
+         parent=""
+         icon="mdi mdi-package-variant"
+         order="1"/>
     <add source="WeShop_Product::catalog" name="catalog" title="目录" action=""
          parent="WeShop_Shop::main"
          icon="mdi mdi-package-variant"
