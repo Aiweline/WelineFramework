@@ -59,29 +59,29 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 ->where('scope', 'product')
                 ->find()
                 ->fetch();
-            $product  = json_decode($userData['json'] ?? '', true);
+            $product = json_decode($userData['json'] ?? '', true);
             if (!isset($product['progress'])) {
                 $product['progress'] = 'product_base_info';
             }
             if (isset($product['set_id'])) {
-                $set                 = $this->product->eav_AttributeSetModel()->where(Set::fields_ID, $product['set_id'])->find()->fetch();
+                $set = $this->product->eav_AttributeSetModel()->where(Set::fields_ID, $product['set_id'])->find()->fetch();
                 $product['set_name'] = $set->getData('name');
             }
-            $product['image']  = $product['image'] ?? '';
+            $product['image'] = $product['image'] ?? '';
             $product['images'] = $product['images'] ?? '';
             $this->assign('product', $product);
             # 实体ID
             //            $this->product->setModelFieldsData($data);
             # 属性集
-            $sets = $this->product->eav_AttributeSetModel()->select()->fetchOrigin();
+            $sets = $this->product->eav_AttributeSetModel()->select()->fetchArray();
             $this->assign('sets', $sets);
             return $this->fetch('form');
         }
         # post请求保存
         if ($this->request->isPost()) {
-            $data              = $this->request->getPost();
-            $entity_id         = $this->product->getEntityId();
-            $data['image']     = trim($data['image'], ',');
+            $data = $this->request->getPost();
+            $entity_id = $this->product->getEntityId();
+            $data['image'] = trim($data['image'], ',');
             $data['parent_id'] = 0;
             $this->product->setModelFieldsData($data);
             # 创建主产品
@@ -108,9 +108,9 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
             # 检测是否有可配置产品
             if (isset($data['configurable'])) {
-                $configurableAttributes      = $data['configurable'];
+                $configurableAttributes = $data['configurable'];
                 $configurableProductItemsStr = $data['configurableProductItems'] ?? '[]';
-                $configurableProductItems    = json_decode($configurableProductItemsStr, true);
+                $configurableProductItems = json_decode($configurableProductItemsStr, true);
                 foreach ($configurableProductItems as $configurableProduct) {
                     if (empty($configurableProduct['image'])) {
                         $configurableProduct['image'] = $data['image'];
@@ -120,7 +120,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                     }
                     # 创建子产品
                     $configurableProduct['parent_id'] = $product_id;
-                    $configurableProduct              = array_merge($data, $configurableProduct);
+                    $configurableProduct = array_merge($data, $configurableProduct);
                     try {
                         $child_product_id = $this->product->reset()->clearData()->setModelFieldsData($configurableProduct)->save();
                     } catch (\Throwable $throwable) {
@@ -143,9 +143,9 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                                 $attribute_value_item['swatch-image'] = $data['image'];
                             }
                             $attribute_value_item['swatch-color'] = $attribute_value_item['swatch-color'] ?? '';
-                            $attribute_value_item['swatch-text']  = $attribute_value_item['swatch-text'] ?? '';
+                            $attribute_value_item['swatch-text'] = $attribute_value_item['swatch-text'] ?? '';
                             # 类型数据
-                            $type       = $attributeDataItem->getTypeModel();
+                            $type = $attributeDataItem->getTypeModel();
                             $value_data = [
                                 $child_product_id,
                                 $attribute_value_item['value'],
@@ -215,7 +215,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             $products = $this->product->reset()
                 ->where('sku in (\'' . implode("','", $skus) . '\')')
                 ->select()
-                ->fetchOrigin();
+                ->fetchArray();
             # 检查这些sku是否存在
             foreach ($skus as $key => $sku) {
                 unset($skus[$key]);
@@ -234,35 +234,35 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
     public function getSetAttributes()
     {
-        $id         = $this->request->getGet('id');
+        $id = $this->request->getGet('id');
         $attributes = $this->product->eav_AttributeModel()
             ->joinModel(Group::class, 'group', 'main_table.group_id=group.group_id')
             ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
             ->where('main_table.' . Set::fields_ID, $id)
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
         return $this->fetchJson($attributes);
     }
 
     public function getSetGroup()
     {
-        $id     = $this->request->getGet('id');
+        $id = $this->request->getGet('id');
         $groups = $this->product->eav_AttributeGroupModel()->where(Set::fields_ID, $id)
             ->joinModel(Group::class, 'group', 'main_table.group_id=group.group_id')
             ->joinModel(Type::class, 'type', 'main_table.type_id=type.type_id')
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
         return $this->fetchJson($groups);
     }
 
     public function getSetGroupAttributes()
     {
-        $id     = $this->request->getGet('set_id');
+        $id = $this->request->getGet('set_id');
         $groups = $this->product->eav_AttributeGroupModel()
             ->addLocalDescription()
             ->where(Set::fields_ID, $id)
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
         $productEavEntity = ObjectManager::getInstance(EavEntity::class)->loadByCode('product');
         foreach ($groups as &$group) {
             $attributes = $this->product->reset()->eav_AttributeModel()
@@ -281,27 +281,27 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 $frontend_attrs = str_replace('\'', '', $frontend_attrs);
                 $frontend_attrs = str_replace('"', '', $frontend_attrs);
                 $frontend_attrs = explode(' ', $frontend_attrs);
-                $need           = [];
+                $need = [];
                 foreach ($frontend_attrs as $key => $frontend_attr) {
-                    $frontend_attr_arr           = explode('=', $frontend_attr);
-                    $frontend_attr_arr[0]        = trim($frontend_attr_arr[0]);
-                    $frontend_attr_arr[1]        = trim($frontend_attr_arr[1] ?? '');
+                    $frontend_attr_arr = explode('=', $frontend_attr);
+                    $frontend_attr_arr[0] = trim($frontend_attr_arr[0]);
+                    $frontend_attr_arr[1] = trim($frontend_attr_arr[1] ?? '');
                     $need[$frontend_attr_arr[0]] = $frontend_attr_arr[1];
                 }
                 $attr['frontend_attrs_json'] = $need;
                 # 获取属性值
                 try {
-                    $value         = $attr->getValue();
-                }catch (\Exception $exception){
+                    $value = $attr->getValue();
+                } catch (\Exception $exception) {
                     $value = $attr->getMultipleValued() ? [] : '';
                 }
                 $attr['value'] = $attr->getData('multiple_valued') ? $value : ($value[0] ?? '');
-                $data          = $attr->getData();
+                $data = $attr->getData();
                 # 获取属性配置项
                 if ($attr->getData('has_option')) {
                     $data['options'] = $attr->getOptionModel()
                         ->select()
-                        ->fetchOrigin();
+                        ->fetchArray();
                 }
                 $attr = $data;
             }
@@ -321,13 +321,13 @@ class Product extends \Weline\Framework\App\Controller\BackendController
     {
 # 批量查询属性
         /**@var EavAttribute $attribute */
-        $attribute       = ObjectManager::make(EavAttribute::class);
+        $attribute = ObjectManager::make(EavAttribute::class);
         $attributesItems = [];
-        $attributeIds    = [];
+        $attributeIds = [];
         $attributeValues = [];
         foreach ($attributes as $attributeItems) {
             $attributeValues = $attributeValues + $attributeItems;
-            $attributeIds    = array_merge($attributeIds, array_keys($attributeItems));
+            $attributeIds = array_merge($attributeIds, array_keys($attributeItems));
         }
         # 查询属性是否存在
         /**@var EavAttribute[] $attributeDataItems */

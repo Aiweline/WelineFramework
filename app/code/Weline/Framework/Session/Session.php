@@ -49,7 +49,7 @@ class Session implements SessionInterface
         }
     }
 
-    public function start(string $session_id = null): void
+    public function start(string $session_id = ''): void
     {
         if ($session_id) {
             if (session_id() != $session_id) {
@@ -92,7 +92,7 @@ class Session implements SessionInterface
      *
      * @return string
      */
-    public function getData(string $name = null): mixed
+    public function getData(string $name = ''): mixed
     {
         if ($name) {
             return $this->session->get($name);
@@ -211,7 +211,7 @@ class Session implements SessionInterface
         return $this->getType() === 'frontend';
     }
 
-    public function destroy(string $id = null): bool
+    public function destroy(string $id = ''): bool
     {
         return $this->session->destroy($id ?: $this->session->getSessionId());
     }
