@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Model;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;

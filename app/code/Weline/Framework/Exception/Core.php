@@ -27,15 +27,15 @@ class Core extends \Exception
     /**
      * Exception 初始函数...
      *
-     * @param                 $message
+     * @param string $message
      * @param \Exception|null $cause
-     * @param int             $code
+     * @param int $code
      */
-    public function __construct($message = null, \Exception $cause = null, $code = 0)
+    public function __construct(string $message = '', null|\Exception $cause = null, $code = 0)
     {
         $this->init();
 
-        $this->etc    = Env::getInstance();
+        $this->etc = Env::getInstance();
         $this->config = (array)$this->etc->getConfig();
         $this->_debug = new Printing();
 
@@ -257,22 +257,22 @@ class Core extends \Exception
      */
     public function getErrorCode(): string
     {
-        $startColor  = chr(27) . '[36m ';
-        $endColor    = chr(27) . '[0m ';
+        $startColor = chr(27) . '[36m ';
+        $endColor = chr(27) . '[0m ';
         $heightColor = chr(27) . '[34m';
 
-        $isCli      = (PHP_SAPI === 'cli');
-        $file       = new File();
+        $isCli = (PHP_SAPI === 'cli');
+        $file = new File();
         $fileSource = $file->open($this->file, $file::mode_r)->getSource();
 
-        $returnTxt  = $isCli ? $startColor : '<div style="padding:25px;color:#767678;background-color:#9e9e9e42;margin: 15px 8px 8px 8px">'; // 初始化返回
-        $i          = 1;                                                                                                                     // 行数
+        $returnTxt = $isCli ? $startColor : '<div style="padding:25px;color:#767678;background-color:#9e9e9e42;margin: 15px 8px 8px 8px">'; // 初始化返回
+        $i = 1;                                                                                                                     // 行数
         $start_line = $this->line - 2;
-        $end_line   = $this->line + 2;
+        $end_line = $this->line + 2;
         while (!feof($fileSource)) {
             $buffer = fgets($fileSource);
             $buffer = $isCli ? $buffer : str_replace(' ', '&nbsp;', $buffer);
-            $line   = $isCli ? '第 ' . $i . ' 行# ' : '<b style="color: gray">第 ' . $i . ' 行#</b>';
+            $line = $isCli ? '第 ' . $i . ' 行# ' : '<b style="color: gray">第 ' . $i . ' 行#</b>';
             // 指定行范围读取
             if ($i > $start_line && $i < $end_line) {
                 if ($isCli) {

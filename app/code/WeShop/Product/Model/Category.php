@@ -21,6 +21,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Category extends \Weline\Framework\Database\Model
 {
+    public const indexer = 'product_category';
     public const fields_ID = 'category_id';
     public const fields_CATEGORY_ID = 'category_id';
     public const fields_NAME = 'name';
