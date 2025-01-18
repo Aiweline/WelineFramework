@@ -17,7 +17,6 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 <html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
     @template(Weline_Admin::common/head.phtml)
-    <title><?= __('Weline Admin 管理面板') ?></title>
     <!-- twitter-bootstrap-wizard css -->
     <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
     <!-- Sweet Alert-->
