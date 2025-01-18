@@ -571,13 +571,13 @@ abstract class Query implements QueryInterface
             Env::log($file, $this->sql);
         }
         # 调试环境信息
-        if (Debug::target('fetch')) {
+        if (Debug::target('pre_fetch')) {
             $msg = __('即将执行信息：') . PHP_EOL;
-            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
-            Debug::target('fetch', $msg);
+            Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -651,7 +651,7 @@ abstract class Query implements QueryInterface
         # 调试环境信息
         if (Debug::target('fetch')) {
             $msg = __('即将执行信息：') . PHP_EOL;
-            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
