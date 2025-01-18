@@ -45,14 +45,18 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $file = Env::get('db_log.file');
             Env::log($file, $this->getSqlWithBounds($this->sql));
         }
+        if (Debug::target('custom')) {
+            // 自定义调试类型信息
+            Debug::target('custom', '我是调试信息！');
+        }
         # 调试环境信息
-        if (Debug::target('fetch')) {
+        if (Debug::target('pre_fetch')) {
             $msg = __('即将执行信息：') . PHP_EOL;
-            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
-            Debug::target('fetch', $msg);
+            Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -133,10 +137,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         # 调试环境信息
         if (Debug::target('fetch')) {
             $msg = __('执行后信息：') . PHP_EOL;
-            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            $msg .= __('查询结果:') . (is_string($result) ? $result : json_encode($result)) . PHP_EOL;
             Debug::target('fetch', $msg);
             exit(1);
         }
