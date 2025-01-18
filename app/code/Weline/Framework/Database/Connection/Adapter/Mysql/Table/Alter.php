@@ -42,7 +42,7 @@ class Alter extends AbstractTable implements AlterInterface
      */
     public function addColumn(string $field_name, string $after_column, string $type, string|int $length, string $options, string $comment): AlterInterface
     {
-        $type_length    = $length ? "{$type}({$length})" : $type;
+        $type_length = $length ? "{$type}({$length})" : $type;
         $this->fields[] = "ADD COLUMN `{$field_name}` {$type_length} {$options} COMMENT '{$comment}' " . (empty($after_column) ? 'FIRST' : "AFTER `{$after_column}`");
         return $this;
     }
@@ -105,7 +105,7 @@ class Alter extends AbstractTable implements AlterInterface
                 if (!is_array($column)) {
                     new Exception(self::index_type_MULTI . __('：此索引的column需要array类型,当前类型') . "{$type_of_column}" . ' 例如：[ID,NAME(19),AGE]');
                 }
-                $column          = implode(',', $column);
+                $column = implode(',', $column);
                 $this->indexes[] = "INDEX {$name}(`$column`) USING {$index_method} {$comment}," . PHP_EOL;
 
                 break;
@@ -148,10 +148,10 @@ class Alter extends AbstractTable implements AlterInterface
         return $this;
     }
 
-    public function alterColumn(string $old_field, string $field_name, string $after_field = '', string $type = null, string|int|null $length = null, string $options = null, string $comment = null): AlterInterface
+    public function alterColumn(string $old_field, string $field_name, string $after_field = '', string $type = '', string|int $length = '', string $options = '', string $comment = ''): AlterInterface
     {
         $not_need_length_types = [
-            'text', 'mediumtext', 'longtext','tinytext','mediumblob','longblob','tinyblob','blob',
+            'text', 'mediumtext', 'longtext', 'tinytext', 'mediumblob', 'longblob', 'tinyblob', 'blob',
         ];
         if (in_array(strtolower($type), $not_need_length_types)) {
             $type_length = $type;
@@ -184,7 +184,7 @@ class Alter extends AbstractTable implements AlterInterface
         # --如果存在要新增的字段
         if ($this->fields) {
             $fields = join(',', $this->fields);
-            $sql    = "ALTER TABLE {$this->table} $fields";
+            $sql = "ALTER TABLE {$this->table} $fields";
             if ($dump_sql) {
                 $dump_sqls[] = $sql;
             } else {
@@ -197,10 +197,10 @@ class Alter extends AbstractTable implements AlterInterface
         }
         try {
             # 检测更新表注释
-            $ddl               = $this->getCreateTableSql();
+            $ddl = $this->getCreateTableSql();
             $ddl_comment_array = explode('COMMENT=', $ddl);
-            $comment           = str_replace('"', '', array_pop($ddl_comment_array));
-            $comment           = str_replace('\'', '', $comment);
+            $comment = str_replace('"', '', array_pop($ddl_comment_array));
+            $comment = str_replace('\'', '', $comment);
             # --检测存在评论，并且评论不相同时，更新表评论
             if ($this->comment && $comment !== $this->comment) {
                 $sql = "ALTER TABLE {$this->table} COMMENT='{$this->comment}'";
@@ -308,8 +308,8 @@ class Alter extends AbstractTable implements AlterInterface
 
     public function addForeignKey(string $FK_Name, string $FK_Field, string $references_table, string $references_field, bool $on_delete = false, bool $on_update = false): AlterInterface
     {
-        $on_delete_str        = $on_delete ? 'on delete cascade' : '';
-        $on_update_str        = $on_update ? 'on update cascade' : '';
+        $on_delete_str = $on_delete ? 'on delete cascade' : '';
+        $on_update_str = $on_update ? 'on update cascade' : '';
         $this->foreign_keys[] = "constraint {$FK_Name} foreign key ({$FK_Field}) references {$references_table}({$references_field}) {$on_delete_str} {$on_update_str}";
         return $this;
     }
