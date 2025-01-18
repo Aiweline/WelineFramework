@@ -16,7 +16,8 @@ class Store extends BackendController
 
     public function __construct(
         \WeShop\Store\Model\Store $store,
-    ) {
+    )
+    {
         $this->store = $store;
     }
 
@@ -51,7 +52,7 @@ class Store extends BackendController
             ->where($local::fields_IS_ACTIVE, 1)
             ->where(Locale\Name::fields_DISPLAY_LOCALE_CODE, \Weline\Framework\Http\Cookie::getLangLocal())
             ->joinModel(Locale\Name::class, 'name', 'main_table.code=name.locale_code')
-            ->select()->fetchOrigin();
+            ->select()->fetchArray();
         $this->assign('locals', $locals);
         return $this->fetch('form');
     }
