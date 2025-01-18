@@ -120,9 +120,30 @@ REBUILD_INDEXER_SQL;
         return true;
     }
 
-    public function getIndexFields(string $table): QueryInterface
+    public function getIndexFields(string $table): array
     {
-        return $this->query('show index from ' . $table);
+        // 获取表的索引列表
+        $indexList = $this->query("PRAGMA index_list('$table')")->fetch();
+
+        $indexFields = [];
+
+        foreach ($indexList as $index) {
+            // 获取索引的详细信息
+            $indexInfo = $this->query("PRAGMA index_info('{$index['name']}')")->fetch();
+
+            foreach ($indexInfo as $info) {
+                $indexFields[] = [
+                    'Table' => $table,
+                    'Non_unique' => $index['unique'] ? 0 : 1,
+                    'Key_name' => $index['name'],
+                    'Seq_in_index' => $info['seqno'],
+                    'Column_name' => $info['name'],
+                    'Collation' => 'A', // SQLite 默认使用二进制排序
+                ];
+            }
+        }
+
+        return $indexFields;
     }
 
     public function dev()
@@ -183,7 +204,15 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
      */
     public function getCreateTableSql(string $table_name): string
     {
-        return $this->query("SHOW CREATE TABLE {$table_name}")->fetch()[0]["Create Table"];
+        $table_name = str_replace('`', '', $table_name);
+        // 获取表的元数据
+        $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
+
+        if ($tableMeta === false) {
+            throw new Exception("Table '$table_name' does not exist.");
+        }
+        // 返回 CREATE TABLE 语句
+        return $tableMeta[0]['sql'] ?? '';
     }
 
     public function getConfigProvider(): ConfigProviderInterface
