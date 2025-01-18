@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Acl',
     __DIR__,
-    '1.0.2',
+    '1.0.5',
     '<a href="https://bbs.aiweline.com">权限控制器</a>',
     ['Weline_Framework']
 );
