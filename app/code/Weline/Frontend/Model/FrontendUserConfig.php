@@ -21,9 +21,9 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class FrontendUserConfig extends \Weline\Framework\Database\Model
 {
-    public const fields_ID      = 'user_id';
+    public const fields_ID = 'user_id';
     public const fields_SESSION = 'session';
-    public const fields_config  = 'config';
+    public const fields_config = 'config';
 
     /**
      * @inheritDoc
@@ -48,9 +48,9 @@ class FrontendUserConfig extends \Weline\Framework\Database\Model
     {
         if (!$setup->tableExist()) {
             $setup->createTable()
-                  ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key', '用户ID')
-                  ->addColumn(self::fields_config, TableInterface::column_type_TEXT, null, '', '配置')
-                  ->create();
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key', '用户ID')
+                ->addColumn(self::fields_config, TableInterface::column_type_TEXT, null, '', '配置')
+                ->create();
             /**@var Config $config */
             $config = ObjectManager::getInstance(Config::class);
             $config->setConfig('frontend_default_avatar', 'Weline_Frontend::/img/logo.png', 'Weline_Frontend');
@@ -102,7 +102,7 @@ class FrontendUserConfig extends \Weline\Framework\Database\Model
         }
     }
 
-    public function save(array|bool|AbstractModel $data = [], string|array $sequence = null): bool|int
+    public function save(array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
         $this->forceCheck();
         return parent::save($data, $sequence);

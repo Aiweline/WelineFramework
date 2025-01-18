@@ -36,6 +36,11 @@ final class Connector extends Query implements ConnectorInterface
     protected ?PDO $link = null;
     protected ?Query $query = null;
 
+    static function processName(string $name): string
+    {
+        return str_replace('`', '', $name);
+    }
+
     public function create(): static
     {
         $db_type = $this->configProvider->getDbType();
@@ -64,7 +69,7 @@ final class Connector extends Query implements ConnectorInterface
 
     public function reindex(string $table): bool
     {
-        $table = str_replace('`', '', $table);
+        $table = self::processName($table);
         if (str_contains($table, '.')) {
             list($schema, $table) = explode('.', $table);
         }
@@ -123,6 +128,7 @@ REBUILD_INDEXER_SQL;
 
     public function getIndexFields(string $table): array
     {
+        $table = self::processName($table);
         // 获取表的索引列表
         $indexList = $this->query("PRAGMA index_list('$table')")->fetch();
 
@@ -205,7 +211,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
      */
     public function getCreateTableSql(string $table_name): string
     {
-        $table_name = str_replace('`', '', $table_name);
+        $table_name = self::processName($table_name);
         // 获取表的元数据
         $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
 
@@ -233,7 +239,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function tableExist(string $table_name): bool
     {
-        $table_name = str_replace('`', '', $table_name);
+        $table_name = self::processName($table_name);
         try {
             $res = $this->query("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table_name}'; ")->fetch();
             if (empty($res)) {
@@ -253,15 +259,17 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function hasField(string $table, string $field): bool
     {
-        $field = trim($field, '`');
+        $table = self::processName($table);
+        $field = self::processName($field);
         $sql = "SELECT name FROM pragma_table_info('{$table}') WHERE name LIKE '{$field}';";
         $res = $this->query($sql)->fetch();
-        return ($res[0]['count'] ?? 0) > 0;
+        return (bool)$res;
     }
 
     public function hasIndex(string $table, string $idx_name): bool
     {
-        $idx_name = trim($idx_name, '`');
+        $table = self::processName($table);
+        $idx_name = self::processName($idx_name);
         $sql = "SELECT name FROM pragma_index_list($table) WHERE name LIKE '{$idx_name}';";
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;
