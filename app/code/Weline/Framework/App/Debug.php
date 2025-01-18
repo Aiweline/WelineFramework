@@ -6,7 +6,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Debug
 {
-    public static function env(string $env_key, bool $target_stop = false, mixed $value = null): mixed
+    public static function env(string $env_key, bool $target_stop = true, mixed $value = null): mixed
     {
         if (!$value) {
             # 获取上级调用文件和行数
