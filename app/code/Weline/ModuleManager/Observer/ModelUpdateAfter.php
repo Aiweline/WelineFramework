@@ -35,7 +35,8 @@ class ModelUpdateAfter implements ObserverInterface
             /**@var Module $module */
             $module = $event->getData('module');
             # 检查是否存在表
-            $table = $model->getOriginTableName();
+            $table = $model->getTable();
+            $table = str_replace('`', '', $table);
             /**@var Table $has */
             $has = $this->table->where($this->table::fields_name, $table)->find()->fetch();
             if ($has->getId() and $has->getModuleName() != $module->getName() and $has->getModel() != $model::class) {

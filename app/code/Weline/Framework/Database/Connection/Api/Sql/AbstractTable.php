@@ -162,9 +162,10 @@ abstract class AbstractTable implements TableInterface
      *
      * @param string $table_name 【1、如果存在表名就读取对应表的字段；2、不存在则读取Table类设置的表名】
      *
-     * @return mixed
+     * @return array
+     * @throws Exception
      */
-    public function getTableColumns(string $table_name = ''): mixed
+    public function getTableColumns(string $table_name = ''): array
     {
         $table_name = $table_name ?: $this->table;
         return $this->query("SHOW FULL COLUMNS FROM {$table_name}")->fetch();

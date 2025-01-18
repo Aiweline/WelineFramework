@@ -113,7 +113,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         $config = $this
             ->find()
             ->fetchArray();
-        $this->config[$self_config_key] = $config['value']??'';
+        $this->config[$self_config_key] = $config['value'] ?? '';
         return $this->config[$self_config_key];
     }
 
@@ -131,7 +131,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         } catch (\Throwable $e) {
             $config = null;
         }
-        $this->default_config[$key] = $config['value']??'';
+        $this->default_config[$key] = $config['value'] ?? '';
         return $this->default_config[$key];
     }
 
@@ -207,7 +207,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             ->save(true);
     }
 
-    public function save(array|bool|AbstractModel $data = [], string|array $sequence = null): bool|int
+    public function save(array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
         $this->forceCheck();
         return parent::save($data, $sequence);
