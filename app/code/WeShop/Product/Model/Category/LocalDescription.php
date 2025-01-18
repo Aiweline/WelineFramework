@@ -15,6 +15,7 @@ namespace WeShop\Product\Model\Category;
 
 class LocalDescription extends \Weline\I18n\LocalModel
 {
-    public const fields_ID   = 'category_id';
+    public const indexer = 'product_category_local_description';
+    public const fields_ID = 'category_id';
     public const fields_name = 'name';
 }
