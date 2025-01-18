@@ -16,6 +16,7 @@ namespace Weline\Framework\Database\Connection\Adapter\SqLite;
 
 use PDO;
 use PDOException;
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -232,7 +233,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function tableExist(string $table_name): bool
     {
-        $table_name = trim($table_name, '`');
+        $table_name = str_replace('`', '', $table_name);
         try {
             $res = $this->query("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table_name}'; ")->fetch();
             if (empty($res)) {

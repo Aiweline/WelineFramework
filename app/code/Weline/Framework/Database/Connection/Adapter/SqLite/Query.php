@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Adapter\SqLite;
 
 use PDO;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -43,6 +44,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
             Env::log($file, $this->getSqlWithBounds($this->sql));
+        }
+        # 调试环境信息
+        if (Debug::target('fetch')) {
+            $msg = __('即将执行信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            Debug::target('fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -119,6 +129,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
             Env::log($file, $this->sql);
+        }
+        # 调试环境信息
+        if (Debug::target('fetch')) {
+            $msg = __('执行后信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            Debug::target('fetch', $msg);
+            exit(1);
         }
         //        $this->clear();
         $this->clearQuery();
