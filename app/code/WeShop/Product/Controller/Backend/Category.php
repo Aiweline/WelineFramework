@@ -22,7 +22,8 @@ class Category extends \Weline\Framework\App\Controller\BackendController
 
     public function __construct(
         \WeShop\Product\Model\Category $category
-    ) {
+    )
+    {
         $this->category = $category;
     }
 
@@ -36,16 +37,16 @@ class Category extends \Weline\Framework\App\Controller\BackendController
 
     public function getSearch(): string
     {
-        $id     = $this->request->getGet('id', 0);
-        $field  = $this->request->getGet('field');
-        $limit  = $this->request->getGet('limit');
+        $id = $this->request->getGet('id', 0);
+        $field = $this->request->getGet('field');
+        $limit = $this->request->getGet('limit');
         $search = $this->request->getGet('search');
-        $json   = ['limit' => $limit, 'search' => $search];
+        $json = ['limit' => $limit, 'search' => $search];
         $this->category->addLocalDescription();
         $this->category->where('main_table.category_id', $id, '!=', 'and');
         if ($field && $search) {
             $this->category->where('main_table.' . $field, "%{$search}%", 'like', 'or')
-                           ->where('local.' . $field, "%{$search}%", 'like');
+                ->where('local.' . $field, "%{$search}%", 'like');
             if ($limit) {
                 $this->category->limit(1);
             } else {
@@ -53,9 +54,9 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             }
         } elseif (empty($field) && $search) {
             $this->category->where('main_table.name', "%{$search}%", 'like', 'or')
-                           ->where('local.name', "%{$search}%", 'like');
+                ->where('local.name', "%{$search}%", 'like');
         }
-        $attributes    = $this->category->select()->fetchOrigin();
+        $attributes = $this->category->select()->fetchArray();
         $json['items'] = $attributes;
         return $this->fetchJson($json);
     }
@@ -68,8 +69,8 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             }
             $this->assign('action', $this->request->getUrlBuilder()->getCurrentUrl());
             $category = $this->category->where('main_table.' . $this->category::fields_ID, $this->request->getGet('id', 0))
-                                       ->joinModel($this->category, 'c', 'main_table.category_id=c.pid', 'left', 'c.name as parent_name,c.category_id as parent_id')
-                                       ->find()->fetch();
+                ->joinModel($this->category, 'c', 'main_table.category_id=c.pid', 'left', 'c.name as parent_name,c.category_id as parent_id')
+                ->find()->fetch();
             if (!$category->getId()) {
                 die(__('分类找不到！'));
             }

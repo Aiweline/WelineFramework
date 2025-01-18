@@ -35,7 +35,7 @@ class App
      *
      * @return mixed
      */
-    public static function Env(string $key = '', $value = null): mixed
+    public static function Env(string $key = '', mixed $value = null): mixed
     {
         if (!isset(self::$_env)) {
             self::$_env = Env::getInstance();
