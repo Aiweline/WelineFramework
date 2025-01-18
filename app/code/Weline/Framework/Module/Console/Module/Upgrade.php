@@ -38,7 +38,8 @@ class Upgrade extends CommandAbstract
         Printing $printer,
         Data     $data,
         System   $system
-    ) {
+    )
+    {
         $this->printer = $printer;
         $this->system = $system;
         $this->data = $data;
@@ -66,11 +67,11 @@ class Upgrade extends CommandAbstract
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Framework_Module::module_upgrade_before');
         $appoint = false;
-        $argsModule = $args['module']??[];
-        if(is_string($argsModule)){
+        $argsModule = $args['module'] ?? [];
+        if (is_string($argsModule)) {
             $argsModule = explode(' ', $argsModule);
         }
-        if(isset($args['model'])){
+        if (isset($args['model'])) {
             $appoint = true;
             /**@var ModelManager $modelManager */
             $modelManager = ObjectManager::getInstance(ModelManager::class);
@@ -80,25 +81,25 @@ class Upgrade extends CommandAbstract
             $this->printer->note(__('指定安装Setup信息'));
             $modules = $module_handle->getModules();
             foreach ($modules as $module_name => $module) {
-                if($argsModule and !in_array($module_name, $argsModule)){
+                if ($argsModule and !in_array($module_name, $argsModule)) {
                     continue;
                 }
-                if (is_file($module['base_path'].'/register.php')) {
-                    require $module['base_path'].'/register.php';
+                if (is_file($module['base_path'] . '/register.php')) {
+                    require $module['base_path'] . '/register.php';
                 }
                 $module_handle->setupInstall(new Module($module));
             }
             // 注册模型数据库信息
             $this->printer->note(__('指定注册模型数据库信息'));
             foreach ($modules as $module_name => $module) {
-                if($argsModule and !in_array($module_name, $argsModule)){
+                if ($argsModule and !in_array($module_name, $argsModule)) {
                     continue;
                 }
                 $module_handle->setupInstall(new Module($module));
                 $module_handle->setupModel(new Module($module));
             }
         }
-        if(isset($args['route'])){
+        if (isset($args['route'])) {
             // 扫描模型注册代码
             list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
             $appoint = true;
@@ -108,18 +109,18 @@ class Upgrade extends CommandAbstract
             $modules = $module_handle->getModules();
             $this->printer->note(__('指定注册路由信息'));
             foreach ($modules as $module_name => $module) {
-                if($argsModule and !in_array($module_name, $argsModule)){
+                if ($argsModule and !in_array($module_name, $argsModule)) {
                     continue;
                 }
                 // 注册模组
                 $this->printer->note(__('1)注册模组'));
-                if (is_file($module['base_path'].'/register.php')) {
-                    require $module['base_path'].'/register.php';
+                if (is_file($module['base_path'] . '/register.php')) {
+                    require $module['base_path'] . '/register.php';
                 }
                 $module_handle->registerRoute(new Module($module));
             }
         }
-        if($appoint){
+        if ($appoint) {
             $this->printer->success(__('委托部分更新已运行！'));
             return;
         }
@@ -156,10 +157,12 @@ class Upgrade extends CommandAbstract
         // 扫描代码
         $this->printer->note($i . '、清理模板缓存', '系统');
         list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
-        foreach ($origin_vendor_modules as $module) {
-            $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
-            if (is_dir($tpl_dir)) {
-                $this->system->exec("rm -rf {$tpl_dir}");
+        foreach ($origin_vendor_modules as $modules) {
+            foreach ($modules as $module) {
+                $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
+                if (is_dir($tpl_dir)) {
+                    $this->system->exec("rm -rf {$tpl_dir}");
+                }
             }
         }
         $i += 1;
@@ -182,19 +185,30 @@ class Upgrade extends CommandAbstract
             }
         }
         $modules = Env::getInstance()->getModuleList();
+        $no_modules = [];
+        $diff_base_path_modules = [];
         foreach ($modules as $module) {
             if (!isset($dependencyModules[$module['name']])) {
-                $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
-                $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果有问题请运行composer update后再次运行。'.$module['name'].'模块未找到，请手动确认并删除 %1 中关于此模块的信息！', [Env::path_MODULES_FILE]));
-                exit(0);
+                $no_modules[] = $module['name'];
             }
             $dependencyModule = $dependencyModules[$module['name']];
             if ($module['base_path'] != $dependencyModule['base_path']) {
-                $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
-                $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果有问题请运行composer update后再次运行。'.$module['name'].'模块路径不一致，请手动确认并删除 %1 中关于此模块的信息！', [Env::path_MODULES_FILE]));
-                exit(0);
+                $diff_base_path_modules[] = $module['name'];
             }
         }
+        if ($no_modules) {
+            $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
+            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->printer->setup(__('%modules 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $no_modules)]));
+            exit(0);
+        }
+        if ($diff_base_path_modules) {
+            $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
+            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->printer->setup(__('%modules 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $diff_base_path_modules)]));
+            exit(0);
+        }
+
         $dependencyModuleNames = array_keys($dependencyModules);
         foreach ($modules as $module) {
             if (!in_array($module['name'], $dependencyModuleNames)) {
@@ -272,7 +286,7 @@ class Upgrade extends CommandAbstract
      */
     public function tip(): string
     {
-        return '升级模块.'.PHP_EOL.' 1. --mode[指定升级模式为数据库模型：支持的有model, route] --module Weline_Demo 升级指定模块.';
+        return '升级模块.' . PHP_EOL . ' 1. --mode[指定升级模式为数据库模型：支持的有model, route] --module Weline_Demo 升级指定模块.';
     }
 
     /**

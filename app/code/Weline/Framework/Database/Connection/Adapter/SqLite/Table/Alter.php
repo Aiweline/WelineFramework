@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Adapter\SqLite\Table;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
@@ -46,8 +47,9 @@ class Alter extends AbstractTable implements AlterInterface
      * 参数区：
      *
      * @param string $field_name 字段名
+     * @param string $after_column
      * @param string $type 字段类型
-     * @param int|null $length 长度
+     * @param string|int $length 长度
      * @param string $options 配置
      * @param string $comment 字段注释
      *
@@ -202,7 +204,7 @@ class Alter extends AbstractTable implements AlterInterface
                 $dump_sqls[] = $sql;
             } else {
                 try {
-                    $this->query($sql);
+                    $this->query($sql)->fetch();
                 } catch (\Exception $exception) {
                     exit($exception->getMessage() . PHP_EOL . __('数据库SQL:%1', $sql) . PHP_EOL);
                 }
