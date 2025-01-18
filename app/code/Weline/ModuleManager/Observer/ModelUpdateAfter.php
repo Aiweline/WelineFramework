@@ -39,7 +39,7 @@ class ModelUpdateAfter implements ObserverInterface
             /**@var Table $has */
             $has = $this->table->where($this->table::fields_name, $table)->find()->fetch();
             if ($has->getId() and $has->getModuleName() != $module->getName() and $has->getModel() != $model::class) {
-                throw new Exception($table . __('表已存在！该表已被：%1 模组下的 %2 模型创建，请为当前模型 %3 更换表名。', [$has->getModuleName(), $has->getModel(), $model::class]));
+                throw new Exception($table . __('表已存在！该表已被：%1 模组下的 %2 模型创建，请为当前模型 %3 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。', [$has->getModuleName(), $has->getModel(), $model::class]));
             }
             $this->table->reset()->clearData()
                 ->setData($this->table::fields_module_name, $module->getName())
