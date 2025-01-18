@@ -14,6 +14,7 @@ namespace Weline\Backend\Model;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -279,13 +280,6 @@ class Menu extends \Weline\Framework\Database\Model
                     $roleAccessSources,
                     'source_name'
                 );
-            // 未在ACL控制列表内的菜单
-            $menus = $this->joinModel(Acl::class, 'acl', 'main_table.source=acl.source_id')
-                ->where(self::fields_SOURCE, $roleAccessSources, 'not in')
-                ->where(Acl::fields_ACL_ID . ' is null')
-                ->select()
-                ->getSql();
-            dd($menus);
         } else {
             $aclTree = self::Acl()
                 ->getTree(
