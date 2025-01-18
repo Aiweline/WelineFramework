@@ -27,10 +27,15 @@ class Debug
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $file = $backtrace[0]['file'];
             $line = $backtrace[0]['line'];
+            # 调用者位置
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+            $call_file = $backtrace[1]['file'];
+            $call_line = $backtrace[1]['line'];
+
             $printer = 'Weline\Framework\Output\\' . (CLI ? 'Cli' : 'Debug') . '\Printing';
             /**@var \Weline\Framework\Output\Debug\Printing $printer */
             $printer = ObjectManager::getInstance($printer);
-            $printer->printing($_ENV['w-debug'][$env_key] . PHP_EOL . __('触发位置：') . "{$file}({$line})");
+            $printer->printing($_ENV['w-debug'][$env_key] . PHP_EOL . __('触发位置：') . "{$file}({$line})" . PHP_EOL . __('调用者位置：') . "{$call_file}({$call_line})");
             if (is_string($value)) {
                 $printer->printing($value);
             } else {
