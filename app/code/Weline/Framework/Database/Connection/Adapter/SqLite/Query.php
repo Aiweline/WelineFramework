@@ -42,12 +42,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
-            $data = [
-                'prepare_sql' => $this->getPrepareSql(false),
-                'sql' => $this->getSql(false),
-                'data' => $this->bound_values
-            ];
-            Env::log($file, json_encode($data));
+            Env::log($file, $this->getSqlWithBounds($this->sql));
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -123,13 +118,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->fetch_type = '';
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
-            $data = [
-                'prepare_sql' => $this->getPrepareSql(false),
-                'sql' => $this->getLastSql(false),
-                'data' => $this->bound_values,
-                'result' => $origin_data
-            ];
-            Env::log($file, json_encode($data));
+            Env::log($file, $this->sql);
         }
         //        $this->clear();
         $this->clearQuery();
