@@ -40,6 +40,7 @@ class Debug
         if(!is_string($content)){
             $content = w_var_export($content, true);
         }
+        $content .= date('Y-m-d H:i:s'). PHP_EOL;
         $content .= PHP_EOL;
         file_put_contents($log, $content, $append ? FILE_APPEND : 0);
         return true;
