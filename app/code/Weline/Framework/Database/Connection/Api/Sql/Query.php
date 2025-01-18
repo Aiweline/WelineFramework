@@ -511,13 +511,13 @@ abstract class Query implements QueryInterface
             $this->query($this->sql);
         } else {
             # 聚合查询
-            if($this->group_by){
+            if ($this->group_by) {
                 $this->prepareSql('select');
                 $preSql = $this->getSql();
                 $sql = "select count({$field}) as `{$alias}` from ({$preSql}) as total_records";
                 $this->sql = $sql;
                 $this->query($this->sql);
-            }else{
+            } else {
                 $this->fields = "count({$field}) as `{$alias}`";
                 $this->limit(1, 0);
                 $this->prepareSql('find');
@@ -570,7 +570,15 @@ abstract class Query implements QueryInterface
             $file = Env::get('db_log.file');
             Env::log($file, $this->sql);
         }
-
+        # 调试环境信息
+        if (Debug::target('fetch')) {
+            $msg = __('即将执行信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            Debug::target('fetch', $msg);
+        }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
             if ($origin_data === false) {
@@ -640,7 +648,16 @@ abstract class Query implements QueryInterface
                 break;
         }
         $this->fetch_type = '';
-
+        # 调试环境信息
+        if (Debug::target('fetch')) {
+            $msg = __('即将执行信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . $this->batch . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            Debug::target('fetch', $msg);
+            exit(1);
+        }
         //        $this->clear();
         $this->clearQuery();
         //        $this->reset();
