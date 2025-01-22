@@ -126,9 +126,9 @@ REBUILD_INDEXER_SQL;
         return true;
     }
 
-    public function getIndexFields(string $table): QueryInterface
+    public function getIndexFields(string $table): array
     {
-        return $this->query('show index from ' . $table);
+        return $this->query('show index from ' . $table)->fetchArray();
     }
 
     public function dev()
