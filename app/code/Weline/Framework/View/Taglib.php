@@ -180,6 +180,13 @@ class Taglib
             $name_str = $has_piece ? "{$name_str}??{$default}) " : $name_str . ' ';
         }
 
+        // 替换操作符
+        foreach (self::operators_symbols_to_lang as $item) {
+            if (str_contains($name_str, $item)) {
+                $name_str = str_replace($item, ' ' . $item . ' ', $name_str);
+            }
+        }
+
         return $name_str;
     }
 
@@ -609,15 +616,8 @@ class Taglib
             ],
             'template' => [
                 'tag' => 1,
-                'attr' => ['enable' => 0],
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
-                        $enable = $attributes['enable'] ?? 1;
-                        if (!$enable or ($enable ==='false')) {
-                            $template_string  = $tag_data[0]??'';
-                            $target_template  = $tag_data[2]??'';
-                            return "<!-- 模块被禁用：{$target_template} 原始模板：{$template_string}-->";
-                        }
                         return match ($tag_key) {
                             'tag' => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, trim($tag_data[2]))),
                             default => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, trim($tag_data[1])))
@@ -961,12 +961,17 @@ class Taglib
             $format_function = $tag_configs['callback'];
             foreach ($tag_config_patterns as $tag_key => $tag_pattern) {
                 preg_match_all($tag_pattern, $content, $customTags, PREG_SET_ORDER);
-//                if($tag=='if'){
-//                    dd($customTags);
-//                }
                 foreach ($customTags as $customTag) {
                     $originalTag = $customTag[0];
                     if (isset($customTag[1])) {
+                        if ($tag_key == 'tag' or $tag_key == 'tag-self-close-with-attrs' or $tag_key == 'tag-start') {
+                            // 替换操作符
+                            foreach (self::operators_symbols_to_lang as $operator => $symbol) {
+                                if (str_contains($customTag[1], $operator)) {
+                                    $customTag[1] = str_replace($operator, ' ' . $symbol . ' ', $customTag[1]);
+                                }
+                            }
+                        }
                         $customTag[1] = str_replace(PHP_EOL, '', $customTag[1]);
                     }
 
