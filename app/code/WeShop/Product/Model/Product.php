@@ -23,6 +23,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Product extends EavModel
 {
+    public const indexer = 'product';
     public const fields_ID = 'product_id';
     public const fields_name = 'name';
     public const fields_short_description = 'short_description';

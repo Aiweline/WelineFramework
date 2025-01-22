@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Database;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Cache\DbModelCache;
@@ -296,6 +297,9 @@ abstract class AbstractModel extends DataObject
      */
     protected function processTable(): string
     {
+        if (self::table) {
+            return self::table;
+        }
         if (!$this->table) {
             $class_file_name_arr = explode('Model', $this::class);
             array_shift($class_file_name_arr);

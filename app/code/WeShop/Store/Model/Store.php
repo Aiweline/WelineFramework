@@ -11,6 +11,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Store extends Model
 {
+    public const indexer = 'store';
     public const fields_ID = 'store_id';
     public const fields_NAME = 'name';
     public const fields_CODE = 'code';

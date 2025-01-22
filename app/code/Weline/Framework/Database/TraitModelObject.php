@@ -126,13 +126,13 @@ trait TraitModelObject
      * 参数区：
      *
      * @param string $key
-     * @param null   $index
+     * @param null $index
      *
      * @return array|mixed|string|null
      */
-    public function getData($key = '', $index = null)
+    public function getData(mixed $key = null, $index = null)
     {
-        if ('' === $key) {
+        if (null === $key) {
             return $this->_data;
         }
 
@@ -322,16 +322,16 @@ trait TraitModelObject
      *
      * 参数区：
      *
-     * @param array  $keys       必须表示的键数组
-     * @param string $rootName   根节点名称
-     * @param bool   $addOpenTag 允许添加初始xml节点的标志
-     * @param bool   $addCdata   需要在CDATA中包装所有值的标志
+     * @param array $keys 必须表示的键数组
+     * @param string $rootName 根节点名称
+     * @param bool $addOpenTag 允许添加初始xml节点的标志
+     * @param bool $addCdata 需要在CDATA中包装所有值的标志
      *
      * @return string
      */
     public function toXml(array $keys = [], $rootName = 'item', $addOpenTag = false, $addCdata = true): string
     {
-        $xml  = '';
+        $xml = '';
         $data = $this->toArray($keys);
         foreach ($data as $fieldName => $fieldValue) {
             if ($addCdata === true) {
@@ -360,10 +360,10 @@ trait TraitModelObject
      *
      * 参数区：
      *
-     * @param array  $arrAttributes 必须表示的键数组
-     * @param string $rootName      根节点名称
-     * @param bool   $addOpenTag    允许添加初始xml节点的标志
-     * @param bool   $addCdata      需要在CDATA中包装所有值的标志
+     * @param array $arrAttributes 必须表示的键数组
+     * @param string $rootName 根节点名称
+     * @param bool $addOpenTag 允许添加初始xml节点的标志
+     * @param bool $addCdata 需要在CDATA中包装所有值的标志
      *
      * @return string
      */
@@ -455,12 +455,12 @@ trait TraitModelObject
     {
         switch (substr($method, 0, 3)) {
             case 'get':
-                $key   = $this->_underscore(substr($method, 3));
+                $key = $this->_underscore(substr($method, 3));
                 $index = $args[0] ?? null;
 
                 return $this->getData($key, $index);
             case 'set':
-                $key   = $this->_underscore(substr($method, 3));
+                $key = $this->_underscore(substr($method, 3));
                 $value = $args[0] ?? null;
 
                 return $this->setData($key, $value);
@@ -512,7 +512,7 @@ trait TraitModelObject
         if (isset(self::$_underscoreCache[$name])) {
             return self::$_underscoreCache[$name];
         }
-        $result                        = strtolower(trim(preg_replace('/([A-Z]|[0-9]+)/', '_$1', $name), '_'));
+        $result = strtolower(trim(preg_replace('/([A-Z]|[0-9]+)/', '_$1', $name), '_'));
         self::$_underscoreCache[$name] = $result;
 
         return $result;
@@ -527,10 +527,10 @@ trait TraitModelObject
      *
      * 参数区：
      *
-     * @param array  $keys           允许转化的键
+     * @param array $keys 允许转化的键
      * @param string $valueSeparator 键和值之间的分隔符
      * @param string $fieldSeparator 键/值对之间的分隔符
-     * @param string $quote          引用标志
+     * @param string $quote 引用标志
      *
      * @return string
      */
@@ -555,12 +555,12 @@ trait TraitModelObject
      *
      * 参数区：
      *
-     * @param null  $data
+     * @param null $data
      * @param array $objects
      *
      * @return array|string
      */
-    public function debug($data = null, &$objects = [])
+    public function debug(mixed $data = null, &$objects = [])
     {
         if ($data === null) {
             $hash = spl_object_hash($this);
@@ -568,7 +568,7 @@ trait TraitModelObject
                 return '*** RECURSION ***';
             }
             $objects[$hash] = true;
-            $data           = $this->getData();
+            $data = $this->getData();
         }
         $debug = [];
         foreach ($data as $key => $value) {

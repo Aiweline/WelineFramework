@@ -19,6 +19,7 @@ use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 interface ConnectorInterface
 {
     public function create(): static;
+
     public function close(): void;
 
     /**
@@ -36,6 +37,7 @@ interface ConnectorInterface
     public function query(string $sql): QueryInterface;
 
     public function getConfigProvider(): ConfigProviderInterface;
+
     /**
      * @DESC          # 创建表
      *
@@ -46,6 +48,7 @@ interface ConnectorInterface
      * @return CreateInterface
      */
     public function createTable(): Sql\Table\CreateInterface;
+
     /**
      * @DESC          # 修改表
      *
@@ -71,9 +74,9 @@ interface ConnectorInterface
      * @DateTime: 2022/5/17 22:52
      * 参数区：
      * @param string $table
-     * @return QueryInterface
+     * @return array
      */
-    public function getIndexFields(string $table): QueryInterface;
+    public function getIndexFields(string $table): array;
 
     /**
      * @DESC          # 读取创建表SQL
@@ -93,6 +96,7 @@ interface ConnectorInterface
 
     public function getVersion(): string;
 
-    public function hasField(string $table,string $field):bool;
-    public function hasIndex(string $table, string $idx_name):bool;
+    public function hasField(string $table, string $field): bool;
+
+    public function hasIndex(string $table, string $idx_name): bool;
 }
