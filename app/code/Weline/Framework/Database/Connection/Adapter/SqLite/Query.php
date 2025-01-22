@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Adapter\SqLite;
 
 use PDO;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -42,12 +43,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
-            $data = [
-                'prepare_sql' => $this->getPrepareSql(false),
-                'sql' => $this->getSql(false),
-                'data' => $this->bound_values
-            ];
-            Env::log($file, json_encode($data));
+            Env::log($file, $this->getSqlWithBounds($this->sql));
+        }
+        if (Debug::target('custom')) {
+            // 自定义调试类型信息
+            Debug::target('custom', '我是调试信息！');
+        }
+        # 调试环境信息
+        if (Debug::target('pre_fetch')) {
+            $msg = __('即将执行信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -123,13 +132,18 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->fetch_type = '';
         if (Env::get('db_log.enabled') or DEBUG) {
             $file = Env::get('db_log.file');
-            $data = [
-                'prepare_sql' => $this->getPrepareSql(false),
-                'sql' => $this->getLastSql(false),
-                'data' => $this->bound_values,
-                'result' => $origin_data
-            ];
-            Env::log($file, json_encode($data));
+            Env::log($file, $this->sql);
+        }
+        # 调试环境信息
+        if (Debug::target('fetch')) {
+            $msg = __('执行后信息：') . PHP_EOL;
+            $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
+            $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
+            $msg .= '$this->sql:' . $this->sql . PHP_EOL;
+            $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            $msg .= __('查询结果:') . (is_string($result) ? $result : json_encode($result)) . PHP_EOL;
+            Debug::target('fetch', $msg);
+            exit(1);
         }
         //        $this->clear();
         $this->clearQuery();

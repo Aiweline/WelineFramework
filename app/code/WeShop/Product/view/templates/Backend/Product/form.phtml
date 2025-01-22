@@ -23,12 +23,13 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
     <js:part name="debounce"/>
     <style>
-        .product-image-close{
-            border:1px dashed;
+        .product-image-close {
+            border: 1px dashed;
             position: relative;
             margin: 0.5rem;
         }
-        .product-image-close>span{
+
+        .product-image-close > span {
             position: absolute;
             transition: 0.3s;
             top: -0.5rem;
@@ -42,7 +43,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             height: 1rem;
             content: 'X';
         }
-        .product-image-close>span:hover{
+
+        .product-image-close > span:hover {
             color: red;
             font-weight: bold;
             font-size: 20px;
@@ -481,8 +483,6 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 
 <!-- Sweet alert init js-->
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
 <script>
     $(document).ready(function () {
         $('#set_id').change(function (e) {
@@ -493,6 +493,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 url: '@backend-url("*/backend/product/set-group-attributes")',
                 data: {set_id: set_id},
                 success: function (data) {
+                    console.log(data)
                     let attribute_container = $('#attributes-container')
                     attribute_container.empty()
                     // 渲染组属性
@@ -679,8 +680,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
                     generateConfigurableProduct()
                 })
-                hideLoading()
             })
+            hideLoading()
         })
     })
 
@@ -805,7 +806,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             let images = '';
             let images_src = '';
             if (configurableProduct['image'].length > 0) {
-                configurableProduct['image'].forEach(function (image_src,index) {
+                configurableProduct['image'].forEach(function (image_src, index) {
                     images = `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${configurableProduct.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${configurableProduct.sku}" onclick="generateFileManagerModal('${configurableProduct.sku}-${index}-origin')" id="${configurableProduct.sku}-${index}-origin" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(image_src)}" ></div>` + images;
                     images_src = image_src + ',' + images_src;
                 })
@@ -1192,13 +1193,13 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 <script>
     function addDragItem(sku) {
         new DragSort({
-            id: sku+'-image-preview', // 拖动父级div框的ID
+            id: sku + '-image-preview', // 拖动父级div框的ID
             drag: 'drag-item', //拖动元素
             times: '500', // 动画时长（默认一秒钟）
             callback: function () {
                 // 刷新目标value
                 let urls = '';
-                let imgs = $('#'+sku+'-image-preview').find('img')
+                let imgs = $('#' + sku + '-image-preview').find('img')
                 for (let i = 0; i < imgs.length; i++) {
                     if (urls) {
                         urls += ','

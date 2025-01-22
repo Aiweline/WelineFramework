@@ -16,6 +16,7 @@ namespace Weline\Framework\Database\Connection\Adapter\SqLite;
 
 use PDO;
 use PDOException;
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -34,6 +35,11 @@ final class Connector extends Query implements ConnectorInterface
 
     protected ?PDO $link = null;
     protected ?Query $query = null;
+
+    static function processName(string $name): string
+    {
+        return str_replace('`', '', $name);
+    }
 
     public function create(): static
     {
@@ -63,7 +69,7 @@ final class Connector extends Query implements ConnectorInterface
 
     public function reindex(string $table): bool
     {
-        $table = str_replace('`', '', $table);
+        $table = self::processName($table);
         if (str_contains($table, '.')) {
             list($schema, $table) = explode('.', $table);
         }
@@ -120,9 +126,31 @@ REBUILD_INDEXER_SQL;
         return true;
     }
 
-    public function getIndexFields(string $table): QueryInterface
+    public function getIndexFields(string $table): array
     {
-        return $this->query('show index from ' . $table);
+        $table = self::processName($table);
+        // 获取表的索引列表
+        $indexList = $this->query("PRAGMA index_list('$table')")->fetch();
+
+        $indexFields = [];
+
+        foreach ($indexList as $index) {
+            // 获取索引的详细信息
+            $indexInfo = $this->query("PRAGMA index_info('{$index['name']}')")->fetch();
+
+            foreach ($indexInfo as $info) {
+                $indexFields[] = [
+                    'Table' => $table,
+                    'Non_unique' => $index['unique'] ? 0 : 1,
+                    'Key_name' => $index['name'],
+                    'Seq_in_index' => $info['seqno'],
+                    'Column_name' => $info['name'],
+                    'Collation' => 'A', // SQLite 默认使用二进制排序
+                ];
+            }
+        }
+
+        return $indexFields;
     }
 
     public function dev()
@@ -183,7 +211,15 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
      */
     public function getCreateTableSql(string $table_name): string
     {
-        return $this->query("SHOW CREATE TABLE {$table_name}")->fetch()[0]["Create Table"];
+        $table_name = self::processName($table_name);
+        // 获取表的元数据
+        $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
+
+        if ($tableMeta === false) {
+            throw new Exception("Table '$table_name' does not exist.");
+        }
+        // 返回 CREATE TABLE 语句
+        return $tableMeta[0]['sql'] ?? '';
     }
 
     public function getConfigProvider(): ConfigProviderInterface
@@ -203,7 +239,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function tableExist(string $table_name): bool
     {
-        $table_name = trim($table_name, '`');
+        $table_name = self::processName($table_name);
         try {
             $res = $this->query("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table_name}'; ")->fetch();
             if (empty($res)) {
@@ -223,15 +259,17 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function hasField(string $table, string $field): bool
     {
-        $field = trim($field, '`');
+        $table = self::processName($table);
+        $field = self::processName($field);
         $sql = "SELECT name FROM pragma_table_info('{$table}') WHERE name LIKE '{$field}';";
         $res = $this->query($sql)->fetch();
-        return ($res[0]['count'] ?? 0) > 0;
+        return (bool)$res;
     }
 
     public function hasIndex(string $table, string $idx_name): bool
     {
-        $idx_name = trim($idx_name, '`');
+        $table = self::processName($table);
+        $idx_name = self::processName($idx_name);
         $sql = "SELECT name FROM pragma_index_list($table) WHERE name LIKE '{$idx_name}';";
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;

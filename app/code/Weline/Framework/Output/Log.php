@@ -26,13 +26,13 @@ class Log extends Debug\AbstractPrint
      *
      * @param             $message
      * @param string|null $log_path
-     * @param int         $message_type
+     * @param int $message_type
      *
      * @throws \Weline\Framework\App\Exception
      */
-    public function debug($message, string $log_path = null, int $message_type = 3)
+    public function debug($message, string $log_path = '', int $message_type = 3)
     {
-        $this->doPrint($data, $message, self::ERROR, 0, $message_type,'debug');
+        $this->doPrint('DEBUG', $message, self::ERROR, 0, $message_type, 'debug');
     }
 
     /**
@@ -42,12 +42,12 @@ class Log extends Debug\AbstractPrint
      *
      * @param             $message
      * @param string|null $log_path
-     * @param int         $message_type
+     * @param int $message_type
      *
      * @throws \Weline\Framework\App\Exception
      */
-    public function info($message, string $log_path = null, int $message_type = 3)
+    public function info($message, string $log_path = '', int $message_type = 3)
     {
-        $this->doPrint($data, $message, self::NOTE, 0, $message_type,'info');
+        $this->doPrint('INFO', $message, self::NOTE, 0, $message_type, 'info');
     }
 }
