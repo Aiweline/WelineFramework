@@ -36,7 +36,6 @@ abstract class AbstractTable implements TableInterface
     public string $additional = 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;';
 
     protected ?ConnectorInterface $connector = null;
-    protected ?QueryInterface $query = null;
 
     /**
      * @DESC          # 设置链接
@@ -98,9 +97,9 @@ abstract class AbstractTable implements TableInterface
         if ($primary_key) {
             $this->primary_key = $primary_key;
         }
-        $this->table          = $table;
+        $this->table = $table;
         $this->new_table_name = $new_table_name ? '`' . $this->connector->getConfigProvider()->getDatabase() . '`.`' . $new_table_name . '`' : '';
-        $this->comment        = $comment;
+        $this->comment = $comment;
     }
 
     /**
@@ -163,9 +162,10 @@ abstract class AbstractTable implements TableInterface
      *
      * @param string $table_name 【1、如果存在表名就读取对应表的字段；2、不存在则读取Table类设置的表名】
      *
-     * @return mixed
+     * @return array
+     * @throws Exception
      */
-    public function getTableColumns(string $table_name = ''): mixed
+    public function getTableColumns(string $table_name = ''): array
     {
         $table_name = $table_name ?: $this->table;
         return $this->query("SHOW FULL COLUMNS FROM {$table_name}")->fetch();
@@ -187,7 +187,7 @@ abstract class AbstractTable implements TableInterface
     public function getCreateTableSql(string $table_name = ''): mixed
     {
         $table_name = $table_name ?: $this->table;
-        return $this->query("SHOW CREATE TABLE {$table_name}")->fetch()[0]["Create Table"];
+        return $this->getConnector()->getCreateTableSql($table_name);
     }
 
     protected function init_vars()

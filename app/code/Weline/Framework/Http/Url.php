@@ -90,9 +90,9 @@ class Url implements UrlInterface
         return (Cookie::getCurrency() ? '/' . Cookie::getCurrency() : '') . (Cookie::getLang() ? '/' . Cookie::getLang() : '');
     }
 
-    public static function removeExtraDoubleSlashes(?string $url = null): string
+    public static function removeExtraDoubleSlashes(null|string $url = ''): string
     {
-        if (null === $url) {
+        if ('' === $url || null === $url) {
             return '';
         }
         $parts = parse_url($url);
@@ -191,29 +191,29 @@ class Url implements UrlInterface
             foreach ($url_params as $key => $url_param) {
                 unset($url_params[$key]);
                 $url_param_arr = explode('=', $url_param);
-                $url_params[$url_param_arr[0]] = $url_param_arr[1]??'';
+                $url_params[$url_param_arr[0]] = $url_param_arr[1] ?? '';
             }
             $url = $url_arrs[0];
         }
-        if($url_params){
-            if($merge_url_params){
-                if($params){
-                    $params = array_merge($url_params,$params);
-                }else{
+        if ($url_params) {
+            if ($merge_url_params) {
+                if ($params) {
+                    $params = array_merge($url_params, $params);
+                } else {
                     $params = $url_params;
                 }
             }
         }
-        if($merge_url_params){
+        if ($merge_url_params) {
             $params = array_merge($this->request->getGet(), $params);
         }
         if ($params) {
-            foreach ($params as $key=>$param) {
-                if(empty($param)){
+            foreach ($params as $key => $param) {
+                if (empty($param)) {
                     unset($params[$key]);
                 }
             }
-            $url .= '?'.http_build_query($params);
+            $url .= '?' . http_build_query($params);
         }
         return self::removeExtraDoubleSlashes($url);
     }
