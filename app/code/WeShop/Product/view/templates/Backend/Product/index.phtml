@@ -21,7 +21,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
           type='text/css'/>
     <!-- Sweet Alert-->
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <link href='@static(Weline_Eav::css/product.css)' rel='stylesheet' type='text/css'/>
+    <link href='@static(WeShop_Product::css/product.css)' rel='stylesheet' type='text/css'/>
 
     <title>
         <?= __('Weline Admin 管理面板') ?>
@@ -107,14 +107,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </p>
                                 <div class='table-rep-plugin'>
                                     <!-- search form -->
-                                    <div class='row'>
-                                        <div class='col-6'>
+                                    <div class='row align-items-center'>
+                                        <div class='col-3'>
                                             <block class='Weline\Component\Block\Form\Search'
                                                    id='entity-product-search' action='*/backend/product' method='get'
                                                    keyword='search' value=''
                                                    placeholder='请输入产品关键词回车搜索'></block>
                                         </div>
-                                        <div class='col-6'>
+                                        <div class='col-9'>
                                             <block class='Weline\Component\Block\OffCanvas'
                                                    template='Weline_Component::off-canvas.phtml'
                                                    cache='0'

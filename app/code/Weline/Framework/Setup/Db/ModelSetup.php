@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Setup\Db;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
@@ -77,7 +78,7 @@ class ModelSetup
     {
         return $this->model->getConnection()->getConnector()
             ->createTable()
-            ->createTable($table ?: $this->model->getOriginTableName(), $comment);
+            ->createTable($table ?: $this->model->getTable(), $comment);
     }
 
     /**
@@ -92,6 +93,9 @@ class ModelSetup
      */
     public function alterTable(string $comment = '', string $new_table_name = ''): AlterInterface
     {
+        if (!$this->model->getConnection()->getConnector()->tableExist($this->model->getTable())) {
+            throw new \Weline\Framework\App\Exception(__('表不存在: %1', $this->model->getTable()));
+        }
         return $this->model->getConnection()->getConnector()->alterTable()->forTable($this->model->getTable(), $this->model->_primary_key, $comment, $new_table_name);
     }
 
@@ -208,18 +212,15 @@ class ModelSetup
         return $this->model->getConnection()->query($sql)->fetch();
     }
 
-    public function hasField(string $field)
+    public function hasField(string $field): bool
     {
-        if (!$this->tableExist()) {
-            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！",$this->model->getTable()));
-        }
         return $this->model->getConnection()->getConnector()->hasField($this->getTable(), $field);
     }
 
-    public function hasIndex(string $idx_name)
+    public function hasIndex(string $idx_name): bool
     {
         if (!$this->tableExist()) {
-            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！",$this->model->getTable()));
+            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！", $this->model->getTable()));
         }
         return $this->model->getConnection()->getConnector()->hasIndex($this->getTable(), $idx_name);
     }
