@@ -32,7 +32,7 @@ class Edit extends BackendController
             ->find()->fetch();
         $this->assign('product', $product);
         # 属性集
-        $sets = $this->product->eav_AttributeSetModel()->select()->fetchOrigin();
+        $sets = $this->product->eav_AttributeSetModel()->select()->fetchArray();
         $this->assign('sets', $sets);
         # 产品属性集
         $set = $this->product->eav_AttributeSetModel()->where('set_id', $product['set_id'])->find()->fetch();
@@ -50,7 +50,7 @@ class Edit extends BackendController
             ->addLocalDescription()
             ->where(Set::fields_ID, $set_id)
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
         foreach ($groups as &$group) {
             $attributes = $this->product->reset()->eav_AttributeModel()
                 ->where(EavAttribute::fields_set_id, $group[Set::fields_ID])
@@ -68,23 +68,23 @@ class Edit extends BackendController
                 $frontend_attrs = str_replace('\'', '', $frontend_attrs);
                 $frontend_attrs = str_replace('"', '', $frontend_attrs);
                 $frontend_attrs = explode(' ', $frontend_attrs);
-                $need           = [];
+                $need = [];
                 foreach ($frontend_attrs as $key => $frontend_attr) {
-                    $frontend_attr_arr           = explode('=', $frontend_attr);
-                    $frontend_attr_arr[0]        = trim($frontend_attr_arr[0]);
-                    $frontend_attr_arr[1]        = trim($frontend_attr_arr[1] ?? '');
+                    $frontend_attr_arr = explode('=', $frontend_attr);
+                    $frontend_attr_arr[0] = trim($frontend_attr_arr[0]);
+                    $frontend_attr_arr[1] = trim($frontend_attr_arr[1] ?? '');
                     $need[$frontend_attr_arr[0]] = $frontend_attr_arr[1];
                 }
                 $attr['frontend_attrs_json'] = $need;
                 # 获取属性值
-                $value         = $attr->getValue();
+                $value = $attr->getValue();
                 $attr['value'] = $attr->getData('multiple_valued') ? $value : ($value[0] ?? '');
-                $data          = $attr->getData();
+                $data = $attr->getData();
                 # 获取属性配置项
                 if ($attr->getData('has_option')) {
                     $data['options'] = $attr->getOptionModel()
                         ->select()
-                        ->fetchOrigin();
+                        ->fetchArray();
                 }
                 $attr = $data;
             }

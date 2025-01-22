@@ -64,7 +64,7 @@ class PcController extends Core
             if ($this->_url->isLink($url)) {
                 $this->request->getResponse()->redirect($url . (str_contains($url, '?') ? '&' : '') . http_build_query($params));
             } else {
-                if(str_starts_with($url, '/')) {
+                if (str_starts_with($url, '/')) {
                     $this->request->getResponse()->redirect($this->_url->getUrl($url, $params, $merge_params));
                 }
                 $this->request->getResponse()->redirect($this->request->isBackend() ? $this->_url->getBackendUrl($url, $params, $merge_params) :
@@ -89,7 +89,7 @@ class PcController extends Core
     {
         /**@var Session $session */
         $session = ObjectManager::getInstance(Session::class);
-        if($name = $this->csrf()) {
+        if ($name = $this->csrf()) {
             # form表单检测
             if ($token = Token::get($name)) {
                 $request_token = $this->request->getPost($name);
@@ -97,9 +97,9 @@ class PcController extends Core
                 if ($request_token and ($this->request->getPost($name) !== $token)) {
                     $this->noRouter();
                 }
-                if(!$request_token) {
+                if (!$request_token) {
                     # 处理api form-key和token问题
-                    if($this->request->getServer('Content-Type') === 'application/json') {
+                    if ($this->request->getServer('Content-Type') === 'application/json') {
                         $request_token = $this->request->getServer('X-CSRF-TOKEN');
                     }
                     if (empty($request_token)) {
@@ -112,7 +112,7 @@ class PcController extends Core
                         $this->noRouter();
                     }
                 }
-            }else{
+            } else {
                 $this->noRouter();
             }
         }
@@ -209,20 +209,20 @@ class PcController extends Core
      * @return mixed
      * @throws Null
      */
-    protected function fetch(string $fileName = null, array $data = []): mixed
+    protected function fetch(string $fileName = '', array $data = []): mixed
     {
         if ($data) {
             $this->assign($data);
         }
         # 如果指定了模板就直接读取
         if ($fileName) {
-            if(is_int(strpos($fileName, '::'))) {
+            if (is_int(strpos($fileName, '::'))) {
                 return $this->getTemplate()->fetch($fileName);
             }
             //            return $this->getTemplate()->fetch('templates' . DS .$fileName);
         }
         $controller_class_name = $this->request->getRouterData('class/controller_name');
-        if ($fileName === null) {
+        if ($fileName === '') {
             if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
                 $fileName = $controller_class_name;
             } else {
@@ -231,7 +231,7 @@ class PcController extends Core
         } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
             $fileName = $controller_class_name . DS . $fileName;
         } else {
-            $fileName = $controller_class_name . '/' .$this->request->getRouterData('class/method') . DS . $fileName;
+            $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
         }
         return $this->getTemplate()->fetch('templates' . DS . $fileName);
     }
@@ -239,12 +239,13 @@ class PcController extends Core
     /**
      * 返回JSON
      *
-     * @param array|bool $data
+     * @param array $data
      *
      * @return string
-     * @throws Null
+     * @throws Exception
+     * @throws \ReflectionException
      */
-    protected function fetchJson(mixed $data): string
+    protected function fetchJson(array $data): string
     {
         return $this->request->getResponse()->renderJson($data);
     }
