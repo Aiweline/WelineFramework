@@ -38,17 +38,17 @@ interface AlterInterface
      * @DateTime: 2021/8/26 21:31
      * 参数区：
      *
-     * @param string      $old_field   旧字段
-     * @param string      $field_name  新字段名
-     * @param string      $after_field 指定添加到某个字段之后
-     * @param string|null $type        字段类型
-     * @param int|null    $length      长度
-     * @param string|null $options     配置
-     * @param string|null $comment     字段注释
+     * @param string $old_field 旧字段
+     * @param string $field_name 新字段名
+     * @param string $after_field 指定添加到某个字段之后
+     * @param string $type 字段类型
+     * @param string|int $length 长度
+     * @param string $options 配置
+     * @param string $comment 字段注释
      *
      * @return AlterInterface
      */
-    public function alterColumn(string $old_field, string $field_name, string $after_field = '', string $type = null, ?int $length = null, string $options = null, string $comment = null): AlterInterface;
+    public function alterColumn(string $old_field, string $field_name, string $after_field = '', string $type = '', string|int $length = 0, string $options = '', string $comment = ''): AlterInterface;
 
     /**
      * @DESC          # 删除字段
@@ -73,11 +73,12 @@ interface AlterInterface
      * @DateTime: 2021/8/26 21:31
      * 参数区：
      *
-     * @param string   $field_name 字段名
-     * @param string   $type       字段类型
-     * @param int|null $length     长度
-     * @param string   $options    配置
-     * @param string   $comment    字段注释
+     * @param string $field_name 字段名
+     * @param string $after_column
+     * @param string $type 字段类型
+     * @param string|int $length 长度
+     * @param string $options 配置
+     * @param string $comment 字段注释
      *
      * @return AlterInterface
      */
@@ -91,10 +92,11 @@ interface AlterInterface
      * @DateTime: 2021/9/5 17:26
      * 参数区：
      *
-     * @param string       $type 【索引类型】
-     * @param string       $name 【索引名】
+     * @param string $type 【索引类型】
+     * @param string $name 【索引名】
      * @param array|string $column
-     *
+     * @param string $comment
+     * @param string $index_method
      * @return AlterInterface
      */
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = 'BTREE'): AlterInterface;
@@ -154,8 +156,8 @@ interface AlterInterface
      * @param string $FK_Field
      * @param string $references_table
      * @param string $references_field
-     * @param false  $on_delete
-     * @param false  $on_update
+     * @param false $on_delete
+     * @param false $on_update
      *
      * @return AlterInterface
      */
