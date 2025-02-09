@@ -21,4 +21,6 @@ interface ScheduleInterface
     function remove(string $name): array;
 
     function exist(string $name): bool;
+
+    function getJobs(): array;
 }
