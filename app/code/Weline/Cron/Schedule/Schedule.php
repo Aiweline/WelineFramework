@@ -13,10 +13,19 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Schedule;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 
 class Schedule implements ScheduleInterface
 {
+    const cron_config_key = 'CRON_SCHEDULE_NAME';
+    const cron_flag = '[Weline_Cron]';
+
+    function __init()
+    {
+        Env::check_user();
+    }
+
     public function create(string $name): array
     {
         return $this->getScheduler()->create($name);
@@ -40,6 +49,11 @@ class Schedule implements ScheduleInterface
 
     public function exist(string $name): bool
     {
-        return $this->getScheduler()->exist("schtasks /query /tn $name");
+        return $this->getScheduler()->exist($name);
+    }
+
+    public function getJobs(): array
+    {
+        return $this->getScheduler()->getJobs();
     }
 }
