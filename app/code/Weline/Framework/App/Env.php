@@ -9,8 +9,10 @@
 
 namespace Weline\Framework\App;
 
-use Weline\Framework\App\Env\Modules;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Output\PrintInterface;
 use Weline\Framework\System\File\Io\File;
 
 class Env extends DataObject
@@ -235,6 +237,8 @@ class Env extends DataObject
 
     private array $dependencies = [];
 
+    private static $user = '';
+
     /**
      * @DESC         |私有化克隆函数
      *
@@ -255,6 +259,37 @@ class Env extends DataObject
         } catch (Exception $e) {
             throw new Exception(__('系统加载错误：%1', $e->getMessage()));
         }
+    }
+
+    public static function check_user(): void
+    {
+        $current_user = Env::user();
+        if ($current_user !== Env::get('user')) {
+            if (CLI) {
+                /** @var Printing $printing */
+                $printing = ObjectManager::getInstance(Printing::class);
+                $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%1 是否与站点运行用户：%2 相同！', [
+                        $current_user, Env::get('user'),
+                    ]);
+                $printing->error($msg);
+                exit(1);
+            } else {
+                die('[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%1 是否与站点运行用户：%2 相同！', [
+                        $current_user, Env::get('user'),
+                    ]));
+            }
+        }
+    }
+
+    public static function user(): string
+    {
+        if (self::$user) {
+            return self::$user;
+        }
+        // 读取当前脚本运行用户
+        exec('whoami', $output);
+        self::$user = $output[0] ?? 'SYSTEM';
+        return self::$user;
     }
 
     static function real_config(string $key, mixed $value = null): string|null

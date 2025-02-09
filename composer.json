@@ -78,7 +78,8 @@
     "phpstan/phpstan": "*",
     "ext-curl": "*",
     "phpclassic/php-shopify": "^1.2",
-    "ecomphp/tiktokshop-php": "^2.6"
+    "ecomphp/tiktokshop-php": "^2.6",
+    "ardagnsrn/ollama-php": "^1.0"
   },
   "opcache-autoloader": true,
   "apcu-autoloader": true,

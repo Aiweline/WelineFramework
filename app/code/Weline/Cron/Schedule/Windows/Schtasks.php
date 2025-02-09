@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Schedule\Windows;
 
+use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 
@@ -25,27 +26,31 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
 
     public function __construct(
         System $system
-    ) {
+    )
+    {
         $this->system = $system;
     }
 
     public function create(string $name): array
     {
+        $current_user = Env::user();
         if (!$this->exist($name)) {
-            $base_project_dir = BP;
-            $base_project_disk_name = substr($base_project_dir, 0, 2);
-            $php_binary = PHP_BINARY; // 确保路径安全
-            $command = "cmd /c \"\" $base_project_disk_name  && cd $base_project_dir && $php_binary bin/m cron:task:run\"\"";
-            $vbs_string = <<<VBS
+            $php_binary = PHP_BINARY;
+            $bp = BP;
+            # 获取盘符
+            $bp_dirs = explode(':', BP);
+            $base_disk = array_shift($bp_dirs);
+            $command = "cmd /c \"\" $base_disk:  \'&&\' cd $bp \'&&\' $php_binary bin\w cron:task:run\"\"";
+            $script_string = <<<SCRIPT
 Set WshShell = CreateObject("WScript.Shell") 
-command = "$command"
+command = "{$command}"
 WshShell.Run command, 0, True
 Set WshShell = Nothing
-VBS;
-            $vbs_file = Env::path_framework_generated . $name . '-cron.vbs';
-            file_put_contents($vbs_file, $vbs_string);
+SCRIPT;
+            $script_file = Env::path_framework_generated . $name . '-cron.vbs';
+            file_put_contents($script_file, $script_string);
             // 创建计划任务
-            $create_command = "SCHTASKS /Create /TN \\$name /TR \"$vbs_file\" /SC MINUTE /F";
+            $create_command = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
             $data = $this->system->win_exec($create_command);
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
@@ -64,7 +69,7 @@ VBS;
 
     public function remove(string $name): array
     {
-        # 删除脚本
+        // 删除脚本
         if (Env::path_framework_generated . $name . '-cron.vbs') {
             unlink(Env::path_framework_generated . $name . '-cron.vbs');
         }
@@ -78,12 +83,27 @@ VBS;
         return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 尚未安装！请执行：php bin/m cron:install 安装计划任务！', $name), 'result' => []];
     }
 
-    public function exist(string $name): bool
+    public function exist(string $name, bool $return_output = false): bool
     {
-        $data = $this->system->win_exec("schtasks /query /tn $name");
-        if (count($data['output']) === 5) {
-            return true;
+        $data = $this->system->win_exec("schtasks /query /tn $name /FO LIST");
+        $output = implode("\n", $data['output']);
+        if (str_contains($output, Schedule::cron_flag)) {
+            if (str_contains($output, $name)) {
+                return true;
+            }
+            return false;
         }
         return false;
+    }
+
+    public function getJobs(): array
+    {
+        $data = $this->system->win_exec("schtasks /query /fo LIST");
+        $output = implode("\n", $data['output']);
+        $output = explode("\n", $output);
+        $output = array_filter($output, function ($item) {
+            return str_contains($item, Schedule::cron_flag);
+        });
+        return $output;
     }
 }
