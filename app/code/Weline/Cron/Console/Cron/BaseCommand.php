@@ -19,8 +19,6 @@ use Weline\Framework\Output\Cli\Printing;
 
 abstract class BaseCommand implements \Weline\Framework\Console\CommandInterface
 {
-    const cron_config_key = 'CRON_SCHEDULE_NAME';
-
     /**
      * @var \Weline\Backend\Model\Config
      */
@@ -40,17 +38,17 @@ abstract class BaseCommand implements \Weline\Framework\Console\CommandInterface
         Schedule $schedule
     )
     {
-        $this->config   = $config;
+        $this->config = $config;
         $this->printing = $printing;
         $this->schedule = $schedule;
     }
 
     function getCronName(string $module_name = 'Weline_Cron')
     {
-        $cron_name = $this->config->getConfig(self::cron_config_key, $module_name);
+        $cron_name = $this->config->getConfig(Schedule::cron_config_key, $module_name);
         if (empty($cron_name)) {
-            $cron_name = '[' . $module_name . ']-' . md5(time() . mt_rand(0, 1000000));
-            $this->config->setConfig(self::cron_config_key, $cron_name, $module_name);
+            $cron_name = Schedule::cron_flag . '-' . md5($module_name) . '-' . Schedule::cron_flag;
+            $this->config->setConfig(Schedule::cron_config_key, $cron_name, $module_name);
         }
         return $cron_name;
     }
