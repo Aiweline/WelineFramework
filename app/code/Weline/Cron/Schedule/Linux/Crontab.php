@@ -13,17 +13,19 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Schedule\Linux;
 
+use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\App\Env;
 
 class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
 {
+
     public function create(string $name): array
     {
         #生成shell脚本
-        $base_project_dir     = BP;
+        $base_project_dir = BP;
         $cron_shell_file_path = Env::path_framework_generated . $name . '-cron.sh';
         $php_binary = PHP_BINARY;
-        $shell_string         = "
+        $shell_string = "
 #!/bin/sh
 cd $base_project_dir &&
 $php_binary bin/m cron:task:run
@@ -78,6 +80,9 @@ $php_binary bin/m cron:task:run
     public function getJobs(): array
     {
         exec('crontab -l', $crontab);
-        return $crontab;
+        $weline_crons = array_filter($crontab, function ($item) {
+            return str_contains($item, Schedule::cron_flag);
+        });
+        return $weline_crons;
     }
 }
