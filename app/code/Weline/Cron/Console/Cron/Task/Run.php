@@ -47,6 +47,7 @@ class Run implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        file_put_contents(Env::path_framework_generated . 'cron_task_run.log', $args);
         $force   = $args['f'] ?? $args['force'] ?? false;
         $process = $args['p'] ?? $args['process'] ?? false;
         foreach ($args as $key => $arg) {
