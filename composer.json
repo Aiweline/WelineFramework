@@ -79,7 +79,8 @@
     "ext-curl": "*",
     "phpclassic/php-shopify": "^1.2",
     "ecomphp/tiktokshop-php": "^2.6",
-    "ardagnsrn/ollama-php": "^1.0"
+    "ardagnsrn/ollama-php": "^1.0",
+    "dragonmantank/cron-expression": "^3.4"
   },
   "opcache-autoloader": true,
   "apcu-autoloader": true,
