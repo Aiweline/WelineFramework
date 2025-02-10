@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
-use Aiweline\KteInventory\Model\SiteCronTask;
 use Cron\CronExpression;
 use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Helper\CronStatus;
@@ -47,8 +46,7 @@ class Run implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        file_put_contents(Env::path_framework_generated . 'cron_task_run.log', $args);
-        $force   = $args['f'] ?? $args['force'] ?? false;
+        $force = $args['f'] ?? $args['force'] ?? false;
         $process = $args['p'] ?? $args['process'] ?? false;
         foreach ($args as $key => $arg) {
             if (!is_int($key) || str_starts_with((string)$arg, '-')) {
@@ -94,7 +92,7 @@ class Run implements CommandInterface
             }
         }
         $pageSize = 1;
-        $this->cronTask->pagination(1, $pageSize)->select()->fetch();
+        $this->cronTask->order('update_time', 'asc')->pagination(1, $pageSize)->select()->fetch();
         # 读取给定的任务
         if ($task_names) {
             foreach ($task_names as $taskName) {
@@ -110,7 +108,7 @@ class Run implements CommandInterface
         }
 
         for ($taskPage = 1; $taskPage <= $taskPages; $taskPage++) {
-            $offset       = ($taskPage - 1) * $pageSize;
+            $offset = ($taskPage - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
             CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $taskPage, $taskTotal, $taskPage]), $currentTotal,
                 $taskTotal, false);
@@ -120,14 +118,14 @@ class Run implements CommandInterface
                 ->getItems();
             # 进程信息管理 
             $processes = [];
-            $pipes     = [];
+            $pipes = [];
             /**@var CronTask $taskModel */
             foreach ($tasks as $key => $taskModel) {
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                 # 进程名
-                $process_name    = PHP_BINARY .' bin/m cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
+                $process_name = PHP_BINARY . ' bin/m cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
                 $task_start_time = ((int)$taskModel->getData($taskModel::fields_RUN_TIME)) ?: microtime(true);
-                $task_run_date   = date('Y-m-d H:i:s');
+                $task_run_date = date('Y-m-d H:i:s');
                 # 上锁
                 $cron = CronExpression::factory($taskModel->getData('cron_time'));
                 # 设置程序预计数据
@@ -158,7 +156,7 @@ class Run implements CommandInterface
                         Process::killPid($pid, $process_name);
                         if (Process::isProcessRunning($pid)) {
                             $force = false;
-                            $msg   = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$process_name, $pid]);
+                            $msg = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$process_name, $pid]);
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
                         }
                     } else {
