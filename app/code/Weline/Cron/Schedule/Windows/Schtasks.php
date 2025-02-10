@@ -36,25 +36,43 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
         $current_user = Env::user();
         if (!$this->exist($name)) {
             $php_binary = PHP_BINARY;
-            $bp = BP;
             # 获取盘符
-            $bp_dirs = explode(':', BP);
-            $base_disk = array_shift($bp_dirs);
-            $command = "cmd /c \"\" $base_disk:  \'&&\' cd $bp \'&&\' $php_binary bin\w cron:task:run\"\"";
+            $log = BP . 'var/cron.log';
+            if(!file_exists($log)){
+                if (!is_dir(dirname($log))) {
+                    mkdir(dirname($log), 0777, true);
+                }
+                file_put_contents($log, '');
+            }
+            # 2>> \"\"{$log}\"\" 2>&1
+            $bp_command_file = BP . 'bin\w';
+//            $command = "$php_binary $bp_command_file cron:task:run 2>> {$log} 2>&1";
+            $command = "$php_binary $bp_command_file cron:task:run";
+//            dd($command);
             $script_string = <<<SCRIPT
-Set WshShell = CreateObject("WScript.Shell") 
-command = "{$command}"
-WshShell.Run command, 0, True
-Set WshShell = Nothing
+Dim command
+command = "$command"
+Dim shell
+Set shell = WScript.CreateObject("WScript.Shell")
+shell.Run command, 0, True
+Set shell = Nothing
+
 SCRIPT;
             $script_file = Env::path_framework_generated . $name . '-cron.vbs';
+
+            $script_string = self::convertGBK($script_string);
             file_put_contents($script_file, $script_string);
             // 创建计划任务
-            $create_command = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
-            $data = $this->system->win_exec($create_command);
+            $create_task = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
+            $data = $this->system->win_exec($create_task);
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => []];
+    }
+
+    static function convertGBK(string $str): string
+    {
+        return iconv('UTF-8', 'GBK', $str);
     }
 
     public function run(string $name): array
@@ -63,7 +81,7 @@ SCRIPT;
         if (count($data['output']) === 1) {
             return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $data];
         } else {
-            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务可能未安装！请执行：php bin/m cron:install 安装计划任务！', $name), 'result' => $data];
+            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务可能未安装或者正在运行，使用php bin/m cron:listing 检查！请执行：php bin/m cron:install 安装计划任务！', $name), 'result' => $data];
         }
     }
 
@@ -98,7 +116,7 @@ SCRIPT;
 
     public function getJobs(): array
     {
-        $data = $this->system->win_exec("schtasks /query /fo LIST");
+        $data = $this->system->win_exec("schtasks /query");
         $output = implode("\n", $data['output']);
         $output = explode("\n", $output);
         $output = array_filter($output, function ($item) {
