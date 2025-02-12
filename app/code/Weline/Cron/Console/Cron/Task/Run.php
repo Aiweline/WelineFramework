@@ -91,7 +91,7 @@ class Run implements CommandInterface
                 $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
             }
         }
-        $pageSize = 1;
+        $pageSize = 10;
         $this->cronTask->order('update_time', 'asc')->pagination(1, $pageSize)->select()->fetch();
         # 读取给定的任务
         if ($task_names) {
@@ -116,9 +116,7 @@ class Run implements CommandInterface
                 ->select()
                 ->fetch()
                 ->getItems();
-            # 进程信息管理 
-            $processes = [];
-            $pipes = [];
+            # 进程信息管理
             /**@var CronTask $taskModel */
             foreach ($tasks as $key => $taskModel) {
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::fields_EXECUTE_NAME));
@@ -127,7 +125,7 @@ class Run implements CommandInterface
                 $task_start_time = ((int)$taskModel->getData($taskModel::fields_RUN_TIME)) ?: microtime(true);
                 $task_run_date = date('Y-m-d H:i:s');
                 # 上锁
-                $cron = CronExpression::factory($taskModel->getData('cron_time'));
+                $cron = new CronExpression($taskModel->getData('cron_time'));
                 # 设置程序预计数据
                 $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);
                 $taskModel->setData($taskModel::fields_RUNTIME_ERROR, '');
@@ -181,7 +179,6 @@ class Run implements CommandInterface
                         ->save();
                     continue;
                 }
-
                 if ($force || $cron->isDue($task_run_date)) {
                     if ($force || ($taskModel->getData($taskModel::fields_STATUS) !== CronStatus::BLOCK->value)) {
                         # 设置程序运行数据
