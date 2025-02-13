@@ -91,7 +91,7 @@ class Run implements CommandInterface
                 $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
             }
         }
-        $pageSize = 10;
+        $pageSize = 1;
         $this->cronTask->order('update_time', 'asc')->pagination(1, $pageSize)->select()->fetch();
         # 读取给定的任务
         if ($task_names) {
