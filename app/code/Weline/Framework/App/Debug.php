@@ -32,16 +32,16 @@ class Debug
             $call_file = $backtrace[1]['file'];
             $call_line = $backtrace[1]['line'];
 
-            $printer = 'Weline\Framework\Output\\' . (CLI ? 'Cli' : 'Debug') . '\Printing';
+            $printerClass = 'Weline\Framework\Output\\' . (CLI ? 'Cli' : 'Debug') . '\Printing';
             /**@var \Weline\Framework\Output\Debug\Printing $printer */
-            $printer = ObjectManager::getInstance($printer);
+            $printer = ObjectManager::getInstance($printerClass);
             $printer->printing($_ENV['w-debug'][$env_key] . PHP_EOL . __('触发位置：') . "{$file}({$line})" . PHP_EOL . __('调用者位置：') . "{$call_file}({$call_line})");
             if (is_string($value)) {
                 $printer->printing($value);
             } else {
                 $printer->printing(w_var_export($value, true));
             }
-            if (isset($_ENV['w-debug'][$env_key . '_target_stop'])) {
+            if (isset($_ENV['w-debug'][$env_key . '_target_stop']) && $_ENV['w-debug'][$env_key . '_target_stop']) {
                 exit();
             }
         }
