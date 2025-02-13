@@ -71,12 +71,12 @@ class ConfigProvider extends DataObject implements ConfigProviderInterface
             $db_conf = Env::getInstance()->reload()->getDbConfig();
             if (empty($db_conf) || !isset($db_conf['master'])) {
                 if ('cli' === PHP_SAPI) {
-                    (new Printing())->error('请安装系统后操作:bin/m system:install', '系统');
+                    (new Printing())->error('请安装系统后操作:bin/w system:install', '系统');
 
-                    throw new Exception('数据库尚未配置，请安装系统后操作:bin/m system:install');
+                    throw new Exception('数据库尚未配置，请安装系统后操作:bin/w system:install');
                 }
 
-                throw new Exception('数据库尚未配置，请安装系统后操作:bin/m system:install');
+                throw new Exception('数据库尚未配置，请安装系统后操作:bin/w system:install');
             }
         }
         $connection_name = 'default';

@@ -58,6 +58,6 @@ class Listing implements CommandInterface
      */
     public function tip(): string
     {
-        return '列出所有队列类型数据，示例：php bin/m queue:type:listing [可选：搜索队列名称]';
+        return '列出所有队列类型数据，示例：php bin/w queue:type:listing [可选：搜索队列名称]';
     }
 }

@@ -165,7 +165,7 @@ class Cli extends CliAbstract
                 $this->printer->error($exception->getMessage());
                 exit();
             }
-//            exit($this->printer->error('命令系统异常！请完整执行（不能简写）更新模块命令后重试：php bin/m command:upgrade'));
+//            exit($this->printer->error('命令系统异常！请完整执行（不能简写）更新模块命令后重试：php bin/w command:upgrade'));
         }
 
         // 检查命令

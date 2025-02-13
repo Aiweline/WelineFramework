@@ -6,4 +6,4 @@ composer require weline/module-website-monitoring
 
 执行：
 
-php bin/m module:upgrade
+php bin/w module:upgrade

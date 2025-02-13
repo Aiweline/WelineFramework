@@ -95,7 +95,7 @@ QUEUETIP;
                 # 队列名
                 $queue_name = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
                 # 进程名
-                $process_name = PHP_BINARY . ' bin/m queue:run --id=' . $queue->getId() . ' --name \'' . $queue_name . '\'';
+                $process_name = PHP_BINARY . ' bin/w queue:run --id=' . $queue->getId() . ' --name \'' . $queue_name . '\'';
                 # 使用进程名检查该进程是否在运行
                 $pid = Process::getPidByName($process_name);
                 $result = $queue->getResult();
