@@ -58,7 +58,7 @@ class Run implements CommandInterface
         if (!is_bool($force)) {
             # 解锁任务
             if (empty($task_names)) {
-                ObjectManager::getInstance(Printing::class)->error(__('请指定要执行的任务！php bin/m cron:task:run demo -f'));
+                ObjectManager::getInstance(Printing::class)->error(__('请指定要执行的任务！php bin/w cron:task:run demo -f'));
                 die;
             }
         }
@@ -121,7 +121,7 @@ class Run implements CommandInterface
             foreach ($tasks as $key => $taskModel) {
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                 # 进程名
-                $process_name = PHP_BINARY . ' bin/m cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
+                $process_name = PHP_BINARY . ' bin/w cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
                 $task_start_time = ((int)$taskModel->getData($taskModel::fields_RUN_TIME)) ?: microtime(true);
                 $task_run_date = date('Y-m-d H:i:s');
                 # 上锁
@@ -222,6 +222,6 @@ class Run implements CommandInterface
      */
     public function tip(): string
     {
-        return '运行计划调度任务。需要运行特定任务时：php bin/m cron:task:run demo demo_run 依次往后添加多个任务名 -f 选项强制解锁运行。';
+        return '运行计划调度任务。需要运行特定任务时：php bin/w cron:task:run demo demo_run 依次往后添加多个任务名 -f 选项强制解锁运行。';
     }
 }

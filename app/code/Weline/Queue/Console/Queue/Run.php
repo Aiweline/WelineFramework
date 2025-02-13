@@ -39,13 +39,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $id = $args['id'] ?? 0;
         if ($id == 0) {
             $this->printing->error(__('请输入队列ID。 '));
-            $this->printing->success(__('正确示例：php bin/m queue:run --id=1'));
+            $this->printing->success(__('正确示例：php bin/w queue:run --id=1'));
             exit();
         }
         $queue = $this->queue->load($id);
         if (empty($queue->getId())) {
             $this->printing->error(__('队列不存在。 '));
-            $this->printing->success(__('正确示例：php bin/m queue:run --id=%1', $id));
+            $this->printing->success(__('正确示例：php bin/w queue:run --id=%1', $id));
             exit();
         }
 
@@ -85,6 +85,6 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('运行队列. ') . 'php bin/m queue:run --id=1';
+        return __('运行队列. ') . 'php bin/w queue:run --id=1';
     }
 }
