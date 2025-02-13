@@ -97,7 +97,7 @@ class Remove extends CommandAbstract
             $input = $this->system->input();
             if (strtolower(chop($input)) === 'y') {
                 if (empty($module_list)) {
-                    $this->printer->error('请先更新模块:bin/m module:upgrade');
+                    $this->printer->error('请先更新模块:bin/w module:upgrade');
                     exit();
                 }
                 foreach ($args as $module) {
@@ -107,11 +107,11 @@ class Remove extends CommandAbstract
                     unset($module_list[$module]);
                 }
                 // 更新模块数据
-//            $this->printer->warning(__('请手动执行：php bin/m module:upgrade'));
+//            $this->printer->warning(__('请手动执行：php bin/w module:upgrade'));
                 $this->data->updateModules($module_list);
 //            $this->upgrade->execute();
-                # 请继续执行 php bin/m module:upgrade
-                $this->printer->printing('请继续执行 php bin/m module:upgrade', $this->printer::WARNING);
+                # 请继续执行 php bin/w module:upgrade
+                $this->printer->printing('请继续执行 php bin/w module:upgrade', $this->printer::WARNING);
             } else {
                 $this->printer->warning(__('已取消执行！'));
             }

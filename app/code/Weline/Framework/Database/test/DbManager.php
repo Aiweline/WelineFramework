@@ -32,7 +32,7 @@ class DbManager extends \Weline\Framework\UnitTest\TestCore
 }
 /**
 
-php bin/m system:install ^
+php bin/w system:install ^
 --db-type=mysql ^
 --db-hostname=127.0.0.1 ^
 --db-database=weline ^

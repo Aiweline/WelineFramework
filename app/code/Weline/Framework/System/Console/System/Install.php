@@ -57,9 +57,9 @@ class Install extends \Weline\Framework\Console\CommandAbstract
                 'modules'   => ['PDO', 'exif', 'fileinfo', 'xsl'],
             ],
             'commands' => [
-                'bin/m command:upgrade',
-                'bin/m deploy:mode:set dev',
-                'bin/m setup:upgrade',
+                'bin/w command:upgrade',
+                'bin/w deploy:mode:set dev',
+                'bin/w setup:upgrade',
             ]
         ];
         // 环境检测
@@ -95,14 +95,14 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         array_shift($args);
         $db_keys = DataInterface::db_keys;
         if (!isset($args_config['db'])) {
-            $this->printer->error('数据库配置为空！示例：bin/m system:install --db-type=mysql', '系统');
+            $this->printer->error('数据库配置为空！示例：bin/w system:install --db-type=mysql', '系统');
             foreach ($db_keys as $key => $item) {
                 $this->printer->warning('--db-' . $key . '=' . ($item ? $item : 'null'), '数据库');
             }
             exit();
         }
         if (!isset($args_config['sandbox_db'])) {
-            $this->printer->error('沙盒数据库配置为空！示例：bin/m system:install --sandbox_db-type=mysql', '系统');
+            $this->printer->error('沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql', '系统');
             foreach ($db_keys as $key => $item) {
                 $this->printer->warning('--sandbox_db-' . $key . '=' . ($item ? $item : 'null'), '沙盒数据库');
             }
@@ -117,7 +117,7 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             $db_config['collate'] ?? $db_config['collate'] = 'utf8mb4_general_ci';
         foreach ($db_keys as $db_key => $v) {
             if (!isset($db_config[$db_key])) {
-                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/m system:install --db-' . $db_key . '=demo', '系统');
+                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/w system:install --db-' . $db_key . '=demo', '系统');
                 exit();
             }
         }
@@ -133,7 +133,7 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             $sandbox_db_config['collate'] ?? $sandbox_db_config['collate'] = 'utf8mb4_general_ci';
         foreach ($db_keys as $db_key => $v) {
             if (!isset($sandbox_db_config[$db_key])) {
-                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/m system:install --sandbox_db-' . $db_key . '=demo', '系统');
+                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/w system:install --sandbox_db-' . $db_key . '=demo', '系统');
                 exit();
             }
         }
@@ -175,5 +175,5 @@ class Install extends \Weline\Framework\Console\CommandAbstract
     }
 }
 /*
-php bin/m system:install  --db-type=mysql  --db-hostname=127.0.0.1  --db-database=weline  --db-username=weline  --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci
+php bin/w system:install  --db-type=mysql  --db-hostname=127.0.0.1  --db-database=weline  --db-username=weline  --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci
 */

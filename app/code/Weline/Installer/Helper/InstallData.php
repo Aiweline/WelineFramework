@@ -21,9 +21,9 @@ class InstallData
                 'modules'   => ['PDO', 'exif', 'fileinfo', 'xsl'],
             ],
             'commands' => [
-                'bin/m command:upgrade',
-                'bin/m deploy:mode:set dev',
-                'bin/m setup:upgrade',
+                'bin/w command:upgrade',
+                'bin/w deploy:mode:set dev',
+                'bin/w setup:upgrade',
             ]
         ];
 

@@ -136,7 +136,7 @@ abstract class CliAbstract implements CommandInterface
         // 扫描所有命令
         $commands = Env::getCommands();
         if (empty($commands)) {
-            exec('php ' . BP . 'bin/m command:upgrade', $result);
+            exec('php ' . BP . 'bin/w command:upgrade', $result);
             return Env::getCommands();
         }
         return $commands;

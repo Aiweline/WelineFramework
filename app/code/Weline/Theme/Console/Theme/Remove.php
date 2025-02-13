@@ -52,7 +52,7 @@ class Remove extends AbstractConsole
                 $this->printing->error(__('当前主题未安装：卸载失败！'), __('主题'));
             }
         } else {
-            $this->printing->error(__('请指定要删除的主题，示例：php bin/m theme:remove Weline_Default'), __('主题'));
+            $this->printing->error(__('请指定要删除的主题，示例：php bin/w theme:remove Weline_Default'), __('主题'));
         }
     }
 

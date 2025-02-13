@@ -17,7 +17,7 @@ class Debug extends \Weline\Framework\Console\CommandAbstract
     {
         if (!isset($args[1])) {
             if (DEV) {
-                $this->printer->error('请输入要测试的类！ex:bin/m dev:debug [class] (请用初始化函数测试类，此处不接受运行类方法。)');
+                $this->printer->error('请输入要测试的类！ex:bin/w dev:debug [class] (请用初始化函数测试类，此处不接受运行类方法。)');
             }
             exit();
         }
