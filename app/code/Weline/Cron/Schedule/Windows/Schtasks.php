@@ -81,7 +81,7 @@ SCRIPT;
         if (count($data['output']) === 1) {
             return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $data];
         } else {
-            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务可能未安装或者正在运行，使用php bin/m cron:listing 检查！请执行：php bin/m cron:install 安装计划任务！', $name), 'result' => $data];
+            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务可能未安装或者正在运行，使用php bin/w cron:listing 检查！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => $data];
         }
     }
 
@@ -98,7 +98,7 @@ SCRIPT;
             }
             return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 移除失败！', $name), 'result' => $data];
         }
-        return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 尚未安装！请执行：php bin/m cron:install 安装计划任务！', $name), 'result' => []];
+        return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 尚未安装！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => []];
     }
 
     public function exist(string $name, bool $return_output = false): bool

@@ -92,7 +92,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
                     }
                     break;
                 default:
-                    $this->printing->error(__('错误的操作,正确示例：%1', 'php bin/m cache:status [enable/disable] [identify...]'));
+                    $this->printing->error(__('错误的操作,正确示例：%1', 'php bin/w cache:status [enable/disable] [identify...]'));
             }
         } else {
             # 处理缓存状态默认查看 所有缓存状态

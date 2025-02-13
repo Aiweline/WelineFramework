@@ -10,7 +10,7 @@ WelineFramework框架集成ElFinder文件管理器
 #### 安装教程
 
 1.  composer require weline/module-el-finder-file-manager
-2.  根目录下php bin/m setup:upgrade
+2.  根目录下php bin/w setup:upgrade
 
 #### 使用说明
 
