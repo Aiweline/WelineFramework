@@ -56,7 +56,7 @@ class InstallConfig
         foreach ($db_keys as $db_key => $v) {
             if (!isset($db_config_check[$db_key])) {
                 $hasErr = true;
-                $msg    = '数据库' . $db_key . '配置不能为空！示例：bin/m system:install --db-' . $db_key . '=demo';
+                $msg    = '数据库' . $db_key . '配置不能为空！示例：bin/w system:install --db-' . $db_key . '=demo';
                 if (CLI) {
                     $this->printer->error($msg, '系统');
                     exit();

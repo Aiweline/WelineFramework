@@ -21,7 +21,7 @@ class Disable extends CommandAbstract
         $command     = array_shift($args);
         $module_list = Env::getInstance()->getModuleList();
         if (empty($module_list)) {
-            $this->printer->error('请先更新模块:bin/m module:upgrade');
+            $this->printer->error('请先更新模块:bin/w module:upgrade');
             exit();
         }
         if (!empty($args)) {
@@ -38,8 +38,8 @@ class Disable extends CommandAbstract
             /**@var Data $helper */
             $helper = ObjectManager::getInstance(Data::class);
             $helper->updateModules($module_list);
-            # 请继续执行 php bin/m module:upgrade
-            $this->printer->printing('请继续执行 php bin/m module:upgrade', $this->printer::WARNING);
+            # 请继续执行 php bin/w module:upgrade
+            $this->printer->printing('请继续执行 php bin/w module:upgrade', $this->printer::WARNING);
         } else {
             $this->printer->printList([$command => ['禁用提示：' => $this->printer->colorize('请输入要禁用的模块', $this->printer::ERROR)]]);
         }

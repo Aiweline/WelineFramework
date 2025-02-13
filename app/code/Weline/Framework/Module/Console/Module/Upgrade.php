@@ -197,14 +197,14 @@ class Upgrade extends CommandAbstract
             }
         }
         if ($no_modules) {
-            $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
-            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->system->exec(PHP_BINARY . ' php bin/w cache:clear -f');
+            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printer->setup(__('%modules 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $no_modules)]));
             exit(0);
         }
         if ($diff_base_path_modules) {
-            $this->system->exec(PHP_BINARY . ' php bin/m cache:clear -f');
-            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/m setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
+            $this->system->exec(PHP_BINARY . ' php bin/w cache:clear -f');
+            $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printer->setup(__('%modules 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $diff_base_path_modules)]));
             exit(0);
         }
