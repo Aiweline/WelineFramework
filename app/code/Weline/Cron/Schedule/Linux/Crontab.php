@@ -35,7 +35,7 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         $shell_string = "
 #!/bin/sh
 cd $base_project_dir &&
-$php_binary bin/m cron:task:run 2>&1 >> $log";
+$php_binary bin/w cron:task:run 2>&1 >> $log";
         file_put_contents($cron_shell_file_path, $shell_string);
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {
             exec(
@@ -51,7 +51,7 @@ $php_binary bin/m cron:task:run 2>&1 >> $log";
     {
         $base_project_dir = BP;
         $php_binary = PHP_BINARY;
-        exec("cd $base_project_dir && $php_binary bin/m cron:task:run", $output);
+        exec("cd $base_project_dir && $php_binary bin/w cron:task:run", $output);
         return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $output];
     }
 

@@ -19,7 +19,7 @@ class Status extends CommandAbstract
         array_shift($args);
         $module_list = Env::getInstance()->getModuleList();
         if (empty($module_list)) {
-            $this->printer->error('请先更新模块:bin/m module:upgrade');
+            $this->printer->error('请先更新模块:bin/w module:upgrade');
             exit();
         }
         if (!empty($args)) {

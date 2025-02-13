@@ -70,6 +70,6 @@ class Data implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('事件观察者列表！具体模组的事件请在命令后写明。例如：（ php bin/m event:data Weline_Core Weline_Base）');
+        return __('事件观察者列表！具体模组的事件请在命令后写明。例如：（ php bin/w event:data Weline_Core Weline_Base）');
     }
 }
