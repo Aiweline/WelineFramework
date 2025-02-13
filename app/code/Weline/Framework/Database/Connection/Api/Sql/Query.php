@@ -578,6 +578,9 @@ abstract class Query implements QueryInterface
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             Debug::target('pre_fetch', $msg);
+            if(empty(Debug::target('pass_pre_fetch'))){
+                exit(1);
+            }
         }
         if ($this->batch and $this->fetch_type == 'insert') {
             $origin_data = $this->getLink()->exec($this->getSql());
@@ -650,13 +653,15 @@ abstract class Query implements QueryInterface
         $this->fetch_type = '';
         # 调试环境信息
         if (Debug::target('fetch')) {
-            $msg = __('即将执行信息：') . PHP_EOL;
+            $msg = __('执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
             Debug::target('fetch', $msg);
-            exit(1);
+            if(empty(Debug::target('pass_fetch'))){
+                exit(1);
+            }
         }
         //        $this->clear();
         $this->clearQuery();
