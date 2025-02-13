@@ -577,6 +577,7 @@ abstract class Query implements QueryInterface
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            $msg .= 'Format SQL:' . $this->getSql(true);
             Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
@@ -655,6 +656,7 @@ abstract class Query implements QueryInterface
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
             $msg .= '$this->sql:' . $this->sql . PHP_EOL;
             $msg .= '$this->bound_values:' . json_encode($this->bound_values) . PHP_EOL;
+            $msg .= 'Format SQL:' . $this->getSql(true);
             Debug::target('fetch', $msg);
         }
         //        $this->clear();
