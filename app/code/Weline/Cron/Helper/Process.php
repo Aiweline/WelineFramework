@@ -21,7 +21,7 @@ class Process
         # 字符串安全
         $pname = escapeshellcmd($pname);
         $speicials = [
-            ' ', '\'', '"'
+            ' ', '\'', '"',':'
         ];
         foreach ($speicials as $special) {
             $pname = str_replace($special, '-', $pname);
