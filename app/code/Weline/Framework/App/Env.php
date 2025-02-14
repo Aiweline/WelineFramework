@@ -347,6 +347,9 @@ class Env extends DataObject
     public static function module_env(string $module, string $name = ''): mixed
     {
         if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
+            if(empty($name)){
+                return $module_env;
+            }
             return $module_env[$name] ?? null;
         }
         $module = Env::getInstance()->getModuleInfo($module);
@@ -358,6 +361,9 @@ class Env extends DataObject
             }
         }
         self::$module_configs[$module['name']] = $local_env;
+        if (empty($name)) {
+            return $local_env;
+        }
         return $local_env[$name] ?? null;
     }
 
