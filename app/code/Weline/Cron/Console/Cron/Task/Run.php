@@ -18,10 +18,12 @@ use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\OS\Win;
 
 
 class Run implements CommandInterface
@@ -86,13 +88,17 @@ class Run implements CommandInterface
             exit;
         }
         # 读取给定的任务
+        $pageSize = 1;
         if ($task_names) {
             foreach ($task_names as $taskName) {
                 $this->cronTask->where($this->cronTask::fields_EXECUTE_NAME, $taskName);
             }
+            $pageSize = count($task_names);
         }
-        $pageSize = 1;
-        $this->cronTask->order('update_time', 'asc')->pagination(1, $pageSize)->select()->fetch();
+        $this->cronTask->order('update_time', 'asc')
+            ->pagination(1, $pageSize)
+            ->select()
+            ->fetch();
         # 读取给定的任务
         if ($task_names) {
             foreach ($task_names as $taskName) {
@@ -102,7 +108,7 @@ class Run implements CommandInterface
         # 分页读取任务
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
-        if ($taskPages == 0) {
+        if ($taskTotal == 0) {
             ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1', implode(' ', $task_names)));
             exit;
         }
@@ -121,7 +127,8 @@ class Run implements CommandInterface
             foreach ($tasks as $key => $taskModel) {
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                 # 进程名
-                $process_name = PHP_BINARY . ' bin/w cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
+                $command_file = BP . 'bin'.DS.'w';
+                $process_name = PHP_BINARY . ' ' . $command_file . ' cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
                 $task_start_time = ((int)$taskModel->getData($taskModel::fields_RUN_TIME)) ?: microtime(true);
                 $task_run_date = date('Y-m-d H:i:s');
                 # 上锁
