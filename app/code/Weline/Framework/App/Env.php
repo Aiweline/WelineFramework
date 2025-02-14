@@ -340,7 +340,7 @@ class Env extends DataObject
     {
         if ($module) {
             if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
-                return $module_env;
+                return $module_env[$name] ?? null;
             }
             $module = Env::getInstance()->getModuleInfo($module);
             $local_env = [];
@@ -351,7 +351,7 @@ class Env extends DataObject
                 }
             }
             self::$module_configs[$module['name']] = $local_env;
-            return $local_env;
+            return $local_env[$name] ?? null;
         }
         return self::getInstance()->getConfig($name);
     }
