@@ -16,6 +16,7 @@ namespace Weline\Cron\Schedule\Windows;
 use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
+use Weline\Framework\System\OS\Win;
 
 class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
 {
@@ -60,7 +61,7 @@ Set shell = Nothing
 SCRIPT;
             $script_file = Env::path_framework_generated . $name . '-cron.vbs';
 
-            $script_string = self::convertGBK($script_string);
+            $script_string = Win::command_convert_gbk($script_string);
             file_put_contents($script_file, $script_string);
             // 创建计划任务
             $create_task = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
@@ -68,11 +69,6 @@ SCRIPT;
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => []];
-    }
-
-    static function convertGBK(string $str): string
-    {
-        return iconv('UTF-8', 'GBK', $str);
     }
 
     public function run(string $name): array
