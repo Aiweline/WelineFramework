@@ -109,6 +109,7 @@ class Run implements CommandInterface
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
         if ($taskTotal == 0) {
+            dd($args);
             ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1', implode(' ', $task_names)));
             exit;
         }

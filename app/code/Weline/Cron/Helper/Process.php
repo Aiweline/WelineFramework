@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Cron\Helper;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\System\OS\Win;
 
 class Process
 {
@@ -40,7 +39,7 @@ class Process
         $process_log_path = Process::getLogProcessFilePath($process_name);
         if (IS_WIN) {
             # 使用cmd命令行创建进程
-            $command = ' cmd /c start /b ' . $process_name . ' > "' . $process_log_path . '" 2>&1 "&" echo $!';
+            $command = ' cmd /c start /b ' . $process_name . ' > "' . $process_log_path . '"';
         } else {
             $command = 'nohup ' . $process_name . ' > "' . $process_log_path . '" 2>&1 & echo $!';
         }
