@@ -339,21 +339,26 @@ class Env extends DataObject
     public static function get(string $name = '', string $module = ''): mixed
     {
         if ($module) {
-            if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
-                return $module_env[$name] ?? null;
-            }
-            $module = Env::getInstance()->getModuleInfo($module);
-            $local_env = [];
-            if (is_file($module['base_path'] . 'etc' . DS . 'env.php')) {
-                $local_env = include $module['base_path'] . 'etc' . DS . 'env.php';
-                if (!is_array($local_env)) {
-                    return [];
-                }
-            }
-            self::$module_configs[$module['name']] = $local_env;
-            return $local_env[$name] ?? null;
+            return self::module_env($module, $name);
         }
         return self::getInstance()->getConfig($name);
+    }
+
+    public static function module_env(string $module, string $name = ''): mixed
+    {
+        if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
+            return $module_env[$name] ?? null;
+        }
+        $module = Env::getInstance()->getModuleInfo($module);
+        $local_env = [];
+        if (is_file($module['base_path'] . 'etc' . DS . 'env.php')) {
+            $local_env = include $module['base_path'] . 'etc' . DS . 'env.php';
+            if (!is_array($local_env)) {
+                return [];
+            }
+        }
+        self::$module_configs[$module['name']] = $local_env;
+        return $local_env[$name] ?? null;
     }
 
     public static function set(string $name, $value): bool
