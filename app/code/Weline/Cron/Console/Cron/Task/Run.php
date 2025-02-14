@@ -109,8 +109,7 @@ class Run implements CommandInterface
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
         if ($taskTotal == 0) {
-            dd($args);
-            ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1', implode(' ', $task_names)));
+            ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1 , 参数：', [implode(' ', $task_names), implode(' ', $args)]));
             exit;
         }
 
@@ -128,7 +127,7 @@ class Run implements CommandInterface
             foreach ($tasks as $key => $taskModel) {
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::fields_EXECUTE_NAME));
                 # 进程名
-                $command_file = BP . 'bin'.DS.'w';
+                $command_file = BP . 'bin' . DS . 'w';
                 $process_name = PHP_BINARY . ' ' . $command_file . ' cron:task:run -process ' . $execute_name . ($force ? ' -force' : '');
                 $task_start_time = ((int)$taskModel->getData($taskModel::fields_RUN_TIME)) ?: microtime(true);
                 $task_run_date = date('Y-m-d H:i:s');
