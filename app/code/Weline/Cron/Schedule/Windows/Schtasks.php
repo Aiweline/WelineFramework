@@ -38,7 +38,7 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
             $php_binary = PHP_BINARY;
             # 获取盘符
             $log = BP . 'var/cron.log';
-            if(!file_exists($log)){
+            if (!file_exists($log)) {
                 if (!is_dir(dirname($log))) {
                     mkdir(dirname($log), 0777, true);
                 }
@@ -81,7 +81,12 @@ SCRIPT;
         if (count($data['output']) === 1) {
             return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $data];
         } else {
-            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务可能未安装或者正在运行，使用php bin/w cron:listing 检查！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => $data];
+            if ($this->exist($name)) {
+                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务正在运行!稍后重试~！使用php bin/w cron:listing 检查！', $name);
+            } else {
+                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务未安装!请执行：php bin/w cron:install 安装计划任务后重试！', $name);
+            }
+            return ['status' => false, 'msg' => $msg, 'result' => $data];
         }
     }
 
