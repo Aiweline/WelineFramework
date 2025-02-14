@@ -231,6 +231,7 @@ class Env extends DataObject
     private array $config = [];
 
     private array $module_list = [];
+    private static array $module_configs = [];
     private array $active_module_list = [];
 
     private array $hasGetConfig;
@@ -335,12 +336,27 @@ class Env extends DataObject
         return self::$instance;
     }
 
-    public static function get(string $name = '')
+    public static function get(string $name = '', string $module = ''): mixed
     {
+        if ($module) {
+            if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
+                return $module_env;
+            }
+            $module = Env::getInstance()->getModuleInfo($module);
+            $local_env = [];
+            if (is_file($module['base_path'] . 'etc' . DS . 'env.php')) {
+                $local_env = include $module['base_path'] . 'etc' . DS . 'env.php';
+                if (!is_array($local_env)) {
+                    return [];
+                }
+            }
+            self::$module_configs[$module['name']] = $local_env;
+            return $local_env;
+        }
         return self::getInstance()->getConfig($name);
     }
 
-    public static function set(string $name, $value)
+    public static function set(string $name, $value): bool
     {
         return self::getInstance()->setConfig($name, $value);
     }
