@@ -13,15 +13,15 @@ declare(strict_types=1);
 namespace Weline\Cron\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\System\OS\Win;
 
 class Process
 {
     static public function initTaskName(string $pname)
     {
         # 字符串安全
-        $pname = escapeshellcmd($pname);
         $speicials = [
-            ' ', '\'', '"',':'
+            ' ', '\'', '"'
         ];
         foreach ($speicials as $special) {
             $pname = str_replace($special, '-', $pname);
@@ -31,7 +31,6 @@ class Process
 
     static public function create(string $process_name): int
     {
-        $process_name = escapeshellcmd($process_name);
         $descriptorspec = array(
             0 => array('pipe', 'r'),   // 子进程将从此管道读取stdin
             1 => array('pipe', 'w'),   // 子进程将向此管道写入stdout
@@ -39,16 +38,13 @@ class Process
         );
         # 创建异步程序
         $process_log_path = Process::getLogProcessFilePath($process_name);
-        if(!is_file($process_log_path)){
-            dd($process_log_path);
-        }
         if (IS_WIN) {
-            # 使用vbs脚本创建进程
-            $disk = substr(BP, 0, 2);
-            $command = $disk . '; cd "' . BP . '" ; start /min "' . $process_name . '" > "' . $process_log_path . '" ';
+            # 使用cmd命令行创建进程
+            $command = ' cmd /c start /b ' . $process_name . ' > "' . $process_log_path . '" 2>&1 "&" echo $!';
         } else {
-            $command = 'cd "' . BP . '" && nohup ' . $process_name . ' > "' . $process_log_path . '" 2>&1 & echo $!';
+            $command = 'nohup ' . $process_name . ' > "' . $process_log_path . '" 2>&1 & echo $!';
         }
+
         Process::setProcessOutput($process_name, $command . PHP_EOL);
         $procPipes = [];
         $process = proc_open($command, $descriptorspec, $procPipes);
@@ -81,7 +77,6 @@ class Process
 
     static public function getLogProcessFilePath(string $pname)
     {
-        $pname = escapeshellcmd($pname);
         # 取出进程名称
         $names = [
             '-name', '-process'
@@ -96,7 +91,8 @@ class Process
                 $pname = $pname[0];
             }
         }
-        $path = Env::VAR_DIR . 'cron' . DS . Process::initTaskName($pname) . '.log';
+        $file_name = str_replace(':', '-', $pname);
+        $path = Env::VAR_DIR . 'cron' . DS . $file_name . '.log';
         if (!is_file($path)) {
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0777, true);
@@ -108,7 +104,6 @@ class Process
 
     static public function unsetLogProcessFilePath(string $pname)
     {
-        $pname = escapeshellcmd($pname);
         $path = self::getLogProcessFilePath($pname);
         if (is_file($path)) {
             unlink($path);
@@ -118,7 +113,6 @@ class Process
 
     static public function killPid(int $pid, string $pname)
     {
-        $pname = escapeshellcmd($pname);
         $logfile = self::getLogProcessFilePath($pname);
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             exec("kill $pid 2>/dev/null", $output, $exitCode);
@@ -151,21 +145,18 @@ class Process
 
     static public function getProcessOutput(string $pname): string|false
     {
-        $pname = escapeshellcmd($pname);
         $path = self::getLogProcessFilePath($pname);
         return file_get_contents($path);
     }
 
     static public function setProcessOutput(string $pname, string $content): false|int
     {
-        $pname = escapeshellcmd($pname);
         $path = self::getLogProcessFilePath($pname);
         return file_put_contents($path, $content, FILE_APPEND);
     }
 
     static public function getPidByName(string $pname): int
     {
-        $pname = escapeshellcmd($pname);
         # 分系统环境
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $pname = str_replace(PHP_BINARY, '', $pname);
