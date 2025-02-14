@@ -41,7 +41,7 @@ class Process
             # 使用cmd命令行创建进程
             $command = ' cmd /c start /b ' . $process_name . ' > "' . $process_log_path . '"';
         } else {
-            $command = 'nohup ' . $process_name . ' > "' . $process_log_path . '" 2>&1 & echo $!';
+            $command = 'nohup ' . $process_name . ' > "' . $process_log_path . '"';
         }
 
         Process::setProcessOutput($process_name, $command . PHP_EOL);
