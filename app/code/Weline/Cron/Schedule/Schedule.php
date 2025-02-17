@@ -21,11 +21,6 @@ class Schedule implements ScheduleInterface
     const cron_config_key = 'CRON_SCHEDULE_NAME';
     const cron_flag = '[Weline_Cron]';
 
-    function __init()
-    {
-        Env::check_user();
-    }
-
     public function create(string $name): array
     {
         return $this->getScheduler()->create($name);
