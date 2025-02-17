@@ -530,11 +530,13 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     optionsTemplate += `<option value="${option.option_id}">${option.code}</option>`;
                                 }
                                 let multiValueAttr = '';
-                                if (attribute.is_multi === 1) {
+                                if (attribute.multiple_valued === 1) {
                                     multiValueAttr = 'multiple';
                                 }
                                 // 编辑不能更改
-                                let selectTemplate = `
+                                let selectTemplate = '';
+                                if (attribute.is_swatch !== 1) {
+                                    selectTemplate = `
                             <select scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}   id="${attribute.code}" type="number"
                                             class="form-control"
                                             placeholder='@lang{请输入}${attribute.name}'
@@ -545,7 +547,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                             ${optionsTemplate}
                                     </select>
                             `;
-                                if (is_disable) {
+                                }
+                                if (is_disable && attribute.is_swatch !== 1) {
                                     selectTemplate = `
                             <select scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs} disabled='disabled'  id="${attribute.code}" type="number"
                                             class="form-control"
@@ -558,8 +561,9 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                             `;
                                 }
 
-                                simpleAttributeTemplate += `
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                if (attribute.is_swatch !== 1) {
+                                    simpleAttributeTemplate += `
+                                <div class='col-lg-2 col-md-3 col-sm-4 col-xs-6 mt-2 mb-4'>
                                     <label for="${attribute.code}" class="form-label">
                                         ${attribute.name}
                                     </label>
@@ -572,6 +576,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     </div>
                                 </div>
                         `;
+                                }
+
                                 let configurableOptionsTemplate = '';
                                 // 可配置项
                                 for (let j in attribute.options) {
@@ -639,13 +645,15 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 `;
                                 }
                             } else {
-                                simpleAttributeTemplate += `
+                                /*非样本属性数据*/
+                                if (attribute.is_swatch !== 1) {
+                                    simpleAttributeTemplate += `
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="${attribute.code}" class="form-label">
                                         ${attribute.name}
                                     </label>
                                     <input scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}
-                                            id="${group.code}-${group.set_id}-${attribute.entity_id}-${attribute.code}" type="number"
+                                            id="${group.code}-${group.set_id}-${attribute.entity_id}-${attribute.code}"
                                             class="form-control"
                                             placeholder='@lang{请输入}${attribute.name}'
                                             value="" event="change"
@@ -658,6 +666,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     </div>
                                 </div>
                         `;
+                                }
                             }
                         }
                         simpleAttributeTemplate += `</div></div>`;
