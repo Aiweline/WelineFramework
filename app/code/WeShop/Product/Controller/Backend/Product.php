@@ -180,15 +180,15 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 }
             }
 //            # 删除预留数据
-//            /**@var BackendUserData $UserData */
-//            $UserData = ObjectManager::getInstance(BackendUserData::class);
-//            try {
-//                $UserData->reset()->clearData()
-//                    ->where('backend_user_id', $this->session->getLoginUserID())
-//                    ->where('scope', 'product')
-//                    ->delete();
-//            } catch (\ReflectionException|Exception|Core $e) {
-//            }
+            /**@var BackendUserData $UserData */
+            $UserData = ObjectManager::getInstance(BackendUserData::class);
+            try {
+                $UserData->reset()->clearData()
+                    ->where('backend_user_id', $this->session->getLoginUserID())
+                    ->where('scope', 'product')
+                    ->delete();
+            } catch (\ReflectionException|Exception|Core $e) {
+            }
             $this->redirect('/component/offcanvas/success', ['msg' => '保存成功']);
         }
     }
@@ -213,7 +213,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
         $skus = $this->request->getPost('skus');
         if ($skus) {
             $products = $this->product->reset()
-                ->where('sku in (\'' . implode("','", $skus) . '\')')
+                ->where('sku', $skus, 'in')
                 ->select()
                 ->fetchArray();
             # 检查这些sku是否存在
@@ -263,7 +263,6 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             ->where(Set::fields_ID, $id)
             ->select()
             ->fetchArray();
-        $productEavEntity = ObjectManager::getInstance(EavEntity::class)->loadByCode('product');
         foreach ($groups as &$group) {
             $attributes = $this->product->reset()->eav_AttributeModel()
                 ->where(EavAttribute::fields_set_id, $group[Set::fields_ID])
