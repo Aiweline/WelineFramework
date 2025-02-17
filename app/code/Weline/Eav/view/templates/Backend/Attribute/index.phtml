@@ -100,8 +100,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <lang>Eav实体-属性管理</lang>
                                 </h4>
                                 <p class='card-title-desc'>
-                                    <lang>管理实体的属性</lang> <notempty name="entity">
-                                        <lang>您当前管理的属性实体是：</lang><span class="text-info">{{entity.name}}</span>
+                                    <lang>管理实体的属性</lang>
+                                    <notempty name="entity">
+                                        <lang>您当前管理的属性实体是：</lang>
+                                        <span class="text-info">{{entity.name}}</span>
                                     </notempty>
                                 </p>
                                 <div class='table-rep-plugin'>
@@ -130,8 +132,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                    flush-button-text="刷新"
                                                    flush-button-class="btn btn-default"
                                                    flush="1"
-                                                   save="0"
-                                                   save-form="#demo-form"
+                                                   save="1"
+                                                   save-form="#attr-form"
                                                    close-button-show="1"
                                                    close-button-text="取消"
                                                    direction="right"
@@ -345,7 +347,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             Swal.fire({
                                 title: '<lang>删除成功</lang>',
                                 icon: 'success',
-                                timer:2000,
+                                timer: 2000,
                                 confirmButtonColor: '#3085d6',
                                 confirmButtonText: '<lang>确认</lang>',
                             }).then(res => {
