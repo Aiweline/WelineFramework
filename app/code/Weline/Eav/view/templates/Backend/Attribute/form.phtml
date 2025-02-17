@@ -292,7 +292,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <foreach name='types' item='type'>
                                             <option value='{{type.type_id}}' @if{attribute.type_id==type.type_id=>
                                                 'selected'}>
-                                                {{type.name}}
+                                                {{type.name}}----[{{type.code}}]
                                             </option>
                                         </foreach>
                                     </select>
@@ -517,7 +517,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                             <div class='offcanvas-body'>
                                 <!-- 使用网格系统布局 -->
                                 <div class='row'>
-                                    <div class='col-sm-6 col-md-4 col-lg-3'>
+                                    <div class='col-sm-4 col-md-3 col-lg-2'>
                                         <div class='form-group required'>
                                             <label for='value' data-toggle='tooltip' title='@lang{每个配置项名称}'>
                                                 <lang>配置项</lang>
@@ -526,7 +526,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                    placeholder='@lang{请输入配置项名称}' required>
                                         </div>
                                     </div>
-                                    <div class='col-sm-6 col-md-4 col-lg-3'>
+                                    <div class='col-sm-4 col-md-3 col-lg-2'>
                                         <div class='form-group required'>
                                             <label for='code' data-toggle='tooltip'
                                                    title='@lang{每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。}'>
@@ -538,7 +538,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     </div>
 
 
-                                    <div class='col-sm-6 col-md-4 col-lg-3' v-if="activeAttrItem.swatch_color">
+                                    <div class='col-sm-4 col-md-3 col-lg-2' v-if="activeAttrItem.swatch_color">
                                         <div class='form-group required'>
                                             <label for='code' data-toggle='tooltip' title='@lang{每个配置颜色，请填写}'>
                                                 <lang>颜色</lang>
@@ -552,7 +552,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 
                                         </div>
                                     </div>
-                                    <div class='col-sm-6 col-md-4 col-lg-3' v-if="activeAttrItem.swatch_image">
+                                    <div class='col-sm-4 col-md-3 col-lg-2' v-if="activeAttrItem.swatch_image">
                                         <div class='form-group required'>
                                             <label for='code' data-toggle='tooltip'
                                                    title='@lang{每个配置的图片，请选择}'>
@@ -574,7 +574,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 
                                         </div>
                                     </div>
-                                    <div class='col-sm-6 col-md-4 col-lg-3' v-if="activeAttrItem.swatch_text">
+                                    <div class='col-sm-4 col-md-3 col-lg-2' v-if="activeAttrItem.swatch_text">
                                         <div class='form-group required'>
                                             <label for='code' data-toggle='tooltip'
                                                    title='@lang{每个配置的文本，请填写}'>
@@ -586,7 +586,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         </div>
                                     </div>
 
-                                    <div class='col-sm-6 col-md-4 col-lg-3 d-flex align-items-end'>
+                                    <div class='col-sm-4 col-md-3 col-lg-2 d-flex align-items-end'>
                                         <div class='form-group'>
                                             <button type='button' class='btn btn-primary' href='' @click='addRow'>
                                                 <span v-text='offRow?"@lang{编辑}":"@lang{添加}"'></span>
@@ -602,8 +602,11 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                             <div class="modal-dialog modal-fullscreen">
                                 <div class="modal-content">
                                     <div class="modal-header">
-                                        <h5 id="chooseImgModelLabel" class="modal-title"><lang>图片选择器</lang> <span
-                                                    class="text-danger"><lang>（双击选中图片）最大支持100kb</lang></span></h5>
+                                        <h5 id="chooseImgModelLabel" class="modal-title">
+                                            <lang>图片选择器</lang>
+                                            <span
+                                                    class="text-danger"><lang>（双击选中图片）最大支持100kb</lang></span>
+                                        </h5>
                                         <button type="button" data-bs-dismiss="modal" aria-label="Close"
                                                 class="btn-close"></button>
                                     </div>
@@ -629,7 +632,9 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     </div>
 
                     <div v-if="(activeName=='progress-attribute-details'&&params.has_option!=1)||activeName=='progress-attribute-option'">
-                        <button class="btn btn-primary pull-right" @click="submitAttr"><lang>提交</lang></button>
+                        <button class="btn btn-primary pull-right" @click="submitAttr">
+                            <lang>提交</lang>
+                        </button>
                     </div>
                 </div>
 
@@ -701,7 +706,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             },
             offRow: '', //编辑的当前行
             EditIndex: 0, //编辑当前行的下标,
-            totalOptions:0 // 总计个数
+            totalOptions: 0 // 总计个数
         },
         mounted() {
             this.activeName = '{{attribute.progress|"progress-select-entity"}}';
@@ -970,11 +975,11 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 }).then((result) => {
                     if (result.isConfirmed) {
                         this.tableData.splice(index, 1)
-                        if(row.option_id){
+                        if (row.option_id) {
                             $.ajax({
                                 type: "post",
                                 url: "@backend-url('*/backend/attribute/option/delete')",
-                                data:{
+                                data: {
                                     id: row.option_id
                                 },
                                 dataType: "json",
