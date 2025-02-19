@@ -42,7 +42,7 @@ class Collect implements CommandInterface
         Printing $printing
     )
     {
-        $this->scan     = $scan;
+        $this->scan = $scan;
         $this->cronTask = $cronTask;
         $this->printing = $printing;
     }
@@ -51,10 +51,10 @@ class Collect implements CommandInterface
     {
         $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {
-            if (is_dir($module['base_path'] . 'Cron')) {
+            if (is_dir($module['base_path'] . 'Console')) {
                 $tasks = [];
                 $this->scan->globFile(
-                    $module['base_path'] . 'Cron' . DS . '*',
+                    $module['base_path'] . 'Console' . DS . '*',
                     $tasks, '.php',
                     $module['base_path'],
                     $module['namespace_path'] . '\\',
@@ -64,7 +64,7 @@ class Collect implements CommandInterface
                 foreach ($tasks as $task) {
                     /**@var \Weline\Cron\CronTaskInterface $taskObject */
                     $taskObject = ObjectManager::getInstance($task);
-                    if($taskObject instanceof CronTaskInterface){
+                    if ($taskObject instanceof CronTaskInterface) {
                         $this->cronTask->clearData()
                             ->setData(CronTask::fields_NAME, $taskObject->name())
                             ->setData(CronTask::fields_EXECUTE_NAME, $taskObject->execute_name(), true)
