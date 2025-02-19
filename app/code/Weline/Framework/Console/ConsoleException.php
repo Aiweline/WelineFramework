@@ -11,9 +11,9 @@ namespace Weline\Framework\Console;
 
 class ConsoleException extends \Weline\Framework\App\Exception
 {
-    public $printer;
+    public \Weline\Framework\Output\Cli\Printing $printer;
 
-    public function __construct($message, \Exception $cause = null, $code = 0)
+    public function __construct($message, ?\Exception $cause = null, $code = 0)
     {
         $this->printer = new \Weline\Framework\Output\Cli\Printing();
         parent::__construct($message, $cause, $code);

@@ -127,7 +127,7 @@ class ObjectManager implements ManagerInterface
         } else {
             $arguments = self::getMethodParams($new_class);
         }
-//        if (str_contains($new_class, 'Weline\Cron\Console\Cron\Listing')) {
+//        if (str_contains($new_class, 'Weline\Console\Console\Console\Listing')) {
 //            p($arguments);
 //        }
         $refClass = self::$reflections[$class] ?? self::$reflections[$class] = new ReflectionClass($new_class);
