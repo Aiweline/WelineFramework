@@ -2,8 +2,6 @@
 
 namespace Weline\Cron\Console\Cron;
 
-use Weline\Cron\Schedule\Schedule;
-
 class Exist extends BaseCommand
 {
 
@@ -21,7 +19,7 @@ class Exist extends BaseCommand
         $other_jobs = array_filter($jobs, function ($item) use ($cron_name) {
             return !str_contains($item, $cron_name);
         });
-        if($other_jobs){
+        if ($other_jobs) {
             $this->printing->note(__('系统-其他定时任务： ') . PHP_EOL . implode("\n", $other_jobs));
         }
     }
