@@ -66,6 +66,9 @@ SCRIPT;
             // 创建计划任务
             $create_task = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
             $data = $this->system->win_exec($create_task);
+            if ($data['return_vars'] === 1) {
+                return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1', $name), 'result' => $data];
+            }
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => []];
