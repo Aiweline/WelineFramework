@@ -12,14 +12,15 @@ class ElFinder extends FileManager
 
     public function render(): string
     {
+        $pre = DEV ? 'dev' : 'prod';
         if ($this->request->isBackend()) {
+            $mainJsFileName = 'elfinder-backend-' . $pre . '-main.js';
             $connector = $this->request->getUrlBuilder()->getBackendUrl('elfinder/backend/connector/manager', $this->getParams(), true);
         } else {
+            $mainJsFileName = 'elfinder-frontend-' . $pre . '-main.js';
             $connector = $this->request->getUrlBuilder()->getUrl('elfinder/frontend/connector/manager', $this->getParams(), true);
         }
         $this->assign('connector', $connector);
-        $pre = DEV ? 'dev' : 'prod';
-        $mainJsFileName = 'elfinder-frontend-' . $pre . '-main.js';
         $mainJsUrl = $this->_cache->get($mainJsFileName);
         if (!$mainJsUrl) {
             $ds = DS;
@@ -28,7 +29,7 @@ class ElFinder extends FileManager
                 die(__('main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder'));
             }
             $mainJsContent = file_get_contents($mainJs);
-            $mainJs = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
+            $mainJs = __DIR__ . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
             $mainJsDir = dirname($mainJs);
             if (!is_dir($mainJsDir)) {
                 mkdir($mainJsDir, 755, true);

@@ -72,6 +72,7 @@
     "weline/module-el-finder-file-manager": "*",
     "weline/module-editor-manager": "^1.1",
     "weline/module-media-manager": "*",
+    "weline/module-parts": "*",
     "phpoffice/phpspreadsheet": "^3.3",
     "shopify/shopify-api": "^5.8",
     "openai-php/client": "^0.9.2",
