@@ -18,15 +18,20 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Config\ModuleFileReader;
 use Weline\Framework\Module\Model\Module;
+use Weline\Framework\Output\Cli\Printing;
 
 class Reindex implements \Weline\Framework\Console\CommandInterface
 {
     private ModuleFileReader $moduleFileReader;
-    public function __counstruct(
+
+    public function __construct(
         ModuleFileReader $moduleFileReader,
-    ) {
+        private Printing $printing
+    )
+    {
         $this->moduleFileReader = $moduleFileReader;
     }
+
     /**
      * @inheritDoc
      */
@@ -34,14 +39,14 @@ class Reindex implements \Weline\Framework\Console\CommandInterface
     {
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $params =  new DataObject(['args' => $args,'break' => false]);
+        $params = new DataObject(['args' => $args, 'break' => false]);
         $eventManager->dispatch('Framework_Database::indexer', $params);
-        if($params->getData('break')) {
-            dd('跳出重建索引');
+        if ($params->getData('break')) {
             return;
         }
         # 继续框架原版的索引重建
         array_shift($args);
+        unset($args['command']);
         $args_indexers = $args;
 
         $indexers = [];
@@ -60,21 +65,21 @@ class Reindex implements \Weline\Framework\Console\CommandInterface
         }
         foreach ($indexers as $indexer => $indexerItems) {
             # 有参数
-            if($args_indexers) {
-                if(in_array($indexer, $args_indexers)) {
+            if ($args_indexers) {
+                if (in_array($indexer, $args_indexers)) {
                     $this->printing->note("开始重建索引：{$indexer} ");
                     foreach ($indexerItems as $indexerItem) {
-                        $this->printing->note("索引组模型：".$indexerItem::class);
+                        $this->printing->note("索引组模型：" . $indexerItem::class);
                         $indexerItem->reindex();
-                        $this->printing->success("索引重建完成：".$indexerItem::class);
+                        $this->printing->success("索引重建完成：" . $indexerItem::class);
                     }
                 }
             } else {
                 $this->printing->note("开始重建索引：{$indexer} ");
                 foreach ($indexerItems as $indexerItem) {
-                    $this->printing->note("索引组模型：".$indexerItem::class);
+                    $this->printing->note("索引组模型：" . $indexerItem::class);
                     $indexerItem->reindex();
-                    $this->printing->success("索引重建完成：".$indexerItem::class);
+                    $this->printing->success("索引重建完成：" . $indexerItem::class);
                 }
             }
         }

@@ -23,7 +23,7 @@ class Connector extends FrontendController
                 die(__('main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder'));
             }
             $mainJsContent = file_get_contents($mainJs);
-            $mainJs = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
+            $mainJs = __DIR__ . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
             $mainJsDir = dirname($mainJs);
             if (!is_dir($mainJsDir)) {
                 mkdir($mainJsDir, 755, true);
@@ -59,7 +59,7 @@ class Connector extends FrontendController
         // CONFIGS
         // 读取支持的类型
         $mimesExt = $this->request->getParam('ext');
-        $mimes    = ['image', 'text/plain'];
+        $mimes = ['image', 'text/plain'];
         if ($mimesExt) {
             $mimesExt = explode(',', $mimesExt);
             foreach ($mimesExt as $k => $mimeExt) {
@@ -83,8 +83,8 @@ class Connector extends FrontendController
         $mimesExt = $this->request->getParam('mimes');
         $mimes = ['image', 'text/plain'];
         if ($mimesExt) {
-            foreach ($mimesExt as $k=>$mimeExt) {
-                $mimes = array_merge( $mimes,MimeTypes::getMimeTypes(trim($mimeExt)));
+            foreach ($mimesExt as $k => $mimeExt) {
+                $mimes = array_merge($mimes, MimeTypes::getMimeTypes(trim($mimeExt)));
             }
         }
         // Volumes config
