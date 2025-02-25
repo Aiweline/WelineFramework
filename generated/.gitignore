@@ -1,3 +1,10 @@
 !.gitignore
 # 删除安全日志
 safe-log.htm
+code/*
+!code/.gitkeep
+language/*
+routers/*
+commands.php
+functions.php
+*-\[Weline_Cron\]-cron*
