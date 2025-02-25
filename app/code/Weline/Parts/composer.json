@@ -1,6 +1,6 @@
 {
   "name": "weline/module-parts",
-  "description": "WelineFramework 部分组件：碎片可重复使用的部分化组件。",
+  "description": "WelineFramework 部分组件：碎片可重复使用的部分化零件。",
   "minimum-stability": "stable",
   "type": "weline-module",
   "require": {

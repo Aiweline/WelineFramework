@@ -23,22 +23,31 @@ class Warm implements CommandInterface
 
     public function __construct(Client $client, Printing $printing)
     {
-        $this->client   = $client;
+        $this->client = $client;
         $this->printing = $printing;
     }
 
     public function execute(array $args = [], array $data = [])
     {
+        $domain = $args[1] ?? $args['domain'] ?? '';
+        if (!$domain) {
+            $domain = Env::get('domain') ?: '';
+            if (!$domain) {
+                $env_path = str_replace(BP, '', Env::path_ENV_FILE);
+                $this->printing->warning(__('请输入域名！或者在 %1 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com ', $env_path));
+                exit(1);
+            }
+        }
         $frontend_routers = (array)(require Env::path_FRONTEND_PC_ROUTER_FILE);
         $this->printing->warning(__('缓存预热开始...'));
         foreach ($frontend_routers as $frontend_router => $router_data) {
             $frontend_router = explode('::', $frontend_router);
-            $frontend_url    = array_shift($frontend_router);
-            $method          = 'get';
+            $frontend_url = array_shift($frontend_router);
+            $method = 'get';
             if ($frontend_router) {
                 $method = strtolower(array_shift($frontend_router));
             }
-            $url = 'http://' . Env::getInstance()->getConfig('domain', '127.0.0.1') . '/' . $frontend_url;
+            $url = 'http://' . $domain . '/' . $frontend_url;
             $this->printing->note($url);
             try {
                 $this->client->$method($url);

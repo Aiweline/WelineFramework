@@ -122,7 +122,7 @@
 
 	// config of RequireJS (REQUIRED)
 	require.config({
-		baseUrl : '/weline/module-el-finder-file-manager/view/statics/js',
+		baseUrl : '/Weline/ElFinderFileManager/view/statics/js',
 		paths : {
 			'jquery'   : '//cdnjs.cloudflare.com/ajax/libs/jquery/'+(old? '1.12.4' : jqver)+'/jquery.min',
 			'jquery-ui': '//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/jquery-ui.min',
@@ -140,7 +140,7 @@
 			// Documentation for client options:
 			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 			defaultOpts : {
-				url : 'http://www.weline.com/zh_Hans_CN/admin_123/elfinder/backend/connector' // connector URL (REQUIRED)
+				url : 'http://127.0.0.1:9981/zh_Hans_CN/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/elfinder/backend/connector' // connector URL (REQUIRED)
 				,commandsOptions : {
 					edit : {
 						extraOptions : {
