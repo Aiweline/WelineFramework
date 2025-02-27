@@ -36,7 +36,8 @@ class ModelManager
     public function __construct(
         ModuleFileReader $moduleReader,
         Printing         $printing
-    ) {
+    )
+    {
         $this->moduleReader = $moduleReader;
         $this->printing = $printing;
     }
@@ -47,10 +48,9 @@ class ModelManager
         if (!in_array($type, ['setup', 'upgrade', 'install'])) {
             throw new Exception(__('$type允许的值不在：%1 中', "'setup','upgrade','install'"));
         }
-        $modelSetup = ObjectManager::getInstance(ModelSetup::class);
         $model_files_data = array_reverse($this->moduleReader->readClass($module, 'Model'));
         foreach ($model_files_data as $key => $model_class) {
-            $this->printing->note($model_class,__('Model升级'));
+            $this->printing->note($model_class, __('Model升级'));
             if (class_exists($model_class)) {
                 $model = ObjectManager::getInstance($model_class);
                 if ($model instanceof AbstractModel) {
@@ -59,13 +59,14 @@ class ModelManager
                     if (PROD) {
                         $this->printing->printing($model::class);
                     }
+                    $modelSetup = ObjectManager::make(ModelSetup::class);
                     $modelSetup->putModel($model);
                     # 执行模型升级
                     $model->$type($modelSetup, $context);
                     $this->getEvenManager()->dispatch('Framework_Database::model_update_after', ['data' => $data, 'type' => $type, 'object' => $this, 'module' => $module]);
                 }
-            }else{
-                $this->printing->error($model_class,__('Model升级'));
+            } else {
+                $this->printing->error($model_class, __('Model升级'));
             }
         }
     }
