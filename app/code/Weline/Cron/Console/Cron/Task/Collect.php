@@ -51,10 +51,10 @@ class Collect implements CommandInterface
     {
         $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {
-            if (is_dir($module['base_path'] . 'Console')) {
+            if (is_dir($module['base_path'] . 'Cron')) {
                 $tasks = [];
                 $this->scan->globFile(
-                    $module['base_path'] . 'Console' . DS . '*',
+                    $module['base_path'] . 'Cron' . DS . '*',
                     $tasks, '.php',
                     $module['base_path'],
                     $module['namespace_path'] . '\\',
