@@ -6,5 +6,12 @@ declare(strict_types=1);/*
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */;
+# 定位dd函数位置
+//function dd()
+//{
+//    echo var_export(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2), true);
+//    die;
+//}
+
 date_default_timezone_set('America/New_York');
 require __DIR__ . '/pub/index.php';
