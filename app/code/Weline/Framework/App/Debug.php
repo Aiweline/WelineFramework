@@ -2,6 +2,7 @@
 
 namespace Weline\Framework\App;
 
+use Weline\Framework\Console\Cli;
 use Weline\Framework\Manager\ObjectManager;
 
 class Debug
