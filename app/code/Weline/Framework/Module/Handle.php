@@ -214,8 +214,8 @@ class Handle implements HandleInterface, RegisterInterface
             $env = $this->getEnv($module_name, $env);
         }                                          // 如果文件不存在则读取模块名字作为router
         $router = strtolower($env['router'] ?: '');
-        $namespace = str_replace(DS, '\\', $param['dir_path']);
-        $namespace = rtrim($namespace, '\\');
+        $namespace = str_replace('_', '\\', $module_name);
+
         # 模块数据
         $module = new Module();
         $module->setStatus(true)
@@ -291,7 +291,7 @@ class Handle implements HandleInterface, RegisterInterface
             'module_version' => $module->getVersion(),
             'module_description' => $module->getDescription()
         ], '__construct');
-        $modelManager = $this->getModuleManager();
+        $modelManager = $this->getModelManager();
         // 已经存在模块则更新
         if ($this->helper->isInstalled($this->old_modules, $module->getName())) {
             if ($this->helper->isDisabled($this->modules, $module->getName())) {
@@ -442,11 +442,9 @@ class Handle implements HandleInterface, RegisterInterface
      * @EMAIL aiweline@qq.com
      * @DateTime: 2023/1/8 0:19
      * 参数区：
-     * @return \Weline\Framework\Database\Model\ModelManager
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
+     * @return ModelManager
      */
-    private function getModuleManager(): ModelManager
+    private function getModelManager(): ModelManager
     {
         return ObjectManager::getInstance(ModelManager::class);
     }
