@@ -297,8 +297,8 @@ abstract class AbstractModel extends DataObject
      */
     protected function processTable(): string
     {
-        if (self::table) {
-            return self::table;
+        if ($this::table) {
+            $this->table = $this::table;
         }
         if (!$this->table) {
             $class_file_name_arr = explode('Model', $this::class);

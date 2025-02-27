@@ -47,68 +47,6 @@ class EavEntity extends Model
         if (!$setup->tableExist()) {
             $this->install($setup, $context);
         }
-        // 安装实体
-        /**@var \Weline\Framework\Module\Config\ModuleFileReader $moduleFileReader */
-        $moduleFileReader = ObjectManager::getInstance(ModuleFileReader::class);
-
-        $modules = Env::getInstance()->getActiveModules();
-        $eavs = [];
-        foreach ($modules as $module) {
-            $eavs = array_merge($eavs, $moduleFileReader->readClass(new Module($module), 'Model'));
-        }
-        foreach ($eavs as $eav) {
-            # 检测类是否可以实例化
-            $eavEntityReflectionInstance = ObjectManager::getReflectionInstance($eav);
-            if (!$eavEntityReflectionInstance->isInstantiable()) {
-                continue;
-            }
-            /**@var \Weline\Eav\EavInterface $eavEntity */
-            $eavEntity = ObjectManager::getInstance($eav);
-            if ($eavEntity instanceof EavInterface) {
-                $this->reset()
-                    ->setData(
-                        [
-                            self::fields_ID => $eavEntity->getEavEntityId(),
-                            self::fields_code => $eavEntity->getEntityCode(),
-                            self::fields_class => $eav,
-                            self::fields_name => $eavEntity->getEntityName(),
-                            self::fields_is_system => 1,
-                            self::fields_eav_entity_id_field_type => $eavEntity->getEntityFieldIdType(),
-                            self::fields_eav_entity_id_field_length => $eavEntity->getEntityFieldIdLength(),
-                        ]
-                    )
-                    ->forceCheck(true, $this::fields_code)
-                    ->save();
-                # 检查属性集和属性组，没有则为实体创建默认属性集和默认属性组
-                #--属性集
-                $attributeSet = $eavEntity->getAttributeSets();
-                if (empty($attributeSet)) {
-                    /**@var \Weline\Eav\Model\EavAttribute\Set $eavAttributeSet */
-                    $eavAttributeSet = ObjectManager::make(EavAttribute\Set::class);
-                    $eavAttributeSet->reset()->clearData()
-                        ->insert([
-                            'eav_entity_id' => $eavEntity->getEavEntityId(),
-                            'name' => '默认属性集',
-                            'code' => 'default',
-                        ])->fetch();
-                }
-                # --属性组
-                $attributeGroup = $eavEntity->getAttributeGroups();
-                if (empty($attributeGroup)) {
-                    # 获取默认属性集
-                    $attributeSet = $eavEntity->getAttributeSet('default');
-                    /**@var \Weline\Eav\Model\EavAttribute\Group $eavAttributeGroup */
-                    $eavAttributeGroup = ObjectManager::make(EavAttribute\Group::class);
-                    $eavAttributeGroup->reset()->clearData()
-                        ->insert([
-                            'set_id' => $attributeSet->getId(),
-                            'eav_entity_id' => $eavEntity->getEavEntityId(),
-                            'name' => '默认属性组',
-                            'code' => 'default',
-                        ])->fetch();
-                }
-            }
-        }
     }
 
     public function loadByCode($code): static

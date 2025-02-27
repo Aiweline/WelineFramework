@@ -160,7 +160,6 @@ class Handle implements HandleInterface, RegisterInterface
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = '', array $dependencies = []): mixed
     {
         // 检测依赖
-
         foreach ($dependencies as $dependency) {
             if (!Checker::hasDependency($dependency)) {
                 throw new Exception(__('%1 模组所需依赖尚 %2 未安装！请先安装模块后继续执行，或者删除此依赖。', [$module_name, $dependency]));
