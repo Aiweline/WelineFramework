@@ -55,22 +55,22 @@ class SmtpSender extends \Weline\Framework\App\Helper
      * @DateTime: 2022/11/2 22:50
      * 参数区：
      *
-     * @param string|array $from       发送者：demo@demo.com | 带名字的发送者：['email'=>'demo@demo.com','name'=>'Sender']
-     * @param string|array $to         单个收件人：demo@demo.com | 带名字的收件人：['email'=>'demo@demo.com','name'=>'Sender'] | 多个收件人：[['email'=>'demo1@demo.com',
+     * @param string|array $from 发送者：demo@demo.com | 带名字的发送者：['email'=>'demo@demo.com','name'=>'Sender']
+     * @param string|array $to 单个收件人：demo@demo.com | 带名字的收件人：['email'=>'demo@demo.com','name'=>'Sender'] | 多个收件人：[['email'=>'demo1@demo.com',
      *                                 'name'=>'Sender1'], ['email'=>'demo2@demo.com','name'=>'Sender2']]
-     * @param string       $subject    字符串：This is a test subject.
-     * @param string       $content    字符串：This is a test message content.
-     * @param string       $alt        字符串：Just is a test alt.
+     * @param string $subject 字符串：This is a test subject.
+     * @param string $content 字符串：This is a test message content.
+     * @param string $alt 字符串：Just is a test alt.
      * @param string|array $attachment 单个附件：/data/imgg/test.jpg | 带名字的附件：['path'=>'/data/imgg/test.jpg','name'=>'test.jpg'] | 多个附件:
      *                                 [['path'=>'/data/imgg/test1.jpg','name'=>'test1.jpg'],['path'=>'/data/imgg/test2.jpg','name'=>'test2.jpg']]
-     * @param string|array $reply_to   单个回复：reply_to@demo.com | 带名字的回复：['email'=>'reply_to@demo.com','name'=>'Reply to'] |
+     * @param string|array $reply_to 单个回复：reply_to@demo.com | 带名字的回复：['email'=>'reply_to@demo.com','name'=>'Reply to'] |
      *                                 一次性回复多个邮件：[['email'=>'reply_to1@demo.com','name'=>'Reply to 1'], ['email'=>'reply_to2@demo.com',
      *                                 'name'=>'Reply to 2']]
-     * @param string|array $cc         单个抄送：cc@demo.com | 带名字的抄送：['email'=>'cc@demo.com','name'=>'CC'] | 一次性抄送给多个邮件：[['email'=>'cc1@demo
+     * @param string|array $cc 单个抄送：cc@demo.com | 带名字的抄送：['email'=>'cc@demo.com','name'=>'CC'] | 一次性抄送给多个邮件：[['email'=>'cc1@demo
      *                                 .com','name'=>'CC 1'], ['email'=>'cc2@demo.com','name'=>'CC 2']]
-     * @param string|array $bcc        单个密送：bcc@demo.com | 带名字的抄送：['email'=>'bcc@demo.com','name'=>'BCC'] | 一次性抄送给多个邮件：[['email'=>'bcc1@demo
+     * @param string|array $bcc 单个密送：bcc@demo.com | 带名字的抄送：['email'=>'bcc@demo.com','name'=>'BCC'] | 一次性抄送给多个邮件：[['email'=>'bcc1@demo
      *                                 .com','name'=>'BCC 1'], ['email'=>'bcc2@demo.com','name'=>'BCC 2']]
-     * @param string       $module     模型：Weline_Smtp。默认使用Weline_Smtp模组下的配置，你可以使用Weline\Smtp\Helper\Data设置或获取对应模组的Smtp配置
+     * @param string $module 模型：Weline_Smtp。默认使用Weline_Smtp模组下的配置，你可以使用Weline\Smtp\Helper\Data设置或获取对应模组的Smtp配置
      *
      * @return bool
      * @throws \PHPMailer\PHPMailer\Exception
@@ -100,7 +100,7 @@ class SmtpSender extends \Weline\Framework\App\Helper
         $this->mail->Password = $this->data->get($this->data::smtp_password, $module);
         //SMTP 密码
         $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;                                                                                                                                                                                                                                                                                                                                            //启用隐式TLS加密
-        $this->mail->Port       = $this->data->get($this->data::smtp_port, $module);
+        $this->mail->Port = $this->data->get($this->data::smtp_port, $module);
         //要连接的TCP端口；如果已设置`SMTPSecure=PHPMailer::ENCRYPTION_STARTTLS，请使用587`
 
         // 发送者
@@ -119,7 +119,7 @@ class SmtpSender extends \Weline\Framework\App\Helper
                 foreach ($to as $to_email) {
                     if (isset($to_email['email'])) {
                         $this->mail->addAddress($to_email['email'], $to_email['name'] ?? '');               //Name is optional
-                    }elseif(is_string($to_email)){
+                    } elseif (is_string($to_email)) {
                         $this->mail->addAddress($to_email);               //Name is optional
                     }
                 }
@@ -190,26 +190,26 @@ class SmtpSender extends \Weline\Framework\App\Helper
         }
         // 内容
         $this->mail->Subject = $subject;
-        $this->mail->Body    = $content;
+        $this->mail->Body = $content;
         $this->mail->AltBody = $alt;
         $this->mail->isHTML(true);  // Html格式发送邮件
-        $this->mail->send();
+//        $this->mail->send();
         /**@var \Weline\Smtp\Model\SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
         try {
-            $sendLog->setData($sendLog::fields_FROM, $from['email'] ?? $from)
-                    ->setData($sendLog::fields_SENDER_NAME, $from['name'] ?? '')
-                    ->setData($sendLog::fields_TO, json_encode($to))
-                    ->setData($sendLog::fields_REPLY_TO, $reply_to ? json_encode($reply_to) : null)
-                    ->setData($sendLog::fields_SUBJECT, $subject)
-                    ->setData($sendLog::fields_CONTEXT, $content)
-                    ->setData($sendLog::fields_ALT, $alt)
-                    ->setData($sendLog::fields_ATTACHMENT, $attachment ? json_encode($attachment) : null)
-                    ->setData($sendLog::fields_CC, $cc ? json_encode($cc) : null)
-                    ->setData($sendLog::fields_BCC, $bcc ? json_encode($bcc) : null)
-                    ->setData($sendLog::fields_RPOXY, $this->data->get($this->data::smtp_username, $module))
-                    ->setData($sendLog::fields_MODULE, $module)
-                    ->save();
+            $sendLog->setData($sendLog::fields_FROM, $this->mail->From)
+                ->setData($sendLog::fields_SENDER_NAME, $this->mail->FromName)
+                ->setData($sendLog::fields_TO, json_encode($this->mail->getToAddresses()))
+                ->setData($sendLog::fields_REPLY_TO, json_encode($this->mail->getReplyToAddresses()))
+                ->setData($sendLog::fields_SUBJECT, $this->mail->Subject)
+                ->setData($sendLog::fields_CONTEXT, $this->mail->Body)
+                ->setData($sendLog::fields_ALT, $this->mail->AltBody)
+                ->setData($sendLog::fields_ATTACHMENT, json_encode($this->mail->getAttachments()))
+                ->setData($sendLog::fields_CC, json_encode($this->mail->getCcAddresses()))
+                ->setData($sendLog::fields_BCC, json_encode($this->mail->getBccAddresses()))
+                ->setData($sendLog::fields_RPOXY, $this->data->get($this->data::smtp_username, $module))
+                ->setData($sendLog::fields_MODULE, $module)
+                ->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
             if (DEV) {
                 throw new Exception($e->getMessage());
