@@ -265,6 +265,18 @@ class Env extends DataObject
     public static function check_user(): void
     {
         $current_user = Env::user();
+        if (empty(Env::get('user'))) {
+            $etc = str_replace(BP, '', Env::path_ENV_FILE);
+            $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请前往 %1 配置user键指定网站运行用户。示例\'user\'=>\'www\'。', $etc);
+            if (CLI) {
+                /** @var Printing $printing */
+                $printing = ObjectManager::getInstance(Printing::class);
+                $printing->error($msg);
+                exit(1);
+            } else {
+                die($msg);
+            }
+        }
         if ($current_user !== Env::get('user')) {
             if (CLI) {
                 /** @var Printing $printing */
@@ -347,7 +359,7 @@ class Env extends DataObject
     public static function module_env(string $module, string $name = ''): mixed
     {
         if (isset(self::$module_configs[$module]) and $module_env = self::$module_configs[$module]) {
-            if(empty($name)){
+            if (empty($name)) {
                 return $module_env;
             }
             return $module_env[$name] ?? null;
