@@ -5,7 +5,7 @@
   "type": "weline-module",
   "require": {
     "php": "^8.1",
-    "weline/module-media-manager": "v1.0.0"
+    "weline/module-media-manager": "*"
   },
   "authors": [
     {
