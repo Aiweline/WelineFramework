@@ -15,7 +15,7 @@ use Weline\Framework\System\File\Io\File;
 abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint implements PrintInterface
 {
     public $out;
-    private ?File $file=null;
+    private ?File $file = null;
     public bool $printing = true;
 
     /**
@@ -37,7 +37,7 @@ abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint impl
      */
     public function error($data = 'Error!', string $message = '', string $color = self::ERROR, int $pad_length = 25): mixed
     {
-        return $this->doPrint($data, $message, $color, $pad_length, 3,'error');
+        return $this->doPrint($data, $message, $color, $pad_length, 3, 'error');
     }
 
     /**
@@ -59,7 +59,7 @@ abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint impl
      */
     public function success(string $data = 'Success!', string $message = '', string $color = self::SUCCESS, int $pad_length = 25): mixed
     {
-        return $this->doPrint($data, $message, $color, $pad_length,3,'success');
+        return $this->doPrint($data, $message, $color, $pad_length, 3, 'success');
     }
 
     /**
@@ -81,7 +81,7 @@ abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint impl
      */
     public function warning(string $data = 'Warning!', string $message = '', string $color = self::WARNING, int $pad_length = 25): mixed
     {
-        return $this->doPrint($data, $message, $color, $pad_length,3,'warning');
+        return $this->doPrint($data, $message, $color, $pad_length, 3, 'warning');
     }
 
     /**
@@ -103,7 +103,7 @@ abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint impl
      */
     public function note(string $data = 'Note!', string $message = '', string $color = self::NOTE, int $pad_length = 25): mixed
     {
-        return $this->doPrint($data, $message, $color, $pad_length,3,'note');
+        return $this->doPrint($data, $message, $color, $pad_length, 3, 'note');
     }
 
     /**
@@ -178,12 +178,12 @@ abstract class AbstractPrint extends \Weline\Framework\Output\AbstractPrint impl
     public function printing(string $data = 'Printing!', string $message = '', string $color = self::NOTE, int $pad_length = 0): void
     {
         $doc_tmp = $this->colorize('【' . $message . '】：', self::NOTE) . $this->colorize(($pad_length ? str_pad($data, $pad_length) : $data), $color);
-        $doc     = <<<COMMAND_LIST
+        $doc = <<<COMMAND_LIST
 
 $doc_tmp
 
 COMMAND_LIST;
-        exit($doc);
+        echo $doc;
     }
 
     /**
@@ -203,35 +203,50 @@ COMMAND_LIST;
      */
     public function colorize($text, $status): string
     {
+        $end = '[0m';
+        if (!CLI) {
+            $end = '</span>';
+            $text = str_replace(PHP_EOL, '<br>', $text);
+        }
         switch ($status) {
             case self::SUCCESS:
             case 'Green':
                 $this->out = '[32m'; //Green
-
+                if (!CLI) {
+                    $this->out = '<span style="color: #00ff00;">';
+                }
                 break;
             case self::ERROR:
             case self::FAILURE:
             case 'Red':
                 $this->out = '[31m'; //Red
-
+                if (!CLI) {
+                    $this->out = '<span style="color: #ff0000;">';
+                }
                 break;
             case self::WARNING:
             case 'Yellow':
                 $this->out = '[33m'; //Yellow
-
+                if (!CLI) {
+                    $this->out = '<span style="color: #ffff00;">';
+                }
                 break;
             case self::NOTE:
             case 'Blue':
                 $this->out = '[34m'; //Blue
-
+                if (!CLI) {
+                    $this->out = '<span style="color: #0000ff;">';
+                }
                 break;
             default:
                 $this->out = '[31m'; //默认错误信息
-
+                if (!CLI) {
+                    $this->out = '<span style="color: #ff0000;">';
+                }
                 break;
         }
 
-        return chr(27) . "{$this->out}" . "{$text}" . chr(27) . '[0m';
+        return chr(27) . "{$this->out}" . "{$text}" . chr(27) . $end;
     }
 
     /**
@@ -241,7 +256,7 @@ COMMAND_LIST;
      *
      * @param string $log_path
      * @param string $content
-     * @param int    $type
+     * @param int $type
      *
      * @throws \Weline\Framework\App\Exception
      */
