@@ -47,6 +47,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-md-4'>
                         <div class='mb-4'>
                             <label class='form-label' for='validationName'>
+                                <span class="text-danger">*</span>
                                 <lang>商铺名</lang>
                             </label>
                             <input type='text' class='form-control' maxlength='128'
@@ -65,11 +66,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-md-4'>
                         <div class='mb-4'>
                             <label class='form-label' for='storeCode'>
+                                <span class="text-danger">*</span>
                                 <lang>店铺编码</lang>
                             </label>
                             <input type='text' name="code" id='storeCode' value="{{store.code}}"
                                    class='form-control'
-                                   placeholder='@lang{商铺唯一标识码}'>
+                                   placeholder='@lang{商铺唯一标识码}' required>
                             <div class='valid-feedback'>
                                 <lang>填写正确！</lang>
                             </div>
@@ -100,6 +102,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 })
                             }, 500))
                         </script>
+                    </div>
+                    <div class='col-md-4'>
+                        <div class='mb-4'>
+                            <label class='form-label' for='currency'>
+                                <span class="text-danger">*</span>
+                                <lang>默认货币</lang>
+                            </label>
+                            <input type='text' class='form-control' name='currency'
+                                   data-parsley-minlength='5'
+                                   id='longitude'
+                                   required='required' value="{{store.currency}}"/>
+                            <div class='valid-feedback'>
+                                <lang>设置商铺默认货币成功</lang>
+                            </div>
+                            <div class='invalid-feedback'>
+                                <lang>请设置商铺默认货币</lang>
+                            </div>
+                        </div>
                     </div>
                     <!--店铺LOGO-->
                     <div class='col-md-4'>
@@ -137,7 +157,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </foreach>
                             </datalist>
                             <span class="help-block">
-                                            更多区域，请到<a href="/i18n/backend/countries">i18n</a>安装。
+                                            更多区域，请到<a href="/i18n/backend/countries" target="_blank">i18n</a>安装。
                                         </span>
                         </div>
                     </div>
@@ -146,9 +166,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='status'>
                                 <lang>状态</lang>
                             </label>
-                            <input type='text' class='form-control' name='status'
-                                   data-parsley-minlength='1'
-                                   required='required' value="{{store.status|0}}"/>
+                            <select name="status" id="w-status" class="form-control">
+                                <option value="0" {{store.status==0|'selected'}}>
+                                    <lang>禁用</lang>
+                                </option>
+                                <option value="1" {{store.status==1|'selected'}}>
+                                    <lang>启用</lang>
+                                </option>
+                            </select>
                         </div>
                     </div>
                     <div class='col-md-4'>
