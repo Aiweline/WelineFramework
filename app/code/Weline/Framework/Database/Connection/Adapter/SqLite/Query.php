@@ -41,7 +41,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
-        if (Env::get('db_log.enabled') or DEBUG) {
+        if (DEBUG or Env::get('db_log.enabled')) {
             $file = Env::get('db_log.file');
             Env::log($file, $this->getSqlWithBounds($this->sql));
         }
@@ -65,14 +65,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 $result = $this->getLink()->lastInsertId();
             }
-            $origin_data = [];
+            $origin_data = $result;
             $this->reset();
         } else {
-            # SQLITE 不支持多结果集：智能将SQL语句打散，并逐条执行后返回结果集
+            # SQLITE 不支持多结果集：将SQL语句打散，并逐条执行后返回结果集
             $sql = $this->getSqlWithBounds($this->sql);
             $statements = $this->splitSqlStatements($sql);
             if (count($statements) == 1) {
-                $result = $this->PDOStatement->execute($this->bound_values);
+                $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                $this->PDOStatement->execute($this->bound_values);
                 $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
             } else {
                 $origin_data = [];
@@ -88,7 +89,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->batch = false;
         # sqlite 不支持多结果集
         $data = [];
-        if ($model_class) {
+        if ($model_class and is_array($origin_data)) {
             foreach ($origin_data as $origin_datum) {
                 $data[] = ObjectManager::make($model_class, ['data' => $origin_datum], '__construct');
             }
@@ -124,6 +125,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 break;
             case 'delete':
             case 'update':
+                $result = (bool)$data;
                 break;
             default:
                 throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。'));
