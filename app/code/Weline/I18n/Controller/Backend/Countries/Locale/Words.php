@@ -169,7 +169,6 @@ class Words extends BaseController
                 # 分999个为一批
                 $collected_words = array_chunk($collected_words, 999);
                 foreach ($collected_words as $collected_word) {
-                    Debug::env('pre_fetch1');
                     $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::fields_MD5)->fetch();
                 }
                 $this->localeDictionary->commit();
