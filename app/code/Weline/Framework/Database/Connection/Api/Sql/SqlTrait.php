@@ -318,13 +318,29 @@ trait SqlTrait
                     $insert_updates = [];
                     # 查询数据，看看是否存在
                     $exist_sql = self::formatSql($exist_sql);
+                    $this->sql = $exist_sql;
+                    $this->bound_values = $bound_filed_values;
                     $existsQuery = $this->getLink()->prepare($exist_sql);
                     $existsQuery->execute($bound_filed_values);
                     $exists = $existsQuery->fetchAll();
 
+                    $insert_update_where_fields_times = count($this->insert_update_where_fields);
                     if (count($exists) > 0) {
                         # 对比数据是否有变更
                         foreach ($exists as $exist) {
+                            # 卸载$insert_items中已经存在的数据
+                            foreach ($insert_items as $insert_item_key => $insert_item) {
+                                $hit_times = 0;
+                                foreach ($this->insert_update_where_fields as $insert_update_where_field) {
+                                    $insert_update_where_field = trim($insert_update_where_field, '`');
+                                    if ($insert_item[$insert_update_where_field] == $exist[$insert_update_where_field]) {
+                                        $hit_times += 1;
+                                    }
+                                }
+                                if ($hit_times == $insert_update_where_fields_times) {
+                                    unset($insert_items[$insert_item_key]);
+                                }
+                            }
                             # 设计一个联合键值字符串，用于比较插入数据和要更新的数据
                             $exist_update_value_key = '';
                             foreach ($this->insert_update_where_fields as $insert_update_where_field) {
@@ -388,16 +404,6 @@ trait SqlTrait
                 }
                 # 主键为空时新增
                 $identity_inserts_sql = '';
-                $identity_inserts_fields = str_replace(['(', ')', ' '], '', $this->fields);
-
-                $identity_inserts_fields = explode(',', $identity_inserts_fields);
-
-                foreach ($identity_inserts_fields as $identity_inserts_field_key => $identity_inserts_field) {
-                    $identity_inserts_field = str_replace(' ', '', $identity_inserts_field);
-                    $identity_inserts_fields[$identity_inserts_field_key] = trim($identity_inserts_field, '`');
-                }
-
-                $identity_inserts_fields = '`' . implode('`,`', $identity_inserts_fields) . '`';
                 $values = '';
                 $has_identify_field_insert = false;
                 $has_no_identify_field_insert = false;
@@ -436,10 +442,7 @@ trait SqlTrait
                 if (!empty($values)) {
                     $sql .= "INSERT INTO {$this->table} {$this->fields} VALUES {$values}";
                 }
-                if (empty($values) && empty($identity_inserts_sql) && empty($update_inserts_sql)) {
-                    $this->sql = $sql;
-                    return;
-                }
+                $this->sql = $sql;
                 break;
             case 'delete':
                 $sql = "DELETE FROM {$this->table} {$wheres} {$this->additional_sql}";
@@ -529,12 +532,6 @@ trait SqlTrait
         # 预置sql
         $sql = $this::formatSql($sql);
         $this->sql = $sql;
-//        if (str_contains(strtolower($sql), 'bo_CN')) {
-//            dd($this->getSql());
-//        }
-        if (!$this->batch) {
-            $this->PDOStatement = $this->getLink()->prepare($sql);
-        }
     }
 
 

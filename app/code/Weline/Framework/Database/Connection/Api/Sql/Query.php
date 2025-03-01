@@ -139,8 +139,8 @@ abstract class Query implements QueryInterface
             $this->insert_update_where_fields = $update_where_fields;
         }
         # 如果没有忽略主键，则需要添加主键
-        if (!$ignore_primary_key) {
-            if (empty($this->insert_update_where_fields) and !in_array($this->identity_field, $this->insert_update_where_fields)) {
+        if (empty($this->insert_update_where_fields) and !$ignore_primary_key) {
+            if (!in_array($this->identity_field, $this->insert_update_where_fields)) {
                 $this->insert_update_where_fields[] = $this->identity_field;
             }
             if (empty($this->insert_update_where_fields)) {
@@ -158,8 +158,10 @@ abstract class Query implements QueryInterface
         if (is_string(array_key_first($data))) {
             $this->insert['origin'][] = $data;
         } else {
+            sort($data);
             $this->insert['origin'] = $data;
         }
+
         # 计算是否存在多条语句
         if (count($this->insert['origin']) > 1) {
             $this->batch = true;
@@ -566,7 +568,7 @@ abstract class Query implements QueryInterface
 
     public function fetch(string $model_class = ''): mixed
     {
-        if (Env::get('db_log.enabled') or DEBUG) {
+        if (DEBUG or Env::get('db_log.enabled')) {
             $file = Env::get('db_log.file');
             Env::log($file, $this->sql);
         }
@@ -587,10 +589,11 @@ abstract class Query implements QueryInterface
             } else {
                 $result = $this->getLink()->lastInsertId();
             }
-            $origin_data = [];
+            $origin_data = $result;
             $this->reset();
         } else {
-            $result = $this->PDOStatement->execute($this->bound_values);
+            $this->PDOStatement = $this->getLink()->prepare($this->sql);
+            $this->PDOStatement->execute($this->bound_values);
             // 检查是否有多个结果集
             $origin_data = [];
             do {
@@ -643,10 +646,10 @@ abstract class Query implements QueryInterface
                 break;
             case 'delete':
             case 'update':
+                $result = (bool)$data;
                 break;
             default:
                 throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%1', $this->fetch_type));
-                break;
         }
         $this->fetch_type = '';
         # 调试环境信息

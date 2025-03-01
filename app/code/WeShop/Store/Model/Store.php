@@ -27,6 +27,7 @@ class Store extends Model
     public const fields_LATITUDE = 'latitude';
     public const fields_LONGITUDE = 'longitude';
     public const fields_LOCAL = 'local';
+    public const fields_CURRENCY = 'currency'; # 默认货币
 
     public function addLocalDescription(): static
     {
@@ -159,6 +160,13 @@ class Store extends Model
                     255,
                     '',
                     '默认区域码',
+                )
+                ->addColumn(
+                    self::fields_CURRENCY,
+                    TableInterface::column_type_VARCHAR,
+                    255,
+                    'not null',
+                    '货币',
                 )
                 ->create();
         }

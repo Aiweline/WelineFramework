@@ -27,7 +27,7 @@ class HookReader extends ModuleFileReader
         parent::__construct($scanner, $path);
     }
 
-    public function getFileList(\Closure $callback = null): array
+    public function getFileList(?\Closure $callback = null): array
     {
         $cache_key = 'hooks::' . $this->getPath();
         if (PROD && $data = $this->hookCache->get($cache_key)) {
@@ -39,7 +39,7 @@ class HookReader extends ModuleFileReader
                 foreach ($modules_files as $module => $module_file) {
                     if ($module_file) {
                         # 兼容composer目录文件
-                        $hooker_file_arr         = explode('view', $module_file);
+                        $hooker_file_arr = explode('view', $module_file);
                         $modules_files_[$module] = $module . '::' . array_pop($hooker_file_arr);
                     }
                 }
