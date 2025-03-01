@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend\Countries\Locale;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Http\Cookie;
@@ -65,7 +66,11 @@ class Words extends BaseController
         if ($words) {
             $this->dictionary->beginTransaction();
             try {
-                $this->dictionary->insert($words, $this->dictionary::fields_ID)->fetch();
+                # 每一批插入999条，数据库限制
+                $words = array_chunk($words, 999);
+                foreach ($words as $batch => $word) {
+                    $this->dictionary->insert($word, $this->dictionary::fields_ID)->fetch();
+                }
                 $this->dictionary->commit();
             } catch (\Exception $exception) {
                 $this->dictionary->rollBack();
@@ -142,25 +147,36 @@ class Words extends BaseController
         }
         // 获取收集到的词
         $collected_words = array_merge($words, $this->i18n->getCollectedWords());
+        $md5s = [];
         foreach ($collected_words as $key => $collected_word) {
             unset($collected_words[$key]);
             if ($key and $key = trim((string)$key)) {
-                $collected_words[] = [
-                    $this->localeDictionary::fields_WORD => $key,
-                    $this->localeDictionary::fields_LOCALE_CODE => $locale_code,
-                    $this->localeDictionary::fields_MD5 => md5($locale_code . $key),
-                    $this->localeDictionary::fields_TRANSLATE => $key,
-                ];
+                $md5 = md5($locale_code . $key);
+                if (!isset($md5s[$md5])) {
+                    $collected_words[] = [
+                        $this->localeDictionary::fields_WORD => $key,
+                        $this->localeDictionary::fields_LOCALE_CODE => $locale_code,
+                        $this->localeDictionary::fields_MD5 => md5($locale_code . $key),
+                        $this->localeDictionary::fields_TRANSLATE => $key,
+                    ];
+                }
+                $md5s[$md5] = true;
             }
         }
         if ($collected_words) {
             $this->localeDictionary->beginTransaction();
             try {
-                $this->localeDictionary->insert($collected_words, $this->localeDictionary::fields_MD5)->fetch()->commit();
-                $this->getMessageManager()->addSuccess(__('词典收集成功！一共更新 %1 个词。', count($collected_words)));
+                # 分999个为一批
+                $collected_words = array_chunk($collected_words, 999);
+                foreach ($collected_words as $collected_word) {
+                    Debug::env('pre_fetch1');
+                    $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::fields_MD5)->fetch();
+                }
+                $this->localeDictionary->commit();
+                Message::success(__('词典收集成功！一共更新 %1 个词。', count($collected_words)));
             } catch (\Exception $exception) {
                 $this->localeDictionary->rollBack();
-                $this->getMessageManager()->addException($exception);
+                Message::exception($exception);
             }
         }
         $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
