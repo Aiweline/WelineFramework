@@ -6,6 +6,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
+<base href="@backend-url('/')">
 <meta charset="UTF-8">
 <title><?php echo $this->getData('title'); ?></title>
 <!--元数据-->
@@ -47,7 +48,7 @@ endif;
 <!--JS-->
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
 <?php if (DEV): ?>
-<!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
+    <!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>
 <!--加载配置页头-->
 <?php
