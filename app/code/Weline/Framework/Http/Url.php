@@ -45,7 +45,7 @@ class Url implements UrlInterface
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
 
-    public function getUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
+    public function getFrontendUrl(string $path = '', array $params = [], bool $merge_url_params = false)
     {
         if ($path) {
             if (!$this->isLink($path)) {
@@ -63,6 +63,15 @@ class Url implements UrlInterface
             $url = $this->request->getBaseUrl();
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
+    }
+
+    public function getUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
+    {
+        if ($this->request->isBackend()) {
+            return $this->getBackendUrl($path, $params, $merge_url_params);
+        } else {
+            return $this->getFrontendUrl($path, $params, $merge_url_params);
+        }
     }
 
     public function getOriginUrl(string $path = '', array $params = [], bool $merge_url_params = false): string

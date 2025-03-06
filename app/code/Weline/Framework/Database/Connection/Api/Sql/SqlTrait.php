@@ -318,8 +318,6 @@ trait SqlTrait
                     $insert_updates = [];
                     # 查询数据，看看是否存在
                     $exist_sql = self::formatSql($exist_sql);
-                    $this->sql = $exist_sql;
-                    $this->bound_values = $bound_filed_values;
                     $existsQuery = $this->getLink()->prepare($exist_sql);
                     $existsQuery->execute($bound_filed_values);
                     $exists = $existsQuery->fetchAll();
@@ -676,8 +674,10 @@ trait SqlTrait
             $bindings = $this->bound_values;
         }
         foreach ($bindings as $key => $binding) {
-            $binding = $this->quote($binding);
-            $sql = str_replace($key, $binding, $sql);
+            if (is_string($binding)) {
+                $binding = $this->quote($binding);
+            }
+            $sql = str_replace($key, (string)$binding, $sql);
         }
         if ($format) {
             return \SqlFormatter::format($sql);

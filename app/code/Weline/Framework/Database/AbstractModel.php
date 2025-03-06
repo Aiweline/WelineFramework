@@ -589,8 +589,12 @@ abstract class AbstractModel extends DataObject
      *
      * @return bool
      */
-    public function save(array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+    public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
+        if (is_string($data)) {
+            $this->force_check_flag = true;
+            $sequence = $data;
+        }
         if (is_object($data)) {
             $this->setModelData($data->getModelData());
         } elseif (is_bool($data)) {
@@ -981,11 +985,12 @@ abstract class AbstractModel extends DataObject
         $this->items = [];
         foreach ($items as $item) {
             if ($item instanceof AbstractModel) {
-                $this->addItem($item);
+                $model = clone $this;
+                $this->addItem($model->addData($item->getData()));
             } else {
                 if (is_array($item)) {
-                    $model = $this::class;
-                    $this->addItem(new $model($item));
+                    $model = clone $this;
+                    $this->addItem($model->addData($item));
                 }
             }
         }

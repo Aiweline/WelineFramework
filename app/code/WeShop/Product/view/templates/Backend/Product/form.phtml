@@ -150,6 +150,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
                 </div>
                 <form id="productForm" action='{{action}}' method='post' class="needs-validation" novalidate=''>
+                    <input type="hidden" class="hidden" id="product_id" name="product_id"
+                           value="{{product.product_id}}">
                     <div class='tab-content twitter-bs-wizard-tab-content'>
                         <div class='tab-pane @if{product.progress==="product_base_info"=>"active"}'
                              id='product_base_info'>
@@ -293,13 +295,14 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <file-manager target='#image'
                                                   title='选择产品图片'
                                                   vars='product'
+                                                  preview="0"
                                                   path='product/'
                                                   value='product.image'
                                                   multi='0'
                                                   ext="jpg,jpeg,png,gif"
                                                   size="204800"
                                                   w='50'
-                                                  h='50'/>
+                                                  h='50'></file-manager>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -323,7 +326,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                   ext="jpg,jpeg,png,gif"
                                                   size="204800"
                                                   w='50'
-                                                  h='50'/>
+                                                  h='50'></file-manager>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -395,7 +398,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 <!--渲染属性集属性-->
                             </div>
                             <div id="attributes-container">
-
+                                
                             </div>
                         </div>
                         <div class='tab-pane  @if{product.progress==="configurable_attributes"=>"active"}'
@@ -493,7 +496,6 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 url: '@backend-url("*/backend/product/set-group-attributes")',
                 data: {set_id: set_id},
                 success: function (data) {
-                    console.log(data)
                     let attribute_container = $('#attributes-container')
                     attribute_container.empty()
                     // 渲染组属性
@@ -686,17 +688,17 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             }).then((res) => {
                 // 监听可配置项选择,然后生成子产品
                 generateConfigurableProduct()
-                $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
-                    generateConfigurableProduct()
-                })
             })
             hideLoading()
         })
     })
 
     // 监听可配置项选择,然后生成子产品
-    $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
-        generateConfigurableProduct()
+    $('#selectAttribute').on('change', function (e) {
+        let target = $(e.target)
+        if (target.attr('type') === 'checkbox') {
+            generateConfigurableProduct()
+        }
     })
 
     // 笛卡尔积
@@ -1111,7 +1113,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     }
                 }
                 // 提醒用户
-                if (exist) {
+                if (exist && ('{{product.product_id}}' === '')) {
                     Swal.fire({
                         title: '@lang{警告！}',
                         text: '@lang{子产品有部分SKU已存在!请确保产品SKU唯一性。}',

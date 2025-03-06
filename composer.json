@@ -88,6 +88,11 @@
   "optimize-autoloader": true,
   "classmap-authoritative": true,
   "autoload": {
+    "classmap": [
+      "app/code/",
+      "extend/",
+      "generated/code/"
+    ],
     "psr-4": {
       "": [
         "app/code/",
@@ -107,12 +112,7 @@
         "app/code/",
         "generated/code/"
       ]
-    },
-    "classmap": [
-      "app/code/",
-      "extend/",
-      "generated/code/"
-    ]
+    }
   },
   "autoload-dev": {
     "psr-4": {

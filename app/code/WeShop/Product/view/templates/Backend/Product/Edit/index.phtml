@@ -73,12 +73,12 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     <li class='nav-item'>
                         <a href='#product_base_info'
                            class='nav-link @if{product.progress==="product_base_info"=>"active"}'
-
+                           scope="edit_product"
                            name="progress"
                            value="product_base_info"
                            data-index="0"
                            data-toggle='tab'>
-                            <span class='step-number'>01</span>
+                            <span class='step-number'>1</span>
                             <span class='step-title'><lang>基础信息</lang></span>
                             <span class='help-block'>
                                             <lang>类型</lang>
@@ -91,46 +91,48 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     <li class='nav-item'>
                         <a href='#attributes'
                            class='nav-link @if{product.progress==="attributes"=>"active"}'
-
                            name="progress"
+                           scope="edit_product"
                            value="attributes"
                            data-index="1"
                            data-toggle='tab'>
-                            <span class='step-number'>02</span>
+                            <span class='step-number'>2</span>
                             <span class='step-title'><lang>属性</lang></span>
                             <span class='help-block'>
-                                <lang>你选择了</lang>
                                 <span class='text-primary' id="set_name_text">{{product.set_name}}</span>
                                 <lang>属性集</lang>
                             </span>
                         </a>
                     </li>
-                    <li class='nav-item'>
-                        <a href='#configurable_attributes'
-                           class='nav-link @if{product.progress==="configurable_attributes"=>"active"}'
-                           data-progress='configurable_attributes'
-                           name="progress"
-                           value="configurable_attributes"
-                           data-index="2"
-                           data-toggle='tab'>
-                            <span class='step-number'>03</span>
-                            <span class='step-title'><lang>配置信息（可选）</lang></span>
-                            <span class='help-block'>
+                    <if condition="type == 'configurable'">
+                        <li class='nav-item'>
+                            <a href='#configurable_attributes'
+                               class='nav-link @if{product.progress==="configurable_attributes"=>"active"}'
+                               data-progress='configurable_attributes'
+                               scope="edit_product"
+                               name="progress"
+                               value="configurable_attributes"
+                               data-index="2"
+                               data-toggle='tab'>
+                                <span class='step-number'>3</span>
+                                <span class='step-title'><lang>配置信息（可选）</lang></span>
+                                <span class='help-block'>
                                 <notempty name='product.configurable_attributes'><lang>你选择了</lang></notempty>
                                 <span class='text-primary' id="configurable_attributes_text">{{product.configurable_attributes}}</span>
                             </span>
-                        </a>
-                    </li>
+                            </a>
+                        </li>
+                    </if>
                     <li class='nav-item'>
                         <a href='#seo'
                            class='nav-link @if{product.progress==="seo"=>"active"}'
                            data-progress='{{product.progress}}'
-
+                           scope="edit_product"
                            name="progress"
                            value="seo"
                            data-index="3"
                            data-toggle='tab'>
-                            <span class='step-number'>04</span>
+                            <span class='step-number'>@if{type == 'configurable'=>4|3}</span>
                             <span class='step-title'>SEO信息</span>
                             <span class='help-block'>
                                 <span id="seo_name_help">
@@ -149,7 +151,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 <div id='bar' class='progress mt-5'>
                     <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
                 </div>
-                <form id="productForm" action='{{action}}' method='post' class="needs-validation" novalidate=''>
+                <form id="productForm" action='{{req.url}}' method='post' class="needs-validation" novalidate=''>
                     <div class='tab-content twitter-bs-wizard-tab-content'>
                         <div class='tab-pane @if{product.progress==="product_base_info"=>"active"}'
                              id='product_base_info'>
@@ -175,6 +177,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <input type='text' class='form-control rounded' id='sku'
                                            placeholder='@lang{请输入SKU}' name="sku" value="{{product.sku}}"
                                            data-origin-value="{{product.sku}}"
+                                           scope="edit_product"
                                            event="change input"
                                            required/>
                                     <div class="valid-feedback">
@@ -293,6 +296,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <file-manager target='#image'
                                                   title='选择产品图片'
                                                   vars='product'
+                                                  preview="0"
                                                   path='product/'
                                                   value='product.image'
                                                   multi='0'
@@ -396,16 +400,118 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 <!--渲染属性集属性-->
                             </div>
                             <div id="attributes-container">
-
+                                <foreach name="setAttributes" item="group">
+                                    <div class="card">
+                                        <div class="card-title">{{group.name}}</div>
+                                        <div class="row">
+                                            <foreach name="group.attributes" item="attr">
+                                                <div class="col-lg-3 mt-2 mb-4">
+                                                    <label for="color" class="form-label">
+                                                        {{attr.name}}
+                                                    </label>
+                                                    <if condition="attr.has_option">
+                                                        <select name="attribute[{{group.group_id}}][{{attr.attribute_id}}]"
+                                                                data-parsley-minlength="3"
+                                                                required="" id="color" class="form-control"
+                                                                event="change"
+                                                                scope="edit_product"
+                                                                {{attr.frontend_attrs}}>
+                                                            <foreach name="attr.value_alias" item="option">
+                                                                <option value="{{option.option_id}}"
+                                                                        @if{option.selected==1=>
+                                                                    'selected'}>{{option.value}}
+                                                                </option>
+                                                            </foreach>
+                                                        </select>
+                                                        <else/>
+                                                        <input name="attribute[{{group.group_id}}][{{attr.attribute_id}}]"
+                                                               type="text"
+                                                               data-parsley-minlength="3"
+                                                               required="" id="color" class="form-control"
+                                                               scope="edit_product"
+                                                               event="change" {{attr.frontend_attrs}}>
+                                                    </if>
+                                                    <div class="valid-feedback">
+                                                        填写正确！
+                                                    </div>
+                                                    <div class="invalid-feedback">
+                                                        请输入颜色
+                                                    </div>
+                                                </div>
+                                            </foreach>
+                                        </div>
+                                    </div>
+                                </foreach>
                             </div>
                         </div>
-                        <div class='tab-pane  @if{product.progress==="configurable_attributes"=>"active"}'
-                             id='configurable_attributes'>
-                            <div id="selectAttribute"></div>
-                            <div id="configurableProducts"></div>
-                            <input type="hidden" name="configurableProductItems" id="configurableProductItems"
-                                   value="{{product.configurableProducts}}">
-                        </div>
+                        <if condition="type == 'configurable'">
+                            <div class='tab-pane  @if{product.progress==="configurable_attributes"=>"active"}'
+                                 id='configurable_attributes'>
+                                <div id="selectAttribute" style=""></div>
+                                <div id="configurableProducts">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover table-editable table-nowrap align-middle table-edits">
+                                            <thead>
+                                            <tr style="cursor: pointer;">
+                                                <th>产品ID</th>
+                                                <th>图片</th>
+                                                <!--                    <th>图片值</th>-->
+                                                <th>标题</th>
+                                                <th>价格</th>
+                                                <th>SKU</th>
+                                                <th>库存</th>
+                                                <th>操作</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <notempty name="child_products">
+                                                <foreach name="child_products">
+                                                    <tr data-id="{{v.sku}}" style="cursor: pointer;">
+                                                        <td data-product_id="product_id" data-id="0">{{v.product_id}}
+                                                        </td>
+                                                        <td class="d-flex" data-preview="image-preview"
+                                                            data-id="{{v.sku}}-image"
+                                                            id="{{v.sku}}-image-preview">
+                                                            <div class="product-image-close drag-item" draggable="true">
+                                                            <span draggable="false" data-sku="{{v.sku}}"
+                                                                  onclick="deleteImage(this)">X</span><img
+                                                                        draggable="false" data-sku="{{v.sku}}"
+                                                                        onclick="generateFileManagerModal('{{v.sku}}-{{key}}-origin')"
+                                                                        id="{{v.sku}}-{{key}}-origin"
+                                                                        onchange="changeSwatchImageForProduct(this)"
+                                                                        class="img-fluid img-responsive img-thumbnail img-box"
+                                                                        src="/media/{{v.image}}"></div>
+                                                        </td>
+                                                        <td style="display: none" id="{{v.sku}}-image"
+                                                            data-field="image"
+                                                            data-swatch="swatch_image-3-{{v.product_id}}-1-green-2">
+                                                            {{v.image}}
+                                                        </td>
+                                                        <td data-field="name">{{v.name}}</td>
+                                                        <td data-field="price">{{v.price}}</td>
+                                                        <td data-field="sku" id="child-sku-{{v.sku}}">
+                                                            {{v.sku}}
+                                                        </td>
+                                                        <td data-field="stock">{{v.stock}}</td>
+                                                        <td>
+                                                            <a class="btn btn-outline-secondary btn-sm edit"
+                                                               title="编辑">
+                                                                <i class="fas fa-pencil-alt"></i>
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                </foreach>
+                                            </notempty>
+                                            </tbody>
+
+                                        </table>
+                                    </div>
+
+                                </div>
+                                <input type="hidden" name="configurableProductItems" id="configurableProductItems"
+                                       value="{{product.configurableProducts}}">
+                            </div>
+                        </if>
                         <div class='tab-pane' id='seo'>
                             <div class='row'>
                                 <div class='col-lg-6 mt-2 mb-6'>
@@ -486,430 +592,53 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 <!-- Table Editable plugin -->
 <script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script>
-    $(document).ready(function () {
-        showLoading()
-        $('#set_name_text').text($(this).find('option:selected').text());
-        let set_id = $(this).val();
-        $.ajax({
-            url: '@backend-url("*/backend/product/set-group-attributes")',
-            data: {set_id: set_id},
-            success: function (data) {
-                let attribute_container = $('#attributes-container')
-                attribute_container.empty()
-                // 渲染组属性
-                let simpleAttributeTemplate = '';
-                let configurableAttributeTemplate = ``;
-                for (let i = 0; i < data.length; i++) {
-                    window.setAttributeData = data
-                    // 属性组
-                    let group = data[i]
-                    if (group.attributes.length === 0) {
-                        continue;
-                    }
-                    configurableAttributeTemplate += `
-<div class="card">
-<div class="card-title">${group.name}</div>
-<div class='row'>`
-                    simpleAttributeTemplate += `<div class="card">
-<div class="card-title">${group.name}</div>
-<div class='row'>`;
-                    let is_disable = true;
-                    if ("@if{product.parent_id=>'true'|'false'}" === 'false') {
-                        is_disable = false;
-                    }
-                    for (let index in group.attributes) {
-                        let attribute = group.attributes[index]
-                        // 特殊图片图片属性排除
-                        if (attribute.code === 'image' || attribute.code === 'images') {
-                            continue
-                        }
-                        if (attribute.has_option === 1) {
-                            let optionsTemplate = '';
-                            for (let j in attribute.options) {
-                                let option = attribute.options[j]
-                                optionsTemplate += `<option value="${option.option_id}">${option.code}</option>`;
-                            }
-                            let multiValueAttr = '';
-                            if (attribute.is_multi === 1) {
-                                multiValueAttr = 'multiple';
-                            }
-                            // 编辑不能更改
-                            let selectTemplate = `
-                            <select  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}   id="${attribute.code}" type="number"
-                                            class="form-control"
-                                            placeholder='@lang{请输入}${attribute.name}'
-                                            value="${attribute.name}"
-                                            event="change"
-                                            ${multiValueAttr}
-                                            required>
-                                            ${optionsTemplate}
-                                    </select>
-                            `;
-                            if (is_disable) {
-                                selectTemplate = `
-                            <select  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs} disabled='disabled'  id="${attribute.code}" type="number"
-                                            class="form-control"
-                                            placeholder='@lang{请输入}${attribute.name}'
-                                            value="${attribute.name}"
-                                            ${multiValueAttr}
-                                            required>
-                                            ${optionsTemplate}
-                                    </select>
-                            `;
-                            }
+<if condition="type !== 'simple'">
+    <script>
 
-                            simpleAttributeTemplate += `
-                                <div class='col-lg-3 mt-2 mb-4'>
-                                    <label for="${attribute.code}" class="form-label">
-                                        ${attribute.name}
-                                    </label>
-                                    ${selectTemplate}
-                                    <div class="valid-feedback">
-                                        <lang>填写正确！</lang>
-                                    </div>
-                                    <div class="invalid-feedback">
-                                        <lang>请输入</lang>${attribute.name}
-                                    </div>
-                                </div>
-                        `;
-                            let configurableOptionsTemplate = '';
-                            // 可配置项
-                            for (let j in attribute.options) {
-                                let option = attribute.options[j]
-                                let image = '';
-                                let color = '';
-                                let text = option.code;
-                                if (option.swatch_image) {
-                                    let swatch_image_id = 'swatch_image-' + attribute.attribute_id + '-' + attribute.entity_id + '-' + attribute.group_id + '-' + option.code + '-' + option.option_id;
-                                    image = `<div onclick="generateFileManagerModal('${swatch_image_id}')" style="border: 1px dashed;padding:0.5rem " >
-<img  src="/media/image/${option.swatch_image}" style="width: 20px; height: 20px;" id="${swatch_image_id}-image-preview">
-<input id="${swatch_image_id}" type="hidden" value="${option.swatch_image}" data-input-id="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}" onchange="changeSwatchImage(this)">
-</div>`;
-                                }
-                                if (option.swatch_text) {
-                                    text = option.swatch_text;
-                                }
-                                if (option.swatch_color) {
-                                    color = `<div style="background-color: ${option.swatch_color};width: 20px;height: 20px"></div>`;
-                                }
-                                let optionValue = encodeURIComponent(JSON.stringify({
-                                    option_id: option.option_id,
-                                    value: option.value,
-                                    code: option.code,
-                                    "swatch-image": option.swatch_image,
-                                    "swatch-color": option.swatch_color,
-                                    "swatch-text": option.swatch_text
-                                }));
-                                configurableOptionsTemplate += `
-                                <div class="form-check form-check-inline d-flex">
-                                    <input class="form-check-input"
-                                        type="checkbox"
+        function renderConfigurableProductEditTable() {
+            // 初始化可编辑
+            let editTable = $('.table-edits tr')
+            editTable.off()
+            var pickers = {};
+            editTable.editable({
+                /*dropdowns: {
+                    gender: ['Male', 'Female']
+                },*/
+                edit: function (values) {
+                    $('.edit i', this)
+                        .removeClass('fa-pencil-alt')
+                        .addClass('fa-save')
+                        .attr('title', '@lang{保存}');
+                },
+                save: function (values) {
+                    // 直接
+                    $('.edit i', this)
+                        .removeClass('fa-save')
+                        .addClass('fa-pencil-alt')
+                        .attr('title', '@lang{编辑}');
 
-                                        data-attribute-attribute-id="${attribute.attribute_id}"
-                                        data-attribute-entity-id="${attribute.entity_id}"
-                                        data-attribute-group-id="${attribute.group_id}"
-                                        data-attribute-code="${attribute.code}"
-                                        data-attribute-name="${attribute.name}"
-                                        data-option-id="${option.option_id}"
-                                        data-option-swatch-image="${option.swatch_image}"
-                                        data-option-swatch-color="${option.swatch_color}"
-                                        data-option-swatch-text="${option.swatch_text}"
-                                        data-option-value="${option.value}"
-                                        data-option-code="${option.code}"
-                                        data-name="${option.code}"
-                                        name="configurable[${attribute.group_id}][${attribute.attribute_id}][${option.option_id}]"
-                                        value="${optionValue}"
-                                        id="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}">
-                                    <label class="form-check-label d-flex gap-1" for="${attribute.code}-${attribute.entity_id}-${attribute.group_id}-${option.code}">
-                                        ${color}
-                                        ${text}
-                                    </label>
-                                    ${image}
-                                </div>
-                                `;
-                            }
-                            if (configurableOptionsTemplate) {
-                                configurableAttributeTemplate += `
-                                    <div class="mt-4 mt-lg-0" style="width: auto">
-                                        <div class="card-body d-flex flex-row gap-2 align-items-baseline">
-                                            <h5 class="font-size-14">${attribute.name}</h5>
-                                            ${configurableOptionsTemplate}
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                        } else {
-                            simpleAttributeTemplate += `
-                                <div class='col-lg-3 mt-2 mb-4'>
-                                    <label for="${attribute.code}" class="form-label">
-                                        ${attribute.name}
-                                    </label>
-                                    <input  name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}
-                                            id="${group.code}-${group.set_id}-${attribute.entity_id}-${attribute.code}" type="number"
-                                            class="form-control"
-                                            placeholder='@lang{请输入}${attribute.name}'
-                                            value="" event="change"
-                                            required/>
-                                    <div class="valid-feedback">
-                                        <lang>填写正确！</lang>
-                                    </div>
-                                    <div class="invalid-feedback">
-                                        <lang>请输入</lang>${attribute.name}
-                                    </div>
-                                </div>
-                        `;
-                        }
+                    if (this in pickers) {
+                        pickers[this].destroy();
+                        delete pickers[this];
                     }
-                    simpleAttributeTemplate += `</div></div>`;
-                    if (configurableAttributeTemplate) {
-                        configurableAttributeTemplate += `</div></div>`
+                },
+                cancel: function (values) {
+                    $('.edit i', this)
+                        .removeClass('fa-save')
+                        .addClass('fa-pencil-alt')
+                        .attr('title', '@lang{编辑}');
+
+                    if (this in pickers) {
+                        pickers[this].destroy();
+                        delete pickers[this];
                     }
                 }
-                // 回填模板到attributes-container
-                attribute_container.empty().html(simpleAttributeTemplate);
-                let selectAttribute = $('#selectAttribute')
-                if (configurableAttributeTemplate) {
-                    selectAttribute.empty().html(configurableAttributeTemplate);
-                } else {
-                    selectAttribute.empty().html('@lang{暂无可配置项}');
-                }
-            }
-        }).then((res) => {
-            // 监听可配置项选择,然后生成子产品
-            generateConfigurableProduct()
-            $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
-                generateConfigurableProduct()
-            })
-            hideLoading()
-        })
-    })
-
-    // 监听可配置项选择,然后生成子产品
-    $('#selectAttribute').find('input[type="checkbox"]').on('change', function () {
-        generateConfigurableProduct()
-    })
-
-    // 笛卡尔积
-    function cartesianProduct(arrays) {
-        return arrays.reduce(function (a, b) {
-            var result = [];
-            a.forEach(function (x) {
-                b.forEach(function (y) {
-                    result.push(x.concat([y]));
-                });
             });
-            return result;
-        }, [[]]);
-    }
-
-    function generateConfigurableProduct() {
-        // 查找selectAttribute下面所有的checkbox类型为input且被选中的
-        let cartesianAttributesData = []
-        let attributeOptionsSelected = []
-        $("#selectAttribute").find("input[type='checkbox']:checked").each(function () {
-            // 处理每个被选中的 checkbox 元素
-            let option = $(this);
-            let swatch_image_id = 'swatch_image-' + option.data('attribute-attribute-id') + '-' + option.data('attribute-entity-id') + '-' + option.data('attribute-group-id') + '-' + option.data('option-value') + '-' + option.data('option-id');
-            let attribute_code = option.data('attribute-code');
-            let attribute_name = option.data('attribute-name');
-            if (!attributeOptionsSelected[attribute_code]) {
-                attributeOptionsSelected[attribute_code] = []
-            }
-            // 重新刷新时不应该刷掉之前选择的图片
-            let swatch_image = $(`#${swatch_image_id}`).val();
-            if (!swatch_image) {
-                attributeOptionsSelected[attribute_code].push({
-                    'code': attribute_code + '-' + option.data('option-code'),
-                    'attribute_id': option.data('attribute-attribute-id'),
-                    'name': attribute_name + '-' + option.data('name'),
-                    'swatch_image_id': swatch_image_id,
-                    'swatch_image': option.data('option-swatch-image'),
-                    'swatch_color': option.data('option-swatch-color'),
-                    'swatch_text': option.data('option-swatch-text')
-                });
-            }
-            if (swatch_image) {
-                attributeOptionsSelected[attribute_code].push({
-                    'code': attribute_code + '-' + option.data('option-code'),
-                    'attribute_id': option.data('attribute-attribute-id'),
-                    'name': attribute_name + '-' + option.data('name'),
-                    'swatch_image_id': swatch_image_id,
-                    'swatch_image': swatch_image,
-                    'swatch_color': option.data('option-swatch-color'),
-                    'swatch_text': option.data('option-swatch-text')
-                });
-            }
-
-        });
-        for (let key in attributeOptionsSelected) {
-            cartesianAttributesData.push(attributeOptionsSelected[key])
         }
-        // 生成笛卡尔乘积子产品
-        let cartesianProductSkus = cartesianProduct(cartesianAttributesData)
-        // 渲染可编辑表格
-        let configurableProductItems = [];
-        let baseAttributes = {};
-        $('#product_base_info').find('input, select, textarea').each(function () {
-            let name = $(this).attr('name')
-            if (name) {
-                baseAttributes[$(this).attr('name')] = $(this).val()
-            }
-        })
-        for (let i in cartesianProductSkus) {
-            let cartesianProductSku = cartesianProductSkus[i]
-            let sku = '';
-            let name = '';
-            let swatch_image_ids = [];
-            let swatch_images = [];
-            for (let j in cartesianProductSku) {
-                sku += cartesianProductSku[j]['code'] + '-'
-                name += cartesianProductSku[j]['name'] + '-'
-                swatch_image_ids.push(cartesianProductSku[j]['swatch_image_id'])
-                if (cartesianProductSku[j]['swatch_image']) {
-                    swatch_images.push(cartesianProductSku[j]['swatch_image'])
-                }
-            }
-            if (sku) {
-                sku = sku.slice(0, -1)
-            }
-            if (name) {
-                name = name.slice(0, -1)
-            }
 
-            let baseAttributesInfo = Object.assign({}, baseAttributes)
-            // 读取基础属性
-            if (sku) {
-                baseAttributesInfo['sku'] = $('#sku').attr('value') + '-' + sku
-            } else {
-                baseAttributesInfo['sku'] = $('#sku').attr('value')
-            }
-            baseAttributesInfo['name'] = $('#name').attr('value') + '-' + name
-            baseAttributesInfo['swatch_image_ids'] = swatch_image_ids
-            baseAttributesInfo['swatch_images'] = swatch_images
-            let base_image = baseAttributesInfo['image']
-            baseAttributesInfo['image'] = []
-            if (swatch_images.length > 0) {
-                swatch_images.forEach(function (swatch_image) {
-                    baseAttributesInfo['image'].push(swatch_image)
-                })
-            } else {
-                baseAttributesInfo['image'].push(base_image)
-            }
-            configurableProductItems.push(baseAttributesInfo)
-        }
-        let configurableProductsTableTemplate = '';
-        window.configurableProductItems = configurableProductItems
-        for (let i in configurableProductItems) {
-            let configurableProduct = configurableProductItems[i]
-            // 渲染图
-            let images = '';
-            let images_src = '';
-            if (configurableProduct['image'].length > 0) {
-                configurableProduct['image'].forEach(function (image_src, index) {
-                    images = `<div class="product-image-close drag-item" draggable="true"><span draggable="false" data-sku="${configurableProduct.sku}" onclick="deleteImage(this)">X</span><img draggable="false" data-sku="${configurableProduct.sku}" onclick="generateFileManagerModal('${configurableProduct.sku}-${index}-origin')" id="${configurableProduct.sku}-${index}-origin" onchange="changeSwatchImageForProduct(this)" class="img-fluid img-responsive img-thumbnail img-box" src="/media/image/${decodeURIComponent(image_src)}" ></div>` + images;
-                    images_src = image_src + ',' + images_src;
-                })
-                // 如果最后有,号，删除最后一个,号
-                if (images_src[images_src.length - 1] === ',') {
-                    images_src = images_src.slice(0, -1)
-                }
-            }
-            configurableProductsTableTemplate += `
-                <tr data-id="${configurableProduct.sku}">
-                    <td data-product_id="product_id" data-id="0">0</td>
-                    <td class="d-flex" data-preview="image-preview" data-id="${configurableProduct.sku}-image" id="${configurableProduct.sku}-image-preview">${images}</td>
-                    <td style="display: none" id="${configurableProduct.sku}-image" data-field="image" data-swatch="${configurableProduct.swatch_image_ids}" id="${configurableProduct.sku}-image">${images_src}</td>
-                    <td data-field="name">${configurableProduct.name}</td>
-                    <td data-field="price">${configurableProduct.price}</td>
-                    <td data-field="sku" id="child-sku-${configurableProduct.sku}">${configurableProduct.sku}</td>
-                    <td data-field="stock">${configurableProduct.stock}</td>
-                    <td>
-                        <a class="btn btn-outline-secondary btn-sm edit" title="@lang{编辑}">
-                            <i class="fas fa-pencil-alt"></i>
-                        </a>
-                    </td>
-                </tr>
-            `;
-        }
-        if (!configurableProductsTableTemplate) {
-            configurableProductsTableTemplate = '@lang{没有可配置项}';
-        }
-        let configurableProductsTable = `<div class="table-responsive">
-<table class="table table-bordered table-hover table-editable table-nowrap align-middle table-edits">
-            <thead>
-                <tr>
-                    <th><lang>产品ID</lang></th>
-                    <th><lang>图片</lang></th>
-<!--                    <th><lang>图片值</lang></th>-->
-                    <th><lang>标题</lang></th>
-                    <th><lang>价格</lang></th>
-                    <th>SKU</th>
-                    <th><lang>库存</lang></th>
-                    <th><lang>操作</lang></th>
-                </tr>
-            </thead>
-            <tbody>
-                ${configurableProductsTableTemplate}
-            </tbody>
-</div>
-            `;
-        let configurableProductsContainer = $('#configurableProducts')
-        configurableProductsContainer.empty().html(configurableProductsTable);
-        renderConfigurableProductEditTable()
-        // 统计生成了多少个产品，更新到导航
-        let configurableProductsCount = configurableProductsContainer.find('tr').length - 1
-        $('#configurable_attributes_text').text('@lang{你创建了}' + configurableProductsCount + '@lang{个产品}')
-        // 检测子产品skus是否可用
-        checkChildSkus()
-        // 拖拽排序
-        window.configurableProductItems.forEach(function (configurableProduct) {
-            addDragItem(configurableProduct.sku)
-        })
-    }
-
-    function renderConfigurableProductEditTable() {
-        // 初始化可编辑
-        let editTable = $('.table-edits tr')
-        editTable.off()
-        var pickers = {};
-        editTable.editable({
-            /*dropdowns: {
-                gender: ['Male', 'Female']
-            },*/
-            edit: function (values) {
-                $('.edit i', this)
-                    .removeClass('fa-pencil-alt')
-                    .addClass('fa-save')
-                    .attr('title', '@lang{保存}');
-            },
-            save: function (values) {
-                // 直接
-                $('.edit i', this)
-                    .removeClass('fa-save')
-                    .addClass('fa-pencil-alt')
-                    .attr('title', '@lang{编辑}');
-
-                if (this in pickers) {
-                    pickers[this].destroy();
-                    delete pickers[this];
-                }
-            },
-            cancel: function (values) {
-                $('.edit i', this)
-                    .removeClass('fa-save')
-                    .addClass('fa-pencil-alt')
-                    .attr('title', '@lang{编辑}');
-
-                if (this in pickers) {
-                    pickers[this].destroy();
-                    delete pickers[this];
-                }
-            }
-        });
-    }
-
-</script>
+        renderConfigurableProductEditTable();
+    </script>
+</if>
 <script>
     /**打开文件选择器*/
     function generateFileManagerModal(id, multi = 0, changeEle = null) {
@@ -1102,7 +831,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     }
                 }
                 // 提醒用户
-                if (exist) {
+                if (exist && '{{product.product_id}}' === '') {
                     Swal.fire({
                         title: '@lang{警告！}',
                         text: '@lang{子产品有部分SKU已存在!请确保产品SKU唯一性。}',
@@ -1128,7 +857,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             async: false,
             success: function (res) {
                 let target = $('#sku')
-                if (res.product_id) {
+                if (!res.product_id) {
                     target.removeClass('border-success')
                     target.addClass('border-danger')
                     target.attr('valid', 'false')
@@ -1136,7 +865,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     // 提示用户
                     Swal.fire({
                         title: '@lang{警告！}',
-                        text: `@lang{主SKU:} ${target.val()} @lang{已存在!}`,
+                        text: `@lang{主SKU:} ${target.val()} @lang{已不存在!}`,
                         icon: 'error',
                         confirmButtonText: '@lang{好的}'
                     }).then(function (result) {
@@ -1170,7 +899,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             // 提示用户
             Swal.fire({
                 title: '@lang{警告！}',
-                text: `${name} @lang{已存在!}`,
+                text: `${name} @lang{已不存在!}`,
                 icon: 'error',
                 confirmButtonText: '@lang{好的}'
             }).then(function (result) {
