@@ -81,15 +81,15 @@ class FileManager implements TaglibInterface
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CacheInterface $cache */
-            $cache  = ObjectManager::getInstance(FileManagerCacheFactory::class);
+            $cache = ObjectManager::getInstance(FileManagerCacheFactory::class);
             $result = $cache->get($cacheKey);
             if ($result and ($userConfigFileManager !== 'local')) {
                 return $result;
             }
             /**@var Scan $fileScan $ */
-            $fileScan     = ObjectManager::getInstance(Scan::class);
+            $fileScan = ObjectManager::getInstance(Scan::class);
             $fileManagers = [];
-            $modules      = Env::getInstance()->getActiveModules();
+            $modules = Env::getInstance()->getActiveModules();
             foreach ($modules as $module) {
                 $files = [];
                 $fileScan->globFile(
@@ -133,6 +133,7 @@ class FileManager implements TaglibInterface
             $fileManager
                 ->setTarget(trim($attributes['target'], '#'))
                 ->setPath($attributes['path'] ?? '')
+                ->setPreview((bool)($attributes['preview'] ?? true))
                 ->setValue($attributes['value'] ?? '')
                 ->setTitle($attributes['title'] ?? '')
                 ->setMulti($attributes['multi'] ?? '')
@@ -177,6 +178,7 @@ class FileManager implements TaglibInterface
                         code='local'
                         target='#demo'
                         title='文件管理器' 
+                        preview='1'
                         var='store' 
                         path='store/logo' 
                         value='store.logo'
@@ -192,6 +194,7 @@ class FileManager implements TaglibInterface
 参数解释：
 code：可选,指定安装的编辑器代码。例如：local
 target：目标容器id【选择文件后会根据id回填到属性value上】
+preview: 是否预览。默认：1
 ext：必选。默认jpg,png,gif,webp格式
 title：可选。文件管理器标题
 path：可选。默认打开的文件路径

@@ -2,6 +2,9 @@
 
 namespace WeShop\Store\Model;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\Locale;
+use Weline\I18n\Model\Locals;
 use WeShop\Store\Model\Store\LocalDescription;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
@@ -39,6 +42,21 @@ class Store extends Model
             "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
             'left'
         );
+        return $this;
+    }
+
+    public function loadLocalName(): self
+    {
+        $localCode = $this->getData(self::fields_LOCAL);
+        /**@var Locals $local */
+        $local = ObjectManager::getInstance(Locals::class);
+        $local = $local->where(Locals::fields_CODE, $localCode)
+            ->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())
+            ->find()->fetch();
+        if ($local->getId()) {
+            dd($local);
+            $this->setData('local_name', $local->getName());
+        }
         return $this;
     }
 
