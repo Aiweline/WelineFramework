@@ -8,6 +8,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locale;
+use Weline\I18n\Model\Locals;
 
 #[Acl('WeShop_Store::manager', '店铺管理', 'ri-settings-2-fill', '店铺管理', 'WeShop_Store::main')]
 class Store extends BackendController
@@ -34,7 +35,12 @@ class Store extends BackendController
             $this->store->where('name', 'like', "%$search%");
         }
         $listing = $this->store->addLocalDescription()->pagination($page, $pageSize)->select()->fetch();
-        $this->assign('stores', $listing->getItems());
+        $listings = $listing->getItems();
+        /**@var \WeShop\Store\Model\Store $listing */
+        foreach ($listings as &$listing) {
+            $listing = $listing->loadLocalName();
+        }
+        $this->assign('stores', $listings);
         $this->assign('pagination', $listing->getPagination());
         $this->assign('page', $page);
         $this->assign('pageSize', $pageSize);
@@ -46,15 +52,19 @@ class Store extends BackendController
     {
         $this->assign('action', $this->_url->getCurrentUrl());
         # 所有已安装区域
+        $this->assign('locals', self::getLocals());
+        return $this->fetch('form');
+    }
+
+    static function getLocals(): array
+    {
         /**@var Locale $local */
         $local = ObjectManager::getInstance(Locale::class);
-        $locals = $local->where($local::fields_IS_INSTALL, 1)
+        return $local->where($local::fields_IS_INSTALL, 1)
             ->where($local::fields_IS_ACTIVE, 1)
             ->where(Locale\Name::fields_DISPLAY_LOCALE_CODE, \Weline\Framework\Http\Cookie::getLangLocal())
             ->joinModel(Locale\Name::class, 'name', 'main_table.code=name.locale_code')
             ->select()->fetchArray();
-        $this->assign('locals', $locals);
-        return $this->fetch('form');
     }
 
     #[Acl('WeShop_Store::add_post', '店铺添加', 'mdi mdi-pen-plus', '店铺添加')]
@@ -85,6 +95,7 @@ class Store extends BackendController
             if (!$store->getId()) {
                 $this->getMessageManager()->addError(__('商铺不存在！'));
             }
+            $this->assign('locals', self::getLocals());
             $this->assign('action', $this->_url->getCurrentUrl());
             $this->assign('store', $store);
             return $this->fetch('form');

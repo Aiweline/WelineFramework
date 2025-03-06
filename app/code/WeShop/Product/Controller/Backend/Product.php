@@ -80,7 +80,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
         # post请求保存
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
-            $entity_id = $this->product->getEntityId();
+            $eav_entity_id = $this->product->getEavEntityId();
             $data['image'] = trim($data['image'], ',');
             $data['parent_id'] = 0;
             $this->product->setModelFieldsData($data);
@@ -90,7 +90,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 # 保存属性数据
                 $attributes = $this->request->getPost('attribute');
                 if ($attributes) {
-                    list($attributeValues, $attributeDataItems) = $this->checkAttributes($attributes, $entity_id);
+                    list($attributeValues, $attributeDataItems) = $this->checkAttributes($attributes, $eav_entity_id);
                     /**@var EavAttribute $attributeDataItem */
                     foreach ($attributeDataItems as $attributeDataItem) {
                         # 先删除属性原值
@@ -131,7 +131,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                     # 可配置属性设置
                     /**@var OptionId $optionModel */
                     $optionModel = ObjectManager::getInstance(OptionId::class);
-                    list($attributeValues, $attributeDataItems) = $this->checkAttributes($configurableAttributes, $entity_id);
+                    list($attributeValues, $attributeDataItems) = $this->checkAttributes($configurableAttributes, $eav_entity_id);
                     foreach ($attributeDataItems as $attributeDataItem) {
                         # 先删除属性原值
                         $valueModel = $attributeDataItem->w_getValueModel();
@@ -311,12 +311,12 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
     /**
      * @param mixed $attributes
-     * @param int $entity_id
+     * @param int $eav_entity_id
      * @return array
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
-    public function checkAttributes(array $attributes, int $entity_id): array
+    public function checkAttributes(array $attributes, int $eav_entity_id): array
     {
 # 批量查询属性
         /**@var EavAttribute $attribute */
@@ -332,7 +332,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
         /**@var EavAttribute[] $attributeDataItems */
         $attributeDataItems = $attribute->reset()
             ->where($attribute::fields_attribute_id, $attributeIds, 'in')
-            ->where($attribute::fields_eav_entity_id, $entity_id)
+            ->where($attribute::fields_eav_entity_id, $eav_entity_id)
             ->select()
             ->fetch()
             ->getItems();

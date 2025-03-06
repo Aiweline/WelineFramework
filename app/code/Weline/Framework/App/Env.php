@@ -475,13 +475,31 @@ class Env extends DataObject
     {
         $this->hasGetConfig[$key] = $value;
         $config = $this->getConfig();
-        $config[$key] = $value;
-        $this->config[$key] = $value;
+        if (str_contains($key, '.')) {
+            $keys = explode('.', $key);
+            $first_key = array_shift($keys);
+            $end_key = $keys[array_key_last($keys)];
+            $this->config = $config;
+            $tmp = &$this->config[$first_key];
+            foreach ($keys as $item) {
+                if (isset($tmp[$item])) {
+                    $tmp = &$tmp[$item];
+                } else {
+                    $tmp = [];
+                }
+                if ($end_key === $item) {
+                    $tmp = $value;
+                }
+            }
+        } else {
+            $config[$key] = $value;
+            $this->config[$key] = $value;
+        }
 
         try {
             $file = new File();
             $file->open(self::path_ENV_FILE, $file::mode_w);
-            $text = '<?php return ' . w_var_export($config, true) . ';';
+            $text = '<?php return ' . w_var_export($this->config, true) . ';';
             $file->write($text);
             $file->close();
             return true;

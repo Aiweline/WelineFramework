@@ -154,7 +154,7 @@ class Product extends EavModel
                     $this::fields_parent_id,
                     TableInterface::column_type_INTEGER,
                     11,
-                    'not null',
+                    'default 0',
                     '父级ID'
                 )
                 ->addColumn(
