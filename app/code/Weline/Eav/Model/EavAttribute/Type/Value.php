@@ -69,7 +69,7 @@ class Value extends \Weline\Framework\Database\Model
         /**@var \Weline\Eav\Model\EavAttribute\Type $type */
         $type = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Type::class);
 
-        $types    = $type->select()->fetch()->getItems();
+        $types = $type->select()->fetch()->getItems();
         $entities = $entity->clear()->select()->fetch()->getItems();
         /**@var EavEntity $entity */
         foreach ($entities as $entity) {
@@ -119,8 +119,8 @@ class Value extends \Weline\Framework\Database\Model
                         }
                     }
                     $table
-                        ->addIndex(TableInterface::index_type_KEY, 'ATTRIBUTE_ID', 'attribute_id')
-                        ->addIndex(TableInterface::index_type_KEY, 'ENTITY_ID', 'entity_id')
+                        ->addIndex(TableInterface::index_type_KEY, $eav_entity_type_table . '_idx_ATTRIBUTE_ID', 'attribute_id')
+                        ->addIndex(TableInterface::index_type_KEY, $eav_entity_type_table . '_idx_ENTITY_ID', 'entity_id')
                         ->create();
                 }
             }
@@ -203,7 +203,7 @@ class Value extends \Weline\Framework\Database\Model
         if (!$this->attribute) {
             throw new Exception(__('属性不存在！'));
         }
-        $table                   = 'eav_' . $this->attribute->current_getEntity()->getEntityCode() . '_' . $this->attribute->getTypeModel()->getCode();
+        $table = 'eav_' . $this->attribute->current_getEntity()->getEntityCode() . '_' . $this->attribute->getTypeModel()->getCode();
         $this->origin_table_name = parent::getTable($table);
 
         return $this->origin_table_name;

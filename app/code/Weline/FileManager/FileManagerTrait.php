@@ -24,6 +24,16 @@ trait FileManagerTrait
         return $this->setData('path', $path);
     }
 
+    public function setPreview(bool $preview): static
+    {
+        return $this->setData('preview', $preview);
+    }
+
+    public function getPreview(): bool
+    {
+        return (bool)$this->getData('preview');
+    }
+
     public function getValue(): string
     {
         return $this->getData('value') ?? '';

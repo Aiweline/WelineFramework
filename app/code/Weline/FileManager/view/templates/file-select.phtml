@@ -1,5 +1,7 @@
-<!-- 图片预览 -->
-@template(Weline_FileManager::image-preview/template.phtml)
+<notempty name="preview">
+    <!-- 图片预览 -->
+    @template(Weline_FileManager::image-preview/template.phtml)
+</notempty>
 <!-- Small modal -->
 <a type="button" data-bs-target="#{{target}}-select-modal" class="btn btn-primary btn-sm waves-effect waves-light"
    data-bs-toggle="modal">{{title}}</a>
@@ -12,7 +14,8 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    {{title}} <if condition="ext !== '*'"><span class="text-danger">@lang{允许的文件类型：}({{ext}})</span></if>
+                    {{title}}
+                    <if condition="ext !== '*'"><span class="text-danger">@lang{允许的文件类型：}({{ext}})</span></if>
                     <span>@lang{允许的文件大小：}{{size_alias}}</span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" id="{{target}}-close-modal"
@@ -57,14 +60,20 @@
             checkIframeLoaded()
         }, 100);
         // 超过10秒则断开
-        setTimeout(function (){
+        setTimeout(function () {
             clearInterval(timer)
-        },10000)
-    })
-    // 点击预览
-    $('#{{target}}-preview').on('click', '.img', function () {
-        let url = $(this).data('url')
-        let iframe = $("#{{target}}-file-manager-iframe");
-        iframe.attr('src', url)
+        }, 10000)
     })
 </script>
+<notempty name="preview">
+    <script>
+        // 点击预览
+        if ($('#{{target}}-preview')) {
+            $('#{{target}}-preview').on('click', '.img', function () {
+                let url = $(this).data('url')
+                let iframe = $("#{{target}}-file-manager-iframe");
+                iframe.attr('src', url)
+            })
+        }
+    </script>
+</notempty>

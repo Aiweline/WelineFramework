@@ -51,9 +51,9 @@ class UiTest extends TestCore
 //        # 运行php
         # 安装选择文件属性
         /** @var Type $type */
-        $type = ObjectManager::getInstance(Type::class);
+        $type = ObjectManager::make(Type::class);
         $type->setFieldType(TableInterface::column_type_VARCHAR)
-            ->setCode('select_file')
+            ->setCode('select_file_test')
             ->setFrontendAttrs('type="file" data-parsley-minlength="3" required')
             ->setFieldLength(255)
             ->setIsSwatch(false)
@@ -64,6 +64,11 @@ class UiTest extends TestCore
             ->setDefaultValue('')
             ->setName('选择文件')
             ->save();
-        dd('$res');
+        $type->load('code', 'select_file_test');
+        $ok1 = $type->getCode() == 'select_file_test';
+        $type->delete()->fetch();
+        $type->load('code', 'select_file_test');
+        $ok2 = $type->getCode() == '';
+        self::assertTrue($ok1 and $ok2, 'ui模型测试！');
     }
 }

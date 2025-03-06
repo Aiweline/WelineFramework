@@ -834,8 +834,10 @@ abstract class Query implements QueryInterface
     {
         $real_sql = $this->sql;
         foreach ($this->bound_values as $where_key => $wheres_value) {
-            $wheres_value = $this->getLink()->quote($wheres_value);
-            $real_sql = str_replace($where_key, $wheres_value, $real_sql);
+            if (is_string($wheres_value)) {
+                $wheres_value = $this->getLink()->quote($wheres_value);
+            }
+            $real_sql = str_replace($where_key, (string)$wheres_value, $real_sql);
         }
         if ($format) {
             return \SqlFormatter::format($real_sql);

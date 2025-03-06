@@ -16,9 +16,7 @@ namespace Weline\DeveloperWorkspace\Console\PhpUnit;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Framework\System\File\Scan;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
@@ -28,8 +26,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
     public function __construct(
         System   $system,
         Printing $printing
-    ) {
-        $this->system   = $system;
+    )
+    {
+        $this->system = $system;
         $this->printing = $printing;
     }
 
@@ -38,6 +37,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        # 提示是否运行：生产环境禁止运行
+        if (Env::get('deploy') !== 'dev') {
+            $this->printing->setup(__('非开发环境禁止运行！如你确认是dev环境，请运行php bin/w deploy:model:set dev 转换环境后运行！'));
+            exit(1);
+        }
+        $this->printing->note(__('正在 收集 测试套件...'));
         $php_unit_path = DEV_PATH . 'phpunit' . DS;
         if (!is_dir($php_unit_path)) {
             mkdir($php_unit_path, 755, true);
@@ -48,7 +53,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         $php_unit_config_path = $php_unit_path . 'config.xml';
         # 先把所有模组的test文件目录写到phpunit.xml【避免全目录扫描提升测试速度】
-        $modules      = Env::getInstance()->getActiveModules();
+        $modules = Env::getInstance()->getActiveModules();
         $php_unit_xml = '<?xml version=\'1.0\' encoding=\'UTF-8\'?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="http://schema.phpunit.de/6.2/phpunit.xsd"
@@ -63,9 +68,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
          processIsolation="false"
          stopOnFailure="false">
     <testsuites>';
-
+        $exist_suites = [];
         foreach ($modules as $module) {
-            $test_path      = $module['base_path'] . 'test' . DS;
+            $test_path = $module['base_path'] . 'test' . DS;
             $testsuite_path = $test_path . 'testsuite.xml';
             if (is_dir($test_path)) {
                 $testsuites = '';
@@ -74,9 +79,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     foreach ($xml->children() as $testsuite) {
                         $testsuite = get_object_vars($testsuite);
                         if (!isset($testsuite['@attributes']['name'])) {
-                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%1 ，示例：<testsuite name="unit">
-        <file>CacheTest.php</file>
-    </testsuite>', $testsuite_path));
+                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%1 ，示例：<testsuite name="unit"><file>CacheTest.php</file></testsuite>', $testsuite_path));
                         }
                         $suite_name = $testsuite['@attributes']['name'] ?? $module['name'];
                         unset($testsuite['@attributes']);
@@ -84,6 +87,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                             if (($key === 'file' or $key === 'directory') and !str_starts_with(BP, $testsuite_data)) {
                                 $testsuite_data = $test_path . $testsuite_data;
                             }
+                            $exist_suites[$suite_name] = $suite_name;
                             $testsuites .= "
         <testsuite name='unit'>
             <{$key}>{$testsuite_data}</{$key}>
@@ -95,6 +99,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                         }
                     }
                 } else {
+                    $exist_suites[$module['name']] = $module['name'];
                     $testsuites .= "
         <testsuite name='unit'>
             <directory suffix=\"Test.php\">$test_path</directory>
@@ -109,9 +114,22 @@ class Run implements \Weline\Framework\Console\CommandInterface
             ";
             }
         }
-        $code_framework_modules   = glob(APP_CODE_PATH . 'Weline' . DS . 'Framework' . DS . '*' . DS . 'test', GLOB_ONLYDIR);
-        $vendor_framework_modules = glob(VENDOR_PATH . 'weline' . DS . 'framework' . DS . '*' . DS . 'test', GLOB_ONLYDIR);
-        $framework_modules        = array_merge($vendor_framework_modules, $code_framework_modules);
+        $app_code_weline_framework_dir = APP_CODE_PATH . 'Weline' . DS . 'Framework' . DS;
+        $code_framework_modules = glob($app_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
+        foreach ($code_framework_modules as $key => $test_dir) {
+            $key_new = str_replace($app_code_weline_framework_dir, '', $test_dir);
+            unset($code_framework_modules[$key]);
+            $code_framework_modules[$key_new] = $test_dir;
+        }
+        $vendor_code_weline_framework_dir = APP_CODE_PATH . 'weline' . DS . 'framework' . DS;
+        $vendor_framework_modules = glob($vendor_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
+        foreach ($vendor_framework_modules as $key => $test_dir) {
+            $key_new = str_replace($vendor_code_weline_framework_dir, '', $test_dir);
+            unset($vendor_framework_modules[$key]);
+            $vendor_framework_modules[$key_new] = $test_dir;
+        }
+        # 代码code目录优先级最高
+        $framework_modules = array_merge($vendor_framework_modules, $code_framework_modules);
         foreach ($framework_modules as $test_path) {
             $testsuite_path = $test_path . 'testsuite.xml';
             if (is_dir($test_path)) {
@@ -125,7 +143,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
         <file>CacheTest.php</file>
     </testsuite>', $testsuite_path));
                         }
+                        # 校验套件名称
                         $suite_name = $testsuite['@attributes']['name'] ?? $module['name'];
+                        if (isset($exist_suites[$suite_name])) {
+                            continue;
+                        }
+                        $exist_suites[$suite_name] = true;
                         unset($testsuite['@attributes']);
                         foreach ($testsuite as $key => $testsuite_data) {
                             if (($key === 'file' or $key === 'directory') and !str_starts_with(BP, $testsuite_data)) {
@@ -145,6 +168,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
                         }
                     }
                 } else {
+                    # 校验套件名称
+                    $suite_name = $testsuite['@attributes']['name'] ?? $module['name'];
+                    if (isset($exist_suites[$suite_name])) {
+                        continue;
+                    }
+                    $exist_suites[$suite_name] = true;
                     $testsuites .= "
         <testsuite name='framework'>
             <directory suffix=\"Test.php\">$test_path</directory>
@@ -190,10 +219,32 @@ class Run implements \Weline\Framework\Console\CommandInterface
 </phpunit>
 ';
         file_put_contents($php_unit_config_path, $php_unit_xml);
-        $text_suite_name = $args[1] ?? 'unit';
+        # 去除非数字参数
+        $command = $args['command'];
+        foreach ($args as $arg_key => $arg) {
+            if ($arg === $command) {
+                unset($args[$arg_key]);
+            }
+        }
+//        if (count($args) > 1) {
+//            $this->printing->note(__('每次仅允许执行一个测试套件名，当前套件名: %1', implode(',', $args)));
+//            exit(1);
+//        }
+        $text_suite_name = implode(',', $args) ?? 'unit';
+        $this->printing->note(__('收集完成，准备运行...'));
         $this->printing->note(__('正在测试套件: %1', $text_suite_name));
+        $this->printing->setup(__('重要提示：测试套件运行过程中会操作数据库，从而产生不可预知的风险。请确认当前环境非生产环境，你确认当前环境非生产环境么？(y/n)'));
+        if (strtolower(trim($this->system->input())) !== 'y') {
+            $this->printing->setup(__('已停止运行！'));
+            exit(1);
+        }
+        $this->printing->setup(__('重要提示：再次确认需要运行么？(y/n)'));
+        if (strtolower(trim($this->system->input())) !== 'y') {
+            $this->printing->setup(__('已停止运行！'));
+            exit(1);
+        }
         $ds = DS;
-        $command = $this->system->exec(PHP_BINARY.' '.VENDOR_PATH."{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path", false);
+        $command = $this->system->exec(PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testsuite $text_suite_name", false);
         $this->printing->success($command['command']);
         $this->printing->success(implode("\r\n", $command['output']));
         if ($command['return_vars']) {
