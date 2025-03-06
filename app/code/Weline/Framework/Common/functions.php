@@ -86,7 +86,13 @@ if (!function_exists('w_split_by_capital')) {
      */
     function w_split_by_capital(string $str): array|bool
     {
-        return preg_split('/(?=[A-Z])/', $str);
+        $arrs = preg_split('/(?=[A-Z])/', $str);
+        foreach ($arrs as $ik => $item) {
+            if ('' === $item) {
+                unset($arrs[$ik]);
+            }
+        }
+        return array_values($arrs);
     }
 }
 if (!function_exists('w_var_export')) {

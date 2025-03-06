@@ -164,9 +164,6 @@ class Upgrade extends CommandAbstract
                             $pre_end_with = '';
                             $pre_is_one = false;
                             foreach ($file as $key => &$item) {
-                                if ('' === $item) {
-                                    continue;
-                                }
                                 # 如果$item长度只有1个，那么直接跳过
                                 if (1 == strlen($item)) {
                                     $file_str .= $item;
@@ -190,7 +187,11 @@ class Upgrade extends CommandAbstract
                                     $file_str .= $item;
                                     continue;
                                 }
-                                $file_str .= '-' . $item;
+                                if ($key !== 0) {
+                                    $file_str .= '-' . $item;
+                                } else {
+                                    $file_str .= $item;
+                                }
                             }
                             $command = str_replace('\\', ':', strtolower($file_str));
                             array_pop($file_array);
