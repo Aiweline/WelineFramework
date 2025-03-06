@@ -39,6 +39,9 @@ class Connector extends FrontendController
             $replaces = [
                 "baseUrl : 'js'" => "baseUrl : '{$baseUrl}'",
                 "php/connector.minimal.php" => "$urlPath",
+                "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/themes/smoothness/jquery-ui.css" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.css'),
+                "//cdnjs.cloudflare.com/ajax/libs/jquery/' + (old ? '1.12.4' : jqver) + '/jquery.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery.min.js'),
+                "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/jquery-ui.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.js'),
             ];
             foreach ($replaces as $replace => $replacement) {
                 $mainJsContent = str_replace($replace, $replacement, $mainJsContent);

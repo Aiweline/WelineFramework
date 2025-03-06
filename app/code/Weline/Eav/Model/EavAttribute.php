@@ -308,7 +308,43 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function getOptions(): array
     {
-        return ObjectManager::getInstance(Option::class)->reset()->where(self::fields_ID, $this->getId())->select()->fetchArray();
+        if ($this->hasData('options')) {
+            return $this->getData('options');
+        }
+        $this->setData('options', ObjectManager::getInstance(Option::class)->reset()
+            ->where(self::fields_ID, $this->getId())
+            ->select()
+            ->fetchArray());
+        return $this->getData('options');
+    }
+
+    public function getOptionsWithValue(bool $only_has_value = false): array
+    {
+        if (!$this->hasOption()) {
+            return [];
+        }
+        $options = $this->getOptions();
+        $values = $this->getValue();
+        foreach ($values as $value) {
+            foreach ($options as $op_key => $option) {
+                if ($option[Option::fields_option_id] == $value) {
+                    $option['selected'] = 1;
+                    $options[$op_key] = $option;
+                } else {
+                    if ($only_has_value) {
+                        unset($options[$op_key]);
+                    } else {
+                        $option['selected'] = 0;
+                        $options[$op_key] = $option;
+                    }
+                }
+            }
+        }
+        if ($this->hasData('value_with_options')) {
+            return $this->getData('value_with_options');
+        }
+        $this->setData('value_with_options', $options);
+        return $this->getData('value_with_options');
     }
 
     /**
@@ -682,28 +718,27 @@ class EavAttribute extends \Weline\Framework\Database\Model
         return $this;
     }
 
-    public function existType(string $type_code = ''): bool
+    public function existType(string $type_code = ''): Type
     {
         if ($type_code) {
             if (isset($this->exist_types[$type_code])) {
-                return true;
+                return $this->exist_types[$type_code];
             }
-            /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
-            $typeModel = ObjectManager::getInstance(\Weline\Eav\Model\EavAttribute\Type::class);
+            /**@var Type $typeModel */
+            $typeModel = ObjectManager::getInstance(Type::class);
             $typeModel->reset()->clearData();
             $typeModel->load('code', $type_code);
             if ($typeModel->getId()) {
                 $this->exist_types[$type_code] = $typeModel;
-                return true;
+                return $typeModel;
             } else {
                 throw new \Exception(__('属性类型不存在！类型：%1', $type_code));
             }
         } else {
-            /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
             $typeModel = $this->getTypeModel();
             if ($typeModel->getId()) {
                 $this->exist_types[$typeModel->getCode()] = $typeModel;
-                return true;
+                return $typeModel;
             } else {
                 throw new \Exception(__('属性类型不存在！类型：%1', $type_code));
             }
@@ -713,10 +748,10 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function getTypeModel(): Type
     {
-        if ($this->type) {
+        if ($this->type and $this->type->getId()) {
             return $this->type;
         }
-        /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
+        /**@var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
         return $this->type;
@@ -724,7 +759,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
 
     public function resetTypeModel(): Type
     {
-        /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
+        /**@var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
         return $this->type;

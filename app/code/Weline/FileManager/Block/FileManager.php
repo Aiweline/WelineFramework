@@ -2,7 +2,6 @@
 
 namespace Weline\FileManager\Block;
 
-use Weline\FileManager\FileManagerInterface;
 use Weline\FileManager\Helper\Image;
 use Weline\Framework\View\Block;
 
@@ -11,7 +10,8 @@ class FileManager extends Block
     public function render(): string
     {
         $value = $this->getParseVarsParams('value');
-        $this->assign('value', $value?:$this->getData('value'));
+        $this->assign('value', $value ?: $this->getData('value'));
+        $this->assign('preview', $value ?: $this->getData('preview'));
         $size_alias = Image::getSize($this->getData('size'));
         $value = $this->getData('value') ?: '';
         $this->assign('value_items', Image::processImagesValuePreviewData($value, $this->getData('width'), $this->getData('height')));
@@ -25,6 +25,7 @@ class FileManager extends Block
         return [
             'isIframe' => true,
             'target' => $this->getData('target'),
+            'preview' => $this->getData('preview'),
             'setAttr' => $this->getData('setAttr'),
             'close' => $this->getData('close'),
             'startPath' => $this->getData('path'),

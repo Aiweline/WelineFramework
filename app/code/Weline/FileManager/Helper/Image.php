@@ -21,7 +21,7 @@ class Image
                 foreach ($values as $value) {
                     $url = $value . $process;
                     $pre_fix = '/media/image/';
-                    if(!str_starts_with($url,$pre_fix)){
+                    if (!str_starts_with($url, $pre_fix)) {
                         $url = $pre_fix . $url;
                     }
                     $value_items[] = [
@@ -34,7 +34,7 @@ class Image
             } else {
                 $url = $value . $process;
                 $pre_fix = '/media/image/';
-                if(!str_starts_with($url,$pre_fix)){
+                if (!str_starts_with($url, $pre_fix)) {
                     $url = $pre_fix . $url;
                 }
                 $value_items[] = [
@@ -48,7 +48,7 @@ class Image
         return $value_items;
     }
 
-    public static function getSize($filesize)
+    public static function getSize($filesize): string
     {
         if ($filesize >= 1073741824) {
             $filesize = round($filesize / 1073741824 * 100) / 100 . ' GB';

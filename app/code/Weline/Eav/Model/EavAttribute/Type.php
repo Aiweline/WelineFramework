@@ -551,7 +551,7 @@ class Type extends \Weline\Framework\Database\Model
 
     public function setCode(string $code): static
     {
-        return $this->setData(self::fields_code, $code);
+        return $this->setData(self::fields_code, $code, true);
     }
 
     public function getFieldType(): string
@@ -769,9 +769,9 @@ class Type extends \Weline\Framework\Database\Model
                 }
             } else {
                 $default_value = $this->getValue();
-                if($default_value){
+                if ($default_value) {
                     $value = $default_value;
-                }else{
+                } else {
                     $value = $this->getDefaultValue();
                 }
             }

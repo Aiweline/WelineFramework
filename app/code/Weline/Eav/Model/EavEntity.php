@@ -198,5 +198,4 @@ class EavEntity extends Model
         );
         return $this;
     }
-
 }

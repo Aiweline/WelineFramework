@@ -156,8 +156,19 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                             {{store.local_name|store.name}}
                                                         </local>
                                                     </td>
-                                                    <td><has name="store.image"><img src="/media/image/{{store.image}}?w=50&h=50" alt="{{store.name}}"></has></td>
+                                                    <td class='co-name'>
+                                                        {{store.local}}
+                                                        <if condition="store.local_name">
+                                                            : {{store.local_name}}
+                                                        </if>
+                                                    </td>
+                                                    <td>
+                                                        <has name="store.image"><img
+                                                                    src="/media/image/{{store.image}}?w=50&h=50"
+                                                                    alt="{{store.name}}"></has>
+                                                    </td>
                                                     <td>{{store.code}}</td>
+                                                    <td>{{store.website}}</td>
                                                     <td class='co-name'>
                                                         <if condition="store.status"><span
                                                                     class="text-success">启用</span>
@@ -174,9 +185,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         {{store.email}}
                                                     </td>
                                                     <td class='co-name'>
-                                                        {{store.website}}
-                                                    </td>
-                                                    <td class='co-name'>
                                                         {{store.opening_hours}}
                                                     </td>
                                                     <td class='co-name'>
@@ -190,9 +198,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     </td>
                                                     <td class='co-name'>
                                                         {{store.longitude}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.local}}
                                                     </td>
                                                     <td class='co-name'>{{store.create_time}}</td>
                                                     <td class='co-name'>{{store.update_time}}</td>

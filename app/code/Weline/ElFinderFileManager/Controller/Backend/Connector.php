@@ -13,32 +13,35 @@ class Connector extends BackendController
     public function __init()
     {
         parent::__init();
-        $pre            = DEV ? 'dev' : 'prod';
+        $pre = DEV ? 'dev' : 'prod';
         $mainJsFileName = 'elfinder-backend-' . $pre . '-main.js';
-        $mainJsUrl      = $this->cache->get($mainJsFileName);
+        $mainJsUrl = $this->cache->get($mainJsFileName);
         if (!$mainJsUrl) {
-            $ds     = DS;
+            $ds = DS;
             $mainJs = VENDOR_PATH . "studio-42{$ds}elfinder{$ds}main.default.js";
             if (!is_file($mainJs)) {
                 die(__('main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder'));
             }
             $mainJsContent = file_get_contents($mainJs);
-            $mainJs        = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
-            $mainJsDir     = dirname($mainJs);
+            $mainJs = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
+            $mainJsDir = dirname($mainJs);
             if (!is_dir($mainJsDir)) {
                 mkdir($mainJsDir, 755, true);
             }
             file_put_contents($mainJs, $mainJsContent);
             $mainJsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/' . $mainJsFileName);
-            $baseUrl   = str_replace($mainJsFileName, 'js', $mainJsUrl);
+            $baseUrl = str_replace($mainJsFileName, 'js', $mainJsUrl);
             if (str_contains($baseUrl, '?')) {
                 $baseUrlArr = explode('?', $baseUrl);
-                $baseUrl    = array_shift($baseUrlArr);
+                $baseUrl = array_shift($baseUrlArr);
             }
-            $urlPath  = $this->_url->getBackendUrl('elfinder/backend/connector');
+            $urlPath = $this->_url->getBackendUrl('elfinder/backend/connector');
             $replaces = [
                 "baseUrl : 'js'" => "baseUrl : '{$baseUrl}'",
                 "php/connector.minimal.php" => "$urlPath",
+                "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/themes/smoothness/jquery-ui.css" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.css'),
+                "//cdnjs.cloudflare.com/ajax/libs/jquery/' + (old ? '1.12.4' : jqver) + '/jquery.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery.min.js'),
+                "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/jquery-ui.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.js'),
             ];
             foreach ($replaces as $replace => $replacement) {
                 $mainJsContent = str_replace($replace, $replacement, $mainJsContent);
@@ -59,7 +62,7 @@ class Connector extends BackendController
         // CONFIGS
         // 读取支持的类型
         $mimesExt = $this->request->getParam('ext');
-        $mimes    = ['image', 'text/plain'];
+        $mimes = ['image', 'text/plain'];
         if ($mimesExt) {
             $mimesExt = explode(',', $mimesExt);
             foreach ($mimesExt as $k => $mimeExt) {
