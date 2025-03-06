@@ -104,7 +104,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </p>
                                 <p class='card-title-desc'>
                                     <lang>操作：</lang>
-                                    <a href="@backend-url('*/backend/countries/update')">
+                                    <dd>req</dd>
+                                    <a href="@backend-url('*/backend/countries/update')?code={{req.params.code}}&country_code={{req.params.country_code}}">
                                         <lang>更新</lang>
                                     </a>
                                     <a href="@backend-url('*/backend/countries')">

@@ -73,8 +73,8 @@ class FileManagerConnector implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            if(empty($attributes)){
-                $input   = $tag_data[1];
+            if (empty($attributes)) {
+                $input = $tag_data[1];
                 $pattern = '/(\w+)\s*=\s*[\'"]?([^\'"]*)[\'"]?/';
                 preg_match_all($pattern, $input, $matches);
                 $outputArray = array();
@@ -91,15 +91,15 @@ class FileManagerConnector implements TaglibInterface
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigFileManager;
             /**@var CacheInterface $cache */
-            $cache  = ObjectManager::getInstance(FileManagerCacheFactory::class);
+            $cache = ObjectManager::getInstance(FileManagerCacheFactory::class);
             $result = $cache->get($cacheKey);
             if ($result and ($userConfigFileManager !== 'local')) {
                 return $result;
             }
             /**@var Scan $fileScan $ */
-            $fileScan     = ObjectManager::getInstance(Scan::class);
+            $fileScan = ObjectManager::getInstance(Scan::class);
             $fileManagers = [];
-            $modules      = Env::getInstance()->getActiveModules();
+            $modules = Env::getInstance()->getActiveModules();
             foreach ($modules as $module) {
                 $files = [];
                 $fileScan->globFile(
@@ -134,14 +134,15 @@ class FileManagerConnector implements TaglibInterface
                 }
             }
             $attributes['startPath'] = $attributes['path'] ?? '';
-            if(isset($attributes['target'])){
-                $attributes['target'] = trim($attributes['target'],'.#');
+            if (isset($attributes['target'])) {
+                $attributes['target'] = trim($attributes['target'], '.#');
             }
-            if(isset($attributes['close'])){
-                $attributes['close'] = trim($attributes['close'],'.#');
+            if (isset($attributes['close'])) {
+                $attributes['close'] = trim($attributes['close'], '.#');
             }
-            $attributes['close'] = trim($attributes['close'] ?? '','.#');
+            $attributes['close'] = trim($attributes['close'] ?? '', '.#');
             $attributes['ext'] = $attributes['ext'] ?? '';
+            $attributes['preview'] = boolval($attributes['preview'] ?? '');
             $attributes['value'] = $attributes['value'] ?? '';
             $attributes['vars'] = $attributes['vars'] ?? '';
             $attributes['w'] = $attributes['w'] ?? 50;
