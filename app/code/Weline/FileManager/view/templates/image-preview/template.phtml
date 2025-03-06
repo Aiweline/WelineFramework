@@ -117,7 +117,7 @@
             urls += imgs[i].getAttribute('data-src')
         }
         let targetEle = $('#{{target}}')
-        switch ('{{params.setAttr}}'){
+        switch ('{{params.setAttr}}') {
             case 'text':
                 targetEle.text(urls).trigger('change').trigger('input');
                 break;
@@ -130,7 +130,7 @@
     flushSelectedImage()
 
     $('#{{target}}-preview').on('click', 'img', function () {
-        let src = '/pub/media/' + $(this).attr('data-src');
+        let src = '/media/image/' + $(this).attr('data-src');
         let zoomModal = $('#{{target}}-zoom-modal');
         let zoomPreviewImageBody = $('#{{target}}-zoom-preview-image-body');
         zoomPreviewImageBody.empty()

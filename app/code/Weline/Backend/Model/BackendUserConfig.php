@@ -207,7 +207,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             ->save(true);
     }
 
-    public function save(array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+    public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
         $this->forceCheck();
         return parent::save($data, $sequence);

@@ -147,17 +147,19 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='local'>
                                 <lang>默认地区码</lang>
                             </label>
-                            <input type='text' class='form-control' name='local'
-                                   data-parsley-minlength='1'
-                                   id='local'
-                                   required='required' value="{{store.local}}" list="LocalsList"/>
-                            <datalist id="LocalsList">
+                            <select class='form-control' name='local' id="local" required='required'>
+                                <option value="">
+                                    <lang>--请选择--</lang>
+                                </option>
                                 <foreach name="locals">
-                                    <option value="{{v.code}}">{{v.display_name}}</option>
+                                    <option value="{{v.code}}" @if{store.local==v.code=>
+                                        'selected'}>{{v.display_name}}：{{v.code}}
+                                    </option>
                                 </foreach>
-                            </datalist>
+                            </select>
                             <span class="help-block">
-                                            更多区域，请到<a href="/i18n/backend/countries" target="_blank">i18n</a>安装。
+                                            更多区域，请到<a href="@backend-url('i18n/backend/countries')"
+                                                            target="_blank">i18n</a>安装。
                                         </span>
                         </div>
                     </div>
@@ -167,11 +169,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <lang>状态</lang>
                             </label>
                             <select name="status" id="w-status" class="form-control">
-                                <option value="0" {{store.status==0|'selected'}}>
-                                    <lang>禁用</lang>
-                                </option>
                                 <option value="1" {{store.status==1|'selected'}}>
                                     <lang>启用</lang>
+                                </option>
+                                <option value="0" {{store.status==0|'selected'}}>
+                                    <lang>禁用</lang>
                                 </option>
                             </select>
                         </div>
