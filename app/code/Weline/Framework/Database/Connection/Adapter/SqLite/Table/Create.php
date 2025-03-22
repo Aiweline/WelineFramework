@@ -21,16 +21,17 @@ class Create extends AbstractTable implements CreateInterface
     public string $additional_for_sqlite = ';';
     public array $index_outs = [];
     public const init_vars = [
-        self::table_TABLE         => '',
-        self::table_COMMENT       => '',
-        self::table_FIELDS        => [],
-        self::table_ALERT_FIELDS  => [],
+        self::table_TABLE => '',
+        self::table_COMMENT => '',
+        self::table_FIELDS => [],
+        self::table_ALERT_FIELDS => [],
         self::table_DELETE_FIELDS => [],
-        self::table_INDEXS        => [],
-        self::table_FOREIGN_KEYS  => [],
-        self::table_CONSTRAINTS   => '',
-        self::table_ADDITIONAL    => ';',
+        self::table_INDEXS => [],
+        self::table_FOREIGN_KEYS => [],
+        self::table_CONSTRAINTS => '',
+        self::table_ADDITIONAL => ';',
     ];
+
     public function createTable(string $table, string $comment = ''): CreateInterface
     {
         # 开始表操作
@@ -61,9 +62,9 @@ class Create extends AbstractTable implements CreateInterface
             }
         }
         if ('integer' == strtolower($type)) {
-            $type_length               = $type;
+            $type_length = $type;
         } else {
-            $type_length               = $length ? "{$type}({$length})" : $type;
+            $type_length = $length ? "{$type}({$length})" : $type;
         }
         $this->fields[$field_name] = "`{$field_name}` {$type_length} {$options}";
         return $this;
@@ -74,13 +75,16 @@ class Create extends AbstractTable implements CreateInterface
     {
         # sqlite 不支持索引引擎指定  $index_method = $index_method ? "USING {$index_method}" : '';
         $index_method = '';
-        $type         = strtoupper($type);
-        if (is_array($column)) {
-            $column = implode('`,`', $column);
-        } elseif (is_string($column)) {
+        $type = strtoupper($type);
+        if (is_string($column)) {
             $column = explode(',', $column);
-            $column = implode('`,`', $column);
         }
+        foreach ($column as $item) {
+            if (str_contains($item, '`')) {
+                $column[$item] = str_replace('`', '', $item);
+            }
+        }
+        $column = implode('`,`', $column);
         switch ($type) {
             case self::index_type_UNIQUE:
                 $this->indexes[] = "UNIQUE (`{$column}`) {$index_method}";
@@ -90,9 +94,9 @@ class Create extends AbstractTable implements CreateInterface
             case self::index_type_SPATIAL:
             case self::index_type_KEY:
                 $this->index_outs[] = [
-                    'name'   => $name,
+                    'name' => $name,
                     'column' => $column,
-                    'type'   => $type,
+                    'type' => $type,
                     'method' => $index_method
                 ];
 
@@ -102,11 +106,11 @@ class Create extends AbstractTable implements CreateInterface
                 if (!is_array($column)) {
                     new Exception(self::index_type_MULTI . __('：此索引的column需要array类型,当前类型') . "{$type_of_column}" . ' 例如：[ID,NAME(19),AGE]');
                 }
-                $column          = implode(',', $column);
+                $column = implode(',', $column);
                 $this->index_outs[] = [
-                    'name'   => $name,
+                    'name' => $name,
                     'column' => $column,
-                    'type'   => $type,
+                    'type' => $type,
                     'method' => $index_method
                 ];
                 break;
@@ -141,8 +145,8 @@ class Create extends AbstractTable implements CreateInterface
 
     public function addForeignKey(string $FK_Name, string $FK_Field, string $references_table, string $references_field, bool $on_delete = false, bool $on_update = false): CreateInterface
     {
-        $on_delete_str        = $on_delete ? 'on delete cascade' : '';
-        $on_update_str        = $on_update ? 'on update cascade' : '';
+        $on_delete_str = $on_delete ? 'on delete cascade' : '';
+        $on_update_str = $on_update ? 'on update cascade' : '';
         $this->foreign_keys[] = "constraint {$FK_Name} foreign key ({$FK_Field}) references {$references_table}({$references_field}) {$on_delete_str} {$on_update_str}";
         return $this;
     }
