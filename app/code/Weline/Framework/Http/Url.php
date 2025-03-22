@@ -203,6 +203,10 @@ class Url implements UrlInterface
                 $url_params[$url_param_arr[0]] = $url_param_arr[1] ?? '';
             }
             $url = $url_arrs[0];
+            // 如果原url有参数，并且没有传入参数，则将原url的参数赋值给$params 避免参数丢失
+            if ($url_params and empty($params)) {
+                $params = $url_params;
+            }
         }
         if ($url_params) {
             if ($merge_url_params) {
