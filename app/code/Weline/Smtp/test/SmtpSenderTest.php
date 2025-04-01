@@ -32,7 +32,7 @@ class SmtpSenderTest extends \Weline\Framework\UnitTest\TestCore
         /**@var SmtpSender $smtpSender */
         $smtpSender = ObjectManager::getInstance(SmtpSender::class);
         $condition = $smtpSender->sender(
-            ['email' => $this->data->get($this->data::smtp_username), 'name' => '发送者'],
+            ['email' => 'Aiweline@qq.com', 'name' => '发送者'],
             ['email' => 'Aiweline@qq.com', 'name' => '接收者'],
             'WelineFramework 框架Smtp测试！',
             'WelineFramework 框架Smtp测试！这只是一个测试邮件。'

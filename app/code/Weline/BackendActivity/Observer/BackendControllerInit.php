@@ -29,9 +29,9 @@ class BackendControllerInit implements ObserverInterface
 
     function __construct(Request $request, BackendSession $backendSession, Acl $acl)
     {
-        $this->request        = $request;
+        $this->request = $request;
         $this->backendSession = $backendSession;
-        $this->acl            = $acl;
+        $this->acl = $acl;
     }
 
     function execute(Event $event): void
@@ -51,7 +51,7 @@ class BackendControllerInit implements ObserverInterface
         $activityLogger = ObjectManager::getInstance(BackendActivityLog::class);
         try {
             $activityLogger->setName($name)
-                ->setUserId($this->backendSession->getLoginUserID()??0)
+                ->setUserId($this->backendSession->getLoginUserID() ?? 0)
                 ->setAclId(intval($acl->getAclId()))
                 ->setPath($this->request->getRouteUrlPath())
                 ->setModule($this->request->getData('router/module'))
@@ -66,7 +66,7 @@ class BackendControllerInit implements ObserverInterface
                 ->save();
         } catch (\Exception $e) {
             ObjectManager::getInstance(Log::class)
-                ->warning('File:'.(str_replace(BP, '', $e->getFile())).',Line:'.$e->getLine().','.PHP_EOL.'Error:'.PHP_EOL.$this->request->getId().':'.$e->getCode().':'.PHP_EOL.$e->getMessage());
+                ->warning('File:' . (str_replace(BP, '', $e->getFile())) . ',Line:' . $e->getLine() . ',' . PHP_EOL . 'Error:' . PHP_EOL . $this->request->getId() . ':' . $e->getCode() . ':' . PHP_EOL . $e->getMessage());
         }
     }
 }

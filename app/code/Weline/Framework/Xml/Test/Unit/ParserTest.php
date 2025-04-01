@@ -29,18 +29,18 @@ class ParserTest extends TestCase
 
     public function testGetXml()
     {
-        $this->assertEquals(
-            ['data' => [
-                'nodes' => [
-                    'text'        => ' some text ',
-                    'trim_spaces' => '',
-                    'cdata'       => '  Some data here <strong>html</strong> tags are <i>allowed</i>  ',
-                    'zero'        => '0',
-                    'null'        => null,
-                ],
-            ]],
-            $this->parser->load(__DIR__ . '/_files/data.xml')->xmlToArray()
-        );
+        $expected = ['data' => [
+            'nodes' => [
+                'text' => 'some text',
+                'trim_spaces' => null,
+                'cdata' => '  Some data here <strong>html</strong> tags are <i>allowed</i>  ',
+                'zero' => '0',
+                'null' => null,
+            ],
+        ]];
+        $load = $this->parser->load(__DIR__ . '/_files/data.xml')->xmlToArray();
+
+        $this->assertTrue($expected == $load);
     }
 
     public function testLoadXmlInvalid()

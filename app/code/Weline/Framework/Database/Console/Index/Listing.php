@@ -27,8 +27,9 @@ class Listing implements \Weline\Framework\Console\CommandInterface
 
     public function __construct(
         ModuleFileReader $moduleFileReader,
-        Printing $printing
-    ) {
+        Printing         $printing
+    )
+    {
         $this->moduleFileReader = $moduleFileReader;
         $this->printing = $printing;
     }
@@ -40,9 +41,9 @@ class Listing implements \Weline\Framework\Console\CommandInterface
     {
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $params =  new DataObject(['args' => $args,'break' => false]);
-        $eventManager->dispatch('Framework_Database::indexer_listing', ['data'=>$params]);
-        if($params->getData('break')) {
+        $params = new DataObject(['args' => $args, 'break' => false]);
+        $eventManager->dispatch('Framework_Database::indexer_listing', $params);
+        if ($params->getData('break')) {
             return;
         }
         # 框架原版索引任务
@@ -62,9 +63,9 @@ class Listing implements \Weline\Framework\Console\CommandInterface
         }
         /**@var Indexer $indexer */
         foreach ($indexers as $indexer => $indexItems) {
-            $msg = str_pad($this->printing->colorize($indexer, $this->printing::SUCCESS), 35, ' ', STR_PAD_RIGHT).PHP_EOL;
+            $msg = str_pad($this->printing->colorize($indexer, $this->printing::SUCCESS), 35, ' ', STR_PAD_RIGHT) . PHP_EOL;
             foreach ($indexItems as $indexItem) {
-                $msg .= $this->printing->colorize($indexItem->getTable(), $this->printing::NOTE).PHP_EOL;
+                $msg .= $this->printing->colorize($indexItem->getTable(), $this->printing::NOTE) . PHP_EOL;
             }
             $this->printing->printing($msg);
         }

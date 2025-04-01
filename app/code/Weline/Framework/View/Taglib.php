@@ -620,9 +620,9 @@ class Taglib
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
                         $enable = $attributes['enable'] ?? 1;
-                        if (!$enable or ($enable ==='false')) {
-                            $template_string  = $tag_data[0]??'';
-                            $target_template  = $tag_data[2]??'';
+                        if (!$enable or ($enable === 'false')) {
+                            $template_string = $tag_data[0] ?? '';
+                            $target_template = $tag_data[2] ?? '';
                             return "<!-- 模块被禁用：{$target_template} 原始模板：{$template_string}-->";
                         }
                         return match ($tag_key) {
@@ -903,8 +903,8 @@ class Taglib
         # 兼容自定义tag
         /**@var EventsManager $event */
         $event = ObjectManager::getInstance(EventsManager::class);
-        $data = (new DataObject(['template' => $template, 'tags' => $tags]));
-        $event->dispatch('Framework_Template::after_tags_config', ['data' => $data, 'Taglib' => $this]);
+        $data = (new DataObject(['template' => $template, 'tags' => $tags, 'Taglib' => $this]));
+        $event->dispatch('Framework_Template::after_tags_config', $data);
         $tags = $data->getData('tags');
         # 构造w:tag
         foreach ($tags as $tag => $tag_data) {

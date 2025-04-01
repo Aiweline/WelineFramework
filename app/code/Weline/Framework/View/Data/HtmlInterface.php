@@ -25,7 +25,7 @@ interface HtmlInterface
      * @param string $html
      * @return \Weline\Framework\View\Data\HtmlInterface
      */
-    public function setHtml(string $key, string $html): static;
+    public function setHtmlToDb(string $key, string $html): static;
 
     /**
      * @DESC          # 读取头部信息
@@ -45,7 +45,7 @@ interface HtmlInterface
      * @param string $html
      * @return $this
      */
-    public function addHtml(string $key, string $html): static;
+    public function addHtmlToDb(string $key, string $html): static;
 
     /**
      * 追加html，不保存到数据库

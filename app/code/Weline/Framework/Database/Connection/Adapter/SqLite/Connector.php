@@ -274,4 +274,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $res = $this->query($sql)->fetch();
         return ($res[0]['count'] ?? 0) > 0;
     }
+
+    public function getQuery(): QueryInterface
+    {
+        return $this;
+    }
 }

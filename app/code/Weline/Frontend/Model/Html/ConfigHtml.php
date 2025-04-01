@@ -15,7 +15,8 @@ trait ConfigHtml
 
     public function __construct(
         Config $frontendConfig
-    ) {
+    )
+    {
         $this->frontendConfig = $frontendConfig;
         $this->data = json_decode($frontendConfig->getConfig(self::key, self::module) ?: '', true) ?? [];
     }
@@ -87,7 +88,7 @@ trait ConfigHtml
      * @return Footer
      * @throws \Weline\Framework\App\Exception
      */
-    public function setHtml(string $key, string $html): static
+    public function setHtmlToDb(string $key, string $html): static
     {
         $key_ = $this->checkKey($key);
         $this->data[$key_][$key] = $html;
@@ -101,7 +102,7 @@ trait ConfigHtml
      * @return $this
      * @throws \Weline\Framework\App\Exception
      */
-    public function addHtml(string $key, string $html): static
+    public function addHtmlToDb(string $key, string $html): static
     {
         $key_ = $this->checkKey($key);
         if (!isset($this->data[$key_])) {

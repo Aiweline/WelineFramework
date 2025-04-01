@@ -81,16 +81,16 @@ class Data extends AbstractHelper
                     if (!class_exists($api_class)) {
                         continue;
                     }
-                    $apiDirArray   = explode(Handle::api_DIR, $api_class);
-                    $baseRouter    = str_replace('\\', '/', array_pop($apiDirArray));
+                    $apiDirArray = explode(Handle::api_DIR, $api_class);
+                    $baseRouter = str_replace('\\', '/', array_pop($apiDirArray));
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
-                    $baseRouter    = '';
+                    $baseRouter = '';
                     foreach ($baseRouterArr as $baseRouterKey => $baseRouter_) {
                         if (!isset($baseRouterArr[$baseRouterKey - 1])) {
                             $baseRouter .= $baseRouter_;
                             continue;
                         }
-                        $pre_     = $baseRouterArr[$baseRouterKey - 1];
+                        $pre_ = $baseRouterArr[$baseRouterKey - 1];
                         $lastChar = $pre_[strlen($pre_) - 1] ?? '';
                         if ($lastChar === '/') {
                             $baseRouter .= $baseRouter_;
@@ -101,16 +101,16 @@ class Data extends AbstractHelper
                     $baseRouter = trim($router . $baseRouter, '/');
 
                     $this->parent_class_arr = [];// 清空父类信息
-                    $ctl_data               = $this->parserController($api_class, $name, $router);
+                    $ctl_data = $this->parserController($api_class, $name, $router);
                     if (empty($ctl_data)) {
                         continue;
                     }
                     $ctl_methods = $ctl_data['methods'];
-                    $ctl_area    = $ctl_data['area'];
+                    $ctl_area = $ctl_data['area'];
                     foreach ($ctl_methods as $method => $attributes) {
                         // 分析请求方法
-                        $request_method             = null;
-                        $rule_method                = $method;
+                        $request_method = null;
+                        $rule_method = $method;
                         $request_method_split_array = preg_split('/(?=[A-Z])/', $method);
                         if (1 === count($request_method_split_array)) {
                             $request_method_split_array[1] = $request_method_split_array[0];
@@ -127,12 +127,12 @@ class Data extends AbstractHelper
                         # 检测请求方法和方法名是否重合，重合就使用方法名作为请求方法
                         if (in_array(strtoupper($rule_method), Request::METHODS)) {
                             $request_method = strtoupper($rule_method);
-                            $rule_method    = '';
+                            $rule_method = '';
                         }
                         # 规则路由处理
                         # 删除index后缀
-                        $rule_router     = strtolower($baseRouter . '/' . $rule_method);
-                        $rule_rule_arr   = explode('/', trim($rule_router, '/'));
+                        $rule_router = strtolower($baseRouter . '/' . $rule_method);
+                        $rule_rule_arr = explode('/', trim($rule_router, '/'));
                         $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
                         while ('index' === array_pop($rule_rule_arr)) {
                             $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
@@ -145,9 +145,9 @@ class Data extends AbstractHelper
                         # 模块路由解析
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
-                            $route  = $rule_router . ($request_method ? '::' . $request_method : '');
+                            $route = $rule_router . ($request_method ? '::' . $request_method : '');
                             $backend = false;
-                            if(in_array('BackendController',$ctl_area)){
+                            if (in_array('BackendController', $ctl_area)) {
                                 $backend = true;
                             }
                             $params = [
@@ -163,16 +163,14 @@ class Data extends AbstractHelper
                                 'is_backend' => $backend,
                                 'is_enable' => true
                             ];
-                            $data   = new DataObject($params);
+                            $data = new DataObject($params);
                             /**@var \ReflectionAttribute $attribute */
                             foreach ($attributes as $attribute) {
-                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', [
-                                    'data' => $data,
-                                    'type' => 'api',
-                                    'attribute' => $attribute,
-                                    'controller_data' => $ctl_data,
-                                    'params' => $params
-                                ]);
+                                $data->setData('attribute', $attribute);
+                                $data->setData('type', 'api');
+                                $data->setData('controller_data', $ctl_data);
+                                $data->setData('params', $params);
+                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
                             }
                             // 路由注册+
                             Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -181,7 +179,7 @@ class Data extends AbstractHelper
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
                                 $backend = false;
-                                if(in_array('BackendController',$ctl_area)){
+                                if (in_array('BackendController', $ctl_area)) {
                                     $backend = true;
                                 }
                                 $params = [
@@ -197,16 +195,14 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true
                                 ];
-                                $data   = new DataObject($params);
+                                $data = new DataObject($params);
                                 /**@var \ReflectionAttribute $attribute */
                                 foreach ($attributes as $attribute) {
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', [
-                                        'data' => $data,
-                                        'type' => 'api',
-                                        'attribute' => $attribute,
-                                        'controller_data' => $ctl_data,
-                                        'params' => $params
-                                    ]);
+                                    $data->setData('attribute', $attribute);
+                                    $data->setData('type', 'api');
+                                    $data->setData('controller_data', $ctl_data);
+                                    $data->setData('params', $params);
+                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -226,10 +222,10 @@ class Data extends AbstractHelper
                     if (!class_exists($pc_class)) {
                         continue;
                     }
-                    $pcDirArray    = explode(Handle::pc_DIR, $pc_class);
-                    $baseRouter    = str_replace('\\', '/', array_pop($pcDirArray));
+                    $pcDirArray = explode(Handle::pc_DIR, $pc_class);
+                    $baseRouter = str_replace('\\', '/', array_pop($pcDirArray));
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
-                    $baseRouter    = '';
+                    $baseRouter = '';
                     foreach ($baseRouterArr as $baseRouterKey => $baseRouter_) {
                         if (!isset($baseRouterArr[$baseRouterKey - 1])) {
                             $baseRouter .= $baseRouter_;
@@ -248,16 +244,16 @@ class Data extends AbstractHelper
                     $baseRouter = trim($router . $baseRouter, '/');
 
                     $this->parent_class_arr = [];// 清空父类信息
-                    $ctl_data               = $this->parserController($pc_class, $name, $router);
+                    $ctl_data = $this->parserController($pc_class, $name, $router);
                     if (empty($ctl_data)) {
                         continue;
                     }
                     $ctl_methods = $ctl_data['methods'];
-                    $ctl_area    = $ctl_data['area'];
+                    $ctl_area = $ctl_data['area'];
                     foreach ($ctl_methods as $method => $attributes) {
                         // 分析请求方法
-                        $request_method             = '';
-                        $rule_method                = $method;
+                        $request_method = '';
+                        $rule_method = $method;
                         $request_method_split_array = preg_split('/(?=[A-Z])/', $method);
                         if (1 === count($request_method_split_array)) {
                             $request_method_split_array[1] = $request_method_split_array[0];
@@ -274,11 +270,11 @@ class Data extends AbstractHelper
                         # 如果没有解析到请求方法就使用方法名
                         if (!$request_method && in_array(strtoupper($rule_method), Request::METHODS)) {
                             $request_method = strtoupper($rule_method);
-                            $rule_method    = '';
+                            $rule_method = '';
                         }
                         # 删除index后缀
-                        $rule_router     = strtolower($baseRouter . '/' . $rule_method);
-                        $rule_rule_arr   = explode('/', trim($rule_router, '/'));
+                        $rule_router = strtolower($baseRouter . '/' . $rule_method);
+                        $rule_rule_arr = explode('/', trim($rule_router, '/'));
                         $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
                         while ('index' === array_pop($rule_rule_arr)) {
                             $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
@@ -291,9 +287,9 @@ class Data extends AbstractHelper
                         # 模块路由解析
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
-                            $route  = $rule_router . ($request_method ? '::' . $request_method : '');
+                            $route = $rule_router . ($request_method ? '::' . $request_method : '');
                             $backend = false;
-                            if(in_array('BackendController',$ctl_area)){
+                            if (in_array('BackendController', $ctl_area)) {
                                 $backend = true;
                             }
                             $params = [
@@ -309,16 +305,14 @@ class Data extends AbstractHelper
                                 'is_backend' => $backend,
                                 'is_enable' => true,
                             ];
-                            $data   = new DataObject($params);
+                            $data = new DataObject($params);
                             /**@var \ReflectionAttribute $attribute */
                             foreach ($attributes as $attribute) {
-                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', [
-                                    'data' => $data,
-                                    'type' => 'pc',
-                                    'attribute' => $attribute,
-                                    'controller_data' => $ctl_data,
-                                    'params' => $params,
-                                ]);
+                                $data->setData('attribute', $attribute);
+                                $data->setData('type', 'pc');
+                                $data->setData('controller_data', $ctl_data);
+                                $data->setData('params', $params);
+                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
                             }
                             // 路由注册+
                             Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -327,7 +321,7 @@ class Data extends AbstractHelper
                             $origin_route = str_replace('-', '', $route);
                             if ($router !== $origin_route) {
                                 $backend = false;
-                                if(in_array('BackendController',$ctl_area)){
+                                if (in_array('BackendController', $ctl_area)) {
                                     $backend = true;
                                 }
                                 $params = [
@@ -343,16 +337,14 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true,
                                 ];
-                                $data   = new DataObject($params);
+                                $data = new DataObject($params);
                                 /**@var \ReflectionAttribute $attribute */
                                 foreach ($attributes as $attribute) {
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', [
-                                        'data' => $data,
-                                        'type' => 'pc',
-                                        'attribute' => $attribute,
-                                        'controller_data' => $ctl_data,
-                                        'params' => $params,
-                                    ]);
+                                    $data->setData('attribute', $attribute);
+                                    $data->setData('type', 'pc');
+                                    $data->setData('controller_data', $ctl_data);
+                                    $data->setData('params', $params);
+                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -429,12 +421,12 @@ class Data extends AbstractHelper
         // 默认前端控制器
 //        $ctl_area = \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND;
         if (class_exists($class)) {
-            $reflect            = new \ReflectionClass($class);
+            $reflect = new \ReflectionClass($class);
             $controller_methods = [];
             foreach ($reflect->getMethods() as $method) {
                 if (!is_int(strpos($method->getName(), '__'))) {
                     if ($method->isPublic()) {
-                        $attributes                             = $method->getAttributes();
+                        $attributes = $method->getAttributes();
                         $controller_methods[$method->getName()] = $attributes;
                     }
                 }
@@ -448,11 +440,11 @@ class Data extends AbstractHelper
                     }
                 }
                 $this->parent_class_arr = array_merge($this->parent_class_arr, $controller_class);
-                $parent_methods         = [];
+                $parent_methods = [];
                 foreach ($parent_class->getMethods() as $method) {
                     if (!is_int(strpos($method->getName(), '__'))) {
                         if ($method->isPublic()) {
-                            $method_attributes                  = $method->getAttributes();
+                            $method_attributes = $method->getAttributes();
                             $parent_methods[$method->getName()] = $method_attributes;
                         }
                     }
