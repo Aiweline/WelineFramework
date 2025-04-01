@@ -94,19 +94,30 @@ class Core
     {
         # 获取URL
         $this->url = $url = $this->processUrl();
-
 //        $url                     = str_replace('-', '', $origin_url);
         if ($router = $this->cache->get($this->_router_cache_key)) {
             $this->router = $router;
             return $this->route();
         }
-        if (($pc_result = $this->Pc($url)) || $this->is_match) {
-            return $pc_result;
+
+        # 后台接口请求
+        switch ($this->request_area) {
+            case \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND:
+            case \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND:
+                // API
+                if (($api_result = $this->Api($url)) || $this->is_match) {
+                    return $api_result;
+                }
+                $this->request->getResponse()->noRouter();
+                break;
+            case \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND:
+            case \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND:
+                if (($pc_result = $this->Pc($url)) || $this->is_match) {
+                    return $pc_result;
+                }
+                break;
         }
-        // API
-        if (($api_result = $this->Api($url)) || $this->is_match) {
-            return $api_result;
-        }
+
         // 非开发模式（匹配不到任何路由将报错）
         if (PROD) {
             $this->request->getResponse()->noRouter();
@@ -125,6 +136,17 @@ class Core
     public function processUrl()
     {
         $url = $this->cache->get($this->url_cache_key);
+        # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
+        if ($this->isStaticFile()) {
+            try {
+                $static = $this->StaticFile($url, true);
+                if ($static) {
+                    exit();
+                }
+            } catch (\ReflectionException|Exception $e) {
+                $this->request->getResponse()->noRouter();
+            }
+        }
         $rule = $this->cache->get($this->rule_cache_key);
         if (PROD && $url) {
             $this->url_cache_data = $url;
@@ -134,7 +156,7 @@ class Core
             $this->request->setData($rule);
         } else {
             $url = $this->request->getUrlPath();
-            if ($this->is_admin) {
+            if ($this->is_admin || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
                 $url = str_replace($this->area_router, '', $url);
             }
             $url = str_replace('//', '/', $url);
@@ -142,7 +164,7 @@ class Core
             /**@var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);
             $routerData = new DataObject(['path' => $url, 'rule' => []]);
-            $eventManager->dispatch('Weline_Framework_Router::process_uri_before', ['data' => $routerData]);
+            $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
             $url = $routerData->getData('path');
             $rule = $routerData->getData('rule');
 
@@ -259,21 +281,33 @@ class Core
      * 参数区：
      *
      * @param string $url
-     *
+     * @param bool $is_media
      * @return mixed
      * @throws Exception
      * @throws \ReflectionException
      */
-    public function StaticFile(string &$url): mixed
+    public function StaticFile(string &$url, bool $is_media = false): mixed
     {
-        $filename = APP_CODE_PATH . trim($url, DS);
-        $filename = str_replace('/', DS, $filename);
+        # 卸载Cookie
+        Cookie::static_file();
+        if ($is_media) {
+            $filename = BP . trim($url, DS);
+            $filename = str_replace('/', DS, $filename);
+            # 修复静态资源路径\\ 或者 // 等错误路径修复
+            $filename = str_replace(DS . DS, DS, $filename);
+        } else {
+            $filename = APP_CODE_PATH . trim($url, DS);
+            $filename = str_replace('/', DS, $filename);
+            # 修复静态资源路径\\ 或者 // 等错误路径修复
+            $filename = str_replace(DS . DS, DS, $filename);
+        }
+
         // 阻止读取其他文件
-        if (!str_contains($filename, \Weline\Framework\View\Data\DataInterface::dir)) {
+        if (!$is_media && !str_contains($filename, \Weline\Framework\View\Data\DataInterface::dir)) {
             $this->request->getResponse()->noRouter();
         }
         if (!is_file($filename)) {
-            # 检测vendor目录的组件文件
+            # 检测vendor目录的组件文件 
             $filename = VENDOR_PATH . trim($url, DS);
             if (!is_file($filename)) {
                 # 检测vendor目录的组件文件
@@ -285,6 +319,15 @@ class Core
             }
         }
         if (is_file($filename)) {
+            // Handle caching
+            $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
+            $headers = getallheaders();
+            if (isset($headers['If-Modified-Since']) && $headers['If-Modified-Since'] == $fileModificationTime) {
+                header('HTTP/1.1 304 Not Modified');
+                exit();
+            }
+            $this->header_cache($fileModificationTime, $filename);
+
             $filename_arr = explode('.', $filename);
             $file_ext = end($filename_arr);
             if ($file_ext === 'css') {
@@ -295,23 +338,10 @@ class Core
                 $fi = new \finfo(FILEINFO_MIME_TYPE);
                 $mime_type = $fi->file($filename);
             }
+
             // 响应头
-            header('Cache-Control: max-age=3600');
-            header("Content-Type:$mime_type;charset=UTF-8");
-            // Handle caching
-            $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)).' GMT';
-            $headers = getallheaders();
-            if(isset($headers['If-Modified-Since']) && $headers['If-Modified-Since'] == $fileModificationTime) {
-                header('HTTP/1.1 304 Not Modified');
-                exit();
-            }
-            header('Last-Modified: '.$fileModificationTime);
-            header("X-XSS-Protection: 1; mode=block");
-            header('Expires: ' . (PROD ? '10' : '0'));
-            header('Cache-Control: must-revalidate');
-            header('X-Content-Type-Options: nosniff');
-            header('Pragma: public');
-            header('Content-Length: ' . filesize($filename));
+            $this->header_response($mime_type);
+//            header('Content-Length: ' . filesize($filename));
             readfile($filename);
             return true;
         }
@@ -348,10 +378,10 @@ class Core
         if (!Env::getInstance()->getModuleStatus($module)) {
             $this->request->getResponse()->noRouter();
         }
+        # 检查headers already sent 是否已发送
         # 页头阻止XSS
-        header("X-Frame-Options: SAMEORIGIN");
-        header("X-Content-Type-Options: nosniff");
-        header("X-XSS-Protection: 1; mode=block");
+        $this->header_xss();
+
         # 全页缓存
         $cache_key = $this->cache->buildWithRequestKey('router_route_fpc_cache_key_' . Cookie::getLangLocal());
         if (PROD && $html = $this->cache->get($cache_key)) {
@@ -382,7 +412,8 @@ class Core
 //        $dispatch->assign($this->request->getData());
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $eventManager->dispatch('Framework_Router::route_before', ['route' => $this]);
+        $eventData = ['route' => $this];
+        $eventManager->dispatch('Framework_Router::route_before', $eventData);
         $dispatch = ObjectManager::getInstance($dispatch);
         $dispatch->__setModuleInfo($this->router);
 
@@ -394,7 +425,8 @@ class Core
         $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
         # ----------事件：处理url之前 开始------------
         $resultData = new DataObject(['result' => $result, 'route' => $this]);
-        $eventManager->dispatch('Framework_Router::route_after', ['data' => $resultData]);
+        $eventData = ['data' => $resultData];
+        $eventManager->dispatch('Framework_Router::route_after', $eventData);
 
 //        file_put_contents(__DIR__.'/'.$cache_key.'.html', $result);
         /** Get output buffer. */
@@ -409,5 +441,51 @@ class Core
             $this->cache->set($this->url_cache_key, $this->url);
         }
         return $result;
+    }
+
+    /**
+     * @return void
+     */
+    public function header_xss(): void
+    {
+        header("X-Frame-Options: SAMEORIGIN");
+        header("X-Content-Type-Options: nosniff");
+        header("X-XSS-Protection: 1; mode=block");
+    }
+
+    /**
+     * @param string|null $mime_type
+     * @return void
+     */
+    public function header_response(?string $mime_type): void
+    {
+        header('Cache-Control: max-age=3600');
+        header("Content-Type:$mime_type;charset=UTF-8");
+    }
+
+    /**
+     * @param string $fileModificationTime
+     * @param array|string $filename
+     * @return void
+     */
+    public function header_cache(string $fileModificationTime, array|string $filename): void
+    {
+        header('Last-Modified: ' . $fileModificationTime);
+        header("X-XSS-Protection: 1; mode=block");
+        header('Expires: ' . (PROD ? '10' : '0'));
+        header('Cache-Control: must-revalidate');
+        header('X-Content-Type-Options: nosniff');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($filename));
+    }
+
+    private function isStaticFile(): bool
+    {
+        $arrs = $this->request->getPathSplit();
+        $last = end($arrs);
+        if (str_contains($last, '.')) {
+            return true;
+        }
+        return false;
     }
 }

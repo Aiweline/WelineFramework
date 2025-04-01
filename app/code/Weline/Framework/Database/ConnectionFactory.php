@@ -215,4 +215,9 @@ class ConnectionFactory
         return $this->defaultConnector->query($sql);
     }
 
+    public function getQuery(): QueryInterface
+    {
+        return $this->defaultConnector->getQuery();
+    }
+
 }

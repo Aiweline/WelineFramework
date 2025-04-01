@@ -42,9 +42,10 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
         $data = $event->getData('data');
         $path = $data->getData('path');
         $rule = $data->getData('rule');
+        $type = $data->getData('type');
         /**@var ModuleRouterReader $moduleRoutersReader */
         $moduleRoutersReader = ObjectManager::getInstance(ModuleRouterReader::class);
-        $moduleRouters       = $moduleRoutersReader->read();
+        $moduleRouters = $moduleRoutersReader->read();
         foreach ($moduleRouters as $module => $moduleRouter) {
             /**@var RouterInterface $moduleRouter */
             $moduleRouter = ObjectManager::getInstance($moduleRouter['class']);

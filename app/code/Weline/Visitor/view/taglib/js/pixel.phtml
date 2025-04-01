@@ -1,0 +1,234 @@
+<!-- 创建一个 iframe 沙箱 -->
+<iframe id="sandbox-pixel" style="display:none;"></iframe>
+<script type="text/javascript">
+    // 创建一个 iframe 沙箱
+    var iframe = document.getElementById('sandbox-pixel');
+    iframe.onload = function () {
+        if (window.parent.frontend_api === undefined) {
+            throw new Error('@lang{Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base}');
+        }
+        var iframeWindow = iframe.contentWindow;
+        window.WelinePixel = {
+            url: window.parent.frontend_api('visitor/rest/v1/pixel'),
+            env_model: window.site.env_model,
+            init: {
+                url: window.location.href,
+                userId: window.site.user_id,
+                module: window.site.module,
+                domain: window.location.hostname,
+                eventName: 'click',
+                name: '{:name}',
+                value: 0,
+                currency: getCookie('WELINE_USER_CURRENCY') || 'RMB',
+                websiteUrl: getCookie('WELINE_WEBSITE_URL') || '',
+                websiteId: getCookie('WELINE_WEBSITE_ID') || '',
+                userLang: getCookie('WELINE_USER_LANG') || 'zh-CN',
+                elementInfo: null,
+                additionalInfo: null
+            },
+            initData: {
+                userId: window.site.user_id,
+                url: window.location.href,
+                module: window.site.module,
+                domain: window.location.hostname,
+                eventName: 'click',
+                name: '{:name}',
+                value: 0,
+                currency: getCookie('WELINE_USER_CURRENCY') || 'RMB',
+                websiteUrl: getCookie('WELINE_WEBSITE_URL') || '',
+                websiteId: getCookie('WELINE_WEBSITE_ID') || '',
+                userLang: getCookie('WELINE_USER_LANG') || 'zh-CN',
+                elementInfo: null,
+                additionalInfo: null
+            },
+            // 发送数据的函数
+            send: function (data, url) {
+                // data 不存在则使用this.initData
+                data = data || this.initData
+                // 如果 url 不存在则使用 this.url
+                url = url || this.url
+                let xhr = new XMLHttpRequest();
+                xhr.open('POST', url, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        console.log('Data sent successfully:', xhr.responseText);
+                    } else if (xhr.readyState === 4) {
+                        console.error('Error sending data:', xhr.statusText);
+                    }
+                };
+
+                xhr.send(JSON.stringify(data));
+            },
+            target: function (event) {
+                this.initData.elementInfo = {
+                    tagName: event.target.tagName,
+                    className: event.target.className,
+                    id: event.target.id,
+                    innerText: event.target.innerText,
+                    href: event.target.href || null,
+                    eventType: event.type
+                };
+                this.initData.timestamp = new Date().toISOString();
+                this.initData.local_datetime = new Date().toLocaleString();
+                this.initData.userAgent = navigator.userAgent;
+                this.initData.referrer = document.referrer;
+                this.initData.screen = {
+                    width: window.screen.width,
+                    height: window.screen.height
+                };
+                this.initData.additionalInfo = {
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    outerWidth: window.outerWidth,
+                    outerHeight: window.outerHeight
+                };
+                // 自定义系统级别事件名
+                // homepage category info[about,contact,news,shipping,faq,terms,privacy,refund,return,help,service,account,login,register,logout]
+                // view-item
+                // add-to-cart view-cart buy-now place-order
+                // begin-checkout checkout-success checkout-failure
+                // 解析path
+                let url = new URL(window.app_path(window.location.href));
+                // 页面浏览提取事件名
+                if (event.type === 'DOMContentLoaded') {
+                    switch (url.pathname) {
+                        case '/':
+                            this.initData.eventName = 'homepage'
+                            break;
+                        case '/cart':
+                        case '/cart.html':
+                            this.initData.eventName = 'view-cart'
+                            break;
+                        case '/checkout':
+                        case '/checkout.html':
+                            this.initData.eventName = 'begin-checkout'
+                            break;
+                        case '/checkout/success':
+                        case '/checkout/success.html':
+                            this.initData.eventName = 'checkout-success'
+                            break;
+                        case '/checkout/failure':
+                        case '/checkout/failure.html':
+                            this.initData.eventName = 'checkout-failure'
+                            break;
+                        case '/category':
+                        case '/category.html':
+                            this.initData.eventName = 'category'
+                            break;
+                        default:
+                            this.initData.eventName = 'click'
+                    }
+                    if (this.initData.eventName === 'click') {
+                        // 如果是信息页面: 解析信息页面事件
+                        if (url.pathname.startsWith('/page/')) {
+                            this.initData.eventName = 'page_' + url.pathname.replace('/page/', '').replace('.html', '')
+                        } else if (url.pathname.startsWith('/product/')) {
+                            this.initData.eventName = 'view-item'
+                        } else if (url.pathname.startsWith('/blog')) {
+                            this.initData.eventName = 'blog'
+                        } else if (url.pathname.startsWith('/account/')) {
+                            this.initData.eventName = 'account_' + url.pathname.replace('/account/', '').replace('.html', '')
+                        }
+                    }
+                }
+
+                // 使得自定义事件生效 根据点击的元素 class 设置事件名 weline-pixel::{name}
+                if (event.target.className && event.type === 'click') {
+                    if (event.target.className.indexOf('weline-pixel::') > -1) {
+                        let classNames = event.target.className.split(' ');
+                        for (let i = 0; i < classNames.length; i++) {
+                            if (classNames[i].indexOf('weline-pixel::') > -1) {
+                                this.initData.eventName = classNames[i].replace('weline-pixel::', '');
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 需要值的事件类型
+                if ([
+                    'view-item',
+                    'add-to-cart',
+                    'view-cart',
+                    'buy-now',
+                    'begin-checkout',
+                    'place-order',
+                    'checkout-success',
+                    'checkout-failure',
+                ].indexOf(this.initData.eventName) > -1) {
+                    if (!this.initData.value) {
+                        try {
+                            let ele = event.target.getElementsByClassName('weline-pixel::' + this.initData.eventName + ':value')[0];
+                            if (ele.value) {
+                                this.initData.value = ele.value
+                            } else {
+                                this.initData.value = ele.innerText
+                            }
+                        } catch (e) {
+                            throw new Error('@lang{事件' + this.initData.eventName + '需要指定value值所在位置，请用weline-pixel::' + this.initData.eventName + ':value类名指定值所在的元素，如果指定的元素有value属性，则将使用value属性的值，如果没有则使用innerText}');
+                        }
+                    }
+                }
+            }
+        };
+        iframeWindow.WelinePixel = window.WelinePixel
+        // 监听沙盒中的 JavaScript 代码发送的消息
+        window.addEventListener('message', function (event) {
+            if (event.data === 'sandboxListen') {
+                // 监听父窗口的点击事件
+                // console.log('监听父窗口的点击事件', event)
+                window.addEventListener('click', function (event) {
+                    // 将点击事件转发到沙盒中的 JavaScript 代码
+                    // 深拷贝
+                    window.WelinePixel.initData = JSON.parse(JSON.stringify(window.WelinePixel.init));
+                    window.WelinePixel.target(event)
+                    iframeWindow.postMessage(window.WelinePixel.initData, '*');
+                });
+                // 监听父窗口的点击事件
+                window.addEventListener('DOMContentLoaded', function (event) {
+                    // 将点击事件转发到沙盒中的 JavaScript 代码
+                    // console.log('将点击事件转发到沙盒中的 JavaScript 代码', event)
+                    window.WelinePixel.initData = JSON.parse(JSON.stringify(window.WelinePixel.init));
+                    window.WelinePixel.target(event)
+                    iframeWindow.postMessage(window.WelinePixel.initData, '*');
+                });
+            }
+        });
+        // 在 iframe 中注入 JavaScript 代码
+        iframeWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="UTF-8">
+                <title><lang>沙箱环境</lang></title>
+            </head>
+            <body>
+                <script type="text/javascript">
+                // 发送消息到父窗口，监听点击事件
+                    window.parent.postMessage('sandboxListen', '*');
+                    // 监听父窗口发送的消息
+                    window.addEventListener('message', function(event) {
+                        window.WelinePixel.initData = event.data;
+                        if(window.WelinePixel.initData.eventName !== 'click') {
+                            if(window.WelinePixel.env_model === 'dev') {
+                                console.log('@lang{系统级别事件}', window.WelinePixel.initData);
+                            }
+                            window.WelinePixel.send();
+                        }
+                        // 自定义事件
+                        if(window.WelinePixel.env_model === 'dev') {
+                            console.log('@lang{自定义事件}', window.WelinePixel.initData);
+                        }
+                        {{ pixel_code }}
+                    });
+                <\/script>
+            </body>
+            </html>
+        `);
+    };
+
+    // 加载 iframe
+    iframe.src = 'about:blank';
+</script>

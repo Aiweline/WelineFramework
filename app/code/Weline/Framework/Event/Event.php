@@ -10,6 +10,7 @@
 namespace Weline\Framework\Event;
 
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\Console\Event\Data;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Debug\Printing;
@@ -35,9 +36,25 @@ class Event extends \Weline\Framework\DataObject\DataObject
         $this->setData($data);
     }
 
-    public function getEvenData()
+    public function getData(string $key = '', $index = null): mixed
     {
-        return $this->getData('data');
+        $res = $this->getEvenData($key);
+        if ($res === null) {
+            return parent::getData($key, $index);
+        }
+        return $res;
+    }
+
+    public function getEvenData(string $key = ''): mixed
+    {
+        $eventData = $this->_getData('data');
+        if ($key and $eventData instanceof DataObject) {
+            return $eventData->getData($key);
+        }
+        if (isset($eventData[$key])) {
+            return $eventData[$key];
+        }
+        return $eventData;
     }
 
     private string $name;
@@ -53,7 +70,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
      */
     public function addObserver(Observer $observer)
     {
-        $observers   = $this->getData('observers');
+        $observers = $this->_getData('observers');
         $observers[] = $observer;
         $this->setData('observers', $observers);
 
@@ -69,7 +86,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
      */
     public function getObservers(): array
     {
-        return $this->getData('observers');
+        return $this->_getData('observers');
     }
 
     /**

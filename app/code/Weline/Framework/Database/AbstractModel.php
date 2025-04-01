@@ -14,6 +14,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Database\Cache\DbModelCache;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Helper\Tool;
@@ -117,8 +118,8 @@ abstract class AbstractModel extends DataObject
     public array $items = [];
     private mixed $_query_data = null;
     private bool $is_delete = false;
-    private bool $is_update = false;
     private bool $is_insert = false;
+    private string $find_fields = '';
     public array $pagination = ['page' => 1, 'pageSize' => 20, 'totalSize' => 0, 'lastPage' => 0];
 
     # Flag
@@ -497,7 +498,8 @@ abstract class AbstractModel extends DataObject
         // 清空之前的数据
         $this->clearDataObject();
         // load之前事件
-        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_before', ['model' => $this]);
+        $eventData = ['model' => $this, 'field_or_pk_value' => $field_or_pk_value, 'value' => $value];
+        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_before', $eventData);
         if (is_null($value)) {
             $data = $this->getQuery()->where($this->getQuery()->table_alias . '.' . $this->_primary_key, $field_or_pk_value)->find()->fetch();
         } else {
@@ -509,7 +511,7 @@ abstract class AbstractModel extends DataObject
             $this->_model_fields_data = $data;
         }
         // load之之后事件
-        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_after', ['model' => $this]);
+        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_after', $eventData);
         // 加载之后
         $this->load_after();
         # 触发fetch_after
@@ -557,10 +559,10 @@ abstract class AbstractModel extends DataObject
      */
     public function update(array|string $field = '', int|string $value_or_condition_field = ''): static
     {
+        $query = $this->getQuery();
         if (empty($value_or_condition_field)) {
             $value_or_condition_field = $this->_primary_key;
         }
-        $query = $this->getQuery();
         if ($field) {
             $query->update($field, $value_or_condition_field);
             $this->setModelData($field);
@@ -655,7 +657,8 @@ abstract class AbstractModel extends DataObject
         $this->save_before();
         // save之前事件
         $model_event_name = str_replace('\\', '_', $this::class);
-        $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', ['model' => $this]);
+        $evenData = new DataObject(['model' => &$this]);
+        $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
         $this->getQuery()->beginTransaction();
         try {
             if ($this->force_check_flag) {
@@ -675,7 +678,8 @@ abstract class AbstractModel extends DataObject
         }
 
         // save之后事件
-        $this->getEvenManager()->dispatch($model_event_name . '_model_save_after', ['model' => $this]);
+        $this->getEvenManager()->dispatch($model_event_name . '_model_save_after', $evenData);
+
         // 保存后
         $this->save_after();
         return $save_result;
@@ -815,6 +819,9 @@ abstract class AbstractModel extends DataObject
             if ($method == 'insert') {
                 $this->is_insert = true;
             }
+            if ($method == 'find') {
+                $this->find_fields = implode(',', $args);
+            }
             if ($method == 'delete') {
                 $this->is_delete = true;
                 // load之前事件
@@ -833,9 +840,6 @@ abstract class AbstractModel extends DataObject
                 } else {
                     throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                 }
-            }
-            if ($method == 'update') {
-                $this->is_update = true;
             }
             if ($method == 'total') {
                 return $query->$method(...$args);
@@ -863,7 +867,8 @@ abstract class AbstractModel extends DataObject
                 if ($this->is_delete) {
                     // 加载之前
                     $this->delete_before();
-                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', ['model' => $this]);
+                    $eventData = new DataObject(['model' => &$this]);
+                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_before', $eventData);
                 }
                 # 如果是空数据更新
                 if (!trim($this->getQuery()->getPrepareSql(false))) {
@@ -886,7 +891,7 @@ abstract class AbstractModel extends DataObject
                 if ($this->is_delete) {
                     $this->clearData();
                     // load之之后事件
-                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_after', ['model' => $this]);
+                    $this->getEvenManager()->dispatch($this->processTable() . '_model_delete_after', $eventData);
                     // 加载之后
                     $this->delete_after();
                 }
@@ -904,7 +909,15 @@ abstract class AbstractModel extends DataObject
                 $this->fetch_after();
                 $this->clearQuery();
                 $this->is_delete = false;
-                $this->is_update = false;
+                if ($this->find_fields) {
+                    $find_fields = explode(',', $this->find_fields);
+                    $this->find_fields = '';
+                    $this->clearData();
+                    foreach ($find_fields as $find_field) {
+                        $this->setData($find_field, $query_data[$find_field] ?? null);
+                    }
+                    return $query_data;
+                }
                 # 清除当前查询
                 return $this;
             }
@@ -1022,10 +1035,18 @@ abstract class AbstractModel extends DataObject
     public function setData($key, $value = null, bool $is_unique = false): static
     {
         if ($is_unique) {
-            $this->forceCheck(true, $key);
-            $this->unique_data[$key] = $value;
-            $this->remove_force_check_field = true;
+            if (is_string($key)) {
+                $this->forceCheck(true, $key);
+                $this->unique_data[$key] = $value;
+                $this->remove_force_check_field = true;
+            } elseif (is_array($key)) {
+                foreach ($key as $k => $v) {
+                    $this->forceCheck(true, $k);
+                    $this->unique_data[$k] = $v;
+                }
+            }
         }
+
         $this->set_data_before($key, $value);
         if (is_array($key)) {
             $this->_model_fields_data = $key;
@@ -1034,6 +1055,7 @@ abstract class AbstractModel extends DataObject
         }
         parent::setData($key, $value);
         $this->set_data_after($key, $value);
+
         return $this;
     }
 
@@ -1646,7 +1668,6 @@ PAGINATION;
             }
             # 获取变更数据
             $data = $this->getModelChangedData();
-
             if (!$data) {
                 return $check_result[$this->_primary_key];
             }
