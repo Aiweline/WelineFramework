@@ -28,7 +28,7 @@ class Log extends \Weline\Admin\Controller\BaseController
 
     function listing()
     {
-        $listings = $this->smtpSendLog->pagination()->select()->fetch();
+        $listings = $this->smtpSendLog->order('create_time')->pagination()->select()->fetch();
         $this->assign('logs', $listings->getOriginData());
         $this->assign('pagination', $listings->getPagination());
         $this->assign('total', $listings->getPaginationData()['totalSize']);

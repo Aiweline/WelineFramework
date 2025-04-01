@@ -30,7 +30,7 @@ class Topbar extends \Weline\Framework\View\Block
 
     public function __construct(Config $config, AdminSession $session, array $data = [])
     {
-        $this->config  = $config;
+        $this->config = $config;
         $this->session = $session;
         parent::__construct($data);
         $this->getUser();
@@ -43,7 +43,7 @@ class Topbar extends \Weline\Framework\View\Block
         $this->assign('languages', $languages);
         $current_language = ['code' => 'zh_Hans_CN', 'name' => '中文', 'flag' => ''];
         if (isset($languages[Cookie::getLang()])) {
-            $current_language         = $languages[Cookie::getLang()];
+            $current_language = $languages[Cookie::getLang()];
             $current_language['code'] = Cookie::getLang();
         }
         $this->assign('current_language', $current_language);
@@ -57,11 +57,14 @@ class Topbar extends \Weline\Framework\View\Block
     public function getAvatar()
     {
         /**@var BackendUser $user */
-        $user   = $this->getUser();
+        $user = $this->getUser();
         $avatar = $user->getAvatar();
         if (empty($avatar)) {
             if ($avatar = $this->config->getConfig('admin_default_avatar', 'Weline_Admin')) {
                 $avatar = Template::getInstance()->fetchTagSourceFile(DataInterface::view_STATICS_DIR, $avatar);
+            } else {
+                $this->config->setConfig('admin_default_avatar', 'Weline_Admin::img/logo.jpg', 'Weline_Admin');
+                $avatar = Template::getInstance()->fetchTagSourceFile(DataInterface::view_STATICS_DIR, 'Weline_Admin::img/logo.jpg');
             }
         }
         return $avatar;

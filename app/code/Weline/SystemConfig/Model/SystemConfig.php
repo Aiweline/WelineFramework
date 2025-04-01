@@ -76,23 +76,23 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return $result;
         }
         $result = null;
-        if(str_contains($key,'.')){
-            $keys = explode('.',$key);
+        if (str_contains($key, '.')) {
+            $keys = explode('.', $key);
             $key = array_shift($keys);
             $config_value = $this->clear()->reset()->where([['key', $key], ['area', $area], ['module', $module]])->find()->fetch();
             if (isset($config_value['v'])) {
-                $config_value = json_decode($config_value['v'],true);
-                $result = $config_value[$key]??'';
+                $config_value = json_decode($config_value['v'], true);
+                $result = $config_value[$key] ?? '';
                 foreach ($keys as $key) {
                     if (isset($config_value[$key])) {
                         $result = $config_value[$key];
-                    }else{
+                    } else {
                         $result = null;
                         break;
                     }
                 }
             }
-        }else{
+        } else {
             $config_value = $this->clear()->reset()->where([['key', $key], ['area', $area], ['module', $module]])->find()->fetch();
             if (isset($config_value['v'])) {
                 $result = $config_value['v'];
@@ -157,13 +157,13 @@ class SystemConfig extends \Weline\Framework\Database\Model
         if (!$setup->tableExist()) {
             $setup->getPrinting()->printing('安装', $setup->getTable());
             $setup->createTable('系统配置表')
-                ->addColumn(self::fields_KEY, TableInterface::column_type_VARCHAR, 120, 'primary key', '键')
+                ->addColumn(self::fields_KEY, TableInterface::column_type_VARCHAR, 120, 'not null', '键')
                 ->addColumn(self::fields_VALUE, TableInterface::column_type_TEXT, 0, '', '值')
                 ->addColumn(self::fields_MODULE, TableInterface::column_type_VARCHAR, 120, 'not null', '模块')
                 ->addColumn(self::fields_AREA, TableInterface::column_type_VARCHAR, 120, "NOT NULL DEFAULT 'frontend'", '区域：backend/frontend')
                 ->addIndex(\Weline\Framework\Database\Connection\Api\Sql\TableInterface::index_type_KEY,
-                    'idx_key',
-                    self::fields_KEY,
+                    'idx_key_module_area',
+                    [self::fields_KEY, self::fields_MODULE, self::fields_AREA],
                     '键名索引')
                 ->addIndex(\Weline\Framework\Database\Connection\Api\Sql\TableInterface::index_type_KEY,
                     'idx_module',

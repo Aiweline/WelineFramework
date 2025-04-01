@@ -41,7 +41,7 @@ class EventsManager
                     // 二维数组$eventObserver根据sort字段排序
                     usort($eventObserver, function ($a, $b) {
                         return strnatcasecmp($a['sort'], $b['sort']);
-                    } );
+                    });
                     if (isset($this->eventsObservers[$event_name])) {
                         $this->eventsObservers[$event_name] = array_merge($this->eventsObservers[$event_name], $eventObserver);
                     } else {
@@ -68,15 +68,15 @@ class EventsManager
      * 参数区：
      *
      * @param string $eventName
-     * @param array  $data
+     * @param array $data
      *
      * @return $this
      * @throws null
      */
-    public function dispatch(string $eventName, mixed $data = []): static
+    public function dispatch(string $eventName, mixed &$data = []): static
     {
         if (is_array($data)) {
-            $data['observers']        = $this->getEventObservers($eventName);
+            $data['observers'] = $this->getEventObservers($eventName);
             $this->events[$eventName] = (new Event($data))->setName($eventName);
         } else {
             $this->events[$eventName] = (new Event(['data' => $data, 'observers' => $this->getEventObservers($eventName)]))->setName($eventName);
@@ -111,7 +111,7 @@ class EventsManager
      *
      * 参数区：
      *
-     * @param string   $eventName
+     * @param string $eventName
      * @param Observer $observer
      *
      * @return $this

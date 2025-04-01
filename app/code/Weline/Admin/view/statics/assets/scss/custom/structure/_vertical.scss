@@ -41,6 +41,7 @@
   position: fixed;
   top: $header-height;
   box-shadow: $box-shadow;
+  border-right: 1px solid $border-color;
 }
 
 .main-content {
@@ -514,6 +515,7 @@ body[data-sidebar-size="small"] {
   .vertical-menu {
     width: $sidebar-width-sm;
     text-align: center;
+    border-right: 1px solid $border-color;
 
     .has-arrow:after,
     .badge {

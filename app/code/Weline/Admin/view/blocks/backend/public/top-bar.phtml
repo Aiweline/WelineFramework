@@ -75,7 +75,7 @@
                 <div class='dropdown-menu dropdown-menu-end languages'>
                     <foreach name='languages' item='language' key='code'>
                         <!-- item-->
-                        <a href='javascript:selectLanguage("{{code}}");'
+                        <a href='javascript:select_language("{{code}}");'
                            class='dropdown-item notify-item @if{current_language.code == code=>"active"}'>
                             {{language.flag}}<span class='align-middle'> {{language.name}}</span>
                         </a>
@@ -159,14 +159,18 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-end">
                     <!-- item-->
-<!--                    <a class="dropdown-item" href="#"><i class="ri-user-line align-middle me-1"></i>--><?//= __('资料') ?><!--</a>-->
-<!--                    <a class="dropdown-item" href="#"><i-->
-<!--                                class="ri-wallet-2-line align-middle me-1"></i> --><?//= __('我的钱包') ?><!--</a>-->
-<!--                    <a class="dropdown-item d-block" href="#"><span class="badge bg-success float-end mt-1">11</span><i-->
-<!--                                class="ri-settings-2-line align-middle me-1"></i> --><?//= __('设置') ?><!--</a>-->
-<!--                    <a class="dropdown-item" href="#"><i-->
-<!--                                class="ri-lock-unlock-line align-middle me-1"></i> --><?//= __('锁定屏幕') ?><!--</a>-->
-<!--                    <div class="dropdown-divider"></div>-->
+                    <!--                    <a class="dropdown-item" href="#"><i class="ri-user-line align-middle me-1"></i>-->
+                    <? //= __('资料') ?><!--</a>-->
+                    <!--                    <a class="dropdown-item" href="#"><i-->
+                    <!--                                class="ri-wallet-2-line align-middle me-1"></i> -->
+                    <? //= __('我的钱包') ?><!--</a>-->
+                    <!--                    <a class="dropdown-item d-block" href="#"><span class="badge bg-success float-end mt-1">11</span><i-->
+                    <!--                                class="ri-settings-2-line align-middle me-1"></i> -->
+                    <? //= __('设置') ?><!--</a>-->
+                    <!--                    <a class="dropdown-item" href="#"><i-->
+                    <!--                                class="ri-lock-unlock-line align-middle me-1"></i> -->
+                    <? //= __('锁定屏幕') ?><!--</a>-->
+                    <!--                    <div class="dropdown-divider"></div>-->
                     <a class="dropdown-item text-danger" href="<?= $this->getBackendUrl('admin/login/logout') ?>"><i
                                 class="ri-shut-down-line align-middle me-1 text-danger"></i> <?= __('退出') ?></a>
                 </div>

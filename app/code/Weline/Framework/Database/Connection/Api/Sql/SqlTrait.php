@@ -86,6 +86,11 @@ trait SqlTrait
         return $this->connection;
     }
 
+    public function getConnector(): ConnectorInterface
+    {
+        return $this->connection;
+    }
+
     /**
      * @DESC          | 设置链接
      *
@@ -96,6 +101,11 @@ trait SqlTrait
      * @param ConnectorInterface $connection
      */
     public function setConnection(ConnectorInterface $connection): void
+    {
+        $this->connection = $connection;
+    }
+
+    public function setConnector(ConnectorInterface $connection): void
     {
         $this->connection = $connection;
     }
@@ -169,6 +179,9 @@ trait SqlTrait
         $wheres = '';
         // 如果有联合主键，把条件按照联合主键的顺序依次添加到sql语句中，提升查询速度
         if (!empty($this->_index_sort_keys)) {
+            foreach ($this->_index_sort_keys as &$index_sort_key) {
+                $index_sort_key = str_replace('`', '', $index_sort_key);
+            }
             $_index_sort_keys_wheres = [];
             foreach ($this->wheres as $where_key => $where) {
                 $where_cond = $where[1];
@@ -177,6 +190,7 @@ trait SqlTrait
                     $where_field_arr = explode('.', $where_field);
                     $where_field = array_pop($where_field_arr);
                 }
+                $where_field = str_replace('`', '', $where_field);
                 if (in_array($where_field, $this->_index_sort_keys)) {
                     $_index_sort_keys_wheres[$where_field][] = $where;
                     unset($this->wheres[$where_key]);

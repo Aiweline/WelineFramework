@@ -12,14 +12,16 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Helper;
 
+use Weline\Framework\App\Exception;
+
 class Data extends \Weline\Backend\Model\Config
 {
-    const smtp_host         = 'smtp_host';
-    const smtp_auth         = 'smtp_auth';
-    const smtp_port         = 'smtp_port';
-    const smtp_username     = 'smtp_username';
-    const smtp_password     = 'smtp_password';
-    const smtp_secure       = 'smtp_secure';
+    const smtp_host = 'smtp_host';
+    const smtp_auth = 'smtp_auth';
+    const smtp_port = 'smtp_port';
+    const smtp_username = 'smtp_username';
+    const smtp_password = 'smtp_password';
+    const smtp_secure = 'smtp_secure';
     const smtp_test_address = 'smtp_test_address';
 
     const keys = [
@@ -36,34 +38,58 @@ class Data extends \Weline\Backend\Model\Config
 
     function get(string $key = '', string $module = 'Weline_Smtp'): string|array
     {
-        if ($this->smtp) {
+        if (isset($this->smtp[$module])) {
             if ($key) {
-                return $this->smtp[$key] ?? '';
+                return $this->smtp[$module][$key] ?? '';
             } else {
-                return $this->smtp;
+                return $this->smtp[$module];
             }
         }
         $items = $this->systemConfig->where('module', $module, '=', 'and')->where('key', self::keys, '=', 'or')->select()->fetch()->getItems();
         foreach ($items as $item) {
-            $this->smtp[$item->getKey()] = $item->getData('v');
+            $this->smtp[$module][$item->getKey()] = $item->getData('v');
         }
 
         if ($key) {
-            return $this->smtp[$key] ?? '';
+            return $this->smtp[$module][$key] ?? '';
         }
         foreach (self::keys as $key) {
-            if (!isset($this->smtp[$key])) {
-                $this->smtp[$key] = '';
+            if (!isset($this->smtp[$module][$key])) {
+                $this->smtp[$module][$key] = '';
             }
         }
-        return $this->smtp;
+        return $this->smtp[$module];
     }
 
     /**
      * @throws \Weline\Framework\App\Exception
      */
-    function set(string $key, string $data, string $module = 'Weline_Smtp'): static
+    function set(string|array $key, string $data = '', string $module = 'Weline_Smtp'): static
     {
+        if (is_array($key)) {
+            $keys = self::keys;
+            $keysOks = [];
+            $key['smtp_auth'] = $key['smtp_auth'] ? '1' : '0';
+            $key['smtp_secure'] = $key['smtp_secure'] ? '1' : '0';
+            $key['smtp_test_address'] = $key['smtp_test_address'] ?? '';
+            foreach ($keys as $k) {
+                if (isset($key[$k])) {
+                    try {
+                        $this->set($k, $key[$k], $module);
+                        $keysOks[] = $k;
+                    } catch (Exception $e) {
+                        throw $e;
+                    }
+                }
+            }
+            // 比较配置项是否齐全 检测哪个配置项不齐全，报错异常
+            foreach ($keys as $key) {
+                if (!in_array($key, $keysOks)) {
+                    throw new \Weline\Framework\App\Exception(__('配置项不齐全%1', $key));
+                }
+            }
+            return $this;
+        }
         $this->setConfig($key, $data, $module);
         return $this;
     }

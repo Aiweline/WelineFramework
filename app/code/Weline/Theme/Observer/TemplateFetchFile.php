@@ -32,7 +32,7 @@ class TemplateFetchFile implements ObserverInterface
     /**
      * TemplateFetchBefore 初始函数...
      *
-     * @param WelineTheme    $welineTheme
+     * @param WelineTheme $welineTheme
      * @param CacheInterface $themeCache
      */
     public function __construct(

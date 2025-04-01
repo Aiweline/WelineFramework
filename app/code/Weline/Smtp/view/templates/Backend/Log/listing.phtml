@@ -35,12 +35,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 
     <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
     <!--页头工具条 结束-->
 
     <!-- ========== Topnav Start ========== -->
     <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
     <!--页头菜单栏 结束-->
 
     <!--左侧菜单栏 开始-->
@@ -64,7 +64,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a>
+                                    </li>
                                     <li class="breadcrumb-item active"><?= __('邮件发送记录管理器') ?></li>
                                 </ol>
                             </div>
@@ -114,18 +115,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                 <lang>内容</lang>
                                             </th>
                                             <th>
-                                                <lang>是否HTML</lang>
-                                            </th>
-                                            <th>
-                                                <lang>签名</lang>
-                                            </th>
-                                            <th>
-                                                <lang>抄送数据</lang>
-                                            </th>
-                                            <th>
-                                                <lang>密送数据</lang>
-                                            </th>
-                                            <th>
                                                 <lang>创建时间</lang>
                                             </th>
                                             <th>
@@ -139,15 +128,33 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <tr>
                                                 <td>{{log.id}}</td>
                                                 <td>{{log.module}}</td>
-                                                <td>{{log.from}}</td>
+                                                <td>{{log.from_email}}</td>
                                                 <td>{{log.sender_name}}</td>
-                                                <td>{{log.to}}</td>
+                                                <td>
+                                                    {{log.to_email}}
+                                                    <if condition="log.cc !== '[]'">
+                                                        <lang>抄送：</lang>
+                                                        {{log.cc}}
+                                                    </if>
+                                                    <if condition="log.bcc  !== '[]'">
+                                                        <lang>密送：</lang>
+                                                        {{log.cc}}
+                                                    </if>
+                                                </td>
                                                 <td>{{log.subject}}</td>
-                                                <td>{{log.content}}</td>
-                                                <td>{{log.is_html}}</td>
-                                                <td>{{log.alt}}</td>
-                                                <td>{{log.cc}}</td>
-                                                <td>{{log.bcc}}</td>
+                                                <td>
+                                                    <if condition="log.is_html=='1'">
+                                                        <span class=" badge bg-success">html</span>
+                                                        <else/>
+                                                        <span class=" badge bg-danger">text</span>
+                                                    </if>
+                                                    {{log.content}}
+                                                    <!--签名-->
+                                                    <if condition="log.alt=='1'">
+                                                        <br>
+                                                        <span class="badge bg-info">{{log.alt}}</span>
+                                                    </if>
+                                                </td>
                                                 <td>{{log.create_time}}</td>
                                                 <td>{{log.update_time}}</td>
                                                 <td>

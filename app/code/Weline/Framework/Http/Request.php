@@ -21,6 +21,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
     private string $request_id = '';
 
     private bool $check_param = false;
+    private array $path_split = [];
 
     public function __init()
     {
@@ -56,18 +57,29 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->check_param;
     }
 
+    static array $url_paths = [];
+
     public function getUrlPath(string $url = ''): string
     {
         if ($url) {
-            return parse_url($url)['path'] ?? '';
+            if (isset(self::$url_paths[$url])) {
+                return self::$url_paths[$url];
+            }
+            self::$url_paths[$url] = parse_url($url)['path'] ?? '';
+            return self::$url_paths[$url];
         }
-        return $this->parse_url()['path'] ?? '';
+        $url = $this->getUri();
+        if (isset(self::$url_paths[$url])) {
+            return self::$url_paths[$url];
+        }
+        self::$url_paths[$url] = $this->parse_url()['path'] ?? '';
+        return self::$url_paths[$url];
     }
 
     public function getRouteUrlPath(string $url = ''): string
     {
         $path = $this->getUrlPath($url);
-        if (!$this->isBackend()) {
+        if (!$this->isBackend() and !$this->isApiBackend()) {
             return $path;
         }
         $path = str_replace($this->getAreaRouter() . '/', '', $this->getUrlPath($url));
@@ -451,5 +463,14 @@ class Request extends Request\RequestAbstract implements RequestInterface
             $ip = $_SERVER['REMOTE_ADDR'];
         }
         return $ip;
+    }
+
+    public function getPathSplit(): array
+    {
+        if ($this->path_split) {
+            return $this->path_split;
+        }
+        $this->path_split = explode('/', $this->getUrlPath());
+        return $this->path_split;
     }
 }
