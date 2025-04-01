@@ -1,4 +1,11 @@
 #### 更新说明
+
+更新内容
+
+1. 像素自支持和第三方像素对接支持
+2. 优化支持URL结构：[网站]/[区域]/[货币]/[语言]/[路由]/[控制器]/[方法]/[参数]
+3.
+
 发行版本：
 
 v2.0 优化代码结构，内置服务器，优化框架升级，新增任务队列，计划任务，权限结构，标签结构后台参阅等。
@@ -7,12 +14,15 @@ v1.3 自定义标签，优化内核，上线translate快速翻译标签。
 
 v1.1 解决初始化安装问题以及升级框架内核。
 
-
 # WelineFramework
+
 ## 快速入门
+
 ### 使用本地命令行环境，快速开始
+
 【注意】此环境仅用于快速搭建开发环境，不可直接用于生产环境。
 运行命令：
+
 ```shell
 # ----示例安装命令 开始----
 composer create-project aiweline/weline-framework WelineFramework --prefer-dist
@@ -23,22 +33,16 @@ php bin/w server:start  # 启动框架内置服务器
 # ----示例安装命令 结束----
 ```
 
-### 使用Docker环境，快速开始
-【注意】此镜像不可直接用于生产环境。
-拉取镜像，并使用镜像启动容器即可。内置宝塔面板，启动后直接访问http://127.0.0.1即可（网站后台(http://127.0.0.1/admin_123)账户：admin 密码：admin）。宝塔入口为：http://127.0.0.1:8888/weline 账户：weline 密码：weline
-```
-docker pull aiweline/weline:dev
-# -d 后台运行 -p 端口映射 -it 命令行交互 -v 映射本地目录到docker容器中 
-docker run -d --name weline -p 80:80 -p 8888:8888 -p 3306:3306 -p 888:888 -p 21:21 -p 22:22 -it -v E:\WelineFramework\DEV-workspace:/www/wwwroot/weline.com aiweline/weline:dev /bin/bash
-```
 开发文档：https://gitee.com/aiweline/WelineFramework/wikis
 
 #### 介绍
-测试环境：https://weline.aiweline.com/ 
+
+测试环境：https://weline.aiweline.com/
 
 测试后台：http://weline.aiweline.com/admin_weline/admin/login 账户：admin 密码：admin
 
 微蓝WelineFramework框架！
+
 ~~~
 ├── app                 # 应用目录
 │   ├── code            # -代码
@@ -66,7 +70,7 @@ docker run -d --name weline -p 80:80 -p 8888:8888 -p 3306:3306 -p 888:888 -p 21:
 │   └── session         # -Session存放目录【仅文件session使用】
 └── vendor              # Composer第三方拓展目录
 ~~~
-开发文档：https://gitee.com/aiweline/WelineFramework/wikis
+
 #### 软件架构
 
     PHP>=8.1
@@ -76,10 +80,13 @@ docker run -d --name weline -p 80:80 -p 8888:8888 -p 3306:3306 -p 888:888 -p 21:
     mariadb>=10.6
 
 #### 安装教程
+
 composer下载源码
+
 ~~~
 composer create-project aiweline/weline-framework WelineFramework --prefer-dist
 ~~~
+
 ###一、项目安装
 
     1.  WEB项目部署
@@ -93,69 +100,71 @@ composer create-project aiweline/weline-framework WelineFramework --prefer-dist
     4.  其他命令 php bin/m 回车可见
 
 ### 框架目的
+
 开发优雅且高可用的框架：主要框架使用更加人性化，简单，灵活，快速。
 
 ### 框架特性
+
 跨平台支持：Windows/linux。
 
- **1、自带后台** 
+**1、自带后台**
 
- **1) acl权限管理。** get,post,delete,update等方法精细级别访问控制器<acl>标签支持块级内容可视控制。
+**1) acl权限管理。** get,post,delete,update等方法精细级别访问控制器<acl>标签支持块级内容可视控制。
 
- **2）url管理。** 实现任何链接seo自由重写。
+**2）url管理。** 实现任何链接seo自由重写。
 
- **3) i18n全球化词典管理。** 可自行安装国家地区，并收集前端词典进行翻译，运营人员即可完成翻译，也可以自行开发对接第三方api做自动化翻译。
+**3) i18n全球化词典管理。** 可自行安装国家地区，并收集前端词典进行翻译，运营人员即可完成翻译，也可以自行开发对接第三方api做自动化翻译。
 
- **4）缓存控制器。** 分类型缓存管理，可以单独针对某个缓存进行管理。
+**4）缓存控制器。** 分类型缓存管理，可以单独针对某个缓存进行管理。
 
- **5）计划任务管理。** 收集管理各个模块中的计划任务，可实现解锁，上锁运行等操作。计划任务支持window和linux.
+**5）计划任务管理。** 收集管理各个模块中的计划任务，可实现解锁，上锁运行等操作。计划任务支持window和linux.
 
- **6）事件管理。** 可以轻松查看正在运行的事件。
+**6）事件管理。** 可以轻松查看正在运行的事件。
 
- **7）插件管理。** 可以查看插件位置。
+**7）插件管理。** 可以查看插件位置。
 
- **8）模组管理。** 实时查看和禁用组件。
+**8）模组管理。** 实时查看和禁用组件。
 
- **9）SMTP管理。** 配置邮件SMTP。
+**9）SMTP管理。** 配置邮件SMTP。
 
- **10）开发配置。** 内置开发文档，方便开发者查阅开发资料。内置两套开发模板，分别是前端和后端模板，可以快速成型项目。
+**10）开发配置。** 内置开发文档，方便开发者查阅开发资料。内置两套开发模板，分别是前端和后端模板，可以快速成型项目。
 
- **11）内容管理。** 设计运营人员可以自定义cms页面，将支持前端模板和php代码直接在后台编写，实现ajax解析前端模板变量形成可预览页面。新增发布版本控制。（建设中...）
+**11）内容管理。** 设计运营人员可以自定义cms页面，将支持前端模板和php代码直接在后台编写，实现ajax解析前端模板变量形成可预览页面。新增发布版本控制。（建设中...）
 
- **12）网站内测机制。** url添加sandbox_key参数将进入金丝雀机制，产生的数据将进入测试系统，不会污染正式系统，最好搭配ip段实现
-
+**12）网站内测机制。** url添加sandbox_key参数将进入金丝雀机制，产生的数据将进入测试系统，不会污染正式系统，最好搭配ip段实现
 
 2、ORM
 
- **1）Model模型操作。** Model模型使用魔术方法改造成查询器和数据容器，简化orm操作难度，自带归档数据，自带数据分页，自带树形结构数据返回函数，自解析表名，快速join，自定义附加sql,可在查询过程中定义复杂高级操作。
+**1）Model模型操作。**
+Model模型使用魔术方法改造成查询器和数据容器，简化orm操作难度，自带归档数据，自带数据分页，自带树形结构数据返回函数，自解析表名，快速join，自定义附加sql,可在查询过程中定义复杂高级操作。
 
- **2）Model模型数据源。** 支持框架一主多从作为数据源，也支持Model模型所在模组一主多从作为数据源。也就是Model可以从多个指定数据库读取数据，而非单一的从框架主库配置的数据库池子中读取，它可以有自己的数据库池。
+**2）Model模型数据源。** 支持框架一主多从作为数据源，也支持Model模型所在模组一主多从作为数据源。也就是Model可以从多个指定数据库读取数据，而非单一的从框架主库配置的数据库池子中读取，它可以有自己的数据库池。
 
- **3）Model模型读写分离。** 可以从给定的主从数据库中读写分离。目前算法是随机算法，并未加入均衡器算法。
+**3）Model模型读写分离。** 可以从给定的主从数据库中读写分离。目前算法是随机算法，并未加入均衡器算法。
 
+**3、自定义高性能模板渲染。**
 
- **3、自定义高性能模板渲染。** 
+**1）tab标签。** 支持常用的lang,if,foreach,else,block,template...等等,支持形式：<block .../>,@lang(...)
+,@lang{...}。可以用事件自定义标签。
 
- **1）tab标签。** 支持常用的lang,if,foreach,else,block,template...等等,支持形式：<block .../>,@lang(...),@lang{...}。可以用事件自定义标签。
+**2）缓存去标签化。** 标签一旦解析成为缓存模板【全部由php代码和html代码组成】，不会存在任何标签痕迹，下次读取时也不会再次解析【开发者环境下会一直读取】。
 
- **2）缓存去标签化。** 标签一旦解析成为缓存模板【全部由php代码和html代码组成】，不会存在任何标签痕迹，下次读取时也不会再次解析【开发者环境下会一直读取】。
+**3）模板去翻译化。** 语言由标签解析环节就生效，并存储到不同的语言目录，无需PHP代码再次翻译。减少PHP翻译过程。【实时翻译环境下会一直翻译】
 
- **3）模板去翻译化。** 语言由标签解析环节就生效，并存储到不同的语言目录，无需PHP代码再次翻译。减少PHP翻译过程。【实时翻译环境下会一直翻译】
+**4）前端Hook机制。** 可以在页面中植入钩子，例如：<hook>head_after</hook>，模板引擎会自动解析这个钩子。
 
- **4）前端Hook机制。** 可以在页面中植入钩子，例如：<hook>head_after</hook>，模板引擎会自动解析这个钩子。
+**4、容器**
 
+**1）简化实例化过程。** 且附带实例化执行，自动解析初始化函数依赖，无需使用new ClassName().可以在__construct(
+private \Weline\Demo\Model\Demo $demo)直接实例化$demo.
 
- **4、容器** 
+**2）依赖PHP8的注解解析。** 协助acl解析类或者方法注解，实现注解可直接执行。给出事件，方便控制做类型解析时解析或者执行注解类。作用，注解类直接执行可以实现参数检测，登录检测等快速检测。
 
- **1）简化实例化过程。** 且附带实例化执行，自动解析初始化函数依赖，无需使用new ClassName().可以在__construct(\Weline\Demo\Model\Demo $demo)直接实例化$demo.
-
- **2）依赖PHP8的注解解析。** 协助acl解析类或者方法注解，实现注解可直接执行。给出事件，方便控制做类型解析时解析或者执行注解类。作用，注解类直接执行可以实现参数检测，登录检测等快速检测。
-
-
- **5、预置命令** 
+**5、预置命令**
 
 协调管理框架，具体可以php bin/m 查看所有命令和使用方法。
 常见命名如下：
+
 ```
 cache                         module # Weline_CacheManager
 -cache:clear                         # 缓存清理。
@@ -234,12 +243,27 @@ system                        module # Weline_Framework_System
 -system:install                      # 框架安装
 ```
 
- **6、主题Theme。** 
+**6、主题Theme。**
 
 可以复写所有module中的模板，轻松实现自定义主题。
 
+**7、自带Pixel像素。**
+系统内置pixel像素，使用像素标签：
+
+```html
+
+<pixel name="xxx"></pixel>
+```
+
+配合元素class属性实现像素跟踪。例如添加购物车事件：add-to-cart,在按钮class中添加weline-pixel::
+add-to-cart即可。同时需要指定值时只需要在class中添加weline-pixel::add-to-cart:value即可。
+自定义事件：在元素class中添加weline-pixel::dianji-tijiao即可,需要指定值的话同理，在class中添加weline-pixel::dianji-tijiao:
+value。
+总之：格式是weline-pixel::{name}指定事件名，如果需要指定值，在class中添加weline-pixel::{name}:value即可，例如weline-pixel::
+dianji-tijiao:value。
 
 #### 使用说明
+
 下载后解压，或者使用composer创建项目。
 然后将项目文件拷贝到网站根目录，访问网站域名进入安装界面，配置好信息后安装完成会进入框架首页。
 
@@ -247,19 +271,19 @@ system                        module # Weline_Framework_System
 
 另外，请修改后端入口以及rest接口入口。修改位置：app/code/etc/env.php
 
-
 #### 升级指南
+
 1、composer 直接 require 框架版本。
-2、将环境设置为dev开发模式：php bin/m deploy:mode:set dev
+2、将环境设置为dev开发模式：php bin/w deploy:mode:set dev
 3、composer update
-4、php bin/m s:up
-5、php bin/m deploy:mode:set prod
+4、php bin/w s:up
+5、php bin/w deploy:mode:set prod
 
 #### 参与贡献
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
-5.  提交代码请联系我。
+1. Fork 本仓库
+2. 新建 Feat_xxx 分支
+3. 提交代码
+4. 新建 Pull Request
+5. 提交代码请联系我。
 
