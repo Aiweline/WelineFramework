@@ -42,6 +42,7 @@ class SmtpSender extends \Weline\Framework\App\Helper
         $this->mail->CharSet = 'UTF-8';
     }
 
+
     public function getHelper(): Data
     {
         return $this->data;

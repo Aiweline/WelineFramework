@@ -23,5 +23,6 @@ class ReaderTest extends TestCore
     public function testRead()
     {
         $this->reader->read();
+        $this->assertTrue(true);
     }
 }

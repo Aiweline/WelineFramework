@@ -1,0 +1,139 @@
+<!-- 创建一个 iframe 沙箱 -->
+<iframe id="sandbox-pixel" sandbox="allow-scripts" style="display:none;"></iframe>
+<script type="text/javascript">
+    window.WelinePixel = {
+        initData: {
+            currentUrl: window.location.href,
+            domain: window.location.hostname,
+            eventName: 'click',
+            value: 0,
+            currency: this.getCookie('WELINE_USER_CURRENCY') || 'RMB',
+            websiteUrl: this.getCookie('WELINE_WEBSITE_URL') || '',
+            userLang: this.getCookie('WELINE_USER_LANG') || 'zh-CN',
+            elementInfo: null,
+            additionalInfo: null
+        },
+        // 发送数据的函数
+        send: function (data, url) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    console.log('Data sent successfully:', xhr.responseText);
+                } else if (xhr.readyState === 4) {
+                    console.error('Error sending data:', xhr.statusText);
+                }
+            };
+
+            xhr.send(JSON.stringify(data));
+        },
+        // 获取 cookie 的函数
+        getCookie: function (name) {
+            var nameEQ = name + "=";
+            var ca = document.cookie.split(';');
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        },
+        // DOMContentLoaded 事件处理函数
+        onDOMContentLoaded: function () {
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                this.target();
+            } else {
+                document.addEventListener('DOMContentLoaded', this.target);
+                document.addEventListener('click', this.target);
+            }
+        },
+        target: function (event) {
+            this.initData.elementInfo = {
+                tagName: event.target.tagName,
+                className: event.target.className,
+                id: event.target.id,
+                innerText: event.target.innerText,
+                href: event.target.href || null
+            };
+            this.initData.timestamp = new Date().toISOString();
+            this.initData.local_datetime = new Date().toLocaleString();
+            this.initData.userAgent = navigator.userAgent;
+            this.initData.referrer = document.referrer;
+            this.initData.screen = {
+                width: window.screen.width,
+                height: window.screen.height
+            };
+            this.initData.additionalInfo = {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight
+                outerWidth: window.outerWidth,
+                outerHeight: window.outerHeight
+            };
+
+            // 自定义系统级别事件名
+            // homepage category information
+            // view-item
+            // add-to-cart view-cart buy-now place-order
+            // begin-checkout checkout-success checkout-failure
+            switch (event.type) {
+                case 'click':
+                    switch (event.target.id) {
+                        case 'weline-pixel-add-to-cart':
+                            this.initData.eventName = 'add-to-cart';
+                            break;
+                        case 'weline-pixel-buy-now':
+                            this.initData.eventName = 'buy-now';
+                            break;
+                        case 'weline-pixel-place-order':
+                            this.initData.eventName = 'place-order';
+                            break;
+                        default:
+                            this.initData.eventName = 'click';
+                    }
+                    break;
+                case 'DOMContentLoaded':
+                    let url = window.location.href.replace(this.getCookie('WELINE_WEBSITE_URL'), '').replace('http://', '').replace('https://', '').replace('www.', '').replace('/', '');
+                    switch () this.
+                        initData.eventName = 'DOMContentLoaded';
+                        break;
+            }
+            if (event.target.id === 'add-to-cart') {
+                this.initData.eventName = 'add-to-cart';
+            }
+            // 发送数据
+        }
+    };
+    // 监听
+    window.WelinePixel.onDOMContentLoaded();
+</script>
+<script type="text/javascript">
+    // 创建一个 iframe 沙箱
+    var iframe = document.getElementById('sandbox-pixel');
+    iframe.onload = function () {
+        var iframeWindow = iframe.contentWindow;
+        iframeWindow.WelinePixel = window.WelinePixel;
+        // 在 iframe 中注入 JavaScript 代码
+        iframeWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="UTF-8">
+                <title><lang>沙箱环境</lang></title>
+            </head>
+            <body>
+                <script type="text/javascript">
+                    window.onload = function() {
+                        // window.WelinePixel.send(window.WelinePixel.initData, 'https://pixel.welineframework.com/pixel');
+                        <book>pixel</book>
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+    };
+
+    // 加载 iframe
+    iframe.src = 'about:blank';
+</script>

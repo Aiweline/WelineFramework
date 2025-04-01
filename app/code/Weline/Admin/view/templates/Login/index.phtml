@@ -10,30 +10,27 @@
 -->
 <html lang="en">
 <head>
-    <title>WelineFramework 登录面板</title>
+    <title><lang>Weline 登录面板</lang></title>
     @template(Weline_Admin::common/head.phtml)
 </head>
 
 <body class="bg-pattern">
-<div class="bg-overlay"></div>
 <div class="account-pages my-5 pt-5">
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-xl-4 col-lg-6 col-md-8">
+            <div class="col-xl-4 col-lg-4 col-md-4 col-sm-6 col-xs-12">
                 <div class="card">
                     <div class="card-body p-4">
                         <div class="">
                             <div class="text-center">
-                                <a href="@backend-url('')" class="">
-                                    <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
+                            <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
                                          class="weline-logo auth-logo logo-dark mx-auto">
                                     <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
                                          class="weline-logo auth-logo logo-light mx-auto">
-                                </a>
                             </div>
                             <!-- end row -->
                             <h4 class="font-size-18 text-muted mt-2 text-center"><?= __('欢迎回来！') ?></h4>
-                            <p class="mb-5 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
+                            <p class="mb-3 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
                             <div class='row'>
                                 <!--消息-->
                                 <template>Weline_Component::message.phtml</template>
@@ -43,13 +40,13 @@
                                 <div class="row">
                                     <div class="col-md-12">
                                         <div class="mb-4">
-                                            <label class="form-label" for="username"><?= __('管理员') ?></label>
+                                            <label class="form-label float-start" for="username"><?= __('管理员') ?></label>
                                             <input type="text" class="form-control" id="username" name="username"
                                                    value=""
                                                    placeholder="<?= __('输入管理员') ?>">
                                         </div>
                                         <div class="mb-4">
-                                            <label class="form-label" for="userpassword"><?= __('密码') ?></label>
+                                            <label class="form-label float-start" for="userpassword"><?= __('密码') ?></label>
                                             <input type="password" class="form-control" id="userpassword"
                                                    name="password" value=""
                                                    placeholder="<?= __('输入密码') ?>">
@@ -105,10 +102,10 @@
                     </div>
                 </div>
                 <div class="mt-5 text-center">
-                    <p class="text-white-50"><?= __('还没有账号？') ?> <a href="auth-register.html"
+                    <p class="text-black-50"><?= __('还没有账号？') ?> <a href="auth-register.html"
                                                                          class="fw-medium text-primary"> <?= __('注册') ?> </a>
                     </p>
-                    <p class="text-white-50">©
+                    <p class="text-black-50">©
                         <script>document.write(new Date().getFullYear())</script>
                         Weline. Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
                                 href="https://www.aiweline.com/">秋枫雁飞</a></p>

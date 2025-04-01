@@ -31,12 +31,12 @@ class Register implements RegisterDataInterface
      *
      * 参数区：
      *
-     * @param string       $type         注册类型
-     * @param string       $module_name  模组名
-     * @param array|string $param        参数[模组类型:此处传输目录__DIR__,主题类型：['name' => 'demo','path' => __DIR__,]]
-     * @param array        $dependencies 依赖定义【例如:['Weline_Theme','Weline_Backend']】
-     * @param string       $version      版本
-     * @param string       $description  描述
+     * @param string $type 注册类型
+     * @param string $module_name 模组名
+     * @param array|string $param 参数[模组类型:此处传输目录__DIR__,主题类型：['name' => 'demo','path' => __DIR__,]]
+     * @param array $dependencies 依赖定义【例如:['Weline_Theme','Weline_Backend']】
+     * @param string $version 版本
+     * @param string $description 描述
      *
      * @return mixed
      * @throws App\Exception
@@ -48,9 +48,9 @@ class Register implements RegisterDataInterface
         switch ($type) {
             // 模块安装
             case self::MODULE:
-                $appPathArray    = explode(DS, $param);
+                $appPathArray = explode(DS, $param);
                 $module_name_dir = array_pop($appPathArray);
-                $vendor_dir      = array_pop($appPathArray);
+                $vendor_dir = array_pop($appPathArray);
                 // 安装数据
                 $install_params = [$type, $module_name, ['dir_path' => $vendor_dir . DS . $module_name_dir . DS, 'base_path' => $param . DS, 'module_name' => $module_name], $version, $description, $dependencies];
                 break;
@@ -68,7 +68,7 @@ class Register implements RegisterDataInterface
             ->setData('register_arguments', $install_params);
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Register::register_installer', ['data' => $installerPathData]);
+        $eventsManager->dispatch('Framework_Register::register_installer', $installerPathData);
         $installer_class = $installerPathData->getData('installer');
         /**@var RegisterInterface $installer */
         $installer = ObjectManager::getInstance($installer_class);
@@ -92,7 +92,7 @@ class Register implements RegisterDataInterface
         }
         // 反解析参数名
         $registerRef = new \ReflectionClass(\Weline\Framework\Register\Register::class);
-        $method      = $registerRef->getMethod('register');
+        $method = $registerRef->getMethod('register');
         foreach ($method->getParameters() as $key => $argument) {
             $registerArgs[$argument->getName()] = $registerArgs[$key] ?? (($argument->getType()->getName() === 'array') ? [] : null);
             unset($registerArgs[$key]);
@@ -135,20 +135,20 @@ class Register implements RegisterDataInterface
     static function getStaticFunctions($register_file)
     {
         $tokens = token_get_all(file_get_contents($register_file));
-        $calls  = array();
+        $calls = array();
         foreach ($tokens as $key => $token) {
             if (is_array($token) && $token[0] == T_DOUBLE_COLON) {
-                $call                = '';
-                $start               = $key - 1;
-                $brackets            = 0;
-                $params              = array();
+                $call = '';
+                $start = $key - 1;
+                $brackets = 0;
+                $params = array();
                 $left_square_bracket = false;
-                $params_key          = 0;
-                $long_params         = '';
-                $function_name       = '';
+                $params_key = 0;
+                $long_params = '';
+                $function_name = '';
                 while ($brackets >= 0) {
                     $current_token = is_array($tokens[$start]) ? $tokens[$start][1] : $tokens[$start];
-                    $call          .= $current_token;
+                    $call .= $current_token;
 
                     if ($current_token == '(') {
                         $brackets++;
@@ -180,7 +180,7 @@ class Register implements RegisterDataInterface
                             }
                         }
                         if (!$left_square_bracket) {
-                            $long_params         = rtrim($long_params, ',');
+                            $long_params = rtrim($long_params, ',');
                             $params[$params_key] = explode(',', $long_params);
                         }
                     }
@@ -190,7 +190,7 @@ class Register implements RegisterDataInterface
                     $calls[$function_name] = $params;
                 }
                 $function_name = '';
-                $params        = [];
+                $params = [];
             }
         }
         return $calls;
@@ -209,15 +209,15 @@ class Register implements RegisterDataInterface
     static function getOriginModulesData(): array
     {
         $registers = Register::scanRegisters();
-        $modules   = [];
+        $modules = [];
         foreach ($registers as $register) {
             $registerArgs = Register::parserRegisterFunctionParams($register);
-            $module       = trim($registerArgs['module_name'], '\'\"');
-            $vendorArr    = explode('_', $module);
-            $vendor       = array_shift($vendorArr);
-            $base_path    = str_replace(Register::register_file, '', $register);
-            $env_file     = $base_path . 'etc' . DS . 'env.php';
-            $env          = [];
+            $module = trim($registerArgs['module_name'], '\'\"');
+            $vendorArr = explode('_', $module);
+            $vendor = array_shift($vendorArr);
+            $base_path = str_replace(Register::register_file, '', $register);
+            $env_file = $base_path . 'etc' . DS . 'env.php';
+            $env = [];
             if (file_exists($env_file)) {
                 $env = (array)include $env_file;
             }
@@ -226,22 +226,22 @@ class Register implements RegisterDataInterface
                 $dependency = trim($dependency, '\'"');
             }
             $dependencies = array_merge($dependencies, ($env['dependencies'] ?? []));
-            $pathArr      = explode(DS, $base_path);
-            $path         = array_pop($pathArr);
+            $pathArr = explode(DS, $base_path);
+            $path = array_pop($pathArr);
             if (empty($path)) {
                 $path = array_pop($pathArr);
             }
-            $path                      = array_pop($pathArr) . DS . $path;
+            $path = array_pop($pathArr) . DS . $path;
             $modules[$vendor][$module] = [
-                'vendor'       => $vendor,
-                'name'         => $module,
-                'path'         => $path,
-                'register'     => $register,
-                'id'           => $module,
+                'vendor' => $vendor,
+                'name' => $module,
+                'path' => $path,
+                'register' => $register,
+                'id' => $module,
                 'dependencies' => $dependencies,
-                'env_file'     => $env_file,
-                'base_path'    => $base_path,
-                'env'          => $env
+                'env_file' => $env_file,
+                'base_path' => $base_path,
+                'env' => $env
             ];
         }
         // 更新依赖排序
@@ -252,7 +252,7 @@ class Register implements RegisterDataInterface
             }
         }
         /**@var Sort $dependencyModel */
-        $dependencyModel   = ObjectManager::getInstance(Sort::class);
+        $dependencyModel = ObjectManager::getInstance(Sort::class);
         $dependencyModules = $dependencyModel->dependenciesSort($dependency_modules);
         return [$modules, $dependencyModules];
     }

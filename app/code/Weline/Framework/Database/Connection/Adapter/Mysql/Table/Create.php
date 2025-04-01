@@ -16,9 +16,39 @@ use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
 
 class Create extends AbstractTable implements CreateInterface
 {
+    public array $index_outs = [];
+    public const init_vars = [
+        self::table_TABLE => '',
+        self::table_COMMENT => '',
+        self::table_FIELDS => [],
+        self::table_ALERT_FIELDS => [],
+        self::table_DELETE_FIELDS => [],
+        self::table_INDEXS => [],
+        self::table_FOREIGN_KEYS => [],
+        self::table_CONSTRAINTS => '',
+        self::table_ADDITIONAL => ';',
+    ];
+
+    public function reset()
+    {
+        $this->fields = [];
+        $this->indexs = [];
+        $this->foreign_keys = [];
+        $this->constraints = '';
+        $this->additional = ';';
+        $this->primary_key = '';
+        $this->comment = '';
+        $this->new_table_name = '';
+        $this->index_outs = [];
+        foreach (self::init_vars as $init_var) {
+            $this->$init_var = $init_var;
+        }
+    }
+
     public function createTable(string $table, string $comment = ''): CreateInterface
     {
         # 开始表操作
+        $this->reset();
         $this->startTable($table, $comment);
         return $this;
     }

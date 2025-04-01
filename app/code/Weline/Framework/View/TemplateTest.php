@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\View;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\UnitTest\TestCore;
 
 class TemplateTest extends TestCore
@@ -17,6 +18,15 @@ class TemplateTest extends TestCore
     {
         /**@var Template $template */
         $template = Template::getInstance();
-        p($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim("Aiweline_Index::/css/index.css")));
+        $content = $template->fetchTagSource(
+            \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+            trim("Weline_Admin::/css/index.css"));
+        if (DEV) {
+            self::assertEquals('/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+        } else {
+            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = str_replace('\\', '/', $theme);
+            self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
+        }
     }
 }

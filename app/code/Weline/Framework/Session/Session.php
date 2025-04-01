@@ -14,8 +14,10 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Driver\SessionDriverHandlerInterface;
 
-class Session implements SessionInterface
+class
+Session implements SessionInterface
 {
+    public const session_name = 'WELINE_SESSID';
     public const login_KEY = 'WL_USER';
     public const login_KEY_ID = 'WL_USER_ID';
     public const login_USER_MODEL = 'WL_USER_MODEL';
@@ -57,6 +59,7 @@ class Session implements SessionInterface
             }
         }
         if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_name(self::session_name);
             session_start();
         }
     }

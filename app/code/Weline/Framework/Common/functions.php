@@ -32,6 +32,13 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Cache\ViewCache;
 
+# obj 模型实例化方法
+if (!function_exists('obj')) {
+    function obj(string $class)
+    {
+        return ObjectManager::getInstance($class);
+    }
+}
 if (!function_exists('getStringBetweenContents')) {
     function getStringBetweenContents(string $str, string $startDelimiter, string $endDelimiter): array
     {

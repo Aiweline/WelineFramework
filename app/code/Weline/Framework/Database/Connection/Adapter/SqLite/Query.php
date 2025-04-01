@@ -96,9 +96,35 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         } else {
             $data = $origin_data;
         }
+
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
+                if ($this->find_fields) {
+                    if ($result) {
+                        if (str_contains($this->find_fields, ',')) {
+                            $fields = explode(',', $this->find_fields);
+                            $fields_data = [];
+                            foreach ($fields as $field) {
+                                if (str_contains($field, '.')) {
+                                    $field = explode('.', $field);
+                                    $field = $field[1];
+                                }
+                                $fields_data[$field] = $result[$field] ?? null;
+                            }
+                            $result = $fields_data;
+                        } else {
+                            $field = $this->find_fields;
+                            if (str_contains($field, '.')) {
+                                $field = explode('.', $field);
+                                $field = $field[1];
+                            }
+                            $result = $result[$field] ?? null;
+                        }
+                    }
+                    $this->find_fields = '';
+                    break;
+                }
                 if ($model_class && empty($result)) {
                     $result = ObjectManager::make($model_class, ['data' => []], '__construct');
                 }
@@ -149,6 +175,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         //        $this->clear();
         $this->clearQuery();
+        if ($this->table_alias !== 'main_table') $this->alias('main_table');
         //        $this->reset();
         return $result;
     }

@@ -34,7 +34,7 @@
     "ext-libxml": "*",
     "ext-zip": "*",
     "ext-gd": "*",
-    "phpunit/phpunit": "^9.5.6",
+    "phpunit/phpunit": "^9.6",
     "symfony/intl": "^5.2",
     "symfony/polyfill-intl-icu": "^1.23",
     "jdorn/sql-formatter": "^1.2",

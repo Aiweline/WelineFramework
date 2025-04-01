@@ -21,7 +21,6 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Cache\ViewCache;
 use Weline\Framework\View\Data\DataInterface;
@@ -33,7 +32,6 @@ class Template extends DataObject
     private string $file_ext = '.phtml';
 
     protected Request $request;
-    private Session $session;
     private ?Taglib $taglib = null;
 
     /**

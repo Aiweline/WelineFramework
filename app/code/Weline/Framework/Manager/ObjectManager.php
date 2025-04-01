@@ -10,6 +10,7 @@
 namespace Weline\Framework\Manager;
 
 use ReflectionClass;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Manager\Cache\ObjectCache;
@@ -120,6 +121,9 @@ class ObjectManager implements ManagerInterface
         //        }
 
         # 兼容原类参数，做到只修改特定参数
+        if (Debug::target('dd')) {
+            dd($arguments);
+        }
         if ($arguments) {
             if (isset(self::getMethodParams($new_class)[0]) && self::getMethodParams($new_class)[0]) {
                 $arguments = array_merge(self::getMethodParams($new_class), [$arguments]);
