@@ -12,17 +12,12 @@ namespace Weline\Framework\Controller;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Console\Console\Dev\Debug;
 use Weline\Framework\Controller\Cache\ControllerCache;
-use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Security\Token;
-use Weline\Framework\Session\Session;
-use Weline\Framework\Session\SessionManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
 use ReflectionObject;
@@ -87,8 +82,6 @@ class PcController extends Core
 
     protected function isAllowed(): void
     {
-        /**@var Session $session */
-        $session = ObjectManager::getInstance(Session::class);
         if ($name = $this->csrf()) {
             # form表单检测
             if ($token = Token::get($name)) {
@@ -162,8 +155,6 @@ class PcController extends Core
      * 参数区：
      *
      * @return Template
-     * @throws Exception
-     * @throws \ReflectionException
      */
     protected function getTemplate(): Template
     {
@@ -203,11 +194,12 @@ class PcController extends Core
      *
      * 参数区：
      *
-     * @param string|null $fileName
+     * @param string $fileName
      * @param array $data
      *
      * @return mixed
-     * @throws Null
+     * @throws Exception
+     * @throws \ReflectionException
      */
     protected function fetch(string $fileName = '', array $data = []): mixed
     {

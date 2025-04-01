@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "43038b1bb29fc4a19c088236f288a72c",
+    "content-hash": "d2559020c266e6eadc1e96b2334a3792",
     "packages": [
         {
             "name": "ardagnsrn/ollama-php",
@@ -7557,6 +7557,49 @@
                 "source": "https://github.com/Aiweline/weline-module-module-router/tree/v1.0.0"
             },
             "time": "2023-07-11T15:32:58+00:00"
+        },
+        {
+            "name": "weline/module-parts",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Aiweline/weline-module-parts.git",
+                "reference": "38f18913bd71699d972aec7bfb861361430c97cf"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Aiweline/weline-module-parts/zipball/38f18913bd71699d972aec7bfb861361430c97cf",
+                "reference": "38f18913bd71699d972aec7bfb861361430c97cf",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.1"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-0": {
+                    "Weline\\Parts\\": ""
+                },
+                "psr-4": {
+                    "Weline\\Parts\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Weline",
+                    "email": "aiweline@qq.com"
+                }
+            ],
+            "description": "WelineFramework 部分组件：碎片可重复使用的部分化零件。",
+            "support": {
+                "issues": "https://github.com/Aiweline/weline-module-parts/issues",
+                "source": "https://github.com/Aiweline/weline-module-parts/tree/v1.0.0"
+            },
+            "time": "2025-02-25T11:57:16+00:00"
         },
         {
             "name": "weline/module-queue",

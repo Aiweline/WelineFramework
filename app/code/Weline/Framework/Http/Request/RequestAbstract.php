@@ -9,18 +9,14 @@
 
 namespace Weline\Framework\Http\Request;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Controller\Data\DataInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cache\RequestCache;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Cache\RouterCache;
 
 abstract class RequestAbstract extends RequestFilter
 {
@@ -79,8 +75,6 @@ abstract class RequestAbstract extends RequestFilter
         if (empty($this->_response)) {
             $this->_response = $this->getResponse();
         }
-        $url_arr = explode('/', trim($this->getModuleUrlPath(), '/'));
-        $this->area_router = array_shift($url_arr);
     }
 
     public function parse_url(string $url = ''): bool|int|array|string|null
@@ -151,19 +145,20 @@ abstract class RequestAbstract extends RequestFilter
      * 参数区：
      *
      * @return string
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
      */
     public function getRequestArea(): string
     {
-        switch ($this->area_router) {
-            case Env::getInstance()->getConfig('admin', 'admin'):
+        switch ($this->getServer('WELINE_AREA')) {
+            case 'admin':
                 $area = DataInterface::type_pc_BACKEND;
                 $this->setBackend();
                 break;
-            case Env::getInstance()->getConfig('api_admin', 'api_admin'):
+            case 'api':
+                $area = DataInterface::type_api_REST_FRONTEND;
+                $this->setApiFrontend();
+                break;
+            case 'api_admin':
                 $area = DataInterface::type_api_BACKEND;
-                $this->setBackend();
                 $this->setApiBackend();
                 break;
             default:
@@ -172,7 +167,8 @@ abstract class RequestAbstract extends RequestFilter
         }
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $eventManager->dispatch('WelineFramework_Http::process_area', ['area' => $area, 'path' => $this->area_router]);
+        $eventData = ['area' => $area, 'path' => $this->area_router];
+        $eventManager->dispatch('WelineFramework_Http::process_area', $eventData);
         return $area;
     }
 
@@ -195,7 +191,7 @@ abstract class RequestAbstract extends RequestFilter
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/9/14 23:20
      * 参数区：
-     * @return bool
+     * @return RequestAbstract
      */
     public function setBackend(): static
     {
@@ -214,6 +210,16 @@ abstract class RequestAbstract extends RequestFilter
     public function isBackend(): bool
     {
         return $this->getData('backend') ?: false;
+    }
+
+    public function setApiFrontend(): static
+    {
+        return $this->setData('api_frontend', true);
+    }
+
+    public function isApiFrontend(): bool
+    {
+        return (bool)$this->getData('api_frontend');
     }
 
 
@@ -374,7 +380,7 @@ abstract class RequestAbstract extends RequestFilter
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
             $data = new DataObject(['uri' => $uri]);
-            $event->dispatch('Weline_Framework_Router::router_start', ['data' => $data]);
+            $event->dispatch('Weline_Framework_Router::router_start', $data);
             $uri = $data->getData('uri');
             $this->setServer('REQUEST_URI', $uri);
         }
@@ -425,8 +431,8 @@ abstract class RequestAbstract extends RequestFilter
 
     public function getBaseHost(): string
     {
-        if ((isset($_SERVER['WELINE-WEBSITE-URL']))) {
-            return $_SERVER['WELINE-WEBSITE-URL'];
+        if ((isset($_SERVER['WELINE_WEBSITE_URL']))) {
+            return $_SERVER['WELINE_WEBSITE_URL'];
         }
         $port = $this->getServer('SERVER_PORT');
         return ($this->getServer('HTTP_X_FORWARDED_PROTO') ?: $this->getServer('REQUEST_SCHEME')) . '://' . $this->getServer('HTTP_HOST') . (($port !== '80' && $port !== '443') ? ':' . $port : '');
@@ -434,7 +440,10 @@ abstract class RequestAbstract extends RequestFilter
 
     public function getPrePath(): string
     {
-        return $this->getBaseHost() . '/' . $this->getAreaRouter() . '/';
+        if ($this->getAreaRouter() == '') {
+            return $this->getBaseHost() . '/';
+        }
+        return $this->getBaseHost() . '/' . $this->getServer('WELINE_AREA') . '/';
     }
 
     /**
@@ -443,8 +452,6 @@ abstract class RequestAbstract extends RequestFilter
      * 参数区：
      *
      * @return Response
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
      */
     public function getResponse(): Response
     {

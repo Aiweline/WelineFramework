@@ -32,10 +32,10 @@ class Init
             $req = ObjectManager::getInstance(Request::class);
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
-            $data  = new DataObject(['white_urls' => []]);
-            $event->dispatch('Weline_Framework::maintenance', ['data' => $data]);
+            $data = new DataObject(['white_urls' => []]);
+            $event->dispatch('Weline_Framework::maintenance', $data);
             $white_urls = $data->getData('white_urls');
-            $white      = false;
+            $white = false;
             foreach ($white_urls as $white_url_string) {
                 if (str_contains($req->getUri(), $white_url_string)) {
                     $white = true;

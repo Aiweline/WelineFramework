@@ -33,7 +33,7 @@ class BackendControllerInitAfter implements ObserverInterface
     public function execute(Event $event)
     {
         # 检测记住我
-        if ($token = Cookie::get('w_urt') and (!$this->getSession()->getLoginUserID())) {
+        if ($token = Cookie::get('w_ut') and (!$this->getSession()->getLoginUserID())) {
             /**@var BackendUserToken $backendUserToken */
             $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
             $backendUserToken->where($backendUserToken::fields_token, $token)->where($backendUserToken::fields_type, 'admin_login_remember_me')->find()->fetch();
@@ -41,7 +41,7 @@ class BackendControllerInitAfter implements ObserverInterface
                 $backendUserToken->setData($backendUserToken::fields_token, '')
                     ->setData($backendUserToken::fields_token_expire_time, 0);
                 ObjectManager::getInstance(MessageManager::class)->addWarning(__('记住登录已过期，请重新登录！'));
-                Cookie::set('w_urt', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
+                Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
                 $this->getSession()->logout();
             } elseif ($user_id = $backendUserToken->getId()) {
                 # SESSION登录用户
@@ -75,7 +75,7 @@ class BackendControllerInitAfter implements ObserverInterface
             $white_url = $white_url['path'];
         }
         if (!in_array(trim($this->request->getRouteUrlPath(), '/'), $white_urls) and !$this->request->getParam('isIframe')) {
-            $this->getSession()->setData('referer', $this->request->getUrlPath());
+            $this->getSession()->setData('referer', $this->request->getUrlBuilder()->getCurrentUrl());
         }
     }
 }

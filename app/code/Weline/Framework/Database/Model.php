@@ -27,11 +27,19 @@ abstract class Model extends AbstractModel implements ModelInterface
         return $columns;
     }
 
+    public static function count()
+    {
+        /** @var \Weline\Framework\Database\Model $model */
+        $model = ObjectManager::getInstance(static::class);
+        return $model->total();
+    }
+
     /**
      * 表中搜索字段匹配的值
      * @param string $key
      * @param string $columns
-     * @return array
+     * @param string $logic
+     * @return Model
      */
     public function search(string $key, string $columns = '', $logic = 'or'): static
     {
@@ -46,7 +54,7 @@ abstract class Model extends AbstractModel implements ModelInterface
         return $this;
     }
 
-    public function total_fields(string $sql, string $fields, string $additional = '')
+    public function total_fields(string $sql, string $fields, string $additional = ''): array
     {
         $sql = Tool::rm_sql_limit($sql);
         $sql = "SELECT {$fields} FROM ({$sql}) AS total_no_limit {$additional}";

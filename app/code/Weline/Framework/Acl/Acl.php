@@ -39,13 +39,13 @@ use Weline\Framework\Manager\ObjectManager;
             throw new Exception(__('source_id与parent_source不能相同！'));
         }
         parent::__construct([
-                                'source_id' => $source_id,
-                                'source_name' => __($source_name),
-                                'icon' => $icon,
-                                'document' => __($document),
-                                'parent_source' => $parent_source,
-                                'rewrite' => $rewrite,
-                            ]);
+            'source_id' => $source_id,
+            'source_name' => __($source_name),
+            'icon' => $icon,
+            'document' => __($document),
+            'parent_source' => $parent_source,
+            'rewrite' => $rewrite,
+        ]);
     }
 
     function setSourceId(string $source_id): Acl
@@ -180,15 +180,15 @@ use Weline\Framework\Manager\ObjectManager;
         /**@var Request $request */
         $request = ObjectManager::getInstance(Request::class);
         $this->setType($request->getData('router/class/area'))
-             ->setModule($request->getModuleName())
-             ->setRouter($request->getData('router/router'))
-             ->setMethod($request->getMethod())
-             ->setClass($request->getData('router/class/name'))
-             ->setRoute(str_replace($request->getPrePath(), '', $request->getBaseUrl()));
+            ->setModule($request->getModuleName())
+            ->setRouter($request->getData('router/router'))
+            ->setMethod($request->getMethod())
+            ->setClass($request->getData('router/class/name'))
+            ->setRoute(str_replace($request->getPrePath(), '', $request->getBaseUrl()));
         // ACL控制器事件分配
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Acl::dispatch', ['data' => $this]);
+        $eventsManager->dispatch('Framework_Acl::dispatch', $this);
         return $this->getResult();
     }
 
