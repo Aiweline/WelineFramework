@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
@@ -57,7 +58,8 @@ trait TraitTemplate
         if (PROD && $object = $this->viewCache->get($cache_key)) {
             return $object;
         }
-        $this->eventsManager->dispatch("Framework_View::{$position}", ['is_backend' => $is_backend, 'class' => '']);
+        $eventData = ['position' => $position, 'is_backend' => $is_backend, 'class' => ''];
+        $this->eventsManager->dispatch("Framework_View::{$position}", $eventData);
         $class = $this->eventsManager->getEventData("Framework_View::{$position}")->getData('class');
         if (empty($class) || !class_exists($class)) {
             return '';
@@ -130,6 +132,9 @@ trait TraitTemplate
                 $t_f = implode("", $t_f_arr);
             }
         };
+        if (empty($t_f_arr)) {
+            return [$t_f, $this->getRequest()->getModuleName()];
+        }
         return [$t_f, array_shift($t_f_arr)];
     }
 
@@ -344,10 +349,10 @@ trait TraitTemplate
             return $cache_filename;
         }
         /*---------观察者模式 检测文件是否被继承-----------*/
-        $fileData = new DataObject(['filename' => $filename, 'type' => 'compile']);
+        $fileData = new DataObject(['filename' => $filename, 'type' => 'compile', 'object' => $this]);
         $this->eventsManager->dispatch(
             'Framework_View::fetch_file',
-            ['object' => $this, 'data' => $fileData]
+            $fileData
         );
         $event_filename = $fileData->getData('filename');
         $this->viewCache->set($cache_key, $event_filename);

@@ -9,6 +9,9 @@ class Debug
 {
     public static function env(string $env_key, bool $target_stop = true, mixed $value = null): mixed
     {
+        if (isset($_ENV['w-debug'][$env_key])) {
+            return $_ENV['w-debug'][$env_key];
+        }
         if (!$value) {
             # 获取上级调用文件和行数
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
@@ -21,9 +24,12 @@ class Debug
         return $value;
     }
 
-    public static function target(string $env_key, mixed $value = null): mixed
+    public static function target(string $env_key, mixed $value = 'debug::skip'): mixed
     {
-        if ($value) {
+        if (!isset($_ENV['w-debug']) || !isset($_ENV['w-debug'][$env_key])) {
+            return false;
+        }
+        if ($value !== 'debug::skip') {
             # 获取触发位置
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $file = $backtrace[0]['file'];
@@ -48,9 +54,6 @@ class Debug
         }
         # 无值看看是否有键名
         if (!$value) {
-            if (!isset($_ENV['w-debug'])) {
-                return false;
-            }
             if (array_key_exists($env_key, $_ENV['w-debug'])) {
                 return true;
             }

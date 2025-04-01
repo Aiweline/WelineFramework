@@ -12,7 +12,7 @@ class Detail extends \Weline\Framework\Console\CommandAbstract
         # 导入命令行信息
         $commands = Env::GENERATED_DIR.DS.'commands.php';
         if(!file_exists($commands)){
-            $this->printer->error('命令行信息不存在');
+            $this->printer->error(__('命令行信息不存在'));
             return;
         }
         $commands = include $commands;
@@ -29,6 +29,6 @@ class Detail extends \Weline\Framework\Console\CommandAbstract
 
     public function tip(): string
     {
-        return '查看命令详情，示例：bin/w detail dev:debug';
+        return __('查看命令详情，示例：php bin/w detail dev:debug');
     }
 }

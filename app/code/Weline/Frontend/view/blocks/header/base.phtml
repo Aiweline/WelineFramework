@@ -6,10 +6,14 @@ $host = $this->request->getBaseHost() . '/';
 //$http_host                               = explode('.', $this->request->getServer('HTTP_HOST'));
 //$domain                             = array_pop($http_host);
 //$domain                             = array_pop($http_host) .'.'. $domain;
+/**@var \Weline\Backend\Session\BackendSession $session */
+$session = \Weline\Framework\App\Env::getInstance(\Weline\Backend\Session\BackendSession::class);
+$user_id = $session->getLoginUserID();
 $base_host = $this->request->getPrePath();
 $base_router = $this->request->getRouterData('router');
 $current_module = $this->request->getModuleName();
-$env_model = \Weline\Framework\App\Env::getInstance()->getConfig('deploy');
+$env_model = \Weline\Framework\App\Env::get('deploy');
+$api_host = $this->request->getUrlBuilder()->getApiUrl('', [], false);
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '/{module}/view/statics/{path}' : '/static/' . $theme_path . '/{module}/view/statics/{path}');
 $token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
@@ -46,10 +50,15 @@ endif;
 <w:js>Weline_Frontend::/js/cookie.js</w:js>
 <script>
     window.site = {
+        user_id: '{{user_id}}',
+        module: '{{current_module}}',
         host: '{{host}}',
         env_model: '{{env_model}}',
         env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
         base_host: '{{base_host}}',
+        currency: '{{$_SERVER.WELINE_USER_CURRENCY}}',
+        lang: '{{$_SERVER.WELINE_USER_LANG}}',
+        api_host: '{{api_host}}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode(Weline\Framework\Phrase\Parser::getWords())?>,
         themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
@@ -75,32 +84,147 @@ endif;
         return '{{host}}' + window.path(path);
     }
     window.api = (path) => {
-        return '{{host}}' + window.path(path);
+        return '{{api_host}}' + window.path(path);
     }
     window.frontend_api = (path) => {
-        return '{{host}}' + window.path(path);
+        return '{{api_host}}' + window.path(path);
     }
 
-
-    function selectLanguage(lang) {
-        setCookie('WELINE-USER-LANG', lang, 7, {path: '/', domain: window.location.host});
-        let path = window.location.pathname;
-        if (path.startsWith('/{{local.code}}')) {
-            path = path.replace('/{{local.code}}', '/' + lang);
+    function app_path(path) {
+        let origin_path = path
+        window.site.computePath = [];
+        if (window.site.computePath[origin_path]) {
+            return window.site.computePath[origin_path]
         }
-        window.location.href = path + window.location.search
+        // 提取类似http://localhost:8080/的host
+        if (path.indexOf('://') > 0) {
+            let hosts = path.split('://')
+            let host_0 = hosts[0] + '://'
+            let host_1 = hosts[1]
+            if (host_1.indexOf('/') > 0) {
+                let host_1s = host_1.split('/')
+                host_0 += host_1s.shift()
+                let host_1s_1 = host_1s[0]
+                if (host_1s_1) {
+                    if (getCookie('WELINE_WEBSITE_CODE') && host_1s_1.startsWith(getCookie('WELINE_WEBSITE_CODE'))) {
+                        host_1s.shift()
+                        host_1s_1 = host_1s[0]
+                    }
+                    if ('{{area}}' === host_1s_1) {
+                        host_1s.shift()
+                        host_1s_1 = host_1s[0]
+                    } else if ('{{api_area}}' === host_1s_1) {
+                        host_1s.shift()
+                        host_1s_1 = host_1s[0]
+                    } else if ('{{api_admin_area}}' === host_1s_1) {
+                        host_1s.shift()
+                        host_1s_1 = host_1s[0]
+                    }
+                    if (getCookie('WELINE_USER_CURRENCY') === host_1s_1) {
+                        host_1s.shift()
+                        host_1s_1 = host_1s[0]
+                    }
+                    if (getCookie('WELINE_USER_LANG') === host_1s_1) {
+                        host_1s.shift()
+                    }
+                }
+                path = host_0 + '/' + host_1s.join('/')
+            } else {
+                path = host_1
+            }
+        }
+        window.site.computePath[origin_path] = path;
+        return window.site.computePath[origin_path]
     }
 
-    function selectCurrency(currency_code) {
-        setCookie('WELINE-USER-CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
-        let path = window.location.pathname;
+    function inject_path(path, code = '', type = '') {
+        if (!path) {
+            throw new Error('@lang{JS: inject_path函数path路径不允许为空！}')
+        }
+        let pre_path = getCookie('WELINE_WEBSITE_URL');
+        // 网站
+        if (path.startsWith(getCookie('WELINE_WEBSITE_URL'))) {
+            path = path.replace(getCookie('WELINE_WEBSITE_URL'), '');
+        } else {
+            path = path.replace(window.site.base_router, '');
+        }
+        if (path.startsWith('/' + getCookie('WELINE_WEBSITE_CODE'))) {
+            path = path.replace('/' + getCookie('WELINE_WEBSITE_CODE'), '');
+        }
+        if ('website' === type && code) {
+            pre_path = code;
+        }
+        pre_path = decodeURIComponent(pre_path);
+        if (pre_path.endsWith('/')) {
+            pre_path = pre_path.slice(0, -1);
+        }
+        // 区域
+        if (path.startsWith('/{{area}}')) {
+            if ('area' === type && code) {
+                path = path.replace('/{{area}}', '');
+                pre_path += '/' + code;
+            } else {
+                path = path.replace('/{{area}}', '');
+                pre_path += '/{{area}}';
+            }
+        } else {
+            if ('area' === type && code) {
+                pre_path += '/' + code;
+            } else {
+                pre_path += '/{{area}}';
+            }
+        }
+        // 币种
+        if (path.startsWith('/' + window.site.currency)) {
+            if ('currency' === type && code) {
+                path = path.replace('/' + window.site.currency, '');
+                pre_path += '/' + code;
+            } else {
+                path = path.replace('/' + window.site.currency, '');
+                pre_path += '/' + window.site.currency;
+            }
+        } else {
+            if ('currency' === type && code) {
+                pre_path += '/' + code;
+            } else {
+                pre_path += '/' + window.site.currency;
+            }
+        }
+        // 语言
         if (path.startsWith('/{{local.code}}')) {
-            path = path.replace('/{{local.code}}', '');
+            if ('lang' === type && code) {
+                path = path.replace('/{{local.code}}', '');
+                pre_path += '/' + code;
+            } else {
+                path = path.replace('/{{local.code}}', '');
+                pre_path += '/{{local.code}}';
+            }
+        } else {
+            if ('lang' === type && code) {
+                pre_path += '/' + code;
+            } else {
+                pre_path += '/{{local.code}}';
+            }
         }
-        if (path.startsWith('/{{currency.code}}')) {
-            path = path.replace('/{{currency.code}}', '/' + currency_code);
-        }
-        window.location.href = '/{{local.code}}/' + path + window.location.search
+        return pre_path + path;
+    }
+
+    function select_language(lang) {
+        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
+        setCookie('WELINE_USER_LANG', lang, 7, {path: '/{{area}}', domain: window.location.host});
+        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search
+    }
+
+    function select_currency(currency_code) {
+        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
+        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
+        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + window.location.search
+    }
+
+    function select_site(url) {
+        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
+        setCookie('WELINE_WEBSITE_URL', url, 7, {path: '/', domain: window.location.host});
+        window.location.href = inject_path(window.location.pathname, url, 'website') + window.location.search
     }
 
     /**
@@ -184,4 +308,5 @@ endif;
 <?php
 echo $this->getHeader()->getHtml();
 ?>
+<!--后台配置头部-->
 <hook>head</hook>

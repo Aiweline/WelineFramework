@@ -43,13 +43,14 @@ class Cookie
     public static function getLang(): string
     {
         // 用户语言优先
-        $lang = $_COOKIE['WELINE-USER-LANG'] ?? null;
+        $lang = $_COOKIE['WELINE_USER_LANG'] ?? null;
         // 默认网站语言
         if (empty($lang)) {
             $lang = self::get('WELINE-WEBSITE-LANG', 'zh_Hans_CN');
         }
         return $lang;
     }
+
     /**
      * @DESC          # 获取语言
      *
@@ -62,7 +63,7 @@ class Cookie
     public static function getCurrency(): string
     {
         // 用户货币优先
-        $currency = $_COOKIE['WELINE-USER-CURRENCY'] ?? null;
+        $currency = $_COOKIE['WELINE_USER_CURRENCY'] ?? null;
         // 默认网站语言
         if (empty($currency)) {
             $currency = self::get('WELINE-WEBSITE-CURRENCY', '');
@@ -86,7 +87,39 @@ class Cookie
         $data->setData('lang', self::getLang());
         $data->setData('currency', self::getCurrency());
         $data->setData('lang_local', self::getLang());
-        ObjectManager::getInstance(EventsManager::class)->dispatch('Framework_Cookie::lang_local', ['data' => $data]);
+        ObjectManager::getInstance(EventsManager::class)->dispatch('Framework_Cookie::lang_local', $data);
         return $data->getData('lang_local');
+    }
+
+    public static function static_file(): void
+    {
+        if (headers_sent()) return;
+        // 设置缓存策略
+        header('Cache-Control: public, max-age=31536000, immutable');
+        // 设置缓存过期时间
+        header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 31536000) . ' GMT');
+        // 设置缓存策略（兼容旧版浏览器）
+        header('Pragma: public');
+        // 设置ETag和Last-Modified头部
+        header('ETag: "static-file-etag"');
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', time()) . ' GMT');
+        // 设置文件的MIME类型
+        header('Content-Type: application/octet-stream');
+        // 设置文件的处理方式（在浏览器中显示）
+        header('Content-Disposition: inline');
+        // 显式设置不发送任何cookie
+//        header('Set-Cookie: ');
+        header_remove('Set-Cookie');
+        // 防止搜索引擎索引文件
+        header('X-Robots-Tag: none');
+        // 防止文件被其他网站框架
+        header('X-Frame-Options: DENY');
+        // 防止MIME嗅探攻击
+        header('X-Content-Type-Options: nosniff');
+        // 启用XSS保护
+        header('X-XSS-Protection: 1; mode=block');
+        // 不显示提供者
+        header_remove('X-Powered-By');
+//        header('X-Powered-By: ');
     }
 }

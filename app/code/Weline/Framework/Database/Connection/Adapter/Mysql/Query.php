@@ -133,6 +133,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public function alias(string $table_alias_name): QueryInterface
     {
         $this->table_alias = $table_alias_name;
+        if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
+            $this->fields = $this->table_alias . '.*';
+        }
         return $this;
     }
 
@@ -200,10 +203,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function find(string $find_fields=''): QueryInterface
+    public function find(string $find_fields = ''): QueryInterface
     {
-        if($find_fields){
+        if ($find_fields) {
             $this->find_fields = $find_fields;
+            $this->fields($find_fields);
         }
         $this->limit(1, 0);
         $this->fetch_type = __FUNCTION__;

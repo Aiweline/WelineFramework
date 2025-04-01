@@ -40,15 +40,16 @@ class Compiler implements CompilerInterface
     {
         $config_resources = $this->reader->getResourceFiles();
         foreach ($config_resources as $area => $config_resource) {
+            $data = new DataObject(
+                [
+                    'area' => $area,
+                    'type' => $this->reader->getSourceType(),
+                    'resources' => $config_resource
+                ]
+            );
             $this->getEventManager()->dispatch(
                 'Framework_Resource::compiler',
-                ['data' => new DataObject(
-                    [
-                        'area' => $area,
-                        'type' => $this->reader->getSourceType(),
-                        'resources' => $config_resource
-                    ]
-                )]
+                $data
             );
         }
     }

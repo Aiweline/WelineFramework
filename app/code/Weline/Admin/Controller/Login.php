@@ -135,7 +135,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     ->setData($backendUserToken::fields_token, $token)
                     ->setData($backendUserToken::fields_token_expire_time, $token_expire_time)
                     ->save();
-                Cookie::set('w_urt', $token, $token_expire_time, ['path' => '/' . $this->request->getAreaRouter()]);
+                Cookie::set('w_ut', $token, $token_expire_time, ['path' => '/' . $this->request->getAreaRouter()]);
             }
         } else {
             $adminUsernameUser->setSessionId($this->session->getSessionId())
@@ -169,7 +169,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
 
     public function logout(): void
     {
-        Cookie::set('w_urt', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
+        Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->logout();
         $this->redirect($this->_url->getBackendUrl('admin/login'));
     }

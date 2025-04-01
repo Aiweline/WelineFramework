@@ -54,16 +54,13 @@ class ModelManager
             if (class_exists($model_class)) {
                 $model = ObjectManager::getInstance($model_class);
                 if ($model instanceof AbstractModel) {
-                    $data = new DataObject(['model' => $model]);
-                    $this->getEvenManager()->dispatch('Framework_Database::model_update_before', ['data' => $data, 'type' => $type, 'object' => $this, 'module' => $module]);
+                    $data = new DataObject(['model' => $model, 'type' => $type, 'object' => $this, 'module' => $module]);
+                    $this->getEvenManager()->dispatch('Framework_Database::model_update_before', $data);
                     if (PROD) {
                         $this->printing->printing($model::class);
                     }
-                    $modelSetup = ObjectManager::make(ModelSetup::class);
-                    $modelSetup->putModel($model);
-                    # 执行模型升级
-                    $model->$type($modelSetup, $context);
-                    $this->getEvenManager()->dispatch('Framework_Database::model_update_after', ['data' => $data, 'type' => $type, 'object' => $this, 'module' => $module]);
+                    $this->setupModel($model, $type, $context);
+                    $this->getEvenManager()->dispatch('Framework_Database::model_update_after', $data);
                 }
             } else {
                 $this->printing->error($model_class, __('Model升级'));
@@ -78,5 +75,21 @@ class ModelManager
         }
         $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
         return $this->eventsManager;
+    }
+
+    /**
+     * @param AbstractModel $model
+     * @param string $type
+     * @param Context $context
+     * @return void
+     * @throws Exception
+     * @throws \ReflectionException
+     */
+    public function setupModel(AbstractModel $model, string $type, Context $context): void
+    {
+        $modelSetup = ObjectManager::make(ModelSetup::class);
+        $modelSetup->putModel($model);
+        # 执行模型升级
+        $model->$type($modelSetup, $context);
     }
 }

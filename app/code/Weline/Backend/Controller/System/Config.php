@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Backend\Controller\System;
 
 use Weline\Framework\Cache\Console\Cache\Clear;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
 class Config extends \Weline\Framework\App\Controller\BackendController
@@ -21,6 +22,11 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         $key = $this->request->getGet('key');
         $value = $this->request->getGet('value');
         $type = $this->request->getGet('type','');
+        // 检查三个参数
+        if(!$key || !$value || !$type){
+            MessageManager::error(__('保存失败，请重试!'));
+            return $this->fetch();
+        }
         /**@var \Weline\Backend\Model\Config $config */
         $config = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
         $config->setConfig($key, $value, 'Weline_Backend');
