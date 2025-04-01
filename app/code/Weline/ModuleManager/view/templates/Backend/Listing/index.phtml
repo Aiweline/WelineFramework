@@ -63,7 +63,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a>
+                                    </li>
                                     <li class="breadcrumb-item active"><?= __('模组管理') ?></li>
                                 </ol>
                             </div>
@@ -146,17 +147,28 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         </b>
                                                     </if>
                                                 </td>
-                                                <td>
-                                                    <string>$module->getDescription()|50</string>
+                                                <td style="max-width:180px">
+                                                    <?php
+                                                    $description = $module->getDescription();
+                                                    if (empty($description)) {
+                                                        $description = '无';
+                                                    }
+                                                    $description = html_entity_decode($description);
+                                                    ?>
+                                                    <span
+                                                            style="word-wrap: break-word;white-space: break-spaces;">
+                                                        {{$description}}
+                                                    </span>
                                                 </td>
-                                                <td @if{module.position === 'system' =>"class='disabled text-danger'"}>
-                                                    <if condition="module.position === 'app'">
-                                                        <lang>第三方</lang>
-                                                        <elseif condition="module.position === 'composer'"/>
-                                                        <lang>Composer</lang>
-                                                        <else/>
-                                                        <lang>系统</lang>
-                                                    </if>
+                                                <td @if{module.position===
+                                                'system' =>"class='disabled text-danger'"}>
+                                                <if condition="module.position === 'app'">
+                                                    <lang>第三方</lang>
+                                                    <elseif condition="module.position === 'composer'"/>
+                                                    <lang>Composer</lang>
+                                                    <else/>
+                                                    <lang>系统</lang>
+                                                </if>
                                                 </td>
                                                 <td><var>$module->getNamespacePath()</var></td>
                                                 <td><var>$module->getBasePath()</var></td>
@@ -201,7 +213,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class="col-sm-6">
                         <div class="text-sm-end d-none d-sm-block">
                             Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
-                                href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
                         </div>
                     </div>
                 </div>

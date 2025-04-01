@@ -27,18 +27,19 @@ class Init
         if (empty($env)) {
             throw new Exception('环境为空！');
         }
-        $env['admin']     = $params['admin'];
+        $env['admin'] = $params['admin'];
+        $env['api'] = $params['api'] ?? '';
         $env['api_admin'] = $params['api_admin'];
-        $env['debug_key'] = uniqid('',true);
-        $file             = new File();
+        $env['debug_key'] = uniqid('', true);
+        $file = new File();
         $file->open($env_instance::path_ENV_FILE, $file::mode_w);
         $text = '<?php return ' . var_export($env, true) . ';';
         $file->write($text);
         $file->close();
 
         return ['data' => [
-            'admin'     => $params['admin'],
+            'admin' => $params['admin'],
             'api_admin' => $params['api_admin'],
-        ], 'hasErr'    => false, 'msg' => '-------  配置环境初始化...  -------'];
+        ], 'hasErr' => false, 'msg' => '-------  配置环境初始化...  -------'];
     }
 }

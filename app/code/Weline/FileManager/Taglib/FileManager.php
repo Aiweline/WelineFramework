@@ -114,11 +114,15 @@ class FileManager implements TaglibInterface
                 $userConfigFileManager = $fileManager::name();
             } else {
                 if (!isset($fileManagers[$userConfigFileManager])) {
-                    ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%1', $userConfigFileManager));
+                    if (!CLI) {
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%1', $userConfigFileManager));
+                    }
                     # 使用第一个文件管理器作为默认的文件管理器
                     /**@var \Weline\FileManager\FileManager $fileManager */
                     $fileManager = array_pop($fileManagers);
-                    ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%1 文件管理器代替。', $fileManager::name()));
+                    if (!CLI) {
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%1 文件管理器代替。', $fileManager::name()));
+                    }
                 } else {
                     /**@var \Weline\FileManager\FileManager $fileManager */
                     $fileManager = $fileManagers[$userConfigFileManager];

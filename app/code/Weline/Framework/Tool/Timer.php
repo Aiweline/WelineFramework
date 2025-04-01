@@ -61,6 +61,10 @@ class Timer
                 ];
             case 'month':
                 $dateTime = new DateTime($date);
+                # 解决php部分系统获取二月份的问题
+                if ($dateTime->format('m') == 3) {
+                    $dateTime = new DateTime($dateTime->format('Y-m') . '-28');
+                }
                 $dateTime->modify($offset . ' month');
                 $dateTime->modify('first day of this month');
                 $monthStart = $dateTime->format('Y-m-01 ' . $start_time);

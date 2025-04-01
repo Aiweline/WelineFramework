@@ -11,24 +11,17 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Test;
 
-use PHPUnit\Framework\TestCase;
+use Weline\Framework\UnitTest\TestCore;
 use Weline\Framework\Cache\Scanner;
 
 use function PHPUnit\Framework\assertIsArray;
 
-class ScannerTest extends TestCase
+class ScannerTest extends TestCore
 {
     public function testScanAppCaches()
     {
         $scanner = new Scanner();
-        $data    = $scanner->scanAppCaches();
-        assertIsArray($data);
-    }
-
-    public function testScanFrameworkCaches()
-    {
-        $scanner = new Scanner();
-        $data    = $scanner->scanFrameworkCaches();
+        $data    = $scanner->getCaches();
         assertIsArray($data);
     }
 }

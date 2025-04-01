@@ -23,7 +23,7 @@ class Install extends BaseCommand
     public function execute(array $args = [], array $data = [])
     {
         $cron_name = $this->getCronName($data['module']);
-        $result    = $this->schedule->create($cron_name);
+        $result = $this->schedule->create($cron_name);
         if ($result['status']) {
             $this->printing->note($result['msg']);
         } else {

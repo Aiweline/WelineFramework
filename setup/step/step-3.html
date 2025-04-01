@@ -1,15 +1,19 @@
 <div class="container">
-    <div class="form-box"  >
+    <div class="form-box">
         <h2>Step 3: 环境初始化</h2>
         <form id="init_env" action="/setup/installer.php" method="post" onsubmit="return false;"
               onclick="checkEnv('init_env','init_env','✖')">
             <div class="user-box">
                 <input type="text" name="admin" required="" value="admin_123">
-                <label>PC后台入口</label>
+                <label><span class="text-danger">*</span>PC后台入口</label>
+            </div>
+            <div class="user-box">
+                <input type="text" name="api" value="rest_v1">
+                <label>REST API入口: 选填，默认没有限制</label>
             </div>
             <div class="user-box">
                 <input type="text" name="api_admin" required="" value="rest_123">
-                <label>REST API后台入口</label>
+                <label><span class="text-danger">*</span>REST API后台入口</label>
             </div>
             <button value="提交" type="submit">
                 <span></span>

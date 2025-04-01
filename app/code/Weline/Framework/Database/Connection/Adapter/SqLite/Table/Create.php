@@ -32,9 +32,26 @@ class Create extends AbstractTable implements CreateInterface
         self::table_ADDITIONAL => ';',
     ];
 
+    public function reset()
+    {
+        $this->fields = [];
+        $this->indexs = [];
+        $this->foreign_keys = [];
+        $this->constraints = '';
+        $this->additional = ';';
+        $this->primary_key = '';
+        $this->comment = '';
+        $this->new_table_name = '';
+        $this->index_outs = [];
+        foreach (self::init_vars as $init_var) {
+            $this->$init_var = $init_var;
+        }
+    }
+
     public function createTable(string $table, string $comment = ''): CreateInterface
     {
         # 开始表操作
+        $this->reset();
         $this->startTable($table, $comment);
         return $this;
     }

@@ -45,7 +45,7 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
     public function execute(Event $event)
     {
         /**@var DataObject $words_file_data */
-        $words_file_data = $event->getData('file_data');
+        $words_file_data = $event->getData();
 //        $words_file      = $words_file_data->getData('file_path');
 
         // 翻译收集

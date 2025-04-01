@@ -94,9 +94,17 @@ class Response implements ResponseInterface
             }
         }
         $this->getEvenManager()->dispatch('Weline_Framework_http_response_no_router_before');
-        http_response_code($code);
-        @header('http/2.0 ' . $code . ' ' . $msg);
-        @header('status: ' . $code . ' ' . $msg);
+        if (DEV || CLI) {
+            if (!headers_sent()) {
+                http_response_code($code);
+                header('http/2.0 ' . $code . ' ' . $msg);
+                header('status: ' . $code . ' ' . $msg);
+            }
+        } else {
+            http_response_code($code);
+            header('http/2.0 ' . $code . ' ' . $msg);
+            header('status: ' . $code . ' ' . $msg);
+        }
         if (is_file(BP . 'pub/errors/' . $code . '.php')) {
             exit(include BP . 'pub/errors/' . $code . '.php');
         }
@@ -113,7 +121,7 @@ class Response implements ResponseInterface
     public function redirect(string $url, $code = 302): void
     {
         $data = new DataObject(['url' => $url, 'code' => $code]);
-        $this->getEvenManager()->dispatch('Weline_Framework_Http::response_redirect_before', ['data' => $data]);
+        $this->getEvenManager()->dispatch('Weline_Framework_Http::response_redirect_before', $data);
         $url = $data->getData('url');
         $code = $data->getData('code');
         http_response_code($code);

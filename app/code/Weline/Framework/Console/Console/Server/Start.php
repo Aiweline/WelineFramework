@@ -38,7 +38,8 @@ class Start implements CommandInterface
         $this->printer->note(__('局域网API地址：http://%1:%2/%3/rest', [$this->system->getLocalIp(), $port, Env::get('api_admin')]));
 
         # 调用静态文件部署
-        if (Env::get('deploy') !== 'dev') {
+        $force = $args['force'] ?? $args['f'] ?? false;
+        if (!$force && Env::get('deploy') !== 'dev') {
             $this->printer->setup(__('启用PHP内置服务器需要将部署模式\'设置为dev，当前部署模式为 %1，是否继续(y/n)?', Env::get('deploy') ?? 'default'));
             $input = $this->system->input();
             if (strtolower(chop($input)) !== 'y' && strtolower(chop($input)) !== 'yes') {
@@ -46,6 +47,12 @@ class Start implements CommandInterface
                 return;
             }
             $this->set->deploy('dev');
+        }
+        if (Env::get('deploy') !== 'dev') {
+            # 清理缓存
+            ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class)->execute();
+            # 强制部署开发环境
+            $this->set->deploy('prod');
         }
         Server::instance($host, $port);
     }

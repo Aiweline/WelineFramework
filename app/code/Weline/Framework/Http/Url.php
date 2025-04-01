@@ -25,6 +25,16 @@ class Url implements UrlInterface
         $this->request = $request;
     }
 
+    public function getApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
+    {
+        # 判断前后端
+        if ($this->request->isBackend()) {
+            return $this->getBackendApiUrl($path, $params, $merge_url_params);
+        } else {
+            return $this->getFrontendApiUrl($path, $params, $merge_url_params);
+        }
+    }
+
     public function getBackendApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
     {
         if ($path) {
@@ -41,6 +51,36 @@ class Url implements UrlInterface
             }
         } else {
             $url = $this->request->getBaseUrl();
+        }
+        return $this->extractedUrl($params, $merge_url_params, $url);
+    }
+
+    public function getFrontendApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
+    {
+        if ($path) {
+            if (!$this->isLink($path)) {
+                # URL自带星号处理
+                $router = $this->request->getRouterData('router');
+                if (str_contains($path, '*')) {
+                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('//', '/', $path);
+                }
+                $api = Env::get('api');
+                if (empty($api)) {
+                    $url = $this->request->getBaseHost() . '/' . $path;
+                } else {
+                    $url = $this->request->getBaseHost() . '/' . $api . '/' . $path;
+                }
+            } else {
+                $url = $path;
+            }
+        } else {
+            $api = Env::get('api');
+            if (empty($api)) {
+                $url = $this->request->getBaseHost();
+            } else {
+                $url = $this->request->getBaseHost() . $api . '/';
+            }
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -120,13 +160,14 @@ class Url implements UrlInterface
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . self::getPrefix() . '/' . Env::getInstance()->getConfig('admin') . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
+                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('admin') . self::getPrefix() . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
             } else {
                 $url = $path;
             }
         } else {
             $url = $this->request->getBaseUrl();
         }
+
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
 
@@ -215,11 +256,14 @@ class Url implements UrlInterface
                 } else {
                     $params = $url_params;
                 }
+            } else {
+                $params = $url_params;
             }
         }
         if ($merge_url_params) {
             $params = array_merge($this->request->getGet(), $params);
         }
+
         if ($params) {
             foreach ($params as $key => $param) {
                 if (empty($param)) {
@@ -253,12 +297,12 @@ class Url implements UrlInterface
 
     public function getFullUrl($s, $use_forwarded_host = false): string
     {
-        return self::removeExtraDoubleSlashes($this->getUrlOrigin($s, $use_forwarded_host) . '/' . ($s['ORIGIN_REQUEST_URI'] ?? $s['REQUEST_URI']));
+        return self::removeExtraDoubleSlashes($this->getUrlOrigin($s, $use_forwarded_host) . '/' . ($s['WELINE_ORIGIN_REQUEST_URI'] ?? $s['REQUEST_URI']));
     }
 
     public function getCurrentUrl(array $params = [], bool $merge_url_params = true): string
     {
-        $url = self::removeExtraDoubleSlashes($this->getUrlOrigin($_SERVER, false) . '/' . ($_SERVER['ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI']));
+        $url = self::removeExtraDoubleSlashes($this->getUrlOrigin($_SERVER, false) . '/' . ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI']));
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
 }

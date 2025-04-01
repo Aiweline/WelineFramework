@@ -299,6 +299,9 @@ abstract class Query implements QueryInterface
     public function alias(string $table_alias_name): QueryInterface
     {
         $this->table_alias = $table_alias_name;
+        if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
+            $this->fields = $this->table_alias . '.*';
+        }
         return $this;
     }
 
@@ -498,6 +501,7 @@ abstract class Query implements QueryInterface
     {
         if ($find_fields) {
             $this->find_fields = $find_fields;
+            $this->fields($find_fields);
         }
         $this->limit(1, 0);
         $this->fetch_type = __FUNCTION__;
@@ -615,6 +619,7 @@ abstract class Query implements QueryInterface
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
+                Debug::target('dd', $result);
                 if ($this->find_fields) {
                     if ($result) {
                         if (str_contains($this->find_fields, ',')) {
@@ -634,7 +639,6 @@ abstract class Query implements QueryInterface
                 if ($model_class && empty($result)) {
                     $result = ObjectManager::make($model_class, ['data' => []], '__construct');
                 }
-                $this->find_fields = '';
                 break;
             case 'insert':
                 $result = $this->getLink()->lastInsertId();
@@ -664,6 +668,7 @@ abstract class Query implements QueryInterface
         }
         //        $this->clear();
         $this->clearQuery();
+        if ($this->table_alias !== 'main_table') $this->alias('main_table');
         //        $this->reset();
         return $result;
     }
@@ -762,6 +767,7 @@ abstract class Query implements QueryInterface
                 $this->where("TO_DAYS({$field})=TO_DAYS(NOW())");
                 break;
             case 'yesterday':
+            case 'last_day':
                 #昨天
                 $this->where("DATE({$field}) = DATE(CURDATE()-1)");
                 break;
