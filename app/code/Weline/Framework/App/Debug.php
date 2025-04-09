@@ -15,7 +15,7 @@ class Debug
         if (!$value) {
             # 获取上级调用文件和行数
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-            $file = $backtrace[0]['file'];
+            $file = str_replace(BP, '', $backtrace[0]['file']);
             $line = $backtrace[0]['line'];
             $value = __('调试位置：') . "{$file}({$line})";
         }
@@ -29,14 +29,17 @@ class Debug
         if (!isset($_ENV['w-debug']) || !isset($_ENV['w-debug'][$env_key])) {
             return false;
         }
+        if (is_bool($value)) {
+            $value = $value ? 'true' : 'false';
+        }
         if ($value !== 'debug::skip') {
             # 获取触发位置
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-            $file = $backtrace[0]['file'];
+            $file = str_replace(BP, '', $backtrace[0]['file']);
             $line = $backtrace[0]['line'];
             # 调用者位置
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
-            $call_file = $backtrace[1]['file'];
+            $call_file = str_replace(BP, '', $backtrace[1]['file']);
             $call_line = $backtrace[1]['line'];
 
             $printerClass = 'Weline\Framework\Output\\' . (CLI ? 'Cli' : 'Debug') . '\Printing';

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Backend\Model;
 
 use Weline\Backend\Session\BackendSession;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Api\Db\TableInterface;
@@ -140,6 +141,9 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
      * @param string $key
      * @param string $value
      * @param string $module
+     * @param string $name
+     * @param bool $check
+     * @return bool
      * @throws \Exception
      */
     public function setConfig(string $key, string $value, string $module, string $name, $check = true): bool
@@ -164,7 +168,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
         $userSession = ObjectManager::getInstance(BackendSession::class);
         return (bool)$this->clear()
             ->setData(self::fields_key, $key, true)
-            ->setData(self::fields_value, $value, true)
+            ->setData(self::fields_value, $value)
             ->setData(self::fields_user_id, $userSession->getLoginUserID(), true)
             ->setData(self::fields_module, $module, true)
             ->setData(self::fields_name, $name, true)
@@ -173,8 +177,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
 
     private static function key(string $key, string $module = '', string $name = ''): string
     {
-        $key = ($module ? $module . '::' : '') . ($name ? $name . '::' : '') . $key;
-        return $key;
+        return ($module ? $module . '::' : '') . ($name ? $name . '::' : '') . $key;
     }
 
     /**
@@ -182,7 +185,9 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
      * @param string $key
      * @param string $value
      * @param string $module
-     * @return bool
+     * @param string $name
+     * @param bool $check
+     * @return bool|int
      * @throws \Exception
      */
     public function setDefaultConfig(string $key, string $value, string $module, string $name, $check = true): bool|int
@@ -204,10 +209,10 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             ->setData(self::fields_user_id, 0, true)
             ->setData(self::fields_module, $module, true)
             ->setData(self::fields_name, $name, true)
-            ->save(true);
+            ->save();
     }
 
-    public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+    public function save(string|array|bool|AbstractModel $data = [], string|array|null $sequence = ''): bool|int
     {
         $this->forceCheck();
         return parent::save($data, $sequence);
