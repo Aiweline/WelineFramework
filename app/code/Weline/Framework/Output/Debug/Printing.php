@@ -21,6 +21,18 @@ class Printing extends AbstractPrint
         $this->etc = Env::getInstance();
     }
 
+    public function printing(string $data = 'Printing!', string $message = 'Debug', string $color = self::NOTE, int $pad_length = 0): void
+    {
+        if (!CLI) {
+            $data = str_replace(PHP_EOL, '<br>', $data);
+        }
+        $doc_tmp = '【' . $message . '】：' . ($pad_length ? str_pad($data, $pad_length) : $data);
+        $doc = <<<COMMAND_LIST
+$doc_tmp
+COMMAND_LIST;
+        echo $doc;
+    }
+
     /**
      * @DESC         |日志记录
      *
