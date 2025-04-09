@@ -593,17 +593,18 @@ abstract class AbstractModel extends DataObject
      */
     public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
-        if (is_string($data)) {
-            $this->force_check_flag = true;
-            $sequence = $data;
-        }
+
         if (is_object($data)) {
             $this->setModelData($data->getModelData());
         } elseif (is_bool($data)) {
             $this->force_check_flag = $data;
         } elseif (is_array($data)) {
             $this->setModelData($data);
+        } elseif (is_string($data)) {
+            $this->force_check_flag = true;
+            $sequence = $data;
         }
+
         # 检测是否检查更新
         if ($sequence) {
             if (is_array($sequence)) {
@@ -629,12 +630,12 @@ abstract class AbstractModel extends DataObject
             }
         }
 
+
         # 如果主键有值
         if ($this->_primary_key and $this->getId()) {
             $this->unique_data[$this->_primary_key] = $this->getId();
         }
 
-//        dd($this->unique_data);
         // 如果强制检测更新，但是没有任何条件则使用联合主键的方式进行条件装配
         if ($this->force_check_flag && empty($this->unique_data)) {
             foreach ($this->_unit_primary_keys as $unit_primary_key) {
@@ -1657,6 +1658,7 @@ PAGINATION;
         } else {
             $check_result = $this->unique_data;
         }
+
         # 存在更新
         if (isset($check_result[$this->_primary_key])) {
             # 新增更新依赖主键
