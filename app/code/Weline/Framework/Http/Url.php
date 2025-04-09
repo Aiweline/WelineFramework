@@ -160,7 +160,7 @@ class Url implements UrlInterface
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('admin') . self::getPrefix() . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
+                $url = $this->request->getBaseHost() . '/' . Env::getInstance()->getConfig('admin') . self::getPrefix() . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
             } else {
                 $url = $path;
             }
