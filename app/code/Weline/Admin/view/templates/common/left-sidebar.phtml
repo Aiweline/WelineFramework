@@ -67,6 +67,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
 
                             if ($childCount == 0) {
                                 $url_prefix = $submenu['is_backend'] ? $backend_url_prefix : $frontend_url_prefix;
+                                $url_prefix = rtrim($url_prefix, '/');
                                 echo "<li data-source='{$submenu['source_id']}'>";
                                 echo "<a href='{$url_prefix}/{$submenu['route']}' data-source='{$submenu['source_id']}' class='waves-effect'>";
                                 echo "<i class='{$submenu['icon']}'></i><span>" . __($submenu['source_name']) . "</span>";
@@ -80,7 +81,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
                                 echo "<span>" . __($submenu['source_name']) . "</span>";
                                 echo "</a>";
                                 echo "<ul class='sub-acl' aria-expanded='false'>";
-                                renderSubMenu($children, $backend_url_prefix,$frontend_url_prefix);
+                                renderSubMenu($children, $backend_url_prefix, $frontend_url_prefix);
                                 echo "</ul>";
                                 echo "</li>";
                             }
