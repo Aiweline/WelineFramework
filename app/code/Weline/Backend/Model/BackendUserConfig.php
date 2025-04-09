@@ -197,7 +197,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
             $moduleInfo = Env::getInstance()->getModuleInfo($module);
             if (!$moduleInfo) {
                 if (DEV) {
-                    throw new \Exception('找不到模组' . $module);
+                    throw new \Exception(__('找不到模组: %1', $module));
                 }
                 return false;
             }
