@@ -184,64 +184,50 @@ File: Main Js File
         // 顶部栏
         let data_topbar = $('input[name="data-topbar"]')
         data_topbar.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-topbar': $(e.target).val()}, 'data-topbar': $(e.target).val()}
             setThemeConfig(layout)
-            hideLoading()
         });
         // 侧边栏
         let data_sidebar = $('input[name="data-sidebar"]')
         data_sidebar.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-sidebar': $(e.target).val()}, 'data-sidebar': $(e.target).val()}
             setThemeConfig(layout)
-            hideLoading()
         });
         // 侧边栏尺寸
         let data_sidebar_size = $('input[name="data-sidebar-size"]')
         data_sidebar_size.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-sidebar-size': $(e.target).val()}, 'data-sidebar-size': $(e.target).val()}
             setThemeConfig(layout)
-            hideLoading()
         });
         // 侧边栏尺寸
         let data_layout_size = $('input[name="data-layout-size"]')
         data_layout_size.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout-size': $(e.target).val()}, 'data-layout-size': $(e.target).val()}
             setThemeConfig(layout)
-            hideLoading()
         });
         // 布局
         let data_layout = $('#data-layout')
         data_layout.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout': ""}, 'data-layout': false}
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-layout': "horizontal"}, 'data-layout': true};
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 3、保持最大化
         let data_keep_enlarged = $('#data-keep-enlarged')
         data_keep_enlarged.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout': "false"}, 'data-keep-enlarged': false}
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-keep-enlarged': "true"}, 'data-keep-enlarged': true};
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 4、class
         let layout_class = $('input[name="layout-class"]')
         layout_class.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'class': $(e.target).val()}, 'layout-class': $(e.target).val()}
             setThemeConfig(layout)
-            hideLoading()
         });
 
 
@@ -252,7 +238,6 @@ File: Main Js File
             light_sidebar.prop('checked', true);
         }
         light_sidebar.on("change", function (e) {
-            showLoading()
             let layout = {
                 layouts: {'data-topbar': "dark", 'data-sidebar': 'dark'},
                 'light-sidebar': false,
@@ -268,7 +253,6 @@ File: Main Js File
                 };
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 2、图标菜单
         let icon_sidebar = $('#icon-sidebar')
@@ -276,7 +260,6 @@ File: Main Js File
             icon_sidebar.prop('checked', true);
         }
         icon_sidebar.on("change", function (e) {
-            showLoading()
             let layout = {
                 layouts: {'data-keep-enlarged': "false", class: ""},
                 'icon-sidebar': false,
@@ -292,7 +275,6 @@ File: Main Js File
                 };
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 3、图文菜单
         let layouts_compact_sidebar = $('#layouts-compact-sidebar')
@@ -300,13 +282,19 @@ File: Main Js File
             layouts_compact_sidebar.prop('checked', true);
         }
         layouts_compact_sidebar.on("change", function (e) {
-            showLoading()
-            let layout = {layouts: {'data-sidebar-size': ""}, 'layouts-compact-sidebar': false, 'data-sidebar-size': ""};
+            let layout = {
+                layouts: {'data-sidebar-size': ""},
+                'layouts-compact-sidebar': false,
+                'data-sidebar-size': ""
+            };
             if ($(e.target).prop('checked')) {
-                layout = {layouts: {'data-sidebar-size': "small"}, 'layouts-compact-sidebar': true, 'data-sidebar-size': "small"}
+                layout = {
+                    layouts: {'data-sidebar-size': "small"},
+                    'layouts-compact-sidebar': true,
+                    'data-sidebar-size': "small"
+                }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 4、页顶菜单
         let topnav = $('#topnav')
@@ -314,13 +302,11 @@ File: Main Js File
             topnav.prop('checked', true);
         }
         topnav.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {}, 'topnav': false};
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {}, 'topnav': true}
             }
             setThemeConfig(layout)
-            hideLoading()
         });
 
         // 布局
@@ -330,13 +316,11 @@ File: Main Js File
             horizontal.prop('checked', true);
         }
         horizontal.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout': ""}, 'horizontal': false, 'data-layout': ""};
             if ($(e.target).prop('checked')) {
                 layout = {layouts: {'data-layout': "horizontal"}, 'horizontal': true, 'data-layout': "horizontal"}
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 2、水平顶黑
         let layouts_hori_topbar_dark = $('#layouts-hori-topbar-dark')
@@ -344,7 +328,6 @@ File: Main Js File
             layouts_hori_topbar_dark.prop('checked', true);
         }
         layouts_hori_topbar_dark.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout': ""}, 'layouts-hori-topbar-dark': false, 'data-layout': ""};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -355,7 +338,6 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 3、水平盒子
         let layouts_hori_boxed_width = $('#layouts-hori-boxed-width')
@@ -363,7 +345,6 @@ File: Main Js File
             layouts_hori_boxed_width.prop('checked', true);
         }
         layouts_hori_boxed_width.on("change", function (e) {
-            showLoading()
             let layout = {
                 layouts: {'data-layout': "", 'data-layout-size': ""},
                 'data-layout': "",
@@ -379,7 +360,6 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 4、水平盒子顶黑
         let vertical_collpsed_boxed = $('#vertical-collpsed-boxed')
@@ -387,7 +367,6 @@ File: Main Js File
             vertical_collpsed_boxed.prop('checked', true);
         }
         vertical_collpsed_boxed.on("change", function (e) {
-            showLoading()
             let layout = {
                 layouts: {'data-layout': "", 'data-layout-size': ""},
                 'vertical-collpsed-boxed': false,
@@ -410,7 +389,6 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 5、水平盒子菜单置顶
         let horizontal_menu_top = $('#horizontal_menu_top')
@@ -418,7 +396,6 @@ File: Main Js File
             horizontal_menu_top.prop('checked', true);
         }
         horizontal_menu_top.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {'data-layout': "", 'data-layout-size': ""}, 'horizontal_menu_top': false};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -432,7 +409,6 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 6、紧凑布局
         let boxed = $('#boxed')
@@ -440,7 +416,6 @@ File: Main Js File
             boxed.prop('checked', true);
         }
         boxed.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {}, 'boxed': false};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -460,7 +435,6 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
         // 7、水平紧凑布局
         let horizontal_boxed = $('#horizontal-boxed')
@@ -468,7 +442,6 @@ File: Main Js File
             horizontal_boxed.prop('checked', true);
         }
         horizontal_boxed.on("change", function (e) {
-            showLoading()
             let layout = {layouts: {}, 'horizontal-boxed': false};
             if ($(e.target).prop('checked')) {
                 layout = {
@@ -480,11 +453,11 @@ File: Main Js File
                 }
             }
             setThemeConfig(layout)
-            hideLoading()
         });
     }
 
     async function setThemeConfig(layout, reload = true) {
+        showLoading()
         $.ajax({
             url: window.url('/backend/theme-config/set'),
             data: JSON.stringify(layout),
@@ -492,13 +465,13 @@ File: Main Js File
             type: 'post',
             success: async res => {
                 if ((200 === res.code) && reload) window.location.reload()
+                hideLoading()
             }
         })
     }
 
     function updateThemeSetting(id) {
-        if(id==='reset-theme'){
-            showLoading()
+        if (id === 'reset-theme') {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'light',
@@ -508,9 +481,7 @@ File: Main Js File
                 'dark-mode-switch': false,
                 'rtl-mode-switch': false,
             })
-        }
-        else if(id==='light-mode-radio'){
-            showLoading()
+        } else if (id === 'light-mode-radio') {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'light',
@@ -520,9 +491,7 @@ File: Main Js File
                 'dark-mode-switch': false,
                 'rtl-mode-switch': false,
             })
-        }
-        else if(id==='dark-mode-radio'){
-            showLoading()
+        } else if (id === 'dark-mode-radio') {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'dark',
@@ -534,34 +503,31 @@ File: Main Js File
             })
         }
         // ajax请求设置主题模式
-        else if ($("#light-mode-switch").prop("checked") === true && id === "light-mode-switch") {
-            showLoading()
+        else if (id === "light-mode-switch") {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'light',
                     'data-sidebar': 'light',
                 },
-                'light-mode-switch': true,
+                'light-mode-switch': $("#light-mode-switch").prop("checked") === true,
                 'dark-mode-switch': false,
                 'rtl-mode-switch': false,
             })
-        } else if ($("#dark-mode-switch").prop("checked") === true && id === "dark-mode-switch") {
-            showLoading()
+        } else if (id === "dark-mode-switch") {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'dark',
                     'data-sidebar': 'dark',
                 },
                 'light-mode-switch': false,
-                'dark-mode-switch': true,
+                'dark-mode-switch': $("#dark-mode-switch").prop("checked") === true,
                 'rtl-mode-switch': false,
             })
-        } else if ($("#rtl-mode-switch").prop("checked") === true && id === "rtl-mode-switch") {
-            showLoading()
+        } else if (id === "rtl-mode-switch") {
             setThemeConfig({
                 'light-mode-switch': false,
                 'dark-mode-switch': false,
-                'rtl-mode-switch': true,
+                'rtl-mode-switch': $("#rtl-mode-switch").prop("checked") === true,
             })
         }
     }
