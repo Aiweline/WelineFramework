@@ -17,7 +17,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
         <!-- Settings -->
         <hr class='mt-0'/>
-        <h6 class='text-center mb-0'><lang>系统配置</lang></h6>
+        <h6 class='text-center mb-0'>
+            <lang>系统配置</lang>
+        </h6>
         <div class='p-4'>
             <div class='mb-3'>
                 <div class='mt-4 mt-lg-0'>
@@ -25,7 +27,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         <lang>全局 默认/还原</lang>
                     </h5>
                     <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-topbar'
+                        <input class='form-check-input' type='radio'
                                id='reset-theme'
                                value=''>
                         <label class='form-check-label' for='data-topbar-light'>
@@ -33,7 +35,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         </label>
                     </div>
                     <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='light-mode-switch'
+                        <input class='form-check-input' type='radio'
                                id='light-mode-radio'
                                value='light' <?= $themeConfig->getThemeConfig('light-mode-switch') ? 'checked' : '' ?>>
                         <label class='form-check-label' for='data-topbar-light'>
@@ -41,7 +43,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         </label>
                     </div>
                     <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-topbar'
+                        <input class='form-check-input' type='radio'
                                id='dark-mode-radio'
                                value='dark' <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
                         <label class='form-check-label' for='data-topbar-light'>
