@@ -14,6 +14,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Register\RegisterDataInterface;
 use Weline\Framework\System\File\Io\File;
 use Weline\Framework\Helper\AbstractHelper;
@@ -68,8 +69,10 @@ class Data extends AbstractHelper
      * @throws \ReflectionException
      * @throws \Weline\Framework\App\Exception
      */
-    public function registerModuleRouter(array &$modules, string $path, string $name, string $router)
+    public function registerModuleRouter(array &$modules, Module &$register_module)
     {
+        $name = $register_module->getName();
+        $path = $register_module->getBasePath();
         if (!$this->isDisabled($modules, $name)) {
             $module = $modules[$name];
             # API 路由
@@ -98,15 +101,20 @@ class Data extends AbstractHelper
                             $baseRouter .= '-' . $baseRouter_;
                         }
                     }
-                    $baseRouter = trim($router . $baseRouter, '/');
 
                     $this->parent_class_arr = [];// 清空父类信息
-                    $ctl_data = $this->parserController($api_class, $name, $router);
+                    $ctl_data = $this->parserController($api_class, $name);
                     if (empty($ctl_data)) {
                         continue;
                     }
                     $ctl_methods = $ctl_data['methods'];
                     $ctl_area = $ctl_data['area'];
+                    $backend = false;
+                    if (in_array('BackendRestController', $ctl_area)) {
+                        $backend = true;
+                    }
+                    $router = $register_module->getRouter($backend);
+                    $baseRouter = trim($router . $baseRouter, '/');
                     foreach ($ctl_methods as $method => $attributes) {
                         // 分析请求方法
                         $request_method = null;
@@ -146,10 +154,6 @@ class Data extends AbstractHelper
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
                             $route = $rule_router . ($request_method ? '::' . $request_method : '');
-                            $backend = false;
-                            if (in_array('BackendController', $ctl_area)) {
-                                $backend = true;
-                            }
                             $params = [
                                 'type' => DataInterface::type_API,
                                 'area' => $ctl_area,
@@ -241,7 +245,6 @@ class Data extends AbstractHelper
                             }
                         }
                     }
-                    $baseRouter = trim($router . $baseRouter, '/');
 
                     $this->parent_class_arr = [];// 清空父类信息
                     $ctl_data = $this->parserController($pc_class, $name, $router);
@@ -250,6 +253,12 @@ class Data extends AbstractHelper
                     }
                     $ctl_methods = $ctl_data['methods'];
                     $ctl_area = $ctl_data['area'];
+                    $backend = false;
+                    if (in_array('BackendController', $ctl_area)) {
+                        $backend = true;
+                    }
+                    $router = $register_module->getRouter($backend);
+                    $baseRouter = trim($router . $baseRouter, '/');
                     foreach ($ctl_methods as $method => $attributes) {
                         // 分析请求方法
                         $request_method = '';
@@ -288,10 +297,6 @@ class Data extends AbstractHelper
                         $routers = is_string($router) ? [$router] : $router;
                         foreach ($routers as $router_) {
                             $route = $rule_router . ($request_method ? '::' . $request_method : '');
-                            $backend = false;
-                            if (in_array('BackendController', $ctl_area)) {
-                                $backend = true;
-                            }
                             $params = [
                                 'type' => DataInterface::type_PC,
                                 'area' => $ctl_area,
@@ -416,7 +421,7 @@ class Data extends AbstractHelper
      * @return array
      * @throws \ReflectionException
      */
-    private function parserController(string $class, $module_name, $router)
+    private function parserController(string $class, $module_name): array
     {
         // 默认前端控制器
 //        $ctl_area = \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND;
@@ -462,7 +467,6 @@ class Data extends AbstractHelper
                 'attributes' => $reflect->getAttributes(),
                 'class' => $class,
                 'module_name' => $module_name,
-                'router' => $router,
             ];
         } else {
             return [];
