@@ -16,17 +16,29 @@ use Weline\Framework\DataObject\DataObject;
 
 class Module extends DataObject
 {
-    public const position       = 'position';
-    public const name           = 'name';
-    public const status         = 'status';
-    public const version        = 'version';
-    public const router         = 'router';
-    public const description    = 'description';
-    public const base_path      = 'base_path';
+    public const position = 'position';
+    public const name = 'name';
+    public const backend_router = 'backend_router';
+    public const status = 'status';
+    public const version = 'version';
+    public const router = 'router';
+    public const description = 'description';
+    public const base_path = 'base_path';
     public const namespace_path = 'namespace_path';
-    public const path           = 'path';
-    public const dependencies   = 'dependencies';
+    public const path = 'path';
+    public const dependencies = 'dependencies';
 
+
+    public function getBackendRouter(): string
+    {
+        return (string)$this->getData(self::backend_router);
+    }
+
+    public function setBackendRouter(string $backend_router): self
+    {
+        $this->setData(self::backend_router, $backend_router);
+        return $this;
+    }
 
     public function setPosition(string $position): self
     {
@@ -66,6 +78,7 @@ class Module extends DataObject
 
     /**
      * @param string $version
+     * @return Module
      */
     public function setVersion(string $version): static
     {
@@ -74,15 +87,19 @@ class Module extends DataObject
     }
 
     /**
+     * @param bool $is_admin
      * @return string
      */
-    public function getRouter(): string
+    public function getRouter(bool $is_admin = false): string
     {
+        if ($is_admin) {
+            return $this->getData(self::backend_router) ?: $this->getData(self::router);
+        }
         return $this->getData(self::router);
     }
 
     /**
-     * @param string $router
+     * @param array|string $router
      *
      * @return Module
      */
