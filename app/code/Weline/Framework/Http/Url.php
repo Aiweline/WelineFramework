@@ -155,7 +155,7 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->request->getRouterData('backend_router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
@@ -176,7 +176,7 @@ class Url implements UrlInterface
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
-                $router = $this->request->getRouterData('router');
+                $router = $this->request->getRouterData('backend_router');
                 if (str_contains($path, '*')) {
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);

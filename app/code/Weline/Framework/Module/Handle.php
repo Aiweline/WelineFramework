@@ -211,8 +211,13 @@ class Handle implements HandleInterface, RegisterInterface
         }
         if (empty($env)) {
             $env = $this->getEnv($module_name, $env);
-        }                                          // 如果文件不存在则读取模块名字作为router
+        }
+        // 如果文件不存在则读取模块名字作为router
         $router = strtolower($env['router'] ?: '');
+        $backend_router = $router;
+        if (!empty($env['backend_router'])) {
+            $backend_router = strtolower($env['backend_router']);
+        }
         $namespace = str_replace('_', '\\', $module_name);
 
         # 模块数据
@@ -221,6 +226,7 @@ class Handle implements HandleInterface, RegisterInterface
             ->setPosition($position)
             ->setName($module_name)
             ->setRouter($router)
+            ->setBackendRouter($backend_router)
             ->setNamespacePath($namespace)
             ->setBasePath($param['base_path'])
             ->setPath($param['dir_path'])
@@ -259,14 +265,16 @@ class Handle implements HandleInterface, RegisterInterface
      * @DateTime: 2022/3/28 13:56
      * 参数区：
      *
-     * @param Module $module
+     * @param $module_name
      * @param array $env
      *
      * @return array
      */
     public function getEnv($module_name, array $env): array
     {
-        $env['router'] = strtolower($module_name);
+        if (empty($env['router'])) {
+            $env['router'] = strtolower($module_name);
+        }
         if (DEV) {
             $this->printer->note($module_name . '：模块没有设定路由别名，因此沿用模块名称作为路由入口！', '开发');
             $this->printer->warning('{http://demo.com/' . $module_name . '}', '示例');
@@ -425,7 +433,7 @@ class Handle implements HandleInterface, RegisterInterface
             if (DEV) {
                 $this->printer->setup($module->getName() . '：更新路由...', '开发');
             }
-            $this->helper->registerModuleRouter($this->modules, $module->getBasePath(), $module->getName(), $module->getRouter());
+            $this->helper->registerModuleRouter($this->modules, $module);
             if (DEV) {
                 $this->printer->setup($module->getName() . '：更新路由完成...', '开发');
             }
