@@ -66,7 +66,14 @@ class UpgradeMenu implements ObserverInterface
                     throw new \Exception(__('模块不存在：%1', $module_info['name']));
                 }
             }
-            $menu[Menu::fields_ACTION] = str_replace('*', $module_info['router'], $menu[Menu::fields_ACTION]);
+            if (empty($menu['is_backend'])) {
+                $menu['is_backend'] = true;
+            }
+            $router = $module_info['router'];
+            if ($menu['is_backend']) {
+                $router = $module_info['backend_router'];
+            }
+            $menu[Menu::fields_ACTION] = str_replace('*', $router, $menu[Menu::fields_ACTION]);
         }
         return $menu;
     }
@@ -196,7 +203,7 @@ class UpgradeMenu implements ObserverInterface
         if ($acl_items) {
             /**@var \Weline\Acl\Model\Acl $alcModel */
             $alcModel = ObjectManager::getInstance(Acl::class);
-            $alcModel->insert($acl_items,'source_id')
+            $alcModel->insert($acl_items, 'source_id')
                 ->fetch();
         }
         return array($menus, $menu, $modules_info);
