@@ -35,7 +35,7 @@ class QueueCollect implements \Weline\Framework\Event\ObserverInterface
      * @inheritDoc
      * @throws \Exception
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $this->helper::collect();
     }

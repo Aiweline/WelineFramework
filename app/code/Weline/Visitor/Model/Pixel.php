@@ -33,7 +33,7 @@ class Pixel extends Model
 
     public static function getUnDeaPixels()
     {
-        return obj(self::class)->reset()->where(self::fields_CRON_DEAL, 0)->select()->fetchArray();
+        return w_obj(self::class)->reset()->where(self::fields_CRON_DEAL, 0)->select()->fetchArray();
     }
 
 

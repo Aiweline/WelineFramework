@@ -32,7 +32,7 @@ class RoleChecker implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var \Weline\Acl\Model\Role $role */
         $role = $event->getData('data');

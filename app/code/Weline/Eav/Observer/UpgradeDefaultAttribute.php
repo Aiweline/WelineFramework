@@ -19,7 +19,7 @@ class UpgradeDefaultAttribute implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         // 安装实体
         /**@var \Weline\Framework\Module\Config\ModuleFileReader $moduleFileReader */

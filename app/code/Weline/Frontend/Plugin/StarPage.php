@@ -28,15 +28,15 @@ class StarPage
         $this->cache = $cacheFactory->create();
     }
 
-    public function beforeGetUrlPath(\Weline\Framework\Http\Request $request,$url='')
+    public function beforeGetUrlPath(\Weline\Framework\Http\Request $request, $url = '')
     {
         $result = $request->parse_url($url)['path'] ?? '';
-        if (empty($result)) {
+        if (empty($result) or $result == '/') {
             $result = $this->cache->get(KeysInterface::cache_start_page_path);
             if (empty($result)) {
                 /**@var Config $configModel */
                 $configModel = ObjectManager::getInstance(Config::class);
-                $result      = $configModel->getConfig(KeysInterface::key_start_page_path, KeysInterface::start_module);
+                $result = $configModel->getConfig(KeysInterface::key_start_page_path, KeysInterface::start_module);
                 $this->cache->set(KeysInterface::cache_start_page_path, $result);
             }
         }

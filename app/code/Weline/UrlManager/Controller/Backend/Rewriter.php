@@ -29,10 +29,10 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
 //        dd($urlRewriteModel);
         $rewrites = $urlRewriteModel->fields('main_table.*,main_table.path as rewrite_path,um.url_id,um.path,um.is_deleted')
-                                    ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id')
-                                    ->pagination()
-                                    ->select()
-                                    ->fetch();
+            ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id')
+            ->pagination()
+            ->select()
+            ->fetch();
         $this->assign('rewrites', $rewrites->getItems());
         $this->assign('pagination', $rewrites->getPagination());
         return $this->fetch();
@@ -43,7 +43,7 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         $data = $this->request->getPost();
         if (!isset($data['path'])) {
             $origin_path_arr = explode('::', $data['origin_path']);
-            $data['path']    = array_shift($origin_path_arr);
+            $data['path'] = array_shift($origin_path_arr);
         } else {
             $data['url_identify'] = md5($data['path']);
         }
@@ -65,10 +65,17 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         $uri_identify = $this->request->getGet('identify', '');
         /**@var UrlManager $urlManager */
         $urlManager = ObjectManager::getInstance(UrlManager::class);
-        $url        = $urlManager->where($urlManager::fields_IDENTIFY, $uri_identify)
-                                 ->fields('main_table.*,ur.rewrite as rewrite_path')
-                                 ->joinModel(UrlRewrite::class, 'ur', 'main_table.identify=ur.url_identify', 'left')
-                                 ->find()->fetch();
+        $url = $urlManager
+            ->fields('main_table.*,ur.rewrite as rewrite_path')
+            ->where('ur.' . UrlRewrite::fields_URL_IDENTIFY, $uri_identify)
+            ->joinModel(
+                UrlRewrite::class,
+                'ur',
+                'main_table.identify=ur.url_identify',
+                'right'
+            )
+            ->find()
+            ->fetch();
         $this->assign('url', $url);
         return $this->fetch();
     }

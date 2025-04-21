@@ -36,7 +36,7 @@ class UpgradeMenu implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         list($menus, $menu, $modules_info) = $this->collectMenus();
         return array($menus, $menu, $modules_info);

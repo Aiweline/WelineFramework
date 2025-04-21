@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller\System;
 
+use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,19 +22,24 @@ class Config extends \Weline\Framework\App\Controller\BackendController
     {
         $key = $this->request->getGet('key');
         $value = $this->request->getGet('value');
-        $type = $this->request->getGet('type','');
+        $type = $this->request->getGet('module', '');
         // 检查三个参数
-        if(!$key || !$value || !$type){
+        if (!$key || !$value) {
             MessageManager::error(__('保存失败，请重试!'));
-            return $this->fetch();
+            return $this->redirect($this->request->getReferer());
         }
         /**@var \Weline\Backend\Model\Config $config */
         $config = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
-        $config->setConfig($key, $value, 'Weline_Backend');
+        try {
+            $config->setConfig($key, $value, 'Weline_Backend');
+        } catch (Exception $e) {
+            $this->getMessageManager()->addWarning(__('保存失败，请重试！%1', $e->getMessage()));
+            return $this->redirect($this->request->getReferer());
+        }
         $fetchName = 'fetch' . ucfirst((string)$type);
-        if(!method_exists($this, $fetchName)){
+        if (!method_exists($this, $fetchName)) {
             $this->getMessageManager()->addWarning(__('保存失败，请重试!不支持的类型：%1', $type));
-            return $this->fetch();
+            return $this->redirect($this->request->getReferer());
         }
         # 清理缓存
         /**@var Clear $cache */
@@ -41,16 +47,16 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         $cache->execute(['-f']);
         ob_clean();
         try {
-            if($type === 'json'){
+            if ($type === 'json') {
                 return $this->$fetchName($this->success('保存成功!'));
-            }else{
+            } else {
                 $this->getMessageManager()->addSuccess(__('保存成功,缓存清理成功！'));
                 $this->redirect($this->request->getReferer());
             }
         } catch (\Exception $exception) {
-            if($type === 'json'){
+            if ($type === 'json') {
                 return $this->$fetchName($this->error(__('保存失败! %1', $exception->getMessage())));
-            }else{
+            } else {
                 $this->getMessageManager()->addWarning(__('保存失败! %1', $exception->getMessage()));
                 $this->redirect($this->request->getReferer());
             }

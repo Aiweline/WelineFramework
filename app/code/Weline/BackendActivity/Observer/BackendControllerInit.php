@@ -34,7 +34,7 @@ class BackendControllerInit implements ObserverInterface
         $this->acl = $acl;
     }
 
-    function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         # ACL访问列表信息
         $acl = $this->acl->where(Acl::fields_CLASS, $this->request->getRouterData('class/name'))

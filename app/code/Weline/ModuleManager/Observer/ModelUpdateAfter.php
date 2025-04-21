@@ -24,7 +24,7 @@ class ModelUpdateAfter implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $type = $event->getData('type');
         $data = $event->getData('data');
