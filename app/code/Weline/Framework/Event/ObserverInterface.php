@@ -19,5 +19,5 @@ interface ObserverInterface
      * @param Event $event
      *
      */
-    public function execute(Event $event);
+    public function execute(Event &$event);
 }

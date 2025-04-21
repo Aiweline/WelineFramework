@@ -17,5 +17,6 @@ Register::register(
     '<a href="https://bbs.aiweline.com">系统组件模块: 多网站</a>',
     [
         'Weline_Framework',
+        'Weline_Currency',
     ]
 );

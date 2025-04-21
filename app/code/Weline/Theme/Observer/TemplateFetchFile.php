@@ -42,7 +42,7 @@ class TemplateFetchFile implements ObserverInterface
         $this->welineTheme = $welineTheme;
     }
 
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**
          * @var $template Template

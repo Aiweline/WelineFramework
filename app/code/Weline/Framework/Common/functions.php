@@ -33,8 +33,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Cache\ViewCache;
 
 # obj 模型实例化方法
-if (!function_exists('obj')) {
-    function obj(string $class)
+if (!function_exists('w_obj')) {
+    function w_obj(string $class)
     {
         return ObjectManager::getInstance($class);
     }

@@ -10,15 +10,15 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locals;
 
-class AppDetectLanguage implements ObserverInterface
+class DetectLanguage implements ObserverInterface
 {
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
+        $data = $event->getData();
         /**@var DataObject $data */
-        $data = $event->getData('data');
         $code = $data->getData('code');
         /**@var CacheInterface $cache */
         $cache = ObjectManager::getInstance(AppCache::class . 'Factory');
@@ -32,10 +32,10 @@ class AppDetectLanguage implements ObserverInterface
                 ->select()
                 ->fetchArray();
             foreach ($locals as &$local) {
-                $local = $local['code'];
+                $local = strtolower($local['code']);
             }
             $cache->set('locals', $locals, 3600 * 24 * 30);
         }
-        $data->setData('result',in_array($code, $locals));
+        $data->setData('result', in_array(strtolower($code), $locals));
     }
 }

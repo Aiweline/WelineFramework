@@ -16,17 +16,17 @@ use Weline\Framework\Event\Event;
 
 class Compiler implements \Weline\Framework\Event\ObserverInterface
 {
-    public const area            = 'frontend';
+    public const area = 'frontend';
     public const require_js_file = 'base' . DS . 'require.configs.js';
     public const require_js_type = 'require.config.js';
 
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $eventData = $event->getEvenData();
-        $area      = $eventData->getArea();
+        $area = $eventData->getArea();
         if (self::area === $area) {
             $type = $eventData->getType();
             switch ($type):

@@ -22,14 +22,14 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var Request $req */
-        $req   = ObjectManager::getInstance(Request::class);
+        $req = ObjectManager::getInstance(Request::class);
         $block = Block::getInstance();
         /**@var DataObject $data */
-        $data         = $event->getData('data');
-        $white_urls   = $data->getData('white_urls');
+        $data = $event->getData('data');
+        $white_urls = $data->getData('white_urls');
         $white_urls[] = 'img/favicon.png';
         $white_urls[] = 'assets/css/bootstrap.min.css';
         $white_urls[] = 'assets/css/icons.min.css';
@@ -47,7 +47,7 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         $white_urls[] = 'assets/libs/metismenu/metisMenu.min.js';
         $white_urls[] = 'assets/libs/simplebar/simplebar.min.js';
         $white_urls[] = 'assets/libs/node-waves/waves.min.js';
-        $white        = false;
+        $white = false;
         foreach ($white_urls as $white_url_string) {
             if (str_contains($req->getUri(), $white_url_string)) {
                 $white = true;
