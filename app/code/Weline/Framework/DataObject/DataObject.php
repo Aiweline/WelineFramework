@@ -126,7 +126,7 @@ class DataObject implements \ArrayAccess
      *
      * @return $this
      */
-    public function setData(string|array $key, $value = null): static
+    public function setData(string|array $key, mixed $value = null): static
     {
         if ($key === (array)$key) {
             foreach ($key as $sub_key => $sub_val) {

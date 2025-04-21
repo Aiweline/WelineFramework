@@ -44,7 +44,7 @@ class Create extends AbstractTable implements CreateInterface
         $this->new_table_name = '';
         $this->index_outs = [];
         foreach (self::init_vars as $init_var) {
-            $this->$init_var = $init_var;
+            $this->{$init_var} = $init_var;
         }
     }
 

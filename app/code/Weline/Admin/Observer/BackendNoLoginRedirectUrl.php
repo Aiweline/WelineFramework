@@ -29,7 +29,7 @@ class BackendNoLoginRedirectUrl implements \Weline\Framework\Event\ObserverInter
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var DataObject $data */
         $data = $event->getData('data');

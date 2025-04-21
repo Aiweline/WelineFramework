@@ -20,9 +20,9 @@ use Weline\I18n\Cache\I18nCache;
 
 class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
 {
-    public const WORDS_CACHE_KEY          = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY';
+    public const WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY';
     public const FRONTEND_WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY_FRONTEND';
-    public const BACKEND_WORDS_CACHE_KEY  = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY_BACKEND';
+    public const BACKEND_WORDS_CACHE_KEY = 'WELINE_FRAMEWORK_SYSTEM_WORDS_CACHE_KEY_BACKEND';
     private \Weline\Framework\Cache\CacheInterface $cache;
     /**
      * @var \Weline\Framework\Http\Request
@@ -34,14 +34,14 @@ class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
         Request   $request
     )
     {
-        $this->cache   = $cache->create();
+        $this->cache = $cache->create();
         $this->request = $request;
     }
 
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         if ($this->request->isBackend()) {
             $this->cache->set(self::BACKEND_WORDS_CACHE_KEY, array_merge($this->getBackendWords(), Parser::getWords()));

@@ -16,6 +16,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cache\RequestCache;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 
 abstract class RequestAbstract extends RequestFilter
@@ -102,6 +103,7 @@ abstract class RequestAbstract extends RequestFilter
     {
         return $this->setData('router', $router);
     }
+
 
     /**
      * @DESC         |获取原始路由
@@ -284,10 +286,10 @@ abstract class RequestAbstract extends RequestFilter
      *
      * @param string $key
      * @param string $value
-     *
+     * @param bool $reload
      * @return RequestAbstract
      */
-    public function setServer(string $key, string $value): static
+    public function setServer(string $key, string $value, bool $reload = false): static
     {
         $_SERVER[$key] = $value;
         return $this;
@@ -310,6 +312,7 @@ abstract class RequestAbstract extends RequestFilter
      *
      * 参数区：
      *
+     * @param string $method
      * @return string
      */
     public function setMethod(string $method): string
@@ -370,19 +373,10 @@ abstract class RequestAbstract extends RequestFilter
         $uri = rtrim($this->getServer('REQUEST_URI'), '/');
 
         $url_path = $this->cache->get($this->uri_cache_key);
-        if ($url_path !== false) {
+        if ($url_path) {
             $this->uri_cache_url_path_data = $url_path;
             $this->setServer('REQUEST_URI', $uri);
             return $url_path;
-        }
-        # url 重写
-        if ($uri && $this->isGet()) {
-            /**@var EventsManager $event */
-            $event = ObjectManager::getInstance(EventsManager::class);
-            $data = new DataObject(['uri' => $uri]);
-            $event->dispatch('Weline_Framework_Router::router_start', $data);
-            $uri = $data->getData('uri');
-            $this->setServer('REQUEST_URI', $uri);
         }
         $this->uri = $uri;
         return $uri;

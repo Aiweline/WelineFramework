@@ -245,7 +245,6 @@ class Core
      */
     public function Pc(string $url)
     {
-        $in = false;
         $url = strtolower($url);
         $is_pc_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND;
         // 检测api路由区域

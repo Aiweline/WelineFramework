@@ -34,13 +34,13 @@ class BackendControllerRouteAfter implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         if ($this->request->isBackend()) {
             $request_id = $this->request->getId();
             /** @var BackendActivityLog $backendActivityLogger */
             $backendActivityLogger = ObjectManager::getInstance(BackendActivityLog::class);
-            $backendActivityLog    = $backendActivityLogger->load(BackendActivityLog::fields_request_id, $request_id);
+            $backendActivityLog = $backendActivityLogger->load(BackendActivityLog::fields_request_id, $request_id);
             if ($backendActivityLog->getId()) {
                 try {
                     /** @var DataObject $data */

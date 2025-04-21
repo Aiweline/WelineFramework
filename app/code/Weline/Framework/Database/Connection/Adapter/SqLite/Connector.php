@@ -48,6 +48,8 @@ final class Connector extends Query implements ConnectorInterface
         try {
             //初始化一个Connection对象
             $this->link = new PDO($dsn);
+            # PRAGMA case_sensitive_like = ON;  -- 开启大小写敏感的LIKE查询
+            $this->link->exec('PRAGMA case_sensitive_like = OFF; -- 关闭大小写敏感的LIKE查询（默认）');
             //            $this->link->exec("set names {$this->configProvider->getCharset()} COLLATE {$this->configProvider->getCollate()}");
             // 设置错误模式为异常
             $this->link->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
