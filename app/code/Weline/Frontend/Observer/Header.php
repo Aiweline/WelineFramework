@@ -18,7 +18,7 @@ class Header implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         if (!$event->getData('is_backend')) {
             $event->setData('class', \Weline\Frontend\Model\Html\Header::class);

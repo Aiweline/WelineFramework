@@ -82,7 +82,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
         if (!$this->isBackend() and !$this->isApiBackend()) {
             return $path;
         }
-        $path = str_replace($this->getAreaRouter() . '/', '', $this->getUrlPath($url));
+        $path = str_replace($this->getAreaRouter() . '/', '', $path);
         return ltrim($path, '//');
     }
 

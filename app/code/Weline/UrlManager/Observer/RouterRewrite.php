@@ -15,6 +15,7 @@ namespace Weline\UrlManager\Observer;
 
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
+use Weline\Framework\Http\Url;
 use Weline\UrlManager\Model\UrlRewrite;
 
 class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
@@ -31,15 +32,43 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
-        /**@@var DataObject $data */
-        $data    = $event->getData('data');
-        $rewrite = $this->urlRewrite->load(UrlRewrite::fields_REWRITE, $data->getData('uri'));
+        $uri = ltrim($event->getData('uri'), '/');
+        $rewrite = $this->urlRewrite->load(UrlRewrite::fields_REWRITE, $uri);
         if ($rewrite->getId()) {
             # 读取原地址
-            $origin_path = $rewrite->getData('path');
-            $data->setData('uri', $origin_path);
+            $query = Url::parse_url($uri, 'query');
+            $origin_path = '/' . $rewrite->getData('path');
+            if ($query) {
+                if (str_contains($origin_path, '?')) {
+                    $origin_path .= '&' . $query;
+                } else {
+                    $origin_path .= '?' . $query;
+                }
+            }
+            $event->setData('data', $origin_path);
+            $query = Url::parse_url($origin_path, 'query');
+            parse_str($query, $_GET);
+        } else {
+            # 找不到尝试使用path匹配
+            $path = Url::parse_url($uri, 'path');
+            $rewrite = $this->urlRewrite->reset()->load(UrlRewrite::fields_REWRITE, $path);
+            if ($rewrite->getId()) {
+                # 读取原地址
+                $query = Url::parse_url($uri, 'query');
+                $origin_path = '/' . $rewrite->getData('path');
+                if ($query) {
+                    if (str_contains($origin_path, '?')) {
+                        $origin_path .= '&' . $query;
+                    } else {
+                        $origin_path .= '?' . $query;
+                    }
+                }
+                $event->setData('data', $origin_path);
+                $query = Url::parse_url($origin_path, 'query');
+                parse_str($query, $_GET);
+            }
         }
     }
 }

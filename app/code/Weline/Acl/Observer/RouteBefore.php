@@ -53,7 +53,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var \Weline\Framework\Router\Core $route */
         $route = $event->getData('route');
@@ -233,11 +233,11 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     private function findAccessUrlRouteToRedirect(Request &$request, array &$access_sources)
     {
         foreach ($access_sources as $access_source) {
-            $route = strtolower($access_source['route']??'');
-            $method = strtolower($access_source['method']??'');
+            $route = strtolower($access_source['route'] ?? '');
+            $method = strtolower($access_source['method'] ?? '');
             if (($method === 'get' || $method === '') && $route) {
                 # 跳过添加和编辑页面
-                if (!self::canReferer($route)){
+                if (!self::canReferer($route)) {
                     continue;
                 }
                 # 跳过非PC

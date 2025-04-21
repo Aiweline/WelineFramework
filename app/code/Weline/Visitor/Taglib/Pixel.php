@@ -60,10 +60,10 @@ class Pixel implements TaglibInterface
         return function ($tag_key, $config, $tag_data, $attributes) {
             $name = $attributes['name'];
             /**@var Template $tp */
-            $tp = obj(Template::class);
+            $tp = w_obj(Template::class);
             $data = new DataObject(['pixel_code' => '', 'name' => $name, 'enable' => 1]);
             /**@var EventsManager $event */
-            $event = obj(EventsManager::class);
+            $event = w_obj(EventsManager::class);
             $event->dispatch('Weline_Visitor::taglib_pixel', $data);
             if (empty($data->getData('enable'))) {
                 return '';

@@ -27,20 +27,21 @@ class ReindexCollector implements \Weline\Framework\Event\ObserverInterface
     /**
      *
      * @param ModuleFileReader $moduleFileReader
-     * @param Indexer          $indexer
+     * @param Indexer $indexer
      */
     public function __construct(
         ModuleFileReader $moduleFileReader,
         Indexer          $indexer
-    ) {
+    )
+    {
         $this->moduleFileReader = $moduleFileReader;
-        $this->indexer          = $indexer;
+        $this->indexer = $indexer;
     }
 
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {

@@ -36,7 +36,7 @@ class ProcessUrlBefore implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var DataObject $data */
         $data = $event->getData('data');

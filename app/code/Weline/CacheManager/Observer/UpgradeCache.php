@@ -26,14 +26,14 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
         Scanner $scanner
     )
     {
-        $this->scanner   = $scanner;
+        $this->scanner = $scanner;
         $this->data = $this->scanner->getCaches();
     }
 
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         # 更新缓存到数据库
         $model = $this->getModel();
@@ -41,7 +41,7 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
         $modules = Env::getInstance()->getModuleList();
         # 更新系统缓存
         $framework_cache = $this->data['framework'];
-        foreach ($framework_cache as $module=> $caches) {
+        foreach ($framework_cache as $module => $caches) {
             foreach ($caches as $cache) {
                 $cache['type'] = 0;
                 $this->processCache($model, (array)$cache, $modules, $module);
@@ -49,7 +49,7 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
         }
         # 更新APP缓存
         $app_cache = $this->data['app'];
-        foreach ($app_cache as $module=> $caches) {
+        foreach ($app_cache as $module => $caches) {
             foreach ($caches as $cache) {
                 $cache['type'] = 1;
                 $this->processCache($model, (array)$cache, $modules, $module);
@@ -66,8 +66,8 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
      * 参数区：
      *
      * @param \Weline\CacheManager\Model\Cache $model
-     * @param array                            $cache
-     * @param array                            $modules
+     * @param array $cache
+     * @param array $modules
      * @param                                  $default_module_name
      *
      * @throws \ReflectionException

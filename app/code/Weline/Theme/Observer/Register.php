@@ -17,12 +17,12 @@ use Weline\Theme\Register\Installer;
 
 class Register implements ObserverInterface
 {
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var DataObject $data */
-        $data           = $event->getData('data');
+        $data = $event->getData('data');
         $func_arguments = $data->getData('register_arguments');
-        $type           = $func_arguments[0];
+        $type = $func_arguments[0];
         if ($type === RegisterInterface::THEME) {
             $data->setData('installer', Installer::class);
             $data->setData('register_arguments', $func_arguments);

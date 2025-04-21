@@ -45,6 +45,36 @@ class Event extends \Weline\Framework\DataObject\DataObject
         return $res;
     }
 
+    public function setData(array|string $key, mixed $value = null): static
+    {
+        parent::setData($key, $value);
+        $eventData = $this->_getData('data');
+        if (!$eventData) {
+            return $this;
+        }
+        if (is_array($key)) {
+            if ($eventData instanceof DataObject) {
+                $eventData->setData($key);
+            } elseif (is_array($eventData)) {
+                foreach ($key as $k => $item) {
+                    $eventData[$k] = $value;
+                }
+            } else {
+                $eventData = $value;
+            }
+            $this->_data['data'] = $eventData;
+            return $this;
+        } else if ($eventData instanceof DataObject) {
+            $eventData->setData($key, $value);
+        } elseif (is_array($eventData)) {
+            $eventData[$key] = $value;
+        } else {
+            $eventData = $value;
+        }
+        $this->_data['data'] = $eventData;
+        return $this;
+    }
+
     public function getEvenData(string $key = ''): mixed
     {
         $eventData = $this->_getData('data');
