@@ -65,7 +65,7 @@ class Website extends Model
                 ->setName('默认网站')
                 ->setCode('default')
                 ->setUrl('http://localhost')
-                ->setDefaultCurrency('RMB')
+                ->setDefaultCurrency('CNY')
                 ->setDefaultLanguage('zh_Hans_CN')
                 ->setDefaultTimezone('Asia/Shanghai')
                 ->save(true);

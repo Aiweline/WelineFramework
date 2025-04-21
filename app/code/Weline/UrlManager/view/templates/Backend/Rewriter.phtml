@@ -33,12 +33,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 
     <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
     <!--页头工具条 结束-->
 
     <!-- ========== Topnav Start ========== -->
     <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
     <!--页头菜单栏 结束-->
 
     <!-- ========== Left Sidebar Start ========== -->
@@ -62,8 +62,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统配置') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('URL管理器') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统配置') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item"><a
+                                                href="javascript: void(0);"><?= __('URL管理器') ?></a></li>
                                     <li class="breadcrumb-item active"><?= __('URL管理') ?></li>
                                 </ol>
                             </div>
@@ -86,7 +88,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 </h4>
                                 <p class='card-title-desc'>
                                     静态路由管理：可定制属于自己的静态url来提升seo。
-                                    <a class="btn btn-primary pull-right" href="@admin-url('url-manager/backend/rewriter/form')">
+                                    <a class="btn btn-primary pull-right"
+                                       href="@admin-url('url-manager/backend/rewriter/form')">
                                         <lang>添加</lang>
                                     </a>
                                 </p>
@@ -155,10 +158,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     </if>
                                                 </td>
                                                 <td scope='row'>
-                                                    <a href="@admin-url('url-manager/backend/rewriter/form')?rewrite_id={{v.rewrite_id}}">
+                                                    <a href="@admin-url('*/backend/rewriter/form')?identify={{v.url_identify}}">
                                                         <lang>编辑</lang>
                                                     </a>
-                                                    <a href="@admin-url('url-manager/backend/rewriter/delete')?rewrite_id={{v.rewrite_id}}">
+                                                    <a href="@admin-url('*/backend/rewriter/delete')?rewrite_id={{v.rewrite_id}}">
                                                         <lang>删除</lang>
                                                     </a>
                                                 </td>

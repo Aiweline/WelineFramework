@@ -5,8 +5,7 @@ namespace Weline\Websites\Observer;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Http\Url;
 use Weline\Websites\Model\Website;
 
 class DetectWebsite implements ObserverInterface
@@ -15,15 +14,24 @@ class DetectWebsite implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
+        $get_sites = $event->getData('get_sites');
+        if ($get_sites) {
+            /** @var Website $website_model */
+            $website_model = w_obj(Website::class);
+            $sites = $website_model->select()->fetchArray();
+            $event->setData('sites', $sites);
+            return;
+        }
         # 第一个url获取url协议和域名部分
-        $url1 = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . '/';
+        $url1 = $event->getData('url');
+        $path = Url::parse_url($url1, 'path');
         # 网站模型
         /** @var Website $website_model */
-        $website_model = obj(Website::class);
+        $website_model = w_obj(Website::class);
         # 获取$first_url加上/分割部分的第一个path
-        if ($_SERVER['REQUEST_URI'] !== '/') {
+        if ($path !== '/') {
             $url2 = $url1 . explode('/', $_SERVER['REQUEST_URI'])[1] ?? '';
             /** @var Website $site */
             $site = $website_model->where('url', $url2)->find()->fetch();
@@ -50,10 +58,10 @@ class DetectWebsite implements ObserverInterface
      * @param Website $site
      * @return void
      */
-    public function processSite(Event $event, Website $site): void
+    public function processSite(Event &$event, Website $site): void
     {
         /** @var DataObject $data */
-        $data = $event->getData('data');
+        $data = $event->getData();
         $data->setData('website_url', $site->getUrl());
         $data->setData('website_id', $site->getWebsiteId());
         $data->setData('code', $site->getCode());
