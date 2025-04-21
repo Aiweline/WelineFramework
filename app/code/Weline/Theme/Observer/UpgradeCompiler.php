@@ -19,7 +19,7 @@ use Weline\Theme\Console\Resource\Compiler;
 
 class UpgradeCompiler implements \Weline\Framework\Event\ObserverInterface
 {
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         ObjectManager::getInstance(Compiler::class)->execute();
     }

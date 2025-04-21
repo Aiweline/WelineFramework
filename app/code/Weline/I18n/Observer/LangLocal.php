@@ -10,7 +10,7 @@ use Weline\I18n\Model\I18n;
 class LangLocal implements ObserverInterface
 {
 
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $data = $event->getData('data');
         $lang = $data->getData('lang');

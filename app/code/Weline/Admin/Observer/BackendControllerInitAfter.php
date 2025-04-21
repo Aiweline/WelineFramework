@@ -30,7 +30,7 @@ class BackendControllerInitAfter implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         # 检测记住我
         if ($token = Cookie::get('w_ut') and (!$this->getSession()->getLoginUserID())) {

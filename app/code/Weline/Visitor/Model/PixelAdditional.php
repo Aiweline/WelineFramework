@@ -39,7 +39,7 @@ class PixelAdditional extends Model
             return;
         }
         /** @var Pixel $pixel */
-        $pixel = obj(Pixel::class);
+        $pixel = w_obj(Pixel::class);
         $setup->createTable('weline 访客像素统计-附加数据')
             ->addColumn(
                 self::fields_ID,

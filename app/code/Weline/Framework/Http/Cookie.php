@@ -66,7 +66,7 @@ class Cookie
         $currency = $_COOKIE['WELINE_USER_CURRENCY'] ?? null;
         // 默认网站语言
         if (empty($currency)) {
-            $currency = self::get('WELINE-WEBSITE-CURRENCY', '');
+            $currency = self::get('WELINE_WEBSITE_CURRENCY', '');
         }
         return $currency;
     }

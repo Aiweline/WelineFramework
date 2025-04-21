@@ -79,7 +79,7 @@ class EventsManager
             $data['observers'] = $this->getEventObservers($eventName);
             $this->events[$eventName] = (new Event($data))->setName($eventName);
         } else {
-            $this->events[$eventName] = (new Event(['data' => $data, 'observers' => $this->getEventObservers($eventName)]))->setName($eventName);
+            $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $this->getEventObservers($eventName)]))->setName($eventName);
         }
         $this->events[$eventName]->dispatch();
 

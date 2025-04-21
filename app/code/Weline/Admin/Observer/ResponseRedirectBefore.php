@@ -24,7 +24,7 @@ class ResponseRedirectBefore implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         $data = $event->getData('data');
         $url = $data->getUrl();

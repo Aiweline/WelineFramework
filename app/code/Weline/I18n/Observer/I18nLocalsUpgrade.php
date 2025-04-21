@@ -27,37 +27,37 @@ class I18nLocalsUpgrade implements \Weline\Framework\Event\ObserverInterface
     )
     {
         $this->locals = $locals;
-        $this->i18n   = $i18n;
+        $this->i18n = $i18n;
     }
 
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $locals = $this->i18n->getLocalesWithFlags(0, 22);
         foreach ($locals as $local_code => $local) {
             $localLocals = $this->i18n->getLocalesWithFlagsDisplaySelf($local_code, 0, 22, true);
             foreach ($localLocals as $self_local_code => $localLocal) {
                 $localData = [
-                    'code'        => $self_local_code,
+                    'code' => $self_local_code,
                     'target_code' => $local_code,
-                    'name'        => $localLocal['name'],
-                    'flag'        => $localLocal['flag'],
-                    'is_install'  => 1,
-                    'is_active'   => 1,
+                    'name' => $localLocal['name'],
+                    'flag' => $localLocal['flag'],
+                    'is_install' => 1,
+                    'is_active' => 1,
                 ];
                 # 查询
                 $hasLocal = $this->locals->reset()->where('code', $self_local_code)
-                                         ->where('target_code', $local_code)->find()->fetch();
+                    ->where('target_code', $local_code)->find()->fetch();
                 if ($hasLocal->getId()) {
                     # 更新
                     $this->locals->reset()->where('code', $self_local_code)
-                                 ->where('target_code', $local_code)
-                                 ->update($localData)
-                                 ->fetch();
+                        ->where('target_code', $local_code)
+                        ->update($localData)
+                        ->fetch();
                 } else {
-                    $this->locals->reset()->insert($localData,'','code,target_code')->fetch();
+                    $this->locals->reset()->insert($localData, '', 'code,target_code')->fetch();
                 }
             }
         }
