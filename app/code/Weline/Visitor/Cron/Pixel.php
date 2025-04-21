@@ -48,7 +48,7 @@ class Pixel implements CronTaskInterface
         $unDeaPixels = \Weline\Visitor\Model\Pixel::getUnDeaPixels();
         $do = [];
         /**@var \Weline\Visitor\Model\PixelSource $map */
-        $map = obj(PixelSource::class);
+        $map = w_obj(PixelSource::class);
         $maps = $map::all();
         foreach ($unDeaPixels as $unDeaPixel) {
             $referer = $unDeaPixel['referer'];
@@ -77,7 +77,7 @@ class Pixel implements CronTaskInterface
                             break;
                         }
                         /**@var \Weline\Visitor\Model\Pixel $pixel */
-                        $pixel = obj(\Weline\Visitor\Model\Pixel::class)->load($unDeaPixel['pixel_id']);
+                        $pixel = w_obj(\Weline\Visitor\Model\Pixel::class)->load($unDeaPixel['pixel_id']);
                         $pixel->setSource($code)
                             ->setCronDeal(1)
                             ->save();
@@ -91,7 +91,7 @@ class Pixel implements CronTaskInterface
             }
         }
         foreach ($do as $item) {
-            $pixel = obj(\Weline\Visitor\Model\Pixel::class)->load($item);
+            $pixel = w_obj(\Weline\Visitor\Model\Pixel::class)->load($item);
             $pixel->setData(\Weline\Visitor\Model\Pixel::fields_CRON_DEAL, 1);
             $pixel->save();
         }

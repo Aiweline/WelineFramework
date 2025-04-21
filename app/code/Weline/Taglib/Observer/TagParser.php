@@ -34,7 +34,7 @@ class TagParser implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $frameworkTags = $event->getData('data')->getData('tags');
         # 查找所有标签

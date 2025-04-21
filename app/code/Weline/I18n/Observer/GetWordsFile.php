@@ -42,7 +42,7 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var DataObject $words_file_data */
         $words_file_data = $event->getData();

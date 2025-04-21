@@ -33,7 +33,7 @@ class ReindexListing implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         $data = $event->getData('data');
         $args = $data->getData('args');

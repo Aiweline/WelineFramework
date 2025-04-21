@@ -2,22 +2,28 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="App::detect_language">
-        <observer name="Weline_I18n::detect_language" instance="Weline\I18n\Observer\AppDetectLanguage" disabled="false" shared="true"/>
+    <event name="Framework_Url::detect_language">
+        <observer name="Weline_I18n::detect_language" instance="Weline\I18n\Observer\DetectLanguage" disabled="false"
+                  shared="true"/>
     </event>
     <event name="Framework_Cookie::lang_local">
-        <observer name="Weline_I18n::i18n_lang_local" instance="Weline\I18n\Observer\LangLocal" disabled="false" shared="true"/>
+        <observer name="Weline_I18n::i18n_lang_local" instance="Weline\I18n\Observer\LangLocal" disabled="false"
+                  shared="true"/>
     </event>
     <event name="Framework_phrase::get_words_file">
-        <observer name="Weline_I18n::get_words_file" instance="Weline\I18n\Observer\GetWordsFile" disabled="false" shared="true"/>
+        <observer name="Weline_I18n::get_words_file" instance="Weline\I18n\Observer\GetWordsFile" disabled="false"
+                  shared="true"/>
     </event>
     <event name="Framework_Register::register_installer">
-        <observer name="Weline_I18n::register_installer" instance="Weline\I18n\Observer\Register" disabled="false" shared="true"/>
+        <observer name="Weline_I18n::register_installer" instance="Weline\I18n\Observer\Register" disabled="false"
+                  shared="true"/>
     </event>
     <event name="Framework_Router::route_after">
-        <observer name="Weline_I18n::parse_words_register" instance="Weline\I18n\Observer\ParserWordsRegister" disabled="false" shared="true"/>
+        <observer name="Weline_I18n::parse_words_register" instance="Weline\I18n\Observer\ParserWordsRegister"
+                  disabled="false" shared="true"/>
     </event>
     <event name="Framework_Module::module_upgrade">
-        <observer name="Weline_I18n::i18n_locals_upgrade" instance="Weline\I18n\Observer\I18nLocalsUpgrade" disabled="false" shared="true"/>
+        <observer name="Weline_I18n::i18n_locals_upgrade" instance="Weline\I18n\Observer\I18nLocalsUpgrade"
+                  disabled="false" shared="true"/>
     </event>
 </config>

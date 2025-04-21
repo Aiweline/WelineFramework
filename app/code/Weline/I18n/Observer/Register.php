@@ -16,11 +16,11 @@ use Weline\I18n\Register\Installer;
 
 class Register implements ObserverInterface
 {
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
-        $data           = $event->getData('data');
+        $data = $event->getData('data');
         $func_arguments = $data->getData('register_arguments');
-        $type           = $func_arguments[0];
+        $type = $func_arguments[0];
         if ($type === RegisterInterface::I18N) {
             $data->setData('installer', Installer::class);
             $data->setData('register_arguments', $func_arguments);

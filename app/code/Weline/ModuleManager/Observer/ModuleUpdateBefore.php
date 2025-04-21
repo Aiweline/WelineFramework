@@ -17,7 +17,7 @@ class ModuleUpdateBefore implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event)
+    public function execute(Event &$event)
     {
         /**@var Table $model */
         $model = ObjectManager::getInstance(Table::class);

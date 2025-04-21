@@ -31,12 +31,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 
     <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
     <!--页头工具条 结束-->
 
     <!-- ========== Topnav Start ========== -->
     <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
     <!--页头菜单栏 结束-->
 
     <!-- ========== Left Sidebar Start ========== -->
@@ -67,7 +67,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <p class='card-title-desc'>
                                     <lang>静态路由管理：可定制属于自己的静态url来提升seo。</lang>
                                 </p>
-                                <form class='needs-validation' method="post" action="@admin-url('url-manager/backend/rewriter')" novalidate>
+                                <form class='needs-validation' method="post"
+                                      action="@admin-url('url-manager/backend/rewriter')" novalidate>
                                     <input type="hidden" name="url_identify" value="{{url.identify}}">
                                     <input type="hidden" name="url_id" value="{{url.url_id}}">
                                     <input type="hidden" name="origin_path" value="{{url.path}}">
@@ -78,7 +79,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <lang>路径</lang>
                                                 </label>
                                                 <input type='text' class='form-control disabled' id='path' name="path"
-                                                       placeholder='@lang{输入路径}' value='{{url.path}}' required @if{url.path=>'disabled'}>
+                                                       placeholder='@lang{输入路径}' value='{{url.ur_path}}' required
+                                                       @if{url.ur_path=>'disabled'}>
                                                 <div class='valid-tooltip'>
                                                     <lang>输入路径正确</lang>
                                                 </div>
@@ -93,7 +95,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <lang>重写路径</lang>
                                                 </label>
                                                 <input type='text' class='form-control' id='rewrite' name="rewrite"
-                                                       placeholder='@lang{输入路径}' value='{{url.rewrite_path}}' required>
+                                                       placeholder='@lang{输入路径}' value='{{url.rewrite_path}}'
+                                                       required>
                                                 <div class='valid-tooltip'>
                                                     <lang>输入路径正确</lang>
                                                 </div>
