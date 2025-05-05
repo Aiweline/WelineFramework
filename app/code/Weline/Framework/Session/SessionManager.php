@@ -53,7 +53,7 @@ class SessionManager
             $driver_files = glob($module['base_path'] . 'Session/Driver/*.php');
             foreach ($driver_files as $driver_file) {
                 $driver_name = pathinfo($driver_file, PATHINFO_FILENAME);
-                $driver_file_class = $module['namespace_path'] . DS . 'Session\Driver\\' . ucfirst($driver_name);
+                $driver_file_class = $module['namespace_path'] . '\\Session\\Driver\\' . ucfirst($driver_name);
                 if (!class_exists($driver_file_class)) {
                     new Exception(__('Session 驱动找不到！请检查env配置文件中 session[\'default\'] 是否正确。驱动类：%1', $driver_file_class));
                 }
