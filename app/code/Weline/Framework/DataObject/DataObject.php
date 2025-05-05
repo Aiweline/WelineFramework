@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\DataObject;
 
+use Weline\Framework\App\Debug;
+
 /**
  * 文件信息
  * DESC:   |
@@ -31,7 +33,7 @@ class DataObject implements \ArrayAccess
      *
      * @var array
      */
-    private array $_data = [];
+    protected array $_data = [];
     private array $_changed = [];
 
     /**

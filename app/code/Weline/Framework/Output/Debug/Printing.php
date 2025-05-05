@@ -23,13 +23,16 @@ class Printing extends AbstractPrint
 
     public function printing(string $data = 'Printing!', string $message = 'Debug', string $color = self::NOTE, int $pad_length = 0): void
     {
-        if (!CLI) {
-            $data = str_replace(PHP_EOL, '<br>', $data);
+        if (php_sapi_name() !== 'cli') {
+            $data = explode(PHP_EOL, $data);
+            d($data);
+            return;
         }
-        $doc_tmp = '【' . $message . '】：' . ($pad_length ? str_pad($data, $pad_length) : $data);
+
+        $doc_tmp = '【' . $message . '】' . ($pad_length ? str_pad($data, $pad_length) : $data);
         $doc = <<<COMMAND_LIST
-$doc_tmp
-COMMAND_LIST;
+        $doc_tmp
+        COMMAND_LIST;
         echo $doc;
     }
 
