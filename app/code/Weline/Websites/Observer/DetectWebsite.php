@@ -2,6 +2,7 @@
 
 namespace Weline\Websites\Observer;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -47,6 +48,7 @@ class DetectWebsite implements ObserverInterface
             ->where('url', $url1)
             ->find()
             ->fetch();
+
         if (!$site->getId()) return;
 
         /** @var DataObject $data */

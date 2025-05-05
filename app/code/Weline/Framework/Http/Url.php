@@ -350,10 +350,13 @@ class Url implements UrlInterface
     {
         $ssl = (!empty($s['HTTPS']) && $s['HTTPS'] == 'on');
         $sp = strtolower($s['SERVER_PROTOCOL']);
-        $protocol = substr($sp, 0, strpos($sp, '/')) . (($ssl) ? 's' : '');
+        if ($sp == 'https' || $sp == 'ssl://' || $sp == 'HTTP/1.1') {
+            $ssl = true;
+        }
+        $protocol = $ssl ? 'https' : 'http';
         $port = $s['SERVER_PORT'];
         $port = ((!$ssl && $port == '80') || ($ssl && $port == '443')) ? '' : ':' . $port;
-        $host = ($use_forwarded_host && isset($s['HTTP_X_FORWARDED_HOST'])) ? $s['HTTP_X_FORWARDED_HOST'] : ($s['HTTP_HOST'] ?? null);
+        $host = ($use_forwarded_host && isset($s['HTTP_X_FORWARDED_HOST'])) ? $s['HTTP_X_FORWARDED_HOST'] : ($s['SERVER_NAME'] ?? null);
         $host = $host ?? $s['SERVER_NAME'] . $port;
         return $protocol . '://' . $host;
     }
@@ -374,10 +377,9 @@ class Url implements UrlInterface
     public static $parserCurrencies = [];
     public static $parserLanguages = [];
     public static $parserMatchs = [];
-    public static $parserSiteMatchs = [];
-    public static $parserMatchsData = [];
+    public static array $parserSiteMatchs = [];
 
-    public static $parserUrlCache = [];
+    public static array $parserUrlCache = [];
 
     public static function parse_url(string $url, string $key = '', string $default = ''): array|string
     {
@@ -394,7 +396,7 @@ class Url implements UrlInterface
         return self::$parserUrlCache[$url];
     }
 
-    public static $splitUrlCache = [];
+    public static array $splitUrlCache = [];
 
     public static function split_url(string $url, string $key = '', string $default = ''): array|string
     {
@@ -419,7 +421,7 @@ class Url implements UrlInterface
         return self::$splitUrlCache[$url];
     }
 
-    public static $parserCache = [];
+    public static array $parserCache = [];
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
@@ -446,12 +448,12 @@ class Url implements UrlInterface
         }
         # 静态文件不用再分析店铺
         if ($uri and str_contains($uri, '.')
-            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
+            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff\2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
             return $url;
         }
 
         if (empty(self::$parserMatchs)) {
-            $data = new DataObject([
+            $detect_website_data = new DataObject([
                 'sites' => [],
                 'site_sample' => [
                     "website_id" => 1,
@@ -465,8 +467,8 @@ class Url implements UrlInterface
                 'get_sites' => true
             ]);
             $eventManager = w_obj(EventsManager::class);
-            $eventManager->dispatch('Framework_Url::detect_website', $data);
-            $sites = $data->getData('sites');
+            $eventManager->dispatch('Framework_Url::detect_website', $detect_website_data);
+            $sites = $detect_website_data->getData('sites');
             # 找出站点链接最长的，依次写入self::$parserMatchs
             $tmp = [];
             foreach ($sites as $site) {
@@ -482,12 +484,15 @@ class Url implements UrlInterface
         }
 
         # 匹配网站 self::$parserSites 最长倒序
+        $parsers = self::parse_url($url);
         $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '');
         foreach (self::$parserSites as $site_url => $site) {
             if (str_starts_with($url, $site_url)) {
-                $url = str_replace($site_url, '/', $url);
+                $url = str_replace($site_url, '', $url);
                 $uri = self::parse_url($url, 'path');
-                $data = self::$parserSiteMatchs[$site_url];
+                if (isset(self::$parserSiteMatchs[$site_url])) {
+                    $data = array_merge((array)$data, self::$parserSiteMatchs[$site_url]);
+                }
                 $data['url'] = $url;
                 $data['parse'] = self::parse_url($url);
                 $data['website_url'] = $site_url;
@@ -526,13 +531,8 @@ class Url implements UrlInterface
         foreach (self::$parserMatchs as $match_url => $match_data) {
             if (str_starts_with($url, $match_url)) {
                 $url = str_replace($match_url, '', $url);
-                if ($match_data) {
-                    $match_data['url'] = $url;
-                    if ($key) {
-                        return $match_data[$key] ?? '';
-                    }
-                    return $match_data;
-                }
+                self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
+                self::$parserServer['REQUEST_URI'] = $url;
                 $data['url'] = $url;
                 return $data;
             }
@@ -549,7 +549,7 @@ class Url implements UrlInterface
         if (empty($area)) {
             return $url;
         }
-        $has_area = false;
+        $has_area = $data['has_area'] ?? false;
         switch ($area) {
             case self::$parserServer['WELINE_API_AREA']:
                 self::$parserServer['WELINE_AREA'] = 'api';
@@ -574,13 +574,17 @@ class Url implements UrlInterface
                 break;
             default:
                 self::$parserServer['WELINE_AREA'] = 'frontend';
+                self::$parserServer['WELINE_AREA_ROUTE'] = '';
         }
+        $data['has_area'] = $has_area;
+        $data['area'] = self::$parserServer['WELINE_AREA'];
+        $data['area_route'] = self::$parserServer['WELINE_AREA_ROUTE'];
         $url = $uri . (self::parse_url($url, 'query') ? '?' . self::parse_url($url, 'query') : '');
         # URL结构：[网站前缀]/[货币前缀]/[语言前缀]/[路由]
 
         $data['currency'] = '';
         $data['language'] = '';
-
+        $data['timezone'] = $data['website']['timezone'] ?? 'Asia/Shanghai';
         # 匹配货币 self::$parserCurrencies 最长倒序
         foreach (self::$parserCurrencies as $currency) {
             if (str_starts_with($url, '/' . $currency)) {
@@ -657,6 +661,13 @@ class Url implements UrlInterface
                 }
             }
         }
+        if (empty($data['currency'])) {
+            $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'] ?? $data['website']['default_currency'] ?? 'CNY';
+        }
+        if (empty($data['language'])) {
+            $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? $data['website']['default_language'] ?? 'zh_Hans_CN';
+        }
+        $url = self::decode_url($url);
         $data['uri'] = $url;
         if ($data['all_match']) {
             $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
@@ -673,13 +684,19 @@ class Url implements UrlInterface
         return $data;
     }
 
-    public static function decode_url(string $url, array $now_query = []): string
+    static private array $decode_urls = [];
+
+    public static function decode_url(string $url): string
     {
         # decode seo url
         if (Env::get('seo')) {
+            if (isset(self::$decode_urls[$url])) {
+                return self::$decode_urls[$url];
+            }
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
             $event->dispatch('Framework_Url::seo_decode', $url);
+            self::$decode_urls[$url] = $url;
         }
         return $url;
     }
