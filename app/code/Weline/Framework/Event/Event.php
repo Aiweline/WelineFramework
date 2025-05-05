@@ -19,7 +19,6 @@ class Event extends \Weline\Framework\DataObject\DataObject
 {
     public function __construct(array $data = [])
     {
-        parent::__construct($data);
         if (isset($data['observers'])) {
             foreach ($data['observers'] as $key => $observer) {
                 $observer = ObjectManager::getInstance($observer['instance']);
@@ -33,7 +32,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 }
             }
         }
-        $this->setData($data);
+        parent::__construct($data);
     }
 
     public function getData(string $key = '', $index = null): mixed
@@ -47,9 +46,14 @@ class Event extends \Weline\Framework\DataObject\DataObject
 
     public function setData(array|string $key, mixed $value = null): static
     {
-        parent::setData($key, $value);
         $eventData = $this->_getData('data');
         if (!$eventData) {
+            if (is_array($key)) {
+                $data = $key;
+            } else {
+                $data = [$key => $value];
+            }
+            $this->_data['data'] = $data;
             return $this;
         }
         if (is_array($key)) {
@@ -96,9 +100,9 @@ class Event extends \Weline\Framework\DataObject\DataObject
      *
      * @param Observer $observer
      *
-     * @return \Weline\Framework\Event\Event
+     * @return Event
      */
-    public function addObserver(Observer $observer)
+    public function addObserver(Observer $observer): static
     {
         $observers = $this->_getData('observers');
         $observers[] = $observer;
@@ -148,7 +152,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
      *
      * 参数区：
      */
-    public function dispatch()
+    public function dispatch(): void
     {
         foreach ($this->getObservers() as $observer) {
             $observer->execute($this);
