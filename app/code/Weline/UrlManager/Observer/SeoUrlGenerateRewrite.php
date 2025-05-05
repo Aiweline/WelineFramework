@@ -18,13 +18,9 @@ class SeoUrlGenerateRewrite implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $url = $event->getData('data');
-        if (!str_contains($url, 'forum')) {
-            return;
-        }
-        Debug::env('re');
         $parse = \Weline\Framework\Http\Url::parser($url);
         if (is_string($parse)) {
             return;
@@ -34,12 +30,23 @@ class SeoUrlGenerateRewrite implements ObserverInterface
             return;
         }
         $uri = ltrim($uri, '/');
+        $real_uri = $uri;
+        $currency = $parse['currency'] ?? '';
+        $real_uri = substr($real_uri, strlen($currency . '/'));
+        $language = $parse['language'] ?? '';
+        $real_uri = substr($real_uri, strlen($language . '/'));
+        if (empty($real_uri)) {
+            return;
+        }
+        $match_uri = strtolower($uri);
         $rewrite = $this->urlRewrite->reset()
-            ->where('path', strtolower($uri))
-            ->find()
-            ->fetch();
+            ->where('path', $match_uri, '=', 'or')
+            ->where('path', $real_uri)
+            ->find()->fetch();
         if ($rewrite->getId()) {
-            $url = $rewrite->getData('rewrite');
+            $rewrite_path = $rewrite->getData('rewrite');
+            // FIXME 可能出现替换失败，导致无法访问
+            $url = str_ireplace($real_uri, $rewrite_path, $url);
         }
         $event->setData('data', $url);
     }

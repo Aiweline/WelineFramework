@@ -89,6 +89,22 @@ endif;
     window.frontend_api = (path) => {
         return '{{api_host}}' + window.path(path);
     }
+    window.WelineString = {
+        startsWith: (str, prefix, ignoreCase = true) => {
+            if (ignoreCase) {
+                str = str.toLowerCase();
+                prefix = prefix.toLowerCase();
+            }
+            return str.lastIndexOf(prefix, 0) === 0;
+        },
+        replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
+            if (ignoreCase) {
+                str = str.toLowerCase();
+                prefix = prefix.toLowerCase();
+            }
+            return str.replace(new RegExp('^' + prefix), value);
+        }
+    }
 
     function app_path(path) {
         let origin_path = path
@@ -137,19 +153,22 @@ endif;
         return window.site.computePath[origin_path]
     }
 
+    // path: 路径 url
+    // code: 代码 如区域代码
+    // type: 类型 website|area|currency|lang
     function inject_path(path, code = '', type = '') {
         if (!path) {
             throw new Error('@lang{JS: inject_path函数path路径不允许为空！}')
         }
         let pre_path = getCookie('WELINE_WEBSITE_URL');
         // 网站
-        if (path.startsWith(getCookie('WELINE_WEBSITE_URL'))) {
-            path = path.replace(getCookie('WELINE_WEBSITE_URL'), '');
+        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL'))) {
+            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '/');
         } else {
-            path = path.replace(window.site.base_router, '');
+            path = WelineString.replaceStartsWith(path, window.site.base_router, '/');
         }
-        if (path.startsWith('/' + getCookie('WELINE_WEBSITE_CODE'))) {
-            path = path.replace('/' + getCookie('WELINE_WEBSITE_CODE'), '');
+        if (WelineString.startsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'))) {
+            path = WelineString.replaceStartsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'), '/');
         }
         if ('website' === type && code) {
             pre_path = code;
@@ -158,29 +177,35 @@ endif;
         if (pre_path.endsWith('/')) {
             pre_path = pre_path.slice(0, -1);
         }
+
         // 区域
-        if (path.startsWith('/{{area}}')) {
+        if (WelineString.startsWith(path, '/{{area}}')) {
             if ('area' === type && code) {
-                path = path.replace('/{{area}}', '');
+                path = WelineString.replaceStartsWith(path, '/{{area}}', '');
                 pre_path += '/' + code;
             } else {
-                path = path.replace('/{{area}}', '');
-                pre_path += '/{{area}}';
+                path = WelineString.replaceStartsWith(path, '/{{area}}', '');
+                if ('{{area}}' !== '') {
+                    pre_path += '/{{area}}';
+                }
             }
         } else {
             if ('area' === type && code) {
                 pre_path += '/' + code;
             } else {
-                pre_path += '/{{area}}';
+                if ('{{area}}' !== '') {
+                    pre_path += '/{{area}}';
+                }
             }
         }
+
         // 币种
-        if (path.startsWith('/' + window.site.currency)) {
+        if (WelineString.startsWith(path, '/' + window.site.currency)) {
             if ('currency' === type && code) {
-                path = path.replace('/' + window.site.currency, '');
+                path = WelineString.replaceStartsWith(path, '/' + window.site.currency, '');
                 pre_path += '/' + code;
             } else {
-                path = path.replace('/' + window.site.currency, '');
+                path = WelineString.replaceStartsWith(path, '/' + window.site.currency, '');
                 pre_path += '/' + window.site.currency;
             }
         } else {
@@ -191,12 +216,12 @@ endif;
             }
         }
         // 语言
-        if (path.startsWith('/{{local.code}}')) {
+        if (WelineString.startsWith(path, '/{{local.code}}')) {
             if ('lang' === type && code) {
-                path = path.replace('/{{local.code}}', '');
+                path = WelineString.replaceStartsWith(path, '/{{local.code}}', '');
                 pre_path += '/' + code;
             } else {
-                path = path.replace('/{{local.code}}', '');
+                path = WelineString.replaceStartsWith(path, '/{{local.code}}', '');
                 pre_path += '/{{local.code}}';
             }
         } else {
@@ -206,6 +231,7 @@ endif;
                 pre_path += '/{{local.code}}';
             }
         }
+
         return pre_path + path;
     }
 

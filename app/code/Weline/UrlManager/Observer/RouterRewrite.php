@@ -34,7 +34,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
      */
     public function execute(Event &$event)
     {
-        $uri = ltrim($event->getData('uri'), '/');
+        $uri = ltrim($event->getData(), '/');
         $rewrite = $this->urlRewrite->load(UrlRewrite::fields_REWRITE, $uri);
         if ($rewrite->getId()) {
             # 读取原地址
