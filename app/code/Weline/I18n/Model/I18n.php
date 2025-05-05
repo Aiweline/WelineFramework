@@ -401,16 +401,22 @@ class I18n
         # 收集项目下的所有被__()函数包裹的翻译词
         # --1 检索目录
         // 定义要搜索的目录
-        $directories = [
-            BP . 'app',
-            BP . 'vendor',
-        ];
+//        $directories = [
+//            BP . 'app',
+//            BP . 'vendor',
+//        ];
+        $directories = [];
+        Env::getInstance()->getActiveModules();
+        foreach (Env::getInstance()->getActiveModules() as $module) {
+            $directories[$module['name']] = $module['base_path'];
+        }
         // 初始化翻译词数组
         $translations = [];
         // 遍历目录
-        foreach ($directories as $directory) {
+        foreach ($directories as $module => $directory) {
             $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
             # FIXME 未能更加精准搜索到词语
+            $module_words = [];
             foreach ($iterator as $file) {
                 if ($file->isFile() && in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
                     $content = file_get_contents($file->getPathname());
@@ -421,6 +427,7 @@ class I18n
                         foreach ($matches[1] as $match) {
                             if ($match) {
                                 $translations[$match] = $match;
+                                $module_words[$match] = $match;
                             }
                         }
                     }
@@ -428,6 +435,7 @@ class I18n
                         foreach ($matches[1] as $match) {
                             if ($match) {
                                 $translations[$match] = $match;
+                                $module_words[$match] = $match;
                             }
                         }
                     }
@@ -437,7 +445,36 @@ class I18n
                             // 提取第一个参数
 //                            $filename = str_replace(BP, '', $file->getPathname());
                             $translations[$match] = $match;
+                            $module_words[$match] = $match;
                         }
+                    }
+                }
+            }
+            // 遍历模组i8n目录中的csv翻译文件
+            $i18n_dir = $directory . '/i18n';
+            if (is_dir($i18n_dir)) {
+                $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($i18n_dir));
+                foreach ($iterator as $file) {
+                    // 如果是CSV文件
+                    if ($file->isFile() && $file->getExtension() === 'csv') {
+                        // 读取csv文件内容，如果翻译词不存在翻译文件中则添加到文件中，
+                        //文件形式：第一列为翻译词，第二列为翻译
+                        $file_words = [];
+                        $handle = fopen($file->getPathname(), 'r');
+                        while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+                            $file_words[$data[0]] = $data[1];
+                        }
+                        fclose($handle);
+
+                        // 将翻译词写入csv翻译文件
+                        $file_translations = array_merge($module_words, $file_words);
+                        $file_translations = array_unique($file_translations);
+                        // 将翻译词写入csv文件
+                        $csv_file = fopen($file->getPathname(), 'w+');
+                        foreach ($file_translations as $key => $value) {
+                            fputcsv($csv_file, [$key, $value], ',', '"', '\\');
+                        }
+                        fclose($csv_file);
                     }
                 }
             }
@@ -489,9 +526,9 @@ class I18n
      *
      * @throws Exception
      */
-    public function convertToLanguageFile(): void
+    public function convertToLanguageFile(bool $cache = true): void
     {
-        $locals_words = $this->getLocalsWords();
+        $locals_words = $this->getLocalsWords($cache);
         foreach ($locals_words as $local => $locals_word) {
             $words_filename = Env::path_TRANSLATE_FILES_PATH . $local . '.php';
             $file = new \Weline\Framework\System\File\Io\File();

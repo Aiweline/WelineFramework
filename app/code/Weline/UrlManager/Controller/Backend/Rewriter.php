@@ -17,6 +17,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Exception\ModelException;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\UrlManager\Model\UrlManager;
 use Weline\UrlManager\Model\UrlRewrite;
@@ -43,7 +44,7 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         $data = $this->request->getPost();
         if (!isset($data['path'])) {
             $origin_path_arr = explode('::', $data['origin_path']);
-            $data['path'] = array_shift($origin_path_arr);
+            $data['path'] = strtolower(array_shift($origin_path_arr));
         } else {
             $data['url_identify'] = md5($data['path']);
         }
@@ -53,10 +54,9 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
         try {
             $urlRewriter->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+            MessageManager::error(__('重写失败！') . (DEV ? $e->getMessage() : ''));
         }
-        $this->getMessageManager()->addSuccess(__('重写成功！'));
-//        $this->redirect($this->request->getBackendUrl('/url-manager/backend/url/listing'));
+        MessageManager::success(__('重写成功！'));
         $this->redirect($this->_url->getBackendUrl('url-manager/backend/rewriter'));
     }
 
@@ -81,11 +81,9 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
     }
 
     /**
-     * @throws Exception
-     * @throws \ReflectionException
-     * @throws Core
+     * @return void
      */
-    public function getDelete()
+    public function getDelete(): void
     {
         $rewrite_id = $this->request->getGet('rewrite_id', '');
         /**@var UrlRewrite $urlRewrite */

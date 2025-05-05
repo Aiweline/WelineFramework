@@ -42,12 +42,11 @@ class Collect implements \Weline\Framework\Console\CommandInterface
     {
         # 设置语言翻译收集配置
         try {
-            $this->i18n->convertToLanguageFile();
+            $this->i18n->convertToLanguageFile(false);
             $this->printing->success(__('语言包收集成功！'));
         } catch (Exception $e) {
             $this->printing->error(__('语言包收集失败：%1', $e->getMessage()));
         }
-        # 查找所有已激活模块的模板文件，进行模板生成
     }
 
 
