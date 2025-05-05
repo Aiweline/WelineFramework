@@ -125,7 +125,9 @@ abstract class Model extends AbstractModel implements ModelInterface
         }
         foreach ($nodes as $id => &$node) {
             if (isset($node[$parent_id_field])) {
-                $nodes[$node[$parent_id_field]]['children'][] = &$node;
+                if ($node[$parent_id_field]) {
+                    $nodes[$node[$parent_id_field]]['children'][] = &$node;
+                }
             }
         }
         $items = array_values(array_filter($nodes, function ($node) use ($parent_id_field) {

@@ -83,6 +83,21 @@ class Debug
         $content .= date('Y-m-d H:i:s') . PHP_EOL;
         $content .= PHP_EOL;
         file_put_contents($log, $content, $append ? FILE_APPEND : 0);
+        # 输出一个debug悬浮窗，便于前端直接看到输出内容，通过页面加载后访问文件内容前10条
+        $html = '<script>
+                var debug = document.createElement("div");
+                debug.style.position = "fixed";
+                debug.style.top = "0";
+                debug.style.right = "0";
+                debug.style.width = "300px";
+                debug.style.height = "100%";
+                debug.style.backgroundColor = "#f5f5f5";
+                debug.style.zIndex = "9999";
+                debug.style.overflow = "auto";
+                debug.innerHTML = "<pre>' . str_replace("\n", '<br>', $content) . '</pre>";
+                document.body.appendChild(debug);
+                </script>';
+        echo $html;
         return true;
     }
 }

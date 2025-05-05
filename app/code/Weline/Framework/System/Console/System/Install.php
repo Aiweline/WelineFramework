@@ -52,9 +52,9 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             }
         }
         $data = [
-            'env'      => [
+            'env' => [
                 'functions' => ['exec', 'putenv'],
-                'modules'   => ['PDO', 'exif', 'fileinfo', 'xsl'],
+                'modules' => ['PDO', 'exif', 'fileinfo', 'xsl'],
             ],
             'commands' => [
                 'bin/w command:upgrade',
@@ -99,26 +99,35 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             foreach ($db_keys as $key => $item) {
                 $this->printer->warning('--db-' . $key . '=' . ($item ? $item : 'null'), '数据库');
             }
-            exit();
+                $db_config['type'] ?? $db_config['type'] = 'sqlite';
+                $db_config['path'] ?? $db_config['path'] = APP_PATH . 'etc/db.sqlite';
+                $db_config['hostport'] ?? $db_config['hostport'] = '';
+                $db_config['prefix'] ?? $db_config['prefix'] = 'w_';
+                $db_config['charset'] ?? $db_config['charset'] = 'utf8mb4';
+                $db_config['collate'] ?? $db_config['collate'] = 'utf8mb4_general_ci';
+            $this->printer->error(__('数据库配置为空！已使用默认Sqlite数据库！'), __('系统'));
         }
         if (!isset($args_config['sandbox_db'])) {
-            $this->printer->error('沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql', '系统');
+            $this->printer->error(__('沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql'), __('系统'));
             foreach ($db_keys as $key => $item) {
-                $this->printer->warning('--sandbox_db-' . $key . '=' . ($item ? $item : 'null'), '沙盒数据库');
+                $this->printer->warning('--sandbox_db-' . $key . '=' . ($item ? $item : 'null'), __('沙盒数据库'));
             }
-            exit();
         }
         $db_config = $args_config['db'] ?? [];
         $db_config = array_intersect_key($db_config, $db_keys);
-            $db_config['type'] ?? $db_config['type'] = 'mysql';
+            $db_config['type'] ?? $db_config['type'] = 'sqlite';
+            $db_config['path'] ?? $db_config['path'] = APP_PATH . 'etc/db.sqlite';
+            $db_config['hostname'] ?? $db_config['hostname'] = '127.0.0.1';
             $db_config['hostport'] ?? $db_config['hostport'] = '3306';
             $db_config['prefix'] ?? $db_config['prefix'] = 'w_';
             $db_config['charset'] ?? $db_config['charset'] = 'utf8mb4';
             $db_config['collate'] ?? $db_config['collate'] = 'utf8mb4_general_ci';
-        foreach ($db_keys as $db_key => $v) {
-            if (!isset($db_config[$db_key])) {
-                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/w system:install --db-' . $db_key . '=demo', '系统');
-                exit();
+        if (strtolower($db_config['type']) !== 'sqlite') {
+            foreach ($db_keys as $db_key => $v) {
+                if (!isset($db_config[$db_key])) {
+                    $this->printer->error(__('数据库') . $db_key . __('配置不能为空！示例：bin/w system:install --db-') . $db_key . '=demo', __('系统'));
+                    exit();
+                }
             }
         }
         foreach ($db_config as $key => $item) {
@@ -126,15 +135,19 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         }
         $sandbox_db_config = $args_config['sandbox_db'] ?? [];
         $sandbox_db_config = array_intersect_key($sandbox_db_config, $db_keys);
-            $sandbox_db_config['type'] ?? $sandbox_db_config['type'] = 'mysql';
+            $sandbox_db_config['type'] ?? $sandbox_db_config['type'] = 'sqlite';
+            $sandbox_db_config['path'] ?? $sandbox_db_config['path'] = APP_PATH . 'etc/db.sqlite';
             $sandbox_db_config['hostport'] ?? $sandbox_db_config['hostport'] = '3306';
+            $sandbox_db_config['hostname'] ?? $sandbox_db_config['hostname'] = '127.0.0.1';
             $sandbox_db_config['prefix'] ?? $sandbox_db_config['prefix'] = 'w_';
             $sandbox_db_config['charset'] ?? $sandbox_db_config['charset'] = 'utf8mb4';
             $sandbox_db_config['collate'] ?? $sandbox_db_config['collate'] = 'utf8mb4_general_ci';
-        foreach ($db_keys as $db_key => $v) {
-            if (!isset($sandbox_db_config[$db_key])) {
-                $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/w system:install --sandbox_db-' . $db_key . '=demo', '系统');
-                exit();
+        if (strtolower($sandbox_db_config['type']) !== 'sqlite') {
+            foreach ($db_keys as $db_key => $v) {
+                if (!isset($sandbox_db_config[$db_key])) {
+                    $this->printer->error('数据库' . $db_key . '配置不能为空！示例：bin/w system:install --sandbox_db-' . $db_key . '=demo', '系统');
+                    exit();
+                }
             }
         }
         foreach ($db_config as $key => $item) {
@@ -142,13 +155,13 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         }
         $this->printer->success('参数检测通过！', 'OK');
         $this->printer->note('第三步：配置安装...', '系统');
-        $this->runner->installDb(['db' => $db_config,'sandbox_db' => $sandbox_db_config]);
+        $this->runner->installDb(['db' => $db_config, 'sandbox_db' => $sandbox_db_config]);
         $this->printer->note('第四步：数据安装...', '系统');
 //        $this->runner->systemInstall();
         $this->printer->note('第五步：系统命令更新...', '系统');
         $this->runner->systemCommands();
         $this->printer->note('第六步：系统初始化...', '系统');
-        $initData['admin']     = 'admin_' . uniqid();
+        $initData['admin'] = 'admin_' . uniqid();
         $initData['api_admin'] = 'api_' . uniqid();
         $this->runner->systemInit($initData);
         $this->printer->success('初始化数据完成！', 'OK');

@@ -254,9 +254,8 @@ class App
             # url 重写 兼容原本携带的参数和当前重写原参数
             if (is_array($parse)) {
                 if ($_SERVER['REQUEST_METHOD'] && isset($parse['uri'])) {
-                    $uri = Url::decode_url($parse['uri'], $_GET);
+                    $uri = Url::decode_url($parse['uri']);
                     $parse['server']['REQUEST_URI'] = $uri;
-                    $query = Url::parse_url($uri, 'query');
                     $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
                 }
                 $_SERVER = $parse['server'];

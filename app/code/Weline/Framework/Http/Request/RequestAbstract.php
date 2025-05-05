@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Http\Request;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Controller\Data\DataInterface;
@@ -423,13 +424,29 @@ abstract class RequestAbstract extends RequestFilter
         return trim(array_shift($url_exp), '/');
     }
 
+    public function getSsl(): string
+    {
+        $ssl = false;
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
+            $ssl = true;
+        }
+        if (isset($_SERVER['SERVER_PROTOCOL'])) {
+            if ($_SERVER['SERVER_PROTOCOL'] == 'HTTP/1.1') {
+                $ssl = false;
+            } else {
+                $ssl = true;
+            }
+        }
+        return $ssl ? 'https' : 'http';
+    }
+
     public function getBaseHost(): string
     {
         if ((isset($_SERVER['WELINE_WEBSITE_URL']))) {
             return $_SERVER['WELINE_WEBSITE_URL'];
         }
         $port = $this->getServer('SERVER_PORT');
-        return ($this->getServer('HTTP_X_FORWARDED_PROTO') ?: $this->getServer('REQUEST_SCHEME')) . '://' . $this->getServer('HTTP_HOST') . (($port !== '80' && $port !== '443') ? ':' . $port : '');
+        return $this->getSsl() . '://' . $this->getServer('SERVER_NAME') . ($port == '80' || $port == '443' ? '' : ':' . $port);
     }
 
     public function getPrePath(): string
