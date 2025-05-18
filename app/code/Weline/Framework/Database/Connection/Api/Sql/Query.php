@@ -572,6 +572,9 @@ abstract class Query implements QueryInterface
 
     public function fetch(string $model_class = ''): mixed
     {
+        if ($this->PDOStatement === null) {
+            return false;
+        }
         if (DEBUG or Env::get('db_log.enabled')) {
             $file = Env::get('db_log.file');
             Env::log($file, $this->sql);
@@ -619,7 +622,6 @@ abstract class Query implements QueryInterface
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
-                Debug::target('dd', $result);
                 if ($this->find_fields) {
                     if ($result) {
                         if (str_contains($this->find_fields, ',')) {

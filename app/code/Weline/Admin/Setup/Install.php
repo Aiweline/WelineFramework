@@ -12,8 +12,11 @@ declare(strict_types=1);
 namespace Weline\Admin\Setup;
 
 use Weline\Backend\Model\Config;
+use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
+use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\View\Template;
 
 class Install implements \Weline\Framework\Setup\InstallInterface
@@ -26,8 +29,9 @@ class Install implements \Weline\Framework\Setup\InstallInterface
      * @DateTime: 2022/1/18 20:28
      * 参数区：
      *
-     * @param Data\Setup   $setup
-     * @param Data\Context $context
+     * @param Setup $setup
+     * @param Context $context
+     * @throws Exception
      */
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
