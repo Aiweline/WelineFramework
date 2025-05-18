@@ -65,7 +65,7 @@ use Weline\Framework\Manager\ObjectManager;
 abstract class AbstractModel extends DataObject
 {
     # 主数据库连接使用标志
-    public const framework_db_master = false;
+    public const use_main_db_master = false;
     public const table = '';
     public const primary_key = '';
     # 索引名
@@ -140,8 +140,6 @@ abstract class AbstractModel extends DataObject
      *
      * 参数区：
      *
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
      */
     public function __init()
     {
@@ -226,6 +224,9 @@ abstract class AbstractModel extends DataObject
         return $this->_bind_model_fields;
     }
 
+    /**
+     * @throws DbException
+     */
     public function getConnection()
     {
         # 如果已经有链接直接返回
@@ -233,7 +234,7 @@ abstract class AbstractModel extends DataObject
             return $this->connection;
         }
         # 使用主数据库
-        if ($this::framework_db_master) {
+        if ($this::use_main_db_master) {
             $this->connection = ObjectManager::getInstance(DbManager::class . 'Factory');
         } else {
             # 检测app应用级别的数据库配置信息 读链接 和  写链接
@@ -241,12 +242,16 @@ abstract class AbstractModel extends DataObject
             # 去除相对的模组路径
             if (str_starts_with($filename, APP_CODE_PATH)) {
                 $filename = substr($filename, strlen(APP_CODE_PATH));
-                $this->processModelDbConnection($filename);
+                try {
+                    $this->processModelDbConnection($filename);
+                } catch (DbException $e) {
+                    throw $e;
+                }
             } elseif (str_starts_with($filename, VENDOR_PATH)) {
                 $filename = substr($filename, strlen(VENDOR_PATH));
                 $this->processModelDbConnection($filename);
             } else {
-                $this->connection = ObjectManager::getInstance(DbManager::class . 'Factory');
+                throw new DbException(__('模型文件路径错误，无法确定数据库配置信息') . (DEV ? '(' . $filename . ')' : ''));
             }
         }
         return $this->connection;
@@ -273,7 +278,8 @@ abstract class AbstractModel extends DataObject
             if (!isset($db_config['master'])) {
                 throw new DbException(__('请配置主数据库配置信息,或者主数据库配置信息设置错误') . (DEV ? '(' . $db_config_file . ')' : ''));
             }
-            $this->connection = $this->dbManager->create(
+            Debug::env('dd');
+            $this->connection = ObjectManager::getInstance(DbManager::class)->create(
                 $this->module_name,
                 new ConfigProvider($db_config)
             );
@@ -587,9 +593,11 @@ abstract class AbstractModel extends DataObject
      * 参数区：
      *
      * @param array|bool|AbstractModel $data
-     * @param string|null $sequence
+     * @param string|array $sequence
      *
-     * @return bool
+     * @return bool|int
+     * @throws Exception
+     * @throws \ReflectionException
      */
     public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
     {
@@ -1698,6 +1706,7 @@ PAGINATION;
             }
             # 更新数据
             $this->setData($data);
+
         } else {
             $unique_fields = array_keys($this->unique_data);
             $this->_unit_primary_keys = array_unique(array_merge($this->_unit_primary_keys, $unique_fields));

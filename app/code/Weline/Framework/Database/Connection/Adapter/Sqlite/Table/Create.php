@@ -7,7 +7,7 @@
  * 论坛：https://bbs.aiweline.com
  */
 
-namespace Weline\Framework\Database\Connection\Adapter\SqLite\Table;
+namespace Weline\Framework\Database\Connection\Adapter\Sqlite\Table;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
@@ -19,34 +19,6 @@ use function PHPUnit\Framework\exactly;
 class Create extends AbstractTable implements CreateInterface
 {
     public string $additional_for_sqlite = ';';
-    public array $index_outs = [];
-    public const init_vars = [
-        self::table_TABLE => '',
-        self::table_COMMENT => '',
-        self::table_FIELDS => [],
-        self::table_ALERT_FIELDS => [],
-        self::table_DELETE_FIELDS => [],
-        self::table_INDEXS => [],
-        self::table_FOREIGN_KEYS => [],
-        self::table_CONSTRAINTS => '',
-        self::table_ADDITIONAL => ';',
-    ];
-
-    public function reset()
-    {
-        $this->fields = [];
-        $this->indexs = [];
-        $this->foreign_keys = [];
-        $this->constraints = '';
-        $this->additional = ';';
-        $this->primary_key = '';
-        $this->comment = '';
-        $this->new_table_name = '';
-        $this->index_outs = [];
-        foreach (self::init_vars as $init_var) {
-            $this->{$init_var} = $init_var;
-        }
-    }
 
     public function createTable(string $table, string $comment = ''): CreateInterface
     {

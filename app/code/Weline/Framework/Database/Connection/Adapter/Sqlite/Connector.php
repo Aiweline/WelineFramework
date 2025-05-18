@@ -12,11 +12,10 @@ declare(strict_types=1);
  * 描述：此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
  */
 
-namespace Weline\Framework\Database\Connection\Adapter\SqLite;
+namespace Weline\Framework\Database\Connection\Adapter\Sqlite;
 
 use PDO;
 use PDOException;
-use Weline\Framework\App\Debug;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;

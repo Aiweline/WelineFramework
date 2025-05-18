@@ -65,9 +65,26 @@ SCRIPT;
             file_put_contents($script_file, $script_string);
             // 创建计划任务
             $create_task = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE /RU \"$current_user\"";
+//            $create_task = "SCHTASKS /Create /TN \"$name\" /TR \"$script_file\" /SC MINUTE";
             $data = $this->system->win_exec($create_task);
             if ($data['return_vars'] === 1) {
-                return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1', $name), 'result' => $data];
+                $msg = __("
+你可能需要添加用户权限！（当前用户：%1）
+打开本地安全策略：
+              
+按 Win + R 键，输入 secpol.msc，然后按回车。
+导航到任务计划程序权限：
+
+在本地安全策略编辑器中，展开“本地策略” -> “用户权限分配”。
+找到“作为批处理作业登录”和“计划任务”这两项权限。
+添加用户：
+
+双击“作为批处理作业登录”或“计划任务”，然后点击“添加用户或组”。
+输入要赋予权限的用户账户名，然后点击“检查名称”以确保账户名正确无误。
+点击“确定”以添加用户，并再次点击“确定”以保存更改。", $current_user);
+                $msg .= PHP_EOL . PHP_EOL . '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1 遇到权限问题，请按照上述步骤添加权限！', $name);
+
+                return ['status' => false, 'msg' => $msg, 'result' => $data];
             }
             return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
         }

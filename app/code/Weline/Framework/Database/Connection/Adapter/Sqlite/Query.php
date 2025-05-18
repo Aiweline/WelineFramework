@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 
-namespace Weline\Framework\Database\Connection\Adapter\SqLite;
+namespace Weline\Framework\Database\Connection\Adapter\Sqlite;
 
 use PDO;
 use Weline\Framework\App\Debug;
@@ -31,12 +31,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $statements = preg_split($pattern, $sql);
 
         // 去除每个语句的前后空格
-        $statements = array_map('trim', $statements);
+        $statements = $statements ? array_map('trim', $statements) : [];
 
         // 过滤掉空语句
-        $statements = array_filter($statements);
-
-        return $statements;
+        return array_filter($statements);
     }
 
     public function fetch(string $model_class = ''): mixed
