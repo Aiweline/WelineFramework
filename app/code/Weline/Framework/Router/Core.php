@@ -94,6 +94,7 @@ class Core
     {
         # 获取URL
         $this->url = $url = $this->processUrl();
+
 //        $url                     = str_replace('-', '', $origin_url);
         if ($router = $this->cache->get($this->_router_cache_key)) {
             $this->router = $router;
