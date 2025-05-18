@@ -1,0 +1,108 @@
+<html lang="en">
+<head>
+    <title>FlashForge Email Signature</title>
+</head>
+<body>
+<script>
+    // 配置
+    const config = {
+        title: "闪铸科技", // 邮件签名标题
+        name: "张三", // 姓名
+        career: "技术支持工程师", // 职位
+        phone: "+86-12345678901", // 电话
+        logo: "./logo.webp", // Logo图片链接，请换成自己的Logo图片的链接
+        product_url: "./product.webp", // 产品图链接，请换成自己的产品图的链接
+        logo_alt: "闪铸科技", // Logo图片的替代文本（Alt）
+        product_alt: "闪铸科技系列产品",// 产品图的替代文本（Alt）
+        icons: [
+            {
+                id: "bilibili",
+                url: "https://www.iconfont.cn/search/index?searchType=icon&q=bilibili",
+                alt: "B站",
+                svg: ``,
+            }
+        ]
+    };
+    const icon = `<a href="{{url}}" style="
+        display: flex;
+        width: 70px;
+        height: 30px;
+        background-color: rgba(78,187,242,1);
+        margin: 0 5px;
+        text-align: center;
+        color: white;
+        text-decoration: none;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;"
+        onmouseover="this.style.backgroundColor='rgba(0,163,223,1)'"
+        onmouseout="this.style.backgroundColor='rgba(78,187,242,1)'">
+            <!-- 需要图标时：前往https://www.iconfont.cn/search/index?searchType=icon&q=bilibili搜索你想要的标签，替换掉下面的svg  -->
+            <!-- 具体的教程文档：https://flashforge.feishu.cn/wiki/FRfswAHXai0xDUkDkxGcokC9n6c  -->
+        {{svg}}
+        </a>`;
+    // 模板字符串
+    const tmp = `
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>{{title}}</title>
+</head>
+<body>
+<div style="font-family: Arial, sans-serif;width: 100%;margin: 0 auto;border-top: 1px solid #eee;padding-top: 20px;position: relative;overflow: hidden;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <!-- 左侧公司信息 -->
+        <div style="display: flex;flex-direction: column;">
+            <div>
+                <!-- 需要 Logo图片放置链接的：下方a标签内的href从#号改成类似 http://www.flashforge.com 的链接就可以了 -->
+                <a href="#">
+                <img src="{{logo}}" alt="{{logo_alt}}" style="
+                     height: 50px; margin-right: 15px; transition: all 0.3s ease; opacity: 1;"
+                     onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                </a>
+            </div>
+            <div>
+                <!-- 下面是人员信息：请只修改姓名、职位、电话 即可，不要动到任何其他信息包括左右尖括号都不能动到 -->
+                <p style="margin: 0 0 3px 0; font-weight: bold; font-size: 1.875rem;">{{name}}
+                    <span style="font-size: 1rem; font-weight: normal;">|</span>
+                    <span style="font-size: 1rem; font-weight: normal; " >{{career}} </span>
+                    <span style="font-size: 1rem; font-weight: normal;">|</span>
+                    <span style="font-size: 1rem; font-weight: normal;" >{{phone}}</span>
+                </p>
+                <p style="margin: 0; font-size: 0.75rem;">
+                    <span style="font-size: 1rem; font-weight: normal; " >浙江闪铸集团有限公司</span>
+                    <span style="font-size: 0.8rem; font-weight: normal;">|</span>
+                    <a href="http://www.sz3dp.com" style="color: #000000; text-decoration: none; transition: all 0.3s ease;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">www.sz3dp.com</a>
+                </p>
+            </div>
+        </div>
+        <!-- 右侧产品图片 -->
+        <div style="
+            position: absolute;
+            right: 1rem;
+            bottom: 1vh;
+            height: 100%;
+        ">
+            <!-- 需要换掉产品图的，在下面的img src属性中换掉./product.webp。注意：双引号保留  -->
+            <a href="#">
+                <img src="{{product_url}}" alt="{{product_alt}}" style="width: 100%; height: 100%; object-fit: contain;">
+            </a>
+        </div>
+    </div>
+
+    <!-- 社交媒体图标 -->
+    <div style="display: flex;margin-top: 20px;padding: 4vh 4vh;background: linear-gradient(to right, #00A3DF,#e0f7fa);text-align: left;">
+        <!-- 增加一个链接：复制下面的一对<a></a>内容，把#号换成类似 http://www.flashforge.com 的链接  -->
+        {{icons_html}}
+    </div>
+</div>
+</body>
+</html>`;
+
+    function sendEmail() {
+        window.location = "mailto:someone@example.com";
+    }
+</script>
+</body>
+</html>

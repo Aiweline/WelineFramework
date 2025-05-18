@@ -82,7 +82,11 @@ class Debug
         }
         $content .= date('Y-m-d H:i:s') . PHP_EOL;
         $content .= PHP_EOL;
-        file_put_contents($log, $content, $append ? FILE_APPEND : 0);
+        if ($append) {
+            file_put_contents($log, $content, FILE_APPEND);
+        } else {
+            file_put_contents($log, $content);
+        }
         # 输出一个debug悬浮窗，便于前端直接看到输出内容，通过页面加载后访问文件内容前10条
         $html = '<script>
                 var debug = document.createElement("div");

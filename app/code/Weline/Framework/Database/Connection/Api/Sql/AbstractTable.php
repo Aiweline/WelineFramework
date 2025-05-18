@@ -37,6 +37,25 @@ abstract class AbstractTable implements TableInterface
 
     protected ?ConnectorInterface $connector = null;
 
+    public array $index_outs = [];
+
+    public function reset(): void
+    {
+        $this->table = '';
+        $this->fields = [];
+        $this->alter_fields = [];
+        $this->delete_fields = [];
+        $this->indexes = [];
+        $this->foreign_keys = [];
+        $this->constraints = '';
+        $this->additional = ';';
+        $this->primary_key = '';
+        $this->comment = '';
+        $this->new_table_name = '';
+        $this->index_outs = [];
+    }
+
+
     /**
      * @DESC          # 设置链接
      *
@@ -44,8 +63,6 @@ abstract class AbstractTable implements TableInterface
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/9/5 18:11
      * 参数区：
-     * @throws Exception
-     * @throws \ReflectionException
      */
     public function setConnection(ConnectorInterface $connector): static
     {

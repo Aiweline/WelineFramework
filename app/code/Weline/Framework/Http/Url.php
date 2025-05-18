@@ -438,7 +438,9 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_AREA'] = 'frontend';
             self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::get('WELINE_USER_CURRENCY') ?? '';
             self::$parserServer['WELINE_USER_LANG'] = Cookie::get('WELINE_USER_LANG') ?? '';
+            self::$parserServer['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
             self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
         }
         if ($url) {
             $uri = self::parse_url($url, 'path') . self::parse_url($url, 'query');
@@ -448,7 +450,7 @@ class Url implements UrlInterface
         }
         # 静态文件不用再分析店铺
         if ($uri and str_contains($uri, '.')
-            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff\2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
+            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
             return $url;
         }
 
@@ -486,6 +488,7 @@ class Url implements UrlInterface
         # 匹配网站 self::$parserSites 最长倒序
         $parsers = self::parse_url($url);
         $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '');
+        self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
         foreach (self::$parserSites as $site_url => $site) {
             if (str_starts_with($url, $site_url)) {
                 $url = str_replace($site_url, '', $url);
