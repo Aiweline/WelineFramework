@@ -1,0 +1,854 @@
+<html lang="zh-CN">
+<head>
+    <title>FlashForge Email Signature Generator</title>
+    <style>
+        :root {
+            --primary-color: #00A3DF;
+            --hover-color: #0085b7;
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .editor-panel, .preview-panel {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 163, 223, 0.2);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 600;
+        }
+
+        button:hover {
+            background-color: var(--hover-color);
+            transform: translateY(-2px);
+        }
+
+        .icon-list {
+            margin-top: 15px;
+        }
+
+        .icon-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .copy-btn {
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 1000;
+        }
+
+        .show {
+            opacity: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .preview-container {
+            border: 1px dashed #ddd;
+            padding: 20px;
+            min-height: 300px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        /* 对话框样式 */
+        .dialog {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dialog-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .dialog-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dialog-header h3 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .dialog-header .close {
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .dialog-body {
+            padding: 20px;
+        }
+
+        .dialog-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .dialog-footer button {
+            min-width: 80px;
+        }
+
+        .dialog-footer button.primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .svg-preview {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px dashed #ddd;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 图标列表样式 */
+        .icon-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .icon-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .icon-alt {
+            display: block;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .icon-type {
+            font-size: 0.8em;
+            color: #999;
+        }
+
+        .icon-type svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .icon-url {
+            display: block;
+            color: #666;
+            font-size: 0.9em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .icon-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .icon-actions button {
+            padding: 5px 10px;
+            font-size: 0.9em;
+        }
+
+        .preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            color: var(--primary-color);
+            transition: var(--transition);
+        }
+
+        .refresh-btn:hover {
+            background: rgba(0, 163, 223, 0.1);
+            transform: rotate(90deg);
+        }
+
+        .refresh-btn svg {
+            display: block;
+        }
+
+        .no-icons {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .dialog-content {
+                width: 95%;
+            }
+
+            .icon-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .icon-actions {
+                margin-top: 10px;
+                align-self: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="editor-panel">
+        <h1>邮件签名生成器</h1>
+        <div class="form-group">
+            <label for="company">公司名称</label>
+            <input type="text" id="company" placeholder="闪铸科技">
+        </div>
+        <div class="form-group">
+            <label for="company_url">公司网址</label>
+            <input type="text" id="company_url" placeholder="https://www.example.com">
+        </div>
+        <div class="form-group">
+            <label for="name">姓名</label>
+            <input type="text" id="name" placeholder="张三">
+        </div>
+        <div class="form-group">
+            <label for="career">职位</label>
+            <input type="text" id="career" placeholder="技术支持工程师">
+        </div>
+        <div class="form-group">
+            <label for="phone">电话</label>
+            <input type="text" id="phone" placeholder="+86-12345678901">
+        </div>
+        <div class="form-group">
+            <label for="logo">Logo链接</label>
+            <input type="text" id="logo" placeholder="./logo.webp">
+        </div>
+        <div class="form-group">
+            <label for="logo_url">Logo点击链接</label>
+            <input type="text" id="logo_url" placeholder="https://www.example.com">
+        </div>
+        <div class="form-group">
+            <label for="product_image_url">产品图链接</label>
+            <input type="text" id="product_image_url" placeholder="./product.webp">
+        </div>
+        <div class="form-group">
+            <label for="product_url">产品链接</label>
+            <input type="text" id="product_url" placeholder="./product.webp">
+        </div>
+
+        <div class="form-group">
+            <label>社交媒体图标</label>
+            <button type="button" id="add-icon">+ 添加图标</button>
+            <div class="icon-list" id="icon-list"></div>
+        </div>
+
+        <button class="copy-btn" id="copy-btn">复制签名代码</button>
+    </div>
+
+    <div class="preview-panel">
+        <div class="preview-header">
+            <h1>预览</h1>
+            <button class="refresh-btn" title="刷新预览">
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                    <path fill="currentColor"
+                          d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
+                </svg>
+            </button>
+        </div>
+        <div class="preview-container" id="preview"></div>
+    </div>
+</div>
+
+<div class="toast" id="toast">代码已复制到剪贴板！</div>
+
+<!-- 添加图标对话框 -->
+<div class="dialog" id="icon-dialog">
+    <div class="dialog-content">
+        <div class="dialog-header">
+            <h3>添加社交媒体图标</h3>
+            <span class="close" onclick="closeDialog()">&times;</span>
+        </div>
+        <div class="dialog-body">
+            <div class="form-group">
+                <label for="icon-url">图标链接</label>
+                <input type="text" id="icon-url" placeholder="https://example.com/icon">
+            </div>
+            <div class="form-group">
+                <label for="icon-alt">图标描述</label>
+                <input type="text" id="icon-alt" placeholder="例如: Facebook">
+            </div>
+            <div class="form-group">
+                <label for="icon-svg">SVG代码 (可选)</label>
+                <textarea id="icon-svg" rows="4" placeholder="粘贴SVG代码..."></textarea>
+                <div id="svg-preview" class="svg-preview"></div>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button onclick="closeDialog()">取消</button>
+            <button onclick="addIcon()" class="primary">添加</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 从cookie加载配置或使用默认配置
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function setCookie(name, value, days = 365) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = `${name}=${value};expires=${date.toUTCString()};path=/`;
+    }
+
+    let config = {
+        company: "闪铸科技",
+        company_url: "www.sz3dp.com",
+        title: "闪铸科技",
+        name: "张三",
+        career: "技术支持工程师",
+        phone: "+86-12345678901",
+        logo: "./logo.webp",
+        logo_url: "http://www.flashforge.com",
+        product_url: "https://ca.flashforge.com/products/adventurer-5m-pro-3d-printer",
+        product_image_url: "http://www.flashforge.com/products/ad5m.png",
+        logo_alt: "闪铸科技",
+        product_alt: "闪铸科技系列产品",
+        icons: [{
+            url: "https://www.facebook.com/flashforge",
+            alt: "Facebook",
+            svg: `<svg t="1747478447424" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1461" width="20" height="20"><path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32z m-32 736H663.9V602.2h104l15.6-120.7H663.9v-77.1c0-35 9.7-58.8 59.8-58.8h63.9v-108c-11.1-1.5-49-4.8-93.2-4.8-92.2 0-155.3 56.3-155.3 159.6v89H434.9v120.7h104.3V848H176V176h672v672z" p-id="1462" fill="#ffffff"></path></svg>`
+        }, {
+            url: "https://twitter.com/FlashForge3D",
+            alt: "Twitter",
+            svg: `<svg t="1747480509361" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3343" width="20" height="20"><path d="M868.78260513 350.93851167c-4.19752479 316.58112364-206.64378348 533.42289687-508.84923077 547.04005471-124.62575954 5.70639316-214.91280228-34.551102-293.48715213-84.46745527 92.10982108 14.70125585 206.32520569-22.11723305 267.41045242-74.40833277-90.28704274-8.78247749-143.74276011-54.7393641-168.7552-128.69725356 26.08953618 4.51026781 53.57474644 3.31414245 78.36079771-1.93480569-81.47305755-27.27282508-139.65259487-77.62795213-142.6586621-183.14254588 22.8629151 10.40920798 46.6967339 20.19409687 78.36079772 22.12306782-60.97321937-34.68180056-106.05956011-161.46291966-54.42078633-245.29788718 90.49359316 99.18854928 199.34683533 180.12947692 378.08647293 191.07898346-44.87512251-191.83050029 209.33127293-295.85489687 315.7222473-166.92541994 44.97431338-8.70079088 81.58158405-25.7639567 116.79551453-44.33599088-14.49353846 44.54837607-42.40585299 75.68030997-76.43065983 100.58539031 37.3506188-5.04239772 70.41152364-14.16912593 98.65525243-28.12469971-17.51944388 36.39255157-55.82929687 69.02751909-88.78984388 96.50689458z" fill="#ffffff" p-id="3344"></path></svg>`
+        },
+            {
+                url: "https://www.linkedin.com/company/flashforge",
+                alt: "Linkedin",
+                svg: `<svg t="1747480607021" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4367" width="20" height="20"><path d="M236.8 334.4v656H16v-656h220.8z m12.8-204.8c0 32-9.6 59.2-35.2 81.6-22.4 22.4-52.8 32-91.2 32-38.4 0-65.6-9.6-88-32S0 164.8 0 129.6C0 97.6 12.8 70.4 35.2 48s52.8-32 88-32 65.6 9.6 88 32 38.4 51.2 38.4 81.6z m771.2 484.8V992H804.8V640c0-46.4-9.6-81.6-28.8-110.4-19.2-25.6-46.4-41.6-84.8-41.6-28.8 0-49.6 6.4-68.8 22.4-19.2 16-32 35.2-41.6 56-6.4 12.8-6.4 32-6.4 52.8v371.2H355.2V560 329.6h216v94.4c9.6-16 19.2-25.6 28.8-38.4 9.6-9.6 22.4-22.4 38.4-35.2 16-12.8 35.2-22.4 56-28.8 22.4-6.4 46.4-9.6 75.2-9.6 75.2 0 134.4 25.6 182.4 75.2 48 57.6 68.8 129.6 68.8 227.2z" fill="#888888" p-id="4368"></path></svg>`
+            }
+        ]
+    };
+
+    try {
+        const savedConfig = getCookie('emailSignatureConfig');
+        if (savedConfig) {
+            config = JSON.parse(savedConfig);
+        }
+    } catch (e) {
+        console.error('Failed to parse saved config', e);
+    }
+    // 图标模板
+    const iconTemplate = (iconData) => {
+        return `<a href="${iconData.url}" style="
+            display: flex;
+            width: 70px;
+            height: 30px;
+            background-color: rgba(78,187,242,1);
+            margin: 0 5px;
+            text-align: center;
+            color: white;
+            text-decoration: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;"
+            onmouseover="this.style.backgroundColor='rgba(0,163,223,1)'"
+            onmouseout="this.style.backgroundColor='rgba(78,187,242,1)'"
+            title="${iconData.alt}">
+            ${iconData.svg || iconData.alt}
+        </a>`;
+    };
+
+    // 生成图标HTML
+    const generateIconsHtml = (icons) => {
+        return icons.map(icon => iconTemplate(icon)).join('');
+    };
+
+    // 模板字符串
+    const tmp = `
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>___company___</title>
+</head>
+<body>
+<div style="font-family: Arial, sans-serif;width: 100%;margin: 0 auto;border-top: 1px solid #eee;padding-top: 20px;position: relative;overflow: hidden;">
+        <hr>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <!-- 左侧公司信息 -->
+        <div style="display: flex;gap: 10px;flex-direction: column;width: 50%;">
+            <a href="___logo_url___">
+                <div>
+                    <!-- 需要 Logo图片放置链接的：下方a标签内的href从#号改成类似 http://www.flashforge.com 的链接就可以了 -->
+                    <img src="___logo___" alt="___logo_alt___" style="
+                         height: 50px; margin-right: 15px; transition: all 0.3s ease; opacity: 1;"
+                         onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                </div>
+            </a>
+            <div>
+                <!-- 下面是人员信息：请只修改姓名、职位、电话 即可，不要动到任何其他信息包括左右尖括号都不能动到 -->
+                <p style="    display: flex
+;
+    margin: 0 0 3px 0;
+    font-weight: bold;
+    column-gap: 1rem;
+    font-size: 1.875rem;
+    margin-bottom: 1rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;">___name___
+                    <span>
+                        <span style="font-size: 1rem; font-weight: normal;">|</span>
+                        <span style="font-size: 1rem; font-weight: normal; " >___career___ </span>
+                    </span>
+                    <span>
+                        <span style="font-size: 1rem; font-weight: normal;">|</span>
+                        <span style="font-size: 1rem; font-weight: normal;" >___phone___</span>
+                    </span>
+                </p>
+                <p style="margin: 0; font-size: 0.75rem;">
+                    <span style="font-size: 1rem; font-weight: normal; " >___company___</span>
+                    <span style="font-size: 0.8rem; font-weight: normal;">|</span>
+                    <a href="http://www.sz3dp.com" style="color: #000000; text-decoration: none; transition: all 0.3s ease;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">___company_url___</a>
+                </p>
+            </div>
+        </div>
+        <!-- 右侧产品图片 -->
+            <a href="___product_url___" style="width: 50%;
+    position: relative;
+    bottom: -8vh;">
+                <div style="
+                    position: relative;
+    right: 1rem;
+    height: 100%;display: flex
+;
+    flex-direction: row-reverse;
+                ">
+                    <!-- 需要换掉产品图的，在下面的img src属性中换掉./product.webp。注意：双引号保留  -->
+                        <img src="___product_image_url___" alt="___product_alt___"
+style="max-width: 200px; width: 100%;object-fit: contain;">
+                </div>
+            </a>
+
+    </div>
+
+    <!-- 社交媒体图标 -->
+    <div style="display: flex;margin-top: 20px;padding: 2vh 2vh;background: linear-gradient(to right, #00A3DF,#e0f7fa);text-align: left;">
+        <!-- 增加一个链接：复制下面的一对<a></a>内容，把#号换成类似 http://www.flashforge.com 的链接  -->
+        ___icons_html___
+    </div>
+</div>
+</body>
+</html>`;
+
+    // 渲染预览
+    function renderPreview() {
+        try {
+            const logo_url = document.getElementById('logo_url').value || '闪铸科技';
+            const company = document.getElementById('company').value || '闪铸科技';
+            const company_url = document.getElementById('company_url').value || 'http://www.sz3dp.com';
+            const name = document.getElementById('name').value || '';
+            const career = document.getElementById('career').value || '';
+            const phone = document.getElementById('phone').value || '';
+            const logo = document.getElementById('logo').value || '';
+            const product_url = document.getElementById('product_url').value || '';
+            const product_image_url = document.getElementById('product_image_url').value || '';
+
+            // 更新配置
+            config = {
+                logo_url,
+                company,
+                company_url,
+                name,
+                career,
+                phone,
+                logo,
+                product_url,
+                product_image_url,
+                logo_alt: company,
+                product_alt: `${company}`,
+                icons: config.icons
+            };
+
+            // 保存配置到cookie
+            setCookie('emailSignatureConfig', JSON.stringify(config));
+
+            // 生成预览HTML
+            let previewHtml = tmp
+                .replace(/___logo_url___/g, escapeHtml(logo_url))
+                .replace(/___company___/g, escapeHtml(company))
+                .replace(/___company_url___/g, escapeHtml(company_url))
+                .replace(/___name___/g, escapeHtml(name))
+                .replace(/___career___/g, escapeHtml(career))
+                .replace(/___phone___/g, escapeHtml(phone))
+                .replace(/___logo___/g, escapeHtml(logo))
+                .replace(/___product_url___/g, escapeHtml(product_url))
+                .replace(/___product_image_url___/g, escapeHtml(product_image_url))
+                .replace(/___logo_alt___/g, escapeHtml(company))
+                .replace(/___product_alt___/g, escapeHtml(`${company}`))
+                .replace(/___icons_html___/g, generateIconsHtml(config.icons));
+
+            // 验证HTML结构
+            if (!isValidHtml(previewHtml)) {
+                console.error('生成的HTML结构无效:', previewHtml);
+                previewHtml = `<div style="color:red">预览生成错误，请检查输入内容</div>`;
+            }
+
+            document.getElementById('preview').innerHTML = previewHtml;
+        } catch (error) {
+            console.error('渲染预览时出错:', error);
+            document.getElementById('preview').innerHTML =
+                `<div style="color:red">预览生成错误: ${error.message}</div>`;
+        }
+    }
+
+    // HTML转义函数
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // 简单HTML结构验证
+    function isValidHtml(html) {
+        try {
+            const doc = document.implementation.createHTMLDocument();
+            doc.body.innerHTML = html;
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // 添加图标对话框
+    function showAddIconDialog() {
+        const dialog = document.getElementById('icon-dialog');
+        const urlInput = document.getElementById('icon-url');
+        const altInput = document.getElementById('icon-alt');
+        const svgInput = document.getElementById('icon-svg');
+        const preview = document.getElementById('svg-preview');
+
+        // 重置表单
+        urlInput.value = '';
+        altInput.value = '';
+        svgInput.value = '';
+        preview.innerHTML = '';
+
+        // 显示对话框
+        dialog.style.display = 'block';
+
+        // 实时预览SVG
+        svgInput.addEventListener('input', () => {
+            preview.innerHTML = svgInput.value;
+        });
+    }
+
+    // 保存图标(添加/编辑)
+    function saveIcon() {
+        const dialog = document.getElementById('icon-dialog');
+        const urlInput = document.getElementById('icon-url');
+        const altInput = document.getElementById('icon-alt');
+        const svgInput = document.getElementById('icon-svg');
+
+        if (!urlInput.value) {
+            alert('请输入图标链接');
+            return;
+        }
+
+        const iconData = {
+            url: urlInput.value.trim(),
+            alt: altInput.value.trim() || '图标',
+            svg: svgInput.value.trim() || ''
+        };
+
+        if (dialog.dataset.mode === 'edit') {
+            // 更新现有图标
+            const index = config.icons.findIndex(i => i.id === dialog.dataset.editId);
+            if (index !== -1) {
+                config.icons[index] = {
+                    ...config.icons[index],
+                    ...iconData
+                };
+            }
+        } else {
+            // 添加新图标
+            config.icons.push({
+                id: `icon-${Date.now()}`,
+                ...iconData
+            });
+        }
+
+        // 保存完整配置
+        setCookie('emailSignatureConfig', JSON.stringify(config));
+
+        dialog.style.display = 'none';
+        renderIconsList();
+        renderPreview();
+    }
+
+    // 关闭对话框
+    function closeDialog() {
+        document.getElementById('icon-dialog').style.display = 'none';
+    }
+
+    // 删除图标
+    function deleteIcon(id) {
+        config.icons = config.icons.filter(icon => icon.id !== id);
+        renderIconsList();
+        renderPreview();
+    }
+
+    // 渲染图标列表
+    function renderIconsList() {
+        const iconList = document.getElementById('icon-list');
+        iconList.innerHTML = '';
+
+        if (config.icons.length === 0) {
+            iconList.innerHTML = '<div class="no-icons">暂无图标，点击上方按钮添加</div>';
+            return;
+        }
+
+        config.icons.forEach(icon => {
+            const iconItem = document.createElement('div');
+            iconItem.className = 'icon-item';
+            iconItem.innerHTML = `
+                <div class="icon-info">
+                    <span class="icon-alt">${icon.alt}<span class="icon-type">${icon.svg ?? ' (SVG)'}</span></span>
+                    <span class="icon-url">${icon.url}</span>
+                </div>
+                <div class="icon-actions">
+                    <button onclick="editIcon('${icon.id}')">编辑</button>
+                    <button onclick="deleteIcon('${icon.id}')">删除</button>
+                </div>
+            `;
+            iconList.appendChild(iconItem);
+        });
+    }
+
+    // 编辑图标
+    function editIcon(id) {
+        const icon = config.icons.find(i => i.id === id);
+        if (!icon) return;
+
+        const dialog = document.getElementById('icon-dialog');
+        const urlInput = document.getElementById('icon-url');
+        const altInput = document.getElementById('icon-alt');
+        const svgInput = document.getElementById('icon-svg');
+        const preview = document.getElementById('svg-preview');
+
+        // 填充表单
+        urlInput.value = icon.url;
+        altInput.value = icon.alt;
+        svgInput.value = icon.svg;
+        preview.innerHTML = icon.svg;
+
+        // 设置编辑模式
+        dialog.dataset.mode = 'edit';
+        dialog.dataset.editId = id;
+        dialog.style.display = 'block';
+    }
+
+    // 初始化对话框
+    function initDialog() {
+        const dialog = document.getElementById('icon-dialog');
+        dialog.style.display = 'none';
+        dialog.dataset.mode = 'add';
+    }
+
+    // 初始化表单
+    function initForm() {
+        document.getElementById('company').value = config.company ?? '闪铸科技';
+        document.getElementById('company_url').value = config.company_url ?? 'https://www.sz3dp.com';
+        document.getElementById('name').value = config.name;
+        document.getElementById('career').value = config.career;
+        document.getElementById('phone').value = config.phone;
+        document.getElementById('logo').value = config.logo;
+        document.getElementById('logo_url').value = config.logo_url;
+        document.getElementById('product_url').value = config.product_url;
+        document.getElementById('product_image_url').value = config.product_image_url;
+
+        // 添加事件监听
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', renderPreview);
+        });
+
+        // 初始化对话框
+        initDialog();
+
+        // 事件监听
+        document.getElementById('add-icon').addEventListener('click', showAddIconDialog);
+        document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
+        document.querySelector('#icon-dialog .primary').addEventListener('click', saveIcon);
+        document.querySelector('.refresh-btn').addEventListener('click', renderPreview);
+
+        renderIconsList();
+        renderPreview();
+    }
+
+    // 页面加载完成后初始化
+    function checkDOMReady() {
+        console.log('Checking DOM ready state...');
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            initForm();
+        } else {
+            document.addEventListener('DOMContentLoaded', initForm);
+            // 添加超时fallback
+            setTimeout(initForm, 1000);
+        }
+    }
+
+    // 更安全的复制功能
+    function copyToClipboard() {
+        try {
+            const previewHtml = document.getElementById('preview').innerHTML;
+            const textArea = document.createElement('textarea');
+            textArea.value = previewHtml;
+            document.body.appendChild(textArea);
+            textArea.select();
+
+            const result = document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            if (result) {
+                showToast('代码已复制到剪贴板！');
+            } else {
+                showToast('复制失败，请手动选择并复制', true);
+            }
+        } catch (err) {
+            console.error('复制出错:', err);
+            showToast('复制出错，请手动选择并复制', true);
+        }
+    }
+
+    // 显示提示
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.style.backgroundColor = isError ? '#f44336' : '#4CAF50';
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // 启动应用
+    checkDOMReady();
+</script>
+</body>
+</html>

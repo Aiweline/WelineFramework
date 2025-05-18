@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database;
 
+use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
@@ -101,15 +102,19 @@ class ConnectionFactory
     /**
      * 获取适配器
      *
-     * @param string $driver_type
-     *
-     * @return string
+     * @param ConfigProvider|null $configProvider
+     * @return ConnectorInterface
+     * @throws \ReflectionException
+     * @throws Exception
      */
     public function getConnectorAdapter(null|ConfigProvider $configProvider = null): ConnectorInterface
     {
         $configProvider = $configProvider ?: $this->configProvider;
         $driver_type = $configProvider->getDbType();
         $driverClass = "Weline\\Framework\\Database\\Connection\\Adapter\\" . ucfirst($driver_type) . '\\Connector';
+        if (!class_exists($driverClass)) {
+            throw new Exception(__("数据库驱动 %1 不存在", $driverClass));
+        }
         return ObjectManager::make($driverClass, ['configProvider' => $configProvider]);
     }
 
@@ -162,8 +167,6 @@ class ConnectionFactory
      * @param string $sql
      *
      * @return QueryInterface
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
      */
     public function query(string $sql): QueryInterface
     {
@@ -202,15 +205,6 @@ class ConnectionFactory
         if (is_null($this->defaultConnector)) {
             $this->getConnector();
         }
-        // 如果是drop开头的语句，则不进行缓存
-        //        if (strpos(strtolower($sql), 'drop') === 0) {
-        //            p($sql);
-        //        }
-        //
-        //        // 如果是drop开头的语句，则不进行缓存
-        //        if (strpos(strtolower($sql), 'm_aiweline_hello_world')) {
-        //            p($sql);
-        //        }
 
         return $this->defaultConnector->query($sql);
     }

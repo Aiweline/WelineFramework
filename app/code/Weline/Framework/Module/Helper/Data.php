@@ -247,7 +247,7 @@ class Data extends AbstractHelper
                     }
 
                     $this->parent_class_arr = [];// 清空父类信息
-                    $ctl_data = $this->parserController($pc_class, $name, $router);
+                    $ctl_data = $this->parserController($pc_class, $name);
                     if (empty($ctl_data)) {
                         continue;
                     }
@@ -457,7 +457,7 @@ class Data extends AbstractHelper
                 $controller_methods = array_merge($parent_methods, $controller_methods);
                 // 实例化类
                 if (!$parent_class->isAbstract()) {
-                    $this->parent_class_arr = array_merge($this->parent_class_arr, $this->parserController($parent_class->getName(), $module_name, $router)['area']);
+                    $this->parent_class_arr = array_merge($this->parent_class_arr, $this->parserController($parent_class->getName(), $module_name)['area']);
                 }
             }
 
