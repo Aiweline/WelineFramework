@@ -29,7 +29,7 @@ class Create extends AbstractTable implements CreateInterface
         self::table_ADDITIONAL => ';',
     ];
 
-    public function reset()
+    public function reset(): void
     {
         $this->fields = [];
         $this->indexs = [];
@@ -40,8 +40,8 @@ class Create extends AbstractTable implements CreateInterface
         $this->comment = '';
         $this->new_table_name = '';
         $this->index_outs = [];
-        foreach (self::init_vars as $init_var) {
-            $this->$init_var = $init_var;
+        foreach (self::init_vars as $key => $init_var) {
+            $this->$key = $init_var;
         }
     }
 

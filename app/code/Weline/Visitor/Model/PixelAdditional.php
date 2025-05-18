@@ -9,8 +9,8 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class PixelAdditional extends Model
 {
-
-    public const fields_ID = 'pixel_id';
+    public const fields_ID = 'pixel_additional_id';
+    public const fields_PIXEL_ID = 'pixel_id';
     public const fields_TOTAL_EVENT_DATA = 'total_event_data';
 
 
@@ -43,10 +43,17 @@ class PixelAdditional extends Model
         $setup->createTable('weline 访客像素统计-附加数据')
             ->addColumn(
                 self::fields_ID,
-                TableInterface::column_type_INTEGER,
+                TableInterface::column_type_BIGINT,
                 0,
                 'primary key auto_increment',
                 'ID'
+            )
+            ->addColumn(
+                self::fields_PIXEL_ID,
+                TableInterface::column_type_BIGINT,
+                0,
+                'not null',
+                '像素ID'
             )
             ->addColumn(
                 self::fields_TOTAL_EVENT_DATA,
@@ -55,12 +62,12 @@ class PixelAdditional extends Model
                 '',
                 '总事件数据'
             )
-            ->addForeignKey(
-                'FK_pixel_id',
-                self::fields_ID,
-                $pixel->getTable(),
-                Pixel::fields_ID,
-                true)
+//            ->addForeignKey(
+//                'FK_pixel_id',
+//                self::fields_ID,
+//                $pixel->getTable(),
+//                Pixel::fields_ID,
+//                true)
             ->create();
     }
 
