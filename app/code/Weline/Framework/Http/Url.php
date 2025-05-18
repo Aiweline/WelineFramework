@@ -171,6 +171,22 @@ class Url implements UrlInterface
         }
     }
 
+    /**
+     * 判断是否同站链接
+     * @param string $url
+     * @return bool
+     */
+    public static function is_same_site(string $url): bool
+    {
+        $parse = self::parser($url);
+        $url_site = $parse['website_url'] ?? '';
+        /** @var Request $req */
+        $req = w_obj(Request::class);
+        $req_parse = self::parser($req->getUrlPath());
+        $req_host = $req_parse['website_url'] ?? '';
+        return $url_site === $req_host;
+    }
+
     public function getOriginUrl(string $path = '', array $params = [], bool $merge_url_params = false): string
     {
         if ($path) {

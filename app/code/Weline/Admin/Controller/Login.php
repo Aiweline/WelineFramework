@@ -150,7 +150,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->redirect($this->_url->getBackendUrl('admin'));
     }
 
-    private function redirectReferer()
+    private function redirectReferer(): void
     {
         $backend_login_referer = Url::removeExtraDoubleSlashes($this->session->getData('backend_login_referer'));
         if ($backend_login_referer) {
@@ -160,8 +160,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
         }
         $referer = Url::removeExtraDoubleSlashes($this->session->getData('referer'));
+
         if ($referer) {
-            if ($referer !== $this->request->getUrlPath()) {
+            if (Url::is_same_site($referer) && $referer !== $this->request->getUrlPath()) {
                 $this->redirect($referer);
             }
         }
