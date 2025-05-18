@@ -42,10 +42,10 @@ interface TableInterface
     public const column_type_DATETIME = 'datetime';
 
     // 能够支持text类型数据
-    public const column_type_TEXT       = 'text';
+    public const column_type_TEXT = 'text';
 
-    public const column_type_JSON       = 'json';
-    public const column_type_LONG_TEXT  = 'longtext';
+    public const column_type_JSON = 'json';
+    public const column_type_LONG_TEXT = 'longtext';
     public const column_type_MEDIU_TEXT = 'mediumtext';
 
     // 一个真正的blob，以二进制形式存储在DB中
@@ -71,30 +71,32 @@ interface TableInterface
 
     /*索引方式*/
     public const index_method_BTREE = 'BTREE';//--用BTREE 方式索引
-    public const index_method_HASH  = 'HASH'; //--用HASH 方式索引
+    public const index_method_HASH = 'HASH'; //--用HASH 方式索引
 
 
-    public const table_TABLE         = 'table';
-    public const table_COMMENT       = 'comment';
-    public const table_FIELDS        = 'fields';
-    public const table_ALERT_FIELDS  = 'alter_fields';
+    public const table_TABLE = 'table';
+    public const table_COMMENT = 'comment';
+    public const table_FIELDS = 'fields';
+    public const table_ALERT_FIELDS = 'alter_fields';
     public const table_DELETE_FIELDS = 'delete_fields';
-    public const table_INDEXS        = 'indexes';
-    public const table_FOREIGN_KEYS  = 'foreign_keys';
-    public const table_TYPE          = 'type';
-    public const table_CONSTRAINTS   = 'constraints';
-    public const table_ADDITIONAL    = 'additional';
+    public const table_INDEXS = 'indexes';
 
+    public const table_FOREIGN_KEYS = 'foreign_keys';
+
+    public const table_TYPE = 'type';
+
+    public const table_CONSTRAINTS = 'constraints';
+    public const table_ADDITIONAL = 'additional';
     public const init_vars = [
-        self::table_TABLE         => '',
-        self::table_COMMENT       => '',
-        self::table_FIELDS        => [],
-        self::table_ALERT_FIELDS  => [],
+        self::table_TABLE => '',
+        self::table_COMMENT => '',
+        self::table_FIELDS => [],
+        self::table_ALERT_FIELDS => [],
         self::table_DELETE_FIELDS => [],
-        self::table_INDEXS        => [],
-        self::table_FOREIGN_KEYS  => [],
-        self::table_CONSTRAINTS   => '',
-        self::table_ADDITIONAL    => 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;',
+        self::table_INDEXS => [],
+        self::table_FOREIGN_KEYS => [],
+        self::table_CONSTRAINTS => '',
+        self::table_ADDITIONAL => 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;',
     ];
 
     /**

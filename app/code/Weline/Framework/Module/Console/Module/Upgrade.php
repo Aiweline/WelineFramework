@@ -237,10 +237,20 @@ class Upgrade extends CommandAbstract
         $modules = $module_handle->getModules();
         foreach ($modules as $module_name => $module) {
             if (isset($module['upgrading']) and $module['upgrading']) {
-                $module_handle->setupInstall(new Module($module));
+                try {
+                    $module_handle->setupUpgrade(new Module($module));
+                } catch (Exception $exception) {
+                    $this->printer->error($exception->getMessage());
+                    die;
+                }
             }
             if (isset($module['installing']) and $module['installing']) {
-                $module_handle->setupInstall(new Module($module));
+                try {
+                    $module_handle->setupInstall(new Module($module));
+                } catch (Exception $exception) {
+                    $this->printer->error($exception->getMessage());
+                    die;
+                }
             }
         }
         // 注册模型数据库信息

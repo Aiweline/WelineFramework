@@ -35,7 +35,7 @@ Session implements SessionInterface
 
     public function __init()
     {
-        if (isset($_SERVER['REQUEST_URI']) && !isset($this->session)) {
+        if (!CLI && isset($_SERVER['REQUEST_URI']) && !isset($this->session)) {
             $type = 'frontend';
             $identity_path = '/';
             if (is_int(strpos($_SERVER['REQUEST_URI'], Env::getInstance()->getData('admin')))) {
