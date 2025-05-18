@@ -82,7 +82,7 @@ SCRIPT;
 双击“作为批处理作业登录”或“计划任务”，然后点击“添加用户或组”。
 输入要赋予权限的用户账户名，然后点击“检查名称”以确保账户名正确无误。
 点击“确定”以添加用户，并再次点击“确定”以保存更改。", $current_user);
-                $msg .= PHP_EOL . PHP_EOL . '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1 遇到权限问题，请按照上述步骤添加权限！', $name);
+                $msg .= PHP_EOL . PHP_EOL . '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1 遇到权限问题，请按照上述步骤添加权限！或者使用管理员运行：php bin/w cron:install', $name);
 
                 return ['status' => false, 'msg' => $msg, 'result' => $data];
             }
@@ -117,7 +117,7 @@ SCRIPT;
             if (count($data['output']) === 1) {
                 return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功移除!', $name), 'result' => $data];
             }
-            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 移除失败！', $name), 'result' => $data];
+            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 移除失败！可能权限不足，考虑使用管理员运行！php bin/w cron:remove', $name), 'result' => $data];
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 尚未安装！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => []];
     }
