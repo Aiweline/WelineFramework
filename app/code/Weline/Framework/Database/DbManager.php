@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Database;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Exception\LinkException;
@@ -106,8 +107,7 @@ class DbManager
      * @param ConfigProvider|null $configProvider 链接资源配置
      *
      * @return ConnectionFactory
-     * @throws \ReflectionException
-     * @throws LinkException|\Weline\Framework\App\Exception
+     * @throws LinkException
      */
     public function create(string $connection_name = 'default', null|ConfigProvider $configProvider = null): ConnectionFactory
     {
@@ -147,7 +147,6 @@ class DbManager
      * @param string $connection_name
      *
      * @return ConnectionFactory|null
-     * @throws LinkException
      */
     public function getConnection(string $connection_name = 'default'): ?ConnectionFactory
     {

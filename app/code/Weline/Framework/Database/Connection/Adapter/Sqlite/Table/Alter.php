@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 
-namespace Weline\Framework\Database\Connection\Adapter\SqLite\Table;
+namespace Weline\Framework\Database\Connection\Adapter\Sqlite\Table;
 
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
