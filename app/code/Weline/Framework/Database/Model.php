@@ -105,7 +105,8 @@ abstract class Model extends AbstractModel implements ModelInterface
         string     $order_sort = 'ASC',
         string     $selected_field = 'id',
         array      $selected = [],
-        string     $name_field = 'name'
+        string     $name_field = 'name',
+        string     $node_field = 'nodes'
     ): array
     {
         $nodes = [];
@@ -117,16 +118,15 @@ abstract class Model extends AbstractModel implements ModelInterface
         if ($selected) {
             $model->where($selected_field, $selected, 'in');
         }
-        $results = $model->select()
-            ->fetchArray();
+        $results = $model->select()->fetchArray();
         foreach ($results as $result) {
             $nodes[$result[$selected_field]] = $result;
-//            $nodes[$result[$selected_field]]['children'][] = $result;
+//            $nodes[$result[$selected_field]][$node_field][] = $result;
         }
         foreach ($nodes as $id => &$node) {
             if (isset($node[$parent_id_field])) {
                 if ($node[$parent_id_field]) {
-                    $nodes[$node[$parent_id_field]]['children'][] = &$node;
+                    $nodes[$node[$parent_id_field]][$node_field][] = &$node;
                 }
             }
         }
@@ -142,7 +142,7 @@ abstract class Model extends AbstractModel implements ModelInterface
         return $this->buildSelectedTree($items, $selected_field, $selected, $name_field);
     }
 
-    function buildSelectedTree(array $tree, string &$selected_field, array &$selectedLeaves, string &$name_field)
+    function buildSelectedTree(array $tree, string &$selected_field, array &$selectedLeaves, string &$name_field, $node_field = 'nodes'): array
     {
         $result = [];
 
@@ -150,11 +150,11 @@ abstract class Model extends AbstractModel implements ModelInterface
             // 检查当前节点是否是选中的叶子节点
             if (isset($node[$selected_field]) and in_array($node[$selected_field], $selectedLeaves)) {
                 $result[] = $node;
-            } elseif (!empty($node['children'])) {
+            } elseif (!empty($node[$node_field])) {
                 // 递归处理子节点
-                $children = $this->buildSelectedTree($node['children'], $selected_field, $selectedLeaves, $name_field);
+                $children = $this->buildSelectedTree($node[$node_field], $selected_field, $selectedLeaves, $name_field);
                 if (!empty($children)) {
-                    $node['children'] = $children;
+                    $node[$node_field] = $children;
                     $result[] = $node;
                 }
             }

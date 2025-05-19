@@ -36,7 +36,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!--页头工具条 结束-->
     <!-- ========== Topnav Start ========== -->
     <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
     <!--页头菜单栏 结束-->
 
     <!-- ========== Left Sidebar Start ========== -->
@@ -141,11 +141,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                             <foreach name="catalogs" item="v">
                                                                 <if condition="$catalog.pid === $v.id">
                                                                     <option value="@var{$v.id}-@var{$v.level}" selected>
-                                                                        <var>$v.name</var>
+                                                                        {{v.name}}
                                                                     </option>
                                                                     <else/>
                                                                     <option value="@var{$v.id}-@var{$v.level}">
-                                                                        <var>$v.name</var>
+                                                                        {{v.name}}
                                                                     </option>
                                                                 </if>
                                                                 <notempty name="$v.nodes">
@@ -153,12 +153,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                         <if condition="$catalog.id === $node.pid">
                                                                             <option value="@var{$node.id}-@var{$node.level}"
                                                                                     selected>
-                                                                                <php>echo str_pad('-',$node['level']);</php>
+                                                                                <php>echo str_pad('-',$node['level']);
+                                                                                </php>
                                                                                 <var>$node.name</var>
                                                                             </option>
                                                                             <else/>
                                                                             <option value="@var{$node.id}-@var{$node.level}">
-                                                                                <php>echo str_pad('-',$node['level']);</php>
+                                                                                <php>echo str_pad('-',$node['level']);
+                                                                                </php>
                                                                                 <var>$node.name</var>
                                                                             </option>
                                                                         </if>
@@ -239,11 +241,46 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             $.get({
                                                 url: '@admin-url("dev/tool/admin/document/catalog/tree")',
                                             }).done(res => {
-                                                console.log(res)
                                                 $('#catalog-tree').treeview({
                                                     data: res,
                                                     enableLinks: true,
-                                                    expandIcon: 'glyphicon glyphicon-plus'
+                                                    expandIcon: 'glyphicon glyphicon-plus',
+                                                    collapseIcon: 'glyphicon glyphicon-minus',
+                                                    onNodeSelected: function (event, data) {
+                                                        console.log('Node selected:', data);
+                                                    }
+                                                })
+                                                // 处理编辑节点
+                                                $('#catalog-tree').on('click', '.edit-node', function (e) {
+                                                    e.stopPropagation(); // 阻止事件冒泡，防止触发节点选择事件
+                                                    var nodeId = $(this).data('id');
+                                                    console.log('Edit node:', nodeId);
+                                                    // 在这里添加编辑节点的逻辑，例如弹出编辑表单
+                                                });
+                                                // 处理删除节点
+                                                $('#catalog-tree').on('click', '.delete-node', function (e) {
+                                                    e.stopPropagation(); // 阻止事件冒泡，防止触发节点选择事件
+                                                    var nodeId = $(this).data('id');
+                                                    if (confirm('确定要删除这个节点吗？')) {
+                                                        console.log('Delete node:', nodeId);
+                                                        // 在这里添加删除节点的逻辑，例如发送 AJAX 请求到后端
+                                                        $.ajax({
+                                                            url: '@admin-url("dev/tool/admin/document/catalog/delete")',
+                                                            method: 'POST',
+                                                            data: {id: nodeId},
+                                                            success: function (response) {
+                                                                if (response.success) {
+                                                                    alert('节点删除成功');
+                                                                    renderTree(); // 重新渲染树形结构
+                                                                } else {
+                                                                    alert('节点删除失败');
+                                                                }
+                                                            },
+                                                            error: function () {
+                                                                alert('请求失败');
+                                                            }
+                                                        });
+                                                    }
                                                 });
                                             })
                                         }

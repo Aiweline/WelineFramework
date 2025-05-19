@@ -483,7 +483,7 @@ class Core
     {
         $arrs = $this->request->getPathSplit();
         $last = end($arrs);
-        if (str_contains($last, '.')) {
+        if (str_contains($last, '.') and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $last)) {
             return true;
         }
         return false;
