@@ -11,15 +11,22 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Controller\Admin\Document;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 
+#[Acl('Weline_DeveloperWorkspace::dev-document-manager',
+    'dev-document-manager',
+    'icon',
+    '开发文档管理器',
+    ''
+)]
 class Catalog extends \Weline\Admin\Controller\BaseController
 {
     public function index()
     {
         $catalogModel = $this->getCatalogModel();
-        $catalogs     = $catalogModel->getTree();
+        $catalogs = $catalogModel->getTree();
         $this->assign('catalogs', $catalogs);
         # 清理模型
         $catalogModel->clearData();
@@ -35,28 +42,30 @@ class Catalog extends \Weline\Admin\Controller\BaseController
 
     public function tree()
     {
-        $trees = $this->getCatalogModel()->getTree();
+        $trees = $this->getCatalogModel()->getTree(
+            'pid'
+        );
         $trees = $this->processTrees($trees);
         return $this->fetchJson($trees);
     }
 
-    private function processTrees(array &$trees)
+    private function processTrees(array &$trees): array
     {
         foreach ($trees as &$tree) {
-            $tree['text']       = '<a class="btn" href="' . $this->_url->getBackendUrl('/dev/tool/admin/document/catalog', ['id' => $tree['id']]) . '">' . 
-                $tree['text'] . '</a>
+            $tree['text'] = '<a class="btn" href="' . $this->_url->getBackendUrl('/dev/tool/admin/document/catalog', ['id' => $tree['id']]) . '">' .
+                $tree['name'] . '</a>
 <a class="btn btn-info pull-right" href="' . $this->_url->getBackendUrl('/dev/tool/admin/document/catalog', ['id' => $tree['id']]) . '">修改</a>
 <a class="btn btn-danger pull-right" href="' . $this->_url->getBackendUrl('/dev/tool/admin/document/catalog/delete', ['id' => $tree['id']]) . '">' . __('删除') . '</a>
 ';
             $tree['selectable'] = true;
-            $tree['state']      = [
-                'checked'  => false,
+            $tree['state'] = [
+                'checked' => false,
                 'disabled' => !$tree['is_active'],
                 'expanded' => true,
                 'selected' => false
             ];
-            $tree['tags']       = ['available'];
-            $tree['href']       = $this->_url->getBackendUrl('/dev/tool/document/catalog', ['id' => $tree['id']]);
+            $tree['tags'] = ['available'];
+            $tree['href'] = $this->_url->getBackendUrl('/dev/tool/document/catalog', ['id' => $tree['id']]);
             if (isset($tree['nodes']) and count($tree['nodes'])) {
                 $this->processTrees($tree['nodes']);
             }
@@ -71,6 +80,7 @@ class Catalog extends \Weline\Admin\Controller\BaseController
      */
     public function delete()
     {
+        dd($this->request->getParam('id'));
         $catalogModel = $this->getCatalogModel()->load($this->request->getParam('id'));
         if ($catalogModel->getId()) {
             try {
@@ -86,12 +96,12 @@ class Catalog extends \Weline\Admin\Controller\BaseController
 
     public function postPost()
     {
-        $post      = $this->request->getPost();
-        $catalog   = $this->getCatalogModel();
-        $pid_arr   = explode('-', $post['pid']);
-        $pid       = array_shift($pid_arr);
+        $post = $this->request->getPost();
+        $catalog = $this->getCatalogModel();
+        $pid_arr = explode('-', $post['pid']);
+        $pid = array_shift($pid_arr);
         $pid_level = (int)array_shift($pid_arr);
-        $level     = $pid_level;
+        $level = $pid_level;
         if ($pid === $post['id']) {
             $this->getMessageManager()->addError(__('不能自己选择自己作为父类！'));
             $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document/catalog', ['id' => $post['id']]));
@@ -106,7 +116,7 @@ class Catalog extends \Weline\Admin\Controller\BaseController
             $this->getMessageManager()->addError(__('目录名不能为空！'));
             $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document/catalog'));
         }
-        $post['pid']   = $pid;
+        $post['pid'] = $pid;
         $post['level'] = $level;
         # 检查是新增还是修改
         if ($id = $this->request->getParam('id')) {

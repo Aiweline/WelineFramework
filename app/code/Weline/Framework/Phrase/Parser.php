@@ -10,7 +10,9 @@
 namespace Weline\Framework\Phrase;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -34,16 +36,19 @@ class Parser
      * @param int|array|string|null $args
      *
      * @return mixed|string|string[]
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
-     * @throws \Weline\Framework\Exception\Core
+     * @throws Exception
+     * @throws Core
      */
     public static function parse(string|array $words, int|array|string|null $args = null): mixed
     {
         $words = self::processWords($words);
         if (is_array($args)) {
-            foreach ($args as $key => $arg) {
-                $words = str_replace('%' . (is_integer($key) ? $key + 1 : $key), (string)$arg, $words);
+            // 按照字符串最长key匹配倒序
+            uksort($args, function ($a, $b) {
+                return strlen($b) <=> strlen($a);
+            });
+            foreach ($args as $arg_key => $arg) {
+                $words = str_replace('%' . $arg_key, (string)$arg, $words);
             }
         } elseif ($words && $args) {
             $words = str_replace('%1', $args, $words);
@@ -60,7 +65,7 @@ class Parser
      * @param string $words
      *
      * @return string
-     * @throws \Weline\Framework\App\Exception
+     * @throws Exception
      */
     protected static function processWords(string $words): string
     {
@@ -99,8 +104,8 @@ class Parser
                     try {
                         self::$words = (array)include $words_file;
                         $phraseCache->set($cache_key, self::$words);
-                    } catch (\Weline\Framework\App\Exception $exception) {
-                        throw new \Weline\Framework\App\Exception($exception->getMessage());
+                    } catch (Exception $exception) {
+                        throw new Exception($exception->getMessage());
                     }
                 }
             }
