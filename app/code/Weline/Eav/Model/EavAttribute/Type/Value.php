@@ -203,6 +203,8 @@ class Value extends \Weline\Framework\Database\Model
         if (!$this->attribute) {
             throw new Exception(__('属性不存在！'));
         }
+        dd($this->attribute->getTypeModel());
+        dd($this->attribute->getTypeModel()->getCode());
         $table = 'eav_' . $this->attribute->current_getEntity()->getEntityCode() . '_' . $this->attribute->getTypeModel()->getCode();
         $this->origin_table_name = parent::getTable($table);
 

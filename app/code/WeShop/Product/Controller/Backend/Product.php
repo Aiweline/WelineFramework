@@ -45,7 +45,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
     /**
      * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
+     * @throws \Weline\Framework\App\Exception|Core
      */
     public function add()
     {
