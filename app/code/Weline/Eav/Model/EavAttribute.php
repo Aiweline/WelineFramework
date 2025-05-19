@@ -421,12 +421,14 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }
         $entity_id = $entity_id ?: $this->current_getEntity()->getId();
         $this->setData('entity_id', $entity_id);
+
         if ($entity_id) {
             $valueModel = $this->w_getValueModel();
             $valueModel
                 ->fields(Value::fields_value)
                 ->where(Value::fields_attribute_id, $this->getId())
                 ->where(Value::fields_entity_id, $entity_id);
+
             if ($this->getMultipleValued()) {
                 $values = $valueModel->select()->fetchArray();
                 foreach ($values as $key => &$item) {
@@ -754,6 +756,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
         /**@var Type $typeModel */
         $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
+        if (!$this->type->getId()) {
+            throw new \Exception(__('属性类型不存在！属性：%name, 属性代码：%code 属性实体：%entity 属性实体代码：%entity_code', ['name' => $this->getName(), 'code' => $this->getCode(), 'entity' => $this->getEavEntity()->getName(), 'entity_code' => $this->getEavEntity()->getCode()]));
+        }
         return $this->type;
     }
 
