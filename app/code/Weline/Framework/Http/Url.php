@@ -441,6 +441,11 @@ class Url implements UrlInterface
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
+        # 静态文件不用再分析店铺
+        if ($parse_url and str_contains($parse_url, '.')
+            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $parse_url)) {
+            return $parse_url;
+        }
         $url = $parse_url;
         # 初始化server
         if (empty(self::$parserServer)) {

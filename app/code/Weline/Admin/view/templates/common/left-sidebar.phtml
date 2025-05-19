@@ -42,9 +42,9 @@ if (!$themeConfig->getThemeConfig('topnav')):
                             echo "<i class='{$menu['icon']}'></i><span>" . __($menu['source_name']) . "</span>";
                             echo "</li>";
 
-                            if (isset($menu['children'])) {
+                            if (isset($menu['nodes'])) {
                                 echo "<ul class='sub-acl' aria-expanded='false'>";
-                                renderSubMenu($menu['children'], $backend_url_prefix, $frontend_url_prefix);
+                                renderSubMenu($menu['nodes'], $backend_url_prefix, $frontend_url_prefix);
                                 echo "</ul>";
                             }
                         }
@@ -57,9 +57,9 @@ if (!$themeConfig->getThemeConfig('topnav')):
                                 continue;
                             }
 
-                            $children = $submenu['children'] ?? [];
+                            $nodes = $submenu['nodes'] ?? [];
                             $childCount = 0;
-                            foreach ($children as $child) {
+                            foreach ($nodes as $child) {
                                 if ($child['type'] === 'menus') {
                                     $childCount++;
                                 }
@@ -81,7 +81,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
                                 echo "<span>" . __($submenu['source_name']) . "</span>";
                                 echo "</a>";
                                 echo "<ul class='sub-acl' aria-expanded='false'>";
-                                renderSubMenu($children, $backend_url_prefix, $frontend_url_prefix);
+                                renderSubMenu($nodes, $backend_url_prefix, $frontend_url_prefix);
                                 echo "</ul>";
                                 echo "</li>";
                             }
