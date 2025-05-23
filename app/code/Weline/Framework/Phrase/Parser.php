@@ -42,19 +42,19 @@ class Parser
     public static function parse(string|array $words, int|array|string|null $args = null): mixed
     {
         $words = self::processWords($words);
-        if (is_array($args)) {
-            // 按照字符串最长key匹配倒序
-            uksort($args, function ($a, $b) {
-                return strlen($b) <=> strlen($a);
-            });
-            foreach ($args as $arg_key => $arg) {
-                $words = str_replace('%' . $arg_key, (string)$arg, $words);
-            }
-        } elseif ($words && $args) {
-            $words = str_replace('%1', $args, $words);
+
+        if ($args === null) {
+            return $words;
         }
 
-        return $words;
+        // 转换%1,%2格式为sprintf格式
+        $words = preg_replace('/%(\d+)/', '%$1\$s', $words);
+
+        if (is_array($args)) {
+            return vsprintf($words, $args);
+        }
+
+        return sprintf($words, $args);
     }
 
     /**
