@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Phrase;
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
@@ -39,7 +40,7 @@ class Parser
      * @throws Exception
      * @throws Core
      */
-    public static function parse(string|array $words, int|array|string|null $args = null): mixed
+    public static function parse(string|array &$words, int|array|string|null $args = null): mixed
     {
         $words = self::processWords($words);
 
@@ -47,14 +48,24 @@ class Parser
             return $words;
         }
 
-        // 转换%1,%2格式为sprintf格式
-        $words = preg_replace('/%(\d+)/', '%$1\$s', $words);
-
-        if (is_array($args)) {
-            return vsprintf($words, $args);
+        // 如果是字符串 或者 数字
+        if (is_string($args) || is_numeric($args)) {
+            // 占位符%{} 这种占位符
+            $words = str_replace('%{}', $args, $words);
+            return $words;
         }
 
-        return sprintf($words, $args);
+        // 如果是数组
+        if (is_array($args)) {
+            foreach ($args as $key => $arg) {
+                if (is_numeric($key)) {
+                    $key += 1;
+                }
+                $words = str_replace('%{' . $key . '}', $arg, $words);
+            }
+        }
+
+        return $words;
     }
 
     /**
