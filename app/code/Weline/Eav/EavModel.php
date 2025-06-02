@@ -66,16 +66,16 @@ abstract class EavModel extends Model implements EavInterface
     {
         parent::__init();
         if (empty($this->entity_code) && empty($this::entity_code)) {
-            throw new Exception(__('Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%1', $this::class));
+            throw new Exception(__('Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1}', $this::class));
         }
         if (empty($this->entity_name) && empty($this::entity_name)) {
-            throw new Exception(__('Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%1', $this::class));
+            throw new Exception(__('Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1}', $this::class));
         }
         if (empty($this->eav_entity_id_field_type) && empty($this::eav_entity_id_field_type)) {
-            throw new Exception(__('Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%1', $this::class));
+            throw new Exception(__('Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1}', $this::class));
         }
         if (empty($this->eav_entity_id_field_length) && empty($this::entity_name)) {
-            throw new Exception(__('Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%1', $this::class));
+            throw new Exception(__('Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1}', $this::class));
         }
     }
 
@@ -189,7 +189,7 @@ abstract class EavModel extends Model implements EavInterface
             $this->attribute::fields_set_id => $set_code,
         ])
             ->find()->fetch()->getId()) {
-//            throw new Exception(__('实体（%1）已经存在属性（%2）', [$this->getEntityCode(), $code]));
+//            throw new Exception(__('实体（%{1}）已经存在属性（%{2}）', [$this->getEntityCode(), $code]));
             return false;
         }
         $type = $this->existType($type);
@@ -222,7 +222,7 @@ abstract class EavModel extends Model implements EavInterface
     public function setAttribute(EavAttribute $attribute): bool
     {
         if ($attribute->current_getEntity()->getEntityCode() !== $this->getEntityCode()) {
-            throw new Exception(__('警告：属性不属于当前Eav实体！当前实体：%1，当前属性：%2，当前属性所属实体：%3',
+            throw new Exception(__('警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3}',
                     [
                         $this->getEntityCode(),
                         $attribute->getCode() . ':' . $attribute->getName(),
@@ -259,7 +259,7 @@ abstract class EavModel extends Model implements EavInterface
             $this->exist_types[$type_code] = $typeModel;
             return $typeModel;
         } else {
-            throw new \Exception(__('属性类型不存在！类型：%1', $type_code));
+            throw new \Exception(__('属性类型不存在！类型：%{1}', $type_code));
         }
     }
 
@@ -299,7 +299,7 @@ abstract class EavModel extends Model implements EavInterface
             $this->exist_entities[$code] = $entityModel;
             return $entityModel;
         } else {
-            throw new \Exception(__('属性所属实体不存在！实体：%1', $code));
+            throw new \Exception(__('属性所属实体不存在！实体：%{1}', $code));
         }
     }
 

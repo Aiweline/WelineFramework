@@ -41,7 +41,7 @@ final class Connector extends Query implements ConnectorInterface
     {
         $db_type = $this->configProvider->getDbType();
         if (!in_array($db_type, PDO::getAvailableDrivers())) {
-            throw new LinkException(__('驱动不存在：%1,可用驱动列表：%2，更多驱动配置请转到php.ini中开启。', [$db_type, implode(',', PDO::getAvailableDrivers())]));
+            throw new LinkException(__('驱动不存在：%{1},可用驱动列表：%{2}，更多驱动配置请转到php.ini中开启。', [$db_type, implode(',', PDO::getAvailableDrivers())]));
         }
         $dsn = "{$db_type}:host={$this->configProvider->getHostName()}:{$this->configProvider->getHostPort()};dbname={$this->configProvider->getDatabase()};charset={$this->configProvider->getCharset()};collate={$this->configProvider->getCollate()}";
         try {
@@ -235,6 +235,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $stmt->execute();
         return $stmt->rowCount() > 0;
     }
+
     public function hasIndex(string $table, string $idx_name): bool
     {
         # 检查索引是否存在

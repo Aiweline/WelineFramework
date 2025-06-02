@@ -244,7 +244,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if ($type) {
             $attr_var_name = $type;
             if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%1 支持的初始化类型：%2', [$attr_var_name, var_export(self::init_vars, true)]));
+                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
             }
             $this->$attr_var_name = self::init_vars[$attr_var_name];
         } else {
@@ -260,7 +260,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if ($type) {
             $attr_var_name = $type;
             if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%1 支持的初始化类型：%2', [$attr_var_name, var_export(self::init_vars, true)]));
+                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
             }
             $this->$attr_var_name = self::init_vars[$attr_var_name];
         } else {

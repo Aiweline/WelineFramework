@@ -162,7 +162,7 @@ class Handle implements HandleInterface, RegisterInterface
         // 检测依赖
         foreach ($dependencies as $dependency) {
             if (!Checker::hasDependency($dependency)) {
-                throw new Exception(__('%1 模组所需依赖尚 %2 未安装！请先安装模块后继续执行，或者删除此依赖。', [$module_name, $dependency]));
+                throw new Exception(__('%{1} 模组所需依赖尚 %{2} 未安装！请先安装模块后继续执行，或者删除此依赖。', [$module_name, $dependency]));
             }
         }
 
@@ -170,13 +170,13 @@ class Handle implements HandleInterface, RegisterInterface
             $this->printer->error($module_name . __('：处理...'), '开发');
         }
         if (!isset($param['base_path'])) {
-            throw new Exception(__('尚未设置基础路径！%1', 'base_path'));
+            throw new Exception(__('尚未设置基础路径！%{1}', 'base_path'));
         }
         if (!isset($param['dir_path'])) {
-            throw new Exception(__('尚未设置模组目录！%1', 'dir_path'));
+            throw new Exception(__('尚未设置模组目录！%{1}', 'dir_path'));
         }
         if (!isset($param['module_name'])) {
-            throw new Exception(__('尚未设置模组名！%1', 'module_name'));
+            throw new Exception(__('尚未设置模组名！%{1}', 'module_name'));
         }
         # 检测位置
         $base_path = $param['base_path'] ?? $param;
@@ -244,7 +244,7 @@ class Handle implements HandleInterface, RegisterInterface
                 $this->setupModel($module);
             }
         } else {
-            $this->printer->setup(__("扩展%1安装中...", $module->getName()));
+            $this->printer->setup(__("扩展%{1}安装中...", $module->getName()));
             // 全新安装
             $module->setStatus(true);
             $module['installing'] = true;
@@ -308,8 +308,8 @@ class Handle implements HandleInterface, RegisterInterface
                 // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
                 $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
                 if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
-                    $this->printer->note(__('扩展 %1 升级中...', $module->getName()));
-                    $this->printer->setup(__('升级 %1 到 %2', [$old_version, $module->getVersion()]));
+                    $this->printer->note(__('扩展 %{1} 升级中...', $module->getName()));
+                    $this->printer->setup(__('升级 %{1} 到 %{2}', [$old_version, $module->getVersion()]));
 
                     # 升级模块的模型
                     $modelManager->update($module, $setup_context, 'upgrade');
@@ -368,8 +368,8 @@ class Handle implements HandleInterface, RegisterInterface
             // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
             $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
             if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
-                $this->printer->note(__('扩展 %1 升级中...', $module->getName()));
-                $this->printer->setup(__('升级 %1 到 %2', [$old_version, $module->getVersion()]));
+                $this->printer->note(__('扩展 %{1} 升级中...', $module->getName()));
+                $this->printer->setup(__('升级 %{1} 到 %{2}', [$old_version, $module->getVersion()]));
 
                 foreach (\Weline\Framework\Setup\Data\DataInterface::upgrade_FILES as $upgrade_FILE) {
                     $setup_file = $setup_dir . DS . $upgrade_FILE . '.php';

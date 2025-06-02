@@ -113,7 +113,7 @@ class ConnectionFactory
         $driver_type = $configProvider->getDbType();
         $driverClass = "Weline\\Framework\\Database\\Connection\\Adapter\\" . ucfirst($driver_type) . '\\Connector';
         if (!class_exists($driverClass)) {
-            throw new Exception(__("数据库驱动 %1 不存在", $driverClass));
+            throw new Exception(__("数据库驱动 %{1} 不存在", $driverClass));
         }
         return ObjectManager::make($driverClass, ['configProvider' => $configProvider]);
     }

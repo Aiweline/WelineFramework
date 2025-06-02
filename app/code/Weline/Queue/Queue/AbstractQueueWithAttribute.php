@@ -62,8 +62,8 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         $this->queue->init();
         $this->taskClass = $taskClass;
         $this->setData($queue->getData());
-        $this->task           = $this->getTask();
-        $this->item_id        = $item_id;
+        $this->task = $this->getTask();
+        $this->item_id = $item_id;
         $this->task_msg_field = $task_msg_field;
         $this->task->setData($task_msg_field, '')
             ->setStatus(1)
@@ -75,7 +75,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
 
     protected function setTotal(int $total = 0): self
     {
-        $this->total          = $total;
+        $this->total = $total;
         $this->validate_total = $total;
         return $this;
     }
@@ -89,7 +89,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
     protected function setSuccess(string $msg = ''): self
     {
         $this->current_item['msg'] = $msg;
-        $this->success_data[$this->current_item[$this->item_id]]      = $this->current_item;
+        $this->success_data[$this->current_item[$this->item_id]] = $this->current_item;
         return $this;
     }
 
@@ -115,27 +115,27 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         }
         $msg = '';
         if ($this->fatal_errors) {
-            $msg             .= __('致命错误：') . PHP_EOL;
+            $msg .= __('致命错误：') . PHP_EOL;
             $fatalErrorIndex = 1;
             foreach ($this->fatal_errors as $fatalError) {
-                $msg             .= $fatalErrorIndex . '、' . $fatalError . PHP_EOL;
+                $msg .= $fatalErrorIndex . '、' . $fatalError . PHP_EOL;
                 $fatalErrorIndex += 1;
             }
         }
         if ($this->normal_errors) {
-            $msg              .= __('错误：') . PHP_EOL;
+            $msg .= __('错误：') . PHP_EOL;
             $normalErrorIndex = 1;
             foreach ($this->normal_errors as $normalError) {
-                $msg              .= $normalErrorIndex . '、' . $normalError . PHP_EOL;
+                $msg .= $normalErrorIndex . '、' . $normalError . PHP_EOL;
                 $normalErrorIndex += 1;
             }
         }
         if ($append) {
             $msg = $this->queue->getResult() . PHP_EOL . $msg;
         }
-        if($this->current_item){
+        if ($this->current_item) {
             if (empty($this->current_item[$this->item_id])) {
-                $msg                  .= 'current_item[' . $this->item_id . '] is null';
+                $msg .= 'current_item[' . $this->item_id . '] is null';
                 $this->fatal_errors[] = $msg;
             } else {
                 $this->setProcessMsg('id', $this->current_item[$this->item_id]);
@@ -157,9 +157,10 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         } catch (ModelException $e) {
             d($e->getMessage());
         }
-        $this->processed(false,$msg);
+        $this->processed(false, $msg);
         return $this;
     }
+
     protected function error(string $msg = '', bool $fatalError = false, bool $append = true): self
     {
         if ($fatalError) {
@@ -177,18 +178,18 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         }
         $msg = '';
         if ($this->fatal_errors) {
-            $msg             .= __('致命错误：') . PHP_EOL;
+            $msg .= __('致命错误：') . PHP_EOL;
             $fatalErrorIndex = 1;
             foreach ($this->fatal_errors as $fatalError) {
-                $msg             .= $fatalErrorIndex . '、' . $fatalError . PHP_EOL;
+                $msg .= $fatalErrorIndex . '、' . $fatalError . PHP_EOL;
                 $fatalErrorIndex += 1;
             }
         }
         if ($this->normal_errors) {
-            $msg              .= __('错误：') . PHP_EOL;
+            $msg .= __('错误：') . PHP_EOL;
             $normalErrorIndex = 1;
             foreach ($this->normal_errors as $normalError) {
-                $msg              .= $normalErrorIndex . '、' . $normalError . PHP_EOL;
+                $msg .= $normalErrorIndex . '、' . $normalError . PHP_EOL;
                 $normalErrorIndex += 1;
             }
         }
@@ -196,7 +197,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             $msg = $this->queue->getResult() . PHP_EOL . $msg;
         }
         if (empty($this->current_item[$this->item_id])) {
-            $msg                  .= 'current_item[' . $this->item_id . '] is null';
+            $msg .= 'current_item[' . $this->item_id . '] is null';
             $this->fatal_errors[] = $msg;
         } else {
             $this->setProcessMsg('id', $this->current_item[$this->item_id]);
@@ -216,7 +217,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         } catch (ModelException $e) {
             d($e->getMessage());
         }
-        $this->processed(false,$msg);
+        $this->processed(false, $msg);
         return $this;
     }
 
@@ -237,6 +238,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         $this->getTask()->setStatus(3)->save();
         return $this;
     }
+
     public function fatal_error(string $msg = ''): self
     {
         $this->setError($msg, true);
@@ -257,7 +259,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             $process = [];
         }
         $process[$key][] = $msg;
-        $process         = json_encode($process);
+        $process = json_encode($process);
         $this->queue->setProcess($process)
             ->save();
         return $this;
@@ -303,7 +305,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
     protected function setAdditionalError(array $additional_error_data = [], string $msg = ''): self
     {
         $additional_error_data['msg'] = $msg;
-        $this->additional_error_data  = $additional_error_data;
+        $this->additional_error_data = $additional_error_data;
         return $this;
     }
 
@@ -337,7 +339,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
 
     function processed(bool $success = true, string $msg = ''): self
     {
-        if(!$this->current_item){
+        if (!$this->current_item) {
             return $this;
         }
         if ($this->current_item['ok'] || $success) {
@@ -355,12 +357,12 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         $current_item['msg'] = $msg;
         $this->current_index = &$current_index;
         $this->current_item = &$current_item;
-        $this->percent       = $this->validate_total ? (float)(number_format($this->current_index / $this->validate_total, 4)) * 100 : 0;
-        $output              = '[[' . __('成功:%1 ,失败：%2 ,' . $processMsg . ':%3 ',
+        $this->percent = $this->validate_total ? (float)(number_format($this->current_index / $this->validate_total, 4)) * 100 : 0;
+        $output = '[[' . __('成功:%{1} ,失败：%{2} ,' . $processMsg . ':%{3} ',
                 [count($this->success_data), count($this->error_data), json_encode($current_item)]) . ']]';
-        $task                = $this->getTask();
+        $task = $this->getTask();
         $task
-            ->setProcess(__('总计:%1 , 有效:%2, 成功:%3 ,失败：%4 , 进度:%5%', [$this->total, $this->validate_total, count($this->success_data), count($this->error_data), (string)$this->percent]))
+            ->setProcess(__('总计:%{1} , 有效:%{2}, 成功:%{3} ,失败：%{4} , 进度:%{5}%', [$this->total, $this->validate_total, count($this->success_data), count($this->error_data), (string)$this->percent]))
             ->save();
         $result = $this->queue->getResult();
         # 删除[[]]中的内容
@@ -406,7 +408,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
      */
     public function output(): array
     {
-        $result              = [];
+        $result = [];
         $success_spreadsheet = new Spreadsheet();
         # region 生成成功结果文件
         if ($this->success_data) {
@@ -419,7 +421,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             $success_rows = 1;
             foreach ($this->titles as $key => $title) {
                 $coordinateIndex = $key + 1;
-                $cellName        = $success_sheet->getCellByColumnAndRow($coordinateIndex, $success_rows)->getCoordinate();
+                $cellName = $success_sheet->getCellByColumnAndRow($coordinateIndex, $success_rows)->getCoordinate();
                 $success_sheet->setCellValue($cellName, $title);
             }
             foreach ($this->success_data as $success) {
@@ -427,7 +429,7 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
                 $column_index = 0;
                 foreach ($success as $item) {
                     $column_index += 1;
-                    $cellName     = $success_sheet->getCellByColumnAndRow($column_index, $success_rows)->getCoordinate();
+                    $cellName = $success_sheet->getCellByColumnAndRow($column_index, $success_rows)->getCoordinate();
                     if (is_array($item)) {
                         $item = w_var_export($item, true);
                     }
@@ -436,9 +438,9 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             }
             # 写入文件名称
             $filename = 'success' . DS . date('Y-m-d-H') . DS . md5(date('Y-m-d-H-i:s')) . '.xlsx';
-            $writer   = new Xlsx($success_spreadsheet);
+            $writer = new Xlsx($success_spreadsheet);
 
-            $file_path      = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
+            $file_path = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
             $save_file_path = BP . $file_path;
             if (!is_dir(dirname($save_file_path))) {
                 mkdir(dirname($save_file_path), 0775, true);
@@ -459,19 +461,19 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             }
             $error_sheet = $error_spreadsheet->createSheet();
             $error_sheet->setTitle(__('失败'));
-            $error_rows     = 1;
+            $error_rows = 1;
             $this->titles[] = 'error';
             foreach ($this->titles as $key => $title) {
                 $coordinateIndex = $key + 1;
-                $cellName        = $error_sheet->getCellByColumnAndRow($coordinateIndex, $error_rows)->getCoordinate();
+                $cellName = $error_sheet->getCellByColumnAndRow($coordinateIndex, $error_rows)->getCoordinate();
                 $error_sheet->setCellValue($cellName, $title);
             }
             foreach ($this->error_data as $error) {
-                $error_rows   += 1;
+                $error_rows += 1;
                 $column_index = 0;
                 foreach ($error as $item) {
                     $column_index += 1;
-                    $cellName     = $error_sheet->getCellByColumnAndRow($column_index, $error_rows)->getCoordinate();
+                    $cellName = $error_sheet->getCellByColumnAndRow($column_index, $error_rows)->getCoordinate();
                     if (is_array($item)) {
                         $item = w_var_export($item, true);
                     }
@@ -480,9 +482,9 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             }
             # 写入文件名称
             $filename = 'error' . DS . date('Y-m-d-H') . DS . md5(date('Y-m-d-H-i:s')) . '.xlsx';
-            $writer   = new Xlsx($error_spreadsheet);
+            $writer = new Xlsx($error_spreadsheet);
 
-            $file_error_path      = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
+            $file_error_path = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
             $save_error_file_path = BP . $file_error_path;
             if (!is_dir(dirname($save_error_file_path))) {
                 mkdir(dirname($save_error_file_path), 0775, true);
@@ -504,16 +506,16 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             }
             $additional_error_sheet = $additional_error_spreadsheet->createSheet();
             $additional_error_sheet->setTitle(__('附加错误'));
-            $error_rows     = 1;
+            $error_rows = 1;
             $this->titles[] = __('附加错误');
             foreach ($this->titles as $key => $title) {
                 $coordinateIndex = $key + 1;
-                $cellName        = $additional_error_sheet->getCellByColumnAndRow($coordinateIndex, $error_rows)->getCoordinate();
+                $cellName = $additional_error_sheet->getCellByColumnAndRow($coordinateIndex, $error_rows)->getCoordinate();
                 $additional_error_sheet->setCellValue($cellName, $title);
             }
             foreach ($this->additional_error_data as $error) {
                 $error_rows += 1;
-                $cellName   = $additional_error_sheet->getCellByColumnAndRow(1, $error_rows)->getCoordinate();
+                $cellName = $additional_error_sheet->getCellByColumnAndRow(1, $error_rows)->getCoordinate();
                 if (is_array($error)) {
                     $error = w_var_export($error, true);
                 }
@@ -521,9 +523,9 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             }
             # 写入文件名称
             $filename = 'additional_error_data' . DS . date('Y-m-d-H') . DS . md5(date('Y-m-d-H-i:s')) . '.xlsx';
-            $writer   = new Xlsx($additional_error_spreadsheet);
+            $writer = new Xlsx($additional_error_spreadsheet);
 
-            $file_error_path      = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
+            $file_error_path = 'pub' . DS . 'media' . DS . 'export' . DS . $filename;
             $save_error_file_path = BP . $file_error_path;
             if (!is_dir(dirname($save_error_file_path))) {
                 mkdir(dirname($save_error_file_path), 0775, true);
@@ -559,8 +561,8 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
         $options_data = [
             'entity' => $queue
         ];
-        $attributes   = $queue->getAttributes($options_data);
-        $data         = [];
+        $attributes = $queue->getAttributes($options_data);
+        $data = [];
         foreach ($attributes as $attribute) {
             $data[$attribute->getCode()] = $attribute->getValue();
         }
@@ -587,8 +589,8 @@ abstract class AbstractQueueWithAttribute extends DataObject implements QueueInt
             $file = $sourceFile;
         }
         $reader = IOFactory::load($file);
-        $rows   = $reader->getSheet(0)->toArray();
-        $data   = [];
+        $rows = $reader->getSheet(0)->toArray();
+        $data = [];
         if (empty($keys)) {
             $data = $rows;
         } else {

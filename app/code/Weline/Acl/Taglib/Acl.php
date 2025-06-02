@@ -87,25 +87,25 @@ class Acl implements TaglibInterface
             $user = $session->getLoginUser();
             // 角色
             $role = $user->getRoleModel();
-            if($role->getId()===1){
+            if ($role->getId() === 1) {
                 return $tag_data[2] ?? '';
             }
             /**@var CacheInterface $cache */
-            $cache = ObjectManager::getInstance(AclCache::class.'Factory');
-            $cacheKey = 'acl_' . $role->getId().'_source';
+            $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+            $cacheKey = 'acl_' . $role->getId() . '_source';
             $accesses = $cache->get($cacheKey);
-            if(!$accesses){
+            if (!$accesses) {
                 if (empty($role->getId())) {
                     /**@var MessageManager $messageManager */
                     $messageManager = ObjectManager::getInstance(MessageManager::class);
-                    $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %1 资源,如有需求请联系管理员！',$source);
+                    $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
                     $messageManager->addWarning($msg);
                     return '<!-- ' . $msg . ' 资源 -->';
                 }
                 // 检查权限资源
                 /**@var RoleAccess $roleAccess */
                 $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-                $accesses   = $roleAccess->getRoleAccessListArray($role);
+                $accesses = $roleAccess->getRoleAccessListArray($role);
                 foreach ($accesses as &$access) {
                     $access = $access['source_id'];
                 }
@@ -114,12 +114,12 @@ class Acl implements TaglibInterface
             if (!in_array($source, $accesses)) {
                 /**@var MessageManager $messageManager */
                 $messageManager = ObjectManager::getInstance(MessageManager::class);
-                $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %1 资源,如有需求请联系管理员！',$source);
+                $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
                 $messageManager->addWarning($msg);
                 return '<!-- ' . $msg . ' 资源 -->';
             }
             if (DEV) {
-                return '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL.'<!-- -----开发环境显示acl标签---------END -->';
+                return '<!-- -----开发环境显示acl标签---------START -->' . ($tag_data[0] ?? '') . PHP_EOL . '<!-- -----开发环境显示acl标签---------END -->';
             }
             return $tag_data[2] ?? '';
         };
@@ -144,7 +144,7 @@ class Acl implements TaglibInterface
     static function document(): string
     {
         $msg = __('这里是重要信息，只允许拥有Weline_Backend::setting权限的用户访问');
-        $tag = __('使用示例：').htmlentities('<acl source="Weline_Backend::setting">
+        $tag = __('使用示例：') . htmlentities('<acl source="Weline_Backend::setting">
     <div>
         <span>' . $msg . '</span>
     </div>

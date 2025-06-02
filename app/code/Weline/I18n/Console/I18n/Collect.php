@@ -45,7 +45,7 @@ class Collect implements \Weline\Framework\Console\CommandInterface
             $this->i18n->convertToLanguageFile(false);
             $this->printing->success(__('语言包收集成功！'));
         } catch (Exception $e) {
-            $this->printing->error(__('语言包收集失败：%1', $e->getMessage()));
+            $this->printing->error(__('语言包收集失败：%{1}', $e->getMessage()));
         }
     }
 

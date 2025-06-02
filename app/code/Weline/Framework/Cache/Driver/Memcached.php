@@ -30,7 +30,7 @@ class Memcached extends CacheDriverAbstract
             $this->config['options'] = [];
         }
         if (!isset($this->config['host']) && !isset($this->config['port']) && !isset($this->config['timeout']) && !isset($this->config['options'])) {
-            throw new Exception(__('请指定memcached的配置项，示例：%1', "
+            throw new Exception(__('请指定memcached的配置项，示例：%{1}', "
             'memcached' =>
                         array(
                             'host' => '127.0.0.1',

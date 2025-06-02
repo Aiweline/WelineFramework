@@ -36,16 +36,16 @@ class Installer implements RegisterInterface
      *
      * 参数区：
      *
-     * @param string       $type
-     * @param string       $module_name
+     * @param string $type
+     * @param string $module_name
      * @param array|string $param
-     * @param string       $version
-     * @param string       $description
+     * @param string $version
+     * @param string $description
      */
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = ''): mixed
     {
         // 参数检查
-        $this->printing->printing(__('语言包(%1)：%2 已安装。', [$module_name, $param]));
+        $this->printing->printing(__('语言包(%{1})：%{2} 已安装。', [$module_name, $param]));
         return '';
     }
 }

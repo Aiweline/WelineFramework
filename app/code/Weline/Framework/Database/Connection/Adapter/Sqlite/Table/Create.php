@@ -196,7 +196,7 @@ createSQL;
         try {
             $result = $this->query($sql)->fetch();
         } catch (\Exception $exception) {
-            throw new Exception(__('创建表失败，' . PHP_EOL . PHP_EOL . 'SQL：%1 ' . PHP_EOL . PHP_EOL . 'ERROR：%2', [$sql, $exception->getMessage()]));
+            throw new Exception(__('创建表失败，' . PHP_EOL . PHP_EOL . 'SQL：%{1} ' . PHP_EOL . PHP_EOL . 'ERROR：%{2}', [$sql, $exception->getMessage()]));
         }
         return $result;
     }

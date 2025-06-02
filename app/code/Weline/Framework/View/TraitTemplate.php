@@ -80,7 +80,7 @@ trait TraitTemplate
             # 到模块配置中获取模块的模板文件路径
             $module_lists = Env::getInstance()->getModuleList();
             if (!isset($module_lists[$pre_module_name])) {
-                throw new Exception(__('异常：你指定的模板文件所在的模块不存在！模块：%1，所使用的模板：%2', [$pre_module_name, $fileName]));
+                throw new Exception(__('异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}', [$pre_module_name, $fileName]));
             }
             $fileName = str_replace($pre_module_name . '::', '', $fileName);
             # 替换掉当前模块的视图目录
@@ -211,7 +211,7 @@ trait TraitTemplate
                         $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
                         $t_f = str_replace($module_name . '::', '', $t_f);
                     } else {
-                        throw new Exception(__('资源不存在：%1，模组：%2', [$source, $module_name]));
+                        throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
                     }
                 } else {
                     $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);

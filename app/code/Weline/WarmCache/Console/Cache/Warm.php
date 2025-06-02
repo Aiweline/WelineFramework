@@ -34,7 +34,7 @@ class Warm implements CommandInterface
             $domain = Env::get('domain') ?: '';
             if (!$domain) {
                 $env_path = str_replace(BP, '', Env::path_ENV_FILE);
-                $this->printing->warning(__('请输入域名！或者在 %1 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com ', $env_path));
+                $this->printing->warning(__('请输入域名！或者在 %{1} 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com ', $env_path));
                 exit(1);
             }
         }

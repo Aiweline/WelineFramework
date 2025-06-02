@@ -38,33 +38,33 @@ class Set implements \Weline\Framework\Console\CommandInterface
             exit();
         }
         if (empty($type = $args[1])) {
-            $this->printing->error(__('请指定设置类型：%1', implode(',', $this->getTypes())));
+            $this->printing->error(__('请指定设置类型：%{1}', implode(',', $this->getTypes())));
             foreach ($this->getTypes() as $key => $detail) {
                 $this->printing->note($detail, $key);
             }
             exit();
         }
         if (!array_key_exists($type, $this->getTypes())) {
-            $this->printing->error(__('错误的设置类型：%1', implode(',', $this->getTypes())));
+            $this->printing->error(__('错误的设置类型：%{1}', implode(',', $this->getTypes())));
             foreach ($this->getTypes() as $key => $detail) {
                 $this->printing->note($detail, $key);
             }
             exit();
         }
         if (!isset($args[2])) {
-            $this->printing->error(__('请设置类型 %1 的值', $type));
+            $this->printing->error(__('请设置类型 %{1} 的值', $type));
             $this->printing->note($this->getTypes()[$type], $type);
             exit();
         }
         $value = $args[2];
         if ($value !== '0' && $value !== '1') {
-            $this->printing->error(__('类型 %1 的值仅接受：0或1', $type));
+            $this->printing->error(__('类型 %{1} 的值仅接受：0或1', $type));
             $this->printing->note($this->getTypes()[$type], $type);
             exit();
         }
 
         Env::getInstance()->setConfig($type, $value);
-        $this->printing->success(__('类型 %1 设置为：%1', [$type, $type]));
+        $this->printing->success(__('类型 %{1} 设置为：%{1}', [$type, $type]));
     }
 
     public function getTypes(): array

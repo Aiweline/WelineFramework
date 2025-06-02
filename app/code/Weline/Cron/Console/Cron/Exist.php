@@ -10,9 +10,9 @@ class Exist extends BaseCommand
         $cron_name = $this->getCronName($data['module']);
         $result = $this->schedule->exist($cron_name);
         if ($result) {
-            $this->printing->success(__('系统定时任务：%1 ,已安装！', $cron_name));
+            $this->printing->success(__('系统定时任务：%{1} ,已安装！', $cron_name));
         } else {
-            $this->printing->error(__('系统定时任务：%1 ,未安装！', $cron_name));
+            $this->printing->error(__('系统定时任务：%{1} ,未安装！', $cron_name));
         }
         # 存在，但名称不匹配，解析存在的计划任务
         $jobs = $this->schedule->getJobs();
