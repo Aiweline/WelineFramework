@@ -136,12 +136,12 @@ trait ConfigHtml
     {
         $keyArr = explode('::', $key);
         if (count($keyArr) != 2) {
-            throw new Exception(__('key格式错误，请使用[模块::key],例如：%1', 'Weline_Demo::header'));
+            throw new Exception(__('key格式错误，请使用[模块::key],例如：%{1}', 'Weline_Demo::header'));
         }
         $module = $keyArr[0];
         $modules = Env::getInstance()->getActiveModules();
         if (!isset($modules[$module])) {
-            throw new Exception(__('模块不存在，请检查模块名称!请使用[模块::key],例如：%1。当前Key：%2，模块：%3', ['Weline_Demo::header', $key, $module]));
+            throw new Exception(__('模块不存在，请检查模块名称!请使用[模块::key],例如：%{1}。当前Key：%{2}，模块：%{3}', ['Weline_Demo::header', $key, $module]));
         }
         return $keyArr[1];
     }

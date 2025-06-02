@@ -127,7 +127,7 @@ class Words extends BaseController
         $this->assign('words', $this->localeDictionary->getItems());
         $this->assign('pagination', $this->localeDictionary->getPagination());
         $this->assign('total', $this->localeDictionary->pagination['totalSize']);
-        $this->assign('translate_mode', __(Env::getInstance()->getConfig('translate_mode') ?? ''));
+        $this->assign('translate_mode', __(Env::get('i18n.translate_mode') ?? ''));
         return $this->fetch();
     }
 
@@ -172,7 +172,7 @@ class Words extends BaseController
                     $this->localeDictionary->reset()->insert($collected_word, $this->localeDictionary::fields_MD5)->fetch();
                 }
                 $this->localeDictionary->commit();
-                Message::success(__('词典收集成功！一共更新 %1 个词。', count($collected_words)));
+                Message::success(__('词典收集成功！一共更新 %{1} 个词。', count($collected_words)));
             } catch (\Exception $exception) {
                 $this->localeDictionary->rollBack();
                 Message::exception($exception);
@@ -239,7 +239,7 @@ class Words extends BaseController
             ->find()
             ->fetch();
         if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('地区码未安装或者未激活！地区码：%1', $this->request->getParam('code')));
+            $this->getMessageManager()->addWarning(__('地区码未安装或者未激活！地区码：%{1}', $this->request->getParam('code')));
             $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
         }
         // 语言包生成
@@ -310,7 +310,7 @@ REGISTER_CONTENT;
     public function enable()
     {
         try {
-            Env::getInstance()->setConfig('translate_mode', 'online');
+            Env::set('i18n.translate_mode', 'online');
             $this->getMessageManager()->addSuccess(__('成功开启！'));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
@@ -321,7 +321,7 @@ REGISTER_CONTENT;
     public function disable()
     {
         try {
-            Env::getInstance()->setConfig('translate_mode', 'default');
+            Env::set('i18n.translate_mode', 'default');
             $this->getMessageManager()->addSuccess(__('成功禁用！'));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);

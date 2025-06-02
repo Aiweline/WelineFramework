@@ -179,7 +179,7 @@ if (!function_exists('framework_view_process_block')) {
         if (!isset($data['class'])) {
             $data['class'] = $data[0] ?? '';
             if (!$data['class']) {
-                throw new \Weline\Framework\App\Exception(__('framework.view.block.class_not_found %1', $data['class']));
+                throw new \Weline\Framework\App\Exception(__('framework.view.block.class_not_found %{1}', $data['class']));
             }
         }
 

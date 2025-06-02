@@ -45,8 +45,8 @@ class Active extends AbstractConsole
         } else {
             $theme = $this->welineTheme->getActiveTheme();
             if ($theme) {
-                $this->printing->success(__('当前主题：%1', [$theme->getName()]));
-                $this->printing->success(__('路径：%1', [$theme->getPath()]));
+                $this->printing->success(__('当前主题：%{1}', [$theme->getName()]));
+                $this->printing->success(__('路径：%{1}', [$theme->getPath()]));
             } else {
                 $this->printing->warning(__('主题'), __('系统未安装任何主题！'));
             }

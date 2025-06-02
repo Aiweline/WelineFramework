@@ -1,4 +1,4 @@
 <?php
 return [
-    'router' => 'visitor'
+    'router' => 'websites'
 ];

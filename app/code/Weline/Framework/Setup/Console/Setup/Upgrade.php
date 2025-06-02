@@ -76,12 +76,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         if ($install) {
             $this->printing->success(__('系统识别到您初次安装！已为您初始化安装参数。'), __('安装'));
-            $this->printing->success(__('您的后台入口地址密钥：%1 ', Env::get('admin')), __('安装'));
-            $this->printing->success(__('您的API后台入口地址密钥：%1', Env::get('api_admin')), __('安装'));
+            $this->printing->success(__('您的后台入口地址密钥：%{1} ', Env::get('admin')), __('安装'));
+            $this->printing->success(__('您的API后台入口地址密钥：%{1}', Env::get('api_admin')), __('安装'));
             $this->printing->success(__('使用server:start命令指定的地址访问网站，默认使用http://127.0.0.1:9981，例如:'), __('安装'));
-            $this->printing->note(__('访问后台：%1/admin/login', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
-            $this->printing->note(__('访问后台API：%1', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
-            $this->printing->warning(__('默认使用sqlite作为开发数据库，若要修改数据库，请转到 %1 下的env.php按照数组键sample_db中的配置样本，修改db键即可。', APP_ETC_PATH), __('安装'));
+            $this->printing->note(__('访问后台：%{1}/admin/login', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
+            $this->printing->note(__('访问后台API：%{1}', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
+            $this->printing->warning(__('默认使用sqlite作为开发数据库，若要修改数据库，请转到 %{1} 下的env.php按照数组键sample_db中的配置样本，修改db键即可。', APP_ETC_PATH), __('安装'));
             $this->printing->setup(__('由于您属于第一次安装，您可以使用命令行：php bin/w setup:upgrade , 然后使用：php bin/w server:start 快速开启本地开发服务器。'), __('安装'));
             # 设置安装文件
             file_put_contents(BP . 'setup/install.lock', date('Y-m-d H:i:s'));

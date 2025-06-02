@@ -413,7 +413,7 @@ class Queue extends EavModel
     {
         $type = $attribute->getType();
         if ($type->getRequired() and ($attribute->getValue() == null or $attribute->getValue() == '')) {
-            return __('请填写 %1', $attribute->getName());
+            return __('请填写 %{1}', $attribute->getName());
         }
         return true;
     }

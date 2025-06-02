@@ -28,7 +28,7 @@ class Queue implements \Weline\Cron\CronTaskInterface
         Printing                  $printing
     )
     {
-        $this->queue    = $queue;
+        $this->queue = $queue;
         $this->printing = $printing;
     }
 
@@ -101,7 +101,7 @@ QUEUETIP;
                 $result = $queue->getResult();
                 if ($pid) {
                     $output = Process::getProcessOutput($process_name);
-                    $queue->setResult($output . __('进程已存在，请检查进程状态！进程名：%1', $process_name).$result)
+                    $queue->setResult($output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name) . $result)
                         ->setPid($pid)
                         ->save();
                     continue;
@@ -111,12 +111,12 @@ QUEUETIP;
                     $queue->setEndAt(date('Y-m-d H:i:s'))
                         ->setPid(0);
                     if ($queue->isFinished()) {
-                        $queue->setResult( PHP_EOL . $output . __('队列结束...').$result)
+                        $queue->setResult(PHP_EOL . $output . __('队列结束...') . $result)
                             ->setStatus($queue::status_done)
                             ->save();
                     } else {
                         $queue->setStatus($queue::status_error)
-                            ->setResult( PHP_EOL . $output . __('队列进程异常结束...').$result)
+                            ->setResult(PHP_EOL . $output . __('队列进程异常结束...') . $result)
                             ->save();
                     }
                     # 卸载进程记录文件
@@ -126,7 +126,7 @@ QUEUETIP;
                 # 创建进程
                 $pid = Process::create($process_name);
                 if (!$pid) {
-                    $queue->setResult(__('进程创建失败！请检查进程状态！进程名：%1', [$process_name]))
+                    $queue->setResult(__('进程创建失败！请检查进程状态！进程名：%{1}', [$process_name]))
                         ->setStartAt(date('Y-m-d H:i:s'))
                         ->setStatus($queue::status_error)
                         ->save();

@@ -36,7 +36,7 @@ class Compiler implements \Weline\Framework\Console\CommandInterface
         array_shift($args);
         foreach ($args as $arg) {
             if (!in_array($arg, array_keys($this->getTypes()))) {
-                $this->printing->error(__('不存在的编译资源类型：%1，支持的资源类型：%2', [$arg, $this->getTypes(true)]));
+                $this->printing->error(__('不存在的编译资源类型：%{1}，支持的资源类型：%{2}', [$arg, $this->getTypes(true)]));
                 exit();
             }
             $source_types[] = $arg;
@@ -66,7 +66,7 @@ class Compiler implements \Weline\Framework\Console\CommandInterface
     public function getTypes(bool $to_string = false)
     {
         $data = [
-            'less'      => __('编译less静态资源！'),
+            'less' => __('编译less静态资源！'),
             'requireJs' => __('静态文件：require.config.js编译文件！'),
         ];
         if ($to_string) {

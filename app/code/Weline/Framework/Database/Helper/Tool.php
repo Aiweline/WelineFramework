@@ -220,7 +220,7 @@ class Tool
                 throw new \Exception(__('导出文件目录不可写!'));
             }
             if (!str_contains($output_file_name, $model_export_dir)) {
-                throw new \Exception(__('导出文件路径错误! 仅允许导出到%1media/export/model/目录下', PUB));
+                throw new \Exception(__('导出文件路径错误! 仅允许导出到%{1}media/export/model/目录下', PUB));
             }
         } else {
             $output_file_name = $model_export_dir . $output_file_name;
@@ -231,7 +231,7 @@ class Tool
                 touch($output_file_name);
             }
             if (!is_writeable(dirname($output_file_name))) {
-                throw new \Exception(__('导出文件目录不可写! %1', dirname($output_file_name)));
+                throw new \Exception(__('导出文件目录不可写! %{1}', dirname($output_file_name)));
             }
         }
         // 打开 PHP 输出流

@@ -177,7 +177,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                                         if ($can_referer) {
                                             /**@var MessageManager $message */
                                             $message = ObjectManager::getInstance(MessageManager::class);
-                                            $message->addWarning(__('你无权进行该操作！已将你带回来源网址！你不具备：%1 操作权限！', $request->getMethod()));
+                                            $message->addWarning(__('你无权进行该操作！已将你带回来源网址！你不具备：%{1} 操作权限！', $request->getMethod()));
                                             $request->_response->redirect($referer);
                                         } else {
                                             // 找一个有权限的get请求路由访问
@@ -247,7 +247,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 if (($method === 'get' || $method === '') && $route) {
                     /**@var MessageManager $message */
                     $message = ObjectManager::getInstance(MessageManager::class);
-                    $message->addWarning(__('你无权进行该操作！你不具备：%1 路由：%2 操作权限！已将你带到你可访问的页面！', [
+                    $message->addWarning(__('你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！', [
                         $request->getMethod(),
                         $request->getUri()
                     ]));

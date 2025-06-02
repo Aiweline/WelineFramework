@@ -34,12 +34,12 @@ class MenuXmlReader extends XmlReader
         $configs = parent::read();
         // 菜单提取
         $module_menus = [];
-        $has_orders   = [];
+        $has_orders = [];
         $data = [];
         foreach ($configs as $module_and_file => $config) {
-            $m_a_f_arr                     = explode('::', $module_and_file);
-            $module                        = array_shift($m_a_f_arr);
-            $module_menu_file              = array_pop($m_a_f_arr);
+            $m_a_f_arr = explode('::', $module_and_file);
+            $module = array_shift($m_a_f_arr);
+            $module_menu_file = array_pop($m_a_f_arr);
             $module_menus[$module]['file'] = $module_menu_file;
             $module_menus[$module]['data'] = [];
             if (
@@ -50,7 +50,7 @@ class MenuXmlReader extends XmlReader
                 $this->checkElementAttribute(
                     $config['menus'],
                     'noNamespaceSchemaLocation',
-                    __('菜单元素menus必须设置：noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"，文件：%1', $module_and_file)
+                    __('菜单元素menus必须设置：noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"，文件：%{1}', $module_and_file)
                 );
             }
             foreach ($config['menus'] as $menu) {
@@ -61,34 +61,34 @@ class MenuXmlReader extends XmlReader
                                 $this->checkElementAttribute(
                                     $menu_data,
                                     'name',
-                                    __('菜单配置错诶：add元素缺少name属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                                    __('菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                                 );
                                 $this->checkElementAttribute(
                                     $menu_data,
                                     'source',
-                                    __('菜单配置错诶：add元素缺少source属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                                    __('菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                                 );
                                 $this->checkElementAttribute(
                                     $menu_data,
                                     'title',
-                                    __('菜单配置错诶：add元素缺少title属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                                    __('菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                                 );
                                 $this->checkElementAttribute(
                                     $menu_data,
                                     'action',
-                                    __('菜单配置错诶：add元素缺少action属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                                    __('菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/"  icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                                 );
                                 $this->checkElementAttribute(
                                     $menu_data,
                                     'order',
-                                    __('菜单配置错诶：add元素缺少icon属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                                    __('菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                                 );
                                 if (!isset($menu['add']['_attribute']['icon'])) {
                                     $menu['add']['_attribute']['icon'] = '';
                                 }
                                 /*$menu['add']['_attribute']['order'] = $menu['add']['_attribute']['order']??0;
                                 if (in_array($menu_data['_attribute']['order'], $has_orders)) {
-                                    throw new \Exception(__('菜单排序值 %1 重复,请重新设置order排序值.错误所在文件：%2', [$menu['add']['_attribute']['order'], $module_menu_file]));
+                                    throw new \Exception(__('菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}', [$menu['add']['_attribute']['order'], $module_menu_file]));
                                 }
                                 $has_orders[] = $menu_data['_attribute']['order'];*/
                                 # 默认属性
@@ -106,34 +106,34 @@ class MenuXmlReader extends XmlReader
                         $this->checkElementAttribute(
                             $menu['add'],
                             'name',
-                            __('菜单配置错诶：add元素缺少name属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                            __('菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                         );
                         $this->checkElementAttribute(
                             $menu['add'],
                             'source',
-                            __('菜单配置错诶：add元素缺少source属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                            __('菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                         );
                         $this->checkElementAttribute(
                             $menu['add'],
                             'title',
-                            __('菜单配置错诶：add元素缺少title属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                            __('菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                         );
                         $this->checkElementAttribute(
                             $menu['add'],
                             'action',
-                            __('菜单配置错诶：add元素缺少action属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                            __('菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                         );
                         $this->checkElementAttribute(
                             $menu['add'],
                             'order',
-                            __('菜单配置错诶：add元素缺少order属性,文件：%1 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
+                            __('菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source="Weline_Backend::dashboard" name="Dashboard" title="Dashboard" action="/" icon="mdi-home-variant-outline" order="999"/>', $module_and_file)
                         );
                         if (!isset($menu['add']['_attribute']['icon'])) {
                             $menu['add']['_attribute']['icon'] = '';
                         }
                         /*$menu['add']['_attribute']['order'] = $menu['add']['_attribute']['order']??0;
                         if (in_array($menu['add']['_attribute']['order'], $has_orders)) {
-                            throw new \Exception(__('菜单排序值 %1 重复,请重新设置order排序值.错误所在文件：%2', [$menu['add']['_attribute']['order'], $module_menu_file]));
+                            throw new \Exception(__('菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}', [$menu['add']['_attribute']['order'], $module_menu_file]));
                         }
                         $has_orders[] = $menu['add']['_attribute']['order'];*/
                         $menu['add']['_attribute']['is_system'] = 1;

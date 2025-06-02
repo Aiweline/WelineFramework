@@ -2,10 +2,8 @@
 
 namespace Weline\Visitor\Taglib;
 
-use http\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Request;
 use Weline\Framework\View\Template;
 use Weline\Taglib\TaglibInterface;
 
@@ -97,7 +95,7 @@ class Pixel implements TaglibInterface
     自定义事件：在你想要统计的标签上设置类名开头为weline-pixel::name类，冒号后面的名字将作为事件名。
     只有设置了weline-pixel::name类的标签才会被统计，例如：weline-pixel::place-order,weline-pixel::add-to-cart等。
     place-order,add-to-cart将自动解析为事件名字。
-    想要给像素自定义事件，请监听Weline_Visitor::taglib_pixel事件。并在返回pixel_code值中包含js代码
+    想要给像素自定义事件，请使用系统事件监听Weline_Visitor::taglib_pixel事件。并在返回pixel_code值中包含js代码
     （例如:pixel_code=\"WelinePixel.initData.elementInfo.eventType = 'click';\"）
     所有点击事件都包含在WelinePixel.initData.elementInfo中，自定义事件时判断WelinePixel.initData.elementInfo中的数据
     然后修改WelinePixel.initData数据，最后调用WelinePixel.send()即可

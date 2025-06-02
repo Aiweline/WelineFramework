@@ -83,11 +83,11 @@ class QueryTest extends \Weline\Framework\UnitTest\TestCore
         # 查
         self::assertTrue(1 == $query->table('test_weline_for_query')
                 ->alias('a')
-                ->where("(a.stores = '1') OR (a.stores like '%1%')")
+                ->where("(a.stores = '1') OR (a.stores like '%{1}%')")
                 ->where('a.id=1')->where('a.id', 1)
                 ->find('id')->fetch());
         self::assertTrue(1 == $query->table('test_weline_for_query')->alias('a')->where([['a.stores', 1], ['a.id', 1]])->find('id')->fetch());
-        self::assertTrue(1 == $query->table('test_weline_for_query')->alias('a')->where([['a.stores', '=', '1', 'OR'], ['a.stores', 'like', '%1%']])->find('id')->fetch());
+        self::assertTrue(1 == $query->table('test_weline_for_query')->alias('a')->where([['a.stores', '=', '1', 'OR'], ['a.stores', 'like', '%{1}%']])->find('id')->fetch());
         self::assertTrue(1 == $query->table('test_weline_for_query')->alias('a')->fields('a.`id`,a.`stores`')->where('id', 1)->where('stores', 1)->find('id')->fetch());
 
         # 联查

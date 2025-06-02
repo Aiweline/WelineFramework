@@ -16,6 +16,7 @@ use TheSeer\Tokenizer\Exception;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Taglib;
+use WeShop\Store\Model\Store;
 
 class Local implements \Weline\Taglib\TaglibInterface
 {
@@ -91,6 +92,7 @@ class Local implements \Weline\Taglib\TaglibInterface
             }
             $closeText = __('关闭');
             $titileText = __('翻译窗口');
+            $refreshText = __('刷新');
             return match ($tag_key) {
                 'tag' => <<<TAG
                     <a class='d-flex align-items-center link-info gap-1' style='cursor: pointer'
@@ -107,6 +109,8 @@ class Local implements \Weline\Taglib\TaglibInterface
                             <h5 id='{$idName}Label'>
                                 <lang>{$titileText}</lang>
                             </h5>
+                            <button type='button' id="{$idName}IframeRefreshBtn" class='btn-refresh text-reset' 
+                                        aria-label='{$refreshText}'></button>
                             <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas'
                                         aria-label='{$closeText}'></button>
                         </div>
@@ -121,6 +125,10 @@ class Local implements \Weline\Taglib\TaglibInterface
                     <script>
                         //show.bs.offcanvas
                         $('#{$idName}').on('show.bs.offcanvas', function (e) {
+                            let Iframe = $('#{$idName}Iframe')
+                            Iframe.attr('src', Iframe.attr('data-src'))
+                        })
+                        $('#{$idName}IframeRefreshBtn').on('click', function (e) {
                             let Iframe = $('#{$idName}Iframe')
                             Iframe.attr('src', Iframe.attr('data-src'))
                         })
@@ -148,6 +156,15 @@ TAG,
 
     static function document(): string
     {
-        return '翻译标签，使用Model继承 Weline\I18n\LocalModel.然后使用。示例：' . htmlentities('<local model="Weline\Demo\Model\Demo"></local>') . ' 其中 Weline\Demo\Model\Demo 继承Weline\I18n\LocalModel。';
+        return '翻译标签，使用Model继承 Weline\I18n\LocalModel.然后使用。示例：' . htmlentities('<local model="Weline\Store\Model\StoreDescription" field="name" id="store.store_id" name="store-name"></local>') . ' 其中 Weline\Store\Model\Store 继承 Weline\I18n\LocalModel。
+<pre>
+class StoreDescription extends \Weline\I18n\LocalModel
+{
+    public const indexer = \'store_local_description\';
+    public const fields_ID = \'store_id\';
+    public const fields_NAME = Store::fields_NAME;
+    public const fields_DESCRIPTION = Store::fields_DESCRIPTION;
+}
+</pre>示例中，我们设置店铺的name字段可以翻译。<span style="color:red;">除了那么，还可以添加多个字段，比如店铺详情等，使用时指定字段即可。</span>';
     }
 }

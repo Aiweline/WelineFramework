@@ -45,10 +45,10 @@ class Remove extends CommandAbstract
         Handle  $handle
     )
     {
-        $this->system  = $system;
-        $this->data    = $data;
+        $this->system = $system;
+        $this->data = $data;
         $this->upgrade = $upgrade;
-        $this->handle  = $handle;
+        $this->handle = $handle;
     }
 
     /**
@@ -79,7 +79,7 @@ class Remove extends CommandAbstract
                 $this->printer->warning($module . __('模块不存在！'));
             } elseif (!is_dir($module_list[$module]['base_path'])) {
                 unset($args[$key]);
-                $this->printer->setup(__('%1 模块已安装，但是代码已不存在，是否彻底卸载（y/n）？', $module));
+                $this->printer->setup(__('%{1} 模块已安装，但是代码已不存在，是否彻底卸载（y/n）？', $module));
                 // 控制台输入
                 $input = $this->system->input();
                 if (strtolower(chop($input)) === 'y') {

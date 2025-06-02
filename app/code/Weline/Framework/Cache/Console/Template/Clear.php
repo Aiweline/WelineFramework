@@ -28,7 +28,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         System   $system
     )
     {
-        $this->system   = $system;
+        $this->system = $system;
         $this->printing = $printing;
     }
 
@@ -64,7 +64,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         if (is_dir($base_path . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE)) {
 //            p($this->system->exec("rm -rf $base_path" . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE. DS,true));
             $this->system->exec("rm -rf $base_path" . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE . DS);
-            $this->printing->note(__('清理完成：%1', $module_name));
+            $this->printing->note(__('清理完成：%{1}', $module_name));
         }
     }
 

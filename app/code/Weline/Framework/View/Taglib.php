@@ -345,14 +345,14 @@ class Taglib
                             break;
                         case 'tag-self-close-with-attrs':
                             $template_html = htmlentities($tag_data[0]);
-                            throw new TemplateException(__("if没有自闭合标签:[{$template_html}]。示例：%1", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
+                            throw new TemplateException(__("if没有自闭合标签:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                         case 'tag-start':
                             # 排除非if和属性标签的情况
                             if (str_starts_with($tag_data[0], '<if ') || str_starts_with($tag_data[0], '<w:if ')) {
                                 if (!isset($attributes['condition'])) {
                                     if (str_starts_with($tag_data[0], '<if ')) {
                                         $template_html = htmlentities($tag_data[0]);
-                                        throw new TemplateException(__("if标签缺少condition条件属性:[{$template_html}]，示例：%1", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
+                                        throw new TemplateException(__("if标签缺少condition条件属性:[{$template_html}]，示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                                     }
                                 }
                                 $condition = $this->varParser($attributes['condition']);
@@ -380,7 +380,7 @@ class Taglib
                             case '@tag{}':
                             case '@tag()':
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%1", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
+                                throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                             case 'tag-self-close-with-attrs':
                                 $condition = $this->varParser($this->checkVar($attributes['condition']));
                                 $result = "<?php elseif({$condition}):?>";
@@ -399,7 +399,7 @@ class Taglib
                             case '@tag{}':
                             case '@tag()':
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%1", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
+                                throw new TemplateException(__("elseif没有@elseif()和@elseif{}用法:[{$template_html}]。示例：%{1}", htmlentities('<if condition="$a>$b"><var>a</var><elseif condition="$b>$a"/><var>b</var><else/><var>a</var><var>b</var></if>')));
                             // <else/>
                             case 'tag-self-close':
                                 $result = '<?php else:?>';
@@ -422,7 +422,7 @@ class Taglib
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("empty标签需要设置name属性:[{$template_html}] 例如：%1", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
+                                throw new TemplateException(__("empty标签需要设置name属性:[{$template_html}] 例如：%{1}", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
                             return '<?php if(empty(' . $name . ')): ?>';
@@ -447,7 +447,7 @@ class Taglib
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("empty标签需要设置name属性:[$template_html]例如：%1", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
+                                throw new TemplateException(__("empty标签需要设置name属性:[$template_html]例如：%{1}", htmlentities('<empty name="catalogs"><li>没有数据</li></empty>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
                             return '<?php if(!empty(' . $name . ') ): ?>';
@@ -498,7 +498,7 @@ class Taglib
                         case 'tag-start':
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("has标签需要设置name属性:[$template_html]例如：%1", htmlentities('<has name="catalogs"><li>有数据</li><else/>没数据</has>')));
+                                throw new TemplateException(__("has标签需要设置name属性:[$template_html]例如：%{1}", htmlentities('<has name="catalogs"><li>有数据</li><else/>没数据</has>')));
                             }
                             $name = $this->varParser($this->checkVar($attributes['name']));
                             return '<?php if(!empty(' . $name . ') ): ?>';
@@ -531,7 +531,7 @@ class Taglib
                                     $template_html = htmlentities($tag_data[0]);
                                     throw new TemplateException(
                                         __(
-                                            "@block标签语法使用错误：未指定block类:[{$template_html}]。示例：%1或者%2",
+                                            "@block标签语法使用错误：未指定block类:[{$template_html}]。示例：%{1}或者%{2}",
                                             [htmlentities('@block(Weline\Admin\Block\Demo|template=Weline_Admin::block/demo.phtml)'), htmlentities('@block{Weline\Admin\Block\Demo|template=Weline_Admin::block/demo.phtml}')]
                                         )
                                     );
@@ -542,7 +542,7 @@ class Taglib
                             case 'tag-self-close-with-attrs':
                                 if (!isset($attributes['class']) || !$attributes['class']) {
                                     $template_html = htmlentities($tag_data[0]);
-                                    throw new TemplateException(__("block标签语法使用错误:[{$template_html}]：未指定block类。示例：%1", htmlentities("<block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml' vars='item|pageSize|page'/>")));
+                                    throw new TemplateException(__("block标签语法使用错误:[{$template_html}]：未指定block类。示例：%{1}", htmlentities("<block class='Weline\Demo\Block\Demo' template='Weline_Demo::templates/demo.phtml' vars='item|pageSize|page'/>")));
                                 }
                                 // 变量导入
                                 $vars_string = '[';
@@ -582,14 +582,14 @@ class Taglib
                         ?>";
                         case 'tag-self-close-with-attrs':
                             $template_html = htmlentities($tag_data[0]);
-                            throw new TemplateException(__("foreach没有自闭合标签:[{$template_html}]。示例：%1", htmlentities('<foreach name="catalogs" key="key" item="v"><li><var>name</var></li></foreach>')));
+                            throw new TemplateException(__("foreach没有自闭合标签:[{$template_html}]。示例：%{1}", htmlentities('<foreach name="catalogs" key="key" item="v"><li><var>name</var></li></foreach>')));
                         case 'tag-start':
                             if (!isset($attributes['item'])) {
                                 $attributes['item'] = 'v';
                             }
                             if (!isset($attributes['name'])) {
                                 $template_html = htmlentities($tag_data[0]);
-                                throw new TemplateException(__("foreach标签需要指定要循环的变量name属性:[{$template_html}]。例如：需要循环catalogs变量则%1", htmlentities('<foreach name="catalogs" key="key" item="v"><li><var>name</var></li></foreach>')));
+                                throw new TemplateException(__("foreach标签需要指定要循环的变量name属性:[{$template_html}]。例如：需要循环catalogs变量则%{1}", htmlentities('<foreach name="catalogs" key="key" item="v"><li><var>name</var></li></foreach>')));
                             }
                             foreach ($attributes as $key => $attribute) {
                                 $attributes[$key] = $this->checkVar($attribute);
@@ -1027,7 +1027,7 @@ class Taglib
                             if ($required && !in_array($attr, $attributes_keys)) {
                                 $provide_attr = implode(',', $attributes_keys);
                                 $template_html = htmlentities($attr);
-                                throw new TemplateException(__("代码：[{$template_html}] %1:标签必须设置属性%2, 提供的属性：3% 文件：%4", [$tag, $attr, $provide_attr, $fileName]));
+                                throw new TemplateException(__("代码：[{$template_html}] %{1}:标签必须设置属性%{2}, 提供的属性：3% 文件：%{4}", [$tag, $attr, $provide_attr, $fileName]));
                             }
                         }
                     }

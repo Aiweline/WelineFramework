@@ -171,8 +171,8 @@ class Request extends Request\RequestAbstract implements RequestInterface
             foreach (explode('&', $params) as $key => $value) {
                 $value = explode('=', $value);
                 if (count($value) === 2) {
-                    if (str_ends_with($value[0], '%5B%5D')) {
-                        $paramName = rtrim($value[0], '%5B%5D');
+                    if (str_ends_with($value[0], '%{5}B%{5}D')) {
+                        $paramName = rtrim($value[0], '%{5}B%{5}D');
                         $params_[$paramName][] = $value[1] ?? '';
                     } else {
                         $params_[$value[0]] = $value[1] ?? '';
@@ -265,7 +265,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
                 if (PROD) {
                     $this->_response->redirect(404);
                 }
-                throw new Exception(__('未提供参数：%1', $key));
+                throw new Exception(__('未提供参数：%{1}', $key));
             }
         }
         return $result;

@@ -109,14 +109,14 @@ class Run implements CommandInterface
         $taskTotal = (int)$this->cronTask->pagination['totalSize'];
         $taskPages = (int)$this->cronTask->pagination['lastPage'];
         if ($taskTotal == 0) {
-            ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%1 , 参数：', [implode(' ', $task_names), implode(' ', $args)]));
+            ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%{1} , 参数：', [implode(' ', $task_names), implode(' ', $args)]));
             exit;
         }
 
         for ($taskPage = 1; $taskPage <= $taskPages; $taskPage++) {
             $offset = ($taskPage - 1) * $pageSize;
             $currentTotal = $offset + $pageSize;
-            CronStatus::displayProgressBar(__('任务进度：页(%1=>%2)/目(%3/%4)', [$taskPages, $taskPage, $taskTotal, $taskPage]), $currentTotal,
+            CronStatus::displayProgressBar(__('任务进度：页(%{1}=>%{2})/目(%{3}/%{4})', [$taskPages, $taskPage, $taskTotal, $taskPage]), $currentTotal,
                 $taskTotal, false);
             $tasks = $this->cronTask->limit($pageSize, $offset)
                 ->select()
@@ -145,14 +145,14 @@ class Run implements CommandInterface
                 $pid = Process::getPidByName($process_name);
                 if ($pid) {
                     $output = Process::getProcessOutput($process_name);
-                    $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output . __('进程已存在，请检查进程状态！进程名：%1', $process_name))
+                    $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name))
                         ->setData($taskModel::fields_STATUS, CronStatus::RUNNING->value)
                         ->setData($taskModel::fields_BLOCK_TIME, microtime(true) - $task_start_time)
                         ->setData($taskModel::fields_PID, $pid)
                         ->save();
                     # 如果强制执行
                     if ($force) {
-                        $msg = __('%1 程序ID:%2 正在运行中，当前强制执行正在杀死进程中...', [$process_name, $pid]);
+                        $msg = __('%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中...', [$process_name, $pid]);
                         Process::unsetLogProcessFilePath($process_name);
                         $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output . $msg)
                             ->setData($taskModel::fields_BLOCK_TIME, 0)
@@ -161,17 +161,17 @@ class Run implements CommandInterface
                         Process::killPid($pid, $process_name);
                         if (Process::isProcessRunning($pid)) {
                             $force = false;
-                            $msg = __('%1 程序ID:%2 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$process_name, $pid]);
+                            $msg = __('%{1} 程序ID:%{2} 杀死失败！程序不会强制执行，请手动杀死进程后重试!', [$process_name, $pid]);
                             $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $msg)->save();
                         }
                     } else {
-                        $msg = __('%1 程序ID:%2 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行', [$process_name, $pid]);
+                        $msg = __('%{1} 程序ID:%{2} 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行', [$process_name, $pid]);
                         $taskModel->setData($taskModel::fields_RUNTIME_ERROR, $output . $msg)->save();
                     }
                     continue;
                 } elseif ($pid = ($taskModel->getData($taskModel::fields_PID) ?: 0)) {
                     # -----------如果数据库存在PID,说明程序结束---------------
-                    $msg = __('%1 程序ID:%2 已运行完毕!', [$process_name, $pid]);
+                    $msg = __('%{1} 程序ID:%{2} 已运行完毕!', [$process_name, $pid]);
                     $taskModel->setData($taskModel::fields_RUN_TIMES, (int)$taskModel->getData($taskModel::fields_RUN_TIMES) + 1);
                     # 设置程序运行数据
                     $taskModel->setData($taskModel::fields_BLOCK_TIME, 0);

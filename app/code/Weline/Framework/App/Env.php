@@ -258,7 +258,7 @@ class Env extends DataObject
         try {
             $this->reload();
         } catch (Exception $e) {
-            throw new Exception(__('系统加载错误：%1', $e->getMessage()));
+            throw new Exception(__('系统加载错误：%{1}', $e->getMessage()));
         }
     }
 
@@ -267,7 +267,7 @@ class Env extends DataObject
         $current_user = Env::user();
         if (empty(Env::get('user'))) {
             $etc = str_replace(BP, '', Env::path_ENV_FILE);
-            $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请前往 %1 配置user键指定网站运行用户。示例\'user\'=>\'www\'。', $etc);
+            $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请前往 %{1} 配置user键指定网站运行用户。示例\'user\'=>\'www\'。', $etc);
             if (CLI) {
                 /** @var Printing $printing */
                 $printing = ObjectManager::getInstance(Printing::class);
@@ -281,13 +281,13 @@ class Env extends DataObject
             if (CLI) {
                 /** @var Printing $printing */
                 $printing = ObjectManager::getInstance(Printing::class);
-                $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%1 是否与站点运行用户：%2 相同！', [
+                $msg = '[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%{1} 是否与站点运行用户：%{2} 相同！', [
                         $current_user, Env::get('user'),
                     ]);
                 $printing->error($msg);
                 exit(1);
             } else {
-                die('[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%1 是否与站点运行用户：%2 相同！', [
+                die('[' . PHP_OS . ']' . __('运行失败： 非站点运行用户禁止执行！请检查当前用户：%{1} 是否与站点运行用户：%{2} 相同！', [
                         $current_user, Env::get('user'),
                     ]));
             }
@@ -473,29 +473,28 @@ class Env extends DataObject
      */
     public function setConfig(string $key, $value = null): bool
     {
-        $this->hasGetConfig[$key] = $value;
-        $config = $this->getConfig();
+        // 如果键包含点，则处理嵌套设置
         if (str_contains($key, '.')) {
             $keys = explode('.', $key);
-            $first_key = array_shift($keys);
-            $end_key = $keys[array_key_last($keys)];
-            $this->config = $config;
-            $tmp = &$this->config[$first_key];
-            foreach ($keys as $item) {
-                if (isset($tmp[$item])) {
-                    $tmp = &$tmp[$item];
-                } else {
-                    $tmp = [];
+            $lastKey = array_pop($keys);
+            $config = &$this->config;
+
+            // 遍历键路径，创建或设置中间层级数组
+            foreach ($keys as $k) {
+                if (!isset($config[$k]) || !is_array($config[$k])) {
+                    $config[$k] = [];
                 }
-                if ($end_key === $item) {
-                    $tmp = $value;
-                }
+                $config = &$config[$k];
             }
+
+            // 设置最终值
+            $config[$lastKey] = $value;
         } else {
-            $config[$key] = $value;
+            // 处理单一层级设置
             $this->config[$key] = $value;
         }
 
+        // 更新缓存的配置文件
         try {
             $file = new File();
             $file->open(self::path_ENV_FILE, $file::mode_w);
