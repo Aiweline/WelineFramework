@@ -33,12 +33,12 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         try {
             $config->setConfig($key, $value, 'Weline_Backend');
         } catch (Exception $e) {
-            $this->getMessageManager()->addWarning(__('保存失败，请重试！%1', $e->getMessage()));
+            $this->getMessageManager()->addWarning(__('保存失败，请重试！%{1}', $e->getMessage()));
             return $this->redirect($this->request->getReferer());
         }
         $fetchName = 'fetch' . ucfirst((string)$type);
         if (!method_exists($this, $fetchName)) {
-            $this->getMessageManager()->addWarning(__('保存失败，请重试!不支持的类型：%1', $type));
+            $this->getMessageManager()->addWarning(__('保存失败，请重试!不支持的类型：%{1}', $type));
             return $this->redirect($this->request->getReferer());
         }
         # 清理缓存
@@ -55,9 +55,9 @@ class Config extends \Weline\Framework\App\Controller\BackendController
             }
         } catch (\Exception $exception) {
             if ($type === 'json') {
-                return $this->$fetchName($this->error(__('保存失败! %1', $exception->getMessage())));
+                return $this->$fetchName($this->error(__('保存失败! %{1}', $exception->getMessage())));
             } else {
-                $this->getMessageManager()->addWarning(__('保存失败! %1', $exception->getMessage()));
+                $this->getMessageManager()->addWarning(__('保存失败! %{1}', $exception->getMessage()));
                 $this->redirect($this->request->getReferer());
             }
         }

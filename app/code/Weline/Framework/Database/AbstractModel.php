@@ -682,7 +682,7 @@ abstract class AbstractModel extends DataObject
         } catch (\Exception $exception) {
             $this->getQuery()->rollBack();
             $msg = __('保存数据出错! ');
-            $msg .= __('消息: %1', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %1', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %1', $this->getQuery()->getSql());
+            $msg .= __('消息: %{1}', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %{1}', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %{1}', $this->getQuery()->getSql());
             throw new Exception($msg);
         }
 
@@ -1383,7 +1383,7 @@ abstract class AbstractModel extends DataObject
     public function pagination(int $page = 0, int $pageSize = 0, array $params = [], int $max_limit = 1000, int $total = 0): AbstractModel|static
     {
         if ($pageSize > $max_limit) {
-            throw new Exception(__('分页超过每页限制大小！限制每页大小：%1', $max_limit));
+            throw new Exception(__('分页超过每页限制大小！限制每页大小：%{1}', $max_limit));
         }
         if (empty($page)) {
             $page = ObjectManager::getInstance(Request::class)->getGet('page', 1) ?: 1;
@@ -1504,7 +1504,7 @@ PAGELISTHTML;
         $query = http_build_query($params);
         $lastPageUrl = $queryUrl . $query_flag . $query;
         $lastPageName = __('最后一页');
-        $total_page = __('一共 %1 页', $lastPage);
+        $total_page = __('一共 %{1} 页', $lastPage);
         $please_input_page_number = __('请输入页码');
         $turn_to_page = __('跳转页');
         $params['page'] = '';

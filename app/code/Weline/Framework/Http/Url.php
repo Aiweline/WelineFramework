@@ -373,7 +373,7 @@ class Url implements UrlInterface
         $port = $s['SERVER_PORT'];
         $port = ((!$ssl && $port == '80') || ($ssl && $port == '443')) ? '' : ':' . $port;
         $host = ($use_forwarded_host && isset($s['HTTP_X_FORWARDED_HOST'])) ? $s['HTTP_X_FORWARDED_HOST'] : ($s['SERVER_NAME'] ?? null);
-        $host = $host ?? $s['SERVER_NAME'] . $port;
+        $host = ($host ?? $s['SERVER_NAME']) . $port;
         return $protocol . '://' . $host;
     }
 

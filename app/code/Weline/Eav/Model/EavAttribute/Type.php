@@ -720,7 +720,7 @@ class Type extends \Weline\Framework\Database\Model
             if ($model_object instanceof EavModelInterface) {
                 $type->setModelClassData(json_encode($model_object->getModelData()));
             } else {
-                throw new \Exception(__('模型类: %1 必须是 EavModelInterface 接口类的实例', $model_class));
+                throw new \Exception(__('模型类: %{1} 必须是 EavModelInterface 接口类的实例', $model_class));
             }
         }
         $attrs = $options['attrs'] ?? [];

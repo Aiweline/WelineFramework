@@ -95,7 +95,7 @@ class PluginsManager
                 throw new \Error($e->getMessage(), $e->getCode(), $e);
             }
             if ($typeRef->isFinal()) {
-                throw new \Error(__('无法动态代理final类:%1', [$type]));
+                throw new \Error(__('无法动态代理final类:%{1}', [$type]));
             }
             // 读取被侦听拦截原始类的方法列表
             $type_methods = $typeRef->getMethods();
@@ -114,7 +114,7 @@ class PluginsManager
                     throw new \Error($e->getMessage(), $e->getCode(), $e);
                 }
                 if ($typePluginRef->isFinal()) {
-                    throw new \Error(__('插件名称：%name,' . PHP_EOL . '无法动态代理final类:%instance' . PHP_EOL . '状态：%disabled' . PHP_EOL . '排序：%sort', $type_plugin));
+                    throw new \Error(__('插件名称：%{name},' . PHP_EOL . '无法动态代理final类:%{instance}' . PHP_EOL . '状态：%{disabled}' . PHP_EOL . '排序：%sort', $type_plugin));
                 }
                 $plugin_instance_methods = $typePluginRef->getMethods();
                 foreach ($plugin_instance_methods as $key => $plugin_instance_method) {

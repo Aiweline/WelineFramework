@@ -38,7 +38,7 @@ class Uploader
         return $this;
     }
 
-    function getHeaders():array
+    function getHeaders(): array
     {
         return $this->headers;
     }
@@ -48,15 +48,15 @@ class Uploader
         if (isset($_SERVER['HTTP_ORIGIN'])) {
             // 验证来源是否在白名单内
             if (in_array($_SERVER['HTTP_ORIGIN'], $this->accepted_origins)) {
-                if($this->headerResponse){
+                if ($this->headerResponse) {
                     header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
-                }else{
+                } else {
                     $this->headers['Access-Control-Allow-Origin'] = $_SERVER['HTTP_ORIGIN'];
                 }
             } else {
-                if($this->headerResponse){
+                if ($this->headerResponse) {
                     header('HTTP/1.1 403 Origin Denied');
-                }else{
+                } else {
                     $this->headers['HTTP/1.1 403 Origin Denied'] = 'Origin Denied';
                 }
                 throw new Exception('Origin Denied');
@@ -117,9 +117,9 @@ class Uploader
         // 简单的过滤一下文件名是否合格
         if (preg_match('/[\x{4e00}-\x{9fa5}:：,，。…、~`＠＃￥％＆×＋｜｛｝＝－＊＾＄～｀!@#$%^&*()\+=（）！￥{}【】\[\]\|\"\'’‘“”；;《》<>\?\？\·]/u', $filename, $matches)) {
             if (!CLI) {
-                if ($this->headerResponse){
+                if ($this->headerResponse) {
                     header('HTTP/1.1 400 Invalid file name.');
-                }else{
+                } else {
                     $this->headers['HTTP/1.1 400 Invalid file name.'] = 'Invalid file name.';
                 }
             }
@@ -129,9 +129,9 @@ class Uploader
         // 验证扩展名
         if (!in_array(strtolower(pathinfo($filename, PATHINFO_EXTENSION)), $this->ext)) {
             if (!CLI) {
-                if ($this->headerResponse){
+                if ($this->headerResponse) {
                     header('HTTP/1.1 400 Invalid extension.');
-                }else{
+                } else {
                     $this->headers['HTTP/1.1 400 Invalid extension.'] = 'Invalid extension.';
                 }
             }
@@ -171,7 +171,7 @@ class Uploader
         }
         $result = [];
         if (1 === count($_FILES)) {
-            $file     = array_pop($_FILES);
+            $file = array_pop($_FILES);
             $filename = $file['name'];
             if ($filename) {
                 $result = $this->saveFile($file['tmp_name'], $filename);
@@ -184,7 +184,7 @@ class Uploader
                 }
             }
         }
-        return $result??false;
+        return $result ?? false;
     }
 
     public function getUploadFilename(string $filename): string
@@ -213,7 +213,7 @@ class Uploader
     public function saveFile(string $tmp_file, string $filename): string
     {
         $filename = $this->getUploadFilename($filename);
-        $dir      = dirname($filename);
+        $dir = dirname($filename);
         if (!is_dir($dir)) {
             mkdir($dir, 0777, true);
             chmod($dir, 0777);
@@ -222,7 +222,7 @@ class Uploader
             $filename = str_replace(BP, '', $filename);
             return '/' . str_replace('\\', '/', $filename);
         } else {
-            throw new Exception(__('文件上传失败:%1 ', $filename));
+            throw new Exception(__('文件上传失败:%{1} ', $filename));
         }
     }
 

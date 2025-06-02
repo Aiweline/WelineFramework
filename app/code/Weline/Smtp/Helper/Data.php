@@ -85,7 +85,7 @@ class Data extends \Weline\Backend\Model\Config
             // 比较配置项是否齐全 检测哪个配置项不齐全，报错异常
             foreach ($keys as $key) {
                 if (!in_array($key, $keysOks)) {
-                    throw new \Weline\Framework\App\Exception(__('配置项不齐全%1', $key));
+                    throw new \Weline\Framework\App\Exception(__('配置项不齐全%{1}', $key));
                 }
             }
             return $this;

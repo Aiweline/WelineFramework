@@ -38,7 +38,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- end message -->
     <div class='card'>
         <div class='card-body'>
-            <form class='needs-validation' novalidate='' action='{{action}}' method='post'>
+            <form class='needs-validation' novalidate='' action='{{req.url}}' method='post'>
                 <has name="store">
                     <input type="hidden" name="store_id" value="{{store.store_id}}">
                 </has>
