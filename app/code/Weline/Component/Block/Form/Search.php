@@ -26,11 +26,11 @@ class Search extends \Weline\Framework\View\Block implements ComponentInterface
         // 解析参数传参
         $action_params = $this->getParseVarsParams('var-params');
         $check_fields = ['action', 'id'];
-        $data         = $this->getData();
+        $data = $this->getData();
         foreach ($check_fields as $check_field) {
             $field = $this->getData($check_field) ?: '';
             if (empty($field)) {
-                throw new Exception(__('请设置搜索Block块参数：' . $field . '.示例：%1', $this->doc()));
+                throw new Exception(__('请设置搜索Block块参数：' . $field . '.示例：%{1}', $this->doc()));
             }
             if ($check_field === 'action') {
                 $field = $this->request->isBackend() ? $this->getBackendUrl($field) : $this->getUrl($field);
@@ -43,19 +43,19 @@ class Search extends \Weline\Framework\View\Block implements ComponentInterface
         $params = $this->getData('params') ?? [];
         if ($params) {
             $params = explode(',', $params);
-            foreach ($params as $key=>$param) {
+            foreach ($params as $key => $param) {
                 unset($params[$key]);
-                $params[$param]  = $this->request->getParam($param);
+                $params[$param] = $this->request->getParam($param);
             }
-        }else {
+        } else {
             $params = [];
         }
 
-        $data['params']     = array_merge($params, $action_params);
-        $data['keyword']     = $data['keyword'] ?? 'keyword';
-        $data['method']      = $data['method'] ?? 'GET';
-        $data['placeholder'] = $data['placeholder'] ??__( '回车搜索');
-        $data['value']       = $this->request->getGet($data['keyword']) ?:$data['value']??'';
+        $data['params'] = array_merge($params, $action_params);
+        $data['keyword'] = $data['keyword'] ?? 'keyword';
+        $data['method'] = $data['method'] ?? 'GET';
+        $data['placeholder'] = $data['placeholder'] ?? __('回车搜索');
+        $data['value'] = $this->request->getGet($data['keyword']) ?: $data['value'] ?? '';
         $this->assign($data);
     }
 

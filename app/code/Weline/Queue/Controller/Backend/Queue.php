@@ -202,7 +202,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                         ->getAttribute($attribute['code'])
                         ->setValue($queue_id, $attribute['value']);
                 } catch (\ReflectionException|\Weline\Framework\App\Exception|Core $e) {
-                    $json['msg'] = __('设置队列属性失败！请修改重试。%1', $e->getMessage());
+                    $json['msg'] = __('设置队列属性失败！请修改重试。%{1}', $e->getMessage());
                     $this->queue->load($queue_id);
                     $this->queue->setResult($json['msg'])->save();
                     return $this->fetchJson($json);
@@ -214,7 +214,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $execute = ObjectManager::getInstance($this->queue->getType()->getClass());
         $result = $execute->validate($this->queue);
         if (!$result) {
-            $json['msg'] = __('队列校验失败，校验消息：%1', $this->queue->getResult());
+            $json['msg'] = __('队列校验失败，校验消息：%{1}', $this->queue->getResult());
             return $this->fetchJson($json);
         }
         # 删除用户的记录数据
@@ -341,7 +341,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             if ($resultSize > 1024 * 1024) {
                 $dowloadUrl = $this->request->getUrlBuilder()->getBackendUrl('*/backend/queue/dowloadResult', ['id' => $id]);
                 $sieMb = round($resultSize / 1024 / 1024, 2);
-                $this->queue->setData('result', __('队列结果过大:%1 Mb。 请<a href="%2">下载队列结果</a>查看。', [$sieMb, $dowloadUrl]));
+                $this->queue->setData('result', __('队列结果过大:%{1} Mb。 请<a href="%{2}">下载队列结果</a>查看。', [$sieMb, $dowloadUrl]));
             }
         }
         return $this->fetch();
@@ -435,7 +435,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         # 如果队列有进程，杀死进程
         $pid = $this->queue->getPid();
         if ($pid) {
-            $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%1', $pid));
+            $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%{1}', $pid));
             $this->redirect($this->request->getReferer());
         }
         # 重置队列
@@ -468,9 +468,9 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                 $result = Process::killPid($pid, 'queue-' . $queue->getName() . '-' . $queue->getId());
                 Process::unsetLogProcessFilePath($pname);
                 if ($result) {
-                    $this->getMessageManager()->addSuccess(__('队列有进程，已成功杀死进程！进程：%1', $pid));
+                    $this->getMessageManager()->addSuccess(__('队列有进程，已成功杀死进程！进程：%{1}', $pid));
                 } else {
-                    $this->getMessageManager()->addError(__('队列有进程，杀死进程失败！进程：%1', $pid));
+                    $this->getMessageManager()->addError(__('队列有进程，杀死进程失败！进程：%{1}', $pid));
                     $this->redirect($this->request->getReferer());
                 }
             }
@@ -501,7 +501,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         if ($pid) {
             $running = Process::isProcessRunning($pid);
             if ($running) {
-                $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%1', $pid));
+                $this->getMessageManager()->addError(__('队列有进程，请先杀死进程！进程：%{1}', $pid));
                 $this->redirect($this->request->getReferer());
             } else {
                 $queue->setData($queue::fields_pid, 0);

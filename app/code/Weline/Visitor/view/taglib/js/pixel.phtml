@@ -1,13 +1,8 @@
 <!-- 创建一个 iframe 沙箱 -->
 <iframe id="sandbox-pixel" style="display:none;"></iframe>
 <script type="text/javascript">
-    // 创建一个 iframe 沙箱
-    var iframe = document.getElementById('sandbox-pixel');
-    iframe.onload = function () {
-        if (window.parent.frontend_api === undefined) {
-            throw new Error('@lang{Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base}');
-        }
-        var iframeWindow = iframe.contentWindow;
+    // 创建像素对象
+    if (!window.WelinePixel) {
         window.WelinePixel = {
             url: window.parent.frontend_api('visitor/rest/v1/pixel'),
             env_model: window.site.env_model,
@@ -173,6 +168,16 @@
                 }
             }
         };
+    } else {
+        console.error('@lang{Weline Pixel: 不允许重复加载像素，同一个页面只允许一个像素加载，要添加事件请使用像素hook方式添加事件}');
+    }
+    // 创建一个 iframe 沙箱
+    var iframe = document.getElementById('sandbox-pixel');
+    iframe.onload = function () {
+        if (window.parent.frontend_api === undefined) {
+            throw new Error('@lang{Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base}');
+        }
+        var iframeWindow = iframe.contentWindow;
         iframeWindow.WelinePixel = window.WelinePixel
         // 监听沙盒中的 JavaScript 代码发送的消息
         window.addEventListener('message', function (event) {
@@ -202,7 +207,7 @@
             <html lang="zh-CN">
             <head>
                 <meta charset="UTF-8">
-                <title><lang>沙箱环境</lang></title>
+                <title><lang>Pixel沙箱环境</lang></title>
             </head>
             <body>
                 <script type="text/javascript">
@@ -221,6 +226,7 @@
                         if(window.WelinePixel.env_model === 'dev') {
                             console.log('@lang{自定义事件}', window.WelinePixel.initData);
                         }
+                        // 框架系统事件Weline_Visitor::taglib_pixel返回的自定义事件js代码，通过这个方式你可以向任何第三方转发数据
                         {{ pixel_code }}
                     });
                 <\/script>

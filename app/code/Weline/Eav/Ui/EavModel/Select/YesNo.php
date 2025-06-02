@@ -21,13 +21,13 @@ class YesNo implements EavModelInterface
     function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = []): string
     {
         $dependence = $attribute->getDependence();
-        if(!$dependence){
+        if (!$dependence) {
             $options = $this->getModelData();
             foreach ($option_items as $key => $option_item) {
                 $options[$key] = $option_item;
             }
-        }else{
-            $options[''] = __('-请选择-%1-依赖项-',$dependence);
+        } else {
+            $options[''] = __('-请选择-%{1}-依赖项-', $dependence);
         }
 
         $type = $attribute->getType();
@@ -55,7 +55,7 @@ class YesNo implements EavModelInterface
         ];
     }
 
-    static function dependenceProcess(array $dependenceValue=[]): mixed
+    static function dependenceProcess(array $dependenceValue = []): mixed
     {
         return '';
     }

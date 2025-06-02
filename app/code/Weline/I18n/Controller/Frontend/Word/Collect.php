@@ -32,10 +32,10 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
         $words = $this->request->getPost();
         foreach ($words as $key => $word) {
             unset($words[$key]);
-            if($word)$words[] = [
-                $this->dictionary::fields_WORD       => $key,
-                $this->dictionary::fields_IS_BACKEND => $this->request->isBackend()?1:0,
-                $this->dictionary::fields_MODULE     => $this->request->getModuleName(),
+            if ($word) $words[] = [
+                $this->dictionary::fields_WORD => $key,
+                $this->dictionary::fields_IS_BACKEND => $this->request->isBackend() ? 1 : 0,
+                $this->dictionary::fields_MODULE => $this->request->getModuleName(),
             ];
         }
         try {
@@ -45,7 +45,7 @@ class Collect extends \Weline\Framework\App\Controller\FrontendController
                 $this->dictionary::fields_MODULE,
             ])->fetch();
             $this->dictionary->commit();
-            return $this->fetchJson($this->success(__('收集成功！一共收集更新词条：%1 个', count($this->request->getPost()))));
+            return $this->fetchJson($this->success(__('收集成功！一共收集更新词条：%{1} 个', count($this->request->getPost()))));
         } catch (\Exception $exception) {
             $this->dictionary->rollBack();
             return $this->fetchJson($this->error($exception->getMessage()));

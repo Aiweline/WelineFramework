@@ -26,7 +26,7 @@ class EavHelper
         $entity = ObjectManager::make(\Weline\Eav\Model\EavEntity::class);
         $entity = $entity->load($entity::fields_code, $entity_code);
         if (!$entity->getId()) {
-            throw new \Exception(__('当前实体不存在 %1', $entity_code));
+            throw new \Exception(__('当前实体不存在 %{1}', $entity_code));
         }
         return $entity;
     }
@@ -41,7 +41,7 @@ class EavHelper
         $type = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Type::class);
         $type = $type->load($type::fields_code, $type_code);
         if (!$type->getId()) {
-            throw new \Exception(__('类型不存在:%1', $type_code));
+            throw new \Exception(__('类型不存在:%{1}', $type_code));
         }
         return $type;
     }
@@ -52,8 +52,8 @@ class EavHelper
     public static function addType(\Weline\Eav\Model\EavAttribute\Type $type): \Weline\Eav\Model\EavAttribute\Type
     {
         $type->save();
-        if(!$type->getId()){
-            throw new \Exception(__('属性类型添加失败 %1', $type->getCode()));
+        if (!$type->getId()) {
+            throw new \Exception(__('属性类型添加失败 %{1}', $type->getCode()));
         }
         return $type;
     }
@@ -67,7 +67,7 @@ class EavHelper
     {
         /** @var \Weline\Eav\Model\EavAttribute\Set $attributeSet */
         $attributeSet = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Set::class);
-        $eav_entity_id    = self::getEntity($entity_code)->getId();
+        $eav_entity_id = self::getEntity($entity_code)->getId();
         $attributeSet = $attributeSet->where($attributeSet::fields_code, $code)
             ->where($attributeSet::fields_eav_entity_id, $eav_entity_id)
             ->find()
@@ -91,8 +91,8 @@ class EavHelper
     {
         /** @var \Weline\Eav\Model\EavAttribute\Group $attributeGroup */
         $attributeGroup = ObjectManager::make(\Weline\Eav\Model\EavAttribute\Group::class);
-        $eav_entity_id      = self::getEntity($entity_code)->getId();
-        $set_id         = self::getEntityAttributeSet($entity_code,$set_code, $set_name)->getId();
+        $eav_entity_id = self::getEntity($entity_code)->getId();
+        $set_id = self::getEntityAttributeSet($entity_code, $set_code, $set_name)->getId();
         $attributeGroup = $attributeGroup->where($attributeGroup::fields_code, $code)
             ->where($attributeGroup::fields_eav_entity_id, $eav_entity_id)
             ->where($attributeGroup::fields_set_id, $set_id)
@@ -114,14 +114,14 @@ class EavHelper
         return $attributeGroup;
     }
 
-    public static function getAttribute(string $entity_code, string $code, string $name,bool $is_multi,string $type_code,string $dependence = '', string $group_code = 'default', string $group_name = '默认属性组', string $set_code = 'default', string $set_name = '默认属性集'): \Weline\Eav\Model\EavAttribute
+    public static function getAttribute(string $entity_code, string $code, string $name, bool $is_multi, string $type_code, string $dependence = '', string $group_code = 'default', string $group_name = '默认属性组', string $set_code = 'default', string $set_name = '默认属性集'): \Weline\Eav\Model\EavAttribute
     {
         /** @var \Weline\Eav\Model\EavAttribute $attribute */
         $attribute = ObjectManager::make(\Weline\Eav\Model\EavAttribute::class);
         $eav_entity_id = (int)self::getEntity($entity_code)->getId();
-        $set_id    = (int)self::getEntityAttributeSet($set_code, $set_name)->getId();
-        $group_id  = (int)self::getEntityAttributeGroup($group_code, $group_name, $set_code, $set_name)->getId();
-        $type_id   = (int)self::getType($type_code)->getId();
+        $set_id = (int)self::getEntityAttributeSet($set_code, $set_name)->getId();
+        $group_id = (int)self::getEntityAttributeGroup($group_code, $group_name, $set_code, $set_name)->getId();
+        $type_id = (int)self::getType($type_code)->getId();
         /**@var \Weline\Eav\Model\EavAttribute $attribute */
         $attribute = $attribute->where($attribute::fields_code, $code)
             ->where($attribute::fields_eav_entity_id, $eav_entity_id)
@@ -145,16 +145,16 @@ class EavHelper
                 throw new \Exception('创建属性失败');
             }
         } else {
-            $attribute->where($attribute::fields_type_id,$type_id)
-                ->where($attribute::fields_eav_entity_id,$eav_entity_id)
-                ->where($attribute::fields_attribute_id,$attribute->getId())
-                ->where($attribute::fields_is_system,1)
-                ->where($attribute::fields_code,$code)
+            $attribute->where($attribute::fields_type_id, $type_id)
+                ->where($attribute::fields_eav_entity_id, $eav_entity_id)
+                ->where($attribute::fields_attribute_id, $attribute->getId())
+                ->where($attribute::fields_is_system, 1)
+                ->where($attribute::fields_code, $code)
                 ->update([
-                    $attribute::fields_name=>$name,
-                    $attribute::fields_group_id=>$group_id,
-                    $attribute::fields_set_id=>$set_id,
-                    $attribute::fields_multiple_valued=>(int)$is_multi,
+                    $attribute::fields_name => $name,
+                    $attribute::fields_group_id => $group_id,
+                    $attribute::fields_set_id => $set_id,
+                    $attribute::fields_multiple_valued => (int)$is_multi,
                 ])
                 ->fetch();
         }

@@ -30,7 +30,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
         Printing $printing
     )
     {
-        $this->scanner  = $scanner;
+        $this->scanner = $scanner;
         $this->printing = $printing;
     }
 
@@ -43,8 +43,8 @@ class Status implements \Weline\Framework\Console\CommandInterface
         if (isset($args[1]) && $op = $args[1]) {
             $caches = $this->scanner->getCaches();
             $cachesObjs = [];
-            foreach ($caches as $position=> $position_cache_class_files) {
-                foreach ($position_cache_class_files as $module=> $module_cache_class_files) {
+            foreach ($caches as $position => $position_cache_class_files) {
+                foreach ($position_cache_class_files as $module => $module_cache_class_files) {
                     foreach ($module_cache_class_files as $moduleCacheClassFile) {
                         $cachesObjs[] = ObjectManager::getInstance((rtrim($moduleCacheClassFile['class'], 'Factory') . 'Factory'));
                     }
@@ -54,18 +54,18 @@ class Status implements \Weline\Framework\Console\CommandInterface
             switch ($op) {
                 case 'enable':
                 case 'disable':
-                    $status       = $op == 'enable' ? 1 : 0;
+                    $status = $op == 'enable' ? 1 : 0;
                     $cache_config = Env::getInstance()->getData('cache');
-                    $identify_s   = array_slice($args, 2, count($args));
-                    $no_has_data  = [];
-                    $set_data     = $cache_config['status'] ?? [];
+                    $identify_s = array_slice($args, 2, count($args));
+                    $no_has_data = [];
+                    $set_data = $cache_config['status'] ?? [];
                     if ($identify_s) {
                         foreach ($identify_s as $identify) {
                             $no_has = true;
                             foreach ($cachesObjs as $cacheObj) {
                                 if ($identify === $cacheObj->getIdentify()) {
                                     $set_data[$identify] = $status;
-                                    $no_has              = false;
+                                    $no_has = false;
                                 }
                             }
                             if ($no_has) {
@@ -82,7 +82,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
                         }
                     } else {
                         foreach ($caches as $cacheObj) {
-                            $identify            = $cacheObj->getIdentify();
+                            $identify = $cacheObj->getIdentify();
                             $set_data[$identify] = $status;
                         }
                         $cache_config['status'] = $set_data;
@@ -92,7 +92,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
                     }
                     break;
                 default:
-                    $this->printing->error(__('错误的操作,正确示例：%1', 'php bin/w cache:status [enable/disable] [identify...]'));
+                    $this->printing->error(__('错误的操作,正确示例：%{1}', 'php bin/w cache:status [enable/disable] [identify...]'));
             }
         } else {
             # 处理缓存状态默认查看 所有缓存状态
@@ -104,7 +104,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
     {
         $this->printing->warning(__('模组缓存'));
         $caches = $this->scanner->getCaches();
-        $app_caches = $caches['app']??[];
+        $app_caches = $caches['app'] ?? [];
         /**@var CacheInterface $cache */
         foreach ($app_caches as $modeule => $cache_class_files) {
             foreach ($cache_class_files as $cache_class_file) {
@@ -116,9 +116,9 @@ class Status implements \Weline\Framework\Console\CommandInterface
             }
         }
         $this->printing->warning(__('框架缓存'));
-        $caches = $caches['framework']??[];
+        $caches = $caches['framework'] ?? [];
         /**@var CacheInterface $cache */
-        foreach ($caches as $modeule=>$cache_class_files) {
+        foreach ($caches as $modeule => $cache_class_files) {
             foreach ($cache_class_files as $cache_class_file) {
                 $cache = ObjectManager::make(rtrim($cache_class_file['class'], 'Factory') . 'Factory');
                 $this->printing->note(

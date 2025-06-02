@@ -120,7 +120,7 @@ class EventsManager
     public function addObserver(string $eventName, Observer $observer)
     {
         if (!isset($this->events[$eventName])) {
-            throw new Exception(__(sprintf('事件异常：%1 事件不存在！', $eventName)));
+            throw new Exception(__(sprintf('事件异常：%{1} 事件不存在！', $eventName)));
         }
         $event = $this->events[$eventName];
         $event->addObserver($observer);
@@ -140,7 +140,7 @@ class EventsManager
     public function trigger(string $eventName)
     {
         if (!isset($this->events[$eventName])) {
-            throw new Exception(__(sprintf('事件异常：%1 事件不存在！', $eventName)));
+            throw new Exception(__(sprintf('事件异常：%{1} 事件不存在！', $eventName)));
         }
         $event = $this->events[$eventName];
         $event->dispatch();

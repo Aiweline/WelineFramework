@@ -274,7 +274,7 @@ class App
                 }
                 foreach ($default_cookies as $key) {
                     if (!isset($_SERVER[$key])) {
-                        throw new Exception(__('系统SERVER缺少key：%1', $key));
+                        throw new Exception(__('系统SERVER缺少key：%{1}', $key));
                     }
                     Cookie::set($key, $_SERVER[$key], 3600 * 24 * 30, [
 //                    'path' => $cookie_path,
@@ -285,7 +285,7 @@ class App
                 try {
                     $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();
                 } catch (\ReflectionException|App\Exception $e) {
-                    throw new Exception(__('系统错误：%1', $e->getMessage()));
+                    throw new Exception(__('系统错误：%{1}', $e->getMessage()));
                 }
             } else {
                 $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();

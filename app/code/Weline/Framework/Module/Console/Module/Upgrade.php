@@ -199,20 +199,20 @@ class Upgrade extends CommandAbstract
         if ($no_modules) {
             $this->system->exec(PHP_BINARY . ' php bin/w cache:clear -f');
             $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
-            $this->printer->setup(__('%modules 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $no_modules)]));
+            $this->printer->setup(__('%{modules} 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $no_modules)]));
             exit(0);
         }
         if ($diff_base_path_modules) {
             $this->system->exec(PHP_BINARY . ' php bin/w cache:clear -f');
             $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
-            $this->printer->setup(__('%modules 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %modules', ['modules' => implode(' ', $diff_base_path_modules)]));
+            $this->printer->setup(__('%{modules} 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $diff_base_path_modules)]));
             exit(0);
         }
 
         $dependencyModuleNames = array_keys($dependencyModules);
         foreach ($modules as $module) {
             if (!in_array($module['name'], $dependencyModuleNames)) {
-                $this->printer->error(__('发现严重错误！请检查 %1 模块是否已经被删除，请手动确认并删除 %2 中关于此模块的信息！', [$module['name'], Env::path_MODULES_FILE]));
+                $this->printer->error(__('发现严重错误！请检查 %{1} 模块是否已经被删除，请手动确认并删除 %{2} 中关于此模块的信息！', [$module['name'], Env::path_MODULES_FILE]));
                 $this->printer->note(__('输入以下信息选项，确认操作！'));
                 $this->printer->note(__('1) 停止执行。手动确认模块信息并处理。【默认】'));
                 $this->printer->note(__('2) 继续执行。（可能会出现不可预知的错误）'));
@@ -224,7 +224,7 @@ class Upgrade extends CommandAbstract
                 $this->printer->setup(__('你选择了继续执行，可能会出现不可预知的错误。'));
                 $total = 3;
                 for ($i = 1; $i <= $total; $i++) {
-                    echo __("%1 秒后程序继续执行 %2 ...\r", [$total, $i]);
+                    echo __("%{1} 秒后程序继续执行 %{2} ...\r", [$total, $i]);
                     // 模拟处理时间
                     usleep(1000000);
                 }

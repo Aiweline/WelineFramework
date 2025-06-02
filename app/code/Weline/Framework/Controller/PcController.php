@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Controller;
 
+use ReflectionException;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
@@ -142,7 +143,7 @@ class PcController extends Core
      *
      * @return mixed
      * @throws Exception
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     protected function getData(string $key = ''): mixed
     {
@@ -165,7 +166,7 @@ class PcController extends Core
     }
 
     /**
-     * @DESC         |方法描述
+     * @DESC         |模板赋值方法
      *
      * 参数区：
      *
@@ -199,7 +200,7 @@ class PcController extends Core
      *
      * @return mixed
      * @throws Exception
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     protected function fetch(string $fileName = '', array $data = []): mixed
     {
@@ -235,7 +236,7 @@ class PcController extends Core
      *
      * @return string
      * @throws Exception
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     protected function fetchJson(array $data): string
     {

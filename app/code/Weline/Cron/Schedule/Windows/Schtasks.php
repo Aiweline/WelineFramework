@@ -69,7 +69,7 @@ SCRIPT;
             $data = $this->system->win_exec($create_task);
             if ($data['return_vars'] === 1) {
                 $msg = __("
-你可能需要添加用户权限！（当前用户：%1）
+你可能需要添加用户权限！（当前用户：%{1}）
 打开本地安全策略：
               
 按 Win + R 键，输入 secpol.msc，然后按回车。
@@ -82,25 +82,25 @@ SCRIPT;
 双击“作为批处理作业登录”或“计划任务”，然后点击“添加用户或组”。
 输入要赋予权限的用户账户名，然后点击“检查名称”以确保账户名正确无误。
 点击“确定”以添加用户，并再次点击“确定”以保存更改。", $current_user);
-                $msg .= PHP_EOL . PHP_EOL . '[' . PHP_OS . ']' . __('系统定时任务安装失败：%1 遇到权限问题，请按照上述步骤添加权限！或者使用管理员运行：php bin/w cron:install', $name);
+                $msg .= PHP_EOL . PHP_EOL . '[' . PHP_OS . ']' . __('系统定时任务安装失败：%{1} 遇到权限问题，请按照上述步骤添加权限！或者使用管理员运行：php bin/w cron:install', $name);
 
                 return ['status' => false, 'msg' => $msg, 'result' => $data];
             }
-            return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $data];
+            return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%{1}', $name), 'result' => $data];
         }
-        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => []];
+        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%{1}', $name), 'result' => []];
     }
 
     public function run(string $name): array
     {
         $data = $this->system->win_exec("schtasks /Run /tn $name");
         if (count($data['output']) === 1) {
-            return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $data];
+            return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%{1} ,成功运行!', $name), 'result' => $data];
         } else {
             if ($this->exist($name)) {
-                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务正在运行!稍后重试~！使用php bin/w cron:listing 检查！', $name);
+                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%{1} ,运行失败!任务正在运行!稍后重试~！使用php bin/w cron:listing 检查！', $name);
             } else {
-                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,运行失败!任务未安装!请执行：php bin/w cron:install 安装计划任务后重试！', $name);
+                $msg = '[' . PHP_OS . '] ' . __('系统计划任务：%{1} ,运行失败!任务未安装!请执行：php bin/w cron:install 安装计划任务后重试！', $name);
             }
             return ['status' => false, 'msg' => $msg, 'result' => $data];
         }
@@ -115,11 +115,11 @@ SCRIPT;
         if ($this->exist($name)) {
             $data = $this->system->win_exec("schtasks /Delete /tn $name /F");
             if (count($data['output']) === 1) {
-                return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功移除!', $name), 'result' => $data];
+                return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%{1} ,成功移除!', $name), 'result' => $data];
             }
-            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 移除失败！可能权限不足，考虑使用管理员运行！php bin/w cron:remove', $name), 'result' => $data];
+            return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %{1} 移除失败！可能权限不足，考虑使用管理员运行！php bin/w cron:remove', $name), 'result' => $data];
         }
-        return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %1 尚未安装！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => []];
+        return ['status' => false, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务 %{1} 尚未安装！请执行：php bin/w cron:install 安装计划任务！', $name), 'result' => []];
     }
 
     public function exist(string $name, bool $return_output = false): bool

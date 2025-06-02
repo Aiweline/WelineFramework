@@ -27,7 +27,7 @@ class Scan
      */
     public function __init()
     {
-        $this->dirs      = [];
+        $this->dirs = [];
         $this->keepLevel = 0;
     }
 
@@ -42,19 +42,19 @@ class Scan
      * 参数区：
      *
      * @param string $dirPath
-     * @param int    $level
+     * @param int $level
      *
      * @return array
      */
     public function scanDirTree(string $dirPath, int $level = 0): array
     {
         $this->keepLevel += 1;
-        $dirPath         = rtrim($dirPath, DS);
+        $dirPath = rtrim($dirPath, DS);
         if (is_dir($dirPath) && $file_handler = opendir($dirPath)) {
             while (false !== ($file = readdir($file_handler))) {
                 // 排除"."".."
                 if ($file !== '.' && $file !== '..') {
-                    $filename       = $dirPath . DS . $file;
+                    $filename = $dirPath . DS . $file;
                     $relateFilename = str_replace(APP_CODE_PATH, '', $filename);
                     if (is_int(strpos($filename, VENDOR_PATH))) {
                         $relateFilename = str_replace(VENDOR_PATH, '', $filename);
@@ -74,7 +74,7 @@ class Scan
                         }
                     } else {
                         // 文件
-                        $file     = new File();
+                        $file = new File();
                         $pathInfo = pathinfo($filename);
                         $file->setBasename($pathInfo['basename']);
                         $file->setFilename($pathInfo['filename']);
@@ -187,7 +187,7 @@ class Scan
     function getClassNameFromFile($filePath, $composerPath = '')
     {
         $directory = dirname($filePath);
-        if(empty($composerPath)){
+        if (empty($composerPath)) {
             $composerPath = $directory;
         }
 
@@ -196,20 +196,20 @@ class Scan
         }
 
         if ($composerPath === '') {
-            throw new Exception(__('无法找到composer.json！加载文件：%1',$filePath));
+            throw new Exception(__('无法找到composer.json！加载文件：%{1}', $filePath));
         }
 
-        $composer = json_decode(file_get_contents($composerPath . DS .  'composer.json'), true);
+        $composer = json_decode(file_get_contents($composerPath . DS . 'composer.json'), true);
 
         $autoloads = $composer['autoload']['psr-4'] ?? [];
 
         foreach ($autoloads as $namespace => $path) {
             if (strpos($directory, $path) === 0) {
-                $class = str_replace('/', '\\', substr($directory, strlen($composerPath.$path))) . '\\' . basename($filePath, '.php');
+                $class = str_replace('/', '\\', substr($directory, strlen($composerPath . $path))) . '\\' . basename($filePath, '.php');
                 return $namespace . $class;
             }
         }
 
-        throw new Exception(__('无法在自动加载器中加载类！加载文件：%1',$filePath));
+        throw new Exception(__('无法在自动加载器中加载类！加载文件：%{1}', $filePath));
     }
 }
