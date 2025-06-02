@@ -55,7 +55,7 @@ class SessionManager
                 $driver_name = pathinfo($driver_file, PATHINFO_FILENAME);
                 $driver_file_class = $module['namespace_path'] . '\\Session\\Driver\\' . ucfirst($driver_name);
                 if (!class_exists($driver_file_class)) {
-                    new Exception(__('Session 驱动找不到！请检查env配置文件中 session[\'default\'] 是否正确。驱动类：%1', $driver_file_class));
+                    new Exception(__('Session 驱动找不到！请检查env配置文件中 session[\'default\'] 是否正确。驱动类：%{1}', $driver_file_class));
                 }
                 $driver_ref_instance = ObjectManager::getReflectionInstance($driver_file_class);
                 if ($driver_ref_instance->isInstantiable()) {
@@ -70,8 +70,8 @@ class SessionManager
             $driver_class = $drivers[$driver]['class'] ?? '';
         }
         if ($driver and !class_exists($driver_class)) {
-            Env::log('session', __('指定Session驱动为: %1 但是驱动类找不到!', $driver));
-            trigger_error(__('指定Session驱动为: %1 但是驱动类找不到!', $driver), E_USER_ERROR);
+            Env::log('session', __('指定Session驱动为: %{1} 但是驱动类找不到!', $driver));
+            trigger_error(__('指定Session驱动为: %{1} 但是驱动类找不到!', $driver), E_USER_ERROR);
         }
         # 设置驱动缓存
         if (PROD) {

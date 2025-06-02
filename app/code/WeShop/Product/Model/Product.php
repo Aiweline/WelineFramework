@@ -30,6 +30,7 @@ class Product extends EavModel
     public const fields_description = 'description';
     public const fields_meta_name = 'meta_name';
     public const fields_meta_description = 'meta_description';
+    public const fields_meta_keywords = 'meta_keywords';
     public const fields_spu = 'spu';
     public const fields_sku = 'sku';
     public const fields_stock = 'stock';
@@ -249,6 +250,13 @@ class Product extends EavModel
                     'meta描述'
                 )
                 ->addColumn(
+                    self::fields_meta_keywords,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    'not null',
+                    'meta关键词'
+                )
+                ->addColumn(
                     self::fields_set_id,
                     TableInterface::column_type_INTEGER,
                     0,
@@ -309,6 +317,17 @@ class Product extends EavModel
     public function setName(string $name): static
     {
         $this->setData(self::fields_name, $name);
+        return $this;
+    }
+
+    public function getMetaKeywords(): string
+    {
+        return $this->getData(self::fields_meta_keywords);
+    }
+
+    public function setMetaKeywords(string $meta_keywords): static
+    {
+        $this->setData(self::fields_meta_keywords, $meta_keywords);
         return $this;
     }
 

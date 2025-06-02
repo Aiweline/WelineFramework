@@ -28,6 +28,10 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         }
         $localsModel->pagination()->select();
         $locals = $localsModel->fetchArray();
+        if (empty($locals)) {
+            $this->getMessageManager()->addError(__('没有找到任何本地化数据！搜索本地语言：%{1}', $search));
+            $this->redirect(404);
+        }
         $this->assign('local_pagination', $localsModel->getPagination());
         $modelName = $this->request->getGet('model');
         if (empty($modelName)) {
@@ -51,12 +55,11 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         }
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
-        $local_codes = [];
-        foreach ($locals as $local) {
-            $local_codes[] = $local['code'];
-            $model->where($model::fields_local_code, $local['code'], '=', 'or');
-        }
-        # TODO 读取翻译后的文本
+//        $local_codes = [];
+//        foreach ($locals as $local) {
+//            $local_codes[] = $local['code'];
+//            $model->where($model::fields_local_code, $local['code'], '=', 'or');
+//        }
         $local_descriptions = $model->reset()
             ->where($model::fields_ID, $id)
             ->select()
@@ -84,7 +87,9 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         $this->assign('id_field', $model::fields_ID);
         $this->assign('value', $value);
         $this->assign('id', $id);
-        $this->assign('action', $this->request->getUrlBuilder()->getCurrentUrl());
+        $params = $this->request->getGet();
+        $action = $this->request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', $params);
+        $this->assign('action', $action);
         return $this->fetch();
     }
 
@@ -119,7 +124,7 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
 //        dd($model->reset()->insert($insertDesriptions,'eav_entity_id,local_code',$field)->getPrepareSql());
-        $model->reset()->insert($insertDesriptions, 'eav_entity_id,local_code', $field)->fetch();
+        $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', $field)->fetch();
         $this->getMessageManager()->addSuccess(__('翻译完成!'));
         return $this->get();
     }

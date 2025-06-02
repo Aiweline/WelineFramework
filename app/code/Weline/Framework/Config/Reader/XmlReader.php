@@ -22,7 +22,7 @@ class XmlReader extends ModuleFileReader
     /**
      * Format of items in errors array to be used by default. Available placeholders - fields of \LibXMLError.
      */
-    public const ERROR_FORMAT_DEFAULT = "%message%\nLine: %line%\n";
+    public const ERROR_FORMAT_DEFAULT = "%message%\nLine: %{line}%\n";
 
     /**
      * @var Parser
@@ -35,7 +35,7 @@ class XmlReader extends ModuleFileReader
                 $path = 'module.xml'
     )
     {
-        parent::__construct($scanner,  $path);
+        parent::__construct($scanner, $path);
         $this->parser = $parser;
     }
 
@@ -49,7 +49,7 @@ class XmlReader extends ModuleFileReader
     {
         $data = [];
         foreach ($this->getFileList() as $module => $module_file) {
-            $event_xml_data                      = $this->parser->load($module_file)->xmlToArray();
+            $event_xml_data = $this->parser->load($module_file)->xmlToArray();
             $data[$module . '::' . $module_file] = $event_xml_data;
         }
         return $data;
@@ -83,12 +83,12 @@ class XmlReader extends ModuleFileReader
                 }
             } else {
                 // 存在相同节点时其键名是数字
-                $tmp     = [];
+                $tmp = [];
                 $tmp_key = [];
                 foreach ($xmlArray[$levelPath] as $item) {
                     $hasMerged = false;
-                    $xmlArray  = $item['_value'];
-                    $res_data  = $this->getByPath($xmlArray, $pathArr);
+                    $xmlArray = $item['_value'];
+                    $res_data = $this->getByPath($xmlArray, $pathArr);
                     // ID相同合并最后一个
                     $mergeAttributes = ['id', 'name'];
                     foreach ($mergeAttributes as $mergeAttribute) {
@@ -124,7 +124,7 @@ class XmlReader extends ModuleFileReader
      * 参数区：
      *
      * @param string $module_and_file
-     * @param array  $element
+     * @param array $element
      * @param string $attribute
      * @param string $error
      *

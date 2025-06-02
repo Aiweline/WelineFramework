@@ -360,7 +360,7 @@ class I18n
                     $line = 1;
                     while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
                         if (!isset($data[0])) {
-                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%i18n_file 错误行号：%line  错误消息：没有翻译原文! 读取内容：%content', [
+                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%{i18n_file} 错误行号：%{line}  错误消息：没有翻译原文! 读取内容：%{content}', [
                                     'i18n_file' => $i18n_file,
                                     'line' => $line,
                                     'content' => PHP_EOL . w_var_export($data, true)
@@ -368,7 +368,7 @@ class I18n
                         }
                         $data[0] = trim($data[0]);
                         if (!isset($data[1])) {
-                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%i18n_file 错误行号：%line  错误消息：没有翻译内容! 读取内容：%content', [
+                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%{i18n_file} 错误行号：%{line}  错误消息：没有翻译内容! 读取内容：%{content}', [
                                     'i18n_file' => $i18n_file,
                                     'line' => $line,
                                     'content' => PHP_EOL . w_var_export($data, true)
@@ -379,7 +379,7 @@ class I18n
                             if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
                                 $is_utf8 = true;
                             } else {
-                                throw new Exception(__('i18n翻译文件 %i18n_file 未匹配到任何local代码：支持的local代码[%codes]', [
+                                throw new Exception(__('i18n翻译文件 %{i18n_file} 未匹配到任何local代码：支持的local代码[%{codes}]', [
                                     'i18n_file' => $i18n_file,
                                     'codes' => w_var_export($locals_names, true),
                                 ]));
@@ -391,7 +391,7 @@ class I18n
 
                     fclose($handle);
                 } else {
-                    throw new Exception(__('i18n翻译文件 %i18n_file 未能找到可用翻译词，仅支持utf-8格式的文件。', [
+                    throw new Exception(__('i18n翻译文件 %{i18n_file} 未能找到可用翻译词，仅支持utf-8格式的文件。', [
                             'i18n_file' => $i18n_file,
                         ]
                     ));

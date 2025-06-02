@@ -161,9 +161,9 @@ class RequestFilter extends DataObject
      */
     public function m_safe_replace($string): string
     {
-        $string = str_replace('%20', '', $string);
-        $string = str_replace('%27', '', $string);
-        $string = str_replace('%2527', '', $string);
+        $string = str_replace('%{2}0', '', $string);
+        $string = str_replace('%{2}7', '', $string);
+        $string = str_replace('%{2}527', '', $string);
         $string = str_replace('*', '', $string);
         $string = str_replace('"', '"', $string);
         $string = str_replace("'", '', $string);

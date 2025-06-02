@@ -79,7 +79,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     foreach ($xml->children() as $testsuite) {
                         $testsuite = get_object_vars($testsuite);
                         if (!isset($testsuite['@attributes']['name'])) {
-                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%1 ，示例：<testsuite name="unit"><file>CacheTest.php</file></testsuite>', $testsuite_path));
+                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%{1} ，示例：<testsuite name="unit"><file>CacheTest.php</file></testsuite>', $testsuite_path));
                         }
                         $suite_name = $testsuite['@attributes']['name'] ?? $module['name'];
                         unset($testsuite['@attributes']);
@@ -118,9 +118,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $code_framework_modules = glob($app_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
         foreach ($code_framework_modules as $key => $test_dir) {
             $key_new = str_replace($app_code_weline_framework_dir, '', $test_dir);
-            $key_new = explode(DS,$key_new);
+            $key_new = explode(DS, $key_new);
             array_pop($key_new);
-            $key_new = implode(':',$key_new);
+            $key_new = implode(':', $key_new);
             unset($code_framework_modules[$key]);
             $code_framework_modules[$key_new] = $test_dir;
         }
@@ -128,9 +128,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $vendor_framework_modules = glob($vendor_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
         foreach ($vendor_framework_modules as $key => $test_dir) {
             $key_new = str_replace($vendor_code_weline_framework_dir, '', $test_dir);
-            $key_new = explode(DS,$key_new);
+            $key_new = explode(DS, $key_new);
             array_pop($key_new);
-            $key_new = implode(':',$key_new);
+            $key_new = implode(':', $key_new);
             unset($vendor_framework_modules[$key]);
             $vendor_framework_modules[$key_new] = $test_dir;
         }
@@ -138,7 +138,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $framework_modules = array_merge($vendor_framework_modules, $code_framework_modules);
         foreach ($framework_modules as $path_name => $test_path) {
             $path_name = str_replace(DS, ':', $path_name);
-            $test_path = $test_path .DS;
+            $test_path = $test_path . DS;
             $testsuite_path = $test_path . 'testsuite.xml';
             if (is_dir($test_path)) {
                 $testsuites = '';
@@ -147,13 +147,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     foreach ($xml->children() as $testsuite) {
                         $testsuite = get_object_vars($testsuite);
                         if (!isset($testsuite['@attributes']['name'])) {
-                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%1 ，示例：<testsuite name="unit">
+                            throw new Exception(__('testsuite套件配置错误,未配置套件名：%{1} ，示例：<testsuite name="unit">
                                 <file>CacheTest.php</file>
                             </testsuite>', $testsuite_path));
                         }
                         # 校验套件名称
                         $suite_name = $testsuite['@attributes']['name'] ?? '';
-                        if(empty($suite_name)){
+                        if (empty($suite_name)) {
                             $suite_name = "framework::" . $path_name;
                         }
                         unset($testsuite['@attributes']);
@@ -228,12 +228,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
             }
         }
 //        if (count($args) > 1) {
-//            $this->printing->note(__('每次仅允许执行一个测试套件名，当前套件名: %1', implode(',', $args)));
+//            $this->printing->note(__('每次仅允许执行一个测试套件名，当前套件名: %{1}', implode(',', $args)));
 //            exit(1);
 //        }
         $text_suite_name = implode(',', $args) ?: 'unit';
         $this->printing->note(__('收集完成，准备运行...'));
-        $this->printing->note(__('正在测试套件: %1', $text_suite_name));
+        $this->printing->note(__('正在测试套件: %{1}', $text_suite_name));
         $this->printing->setup(__('重要提示：测试套件运行过程中会操作数据库，从而产生不可预知的风险。请确认当前环境非生产环境，你确认当前环境非生产环境么？(y/n)'));
         if (strtolower(trim($this->system->input())) !== 'y') {
             $this->printing->setup(__('已停止运行！'));

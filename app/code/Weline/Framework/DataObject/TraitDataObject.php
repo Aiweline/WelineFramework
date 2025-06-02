@@ -471,7 +471,7 @@ trait TraitDataObject
         }
 
         throw new \Weline\Framework\Exception\Core(
-            sprintf('Invalid method %1::%2', get_class($this), $method)
+            sprintf('Invalid method %{1}::%{2}', get_class($this), $method)
         );
     }
 

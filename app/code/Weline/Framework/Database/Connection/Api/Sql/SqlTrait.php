@@ -128,7 +128,7 @@ trait SqlTrait
     {
         foreach ($where_array as $f_item_key => $f_item_value) {
             if (!is_numeric($f_item_key)) {
-                $this->exceptionHandle(__('Where查询异常：%1,%2,%3', ["第{$f_key}个条件数组错误", '出错的数组：["' . implode('","', $where_array) . '"]', "示例：where([['name','like','%张三%','or'],['name','like','%李四%']])"]));
+                $this->exceptionHandle(__('Where查询异常：%{1},%{2},%{3}', ["第{$f_key}个条件数组错误", '出错的数组：["' . implode('","', $where_array) . '"]', "示例：where([['name','like','%张三%','or'],['name','like','%李四%']])"]));
             }
         }
     }
@@ -151,7 +151,7 @@ trait SqlTrait
         if (in_array(strtolower($where_array[1]), $this->conditions)) {
             return $where_array[1];
         } else {
-            $this->exceptionHandle(__('当前错误的条件操作符：%1 ,当前的条件数组：%2, 允许的条件符：%3', [$where_array[1], '["' . implode('","', $where_array) . '"]', '["' . implode('","', $this->conditions) . '"]']));
+            $this->exceptionHandle(__('当前错误的条件操作符：%{1} ,当前的条件数组：%{2}, 允许的条件符：%{3}', [$where_array[1], '["' . implode('","', $where_array) . '"]', '["' . implode('","', $this->conditions) . '"]']));
         }
     }
 
@@ -529,7 +529,7 @@ trait SqlTrait
                     }
                 }
                 if (!$updates) {
-                    throw new QueryException(__('无法解析更新数据！多记录更新数据：%1，单记录更新数据：%2', [var_export($this->updates, true), var_export($this->single_updates, true)]));
+                    throw new QueryException(__('无法解析更新数据！多记录更新数据：%{1}，单记录更新数据：%{2}', [var_export($this->updates, true), var_export($this->single_updates, true)]));
                 }
                 $updates = rtrim($updates, ',');
 

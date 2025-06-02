@@ -38,7 +38,7 @@ class Parser
         $words = $translate_words[$words] ?? $words;
         if ($args) {
             foreach ($args as $key => $arg) {
-                $words = str_replace('%' . (is_integer($key) ? $key + 1 : $key), $arg, $words);
+                $words = str_replace('%{' . (is_numeric($key) ? $key + 1 : $key) . '}', $arg, $words);
             }
         }
 

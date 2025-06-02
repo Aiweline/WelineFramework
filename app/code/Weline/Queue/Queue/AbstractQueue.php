@@ -55,8 +55,8 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
         $this->queue = &$queue;
         $this->queue->init();
         $this->setData($queue->getData());
-        $this->item_id      = $item_id;
-        $this->display      = ($display and CLI);
+        $this->item_id = $item_id;
+        $this->display = ($display and CLI);
         $this->queue_values = [];
         $this->queue->setProcess('')
             ->setResult('运行中...');
@@ -83,7 +83,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             $values[$attribute->getCode()] = $attribute->getValue();
             if ($this->display) {
                 $this->printing->success(
-                    __('%1(%2): %3', [$attribute->getName(), $attribute->getCode(), $attribute->getValue()]));
+                    __('%{1}(%{2}): %{3}', [$attribute->getName(), $attribute->getCode(), $attribute->getValue()]));
             }
         }
         if (empty($this->queue_values) and $this->display) {
@@ -100,12 +100,12 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
     final protected function queue_total(int $total = 0): self|int
     {
         if ($this->display) {
-            $this->printing->note(__('队列数据总数：%1', [$total]));
+            $this->printing->note(__('队列数据总数：%{1}', [$total]));
         }
         if ($total == 0) {
             return $this->total;
         }
-        $this->total          = $total;
+        $this->total = $total;
         $this->validate_total = $total;
         $this->queue_result((string)$total, __('总计'));
         return $this;
@@ -114,7 +114,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
     final protected function queue_validate_total(int $total = 0): self|int
     {
         if ($this->display) {
-            $this->printing->note(__('有效：%1', [$total]));
+            $this->printing->note(__('有效：%{1}', [$total]));
         }
         if ($total == 0) {
             return $this->validate_total;
@@ -142,22 +142,22 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
      */
     final protected function queue_process(int $processed_total = 0): self
     {
-        $sucess    = $this->queue_status_total('success');
-        $errors    = $this->queue_status_total('error');
+        $sucess = $this->queue_status_total('success');
+        $errors = $this->queue_status_total('error');
         $processed = $this->queue_status_total('processed');
         if ($processed_total) {
             $this->processed_total = $processed_total;
-            $processed             = $this->total - $this->validate_total + $processed_total;
+            $processed = $this->total - $this->validate_total + $processed_total;
         }
         if ($sucess == 0) {
             $sucess = $processed_total;
         }
         if ($this->total == 0) {
             $percent = 100;
-            $msg     = __('无条目数据！');
+            $msg = __('无条目数据！');
         } else {
             $percent = round(($processed / $this->total) * 100, 2);
-            $msg     = __('总计: %1 条,有效: %2 条,成功: %3 条,失败: %4 条 当前(%5)：%6（%7）进度：%8%',
+            $msg = __('总计: %{1} 条,有效: %{2} 条,成功: %{3} 条,失败: %{4} 条 当前(%{5})：%{6}（%{7}）进度：%{8}%',
                 [
                     $this->total,
                     $this->validate_total,
@@ -222,7 +222,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             }
             # 保留两位小数
             $rate = number_format($rate, 2, '.', '');
-            $this->printing->success(__('更新进度: %1', $rate . '%'));
+            $this->printing->success(__('更新进度: %{1}', $rate . '%'));
         }
         if ($msg) {
             $this->queue_result($msg);
@@ -250,7 +250,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             $rate = ($this->queue_status_total('processed') / $this->total) * 100;
             # 保留两位小数
             $rate = number_format($rate, 2, '.', '');
-            $this->printing->success(__('更新进度: %1', $rate . '%'));
+            $this->printing->success(__('更新进度: %{1}', $rate . '%'));
         }
         if (is_array($msg)) {
             $this->status[$key][] = $msg;
@@ -279,11 +279,11 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
     final protected function queue_status_item(string $key = 'status', string|array $msg_or_items = '', bool $append_to_result = false): self
     {
         if ($this->display) {
-            if($this->total){
+            if ($this->total) {
                 $rate = ($this->queue_status_total('processed') / $this->total) * 100;
                 # 保留两位小数
                 $rate = number_format($rate, 2, '.', '');
-                $this->printing->success(__('更新进度: %1', $rate . '%'));
+                $this->printing->success(__('更新进度: %{1}', $rate . '%'));
             }
         }
         if (is_array($msg_or_items)) {
@@ -342,7 +342,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
         if ($this->display) {
             $this->printing->success(__('输出结果...'));
         }
-        $result              = [];
+        $result = [];
         $success_spreadsheet = new Spreadsheet();
         # region 生成成功结果文件
         foreach ($this->status as $status_key => $status) {
@@ -357,11 +357,11 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             if (!is_dir($save_dir)) {
                 mkdir($save_dir, 0777, true);
             }
-            $sheetName       = $status_key;
-            $sheet           = $success_spreadsheet->createSheet();
-            $titles          = [];
+            $sheetName = $status_key;
+            $sheet = $success_spreadsheet->createSheet();
+            $titles = [];
             $array_first_key = array_keys($status)[0];
-            $first           = $status[$array_first_key];
+            $first = $status[$array_first_key];
             if (isset($first) and is_array($first)) {
                 $titles = array_keys($first);
             } else {
@@ -369,17 +369,17 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             }
             foreach ($titles as $title_key => $title) {
                 $coordinateIndex = $title_key + 1;
-                $cellName        = $sheet->getCellByColumnAndRow($coordinateIndex, 1)->getCoordinate();
+                $cellName = $sheet->getCellByColumnAndRow($coordinateIndex, 1)->getCoordinate();
                 $sheet->setCellValue($cellName, $title);
             }
             $row = 1;
             foreach ($status as $itemKey => $item) {
-                $row          += 1;
+                $row += 1;
                 $column_index = 0;
                 if (is_array($item)) {
                     foreach ($item as $key => $value) {
                         $column_index += 1;
-                        $cellName     = $sheet->getCellByColumnAndRow($column_index, $row)->getCoordinate();
+                        $cellName = $sheet->getCellByColumnAndRow($column_index, $row)->getCoordinate();
                         if (is_array($value)) {
                             $value = w_var_export($value, true);
                         }
@@ -387,20 +387,20 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
                     }
                 } elseif (is_string($item)) {
                     $column_index += 1;
-                    $cellName     = $sheet->getCellByColumnAndRow($column_index, $row)->getCoordinate();
+                    $cellName = $sheet->getCellByColumnAndRow($column_index, $row)->getCoordinate();
                     $sheet->setCellValue($cellName, $item);
                 }
             }
             # 写入文件名称
             $queue_dir = $save_dir . $this->queue->getId() . DS;
-            $filename  = $status_key . '-queue-id-' . $this->queue->getId() . '.xlsx';
+            $filename = $status_key . '-queue-id-' . $this->queue->getId() . '.xlsx';
             if (!is_dir($queue_dir)) {
                 mkdir($queue_dir, 0777, true);
             }
             $writer = new Xlsx($success_spreadsheet);
 
             $file_path = $queue_dir . $filename;
-            $url       = '/pub/media/cron/export/queue/' . $this->queue->getId() . '/' . $filename;
+            $url = '/pub/media/cron/export/queue/' . $this->queue->getId() . '/' . $filename;
             if (!is_file($file_path)) {
                 touch($file_path);
             }
@@ -420,7 +420,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
         $this->queue = $queue;
         # 自带属性检测 如果有属性类型是 op_select_site 和 op_select_sites 则根据类型必填性检测值
         $attributes = $queue->getAttributes();
-        $has_error  = [];
+        $has_error = [];
         foreach ($attributes as $attribute) {
             $res = $queue->validateAttribute($attribute);
             if (is_string($res)) {
@@ -438,7 +438,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
     final protected function item_start(string|array $current_item, array $merge = []): self
     {
         if (is_string($current_item)) {
-            $item               = [$this->item_id => $current_item, 'ok' => 0];
+            $item = [$this->item_id => $current_item, 'ok' => 0];
             $this->current_item = &$item;
         } elseif (is_array($current_item)) {
             if (!isset($current_item[$this->item_id])) {
@@ -450,7 +450,7 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             $this->current_item = &$current_item;
         }
         if ($merge) {
-            $current_item       = array_merge($this->current_item, $merge);
+            $current_item = array_merge($this->current_item, $merge);
             $this->current_item = &$current_item;
         }
         if ($this->current_item) {
@@ -513,8 +513,8 @@ abstract class AbstractQueue extends DataObject implements QueueInterface
             $file = $sourceFile;
         }
         $reader = IOFactory::load($file);
-        $rows   = $reader->getSheet(0)->toArray();
-        $data   = [];
+        $rows = $reader->getSheet(0)->toArray();
+        $data = [];
         if (empty($keys)) {
             $data = $rows;
         } else {

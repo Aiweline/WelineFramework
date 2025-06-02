@@ -39,18 +39,18 @@
 删除失败，请联系管理员,删除失败，请联系管理员
 删除成功,删除成功
 非法请求,非法请求
-Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%1,Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%1
-Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%1,Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%1
-Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%1,Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%1
-Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%1,Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%1
-实体（%1）已经存在属性（%2）,实体（%1）已经存在属性（%2）
-警告：属性不属于当前Eav实体！当前实体：%1，当前属性：%2，当前属性所属实体：%3,警告：属性不属于当前Eav实体！当前实体：%1，当前属性：%2，当前属性所属实体：%3
+Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1},Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1}
+Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1},Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1}
+Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1},Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1}
+Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1},Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1}
+实体（%{1}）已经存在属性（%{2}）,实体（%{1}）已经存在属性（%{2}）
+警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3},警告：属性不属于当前Eav实体！当前实体：%{1}，当前属性：%{2}，当前属性所属实体：%{3}
 请传入类型编码！,请传入类型编码！
-属性类型不存在！类型：%1,属性类型不存在！类型：%1
-属性所属实体不存在！实体：%1,属性所属实体不存在！实体：%1
-"当前实体不存在 %1","当前实体不存在 %1"
-类型不存在:%1,类型不存在:%1
-"属性类型添加失败 %1","属性类型添加失败 %1"
+属性类型不存在！类型：%{1},属性类型不存在！类型：%{1}
+属性所属实体不存在！实体：%{1},属性所属实体不存在！实体：%{1}
+"当前实体不存在 %{1}","当前实体不存在 %{1}"
+类型不存在:%{1},类型不存在:%{1}
+"属性类型添加失败 %{1}","属性类型添加失败 %{1}"
 属性集表,属性集表
 属性集ID,属性集ID
 实体ID,实体ID
@@ -59,18 +59,18 @@ Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_en
 属性不存在！无法获取属性类型字段。,属性不存在！无法获取属性类型字段。
 属性类型不存在！无法获取属性类型字段。,属性类型不存在！无法获取属性类型字段。
 此属性没有样本，无法为属性值设置样本！,此属性没有样本，无法为属性值设置样本！
-"模型类: %1 必须是 EavModelInterface 接口类的实例","模型类: %1 必须是 EavModelInterface 接口类的实例"
+"模型类: %{1} 必须是 EavModelInterface 接口类的实例","模型类: %{1} 必须是 EavModelInterface 接口类的实例"
 "请输入 ","请输入 "
 Eav属性输入：缺少select选项,Eav属性输入：缺少select选项
 依赖：,依赖：
 属性没有实体！,属性没有实体！
 该属性没有entity实体！,该属性没有entity实体！
 该属性没有code代码！,该属性没有code代码！
-属性值保存失败！信息：%1,属性值保存失败！信息：%1
-单值属性只能接收一个值！当前值：%1,单值属性只能接收一个值！当前值：%1
-单值属性不支持数组或者对象类型值：%1,单值属性不支持数组或者对象类型值：%1
+属性值保存失败！信息：%{1},属性值保存失败！信息：%{1}
+单值属性只能接收一个值！当前值：%{1},单值属性只能接收一个值！当前值：%{1}
+单值属性不支持数组或者对象类型值：%{1},单值属性不支持数组或者对象类型值：%{1}
 不接受除string和int以外的值！,不接受除string和int以外的值！
--请选择-%1-依赖项-,-请选择-%1-依赖项-
+-请选择-%{1}-依赖项-,-请选择-%{1}-依赖项-
 默认选项1,默认选项1
 默认选项2,默认选项2
 是,是

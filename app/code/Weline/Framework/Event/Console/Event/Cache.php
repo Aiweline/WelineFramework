@@ -31,7 +31,7 @@ class Cache implements CommandInterface
         EventCache $eventCache
     )
     {
-        $this->printing   = $printing;
+        $this->printing = $printing;
         $this->eventCache = $eventCache->create();
     }
 
@@ -54,7 +54,7 @@ class Cache implements CommandInterface
 
                 break;
             default:
-                $this->printing->error(__('未知的参数：%1', [$argv]));
+                $this->printing->error(__('未知的参数：%{1}', [$argv]));
         }
     }
 

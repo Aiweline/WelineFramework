@@ -580,11 +580,11 @@ class EavAttribute extends \Weline\Framework\Database\Model
                     ->insert($data, ['entity_id', 'attribute_id', 'value'])
                     ->fetch();
             } catch (\Throwable $e) {
-                throw new Exception(__('属性值保存失败！信息：%1', $e->getMessage()));
+                throw new Exception(__('属性值保存失败！信息：%{1}', $e->getMessage()));
             }
         } elseif (is_array($value)) {
             if (!$this->getMultipleValued() && (count($value) > 1)) {
-                throw new Exception(__('单值属性只能接收一个值！当前值：%1', w_var_export($value, true)));
+                throw new Exception(__('单值属性只能接收一个值！当前值：%{1}', w_var_export($value, true)));
             }
             $valueModel = $this->w_getValueModel();
             $valueModel->where(['entity_id' => $entity_id, 'attribute_id' => $this->getId()])->delete()->fetch();
@@ -615,7 +615,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                     ->insert($data, ['entity_id', 'attribute_id', 'value'])
                     ->fetch();
             } catch (\Throwable $e) {
-                throw new Exception(__('属性值保存失败！信息：%1', $e->getMessage()));
+                throw new Exception(__('属性值保存失败！信息：%{1}', $e->getMessage()));
             }
         }
         return $this;
@@ -640,7 +640,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 return true;
             } else {
                 if (DEV) {
-                    throw new Exception(__('单值属性不支持数组或者对象类型值：%1', w_var_export($value, true)));
+                    throw new Exception(__('单值属性不支持数组或者对象类型值：%{1}', w_var_export($value, true)));
                 }
                 return false;
             }
@@ -734,7 +734,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 $this->exist_types[$type_code] = $typeModel;
                 return $typeModel;
             } else {
-                throw new \Exception(__('属性类型不存在！类型：%1', $type_code));
+                throw new \Exception(__('属性类型不存在！类型：%{1}', $type_code));
             }
         } else {
             $typeModel = $this->getTypeModel();
@@ -742,7 +742,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 $this->exist_types[$typeModel->getCode()] = $typeModel;
                 return $typeModel;
             } else {
-                throw new \Exception(__('属性类型不存在！类型：%1', $type_code));
+                throw new \Exception(__('属性类型不存在！类型：%{1}', $type_code));
             }
         }
     }
@@ -757,7 +757,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
         $typeModel = ObjectManager::getInstance(Type::class);
         $this->type = clone $typeModel->reset()->clearData()->load($this->getTypeId());
         if (!$this->type->getId()) {
-            throw new \Exception(__('属性类型不存在！属性：%name, 属性代码：%code 属性实体：%entity 属性实体代码：%entity_code', ['name' => $this->getName(), 'code' => $this->getCode(), 'entity' => $this->getEavEntity()->getName(), 'entity_code' => $this->getEavEntity()->getCode()]));
+            throw new \Exception(__('属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}', ['name' => $this->getName(), 'code' => $this->getCode(), 'entity' => $this->getEavEntity()->getName(), 'entity_code' => $this->getEavEntity()->getCode()]));
         }
         return $this->type;
     }

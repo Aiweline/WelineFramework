@@ -95,7 +95,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             }
             # 如果资源ID和父级资源ID相同则不插入数据
             if ($acl->getSourceId() === $acl->getParentSource()) {
-                throw new \Exception(__('资源ID和父级资源ID不能相同，请检查! 资源ID: %1, 父级资源ID: %2', [$acl->getSourceId(), $acl->getParentSource()]));
+                throw new \Exception(__('资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}', [$acl->getSourceId(), $acl->getParentSource()]));
             }
             $route = explode('::', $data->getData('router'));
             if (count($route) > 1) {

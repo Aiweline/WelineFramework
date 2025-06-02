@@ -63,7 +63,7 @@ class UpgradeMenu implements ObserverInterface
                 $module_info = Env::getInstance()->getModuleInfo($menu['module']);
                 $modules_info[$menu['module']] = $module_info;
                 if (empty($module_info)) {
-                    throw new \Exception(__('模块不存在：%1', $module_info['name']));
+                    throw new \Exception(__('模块不存在：%{1}', $module_info['name']));
                 }
             }
             if (empty($menu['is_backend'])) {
