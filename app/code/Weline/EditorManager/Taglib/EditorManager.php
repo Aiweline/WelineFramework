@@ -68,7 +68,7 @@ class EditorManager implements TaglibInterface
             }
             # 检查是否有配置默认的编辑器管理器
             /**@var BackendUserConfig $BackendUserConfig */
-            $BackendUserConfig       = ObjectManager::getInstance(BackendUserConfig::class);
+            $BackendUserConfig = ObjectManager::getInstance(BackendUserConfig::class);
             $userConfigEditorManager = $BackendUserConfig->getConfig('editor-manager');
             if (empty($userConfigEditorManager)) {
                 $userConfigEditorManager = $BackendUserConfig->getDefaultConfig('editor-manager');
@@ -78,13 +78,13 @@ class EditorManager implements TaglibInterface
             }
             $cacheKey = json_encode(func_get_args()) . $userConfigEditorManager;
             /**@var CacheInterface $cache */
-            $cache         = ObjectManager::getInstance(EditorManagerCacheFactory::class);
+            $cache = ObjectManager::getInstance(EditorManagerCacheFactory::class);
             $editorManager = $cache->get($cacheKey);
             if (!$editorManager) {
                 /**@var Scan $fileScan $ */
-                $fileScan       = ObjectManager::getInstance(Scan::class);
+                $fileScan = ObjectManager::getInstance(Scan::class);
                 $editorManagers = [];
-                $modules        = Env::getInstance()->getActiveModules();
+                $modules = Env::getInstance()->getActiveModules();
                 foreach ($modules as $module) {
                     $files = [];
                     $fileScan->globFile(
@@ -108,7 +108,7 @@ class EditorManager implements TaglibInterface
                     $editorManager = array_pop($editorManagers);
                 } else {
                     if (!isset($editorManagers[$userConfigEditorManager])) {
-                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('配置的编辑器管理器不存在! 编辑器管理器名：%1', $userConfigEditorManager));
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('配置的编辑器管理器不存在! 编辑器管理器名：%{1}', $userConfigEditorManager));
                         # 使用第一个编辑器管理器作为默认的编辑器管理器
                         /**@var \Weline\EditorManager\EditorManager $editorManager */
                         $editorManager = array_shift($editorManagers);

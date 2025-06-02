@@ -69,7 +69,7 @@ class Installer implements RegisterInterface
         if (isset($param['parent']) && $parent = $param['parent']) {
             $parent = $this->welineTheme->load('name', $parent);
             if (!$parent->getId()) {
-                throw new Exception(__('父主题：%1 不存在！', $parent));
+                throw new Exception(__('父主题：%{1} 不存在！', $parent));
             }
             $parent_id = $parent->getId();
         }

@@ -29,7 +29,7 @@ class Helper
         $type = ObjectManager::getInstance(Type::class);
         /** @var Type\Attributes $queueTypeAttributeModel */
         $queueTypeAttributeModel = ObjectManager::getInstance(Type\Attributes::class);
-        $modules                 = Env::getInstance()->getActiveModules();
+        $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {
             $queue_files = $reader->readClass(new Module($module), 'Queue');
             foreach ($queue_files as $queue_class) {
@@ -74,7 +74,7 @@ class Helper
                 $attrs = $queue->attributes();
                 foreach ($attrs as $attr) {
                     if (!($attr instanceof \Weline\Eav\Model\EavAttribute)) {
-                        throw new \Exception(__('队列类：%1 属性错误。 队列属性必须继承自 %2', [
+                        throw new \Exception(__('队列类：%{1} 属性错误。 队列属性必须继承自 %{2}', [
                             $queue_class,
                             \Weline\Eav\Model\EavAttribute::class
                         ]));
@@ -137,7 +137,7 @@ class Helper
                     foreach ($notBeLongTypeAttrs as $notBeLongTypeAttr) {
                         $eavAttribute->load($notBeLongTypeAttr->getAttributeId());
                         $valueTable = $eavAttribute->getEavEntityAttributeValueTable();
-                        $query      = $eavAttribute->getQuery(false);
+                        $query = $eavAttribute->getQuery(false);
                         # 删除属性相关数据
                         $query->reset()
                             ->table($valueTable)

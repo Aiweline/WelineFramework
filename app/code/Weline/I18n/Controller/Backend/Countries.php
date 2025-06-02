@@ -110,7 +110,7 @@ class Countries extends BaseController
                 $this->localeNames::fields_DISPLAY_NAME
             ])->fetch();
             $this->countries->commit();
-            Message::success(__('操作成功！更新%1记录。', count($insert_countries)));
+            Message::success(__('操作成功！更新%{1}记录。', count($insert_countries)));
         } catch (\Exception $exception) {
             $this->countries->rollBack();
             Message::exception($exception);
@@ -136,10 +136,10 @@ class Countries extends BaseController
                 $this->countries->load($this->countries::fields_CODE, $code);
                 if ($this->countries->getId()) {
                     $this->countries->setData($this->countries::fields_IS_INSTALL, 1)->save(true);
-                    $this->getMessageManager()->addSuccess(__('成功安装!国家：%1(%2)', [$this->countries->getData($this->localeNames::fields_DISPLAY_NAME),
+                    $this->getMessageManager()->addSuccess(__('成功安装!国家：%{1}(%{2})', [$this->countries->getData($this->localeNames::fields_DISPLAY_NAME),
                         $this->countries->getData($this->countries::fields_CODE)]));
                 } else {
-                    $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
+                    $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 }
             } catch (\Exception $exception) {
                 $this->getMessageManager()->addException($exception);
@@ -163,10 +163,10 @@ class Countries extends BaseController
                 $this->countries->getLocaleModel()->where(Locale::fields_COUNTRY_CODE, $code)
                     ->update([Locale::fields_IS_INSTALL => 0, Locale::fields_IS_ACTIVE => 0])
                     ->fetch();
-                $this->getMessageManager()->addSuccess(__('成功卸载!国家：%1(%2)', [$this->countries->getData(Name::fields_DISPLAY_NAME),
+                $this->getMessageManager()->addSuccess(__('成功卸载!国家：%{1}(%{2})', [$this->countries->getData(Name::fields_DISPLAY_NAME),
                     $this->countries->getData($this->countries::fields_CODE)]));
             } else {
-                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
+                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
             }
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
@@ -184,11 +184,11 @@ class Countries extends BaseController
         try {
             $this->countries->clearQuery()->load($this->countries::fields_CODE, $code);
             if (!$this->countries->getId()) {
-                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
+                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 $this->redirect('*/backend/countries');
             }
             $this->countries->setData($this->countries::fields_IS_ACTIVE, 1)->save(true);
-            $this->getMessageManager()->addSuccess(__('成功激活国家！国家：%1（%2）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
+            $this->getMessageManager()->addSuccess(__('成功激活国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
                 $this->countries->getData($this->countries::fields_CODE)]));
         } catch (\Exception $exception) {
             $this->getMessageManager()->addException($exception);
@@ -207,11 +207,11 @@ class Countries extends BaseController
             $this->countries->clearQuery();
             $this->countries->load($this->countries::fields_CODE, $code);
             if (!$this->countries->getId()) {
-                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%1', $code));
+                $this->getMessageManager()->addWarning(__('国家不存在！国家代码：%{1}', $code));
                 $this->redirect('*/backend/countries');
             }
             $this->countries->setData($this->countries::fields_IS_ACTIVE, 0)->save(true);
-            $this->getMessageManager()->addSuccess(__('成功禁用国家！国家：%1（%2）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
+            $this->getMessageManager()->addSuccess(__('成功禁用国家！国家：%{1}（%{2}）', [$this->countries->getData(Name::fields_DISPLAY_NAME),
                 $this->countries->getData($this->countries::fields_CODE)]));
             // FIXME 禁用应当删除对应语言的翻译包
             $country_locales = $this->locale->where($this->locale::fields_COUNTRY_CODE, $code)->select()->fetch()->getItems();

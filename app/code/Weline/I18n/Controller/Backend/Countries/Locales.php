@@ -95,7 +95,7 @@ class Locales extends BaseController
         $country_code = $this->request->getGet('country_code');
         $this->request->checkParam(false);
         if (!Countries::exists($country_code)) {
-            $this->getMessageManager()->addWarning(__('国家不存在！代码：%1', $country_code));
+            $this->getMessageManager()->addWarning(__('国家不存在！代码：%{1}', $country_code));
             $this->redirect('*/backend/countries/locales');
         }
         $country = $this->i18n->getCountry($country_code);
@@ -179,12 +179,12 @@ class Locales extends BaseController
         $this->locale->clearQuery();
         $locale = $this->locale->load($code);
         if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%1', $code));
+            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%{1}', $code));
             $this->redirect($this->request->getReferer());
         }
         $flag = $this->i18n->getCountryFlagWithLocal($code, 42);
         $locale->setData($locale::fields_IS_INSTALL, 1)->setData($locale::fields_FLAG, $flag['flag'] ?? '')->save(true);
-        $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%1', $code));
+        $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
 
@@ -194,11 +194,11 @@ class Locales extends BaseController
         $this->locale->clearQuery();
         $locale = $this->locale->load($code);
         if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%1', $code));
+            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%{1}', $code));
             $this->redirect($this->request->getReferer());
         }
         $locale->setData($locale::fields_IS_INSTALL, 0)->save();
-        $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%1', $code));
+        $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
 }

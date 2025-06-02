@@ -46,7 +46,7 @@ class ModelManager
     public function update(Module $module, Context $context, string $type): void
     {
         if (!in_array($type, ['setup', 'upgrade', 'install'])) {
-            throw new Exception(__('$type允许的值不在：%1 中', "'setup','upgrade','install'"));
+            throw new Exception(__('$type允许的值不在：%{1} 中', "'setup','upgrade','install'"));
         }
         $model_files_data = array_reverse($this->moduleReader->readClass($module, 'Model'));
         foreach ($model_files_data as $key => $model_class) {

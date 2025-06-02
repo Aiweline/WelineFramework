@@ -25,60 +25,6 @@ trait SqlTrait
     {
 
         $sql = self::convertMySQLToSQLite($sql);
-        if (str_contains($sql, 'truncate')) {
-            $truncate_check_sqls = explode($sql, ';');
-            foreach ($truncate_check_sqls as $truncate_check_sql_key => $truncate_check_sql) {
-                if (str_contains($truncate_check_sql, 'truncate')) {
-                    # 修改成sqlite支持的delete形式
-                    $sql = str_replace('truncate', ' delete from ', $sql);
-                    $truncate_check_sqls[$truncate_check_sql_key] = $sql;
-                }
-            }
-            $sql = implode(';', $truncate_check_sqls);
-        }
-        if (str_contains($sql, 'curdate()-1')) {
-            $sql = str_replace('curdate()-1', '\'now\', \'-1 day\'', $sql);
-        }
-        if (str_contains($sql, 'to_days')) {
-            $sql = str_replace('to_days', 'DATE', $sql);
-        }
-        if (str_contains($sql, 'now()')) {
-            $sql = str_replace('now()', '\'now\'', $sql);
-        }
-        if (str_contains($sql, 'order by order')) {
-            $sql = str_replace('order by order', 'order by `order`', $sql);
-        }
-        if (str_contains($sql, 'order') and str_contains($sql, 'create')) {
-            $sql = str_replace('order', '`order`', $sql);
-            $sql = str_replace('``order``', '`order`', $sql);
-        }
-        if (str_contains($sql, '`order` by')) {
-            $sql = str_replace('`order` by', 'order by', $sql);
-        }
-
-        if (str_contains($sql, 'set names utf8mb4;')) {
-            $sql = str_replace('set names utf8mb4;', '', $sql);
-        }
-        if (str_contains($sql, 'set foreign_key_checks = 0;')) {
-            $sql = str_replace('set foreign_key_checks = 0;', '', $sql);
-        }
-        if (str_contains($sql, ' set on ')) {
-            $sql = str_replace(' set on ', ' `set` on ', $sql);
-        }
-        # 查询字段列表转化sqlite支持的模式
-        if (str_contains($sql, 'show full columns from ')) {
-            if (str_contains($sql, ';')) {
-                $sql_arr = explode(';', $sql);
-                foreach ($sql_arr as &$item) {
-                    if (str_contains($item, 'show full columns from ')) {
-                        $item = str_replace('show full columns from ', 'PRAGMA table_info(', $item) . ')';
-                    }
-                }
-                $sql = implode(';', $sql_arr);
-            } else {
-                $sql = str_replace('show full columns from ', 'PRAGMA table_info(', $sql) . ');';
-            }
-        }
         # 开发环境记录sql日志文件，方便调试查看执行结果
         if (DEV) {
             $dev_log_base_dir = BP . '/var/log/dev/sql/';
@@ -367,9 +313,63 @@ trait SqlTrait
 
         // 处理字符串值中的单引号转义
 //        $result = str_replace("\'", "\''", $result);
-        $result = str_replace("\\'", "''", $result);
+        $sql = str_replace("\\'", "''", $result);
+        if (str_contains($sql, 'truncate')) {
+            $truncate_check_sqls = explode($sql, ';');
+            foreach ($truncate_check_sqls as $truncate_check_sql_key => $truncate_check_sql) {
+                if (str_contains($truncate_check_sql, 'truncate')) {
+                    # 修改成sqlite支持的delete形式
+                    $sql = str_replace('truncate', ' delete from ', $sql);
+                    $truncate_check_sqls[$truncate_check_sql_key] = $sql;
+                }
+            }
+            $sql = implode(';', $truncate_check_sqls);
+        }
+        if (str_contains($sql, 'curdate()-1')) {
+            $sql = str_replace('curdate()-1', '\'now\', \'-1 day\'', $sql);
+        }
+        if (str_contains($sql, 'to_days')) {
+            $sql = str_replace('to_days', 'DATE', $sql);
+        }
+        if (str_contains($sql, 'now()')) {
+            $sql = str_replace('now()', '\'now\'', $sql);
+        }
+        if (str_contains($sql, 'order by order')) {
+            $sql = str_replace('order by order', 'order by `order`', $sql);
+        }
+        if (str_contains($sql, 'order') and str_contains($sql, 'create')) {
+            $sql = str_replace('order', '`order`', $sql);
+            $sql = str_replace('``order``', '`order`', $sql);
+        }
+        if (str_contains($sql, '`order` by')) {
+            $sql = str_replace('`order` by', 'order by', $sql);
+        }
 
-        return $result;
+        if (str_contains($sql, 'set names utf8mb4;')) {
+            $sql = str_replace('set names utf8mb4;', '', $sql);
+        }
+        if (str_contains($sql, 'set foreign_key_checks = 0;')) {
+            $sql = str_replace('set foreign_key_checks = 0;', '', $sql);
+        }
+        if (str_contains($sql, ' set on ')) {
+            $sql = str_replace(' set on ', ' `set` on ', $sql);
+        }
+        # 查询字段列表转化sqlite支持的模式
+        if (str_contains($sql, 'show full columns from ')) {
+            if (str_contains($sql, ';')) {
+                $sql_arr = explode(';', $sql);
+                foreach ($sql_arr as &$item) {
+                    if (str_contains($item, 'show full columns from ')) {
+                        $item = str_replace('show full columns from ', 'PRAGMA table_info(', $item) . ')';
+                    }
+                }
+                $sql = implode(';', $sql_arr);
+            } else {
+                $sql = str_replace('show full columns from ', 'PRAGMA table_info(', $sql) . ');';
+            }
+        }
+        // 处理字段引用中的_`order`关键字,改为_order
+        return str_replace('_`order`', '_order', $sql);
     }
 
 }

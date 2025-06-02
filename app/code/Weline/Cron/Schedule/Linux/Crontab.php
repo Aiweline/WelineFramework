@@ -42,9 +42,9 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
                 'echo -e "`crontab -l` ' . PHP_EOL . ' */1 * * * * sh ' . $cron_shell_file_path . '" | crontab -',
                 $output
             );
-            return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%1', $name), 'result' => $output];
+            return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%{1}', $name), 'result' => $output];
         }
-        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%1', $name), 'result' => ''];
+        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%{1}', $name), 'result' => ''];
     }
 
     public function run(string $name): array
@@ -52,7 +52,7 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
         $base_project_dir = BP;
         $php_binary = PHP_BINARY;
         exec("cd $base_project_dir && $php_binary bin/w cron:task:run", $output);
-        return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%1 ,成功运行!', $name), 'result' => $output];
+        return ['status' => true, 'msg' => '[' . PHP_OS . '] ' . __('系统计划任务：%{1} ,成功运行!', $name), 'result' => $output];
     }
 
     public function remove(string $name): array
@@ -69,7 +69,7 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
         if (is_file(Env::path_framework_generated . $name . '-cron.sh')) {
             unlink(Env::path_framework_generated . $name . '-cron.sh');
         }
-        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已移除：%1', $name), 'result' => ''];
+        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已移除：%{1}', $name), 'result' => ''];
     }
 
     public function exist(string $name): bool

@@ -28,7 +28,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     public function __construct(Printing $printing, Queue $queue)
     {
         $this->printing = $printing;
-        $this->queue    = $queue;
+        $this->queue = $queue;
     }
 
     /**
@@ -45,14 +45,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $queue = $this->queue->load($id);
         if (empty($queue->getId())) {
             $this->printing->error(__('队列不存在。 '));
-            $this->printing->success(__('正确示例：php bin/w queue:run --id=%1', $id));
+            $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
             exit();
         }
 
         # 获取执行者
         $type = $queue->getType();
         /**@var QueueInterface $queue_execute */
-        $queue_execute   = ObjectManager::getInstance($type->getData('class'));
+        $queue_execute = ObjectManager::getInstance($type->getData('class'));
         $validate_result = $queue_execute->vaLidate($queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)

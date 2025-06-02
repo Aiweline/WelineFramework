@@ -197,7 +197,7 @@ abstract class Query implements QueryInterface
             $this->insert_need_fields = array_unique($this->insert_need_fields);
             # 如果长度不一致报错
             if (count($this->insert_need_fields) != count($first_insert_item_keys)) {
-                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%1，实际字段: %2', [implode(',', $this->insert_need_fields), implode(',', $first_insert_item_keys)]));
+                throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}', [implode(',', $this->insert_need_fields), implode(',', $first_insert_item_keys)]));
             }
             foreach ($first_insert_item as $f => $fv) {
                 if (!in_array($f, $insert_need_fields)) {
@@ -210,14 +210,14 @@ abstract class Query implements QueryInterface
                 $item_fields = array_keys($item);
                 foreach ($insert_need_fields as $insert_need_field) {
                     if (!in_array($insert_need_field, $item_fields)) {
-                        throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%1，实际字段: %2', [implode(',', $insert_need_fields), implode(',', $item_fields)]));
+                        throw new Exception(__('插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}', [implode(',', $insert_need_fields), implode(',', $item_fields)]));
                     }
                 }
                 # 检测要更新的字段数据格式是否正确
                 if (!empty($this->insert_update_fields)) {
                     foreach ($this->insert_update_fields as $insert_update_field) {
                         if (!in_array($insert_update_field, $item_fields)) {
-                            throw new Exception(__('检测打算要更新依据字段不匹配，请检查! 打算更新字段：%1，实际字段: %2', [implode(',', $this->insert_update_fields), implode(',', $item_fields)]));
+                            throw new Exception(__('检测打算要更新依据字段不匹配，请检查! 打算更新字段：%{1}，实际字段: %{2}', [implode(',', $this->insert_update_fields), implode(',', $item_fields)]));
                         }
                     }
                 }
@@ -450,7 +450,7 @@ abstract class Query implements QueryInterface
     public function pagination(int $page = 1, int $pageSize = 20, array $params = [], int $max_limit = 1000, int $total = 0): QueryInterface
     {
         if ($pageSize > $max_limit) {
-            throw new Exception(__('分页超过每页限制大小！限制每页大小：%1', $max_limit));
+            throw new Exception(__('分页超过每页限制大小！限制每页大小：%{1}', $max_limit));
         }
         $this->pagination['page'] = $page;
         $this->pagination['pageSize'] = $pageSize;
@@ -655,7 +655,7 @@ abstract class Query implements QueryInterface
                 $result = (bool)$data;
                 break;
             default:
-                throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%1', $this->fetch_type));
+                throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}', $this->fetch_type));
         }
         $this->fetch_type = '';
         # 调试环境信息
@@ -686,7 +686,7 @@ abstract class Query implements QueryInterface
         if ($type) {
             $attr_var_name = $type;
             if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%1 支持的初始化类型：%2', [$attr_var_name, var_export(self::init_vars, true)]));
+                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
             }
             $this->$attr_var_name = self::init_vars[$attr_var_name];
         } else {
@@ -703,7 +703,7 @@ abstract class Query implements QueryInterface
         if ($type) {
             $attr_var_name = $type;
             if (DEV && !isset(self::init_vars[$attr_var_name])) {
-                $this->exceptionHandle(__('不支持的清理类型：%1 支持的初始化类型：%2', [$attr_var_name, var_export(self::init_vars, true)]));
+                $this->exceptionHandle(__('不支持的清理类型：%{1} 支持的初始化类型：%{2}', [$attr_var_name, var_export(self::init_vars, true)]));
             }
             $this->$attr_var_name = self::init_vars[$attr_var_name];
         } else {

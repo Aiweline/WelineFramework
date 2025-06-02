@@ -16,6 +16,8 @@ Register::register(
     '1.0.0',
     '<a href="https://bbs.aiweline.com">系统组件模块: 多网站</a>',
     [
+        'Weline_Acl',
+        'Weline_Admin',
         'Weline_Framework',
         'Weline_Currency',
     ]

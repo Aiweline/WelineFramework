@@ -1,174 +1,186 @@
 <style>
-    /* 删除确认框样式 */
-    .confirmation {
-        display: none; /* 初始隐藏 */
-        padding: 10px;
-        background-color: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
+    .w-delete-confirm {
+        position: fixed;
+        z-index: 1050;
+        background: white;
+        padding: 15px;
         border-radius: 5px;
-        margin-left: 10px;
-        position: absolute; /* 确保它显示在按钮旁边 */
-        z-index: 1000;
-        flex-direction: row;
-        align-items: center;
-        width: auto;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        max-width: 90%;
     }
 
-    .confirmation button {
-        margin-left: 10px;
+    .w-delete-message {
+        padding: 10px 15px;
+        border-radius: 4px;
+        position: fixed;
+        z-index: 1050;
+        max-width: 90%;
     }
 
-    /* 删除成功提示框样式 */
-    .success-message {
-        display: none; /* 初始隐藏 */
-        padding: 10px;
+    .w-delete-success {
         background-color: #d4edda;
         color: #155724;
-        border: 1px solid #c3e6cb;
-        border-radius: 5px;
-        margin-left: 10px;
-        position: absolute; /* 确保它显示在按钮旁边 */
-        z-index: 1000;
+    }
+
+    .w-delete-error {
+        background-color: #f8d7da;
+        color: #721c24;
     }
 </style>
 <script>
-    document.querySelectorAll('[w-delete="true"]').forEach(function (deleteElement) {
-        deleteElement.addEventListener('click', function (event) {
-            // 获取deleteElement是否有属性confirm属性，没有则阻止默认事件
-            if (!deleteElement.hasAttribute('confirm')) {
-                // 阻止默认事件
-                event.preventDefault();
-                // 防止点击删除按钮时事件冒泡到文档上
-                event.stopPropagation();
+    (function () {
+        // 显示消息提示
+        const showMessage = (element, message, type = 'success') => {
+            const rect = element.getBoundingClientRect();
+            const msg = document.createElement('div');
+            msg.className = `w-delete-message w-delete-${type}`;
+            msg.textContent = message;
+
+            // 计算位置 - 类似tooltip的智能定位
+            const viewportWidth = document.documentElement.clientWidth;
+            const triggerRight = rect.right + window.scrollX;
+            const triggerLeft = rect.left + window.scrollX;
+            const msgWidth = msg.offsetWidth;
+
+            // 判断触发元素位置
+            if (triggerRight > viewportWidth - 20) {
+                // 靠近右边 - 显示在左边
+                left = Math.max(10, triggerLeft - msgWidth - 10);
+            } else if (triggerLeft < 20) {
+                // 靠近左边 - 显示在右边
+                left = Math.min(viewportWidth - msgWidth - 10, rect.right + window.scrollX + 10);
             } else {
-                // 如果已设置confirm属性，提交表单
-                deleteElement.closest('form').submit();
-                return;
+                // 正常情况 - 显示在右边
+                left = Math.min(viewportWidth - msgWidth - 10, rect.left + window.scrollX);
             }
 
-            // 获取点击元素的位置
-            const rect = deleteElement.getBoundingClientRect();
-            let msg = deleteElement.getAttribute('msg');
-            if (!msg) {
-                msg = deleteElement.getAttribute('w-msg');
-                if (!msg) {
-                    msg = __('确认删除吗？');
-                }
-            }
-
-            // 计算相对于整个文档的位置
-            let offsetX = window.scrollX || document.documentElement.scrollLeft;
-            let offsetY = window.scrollY || document.documentElement.scrollTop;
-
-            let currentElement = deleteElement;
-            while (currentElement) {
-                offsetX += currentElement.scrollLeft || 0;
-                offsetY += currentElement.scrollTop || 0;
-                currentElement = currentElement.offsetParent;
-            }
-
-            // 更新为相对于文档的坐标
-            const docLeft = rect.left + offsetX;
-            const docTop = rect.top + offsetY;
-
-            // 动态创建确认框
-            const confirmation = document.createElement('div');
-            confirmation.classList.add('confirmation');
-
-            // 默认显示在右侧
-            let confirmationLeft = docLeft + 10;  // 默认显示在右边
-            let confirmationTop = docTop;  // 默认垂直对齐
-
-            // 计算确认框宽高
-            confirmation.style.position = 'absolute'; // 使其可以自由定位
-            confirmation.style.display = 'block';
-            document.body.appendChild(confirmation);
-            const confirmationWidth = confirmation.offsetWidth;
-            const confirmationHeight = confirmation.offsetHeight;
-            confirmation.remove(); // 移除临时确认框，以获取宽高
-
-            // 判断确认框是否超出可视页面右边，如果超出则显示在左边
-            if (confirmationLeft + confirmationWidth > document.body.clientWidth) {
-                confirmationLeft = docLeft - confirmationWidth - rect.width - 50;  // 超出则显示在左边
-            }
-
-            // 判断确认框是否超出页面下边，如果超出则显示在上边
-            if (confirmationTop + confirmationHeight > document.body.clientHeight) {
-                confirmationTop = docTop - confirmationHeight - rect.height - 10; // 超出则显示在上边
-            }
-
-            // 设置确认框的位置
-            confirmation.style.left = `${confirmationLeft}px`;
-            confirmation.style.top = `${confirmationTop}px`;
-
-            // 设置确认框的文本
-            confirmation.innerHTML = `<div>${msg}</div>`;
-
-            // 创建“确认”按钮
-            const confirmButton = document.createElement('button');
-            confirmButton.classList = 'btn btn-sm btn-danger';
-            confirmButton.textContent = __('确认');  // 直接写死为"确认"
-            confirmButton.addEventListener('click', function () {
-                // 设置confirm属性为1，表示确认删除
-                deleteElement.setAttribute('confirm', '1');
-
-                // 创建删除成功提示框
-                const successMessage = document.createElement('div');
-                successMessage.classList.add('success-message');
-                successMessage.textContent = __('条目已删除！');  // 直接写死为"条目已删除！"
-
-                // 自动识别边界调整显示位置
-                let successMessageLeft = confirmationLeft;
-                if (confirmationLeft + successMessage.offsetWidth > document.body.offsetWidth) {
-                    successMessageLeft = confirmationLeft - successMessage.offsetWidth - 10;
-                }
-
-                successMessage.style.left = `${successMessageLeft}px`;
-                successMessage.style.top = `${confirmationTop + 30}px`;  // 在确认框下方偏移 30px
-
-                // 显示成功提示框
-                document.body.appendChild(successMessage);
-                successMessage.style.display = 'block';
-
-                // 自动隐藏成功提示框，3秒后消失
-                setTimeout(function () {
-                    successMessage.remove();
-                }, 3000);
-
-                // 隐藏确认框
-                confirmation.remove();
-                deleteElement.click();  // 确认后模拟点击事件来删除目标元素
+            const top = rect.top + window.scrollY + 30;
+            Object.assign(msg.style, {
+                left: `${left}px`,
+                top: `${top}px`
             });
 
-            // 创建“取消”按钮
-            const cancelButton = document.createElement('button');
-            cancelButton.classList = 'btn btn-sm btn-default btn-outline';
-            cancelButton.textContent = __('取消');  // 直接写死为"取消"
-            cancelButton.addEventListener('click', function () {
-                confirmation.remove();  // 取消时移除提示框
-            });
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 3000);
+        };
 
-            // 将按钮添加到确认框
-            confirmation.appendChild(confirmButton);
-            confirmation.appendChild(cancelButton);
+        // 显示确认对话框
+        const showConfirm = (element, message) => {
+            return new Promise(resolve => {
+                const rect = element.getBoundingClientRect();
+                const confirmBox = document.createElement('div');
+                confirmBox.className = 'w-delete-confirm';
+                confirmBox.innerHTML = `
+                <div>${message}</div>
+                <div class="mt-2 text-end">
+                    <button class="btn btn-sm btn-danger me-2 confirm-btn">${__('确认')}</button>
+                    <button class="btn btn-sm btn-outline-secondary cancel-btn">${__('取消')}</button>
+                </div>
+            `;
 
-            // 将确认框添加到页面
-            document.body.appendChild(confirmation);
+                // 计算位置 - 类似tooltip的智能定位
+                const viewportWidth = document.documentElement.clientWidth;
+                const triggerRight = rect.right + window.scrollX;
+                const triggerLeft = rect.left + window.scrollX;
+                const boxWidth = confirmBox.offsetWidth;
 
-            // 显示确认框
-            confirmation.style.display = 'block';
-
-            // 点击空白区域时隐藏确认框
-            document.addEventListener('click', function hideConfirmation(event) {
-                // 判断点击的目标不是确认框和目标元素
-                if (!confirmation.contains(event.target) && !deleteElement.contains(event.target)) {
-                    confirmation.remove();  // 隐藏确认框
-                    // 移除事件监听器
-                    document.removeEventListener('click', hideConfirmation);
+                // 判断触发元素位置
+                if (triggerRight > viewportWidth - 20) {
+                    // 靠近右边 - 显示在左边
+                    left = Math.max(10, triggerLeft - boxWidth - 10);
+                } else if (triggerLeft < 20) {
+                    // 靠近左边 - 显示在右边
+                    left = Math.min(viewportWidth - boxWidth - 10, rect.right + window.scrollX + 10);
+                } else {
+                    // 正常情况 - 显示在右边
+                    left = Math.min(viewportWidth - boxWidth - 10, rect.left + window.scrollX);
                 }
+
+                const top = rect.top + window.scrollY;
+                Object.assign(confirmBox.style, {
+                    left: `${left}px`,
+                    top: `${top}px`
+                });
+
+                // 事件处理
+                const handleConfirm = () => {
+                    cleanup();
+                    resolve(true);
+                };
+
+                const handleCancel = () => {
+                    cleanup();
+                    resolve(false);
+                };
+
+                const handleClickOutside = (e) => {
+                    if (!confirmBox.contains(e.target) && !element.contains(e.target)) {
+                        cleanup();
+                        resolve(false);
+                    }
+                };
+
+                const cleanup = () => {
+                    confirmBox.remove();
+                    document.removeEventListener('click', handleClickOutside);
+                };
+
+                // 绑定事件
+                confirmBox.querySelector('.confirm-btn').addEventListener('click', handleConfirm);
+                confirmBox.querySelector('.cancel-btn').addEventListener('click', handleCancel);
+                document.addEventListener('click', handleClickOutside);
+
+                document.body.appendChild(confirmBox);
             });
+        };
+
+        // 执行删除请求
+        const performDelete = async (element) => {
+            const form = element.closest('form');
+            const url = element.getAttribute('href') || element.getAttribute('w-url');
+            const method = element.getAttribute('w-method') || 'DELETE';
+
+            try {
+                if (form) {
+                    form.submit();
+                    return;
+                }
+
+                const response = await fetch(url, {method});
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(element, __('删除成功'), 'success');
+                    // 可选：删除成功后移除对应DOM元素
+                    if (element.closest('tr')) {
+                        element.closest('tr').remove();
+                    }
+                } else {
+                    showMessage(element, data.message || __('删除失败'), 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage(element, __('删除请求失败'), 'error');
+            }
+        };
+
+        // 事件委托处理点击
+        document.addEventListener('click', async (event) => {
+            const deleteBtn = event.target.closest('[w-delete="true"]');
+            if (!deleteBtn) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            // 确认删除
+            const confirmed = await showConfirm(
+                deleteBtn,
+                deleteBtn.getAttribute('w-msg') || __('确认删除吗？')
+            );
+
+            if (confirmed) {
+                await performDelete(deleteBtn);
+            }
         });
-    });
-
+    })();
 </script>

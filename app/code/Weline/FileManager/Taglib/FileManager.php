@@ -115,13 +115,13 @@ class FileManager implements TaglibInterface
             } else {
                 if (!isset($fileManagers[$userConfigFileManager])) {
                     if (!CLI) {
-                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%1', $userConfigFileManager));
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('所指定的文件管理器不存在! 文件管理器名：%{1}', $userConfigFileManager));
                     }
                     # 使用第一个文件管理器作为默认的文件管理器
                     /**@var \Weline\FileManager\FileManager $fileManager */
                     $fileManager = array_pop($fileManagers);
                     if (!CLI) {
-                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%1 文件管理器代替。', $fileManager::name()));
+                        ObjectManager::getInstance(MessageManager::class)->addWarning(__('使用：%{1} 文件管理器代替。', $fileManager::name()));
                     }
                 } else {
                     /**@var \Weline\FileManager\FileManager $fileManager */
@@ -129,10 +129,10 @@ class FileManager implements TaglibInterface
                 }
             }
             if (!isset($attributes['target'])) {
-                throw new \Exception(__('缺少目标ID。文档：%1', self::document()));
+                throw new \Exception(__('缺少目标ID。文档：%{1}', self::document()));
             }
             if (str_starts_with($attributes['target'], '.')) {
-                throw new \Exception(__('缺少目标ID。请使用ID选择器，例如：target="#id"。文档：%1', self::document()));
+                throw new \Exception(__('缺少目标ID。请使用ID选择器，例如：target="#id"。文档：%{1}', self::document()));
             }
             $fileManager
                 ->setTarget(trim($attributes['target'], '#'))

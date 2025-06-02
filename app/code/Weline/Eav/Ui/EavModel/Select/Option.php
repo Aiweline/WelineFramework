@@ -23,24 +23,24 @@ class Option implements EavModelInterface
 
     function getHtml(EavAttribute &$attribute, mixed $value, string &$label_class, array &$attrs, array &$option_items = [], bool $only_custom_options = true): string
     {
-        $type       = $attribute->getTypeModel();
+        $type = $attribute->getTypeModel();
         $dependence = $attribute->getDependence();
         if (!$dependence) {
-            if(!$only_custom_options){
+            if (!$only_custom_options) {
                 $options = $this->getModelData();
             }
             foreach ($option_items as $key => $option_item) {
                 $options[$key] = $option_item;
             }
         } else {
-            $options[''] = __('-请选择-%1-依赖项-', $dependence);
+            $options[''] = __('-请选择-%{1}-依赖项-', $dependence);
         }
 
         $attrStr = $type->processElementAttr($attribute, $attrs);
-        if($attribute->getMultipleValued()){
+        if ($attribute->getMultipleValued()) {
             $attrStr .= ' multiple="multiple" ';
         }
-        $html    = '
+        $html = '
         <select ' . $attrStr . '>';
         foreach ($options as $key => $v) {
             if ($value == $key || (is_array($value) and in_array($key, $value))) {
@@ -65,7 +65,7 @@ class Option implements EavModelInterface
     }
 
 
-    static function dependenceProcess(array $dependenceValue=[]): mixed
+    static function dependenceProcess(array $dependenceValue = []): mixed
     {
         return '';
     }

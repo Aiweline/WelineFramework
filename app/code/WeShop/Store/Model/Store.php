@@ -54,7 +54,6 @@ class Store extends Model
             ->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())
             ->find()->fetch();
         if ($local->getId()) {
-            dd($local);
             $this->setData('local_name', $local->getName());
         }
         return $this;

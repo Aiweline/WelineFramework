@@ -204,7 +204,7 @@ class Upgrade extends CommandAbstract
                             ];
                         } else {
                             if (DEV && CLI) {
-                                $this->printer->warning(__('命令类：%1 必须继承：%2', [$class, CommandInterface::class]));
+                                $this->printer->warning(__('命令类：%{1} 必须继承：%{2}', [$class, CommandInterface::class]));
                             }
                         }
                     } catch (\Exception $exception) {
@@ -261,7 +261,7 @@ class Upgrade extends CommandAbstract
                         ];
                     } else {
                         if (DEV && CLI) {
-                            $this->printer->warning(__('命令类：%1 必须继承：%2', [$class, CommandInterface::class]));
+                            $this->printer->warning(__('命令类：%{1} 必须继承：%{2}', [$class, CommandInterface::class]));
                         }
                     }
                 } catch (\Exception $exception) {

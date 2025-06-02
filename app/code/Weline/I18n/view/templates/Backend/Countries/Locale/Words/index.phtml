@@ -146,20 +146,18 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         <lang>（尚未开发）</lang>
                                     </a>
                                     <a class="text-warning" href="@backend-url('*/backend/countries/locale/words/push')?country_code={{req
-                                    .country_code}}&code={{req
+                                    .params.country_code}}&code={{req.params
                                     .code}}">
                                         <lang>发布</lang>
                                     </a>
                                     <lang>在线收集词典功能状态：</lang>
                                     <lang>{{translate_mode}}</lang>
                                     <a class="text-info" href="@backend-url('*/backend/countries/locale/words/enable')?country_code={{req
-                                    .country_code}}&code={{req
-                                    .code}}">
+                                    .params.country_code}}&code={{req.params.code}}">
                                         <lang>实时</lang>
                                     </a>
                                     <a class="text-info" href="@backend-url('*/backend/countries/locale/words/disable')?country_code={{req
-                                    .country_code}}&code={{req
-                                    .code}}">
+                                    .params.country_code}}&code={{req.params.code}}">
                                         <lang>缓存</lang>
                                     </a>
                                 </p>

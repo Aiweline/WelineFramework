@@ -59,7 +59,7 @@ class TagParser implements \Weline\Framework\Event\ObserverInterface
                 /**@var \Weline\Taglib\TaglibInterface $tagObject */
                 $tagObject = ObjectManager::getInstance($item);
                 if (!($tagObject instanceof \Weline\Taglib\TaglibInterface)) {
-                    throw new \Exception(__('标签类{ %1 }必须继承自：\Weline\Taglib\TaglibInterface 接口, 标签文件：%2', [$tagObject::class, $tag]));
+                    throw new \Exception(__('标签类{ %{1} }必须继承自：\Weline\Taglib\TaglibInterface 接口, 标签文件：%{2}', [$tagObject::class, $tag]));
                 }
                 $tag_data = [];
                 if ($tagObject::tag()) {

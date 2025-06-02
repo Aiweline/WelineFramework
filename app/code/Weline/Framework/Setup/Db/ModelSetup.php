@@ -94,7 +94,7 @@ class ModelSetup
     public function alterTable(string $comment = '', string $new_table_name = ''): AlterInterface
     {
         if (!$this->model->getConnection()->getConnector()->tableExist($this->model->getTable())) {
-            throw new \Weline\Framework\App\Exception(__('表不存在: %1', $this->model->getTable()));
+            throw new \Weline\Framework\App\Exception(__('表不存在: %{1}', $this->model->getTable()));
         }
         return $this->model->getConnection()->getConnector()->alterTable()->forTable($this->model->getTable(), $this->model->_primary_key, $comment, $new_table_name);
     }
@@ -220,7 +220,7 @@ class ModelSetup
     public function hasIndex(string $idx_name): bool
     {
         if (!$this->tableExist()) {
-            throw new \Exception(__("%1 表不存在，无法判断字段是否存在！", $this->model->getTable()));
+            throw new \Exception(__("%{1} 表不存在，无法判断字段是否存在！", $this->model->getTable()));
         }
         return $this->model->getConnection()->getConnector()->hasIndex($this->getTable(), $idx_name);
     }
