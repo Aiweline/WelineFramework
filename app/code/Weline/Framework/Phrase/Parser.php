@@ -51,6 +51,9 @@ class Parser
         // 如果是字符串 或者 数字
         if (is_string($args) || is_numeric($args)) {
             // 占位符%{} 这种占位符
+            if (str_contains($words, '%{1}')) {
+                $words = str_replace('%{1}', '%{}', $words);
+            }
             $words = str_replace('%{}', $args, $words);
             return $words;
         }
