@@ -166,7 +166,10 @@
 
         // 事件委托处理点击
         document.addEventListener('click', async (event) => {
-            const deleteBtn = event.target.closest('[w-delete="true"]');
+            let deleteBtn = event.target.closest('[w-delete="true"]');
+            if (!deleteBtn) {
+                deleteBtn = event.target.closest('[w-delete="1"]');
+            }
             if (!deleteBtn) return;
 
             event.preventDefault();
