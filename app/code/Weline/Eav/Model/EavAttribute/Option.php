@@ -21,15 +21,15 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Option extends \Weline\Framework\Database\Model
 {
-    public const fields_ID           = 'option_id';
-    public const fields_option_id    = 'option_id';
-    public const fields_eav_entity_id    = 'eav_entity_id';
+    public const fields_ID = 'option_id';
+    public const fields_option_id = 'option_id';
+    public const fields_eav_entity_id = 'eav_entity_id';
     public const fields_attribute_id = 'attribute_id';
-    public const fields_code         = 'code';
-    public const fields_value        = 'value';
+    public const fields_code = 'code';
+    public const fields_value = 'value';
     public const fields_swatch_image = 'swatch_image';
     public const fields_swatch_color = 'swatch_color';
-    public const fields_swatch_text  = 'swatch_text';
+    public const fields_swatch_text = 'swatch_text';
 
     public array $_unit_primary_keys = ['option_id', 'attribute_id', 'code'];
     public array $_index_sort_keys = ['option_id', 'attribute_id', 'code'];
@@ -70,19 +70,6 @@ class Option extends \Weline\Framework\Database\Model
                 ->addForeignKey('FK_EAV_ATTRIBUTE_ID', 'attribute_id', ObjectManager::getInstance(EavAttribute::class)->getTable(), 'attribute_id', true)
                 ->create();
         }
-    }
-
-    function addLocalDescription()
-    {
-        $lang    = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            \Weline\Eav\Model\EavAttribute\Option\LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
     }
 
     function getOptionId(): int

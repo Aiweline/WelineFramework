@@ -96,7 +96,7 @@ class Product extends EavModel
                 /**@var \Weline\Eav\Model\EavAttribute\Type $type */
                 $type = ObjectManager::getInstance(EavAttribute\Type::class);
                 $type_id = $type->where(EavAttribute\Type::fields_code, 'input_string')
-                    ->find()->fetch()['type_id'] ?? 0;
+                    ->find()->fetch()[EavAttribute\Type::fields_ID] ?? 0;
                 if ($type_id) {
                     /**@var \Weline\Eav\Model\EavAttribute $attributeModel */
                     $attributeModel = ObjectManager::getInstance(EavAttribute::class);
@@ -472,6 +472,22 @@ class Product extends EavModel
     {
         $this->setData(self::fields_weight, $weight);
         return $this;
+    }
+
+    public function productCategories(): array
+    {
+        return ObjectManager::getInstance(ProductCategory::class)
+            ->where('product_id', $this->getId())->fetchArray();
+    }
+
+    public function getCategoriesWithLocale(): array
+    {
+        /** @var ProductCategory $productCategory */
+        $productCategory = ObjectManager::getInstance(ProductCategory::class);
+        return $productCategory->joinCategory()
+            ->where('product_id', $this->getId())
+            ->joinModel(Category\LocalDescription::class, 'category_local', 'category.category_id=category_local.category_id')
+            ->select()->fetchArray();
     }
 
 }
