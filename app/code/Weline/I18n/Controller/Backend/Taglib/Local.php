@@ -88,7 +88,7 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         $this->assign('value', $value);
         $this->assign('id', $id);
         $params = $this->request->getGet();
-        $action = $this->request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', $params);
+        $action = $this->request->getUrlBuilder()->getUrl('i18n/backend/taglib/local', $params);
         $this->assign('action', $action);
         return $this->fetch();
     }
