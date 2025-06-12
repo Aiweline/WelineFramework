@@ -6,6 +6,10 @@
 use Weline\Framework\Manager\ObjectManager;
 
 $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+// 新增时给 progress 默认值，解决无法切换步骤问题
+if (empty($product['progress'])) {
+    $product['progress'] = 'product_base_info';
+}
 ?>
 <!DOCTYPE html>
 <!--
@@ -158,6 +162,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                             <div class='row'>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="name" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>产品名</lang>
                                     </label>
                                     <input scope="product" type='text' class='form-control rounded' id='name'
@@ -172,6 +177,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="sku" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>SKU</lang>
                                     </label>
                                     <input scope="product" type='text' class='form-control rounded' id='sku'
@@ -188,6 +194,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="spu" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>SPU</lang>
                                     </label>
                                     <input scope="product" type='text' class='form-control rounded' id='spu'
@@ -202,6 +209,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="cost" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>成本价</lang>
                                     </label>
                                     <input scope="product" type='number' step="0.01" class='form-control rounded'
@@ -217,6 +225,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="price" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>价格</lang>
                                     </label>
                                     <input scope="product" type='number' step="0.01" class='form-control rounded'
@@ -232,6 +241,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="weight" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>重量</lang>
                                     </label>
                                     <input scope="product" type='number' step="0.01" class='form-control rounded'
@@ -247,6 +257,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="stock" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>库存</lang>
                                     </label>
                                     <input scope="product" type='number' step="1" class='form-control rounded'
@@ -262,6 +273,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-3 mt-2 mb-4'>
                                     <label for="product-status" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>状态</lang>
                                     </label>
                                     <select scope="product" type='number' step="1" class='form-control rounded'
@@ -282,11 +294,35 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="category_ids" class="form-label">
+                                        <span class="text-danger">*</span>
+                                        <lang>分类</lang>
+                                    </label>
+                                    <select scope="product" name="category_ids[]" id="category_ids" class="form-control"
+                                            multiple required>
+                                        <foreach name="categories" item="category">
+                                            <php>
+                                                $isIn = in_array($category['category_id'], $productCategoryIds??[]);
+                                            </php>
+                                            <option value="{{category.category_id}}" @if{isIn=>'selected'}>
+                                                {{category.local_name | category.name}}
+                                            </option>
+                                        </foreach>
+                                    </select>
+                                    <div class="valid-feedback">
+                                        <lang>请选择分类</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请选择分类</lang>
+                                    </div>
+                                </div>
                             </div>
                             <hr>
                             <div class='row'>
                                 <div class='col-lg-4 mt-2 mb-4 mx-12'>
                                     <label for="image" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>主图</lang>
                                     </label>
                                     <input scope="product" type='hidden' class='form-control rounded' id='image'
@@ -295,14 +331,14 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <file-manager target='#image'
                                                   title='选择产品图片'
                                                   vars='product'
-                                                  preview="0"
+                                                  preview="1"
                                                   path='product/'
                                                   value='product.image'
                                                   multi='0'
                                                   ext="jpg,jpeg,png,gif"
                                                   size="204800"
                                                   w='50'
-                                                  h='50'></file-manager>
+                                                  h='50'/>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -312,26 +348,28 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-4 mt-2 mb-4 mx-12'>
                                     <label for="images" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>子图</lang>
                                     </label>
                                     <input scope="product" type='hidden' class='form-control rounded' id='images'
                                            placeholder='@lang{请选择图片}' name="images" value="{{product.images}}"
                                            required/>
-                                    <file-manager target='#images'
-                                                  title='选择产品图片'
-                                                  vars='product'
-                                                  path='product/'
-                                                  value='product.images'
-                                                  multi='1'
+                                    <file-manager target="#images"
+                                                  title="选择产品图片"
+                                                  vars="product"
+                                                  preview="1"
+                                                  path="product/"
+                                                  value="product.images"
+                                                  multi="1"
                                                   ext="jpg,jpeg,png,gif"
                                                   size="204800"
-                                                  w='50'
-                                                  h='50'></file-manager>
+                                                  w="50"
+                                                  h="50"/>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
                                     <div class="invalid-feedback">
-                                        <lang>请输入SKU</lang>
+                                        <lang>请选择图片</lang>
                                     </div>
                                 </div>
                             </div>
@@ -339,6 +377,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                             <div class='row'>
                                 <div class='col-lg-6 mt-2 mb-6 mx-12'>
                                     <label for="short_description" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>简述</lang>
                                     </label>
                                     <textarea scope="product" editor="1" type='text' class='form-control rounded editor'
@@ -354,6 +393,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-6 mt-2 mb-6 mx-12'>
                                     <label for="description" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>详情</lang>
                                     </label>
                                     <textarea scope="product" editor="1" type='text' class='form-control rounded editor'
@@ -371,47 +411,53 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                         </div>
                         <div class='tab-pane @if{product.progress==="attributes"=>"active"}' id='attributes'>
                             <div class='row'>
-                                <div class='col-lg-3 mt-2 mb-4'>
-                                    <label for="set_id" class="form-label">
-                                        <lang>属性集</lang>
-                                    </label>
-                                    <select scope="product" name="set_id" id="set_id" type="number"
-                                            class="form-control" list="Sets"
-                                            event="click change"
-                                            placeholder='@lang{属性集}'
-                                            value="{{product.set_id}}"
-                                            required>
-                                        <option value="0">@lang{--请选择--}</option>
-                                        <foreach name="sets" item="set">
-                                            <option value="{{ set.set_id }}" @if{set.set_id==product.set_id=>
-                                                'selected'}>{{ set.name }}(ID:{{ set.set_id }})
-                                            </option>
-                                        </foreach>
-                                    </select>
-                                    <div class="valid-feedback">
-                                        <lang>填写正确！</lang>
+                                <div class='col-lg-4 col-md-6 col-sm-12 mt-2 mb-4 d-flex align-items-end'>
+                                    <div style="flex:1;">
+                                        <label for="set_id" class="form-label">
+                                            <span class="text-danger">*</span>
+                                            <lang>属性集</lang>
+                                        </label>
+                                        <select scope="product" name="set_id" id="set_id" class="form-control" required>
+                                            <foreach name="sets" item="set">
+                                                <option value="{{set.set_id}}" @if{product.set_id==set.set_id=>'selected'}>{{set.name}}</option>
+                                            </foreach>
+                                        </select>
                                     </div>
-                                    <div class="invalid-feedback">
-                                        <lang>请输入属性集</lang>
-                                    </div>
+                                    <block class='Weline\Component\Block\OffCanvas'
+                                           template='Weline_Component::off-canvas.phtml'
+                                           target-tag='button'
+                                           target-button-class="btn btn-info ms-2"
+                                           cache='0'
+                                           id='off_canvas_attribute_add'
+                                           action="eav/backend/attribute/add?entity_type=product"
+                                           submit-button-text='保存'
+                                           target-button-text='添加属性'
+                                           title='添加属性'
+                                           close-button-show='1'
+                                           save="1"
+                                           close-button-text='关闭'
+                                           direction='right'
+                                           class-names='w-75'
+                                           off-canvas-body-style=''/>
                                 </div>
                                 <!--渲染属性集属性-->
                             </div>
                             <div id="attributes-container">
-                                
+
                             </div>
                         </div>
-                        <div class='tab-pane  @if{product.progress==="configurable_attributes"=>"active"}'
+                        <div class='tab-pane @if{product.progress==="configurable_attributes"=>"active"}'
                              id='configurable_attributes'>
                             <div id="selectAttribute"></div>
                             <div id="configurableProducts"></div>
                             <input type="hidden" name="configurableProductItems" id="configurableProductItems"
                                    value="{{product.configurableProducts}}">
                         </div>
-                        <div class='tab-pane' id='seo'>
+                        <div class='tab-pane @if{product.progress==="seo"=>"active"}' id='seo'>
                             <div class='row'>
                                 <div class='col-lg-6 mt-2 mb-6'>
                                     <label for="meta_name" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>Meta元数据名</lang>
                                     </label>
                                     <input scope="product" type='text' class='form-control rounded' id='meta_name'
@@ -441,6 +487,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 </div>
                                 <div class='col-lg-6 mt-2 mb-6'>
                                     <label for="meta_description" class="form-label">
+                                        <span class="text-danger">*</span>
                                         <lang>Meta元数据描述</lang>
                                     </label>
                                     <textarea scope="product" type='text' class='form-control rounded'
@@ -1172,33 +1219,70 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
             e.preventDefault()
             return false
         }
-        $('*[valid="false"]').each(function () {
-            let target = $(this)
-            let name = $('label[for="' + target.attr('id') + '"]').text()
-            if (!name) {
-                name = '@lang{SKU:}' + target.text()
-            }
-            // 提示用户
-            Swal.fire({
-                title: '@lang{警告！}',
-                text: `${name} @lang{已存在!}`,
-                icon: 'error',
-                confirmButtonText: '@lang{好的}'
-            }).then(function (result) {
-                if (result.isConfirmed) {
-                    target.focus()
-                    $('#progress-wizard').find('a[href="#configurable_attributes"]').tab('show')
+        // 检查所有必填项
+        $('#productForm [required]').each(function () {
+            let input = $(this);
+            if (!input.val() || (input.is('select') && input.val() === '0')) {
+                input.addClass('border-danger');
+                valid = false;
+                // 定位到第一个未填写项
+                if (valid === false && !window._firstInvalid) {
+                    window._firstInvalid = input;
                 }
-            })
-            valid = false
-        })
+            } else {
+                input.removeClass('border-danger');
+            }
+        });
         if (!valid) {
-            e.preventDefault()
-            return false
+            e.preventDefault();
+            if (window._firstInvalid) {
+                // 自动切换到对应tab
+                var tabPane = window._firstInvalid.closest('.tab-pane');
+                if (tabPane && tabPane.id) {
+                    // 先切换tab再focus，避免focus丢失
+                    var nav = $('.twitter-bs-wizard-nav a[href="#' + tabPane.id + '"]');
+                    if (nav.length) {
+                        nav[0].click();
+                    }
+                    setTimeout(function() {
+                        window._firstInvalid.focus();
+                    }, 300);
+                } else {
+                    window._firstInvalid.focus();
+                }
+                window._firstInvalid = null;
+            }
+            return false;
         }
         showLoading();
-        return true
-    })
+        return true;
+    });
+    // 输入时移除红框
+    $('#productForm').on('input change', '[required]', function () {
+        if ($(this).val()) {
+            $(this).removeClass('border-danger');
+        }
+    });
+    // 针对textarea的简述和详情，失去焦点时也校验红框
+    $('#short_description, #description').on('blur input change', function () {
+        if (!$(this).val()) {
+            $(this).addClass('border-danger');
+        } else {
+            $(this).removeClass('border-danger');
+        }
+    });
+</script>
+<script>
+    // 只为有required属性的label加红星
+    $(function() {
+        $('#productForm [required]').each(function() {
+            var input = $(this);
+            var label = input.closest('.form-group,div').find('label[for="'+input.attr('id')+'"],label[for="'+input.attr('name')+'"]');
+            if(label.length && label.find('span.text-danger').length === 0) {
+                label.prepend('<span class="text-danger">*</span>');
+            }
+        });
+    });
 </script>
 <js:part name="drag-sort"/>
 <script>
