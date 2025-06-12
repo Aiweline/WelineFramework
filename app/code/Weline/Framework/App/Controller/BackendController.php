@@ -14,10 +14,7 @@ use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Url;
-use Weline\Framework\Http\UrlInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
 
 class BackendController extends PcController
 {

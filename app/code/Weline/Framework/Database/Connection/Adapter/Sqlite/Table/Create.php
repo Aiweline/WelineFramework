@@ -13,6 +13,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
+use Weline\Framework\Database\Helper\Standar;
 
 use function PHPUnit\Framework\exactly;
 
@@ -60,23 +61,24 @@ class Create extends AbstractTable implements CreateInterface
     }
 
 
+
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = ''): CreateInterface
     {
+        $name = Standar::getIndexName($this->table,$name);
         # sqlite 不支持索引引擎指定  $index_method = $index_method ? "USING {$index_method}" : '';
         $index_method = '';
         $type = strtoupper($type);
         if (is_string($column)) {
             $column = explode(',', $column);
         }
-        foreach ($column as $item) {
-            if (str_contains($item, '`')) {
-                $column[$item] = str_replace('`', '', $item);
-            }
-        }
-        $column = implode('`,`', $column);
+        // 修正：确保每个字段都去除反引号后再加上
+        $column = array_map(function($item) {
+            return '`' . trim(str_replace('`', '', $item)) . '`';
+        }, $column);
+        $column_str = implode(',', $column);
         switch ($type) {
             case self::index_type_UNIQUE:
-                $this->indexes[] = "UNIQUE (`{$column}`) {$index_method}";
+                $this->indexes[] = "UNIQUE ({$column_str}) {$index_method}";
                 break;
             case self::index_type_DEFAULT:
             case self::index_type_FULLTEXT:
@@ -84,21 +86,20 @@ class Create extends AbstractTable implements CreateInterface
             case self::index_type_KEY:
                 $this->index_outs[] = [
                     'name' => $name,
-                    'column' => $column,
+                    'column' => $column_str,
                     'type' => $type,
                     'method' => $index_method
                 ];
-
                 break;
             case self::index_type_MULTI:
                 $type_of_column = getType($column);
                 if (!is_array($column)) {
                     new Exception(self::index_type_MULTI . __('：此索引的column需要array类型,当前类型') . "{$type_of_column}" . ' 例如：[ID,NAME(19),AGE]');
                 }
-                $column = implode(',', $column);
+                $column_str = implode(',', $column);
                 $this->index_outs[] = [
                     'name' => $name,
-                    'column' => $column,
+                    'column' => $column_str,
                     'type' => $type,
                     'method' => $index_method
                 ];

@@ -152,7 +152,7 @@ class Block extends Template implements BlockInterface
             $currentName = '';
             foreach ($action_param_value_arr as $action_param_value_key => $item) {
                 $currentName .= $item . '.';
-                if ($action_param_value_key !== 0 and !isset($currentVar[$item])) {
+                if ($action_param_value_key !== 0 && (!isset($currentVar[$item]) || empty($item))) {
                     throw new \Weline\Framework\App\Exception(__('参数调用链不存在。调用链：%{1}，不存在的参数：%{2}。使用示例：%{3}', [$currentName, $item, $this->doc()]));
                 }
                 $currentVar = $currentVar[$item];

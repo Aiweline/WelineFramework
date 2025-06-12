@@ -29,9 +29,19 @@ class TemplateTest extends TestCore
         $this->template = ObjectManager::getInstance(Template::class);
     }
 
+    /**
+     * @test
+     */
     public function testFetchTagSource()
     {
-        if (DEV) {
+        dd(__FILE__);
+        
+        $string = '@backend-url("/")';
+        $res = $this->template->tmp_replace($string);
+        // 建议不要在单元测试中直接dd($res)，可以用断言或输出
+        // dd($res); // 已注释，避免中断测试
+        self::assertNotEmpty($res);
+        if (defined('DEV') && DEV) {
             self::assertEquals(
                 '/Weline/Framework/view/statics/1.png',
                 $this->template->fetchTagSource('statics', 'Weline_Framework::1.png')
@@ -44,5 +54,6 @@ class TemplateTest extends TestCore
             '/static/' . $theme . '/Weline/Framework/view/statics/1.png',
             $this->template->fetchTagSource('statics', 'Weline_Framework::1.png')
         );
+
     }
 }

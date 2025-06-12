@@ -73,6 +73,10 @@ class FileManager implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 如果匹配到</file-manager>，则返回空
+            if (str_contains($tag_data[0]??'', '</file-manager>')) {
+                throw new \Exception(__('文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。'));
+            }
             if (!empty($attributes['code'])) {
                 $userConfigFileManager = $attributes['code'];
             } else {
