@@ -51,7 +51,7 @@ Session implements SessionInterface
         }
     }
 
-    public function start(string $session_id = ''): void
+    public function start(string|null $session_id = ''): void
     {
         if ($session_id) {
             if (session_id() != $session_id) {

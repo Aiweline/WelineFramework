@@ -156,7 +156,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                         <div class='tab-pane @if{product.progress==="product_base_info"=>"active"}'
                              id='product_base_info'>
                             <div class='row'>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="name" class="form-label">
                                         <lang>产品名</lang>
                                     </label>
@@ -170,7 +170,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入产品名</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="sku" class="form-label">
                                         <lang>SKU</lang>
                                     </label>
@@ -186,7 +186,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入SKU</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="spu" class="form-label">
                                         <lang>SPU</lang>
                                     </label>
@@ -200,7 +200,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入SPU</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="cost" class="form-label">
                                         <lang>成本价</lang>
                                     </label>
@@ -215,7 +215,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="price" class="form-label">
                                         <lang>价格</lang>
                                     </label>
@@ -230,7 +230,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="weight" class="form-label">
                                         <lang>重量</lang>
                                     </label>
@@ -245,7 +245,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="stock" class="form-label">
                                         <lang>库存</lang>
                                     </label>
@@ -260,7 +260,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
-                                <div class='col-lg-3 mt-2 mb-4'>
+                                <div class='col-lg-3 col-md-6 mt-2 mb-4'>
                                     <label for="product-status" class="form-label">
                                         <lang>状态</lang>
                                     </label>
@@ -299,10 +299,10 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                   path='product/'
                                                   value='product.image'
                                                   multi='0'
-                                                  ext="jpg,jpeg,png,gif"
+                                                  ext="jpg,jpeg,png,gif,webp"
                                                   size="204800"
                                                   w='50'
-                                                  h='50'></file-manager>
+                                                  h='50'/>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -323,10 +323,10 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                   path='product/'
                                                   value='product.images'
                                                   multi='1'
-                                                  ext="jpg,jpeg,png,gif"
+                                                  ext="jpg,jpeg,png,gif,webp"
                                                   size="204800"
                                                   w='50'
-                                                  h='50'></file-manager>
+                                                  h='50'/>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
