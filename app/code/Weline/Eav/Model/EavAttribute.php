@@ -62,20 +62,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     private ?Value $value = null;
     private ?EavModel $currentEntity = null;
     private array $exist_types = [];
-
-    public function addLocalDescription()
-    {
-        $lang = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            \Weline\Eav\Model\EavAttribute\LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
-    }
-
+    
     public function loadByAttributeId(int $attribute_id): AbstractModel
     {
         return parent::load('main_table.attribute_id', $attribute_id);
