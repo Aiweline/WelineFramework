@@ -48,7 +48,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                action='*/backend/taglib/local' method='get' keyword='search' value=''
                                placeholder='@lang{请输入关键词}'></block>
                     </div>
-                    <form role='form' class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                    <form id="localTranslationForm" role='form' class='needs-validation' novalidate=''
+                          action='{{action}}' method='post'>
                         <!--基础信息-->
                         <div class='row form-group'>
                             <empty name="local_descriptions">

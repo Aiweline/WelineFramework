@@ -34,11 +34,11 @@ class Store extends BackendController
         if ($search) {
             $this->store->where('name', 'like', "%$search%");
         }
-        $listing = $this->store->addLocalDescription()->pagination($page, $pageSize)->select()->fetch();
+        $listing = $this->store->loadLocalDescription()->pagination($page, $pageSize)->select()->fetch();
         $listings = $listing->getItems();
         /**@var \WeShop\Store\Model\Store $listing */
         foreach ($listings as &$listing) {
-            $listing = $listing->loadLocalName();
+            $listing = $listing->loadLocalName($listing::fields_LOCAL, 'local_name');
         }
         $this->assign('stores', $listings);
         $this->assign('pagination', $listing->getPagination());

@@ -238,7 +238,7 @@ class Url implements UrlInterface
                 $url = $path;
             }
         } else {
-            $url = $this->request->getBaseUrl();
+            $url = $this->request->getOriginBaseUrl();
         }
 
         return $this->extractedUrl($params, $merge_url_params, $url);

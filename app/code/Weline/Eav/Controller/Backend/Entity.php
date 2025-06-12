@@ -25,14 +25,15 @@ class Entity extends \Weline\Framework\App\Controller\BackendController
 
     public function __construct(
         EavEntity $eavEntity
-    ) {
+    )
+    {
         $this->eavEntity = $eavEntity;
     }
 
     public function __init()
     {
         parent::__init();
-        $this->eavEntity->addLocalDescription();
+        $this->eavEntity->loadLocalDescription();
     }
 
     public function index()

@@ -30,20 +30,7 @@ class Category extends \Weline\Framework\Database\Model
     public const fields_POSITION = 'position';
     public const fields_LEVEL = 'level';
     public const fields_CHILD_COUNT = 'child_count';
-
-    public function addLocalDescription(): static
-    {
-        $lang = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            \WeShop\Product\Model\Category\LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
-    }
-
+    
     /**
      * @inheritDoc
      */

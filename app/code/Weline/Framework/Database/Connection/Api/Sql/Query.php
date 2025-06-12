@@ -475,7 +475,7 @@ abstract class Query implements QueryInterface
     public function order(string $field = '', string $sort = 'DESC'): QueryInterface
     {
         if (empty($field)) {
-            $field = $this->identity_field;
+            $field = 'main_table.' . $this->identity_field;
         }
         $field = $this->parserFiled($field);
         if ('key' == strtolower($field) || 'value' == strtolower($field) || 'key' == strtolower($sort)) {
