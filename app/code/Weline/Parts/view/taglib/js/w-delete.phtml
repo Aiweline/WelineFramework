@@ -137,8 +137,17 @@
         // 执行删除请求
         const performDelete = async (element) => {
             const form = element.closest('form');
-            const url = element.getAttribute('href') || element.getAttribute('w-url');
+            const url = element.getAttribute('w-url') || element.getAttribute('w-ajax') || element.getAttribute('href');
             const method = element.getAttribute('w-method') || 'DELETE';
+
+            // 提取所有 w-var-xxx 属性作为 POST 参数
+            const postData = {};
+            Array.from(element.attributes).forEach(attr => {
+                if (attr.name.startsWith('w-var-')) {
+                    const key = attr.name.replace('w-var-', '');
+                    postData[key] = attr.value;
+                }
+            });
 
             try {
                 if (form) {
@@ -146,12 +155,42 @@
                     return;
                 }
 
-                const response = await fetch(url, {method});
+                const fetchOptions = { method };
+                if (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT' || method.toUpperCase() === 'PATCH') {
+                    fetchOptions.headers = { 'Content-Type': 'application/json' };
+                    fetchOptions.body = JSON.stringify(postData);
+                } else if (Object.keys(postData).length > 0) {
+                    // GET/DELETE等方式，将参数拼接到URL
+                    const urlObj = new URL(url, window.location.origin);
+                    Object.entries(postData).forEach(([k, v]) => urlObj.searchParams.append(k, v));
+                    fetchOptions.method = method;
+                    return performDeleteWithUrl(urlObj.toString(), fetchOptions, element);
+                }
+
+                const response = await fetch(url, fetchOptions);
                 const data = await response.json();
 
                 if (data.success) {
                     showMessage(element, __('删除成功'), 'success');
-                    // 可选：删除成功后移除对应DOM元素
+                    if (element.closest('tr')) {
+                        element.closest('tr').remove();
+                    }
+                } else {
+                    showMessage(element, data.message || __('删除失败'), 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage(element, __('删除请求失败'), 'error');
+            }
+        };
+
+        // 辅助函数：GET/DELETE等方式带参数
+        const performDeleteWithUrl = async (url, fetchOptions, element) => {
+            try {
+                const response = await fetch(url, fetchOptions);
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(element, __('删除成功'), 'success');
                     if (element.closest('tr')) {
                         element.closest('tr').remove();
                     }
@@ -184,6 +223,6 @@
             if (confirmed) {
                 await performDelete(deleteBtn);
             }
-        });
+        }, true); // 使用捕获阶段，阻止冒泡提前触发
     })();
 </script>

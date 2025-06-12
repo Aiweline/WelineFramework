@@ -283,6 +283,27 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <lang>请输入正确填写！</lang>
                                     </div>
                                 </div>
+                                <div class='col-lg-3 mt-2 mb-4'>
+                                    <label for="category_ids" class="form-label">
+                                        <lang>分类</lang>
+                                    </label>
+                                    <select name="category_ids[]" id="category_ids" class="form-control" multiple required>
+                                        <foreach name="categories" item="category">
+                                            <php>
+                                                $isIn = in_array($category['category_id'], $productCategoryIds??[]);
+                                            </php>
+                                            <option value="{{category.category_id}}" @if{isIn=>'selected'}>
+                                                {{category.local_name | category.name}}
+                                            </option>
+                                        </foreach>
+                                    </select>
+                                    <div class="valid-feedback">
+                                        <lang>请选择分类</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请选择分类</lang>
+                                    </div>
+                                </div>
                             </div>
                             <hr>
                             <div class='row'>
@@ -372,30 +393,42 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                         </div>
                         <div class='tab-pane @if{product.progress==="attributes"=>"active"}' id='attributes'>
                             <div class='row'>
-                                <div class='col-lg-3 mt-2 mb-4'>
-                                    <label for="set_id" class="form-label">
-                                        <lang>属性集</lang>
-                                    </label>
-                                    <select name="set_id" id="set_id" type="number"
-                                            class="form-control" list="Sets"
-                                            event="click change"
-                                            placeholder='@lang{属性集}'
-                                            value="{{product.set_id}}"
-                                            disabled
-                                            required>
-                                        <option value="0">@lang{--请选择--}</option>
-                                        <foreach name="sets" item="v">
-                                            <option value="{{ v.set_id }}" @if{v.set_id==product.set_id=>'selected'}>
-                                                {{ v.name }}(ID:{{ v.set_id }})
-                                            </option>
-                                        </foreach>
-                                    </select>
-                                    <div class="valid-feedback">
-                                        <lang>填写正确！</lang>
+                                <div class='col-lg-3 mt-2 mb-4 d-flex align-items-end'>
+                                    <div style="flex:1;">
+                                        <label for="set_id" class="form-label">
+                                            <lang>属性集</lang>
+                                        </label>
+                                        <select name="set_id" id="set_id" type="number"
+                                                class="form-control" list="Sets"
+                                                event="click change"
+                                                placeholder='@lang{属性集}'
+                                                value="{{product.set_id}}"
+                                                disabled
+                                                required>
+                                            <option value="0">@lang{--请选择--}</option>
+                                            <foreach name="sets" item="v">
+                                                <option value="{{ v.set_id }}" @if{v.set_id==product.set_id=>'selected'}>
+                                                    {{ v.name }}(ID:{{ v.set_id }})
+                                                </option>
+                                            </foreach>
+                                        </select>
                                     </div>
-                                    <div class="invalid-feedback">
-                                        <lang>请输入属性集</lang>
-                                    </div>
+                                    <block class='Weline\Component\Block\OffCanvas'
+                                           template='Weline_Component::off-canvas.phtml'
+                                           target-tag='button'
+                                           target-button-class="btn btn-info ms-2"
+                                           cache='0'
+                                           id='off_canvas_attribute_add'
+                                           action="eav/backend/attribute/add?entity_type=product"
+                                           submit-button-text='保存'
+                                           target-button-text='添加属性'
+                                           title='添加属性'
+                                           close-button-show='1'
+                                           save="1"
+                                           close-button-text='关闭'
+                                           direction='right'
+                                           class-names='w-75'
+                                           off-canvas-body-style=''/>
                                 </div>
                                 <!--渲染属性集属性-->
                             </div>
@@ -405,29 +438,26 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                         <div class="card-title">{{group.name}}</div>
                                         <div class="row">
                                             <foreach name="group.attributes" item="attr">
-                                                <div class="col-lg-3 mt-2 mb-4">
-                                                    <label for="color" class="form-label">
+                                                <div class="col-lg-4 col-md-6 col-sm-12 mt-2 mb-4">
+                                                    <label for="attr_{{attr.attribute_id}}" class="form-label">
                                                         {{attr.name}}
                                                     </label>
                                                     <if condition="attr.has_option">
                                                         <select name="attribute[{{group.group_id}}][{{attr.attribute_id}}]"
                                                                 data-parsley-minlength="3"
-                                                                required="" id="color" class="form-control"
+                                                                required="{{attr.required}}" id="attr_{{attr.attribute_id}}" class="form-control"
                                                                 event="change"
                                                                 scope="edit_product"
                                                                 {{attr.frontend_attrs}}>
                                                             <foreach name="attr.value_alias" item="option">
-                                                                <option value="{{option.option_id}}"
-                                                                        @if{option.selected==1=>
-                                                                    'selected'}>{{option.value}}
-                                                                </option>
+                                                                <option value="{{option.option_id}}" @if{option.selected==1=>'selected'}>{{option.value}}</option>
                                                             </foreach>
                                                         </select>
                                                         <else/>
                                                         <input name="attribute[{{group.group_id}}][{{attr.attribute_id}}]"
                                                                type="text"
                                                                data-parsley-minlength="3"
-                                                               required="" id="color" class="form-control"
+                                                               required="{{attr.required}}" id="attr_{{attr.attribute_id}}" class="form-control"
                                                                scope="edit_product"
                                                                event="change" {{attr.frontend_attrs}}>
                                                     </if>
@@ -435,7 +465,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                                         填写正确！
                                                     </div>
                                                     <div class="invalid-feedback">
-                                                        请输入颜色
+                                                        请输入{{attr.name}}
                                                     </div>
                                                 </div>
                                             </foreach>
