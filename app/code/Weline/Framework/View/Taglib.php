@@ -11,13 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View;
 
-use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block\Csrf;
-use Weline\Framework\View\Cache\ViewCache;
 use Weline\Framework\View\Exception\TemplateException;
 
 class Taglib

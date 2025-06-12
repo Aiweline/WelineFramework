@@ -461,7 +461,7 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_USER_LANG'] = Cookie::get('WELINE_USER_LANG') ?? '';
             self::$parserServer['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
             self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
-            self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         }
         if ($url) {
             $uri = self::parse_url($url, 'path') . self::parse_url($url, 'query');
@@ -508,7 +508,7 @@ class Url implements UrlInterface
 
         # 匹配网站 self::$parserSites 最长倒序
         $parsers = self::parse_url($url);
-        $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '');
+        $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '').(($parsers['port'] ?? '') == '80' || ($parsers['port'] ?? '') == '443' ? '' : ':' . ($parsers['port'] ?? ''));
         self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
         foreach (self::$parserSites as $site_url => $site) {
             if (str_starts_with($url, $site_url)) {

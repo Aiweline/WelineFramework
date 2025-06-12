@@ -17,6 +17,12 @@ $api_host = $this->request->getUrlBuilder()->getApiUrl('', [], false);
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '/{module}/view/statics/{path}' : '/static/' . $theme_path . '/{module}/view/statics/{path}');
 $token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
+$area = $_SERVER['WELINE_AREA'] ?? '';
+if($area === 'frontend') {
+    $area = '';
+}
+$api_area = $_SERVER['WELINE_API_AREA'] ?? '';
+$api_admin_area = $_SERVER['WELINE_API_ADMIN_AREA'] ?? '';
 ?>
 <!--加载requirejs-->
 <?php if (DEV) : ?>
@@ -160,13 +166,18 @@ endif;
         if (!path) {
             throw new Error('@lang{JS: inject_path函数path路径不允许为空！}')
         }
+        if(!path.startsWith('/')) {
+            path = '/' + path;
+        }
         let pre_path = getCookie('WELINE_WEBSITE_URL');
+
         // 网站
         if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL'))) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '/');
+            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '');
         } else {
-            path = WelineString.replaceStartsWith(path, window.site.base_router, '/');
+            path = WelineString.replaceStartsWith(path, window.site.base_router, '');
         }
+
         if (WelineString.startsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'))) {
             path = WelineString.replaceStartsWith(path, '/' + getCookie('WELINE_WEBSITE_CODE'), '/');
         }
@@ -179,10 +190,12 @@ endif;
         }
 
         // 区域
-        if (WelineString.startsWith(path, '/{{area}}')) {
+        if ('{{area}}'!=='' && WelineString.startsWith(path, '/{{area}}')) {
             if ('area' === type && code) {
-                path = WelineString.replaceStartsWith(path, '/{{area}}', '');
-                pre_path += '/' + code;
+                if ('{{area}}' !== '') {
+                    path = WelineString.replaceStartsWith(path, '/{{area}}', '');
+                    pre_path += '/' + code;
+                }
             } else {
                 path = WelineString.replaceStartsWith(path, '/{{area}}', '');
                 if ('{{area}}' !== '') {
@@ -200,7 +213,7 @@ endif;
         }
 
         // 币种
-        if (WelineString.startsWith(path, '/' + window.site.currency)) {
+        if (window.site.currency && WelineString.startsWith(path, '/' + window.site.currency)) {
             if ('currency' === type && code) {
                 path = WelineString.replaceStartsWith(path, '/' + window.site.currency, '');
                 pre_path += '/' + code;
@@ -211,12 +224,13 @@ endif;
         } else {
             if ('currency' === type && code) {
                 pre_path += '/' + code;
-            } else {
+            } else if(window.site.currency){
                 pre_path += '/' + window.site.currency;
             }
         }
+        
         // 语言
-        if (WelineString.startsWith(path, '/{{local.code}}')) {
+        if (('{{local.code}}'!=='') && WelineString.startsWith(path, '/{{local.code}}')) {
             if ('lang' === type && code) {
                 path = WelineString.replaceStartsWith(path, '/{{local.code}}', '');
                 pre_path += '/' + code;
@@ -227,7 +241,7 @@ endif;
         } else {
             if ('lang' === type && code) {
                 pre_path += '/' + code;
-            } else {
+            } else if('{{local.code}}' !== '') {
                 pre_path += '/{{local.code}}';
             }
         }
