@@ -17,7 +17,6 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use const _PHPStan_4afa27bf8\__;
 
 class App
 {
@@ -250,7 +249,7 @@ class App
         $result = '';
         # URL结构：[网站前缀]/[货币前缀]/[语言前缀]/[路由]，没有网站
         if (!CLI) {
-            $parse = Url::parser();
+            $parse = Url::parser(); 
             # url 重写 兼容原本携带的参数和当前重写原参数
             if (is_array($parse)) {
                 if ($_SERVER['REQUEST_METHOD'] && isset($parse['uri'])) {

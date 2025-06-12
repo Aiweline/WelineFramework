@@ -18,6 +18,8 @@ class BackendSession extends \Weline\Framework\Session\Session
     public function __init()
     {
         parent::__init();
-        $this->setType('backend');
+        if(!CLI){
+            $this->setType('backend');
+        }
     }
 }
