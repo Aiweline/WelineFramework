@@ -12,7 +12,11 @@ declare(strict_types=1);
 namespace Weline\Framework\Database;
 
 use Weline\Framework\Database\Helper\Tool;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\LocalModel;
+use Weline\I18n\Model\Locals;
+use WeShop\Store\Model\Store\LocalDescription;
 
 abstract class Model extends AbstractModel implements ModelInterface
 {
@@ -224,5 +228,50 @@ abstract class Model extends AbstractModel implements ModelInterface
             return $model->select()->fetch();
         }
         return $model->select()->fetchArray();
+    }
+
+    public function loadLocalDescription(string $local_code = '', string|LocalModel $model = ''): static
+    {
+        if (empty($model)) {
+            $model = $this::class . '\\LocalDescription';
+        }
+        if (is_string($model)) {
+            $model = ObjectManager::make($model);
+            if (!$model instanceof LocalModel) {
+                throw new \InvalidArgumentException(__('参数必须是LocalModel的子类或者LocalModel实例'));
+            }
+        }
+        if (empty($local_code)) {
+            $local_code = Cookie::getLang();
+        }
+        $idField = $this::fields_ID;
+        $modelIdField = $model::fields_ID;
+        $this->joinModel(
+            $model,
+            'local',
+            "main_table.{$idField}=local.{$modelIdField} and local.local_code='$local_code'",
+            'left'
+        );
+        return $this;
+    }
+
+    public function loadLocalName(string $model_local_field, string $field = ''): self
+    {
+        $localCode = $this->getData($model_local_field);
+        if (empty($localCode)) {
+            throw new \InvalidArgumentException(__('本地化字段不能为空! %{model}中找不到%{field}字段', ['model' => $this::class, 'field' => $model_local_field]));
+        }
+        if (empty($field)) {
+            $field = $model_local_field . '_name';
+        }
+        /**@var Locals $local */
+        $local = ObjectManager::make(Locals::class);
+        $local = $local->where(Locals::fields_CODE, $localCode)
+            ->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())
+            ->find()->fetch();
+        if ($local->getId()) {
+            $this->setData($field, $local->getName());
+        }
+        return $this;
     }
 }

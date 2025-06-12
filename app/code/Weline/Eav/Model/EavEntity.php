@@ -185,17 +185,4 @@ class EavEntity extends Model
     {
         return $this->setData(self::fields_eav_entity_id_field_length, $eav_entity_id_field_length);
     }
-
-    function addLocalDescription()
-    {
-        $lang = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            \Weline\Eav\Model\EavEntity\LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
-    }
 }

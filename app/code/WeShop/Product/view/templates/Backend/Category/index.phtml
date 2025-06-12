@@ -148,6 +148,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <lang>ID</lang>
                                                 </th>
                                                 <th data-priority='3'><?= __('名称') ?></th>
+                                                <th data-priority='3'><?= __('父分类') ?></th>
                                                 <th data-priority='3'><?= __('位置') ?></th>
                                                 <th data-priority='3'><?= __('创建时间') ?></th>
                                                 <th data-priority='3'><?= __('更新时间') ?></th>
@@ -164,6 +165,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         .category_id" field="name">
                                                             {{category.local_name|category.name}}
                                                         </local>
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        <if condition="category.pid">
+                                                            <span class="text-muted">{{category.parent_name}}</span>
+                                                        </if>
                                                     </td>
                                                     <td>{{category.position}}</td>
                                                     <td class='co-name'>{{category.create_time}}</td>

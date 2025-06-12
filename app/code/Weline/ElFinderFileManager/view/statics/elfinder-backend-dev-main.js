@@ -140,7 +140,7 @@
 			// Documentation for client options:
 			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 			defaultOpts : {
-				url : 'http://127.0.0.1:9981/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/en_US/elfinder/backend/connector' // connector URL (REQUIRED)
+				url : 'http://127.0.0.1:9981/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/elfinder/backend/connector' // connector URL (REQUIRED)
 				,commandsOptions : {
 					edit : {
 						extraOptions : {

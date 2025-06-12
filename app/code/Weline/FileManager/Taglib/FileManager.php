@@ -73,6 +73,8 @@ class FileManager implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 兼容自闭合和非自闭合标签，$tag_data 可能为空或为内容
+            // 只做内容透传，不影响 file-manager 渲染
             if (!empty($attributes['code'])) {
                 $userConfigFileManager = $attributes['code'];
             } else {
@@ -90,6 +92,7 @@ class FileManager implements TaglibInterface
             $fileScan = ObjectManager::getInstance(Scan::class);
             $fileManagers = [];
             $modules = Env::getInstance()->getActiveModules();
+
             foreach ($modules as $module) {
                 $files = [];
                 $fileScan->globFile(
@@ -149,7 +152,7 @@ class FileManager implements TaglibInterface
             $result = $fileManager->setData(
                 [
                     'tag_key' => $tag_key,
-                    'tag_data' => $tag_data,
+                    'tag_data' => $tag_data, // 兼容非自闭合标签内容
                     'attributes' => $attributes,
                     'code' => $userConfigFileManager
                 ]
