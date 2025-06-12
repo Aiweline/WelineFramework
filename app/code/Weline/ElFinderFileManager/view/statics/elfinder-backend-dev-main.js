@@ -7,8 +7,8 @@
 (function(){
 	"use strict";
 	var // jQuery and jQueryUI version
-		jqver = '3.6.0',
-		uiver = '1.12.1',
+		jqver = '3.7.1',
+		uiver = '1.13.2',
 		
 		// Detect language (optional)
 		lang = (function() {
@@ -46,7 +46,7 @@
 		// Start elFinder (REQUIRED)
 		start = function(elFinder, editors, config) {
 			// load jQueryUI CSS
-			elFinder.prototype.loadCss('/Weline/ElFinderFileManager/view/statics/jquery-ui.min.css');
+			elFinder.prototype.loadCss('//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/themes/smoothness/jquery-ui.css');
 			
 			$(function() {
 				var optEditors = {
@@ -124,8 +124,8 @@
 	require.config({
 		baseUrl : '/Weline/ElFinderFileManager/view/statics/js',
 		paths : {
-			'jquery'   : '/Weline/ElFinderFileManager/view/statics/jquery.min',
-			'jquery-ui': '/Weline/ElFinderFileManager/view/statics/jquery-ui.min',
+			'jquery'   : '//cdnjs.cloudflare.com/ajax/libs/jquery/'+(old? '1.12.4' : jqver)+'/jquery.min',
+			'jquery-ui': '//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/jquery-ui.min',
 			'elfinder' : 'elfinder.min',
 			'encoding-japanese': '//cdn.rawgit.com/polygonplanet/encoding.js/1.0.26/encoding.min'
 		},
@@ -140,7 +140,7 @@
 			// Documentation for client options:
 			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 			defaultOpts : {
-				url : 'http://127.0.0.1:9981/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/en_US/elfinder/backend/connector' // connector URL (REQUIRED)
+				url : 'http://127.0.0.1:9981/itVSN37TUg5xjGDnYZleiFX0PcZFvpJw/zh_Hans_CN/elfinder/backend/connector' // connector URL (REQUIRED)
 				,commandsOptions : {
 					edit : {
 						extraOptions : {

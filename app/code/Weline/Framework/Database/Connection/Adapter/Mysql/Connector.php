@@ -23,6 +23,7 @@ use Weline\Framework\Database\Connection\Api\Sql;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
+use Weline\Framework\Database\Helper\Standar;
 use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
@@ -239,6 +240,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function hasIndex(string $table, string $idx_name): bool
     {
         # 检查索引是否存在
+        $idx_name = Standar::getIndexName($table, $idx_name);
+
         $query = "SHOW INDEXES FROM {$table} WHERE Key_name = '{$idx_name}'";
         $stmt = $this->link->prepare($query);
         $stmt->execute();
