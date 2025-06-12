@@ -1027,7 +1027,7 @@ class Taglib
                             if ($required && !in_array($attr, $attributes_keys)) {
                                 $provide_attr = implode(',', $attributes_keys);
                                 $template_html = htmlentities($attr);
-                                throw new TemplateException(__("代码：[{$template_html}] %{1}:标签必须设置属性%{2}, 提供的属性：3% 文件：%{4}", [$tag, $attr, $provide_attr, $fileName]));
+                                throw new TemplateException(__("代码：[{$template_html}] %{1}:标签必须设置属性%{2}, 提供的属性：%{3} 文件：%{4}", [$tag, $attr, $provide_attr, $fileName]));
                             }
                         }
                     }

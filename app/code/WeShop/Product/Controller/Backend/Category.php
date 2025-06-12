@@ -29,8 +29,30 @@ class Category extends \Weline\Framework\App\Controller\BackendController
 
     public function index()
     {
-        $categories = $this->category->addLocalDescription()->pagination()->select()->fetch();
-        $this->assign('categories', $categories->getItems());
+        $categories = $this->category
+            ->loadLocalDescription()
+            ->pagination()
+            ->select()
+            ->fetch();
+        # 为父分类添加名称
+        // 为父分类添加名称（带缓存，避免重复查询）
+        $parentCache = [];
+        $items = $categories->getItems();
+        $this->category->loadLocalDescription();
+        foreach ($items as $i => $category) {
+            $pid = $category->getPid();
+            if ($pid > 0) {
+                if (!isset($parentCache[$pid])) {
+                    $parent = $this->category->load($pid);
+                    $parentCache[$pid] = $parent->getId() ? $parent->getLocalName() : __('无');
+                }
+                $category->setData('parent_name', $parentCache[$pid]);
+            } else {
+                $category->setData('parent_name', __('无'));
+            }
+            $items[$i] = $category;
+        }
+        $this->assign('categories', $items);
         $this->assign('pagination', $categories->getPagination());
         return $this->fetch();
     }
@@ -42,7 +64,7 @@ class Category extends \Weline\Framework\App\Controller\BackendController
         $limit = $this->request->getGet('limit');
         $search = $this->request->getGet('search');
         $json = ['limit' => $limit, 'search' => $search];
-        $this->category->addLocalDescription();
+        $this->category->loadLocalDescription();
         $this->category->where('main_table.category_id', $id, '!=', 'and');
         if ($field && $search) {
             $this->category->where('main_table.' . $field, "%{$search}%", 'like', 'or')

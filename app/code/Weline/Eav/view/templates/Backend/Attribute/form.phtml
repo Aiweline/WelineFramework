@@ -711,11 +711,27 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
         },
         mounted() {
             this.activeName = '{{attribute.progress|"progress-select-entity"}}';
+            // 自动触发实体选择
             if (this.params.eav_entity_id) {
                 this.renderSearchEntityAttributeSet();
             }
             if (this.params.set_id) {
                 this.renderSearchEntityAttributeSetGroup();
+            }
+            // 如果有指定entity_type实体，则默认切换到属性集tab
+            if ('{{entity_type}}' && '{{entity_type}}' !== '') {
+                // 自动选中实体
+                let entity = this.entities.find(e => e.code === '{{entity_type}}');
+                if (entity) {
+                    this.params.eav_entity_id = entity.eav_entity_id;
+                    this.renderSearchEntityAttributeSet();
+                }
+                // 默认切换到属性集tab
+                this.activeName = 'progress-select-set';
+                // 禁用第一个步骤
+                this.$nextTick(() => {
+                    $(".twitter-bs-wizard-nav li").eq(0).addClass('disabled').css({'pointer-events':'none','opacity':0.5});
+                });
             }
             for (let type of this.types) {
                 if (type.type_id == this.params.type_id && type.is_swatch == 1) {

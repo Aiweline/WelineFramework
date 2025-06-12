@@ -90,15 +90,18 @@ class Local implements \Weline\Taglib\TaglibInterface
             } else {
                 $action = $request->getUrlBuilder()->getUrl('i18n/frontend/taglib/local', ['model' => $model, 'field' => $field]);
             }
+
             $closeText = __('关闭');
             $titileText = __('翻译窗口');
             $refreshText = __('刷新');
+            $submitText = __('提交');
             return match ($tag_key) {
                 'tag' => <<<TAG
                     <a class='d-flex align-items-center link-info gap-1' style='cursor: pointer'
                         data-bs-toggle='offcanvas'
                         data-bs-target='#{$idName}' 
                         aria-controls='{$idName}'
+                        data-href='{$action}&value={$name}&id={$parserId}'>
                         <span>{$name}</span>
                         <i class='ri-translate'></i>
                     </a>
@@ -109,10 +112,17 @@ class Local implements \Weline\Taglib\TaglibInterface
                             <h5 id='{$idName}Label'>
                                 <lang>{$titileText}</lang>
                             </h5>
-                            <button type='button' id="{$idName}IframeRefreshBtn" class='btn-refresh text-reset' 
-                                        aria-label='{$refreshText}'></button>
-                            <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas'
+                            <div class="d-flex gap-2 ms-auto">
+                                <button id="{$idName}SubmitBtn" type='submit' class='btn btn-primary btn-sm'>
+                                    <i class="ri-save-line me-1"></i>{$submitText}
+                                </button>
+                                <a id="{$idName}IframeRefreshBtn" class='btn btn-info btn-sm' 
+                                   aria-label='{$refreshText}'>
+                                    <i class="ri-refresh-line me-1"></i>{$refreshText}
+                                </a>
+                                <button type='button' class='btn-close btn-sm' data-bs-dismiss='offcanvas'
                                         aria-label='{$closeText}'></button>
+                            </div>
                         </div>
                         <div class='offcanvas-body'>
                             <div class='position-relative w-100 h-100 '>
@@ -131,6 +141,41 @@ class Local implements \Weline\Taglib\TaglibInterface
                         $('#{$idName}IframeRefreshBtn').on('click', function (e) {
                             let Iframe = $('#{$idName}Iframe')
                             Iframe.attr('src', Iframe.attr('data-src'))
+                        })
+                        // 提交按钮点击事件
+                        $('#{$idName}SubmitBtn').on('click', function (e) {
+                            const btn = $(this);
+                            const Iframe = $('#{$idName}Iframe');
+                            const iframeDoc = Iframe[0].contentWindow?.document;
+
+                            if (!iframeDoc) {
+                                console.error('Iframe document not accessible');
+                                return;
+                            }
+                            // 获取id为localTranslationForm的表单元素
+                            const form = iframeDoc.getElementById('localTranslationForm');
+                            if (!form) {
+                                console.error('Form not found in iframe');
+                                return;
+                            }
+                            
+                            // 防止重复提交
+                            btn.prop('disabled', true);
+                            btn.html(`<span class="spinner-border spinner-border-sm me-1" role="status"></span>\${btn.text()}`);
+
+                            try {
+                                form.submit();
+
+                                // 监听iframe加载完成事件
+                                Iframe.on('load', function() {
+                                    btn.prop('disabled', false);
+                                    btn.html(`<i class="ri-save-line me-1"></i>{$submitText}`);
+                                });
+                            } catch (error) {
+                                console.error('Form submit error:', error);
+                                btn.prop('disabled', false);
+                                btn.html(`<i class="ri-save-line me-1"></i>{$submitText}`);
+                            }
                         })
                     </script>
 TAG,
