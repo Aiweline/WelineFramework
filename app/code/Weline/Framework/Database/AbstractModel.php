@@ -1439,13 +1439,13 @@ abstract class AbstractModel extends DataObject
             $this->pagination = $data;
             return $data;
         }
-        /**@var Url $url_builder */
-        $url_builder = ObjectManager::getInstance(Url::class);
+        /**@var Url $urlBuilder */
+        $urlBuilder = ObjectManager::getInstance(Url::class);
         $params = $this->pagination['params'];
         unset($params['page']);
         unset($params['pageSize']);
         $query_flag = $params ? '&' : '?';
-        $queryUrl = $request->isBackend() ? $url_builder->getBackendUrl($url_path, $params) : $url_builder->getUrl($url_path, $params);
+        $queryUrl = $urlBuilder->getUrl($url_path, $params);
         $prePageName = __('上一页');
         unset($params);
         $prePageClassStatus = $hasPrePage ? '' : 'disabled';
@@ -1511,6 +1511,7 @@ PAGELISTHTML;
         $params['pageSize'] = $this->pagination['pageSize'];
         $query = http_build_query($params);
         $form_url = $queryUrl . $query_flag . $query;
+
         $this->pagination['html'] = <<<PAGINATION
 <nav aria-label='...'>
                             <ul class='pagination {$pagination_style}'>

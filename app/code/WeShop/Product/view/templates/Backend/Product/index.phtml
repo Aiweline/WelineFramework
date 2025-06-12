@@ -125,7 +125,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                    target-button-text='新增产品'
                                                    target-button-class='btn btn-primary'
                                                    title='新增产品'
-                                                   save="0"
+                                                   save="1"
                                                    close-button-show='1'
                                                    close-button-text='关闭'
                                                    direction='right'
@@ -198,13 +198,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                    action-params="{product_id: product.product_id}"
                                                                    submit-button-text='保存' target-button-text='修改'
                                                                    title='编辑产品' close-button-show='1'
+                                                                   save="1"
                                                                    close-button-text='关闭' direction='right'
                                                                    class-names='w-75' off-canvas-body-style=''/>
                                                             <if condition="product.parent_id == 0">
                                                                 <button class="btn btn-danger" w-ajax="@backend-url('*/backend/product/delete',
                                                                 ['product_id'=>$product['product_id']])"
-                                                                        data-msg="@lang{你确定要删除么？}"
-                                                                        data-method="post">
+                                                                        w-delete="true"
+                                                                        w-msg="@lang{你确定要删除么？}"
+                                                                        w-method="post">
                                                                     <lang>删除</lang>
                                                                 </button>
                                                             </if>
@@ -348,6 +350,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         })
     })
 </script>
+<js:part name="w-delete"></js:part>
 <!-- 配置项弹窗 -->
 @template(Weline_Admin::common/footer.phtml)
 </body>

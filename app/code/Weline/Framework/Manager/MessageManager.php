@@ -45,12 +45,20 @@ class MessageManager
      * @return $this
      * @deprecated 弃用函数 使用静态函数 add_error() 代替
      */
-    public function addError(string $msg = '', string $title = '', string $class = 'danger')
+    public function addError(string $msg = '', string $title = '', string $class = 'danger'): static
     {
         $title = $title ?: __('错误！');
         $this->session->addData('system-message', $this->processMessage($msg, $title, $class));
         $this->session->setData('has-error', '1');
         return $this;
+    }
+
+    public static function add_error(string $msg = '', string $title = '', string $class = 'danger'): self
+    {
+        $title = $title ?: __('错误！');
+        self::session()->addData('system-message', self::process_message($msg, $title, $class));
+        self::session()->setData('has-error', '1');
+        return new self(self::session());
     }
 
     public static function error(string $msg = '', string $title = '', string $class = 'danger'): void

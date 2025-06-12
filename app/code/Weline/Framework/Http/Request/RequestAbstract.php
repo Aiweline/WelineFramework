@@ -38,6 +38,7 @@ abstract class RequestAbstract extends RequestFilter
 
     private string $area_router = State::area_frontend;
     private string $uri = '';
+    private string $origin_uri = '';
 
     /**
      * @var CacheInterface|null
@@ -383,6 +384,20 @@ abstract class RequestAbstract extends RequestFilter
         return $uri;
     }
 
+        public function getOriginUri(): string
+    {
+        if ($this->origin_uri !== '') {
+            return $this->origin_uri;
+        }
+        $origin_uri = $this->getServer('WELINE_ORIGIN_REQUEST_URI');
+        if ($origin_uri) {
+            $this->origin_uri = rtrim($origin_uri, '/');
+            return $this->origin_uri;
+        }
+        $origin_uri = $this->getServer('REQUEST_URI');
+        return $origin_uri;
+    }
+
     /**
      * @DESC          # 获取请求的module路由路径
      *
@@ -396,6 +411,13 @@ abstract class RequestAbstract extends RequestFilter
     {
         $url_exp = $this->parse_url();
         return array_shift($url_exp);
+    }
+
+    public function getOriginBaseUrl(): string
+    {
+        $uri = $this->getOriginUri();
+        $url_exp = explode('?', $uri);
+        return $this->getBaseHost() . array_shift($url_exp);
     }
 
     public function getBaseUrl(): string

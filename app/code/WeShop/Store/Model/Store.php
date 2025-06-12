@@ -31,34 +31,7 @@ class Store extends Model
     public const fields_LONGITUDE = 'longitude';
     public const fields_LOCAL = 'local';
     public const fields_CURRENCY = 'currency'; # 默认货币
-
-    public function addLocalDescription(): static
-    {
-        $lang = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
-    }
-
-    public function loadLocalName(): self
-    {
-        $localCode = $this->getData(self::fields_LOCAL);
-        /**@var Locals $local */
-        $local = ObjectManager::getInstance(Locals::class);
-        $local = $local->where(Locals::fields_CODE, $localCode)
-            ->where(Locals::fields_TARGET_CODE, Cookie::getLangLocal())
-            ->find()->fetch();
-        if ($local->getId()) {
-            $this->setData('local_name', $local->getName());
-        }
-        return $this;
-    }
-
+    
     public function setup(ModelSetup $setup, Context $context): void
     {
         $this->install($setup, $context);

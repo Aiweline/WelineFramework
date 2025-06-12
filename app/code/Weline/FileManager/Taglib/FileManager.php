@@ -94,6 +94,7 @@ class FileManager implements TaglibInterface
             $fileScan = ObjectManager::getInstance(Scan::class);
             $fileManagers = [];
             $modules = Env::getInstance()->getActiveModules();
+
             foreach ($modules as $module) {
                 $files = [];
                 $fileScan->globFile(
@@ -153,7 +154,7 @@ class FileManager implements TaglibInterface
             $result = $fileManager->setData(
                 [
                     'tag_key' => $tag_key,
-                    'tag_data' => $tag_data,
+                    'tag_data' => $tag_data, // 兼容非自闭合标签内容
                     'attributes' => $attributes,
                     'code' => $userConfigFileManager
                 ]
