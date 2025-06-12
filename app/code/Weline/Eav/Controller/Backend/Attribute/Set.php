@@ -26,12 +26,13 @@ class Set extends \Weline\Framework\App\Controller\BackendController
     {
         $this->set = $set;
     }
+
     function index()
     {
-        $this->set->addLocalDescription()
-        ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
-        ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\''.Cookie::getLangLocal().'\'', 'left', 'entity_local.name as entity_local_name');
-    
+        $this->set->loadLocalDescription()
+            ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
+            ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
+
         if ($search = $this->request->getGet('search')) {
             $this->set->where('concat(local.name,main_table.name,entity.name,entity.code)', "%$search%", 'like');
         }
@@ -48,16 +49,16 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         if ($this->request->isPost()) {
             try {
                 $set_id = $this->set->setData($this->request->getPost())
-                                    ->save();
+                    ->save();
                 $this->session->delete('eav_set');
                 if ($this->request->getGet('isAjax')) {
                     return $this->fetchJson(array('id' => $set_id, 'msg' => __('添加成功！')));
                 }
                 $this->getMessageManager()->addSuccess(__('添加成功！'));
                 $this->redirect($this->_url->getBackendUrl('*/backend/attribute/set/edit',
-                                                           [
-                                                               'set_id' => $set_id,
-                                                           ]));
+                    [
+                        'set_id' => $set_id,
+                    ]));
             } catch (\Exception $exception) {
                 if ($this->request->getGet('isAjax')) {
                     return $this->fetchJson(array('msg' => __('添加异常！可能已存在该属性集！')));
@@ -80,7 +81,7 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         if ($this->request->isPost()) {
             try {
                 $this->set->setModelFieldsData($this->request->getPost())
-                          ->save();
+                    ->save();
                 $this->session->delete('eav_set');
                 // 如果是ajax
                 if ($this->request->getGet('isAjax')) {
@@ -131,13 +132,13 @@ class Set extends \Weline\Framework\App\Controller\BackendController
     function getApiSearch(): string
     {
         $eav_entity_id = $this->request->getGet('eav_entity_id');
-        $json      = ['items' => [], 'eav_entity_id' => $eav_entity_id];
+        $json = ['items' => [], 'eav_entity_id' => $eav_entity_id];
         if (empty($eav_entity_id)) {
             return $this->fetchJson($json);
         }
-        $sets          = $this->set->where('eav_entity_id', $eav_entity_id)
-                                   ->select()
-                                   ->fetchArray();
+        $sets = $this->set->where('eav_entity_id', $eav_entity_id)
+            ->select()
+            ->fetchArray();
         $json['items'] = $sets;
         return $this->fetchJson($json);
     }
@@ -145,8 +146,8 @@ class Set extends \Weline\Framework\App\Controller\BackendController
     function getSearch(): string
     {
         $eav_entity_id = $this->request->getGet('eav_entity_id');
-        $search    = $this->request->getGet('search');
-        $json      = ['items' => [], 'eav_entity_id' => $eav_entity_id, 'search' => $search];
+        $search = $this->request->getGet('search');
+        $json = ['items' => [], 'eav_entity_id' => $eav_entity_id, 'search' => $search];
         if (empty($eav_entity_id)) {
             $json['msg'] = __('请先选择实体后操作！');
             return $this->fetchJson($json);
@@ -155,15 +156,15 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         if ($search) {
             $this->set->where('concat(name,code) like \'%' . $search . '%\'');
         }
-        $sets          = $this->set->select()
-                                   ->fetchArray();
+        $sets = $this->set->select()
+            ->fetchArray();
         $json['items'] = $sets;
         return $this->fetchJson($json);
     }
 
     protected function validatePost(): void
     {
-        $code      = $this->request->getPost('code');
+        $code = $this->request->getPost('code');
         $eav_entity_id = $this->request->getPost('eav_entity_id');
         if (empty($code) || empty($eav_entity_id)) {
             $this->getMessageManager()->addWarning(__('参数异常！'));
@@ -185,7 +186,7 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         // 实体
         /**@var \Weline\Eav\Model\EavEntity $eavEntityModel */
         $eavEntityModel = ObjectManager::getInstance(EavEntity::class);
-        $entities       = $eavEntityModel->reset()->select()->fetchArray();
+        $entities = $eavEntityModel->reset()->select()->fetchArray();
         $this->assign('entities', $entities);
         // 链接
         $this->assign('action', $this->_url->getCurrentUrl());

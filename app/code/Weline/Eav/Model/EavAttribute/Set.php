@@ -138,19 +138,6 @@ class Set extends \Weline\Framework\Database\Model
             ->fetch();
     }
 
-    function addLocalDescription()
-    {
-        $lang = Cookie::getLang();
-        $idField = $this::fields_ID;
-        $this->joinModel(
-            \Weline\Eav\Model\EavAttribute\Set\LocalDescription::class,
-            'local',
-            "main_table.{$idField}=local.{$idField} and local.local_code='$lang'",
-            'left'
-        );
-        return $this;
-    }
-
     /**
      * @DESC          # 获取关联属性集的属性模型
      *

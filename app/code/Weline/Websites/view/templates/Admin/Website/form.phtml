@@ -1,0 +1,149 @@
+<?php
+
+/**@var \Weline\Framework\View\Template $this */
+
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Framework\Manager\ObjectManager;
+
+$themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+    <!-- twitter-bootstrap-wizard css -->
+    <link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
+    <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
+    <style>
+        .input-group-addon {
+            display: inline-block;
+            width: 40px;
+            height: 38px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        span.required {
+            color: red
+        }
+    </style>
+
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?> class='bg-transparent'>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div class="layout-wrapper overflow-hidden " id="WebsitePage">
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class="card">
+        <div class="card-body">
+            <h4 class="card-title"><?= isset($website['website_id']) ? '编辑网站' : '添加网站' ?></h4>
+
+            <form action="<?= $this->getUrl('*/admin/website/' . (isset($website['website_id']) ? 'edit' : 'add')) ?>"
+                  method="post" class="needs-validation" novalidate>
+                <div class="row">
+                    <?php if (isset($website['website_id'])): ?>
+                        <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
+                    <?php endif; ?>
+
+                    <div class="col-4 mb-3">
+                        <label for="name" class="form-label">网站名称</label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="<?= $website['name'] ?? '' ?>" required>
+                        <div class="invalid-feedback">请输入网站名称</div>
+                    </div>
+
+                    <div class="col-4 mb-3">
+                        <label for="code" class="form-label">网站代码</label>
+                        <input type="text" class="form-control" id="code" name="code"
+                               value="<?= $website['code'] ?? '' ?>" required>
+                        <div class="invalid-feedback">请输入网站代码</div>
+                    </div>
+
+                    <div class="col-4 mb-3">
+                        <label for="url" class="form-label">网站URL</label>
+                        <input type="url" class="form-control" id="url" name="url"
+                               value="<?= $website['url'] ?? '' ?>" required>
+                        <div class="invalid-feedback">请输入有效的URL</div>
+                    </div>
+
+                    <div class="col-4 mb-3">
+                        <label for="default_currency" class="form-label">默认货币</label>
+                        <input type="text" class="form-control" id="default_currency" name="default_currency"
+                               value="<?= $website['default_currency'] ?? 'CNY' ?>" required>
+                        <div class="invalid-feedback">请输入默认货币</div>
+                    </div>
+
+                    <div class="col-4 mb-3">
+                        <label for="default_language" class="form-label">默认语言</label>
+                        <select class="form-select" name="default_language" id="default_language" required>
+                            <foreach name="locales" item="local">
+                                <option value="{{ local.code }}" @if(local.code== website.default_language=>
+                                    'selected')>
+                                    {{ local.name }}
+                                </option>
+                            </foreach>
+                        </select>
+                        <div class="invalid-feedback">请输入默认语言</div>
+                    </div>
+
+                    <div class="col-4 mb-3">
+                        <label for="default_timezone" class="form-label">默认时区{{ website.default_timezone }}</label>
+                        <select class="form-select" name="default_timezone" id="default_timezone" required>
+                            <foreach name="timezones" item="timezone">
+                                <option value="{{ timezone }}" @if(timezone== website.default_timezone=> 'selected')>
+                                    {{ timezone }}
+                                </option>
+                            </foreach>
+                        </select>
+                        <div class="invalid-feedback">请输入默认时区</div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">保存</button>
+                <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-secondary">返回</a>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+
+@template(Weline_Admin::common/footer.phtml)
+<!-- twitter-bootstrap-wizard js -->
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js)'></script>
+
+<!-- Table Editable plugin -->
+<script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
+
+<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.js)'></script>
+
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
+<w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
+<js:part name="debounce"/>
+<w:data-field url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>
+</body>
+
+</html>
