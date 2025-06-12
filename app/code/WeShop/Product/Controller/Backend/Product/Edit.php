@@ -3,6 +3,7 @@
 namespace WeShop\Product\Controller\Backend\Product;
 
 use Aiweline\PlayingInChina\Model\Message;
+use WeShop\Product\Model\Category;
 use WeShop\Product\Model\Product;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Set;
@@ -10,6 +11,7 @@ use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use WeShop\Product\Model\ProductCategory;
 
 class Edit extends BackendController
 {
@@ -71,6 +73,17 @@ class Edit extends BackendController
 //            dd($setAttributes);
             $this->assign('setAttributes', $setAttributes);
             # 如果是可配置产品
+            // 产品分类
+            /**
+             * @var ProductCategory $productCategory
+             */
+            $productCategory = w_obj(ProductCategory::class);
+            $this->assign('productCategoryIds', $productCategory->getCategoryIdsByProductId($product_id));
+            // 分类
+            $categories = ObjectManager::getInstance(Category::class)
+                ->loadLocalDescription()
+                ->select()->fetchArray();
+            $this->assign('categories', $categories);
             return $this->fetch();
         }
         $data = $this->request->getPost();
@@ -86,7 +99,14 @@ class Edit extends BackendController
         unset($data['attribute']);
         $product_id = $this->product->getId();
         try {
-            $this->product->setData($data)->save('product_id');
+            $this->product->setModelFieldsData($data)->save('product_id');
+            # 保存产品分类
+            /**
+             * @var ProductCategory $productCategory
+             */
+            $productCategory = w_obj(ProductCategory::class);
+            $productCategoryIds = $data['category_ids'] ?? [];
+            $productCategory->setProductCategories($product_id, $productCategoryIds);
             # 保存属性数据
             $eav_entity_id = $this->product->getEavEntityId();
             if ($attributes) {
@@ -142,7 +162,7 @@ class Edit extends BackendController
     private function getSetGroupAttributes($set_id): array
     {
         $groups = $this->product->eav_AttributeGroupModel()
-            ->addLocalDescription()
+            ->loadLocalDescription()
             ->where(Set::fields_ID, $set_id)
             ->select()
             ->fetchArray();

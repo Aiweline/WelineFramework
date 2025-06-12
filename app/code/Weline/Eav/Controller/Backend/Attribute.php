@@ -25,10 +25,10 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Attribute extends \Weline\Framework\App\Controller\BackendController
 {
-    public const        eav_entity                     = 'eav_entity';
-    public const        eav_entity_attribute_set       = 'eav_entity_attribute_set';
+    public const        eav_entity = 'eav_entity';
+    public const        eav_entity_attribute_set = 'eav_entity_attribute_set';
     public const        eav_entity_attribute_set_group = 'eav_entity_attribute_set_group';
-    public const        eav_attribute                  = 'attribute';
+    public const        eav_attribute = 'attribute';
 
     /**
      * @var \Weline\Eav\Model\EavAttribute
@@ -41,25 +41,25 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
 
     public function __construct(BackendUserData $backendUserData, EavAttribute $eavAttribute)
     {
-        $this->eavAttribute       = $eavAttribute;
-        $this->backendUserData    = $backendUserData;
+        $this->eavAttribute = $eavAttribute;
+        $this->backendUserData = $backendUserData;
     }
 
     public function index()
     {
-        if($entity_code = $this->request->getGet('entity_code')){
+        if ($entity_code = $this->request->getGet('entity_code')) {
             /**
              * @var \Weline\Eav\Model\EavEntity $entityModel
              */
             $entityModel = ObjectManager::getInstance(EavEntity::class);
             $entityModel->loadByCode($entity_code);
-            if(!$entityModel->getId()){
+            if (!$entityModel->getId()) {
                 throw new Core(__('实体不存在'));
             }
             $this->eavAttribute->where('main_table.eav_entity_id', $entityModel->getId());
             $this->assign('entity', $entityModel);
         }
-        $this->eavAttribute->addLocalDescription()
+        $this->eavAttribute->loadLocalDescription()
             ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
             ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
         $this->eavAttribute->joinModel(Type::class, 'type');
@@ -86,19 +86,19 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
     public function getTypeData()
     {
         $type_id = $this->request->getGet('type_id');
-        $type    = ObjectManager::getInstance(Type::class)->load($type_id);
+        $type = ObjectManager::getInstance(Type::class)->load($type_id);
         return $this->fetchJson($type->getData());
     }
 
     public function getSearch(): string
     {
-        $field     = $this->request->getGet('field');
-        $limit     = $this->request->getGet('limit');
+        $field = $this->request->getGet('field');
+        $limit = $this->request->getGet('limit');
         $eav_entity_id = $this->request->getGet('eav_entity_id');
-        $set_id    = $this->request->getGet('set_id');
-        $group_id  = $this->request->getGet('group_id');
-        $search    = $this->request->getGet('search');
-        $json      = ['items' => [], 'eav_entity_id' => $eav_entity_id, 'set_id' => $set_id, 'group_id' => $group_id, 'limit' => $limit, 'search' => $search];
+        $set_id = $this->request->getGet('set_id');
+        $group_id = $this->request->getGet('group_id');
+        $search = $this->request->getGet('search');
+        $json = ['items' => [], 'eav_entity_id' => $eav_entity_id, 'set_id' => $set_id, 'group_id' => $group_id, 'limit' => $limit, 'search' => $search];
         if (empty($eav_entity_id)) {
             $json['msg'] = __('请先选择实体后操作！');
             return $this->fetchJson($json);
@@ -125,12 +125,16 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
             $this->eavAttribute->where('concat(`attribute`,main_table.`name`,`entity`,`option`)', "%{$search}%", 'like');
             return $this->fetchJson($json);
         }
-        $attributes    = $this->eavAttribute->select()->fetchArray();
+        $attributes = $this->eavAttribute->select()->fetchArray();
         $json['items'] = $attributes;
         return $this->fetchJson($json);
     }
+
     public function add()
     {
+        # 检测是否有锁定实体 entity_type
+        $entity_type = $this->request->getGet('entity_type');
+        $this->assign('entity_type', $entity_type);
         $user_data = $this->backendUserData->where('backend_user_id', $this->session->getLoginUserID())
             ->where('scope', 'attribute')
             ->find()->fetch();
@@ -152,7 +156,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         # 类型
         /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
         $typeModel = ObjectManager::getInstance(EavAttribute\Type::class);
-        $types     = $typeModel->select()->fetchArray();
+        $types = $typeModel->select()->fetchArray();
         $this->assign('types', $types);
         return $this->fetch('form');
     }
@@ -183,17 +187,17 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
             $this->eavAttribute->load($attribute_id);
             $optionModels = [];
             foreach ($options as $option) {
-                $option['option_id']    = $option['option_id'] ?? 0;
+                $option['option_id'] = $option['option_id'] ?? 0;
                 $option['attribute_id'] = $attribute_id;
-                $option['eav_entity_id']    = $base['eav_entity_id'] ?? 0;
-                $optionModels[]         = ObjectManager::make(EavAttribute\Option::class, ['data' => $option]);
+                $option['eav_entity_id'] = $base['eav_entity_id'] ?? 0;
+                $optionModels[] = ObjectManager::make(EavAttribute\Option::class, ['data' => $option]);
             }
             $this->eavAttribute->setOptions($optionModels);
         }
-        $json['code']              = 0;
+        $json['code'] = 0;
         $json['data']['attribute'] = $this->eavAttribute->getData();
-        $json['data']['options']   = $this->eavAttribute->getOptions();
-        $json['msg']               = __('保存成功');
+        $json['data']['options'] = $this->eavAttribute->getOptions();
+        $json['msg'] = __('保存成功');
         # 删除实时保存的数据
         $this->backendUserData->where('backend_user_id', $this->session->getLoginUserID())->where('scope', 'attribute')->delete()->fetch();
         return $this->fetchJson($json);
@@ -214,7 +218,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         }
         # 属性配置项解析
         if (!isset($attribute['options'])) {
-            $options              = $attribute->getOptions();
+            $options = $attribute->getOptions();
             $attribute['options'] = $options;
         } else {
             $attribute['options'] = [];
@@ -229,7 +233,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         # 类型
         /**@var \Weline\Eav\Model\EavAttribute\Type $typeModel */
         $typeModel = ObjectManager::getInstance(EavAttribute\Type::class);
-        $types     = $typeModel->select()->fetchArray();
+        $types = $typeModel->select()->fetchArray();
         $this->assign('types', $types);
         return $this->fetch('form');
     }
@@ -250,7 +254,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
                 return $this->fetchJson($json);
             }
             $json['code'] = 1;
-            $json['msg']  = __('删除成功');
+            $json['msg'] = __('删除成功');
         } else {
             $json['msg'] = __('非法请求');
         }
@@ -260,6 +264,6 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
     public function postTranslate()
     {
         $attribute_id = $this->request->getPost('attribute_id');
-        $eav_entity_id    = $this->request->getPost('eav_entity_id');
+        $eav_entity_id = $this->request->getPost('eav_entity_id');
     }
 }

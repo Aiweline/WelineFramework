@@ -14,6 +14,7 @@ namespace Weline\I18n\Controller\Frontend\Taglib;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 
@@ -23,7 +24,7 @@ class Local extends \Weline\Framework\App\Controller\FrontendController
     {
         // 没有开启实时翻译，不能访问
         if (Env::get('i18n.translate_mode') !== 'online') {
-            $this->getMessageManager()->addError(__('没有开启实时翻译功能！'));
+            MessageManager::add_error(__('没有开启实时翻译，不能访问！'));
             $this->redirect(404);
         }
         /**@var I18n $i18nModel */
