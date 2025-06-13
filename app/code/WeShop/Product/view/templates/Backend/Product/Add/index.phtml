@@ -301,11 +301,12 @@ if (empty($product['progress'])) {
                                     </label>
                                     <select scope="product" name="category_ids[]" id="category_ids" class="form-control"
                                             multiple required>
-                                        <foreach name="categories" item="category">
+                                        <foreach name="categories" item="category" key="key">
                                             <php>
                                                 $isIn = in_array($category['category_id'], $productCategoryIds??[]);
+                                                $isFirst = $key === 0;
                                             </php>
-                                            <option value="{{category.category_id}}" @if{isIn=>'selected'}>
+                                            <option value="{{category.category_id}}" @if{isIn || isFirst=>'selected'}>
                                                 {{category.local_name | category.name}}
                                             </option>
                                         </foreach>
@@ -316,6 +317,7 @@ if (empty($product['progress'])) {
                                     <div class="invalid-feedback">
                                         <lang>请选择分类</lang>
                                     </div>
+                                    <!-- TODO 添加分类 Offcanvas -->
                                 </div>
                             </div>
                             <hr>
@@ -335,7 +337,7 @@ if (empty($product['progress'])) {
                                                   path='product/'
                                                   value='product.image'
                                                   multi='0'
-                                                  ext="jpg,jpeg,png,gif"
+                                                  ext="jpg,jpeg,png,gif,webp"
                                                   size="204800"
                                                   w='50'
                                                   h='50'/>
@@ -361,7 +363,7 @@ if (empty($product['progress'])) {
                                                   path="product/"
                                                   value="product.images"
                                                   multi="1"
-                                                  ext="jpg,jpeg,png,gif"
+                                                  ext="jpg,jpeg,png,gif,webp"
                                                   size="204800"
                                                   w="50"
                                                   h="50"/>
@@ -1310,5 +1312,12 @@ if (empty($product['progress'])) {
 </script>
 <w:editor-manager container-id="progress-wizard" submit=""/>
 <w:data-field url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
+
+<script>
+    $(document).ready(function() {
+        // 默认选中第一个分类
+        $('#category_ids option:first').prop('selected', true);
+    });
+</script>
 </body>
 </html>
