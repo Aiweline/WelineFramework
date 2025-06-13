@@ -96,7 +96,8 @@ class Core
         $this->url = $url = $this->processUrl();
 
 //        $url                     = str_replace('-', '', $origin_url);
-        if ($router = $this->cache->get($this->_router_cache_key)) {
+        $router = $this->cache->get($this->_router_cache_key);
+        if ($router) {
             $this->router = $router;
             return $this->route();
         }
@@ -117,6 +118,15 @@ class Core
                     return $pc_result;
                 }
                 break;
+            default:
+                try {
+                    $static = $this->StaticFile($url, true);
+                    if ($static) {
+                        exit();
+                    }
+                } catch (\ReflectionException|Exception $e) {
+                    $this->request->getResponse()->noRouter();
+                }
         }
 
         // 非开发模式（匹配不到任何路由将报错）
@@ -149,6 +159,7 @@ class Core
             }
         }
         $rule = $this->cache->get($this->rule_cache_key);
+        
         if (PROD && $url) {
             $this->url_cache_data = $url;
             $this->rule_cache_data = $rule;
@@ -481,6 +492,9 @@ class Core
 
     private function isStaticFile(): bool
     {
+        if(!$_SERVER['WELINE_PARSER_URL']){
+            return false;
+        }
         $arrs = $this->request->getPathSplit();
         $last = end($arrs);
         if (str_contains($last, '.') and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $last)) {
