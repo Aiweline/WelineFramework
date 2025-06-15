@@ -5,7 +5,7 @@
     <!--开发工具-->
     <add source="Weline_DeveloperWorkspace::dev-tool" name="dev-tool" title="开发工具" action="dev/tool/admin"
          parent="Weline_Backend::system_dev_configuration" icon="ri-code-box-line" order="20001"/>
-    <add source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试" action="dev/tool/admin/sandbox"
+    <add source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试/沙盒" action="dev/tool/admin/sandbox"
          parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-code-tags-check" order="20004"/>
     <add source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档管理器" action="dev/tool/admin/document"
          parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="20002"/>

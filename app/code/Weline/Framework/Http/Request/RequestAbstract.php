@@ -468,7 +468,8 @@ abstract class RequestAbstract extends RequestFilter
             return $_SERVER['WELINE_WEBSITE_URL'];
         }
         $port = $this->getServer('SERVER_PORT');
-        return $this->getSsl() . '://' . $this->getServer('SERVER_NAME') . ($port == '80' || $port == '443' ? '' : ':' . $port);
+        $host =  $this->getServer('SERVER_NAME')?: $this->getServer('HTTP_HOST');
+        return $this->getSsl() . '://' . $host . ($port == '80' || $port == '443' ? '' : ':' . $port);
     }
 
     public function getPrePath(): string

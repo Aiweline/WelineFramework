@@ -15,10 +15,16 @@ namespace Weline\DeveloperWorkspace\Controller;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\Env;
 
+
 class Sandbox extends FrontendController
 {
     function close()
     {
+        $key = $this->request->getGet('key');
+        if($key != Env::getInstance()->getConfig('sandbox_key')){
+            $this->getMessageManager()->addError(__('启动Key错误'));
+            $this->redirect($this->request->getServer('HTTP_REFERER'));
+        }
         if($this->request->getGet('close')=='on'){
             setcookie('w_sandbox', '', 0, '/', '', false, false);
             setcookie('w_sandbox', '', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);
@@ -29,6 +35,11 @@ class Sandbox extends FrontendController
 
     function enable()
     {
+        $key = $this->request->getGet('key');
+        if($key != Env::getInstance()->getConfig('sandbox_key')){
+            $this->getMessageManager()->addError(__('启动Key错误'));
+            $this->redirect($this->request->getServer('HTTP_REFERER'));
+        }
         if($this->request->getGet('enable')=='on'){
             setcookie('w_sandbox', '1', 0, '/', '', false, false);
             setcookie('w_sandbox', '1', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);

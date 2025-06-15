@@ -1395,6 +1395,7 @@ abstract class AbstractModel extends DataObject
             $params = ObjectManager::getInstance(Request::class)->getGet();
         }
         $this->setQuery($this->getQuery()->pagination($page, $pageSize, $params, $max_limit, $total));
+        
         $this->pagination = $this->getQuery()->pagination;
         $this->setData('pagination', $this->getPagination());
         return $this;

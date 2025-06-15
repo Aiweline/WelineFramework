@@ -529,6 +529,7 @@ abstract class Query implements QueryInterface
                 $this->prepareSql('find');
             }
         }
+
         $this->fetch_type = 'find';
         $result = $this->fetch();
         if (isset($result[$alias])) {
