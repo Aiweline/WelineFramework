@@ -358,7 +358,7 @@ class Template extends DataObject
      * @return bool|void
      * @throws \Exception
      */
-    public function fetchHtml(string $fileName, array $dictionary = [])
+    public function fetchHtml(string $fileName, array $dictionary = []) 
     {
         $comFileName = $this->getFetchFile($fileName);
         return $this->ob_file($comFileName, $dictionary);
