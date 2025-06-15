@@ -14,7 +14,7 @@ namespace Weline\DeveloperWorkspace\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\Env;
-
+use Weline\Framework\Manager\Message;
 
 class Sandbox extends FrontendController
 {
@@ -22,14 +22,14 @@ class Sandbox extends FrontendController
     {
         $key = $this->request->getGet('key');
         if($key != Env::getInstance()->getConfig('sandbox_key')){
-            $this->getMessageManager()->addError(__('启动Key错误'));
+            Message::error(__('启动Key错误'));
             $this->redirect($this->request->getServer('HTTP_REFERER'));
         }
         if($this->request->getGet('close')=='on'){
             setcookie('w_sandbox', '', 0, '/', '', false, false);
             setcookie('w_sandbox', '', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);
         }
-        $this->getMessageManager()->addSuccess(__('沙盒环境已关闭'));
+        Message::success(__('沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！'));
         $this->redirect($this->request->getServer('HTTP_REFERER'));
     }
 
@@ -37,14 +37,14 @@ class Sandbox extends FrontendController
     {
         $key = $this->request->getGet('key');
         if($key != Env::getInstance()->getConfig('sandbox_key')){
-            $this->getMessageManager()->addError(__('启动Key错误'));
+            Message::error(__('启动Key错误'));
             $this->redirect($this->request->getServer('HTTP_REFERER'));
         }
         if($this->request->getGet('enable')=='on'){
             setcookie('w_sandbox', '1', 0, '/', '', false, false);
             setcookie('w_sandbox', '1', 0, '/' . Env::getInstance()->getConfig('admin'), '', false, false);
         }
-        $this->getMessageManager()->addSuccess(__('沙盒环境已启动'));
+        Message::success(__('沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！'));
         $this->redirect($this->request->getServer('HTTP_REFERER'));
     }
 }
