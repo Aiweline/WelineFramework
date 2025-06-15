@@ -8,7 +8,6 @@ declare(strict_types=1);
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
  */
-
 namespace Weline\DeveloperWorkspace\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;

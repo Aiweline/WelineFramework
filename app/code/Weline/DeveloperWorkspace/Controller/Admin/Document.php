@@ -14,6 +14,7 @@ namespace Weline\DeveloperWorkspace\Controller\Admin;
 use Weline\Backend\Model\BackendUser;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Model\ModelService;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,6 +22,12 @@ use Weline\Framework\System\File\Uploader;
 
 use function PHPUnit\Framework\matches;
 
+#[Acl(
+    'Weline_DeveloperWorkspace::dev-document',
+     '开发文档管理', 
+     'fa fa-list-alt',
+      '管理开发文档',
+      'Weline_DeveloperWorkspace::dev-document-manager')]
 class Document extends \Weline\Framework\App\Controller\BackendController
 {
     private Url $url;
@@ -31,6 +38,9 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         $this->url = $url;
     }
 
+    #[
+        Acl('Weline_DeveloperWorkspace::dev-document-manager', '文档列表', 'fa fa-list-alt'),
+    ]
     public function index()
     {
         $documentModel = ModelService::getDocumentModel();
@@ -46,6 +56,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-delete', '文档删除', 'fa fa-delete')]
     public function postDelete()
     {
         $id = $this->request->getParam('id');
@@ -57,11 +68,13 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         }
     }
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-edit', '文档编辑', 'fa fa-edit')]
     public function edit()
     {
         $this->redirect($this->url->getBackendUrl('dev/tool/admin/document/add', $this->request->getParams()));
     }
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-add', '文档添加', 'fa fa-plus')]
     public function add()
     {
         // 分类
@@ -78,6 +91,9 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         return $this->fetch();
     }
 
+    #[
+        Acl('Weline_DeveloperWorkspace::dev-document-manager-save', '文档保存', 'fa fa-save'),
+    ]
     public function postPost()
     {
         # 保存
@@ -98,6 +114,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document'));
     }
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-upload', '文档上传', 'fa fa-upload')]
     public function postUpload()
     {
         $uploader = new Uploader();

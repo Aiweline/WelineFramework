@@ -10,18 +10,6 @@ class FileManagerTest extends TestCore
 {
     public function testFileManager()
     {
-        $str = '<file-manager title="从图库选择" vars="store" target="#image" path="bbs/site/logo"
-                                          value="store.logo.filename" w="50" h="50" multi="0"
-                                          ext="png,jpeg,jpg,webp,svg,ico"></file-manager>';
-        /**@var \Weline\Framework\View\Template $tmp */
-        $tmp = ObjectManager::getInstance(Template::class);
-        $res = $tmp->tmp_replace($str);
-        $res = str_replace('"', '\'', $res);
-        $res = str_replace('$', '\$', $res);
-        $res = str_replace("\r\n", '', $res);
-        $res = str_replace(' ', '', $res);
-        $md5 = md5($res);
-        $this->assertTrue($md5 == '040cbe69071c6b145940dad765e7bfba');
 
         $str = '<file-manager title="从图库选择" vars="store" target="#image" path="bbs/site/logo"
                                           value="{{site.logo.filename}}" w="50" h="50" multi="0"

@@ -11,4 +11,4 @@ declare(strict_types=1);
 # 全局DEBUG模式 注释可使用url控制运行环境，设置可以强行控制DEBUG
 //defined('DEBUG') || define('DEBUG', 1);
 # 全局沙盒模式 注释可使用url控制运行环境，设置可以强行控制SANDBOX
-//defined('SANDBOX') || define('SANDBOX', 0);
+defined('SANDBOX') || define('SANDBOX', 0);
