@@ -584,13 +584,14 @@ class I18n
      */
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
     {
-        $cache_key = __FUNCTION__;
+        $cache_key = __FUNCTION__.'_'.$target_local;
         $locals = $this->i18nCache->get($cache_key);
         if ($locals) {
             return $locals;
         }
         /**@var Locals $LocalsModel */
         $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code', $target_local);
+        $this->i18nCache->set($cache_key,$LocalsModel);
         return $LocalsModel;
     }
 }

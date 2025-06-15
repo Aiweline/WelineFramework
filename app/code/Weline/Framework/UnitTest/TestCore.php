@@ -10,10 +10,7 @@
 namespace Weline\Framework\UnitTest;
 
 use PHPUnit\Framework\TestCase;
-use Weline\DeveloperWorkspace\Plugin\Route;
-use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\CoreUnit;
 use Weline\Framework\Session\Session;
@@ -35,13 +32,14 @@ if (!defined('BP')) {
         throw new \Exception('请先安装 composer');
     }
 }
-require BP . 'index.php';
+require BP . '/app/bootstrap_phpunit.php';
 if (!defined('ENV_TEST')) {
     define('ENV_TEST', true);
 }
 $_SERVER['REQUEST_URI'] = '/test';
 // 初始化session
 ObjectManager::getInstance(Session::class);
+
 
 class TestCore extends TestCase
 {

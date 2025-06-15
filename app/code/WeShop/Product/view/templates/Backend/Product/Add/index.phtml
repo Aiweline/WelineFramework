@@ -304,9 +304,8 @@ if (empty($product['progress'])) {
                                         <foreach name="categories" item="category" key="key">
                                             <php>
                                                 $isIn = in_array($category['category_id'], $productCategoryIds??[]);
-                                                $isFirst = $key === 0;
                                             </php>
-                                            <option value="{{category.category_id}}" @if{isIn || isFirst=>'selected'}>
+                                            <option value="{{category.category_id}}" @if{isIn =>'selected'}>
                                                 {{category.local_name | category.name}}
                                             </option>
                                         </foreach>

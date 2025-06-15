@@ -16,13 +16,15 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 
 #[Acl('Weline_DeveloperWorkspace::dev-document-manager',
-    'dev-document-manager',
-    'icon',
-    '开发文档管理器',
-    ''
-)]
+    'dev-document-catalog-manager',
+    'fa fa-book-o',
+    '文档分类管理器')]
 class Catalog extends \Weline\Admin\Controller\BaseController
 {
+    #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-list',
+        'dev-document-manager',
+        'fa fa-list-alt',
+        '文档分类列表')]
     public function index()
     {
         $catalogModel = $this->getCatalogModel();
@@ -40,6 +42,10 @@ class Catalog extends \Weline\Admin\Controller\BaseController
     }
 
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-catalog-manager-tree',
+        'dev-document-manager',
+        'fa fa-list-alt',
+        '文档分类树')]
     public function tree()
     {
         $trees = $this->getCatalogModel()->getTree(
@@ -73,6 +79,11 @@ class Catalog extends \Weline\Admin\Controller\BaseController
         return $trees;
     }
 
+    #[Acl(
+        'Weline_DeveloperWorkspace::dev-document-catalog-manager-delete',
+        'dev-document-manager',
+        'fa fa-delete',
+        '文档分类删除')]
     /**
      * @throws \ReflectionException
      * @throws Exception
@@ -80,7 +91,6 @@ class Catalog extends \Weline\Admin\Controller\BaseController
      */
     public function delete()
     {
-        dd($this->request->getParam('id'));
         $catalogModel = $this->getCatalogModel()->load($this->request->getParam('id'));
         if ($catalogModel->getId()) {
             try {
@@ -94,6 +104,10 @@ class Catalog extends \Weline\Admin\Controller\BaseController
         $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document/catalog'));
     }
 
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-post',
+            'dev-document-manager',
+            'fa fa-save',
+            '文档分类保存')]
     public function postPost()
     {
         $post = $this->request->getPost();

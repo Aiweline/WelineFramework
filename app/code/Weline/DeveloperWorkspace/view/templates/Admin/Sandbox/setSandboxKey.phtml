@@ -1,0 +1,110 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>配置沙盒启动Key</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>
+                                        设置开启沙盒环境的Key
+                                    </lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>
+                                        设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。
+                                    </lang>
+                                </p>
+                                <form id="sandbox-key-form" class='needs-validation' action="{{req.url}}" method="post" novalidate>
+                                  <div class='row'>
+                                      <div class='col-md-6'>
+                                          <div class='mb-3'>
+                                              <label class='form-label' for='sandbox_key'><lang>沙盒Key</lang></label>
+                                              <input type='text' scope="w_sandbox" class='form-control' name="key" id='sandbox_key'
+                                                    placeholder='@lang{请输入沙盒Key}' value='{{env.sandbox_key}}'
+                                                    required>
+                                              <div class='valid-feedback'>
+                                                  <lang>沙盒Key验证成功</lang>
+                                              </div>
+                                              <div class='invalid-feedback'>
+                                                  <lang>请输入沙盒Key</lang>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                                  <button type='submit' class='btn btn-primary'><lang>提交</lang></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Init js -->
+<js:part name="debounce"/>
+<w:data-field url="@backend-url('backend/sandbox-data')" container-id="sandbox-data" event="input change click"/>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
