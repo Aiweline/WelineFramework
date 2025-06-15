@@ -14,6 +14,7 @@ namespace Weline\Eav\Controller\Backend\Attribute;
 
 use Weline\Eav\Model\EavAttribute\Set\LocalDescription;
 use Weline\Eav\Model\EavEntity;
+use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
@@ -34,7 +35,7 @@ class Group extends \Weline\Framework\App\Controller\BackendController
     {
         $this->group->loadLocalDescription()
             ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
-            ->joinModel(\Weline\Eav\Model\EavAttribute\Set::class, 'set', 'main_table.set_id=set.set_id', 'left', 'set.name as set_name')
+            ->joinModel(\Weline\Eav\Model\EavAttribute\Set::class, 'attr_set', 'main_table.set_id=attr_set.set_id', 'left', 'attr_set.name as set_name')
             ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name')
             ->joinModel(LocalDescription::class, 'set_local', 'main_table.set_id=set_local.set_id and set_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'set_local.name as set_local_name');
         if ($search = $this->request->getGet('search')) {

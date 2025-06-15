@@ -12,13 +12,18 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Controller\Admin;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\Cookie;
 
+#[Acl('Weline_DeveloperWorkspace::dev-sandbox-manager', '沙盒管理', 'fa fa-database')]
 class Sandbox extends BackendController
 {
     function index()
     {
+        $enabled = Cookie::get('w_sandbox');
+        $this->assign('enabled', $enabled);
         return $this->fetch();
     }
 

@@ -690,6 +690,38 @@ class Taglib
                         return $result;
                     }
             ],
+            'frontend-url' => [
+                'tag' => 1,
+                'tag-start' => 1,
+                'tag-end' => 1,
+                'callback' =>
+                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $result = '';
+                        switch ($tag_key) {
+                            case 'tag':
+                                $data = explode('|', $tag_data[2]);
+                                $var = $data[0] ?? '';
+                                $var = trim($var, "'\"");
+                                $var = str_replace(' ', '', $var);
+                                if (isset($data[1]) && $arr_str = $data[1]) {
+                                    $result .= "<?=\$this->getFrontendUrl('{$var}',{$arr_str})?>";
+                                } else {
+                                    $result .= "<?=\$this->getFrontendUrl('{$var}')?>";
+                                }
+                                break;
+                            case  'tag-start':
+                                $result .= "<?=\$this->getFrontendUrl(";
+                                break;
+                            case 'tag-end':
+                                $result .= ')?>';
+                                break;
+                            default:
+                                $data = str_replace(' ', '', $tag_data[1]);
+                                $result .= "<?=\$this->getFrontendUrl({$data})?>";
+                        };
+                        return $result;
+                    }
+            ],
             'api' => [
                 'tag' => 1,
                 'tag-start' => 1,

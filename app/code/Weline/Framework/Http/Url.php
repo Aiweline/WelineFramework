@@ -209,7 +209,7 @@ class Url implements UrlInterface
 
     static function getPrefix()
     {
-        return (Cookie::getCurrency() ? '/' . Cookie::getCurrency() : '') . (Cookie::getLang() ? '/' . Cookie::getLang() : '');
+        return ($_SERVER['WELINE_USER_CURRENCY'] ? '/' . $_SERVER['WELINE_USER_CURRENCY'] : '') . ($_SERVER['WELINE_USER_LANG'] ? '/' . $_SERVER['WELINE_USER_LANG'] : '');
     }
 
     public static function removeExtraDoubleSlashes(null|string $url = ''): string
@@ -446,7 +446,9 @@ class Url implements UrlInterface
             and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $parse_url)) {
             return $parse_url;
         }
+
         $url = $parse_url;
+
         # 初始化server
         if (empty(self::$parserServer)) {
             self::$parserServer = $_SERVER;
@@ -457,8 +459,8 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_BACKEND_AREA'] = Env::get('admin');
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
             self::$parserServer['WELINE_AREA'] = 'frontend';
-            self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::get('WELINE_USER_CURRENCY') ?? '';
-            self::$parserServer['WELINE_USER_LANG'] = Cookie::get('WELINE_USER_LANG') ?? '';
+            self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::getCurrency();
+            self::$parserServer['WELINE_USER_LANG'] = Cookie::getLang();
             self::$parserServer['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
             self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
             self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
@@ -617,6 +619,7 @@ class Url implements UrlInterface
                 break;
             }
         }
+
         # 匹配语言 self::$parserLanguages 最长倒序
         foreach (self::$parserLanguages as $language) {
             if (str_starts_with($url, $language)) {
@@ -691,20 +694,43 @@ class Url implements UrlInterface
         if (empty($data['language'])) {
             $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? $data['website']['default_language'] ?? 'zh_Hans_CN';
         }
-        $url = self::decode_url($url);
-        $data['uri'] = $url;
+        $decode_url = self::decode_url($url);
+        if($url !== $decode_url){
+            $uri = $decode_url;
+        }
+        // ====== 新增逻辑：去除区域、货币、语言前缀，得到纯路由部分 =====
+        $pure_uri = $uri;
+        // 去除区域
+        $area_route = $data['area_route'] ?? '';
+        if ($area_route && str_starts_with(ltrim($pure_uri, '/'), $area_route)) {
+            $pure_uri = substr(ltrim($pure_uri, '/'), strlen($area_route));
+        }
+        // 去除货币
+        $currency = $data['currency'] ?? '';
+        if ($currency && str_starts_with(ltrim($pure_uri, '/'), $currency)) {
+            $pure_uri = substr(ltrim($pure_uri, '/'), strlen($currency));
+        }
+        // 去除语言
+        $language = $data['language'] ?? '';
+        if ($language && str_starts_with(ltrim($pure_uri, '/'), $language)) {
+            $pure_uri = substr(ltrim($pure_uri, '/'), strlen($language));
+        }
+        $pure_uri = ltrim($pure_uri, '/');
+        $data['uri'] = $pure_uri;
+        // ====== 新增逻辑结束 =====
         if ($data['all_match']) {
             $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
             self::$parserMatchs[$match_url] = $data;
         }
-        $data['server'] = self::$parserServer;
         // 解析缓存
         self::$parserCache[$url] = $data;
         self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
-        self::$parserServer['REQUEST_URI'] = $url;
+        self::$parserServer['REQUEST_URI'] = $pure_uri;
+        $data['server'] = self::$parserServer;
         if ($key) {
             return $data[$key] ?? '';
         }
+
         return $data;
     }
 
