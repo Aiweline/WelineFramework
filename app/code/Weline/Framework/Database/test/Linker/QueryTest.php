@@ -12,12 +12,11 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\test\Linker;
 
 use Weline\Framework\App\Debug;
-use Weline\Framework\Database\Connection;
-use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 class QueryTest extends \Weline\Framework\UnitTest\TestCore
 {
+    
     public function testWhere()
     {
         /**@var \Weline\Framework\Database\DbManager $dbManager */
@@ -32,9 +31,9 @@ class QueryTest extends \Weline\Framework\UnitTest\TestCore
         );")->fetch();
 
         # 增
-        self::assertTrue(1 == $query->table('test_weline_for_query')->insert(['name' => 'test', 'stores' => 1])->fetch());
-        self::assertTrue(2 == $query->table('test_weline_for_query')->insert(['name' => 'test2', 'stores' => 2])->fetch());
-        self::assertTrue(3 == $query->table('test_weline_for_query')->insert(['name' => 'test3', 'stores' => 3])->fetch());
+        self::assertTrue(1 == $query->table('test_weline_for_query')->insert(['name' => 'test', 'stores' => 1,'id'=>1])->fetch());
+        self::assertTrue(2 == $query->table('test_weline_for_query')->insert(['name' => 'test2', 'stores' => 2,'id'=>2])->fetch());
+        self::assertTrue(3 == $query->table('test_weline_for_query')->insert(['name' => 'test3', 'stores' => 3,'id'=>3])->fetch());
         # 查
         self::assertEquals(1, $query->table('test_weline_for_query')->where('id', 1)->find('id')->fetch());
         self::assertEquals(2, $query->table('test_weline_for_query')->where('id', 2)->find('id')->fetch());
@@ -42,7 +41,7 @@ class QueryTest extends \Weline\Framework\UnitTest\TestCore
         # 删
         $query->table('test_weline_for_query')->where('id', 3)->delete()->fetch();
         self::assertEquals(null, $query->table('test_weline_for_query')->where('id', 3)->find('id')->fetch());
-        $query->table('test_weline_for_query')->insert(['name' => 'test3', 'stores' => 3])->fetch();
+        $query->table('test_weline_for_query')->insert(['name' => 'test3', 'stores' => 3,'id'=>3])->fetch();
         # 改条件
         $sql = $query->reset()->table('test_weline_for_query')
             ->alias('a')

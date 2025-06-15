@@ -39,7 +39,9 @@ class BlockTest extends TestCore
             'action' => $request->getUrlBuilder()->getUrl('test/test/test'),
             'save_form' => true
         ]);
-        $data = $block->setTemplate('Weline_Component::off-canvas.phtml')->render();
+        $data = $block->setTemplate('Weline_Component::off-canvas.phtml')
+        ->render();
+        
         if (str_contains($data, 'off-canvas.phtml')) {
             $this->assertTrue(true, '模板渲染成功');
         } else {

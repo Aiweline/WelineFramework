@@ -32,8 +32,13 @@ use Weline\Framework\Manager\ObjectManager;
      * @param string $rewrite
      *
      */
-    public function __construct(string $source_id, string $source_name, string $icon, string $document, string $parent_source = '', string $rewrite =
-    '')
+    public function __construct(
+        string $source_id, 
+        string $source_name, 
+        string $icon, 
+        string $document='', 
+        string $parent_source = '', 
+        string $rewrite = '')
     {
         if ($source_id === $parent_source) {
             throw new Exception(__('source_id与parent_source不能相同！'));
