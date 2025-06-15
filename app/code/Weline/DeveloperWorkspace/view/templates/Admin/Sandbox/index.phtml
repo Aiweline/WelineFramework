@@ -81,6 +81,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <div class="row">
                     <div class="col-xl-12 col-sm-12">
                         <div class="card">
+                            <div class="card-title">
+                                <!-- start page message -->
+                                <div class='row'>
+                                    <template>Weline_Component::message.phtml</template>
+                                </div> <!-- end message -->
+                            </div>
                             <div class="card-body">
                                 <h4 class='card-title'>
                                     <lang>可配置参数：</lang>
@@ -119,14 +125,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         <div class="mt-2">
                                             <lang>沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：</lang>
                                             @frontend-url{'*/sandbox/enable'}?enable=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                                            <a href="@frontend-url{'*/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
+                                            <a href="@url{'*/admin/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
                                                 <lang>开启沙盒</lang>
                                             </a>
                                         </div>
                                         <div class="mt-2">
                                             <lang>关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：</lang>
                                             @frontend-url{'*/sandbox/close'}?close=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                                            <a href="@frontend-url{'*/sandbox/close'}?close=on&key={{env.sandbox_key}}">
+                                            <a href="@url{'*/admin/sandbox/close'}?close=on&key={{env.sandbox_key}}">
                                                 <lang>关闭沙盒</lang>
                                             </a>
                                         </div>
