@@ -429,6 +429,11 @@ class Template extends DataObject
         return $this->getUrlObject()->getUrl($path, $params, $merge_query);
     }
 
+    public function getFrontendUrl(string $path, array $params = [], bool $merge_query = false): string
+    {
+        return $this->getUrlObject()->getFrontendUrl($path, $params, $merge_query);
+    }
+
     public function getApi(string $path, array $params = [], bool $merge_query = false): string
     {
         return $this->getUrlObject()->getUrl($path, $params, $merge_query);

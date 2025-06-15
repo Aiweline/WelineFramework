@@ -234,16 +234,19 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $text_suite_name = implode(',', $args) ?: 'unit';
         $this->printing->note(__('收集完成，准备运行...'));
         $this->printing->note(__('正在测试套件: %{1}', $text_suite_name));
-        $this->printing->setup(__('重要提示：测试套件运行过程中会操作数据库，从而产生不可预知的风险。请确认当前环境非生产环境，你确认当前环境非生产环境么？(y/n)'));
-        if (strtolower(trim($this->system->input())) !== 'y') {
-            $this->printing->setup(__('已停止运行！'));
-            exit(1);
+        if(!DEV){
+            $this->printing->setup(__('重要提示：测试套件运行过程中会操作数据库，从而产生不可预知的风险。请确认当前环境非生产环境，你确认当前环境非生产环境么？(y/n)'));
+            if (strtolower(trim($this->system->input())) !== 'y') {
+                $this->printing->setup(__('已停止运行！'));
+                exit(1);
+            }
+            $this->printing->setup(__('重要提示：再次确认需要运行么？(y/n)'));
+            if (strtolower(trim($this->system->input())) !== 'y') {
+                $this->printing->setup(__('已停止运行！'));
+                exit(1);
+            }
         }
-        $this->printing->setup(__('重要提示：再次确认需要运行么？(y/n)'));
-        if (strtolower(trim($this->system->input())) !== 'y') {
-            $this->printing->setup(__('已停止运行！'));
-            exit(1);
-        }
+        
         $ds = DS;
         $command = $this->system->exec(PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testsuite $text_suite_name", false);
         $this->printing->success($command['command']);

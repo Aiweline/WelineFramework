@@ -130,7 +130,6 @@ class PcController extends Core
     protected function setTemplate(Template $template): static
     {
         $this->_template = $template;
-
         return $this;
     }
 

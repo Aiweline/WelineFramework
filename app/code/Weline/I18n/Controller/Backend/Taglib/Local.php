@@ -23,14 +23,17 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         /**@var I18n $i18nModel */
         $i18nModel = ObjectManager::getInstance(I18n::class);
         $localsModel = $i18nModel->getActiveLocalsModel(Cookie::getLangLocal());
-        if ($search = $this->request->getGet('search')) {
+        if ($search = $this->request->getGet('search', '')) {
             $localsModel->where("concat(" . implode(',', $localsModel->getModelFields()) . ")", '%' . $search . '%', 'like');
         }
         $localsModel->pagination()->select();
         $locals = $localsModel->fetchArray();
         if (empty($locals)) {
-            $this->getMessageManager()->addError(__('没有找到任何本地化数据！搜索本地语言：%{1}', $search));
-            $this->redirect(404);
+            $url = $this->request->getUrlBuilder()->getUrl('*/backend/countries');
+            $this->getMessageManager()->addError(__('没有找到任何本地化数据！<a target="_blank" href="%{url}">前往I18n安装启用</a>搜索本地语言：%{search}', [
+                'search'=>$search,
+                'url'=>$url
+            ]));
         }
         $this->assign('local_pagination', $localsModel->getPagination());
         $modelName = $this->request->getGet('model');
@@ -55,11 +58,11 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         }
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
-//        $local_codes = [];
-//        foreach ($locals as $local) {
-//            $local_codes[] = $local['code'];
-//            $model->where($model::fields_local_code, $local['code'], '=', 'or');
-//        }
+    //    $local_codes = [];
+    //    foreach ($locals as $local) {
+    //        $local_codes[] = $local['code'];
+    //        $model->where($model::fields_local_code, $local['code'], '=', 'or');
+    //    }
         $local_descriptions = $model->reset()
             ->where($model::fields_ID, $id)
             ->select()

@@ -89,16 +89,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <lang>控制沙盒环境参数来达到测试系统环境。</lang>
                                 </p>
                                 <div class="row">
-                                    <div class='col-md-6 col-sm-6 col-lg-3'>
                                         <h3><lang>沙盒启动Key</lang></h3>
-                                        <lang>沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：</lang><br><span><url>/</url>?sandbox=<span class="text-info">{{env.sandbox_key|'当前未设置'}}</span></span>
-                                        <a href="@url{'/dev/tool/sandbox/enable'}?enable=on">
-                                            <lang>开启沙盒</lang>
-                                        </a>
-                                        <br>
-                                        <lang>关闭沙盒请在Cookie中删除或者设置：w_sandbox值。</lang>
-                                        <a href="@url{'/dev/tool/sandbox/close'}?close=on"><lang>关闭沙盒</lang></a>
-                                        <block class='Weline\Component\Block\OffCanvas'
+                                        <!-- 提示 沙盒状态 -->
+                                        <div class="mt-2">
+                                            <lang>当前沙盒状态：</lang>
+                                            <span class="badge bg-@if{enabled=>'success'|'info'}"><lang>@if{enabled=>'开启'|'关闭'}</lang></span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <lang>当前Key：</lang>
+                                            <span class="badge bg-info">{{env.sandbox_key}}</span>
+                                        </div>
+                                        <div class="mt-2"><block class='Weline\Component\Block\OffCanvas'
                                                template='Weline_Component::off-canvas.phtml'
                                                cache='0'
                                                id='sandbox'
@@ -113,8 +114,23 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                target-button-text='配置'
                                                save="1"
                                                flush="1"
-                                        />
-                                    </div>
+                                        /></div>
+                                        
+                                        <div class="mt-2">
+                                            <lang>沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：</lang>
+                                            @frontend-url{'*/sandbox/enable'}?enable=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
+                                            <a href="@frontend-url{'*/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
+                                                <lang>开启沙盒</lang>
+                                            </a>
+                                        </div>
+                                        <div class="mt-2">
+                                            <lang>关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：</lang>
+                                            @frontend-url{'*/sandbox/close'}?close=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
+                                            <a href="@frontend-url{'*/sandbox/close'}?close=on&key={{env.sandbox_key}}">
+                                                <lang>关闭沙盒</lang>
+                                            </a>
+                                        </div>
+                                        
                                 </div>
                             </div>
                             <!-- end card-body -->
