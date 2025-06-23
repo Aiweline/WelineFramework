@@ -43,6 +43,13 @@
         right: 0;
         bottom: 0;
         margin: auto;
+        object-fit: contain;
+    }
+
+    /* SVG specific styles */
+    .drag-pic[src$=".svg"] {
+        padding: 5px;
+        background: #fff;
     }
 </style>
 <div id="{{target}}-preview" class="file-target-preview">
@@ -70,7 +77,7 @@
                         aria-label="Close"></button>
             </div>
             <div class="modal-body" id="{{target}}-zoom-preview-image-body">
-                <img src="" alt="" title="">
+                <img data-src="" src="" alt="" title="">
             </div>
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
@@ -130,11 +137,17 @@
     flushSelectedImage()
 
     $('#{{target}}-preview').on('click', 'img', function () {
-        let src = '/media/image/' + $(this).attr('data-src');
+        let src = $(this).attr('data-src');
+        let isSvg = src.toLowerCase().endsWith('.svg');
+        let fullSrc = isSvg ? '/pub/media/' + src : '/media/image/' + src;
         let zoomModal = $('#{{target}}-zoom-modal');
         let zoomPreviewImageBody = $('#{{target}}-zoom-preview-image-body');
-        zoomPreviewImageBody.empty()
-        zoomPreviewImageBody.append(`<img src="${src}" class="img-fluid" alt="">`)
-        zoomModal.modal('show')
+        zoomPreviewImageBody.empty();
+        if (isSvg) {
+            zoomPreviewImageBody.append(`<img src="${fullSrc}" class="img-fluid" style="background: #fff; padding: 20px;" alt="">`);
+        } else {
+            zoomPreviewImageBody.append(`<img src="${fullSrc}" class="img-fluid" alt="">`);
+        }
+        zoomModal.modal('show');
     })
 </script>

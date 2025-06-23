@@ -41,7 +41,10 @@
                 cssAutoLoad: ['themes/windows-10/css/theme.css'],
                 url: '@url("*/frontend/connector")?startPath=' + startPath+'&ext='+ext+'&size='+size+'&multi='+multi, // or connector.maximal.php : connector URL (REQUIRED)
                 commandsOptions: {
-                    getfile: {multiple: true},
+                    getfile: {
+                        multiple: true,
+                        oncomplete: 'close'
+                    },
                     edit: {
                         extraOptions: {
                             // set API key to enable Creative Cloud image editor
@@ -62,9 +65,217 @@
                         officeOnlineMimes: ['application/vnd.ms-office', 'application/msword', 'application/vnd.ms-word', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.spreadsheet', 'application/vnd.oasis.opendocument.presentation']
                     }
                 },
-                onlyMimes: ext.split(',').map(function (e) {
-                    return e.trim();
-                }),
+                // 添加自定义配置
+                ui: ['toolbar', 'tree', 'path', 'stat'],
+                uiOptions: {
+                    // 工具栏配置
+                    toolbar: [
+                        ['back', 'forward'],
+                        ['reload'],
+                        ['home', 'up', 'parent'],
+                        ['mkdir', 'mkfile', 'upload'],
+                        ['open', 'download', 'getfile'],
+                        ['info'],
+                        ['quicklook'],
+                        ['copy', 'cut', 'paste'],
+                        ['rm'],
+                        ['duplicate', 'rename', 'edit', 'resize', 'rotate'],
+                        ['view', 'sort']
+                    ]
+                },
+                // 添加文件类型限制
+                onlyMimes: ext !== '*' ? ext.split(',').map(function(e) {
+                    e = e.trim().toLowerCase();
+                    // 根据文件扩展名返回对应的MIME类型
+                    switch(e) {
+                        // 图片类型
+                        case 'jpg':
+                        case 'jpeg':
+                            return 'image/jpeg';
+                        case 'png':
+                            return 'image/png';
+                        case 'gif':
+                            return 'image/gif';
+                        case 'svg':
+                            return 'image/svg+xml';
+                        case 'webp':
+                            return 'image/webp';
+                        case 'bmp':
+                            return 'image/bmp';
+                        case 'ico':
+                            return 'image/x-icon';
+                        case 'tiff':
+                        case 'tif':
+                            return 'image/tiff';
+                        case 'psd':
+                            return 'image/vnd.adobe.photoshop';
+                        case 'ai':
+                            return 'application/postscript';
+                        case 'eps':
+                            return 'application/postscript';
+                        case 'raw':
+                            return 'image/x-raw';
+                        // 文档类型
+                        case 'pdf':
+                            return 'application/pdf';
+                        case 'doc':
+                        case 'docx':
+                            return 'application/msword';
+                        case 'xls':
+                        case 'xlsx':
+                            return 'application/vnd.ms-excel';
+                        case 'ppt':
+                        case 'pptx':
+                            return 'application/vnd.ms-powerpoint';
+                        case 'txt':
+                            return 'text/plain';
+                        case 'rtf':
+                            return 'application/rtf';
+                        case 'csv':
+                            return 'text/csv';
+                        case 'xml':
+                            return 'application/xml';
+                        case 'json':
+                            return 'application/json';
+                        case 'md':
+                            return 'text/markdown';
+                        case 'odt':
+                            return 'application/vnd.oasis.opendocument.text';
+                        case 'ods':
+                            return 'application/vnd.oasis.opendocument.spreadsheet';
+                        case 'odp':
+                            return 'application/vnd.oasis.opendocument.presentation';
+                        // 压缩文件
+                        case 'zip':
+                            return 'application/zip';
+                        case 'rar':
+                            return 'application/x-rar-compressed';
+                        case '7z':
+                            return 'application/x-7z-compressed';
+                        case 'tar':
+                            return 'application/x-tar';
+                        case 'gz':
+                            return 'application/gzip';
+                        // 音频文件
+                        case 'mp3':
+                            return 'audio/mpeg';
+                        case 'wav':
+                            return 'audio/wav';
+                        case 'ogg':
+                            return 'audio/ogg';
+                        case 'm4a':
+                            return 'audio/m4a';
+                        case 'flac':
+                            return 'audio/flac';
+                        // 视频文件
+                        case 'mp4':
+                            return 'video/mp4';
+                        case 'webm':
+                            return 'video/webm';
+                        case 'avi':
+                            return 'video/x-msvideo';
+                        case 'mov':
+                            return 'video/quicktime';
+                        case 'wmv':
+                            return 'video/x-ms-wmv';
+                        case 'flv':
+                            return 'video/x-flv';
+                        case 'mkv':
+                            return 'video/x-matroska';
+                        // 字体文件
+                        case 'ttf':
+                            return 'font/ttf';
+                        case 'otf':
+                            return 'font/otf';
+                        case 'woff':
+                            return 'font/woff';
+                        case 'woff2':
+                            return 'font/woff2';
+                        case 'eot':
+                            return 'application/vnd.ms-fontobject';
+                        // 代码文件
+                        case 'html':
+                        case 'htm':
+                            return 'text/html';
+                        case 'css':
+                            return 'text/css';
+                        case 'js':
+                            return 'application/javascript';
+                        case 'php':
+                            return 'application/x-httpd-php';
+                        case 'py':
+                            return 'text/x-python';
+                        case 'java':
+                            return 'text/x-java-source';
+                        case 'c':
+                            return 'text/x-c';
+                        case 'cpp':
+                            return 'text/x-c++';
+                        case 'h':
+                            return 'text/x-c';
+                        case 'cs':
+                            return 'text/x-csharp';
+                        case 'go':
+                            return 'text/x-go';
+                        case 'rb':
+                            return 'text/x-ruby';
+                        case 'swift':
+                            return 'text/x-swift';
+                        case 'ts':
+                            return 'application/typescript';
+                        case 'tsx':
+                            return 'application/typescript';
+                        case 'jsx':
+                            return 'text/jsx';
+                        case 'vue':
+                            return 'text/vue';
+                        case 'sass':
+                        case 'scss':
+                            return 'text/x-sass';
+                        case 'less':
+                            return 'text/x-less';
+                        case 'sql':
+                            return 'text/x-sql';
+                        case 'sh':
+                            return 'text/x-shellscript';
+                        case 'bat':
+                            return 'application/x-msdos-program';
+                        case 'ps1':
+                            return 'application/x-powershell';
+                        // 其他常见文件
+                        case 'iso':
+                            return 'application/x-iso9660-image';
+                        case 'exe':
+                            return 'application/x-msdownload';
+                        case 'dll':
+                            return 'application/x-msdownload';
+                        case 'msi':
+                            return 'application/x-msdownload';
+                        case 'apk':
+                            return 'application/vnd.android.package-archive';
+                        case 'ipa':
+                            return 'application/octet-stream';
+                        case 'torrent':
+                            return 'application/x-bittorrent';
+                        case 'key':
+                            return 'application/x-iwork-keynote-sffkey';
+                        case 'pages':
+                            return 'application/x-iwork-pages-sffpages';
+                        case 'numbers':
+                            return 'application/x-iwork-numbers-sffnumbers';
+                        default:
+                            return 'application/octet-stream';
+                    }
+                }) : [],
+                // 添加自定义处理
+                handlers: {
+                    'image/svg+xml': {
+                        // 自定义SVG文件处理
+                        getFileUrl: function(file) {
+                            return file.url || (file.baseUrl + file.hash);
+                        }
+                    }
+                },
                 getFileCallback: function (file, fm) {
                     // 大小限制
                     if (size) {
@@ -140,16 +351,32 @@
                     for (var i = 0; i < file.length; i++) {
                         let f = file[i]
                         let fileJson = JSON.stringify(f).escapeString()
+                        // 处理SVG文件的预览
+                        let previewUrl = f.tmb;
+                        let isSvg = f.name.toLowerCase().endsWith('.svg');
+                        if (isSvg) {
+                            // 使用完整的URL路径
+                            previewUrl = f.baseUrl + f.path;
+                        }
                         var wrapper = document.createElement('div');
                         wrapper.innerHTML = `<div class="drag-item" draggable="true">
                                                         <div class="close" onclick="delSelectedImage(event)">x</div>
-                                                        <img data-src="${f.path}" src="${f.tmb}" alt="${f.name}" class="drag-pic img-responsive" draggable="false" data-file="${fileJson}">
+                                                        <img data-src="${f.path}" src="${previewUrl}" alt="${f.name}" 
+                                                             class="drag-pic img-responsive" draggable="false" 
+                                                             data-file="${fileJson}"
+                                                             style="${isSvg ? 'background: #fff; padding: 5px;' : ''}">
                                                     </div>`;
                         var html = wrapper.firstChild;
                         preview.append(html)
                     }
                     if (closeId !== undefined) {
                         parentDocument.find(closeId).click()
+                    }
+                    // 重置iframe状态
+                    if (parentDocument.find(targetId + '-iframe').length > 0) {
+                        let iframe = parentDocument.find(targetId + '-iframe');
+                        iframe.attr('src', '');
+                        iframe.show();
                     }
                 },
                 // bootCalback calls at before elFinder boot up

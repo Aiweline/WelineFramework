@@ -419,6 +419,7 @@ if (empty($product['progress'])) {
                                             <lang>属性集</lang>
                                         </label>
                                         <select scope="product" name="set_id" id="set_id" class="form-control" required>
+                                            <option value=""><lang>---请选择---</lang></option>
                                             <foreach name="sets" item="set">
                                                 <option value="{{set.set_id}}" @if{product.set_id==set.set_id=>'selected'}>{{set.name}}</option>
                                             </foreach>
@@ -496,6 +497,22 @@ if (empty($product['progress'])) {
                                               placeholder='@lang{请输入Meta元数据名}' name="meta_description" rows="8"
 
                                               required>{{product.meta_description}}</textarea>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                <div class='col-lg-6 mt-2 mb-6'>
+                                    <label for="meta_keywords" class="form-label">
+                                        <lang>Meta关键词</lang>
+                                    </label>
+                                    <textarea scope="product" type='text' class='form-control rounded'
+                                              id='meta_keywords'
+                                              placeholder='@lang{请输入Meta关键词}' name="meta_keywords" rows="8"
+
+                                              required>{{product.meta_keywords}}</textarea>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -838,12 +855,14 @@ if (empty($product['progress'])) {
 
             let baseAttributesInfo = Object.assign({}, baseAttributes)
             // 读取基础属性
+            const mainSku = ($('#sku').attr('value')||$('#sku').val())
             if (sku) {
-                baseAttributesInfo['sku'] = $('#sku').attr('value') + '-' + sku
+                baseAttributesInfo['sku'] = mainSku + '-' + sku
             } else {
-                baseAttributesInfo['sku'] = $('#sku').attr('value')
+                baseAttributesInfo['sku'] = mainSku
             }
-            baseAttributesInfo['name'] = $('#name').attr('value') + '-' + name
+            const mainName = ($('#name').attr('value')||$('#name').val())
+            baseAttributesInfo['name'] = mainName + '-' + name
             baseAttributesInfo['swatch_image_ids'] = swatch_image_ids
             baseAttributesInfo['swatch_images'] = swatch_images
             let base_image = baseAttributesInfo['image']
@@ -1221,13 +1240,16 @@ if (empty($product['progress'])) {
             return false
         }
         // 检查所有必填项
+        let firstInvalidLabel = '';
         $('#productForm [required]').each(function () {
             let input = $(this);
             if (!input.val() || (input.is('select') && input.val() === '0')) {
                 input.addClass('border-danger');
                 valid = false;
-                // 定位到第一个未填写项
-                if (valid === false && !window._firstInvalid) {
+                // 记录第一个未填写项的label
+                if (!firstInvalidLabel) {
+                    let label = input.closest('.form-group,div').find('label[for="'+input.attr('id')+'"],label[for="'+input.attr('name')+'"]').text();
+                    firstInvalidLabel = label ? label.replace('*', '').trim() : '';
                     window._firstInvalid = input;
                 }
             } else {
@@ -1236,23 +1258,30 @@ if (empty($product['progress'])) {
         });
         if (!valid) {
             e.preventDefault();
-            if (window._firstInvalid) {
-                // 自动切换到对应tab
-                var tabPane = window._firstInvalid.closest('.tab-pane');
-                if (tabPane && tabPane.id) {
-                    // 先切换tab再focus，避免focus丢失
-                    var nav = $('.twitter-bs-wizard-nav a[href="#' + tabPane.id + '"]');
-                    if (nav.length) {
-                        nav[0].click();
-                    }
-                    setTimeout(function() {
+            // 弹窗提示
+            Swal.fire({
+                title: '@lang{警告！}',
+                text: firstInvalidLabel ? ('@lang{请填写必填项：}' + firstInvalidLabel) : '@lang{请填写所有必填项！}',
+                icon: 'warning',
+                confirmButtonText: '@lang{好的}'
+            }).then(function () {
+                if (window._firstInvalid) {
+                    // 自动切换到对应tab
+                    var tabPane = window._firstInvalid.closest('.tab-pane');
+                    if (tabPane && tabPane.id) {
+                        var nav = $('.twitter-bs-wizard-nav a[href="#' + tabPane.id + '"]');
+                        if (nav.length) {
+                            nav[0].click();
+                        }
+                        setTimeout(function() {
+                            window._firstInvalid.focus();
+                        }, 300);
+                    } else {
                         window._firstInvalid.focus();
-                    }, 300);
-                } else {
-                    window._firstInvalid.focus();
+                    }
+                    window._firstInvalid = null;
                 }
-                window._firstInvalid = null;
-            }
+            });
             return false;
         }
         showLoading();
@@ -1310,7 +1339,7 @@ if (empty($product['progress'])) {
 
 </script>
 <w:editor-manager container-id="progress-wizard" submit=""/>
-<w:data-field url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
+<w:scope url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
 
 <script>
     $(document).ready(function() {
