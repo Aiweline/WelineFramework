@@ -80,7 +80,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         // 分类
         /**@var Catalog $catalogModel */
         $catalogModel = ObjectManager::getInstance(Catalog::class);
-        $catalogs     = $catalogModel->getTree();
+        $catalogs     = $catalogModel->getTree('pid');
         $this->assign('catalogs', $catalogs);
         # 作者
         /**@var BackendUser $adminUserModel */

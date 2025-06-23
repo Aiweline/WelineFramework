@@ -40,7 +40,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         <div class='card-body'>
             <form class='needs-validation' novalidate='' action='{{req.url}}' method='post'>
                 <has name="store">
-                    <input type="hidden" name="store_id" value="{{store.store_id}}">
+                    <input type="hidden" name="store_id" value="{{store.store_id}}" scope="store">
                 </has>
                 <!--基础信息-->
                 <div class='row'>
@@ -69,7 +69,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <span class="text-danger">*</span>
                                 <lang>店铺编码</lang>
                             </label>
-                            <input type='text' name="code" id='storeCode' value="{{store.code}}"
+                            <input type='text' name="code" id='storeCode' value="{{store.code}}" scope='store'
                                    class='form-control'
                                    placeholder='@lang{商铺唯一标识码}' required>
                             <div class='valid-feedback'>
@@ -109,7 +109,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <span class="text-danger">*</span>
                                 <lang>默认货币</lang>
                             </label>
-                            <input type='text' class='form-control' name='currency'
+                            <input type='text' class='form-control' name='currency' scope='store'
                                    data-parsley-minlength='5'
                                    id='longitude'
                                    required='required' value="{{store.currency}}"/>
@@ -127,7 +127,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='image'>
                                 <lang>Logo</lang>
                             </label>
-                            <input type='hidden' class='form-control' name='image'
+                            <input type='hidden' class='form-control' name='image' scope='store'
                                    data-parsley-minlength='5'
                                    id='image'
                                    required='required' value="{{store.image}}"/>
@@ -147,7 +147,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='local'>
                                 <lang>默认地区码</lang>
                             </label>
-                            <select class='form-control' name='local' id="local" required='required'>
+                            <select class='form-control' scope="store" name='local' id="local" required='required'>
                                 <option value="">
                                     <lang>--请选择--</lang>
                                 </option>
@@ -183,7 +183,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='validationStoreAddress'>
                                 <lang>地址</lang>
                             </label>
-                            <input type='text' class='form-control' name='address'
+                            <input type='text' class='form-control' name='address' scope='store'
                                    data-parsley-minlength='5'
                                    id='validationStoreAddress'
                                    required='required' value="{{store.address}}"/>
@@ -201,7 +201,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='phone'>
                                 <lang>手机</lang>
                             </label>
-                            <input type='text' class='form-control' name='phone'
+                            <input type='text' class='form-control' name='phone' scope='store'
                                    data-parsley-minlength='5'
                                    id='phone'
                                    required='required' value="{{store.phone}}"/>
@@ -219,7 +219,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='email'>
                                 <lang>邮箱</lang>
                             </label>
-                            <input type='text' class='form-control' name='email'
+                            <input type='text' class='form-control' name='email' scope='store'
                                    data-parsley-minlength='3'
                                    id='email'
                                    required='required' value="{{store.email}}"/>
@@ -234,18 +234,25 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <!--网站-->
                     <div class='col-md-4'>
                         <div class='mb-4'>
-                            <label class='form-label' for='website'>
-                                <lang>网站（域名）</lang>
+                            <label class='form-label' for='website_id'>
+                                <span class="text-danger">*</span>
+                                <lang>所属网站</lang>
                             </label>
-                            <input type='text' class='form-control' name='website'
-                                   data-parsley-minlength='5'
-                                   id='website'
-                                   required='required' value="{{store.website}}"/>
+                            <select class='form-control' scope="store" name='website_id' id="website_id" required='required'>
+                                <option value="">
+                                    <lang>--请选择--</lang>
+                                </option>
+                                <foreach name="websites">
+                                    <option value="{{v.website_id}}" @if{store.website_id==v.website_id=>
+                                        'selected'}>{{v.name}}
+                                    </option>
+                                </foreach>
+                            </select>
                             <div class='valid-feedback'>
-                                <lang>设置商铺网站成功</lang>
+                                <lang>选择网站成功</lang>
                             </div>
                             <div class='invalid-feedback'>
-                                <lang>请设置商铺网站</lang>
+                                <lang>请选择所属网站</lang>
                             </div>
                         </div>
                     </div>
@@ -255,7 +262,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='opening_hours'>
                                 <lang>开售时间</lang>
                             </label>
-                            <input type='text' class='form-control' name='opening_hours'
+                            <input type='text' class='form-control' name='opening_hours' scope='store'
                                    data-parsley-minlength='5'
                                    id='opening_hours'
                                    required='required' value="{{store.opening_hours}}"/>
@@ -273,7 +280,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='closing_hours'>
                                 <lang>关闭时间</lang>
                             </label>
-                            <input type='text' class='form-control' name='closing_hours'
+                            <input type='text' class='form-control' name='closing_hours' scope='store'
                                    data-parsley-minlength='5'
                                    id='closing_hours'
                                    required='required' value="{{store.closing_hours}}"/>
@@ -291,7 +298,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='description'>
                                 <lang>店铺详情</lang>
                             </label>
-                            <input type='text' class='form-control' name='description'
+                            <input type='text' class='form-control' name='description' scope='store'
                                    data-parsley-minlength='5'
                                    id='description'
                                    required='required' value="{{store.description}}"/>
@@ -309,7 +316,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='latitude'>
                                 <lang>纬度</lang>
                             </label>
-                            <input type='text' class='form-control' name='latitude'
+                            <input type='text' class='form-control' name='latitude' scope='store'
                                    data-parsley-minlength='5'
                                    id='latitude'
                                    required='required' value="{{store.latitude}}"/>
@@ -327,7 +334,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <label class='form-label' for='longitude'>
                                 <lang>经度</lang>
                             </label>
-                            <input type='text' class='form-control' name='longitude'
+                            <input type='text' class='form-control' name='longitude' scope='store'
                                    data-parsley-minlength='5'
                                    id='longitude'
                                    required='required' value="{{store.longitude}}"/>
@@ -360,5 +367,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 </div>
 <!-- END layout-wrapper -->
 @template(Weline_Admin::common/footer.phtml)
+<w:scope container-id="storeForm" event="change click"/>
 </body>
 </html>

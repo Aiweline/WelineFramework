@@ -143,7 +143,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 <w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
 <js:part name="debounce"/>
-<w:data-field url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>
+<w:scope url="@backend-url('backend/user-data')" container-id="WebsitePage" event="input change click"/>
 </body>
 
 </html>

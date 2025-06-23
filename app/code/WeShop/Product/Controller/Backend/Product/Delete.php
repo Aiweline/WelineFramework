@@ -23,7 +23,9 @@ class Delete extends BackendController
             $productCategoryModel->where('product_id', $id)->delete()->fetch();
             // 删除产品本身
             $productModel = ObjectManager::getInstance(Product::class);
-            $productModel->where('product_id', $id)->delete()->fetch();
+            $productModel->where('product_id', $id,'=','or')
+            ->where('parent_id', $id)
+            ->delete()->fetch();
             header('Content-Type: application/json');
             echo json_encode(['success' => true, 'message' => __('删除成功')]);
             exit;
