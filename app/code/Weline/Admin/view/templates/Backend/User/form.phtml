@@ -188,7 +188,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 <!-- Init js -->
 <js:part name="debounce"/>
-<w:data-field url="@backend-url('backend/user-data')" container-id="user-data" event="input change click"/>
+<w:scope url="@backend-url('backend/user-data')" container-id="user-data" event="input change click"/>
 @template(Weline_Admin::common/footer.phtml)
 </body>
 </html>

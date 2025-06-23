@@ -16,6 +16,7 @@ class Store extends Model
 {
     public const indexer = 'store';
     public const fields_ID = 'store_id';
+    public const fields_WEBSITE_ID = 'website_id';
     public const fields_NAME = 'name';
     public const fields_CODE = 'code';
     public const fields_STATUS = 'status';
@@ -52,6 +53,13 @@ class Store extends Model
                     0,
                     'primary key auto_increment',
                     '店铺ID'
+                )
+                ->addColumn(
+                    self::fields_WEBSITE_ID,
+                    TableInterface::column_type_INTEGER,
+                    0,
+                    'not null',
+                    '网站ID'
                 )
                 ->addColumn(
                     self::fields_NAME,

@@ -14,5 +14,8 @@ Register::register(
     'WeShop_Store',
     __DIR__,
     '1.0.1',
-    '<a href="https://bbs.aiweline.com">商店</a>'
+    '<a href="https://bbs.aiweline.com">商店</a>',
+    [
+        'Weline_Websites'
+    ]
 );
