@@ -19,10 +19,15 @@ class Image
             if (str_contains($value, ',')) {
                 $values = explode(',', $value);
                 foreach ($values as $value) {
-                    $url = $value . $process;
                     $pre_fix = '/media/image/';
-                    if (!str_starts_with($url, $pre_fix)) {
-                        $url = $pre_fix . $url;
+                    $ext = strtolower(pathinfo(PUB.'media/' .$value, PATHINFO_EXTENSION));
+                    if ($ext === 'svg') {
+                        $url = '/pub/media/' . ltrim($value, '/');
+                    } else {
+                        $url = $value . $process;
+                        if (!str_starts_with($url, $pre_fix)) {
+                            $url = $pre_fix . $url;
+                        }
                     }
                     $value_items[] = [
                         'path' => $value,
@@ -32,10 +37,16 @@ class Image
                     ];
                 }
             } else {
-                $url = $value . $process;
                 $pre_fix = '/media/image/';
-                if (!str_starts_with($url, $pre_fix)) {
-                    $url = $pre_fix . $url;
+                $svg_fix = '/pub/media/';
+                $ext = strtolower(pathinfo(PUB.'media/' .$value, PATHINFO_EXTENSION));
+                if ($ext === 'svg') {
+                    $url = $svg_fix . ltrim($value, '/');
+                } else {
+                    $url = $value . $process;
+                    if (!str_starts_with($url, $pre_fix)) {
+                        $url = $pre_fix . $url;
+                    }
                 }
                 $value_items[] = [
                     'path' => $value,

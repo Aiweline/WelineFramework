@@ -67,7 +67,7 @@ class UserData extends BackendController
         $json_format = json_decode($data['json']);
         return $this->fetchJson([
             'code' => 200,
-            'msg' => '保存成功',
+            'msg' => __('保存成功！'),
             'data' => $data,
             'json' => $json_format
         ]);

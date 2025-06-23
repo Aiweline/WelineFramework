@@ -85,6 +85,7 @@ class Add extends BackendController
                     /**@var EavAttribute $attributeDataItem */
                     foreach ($attributeDataItems as $attributeDataItem) {
                         # 先删除属性原值
+                        $attributeDataItem->current_setEntity($this->product);
                         $valueModel = $attributeDataItem->w_getValueModel();
                         $valueModel->where('entity_id', $product_id)->where('attribute_id', $attributeDataItem->getId())->delete();
                         $attribute_value = $attributeValues[$attributeDataItem->getId()];
@@ -115,6 +116,12 @@ class Add extends BackendController
                     $configurableProduct = array_merge($data, $configurableProduct);
                     try {
                         $child_product_id = $this->product->reset()->clearData()->setModelFieldsData($configurableProduct)->save();
+                        // 设置分类
+                        $productCategoryIds = $configurableProduct['category_ids'] ?? [];
+                        if ($child_product_id and $productCategoryIds) {
+                            $productCategoryModel->setCategoryIdsByProductId($child_product_id, $productCategoryIds);
+                        }
+                        $child_product = $this->product->reset()->clearData()->load($child_product_id); 
                     } catch (\Throwable $throwable) {
                         $this->getMessageManager()->addError(__('保存失败,请重试!') . (DEV ? $throwable->getMessage() : ''));
                         $this->request->isGet(true);
@@ -127,6 +134,7 @@ class Add extends BackendController
                     /**@var EavAttribute $attributeDataItem */
                     foreach ($attributeDataItems as $attributeDataItem) {
                         # 先删除属性原值 FIXME 属性没有实体
+                        $attributeDataItem->current_setEntity($child_product);
                         $valueModel = $attributeDataItem->w_getValueModel();
                         $valueModel->where('entity_id', $child_product_id)->where('attribute_id', $attributeDataItem->getId())->delete();
                         $attribute_values = $attributeValues[$attributeDataItem->getId()];
@@ -197,7 +205,7 @@ class Add extends BackendController
      */
     public function checkAttributes(array $attributes, int $eav_entity_id): array
     {
-# 批量查询属性
+        # 批量查询属性
         /**@var EavAttribute $attribute */
         $attribute = ObjectManager::make(EavAttribute::class);
         $attributesItems = [];

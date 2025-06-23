@@ -8,18 +8,21 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locale;
-use Weline\I18n\Model\Locals;
+use Weline\Websites\Model\Website;
 
 #[Acl('WeShop_Store::manager', '店铺管理', 'ri-settings-2-fill', '店铺管理', 'WeShop_Store::main')]
 class Store extends BackendController
 {
     private \WeShop\Store\Model\Store $store;
+    private Website $website;
 
     public function __construct(
         \WeShop\Store\Model\Store $store,
+        Website $website
     )
     {
         $this->store = $store;
+        $this->website = $website;
     }
 
     #[Acl('WeShop_Store::listing', '店铺列表', 'mdi mdi-format-list-bulleted-squarel', '店铺管理')]
@@ -53,6 +56,9 @@ class Store extends BackendController
         $this->assign('action', $this->_url->getCurrentUrl());
         # 所有已安装区域
         $this->assign('locals', self::getLocals());
+        # 获取所有网站列表
+        $websites = $this->website->select()->fetchArray();
+        $this->assign('websites', $websites);
         return $this->fetch('form');
     }
 
@@ -96,6 +102,9 @@ class Store extends BackendController
                 $this->getMessageManager()->addError(__('商铺不存在！'));
             }
             $this->assign('locals', self::getLocals());
+            # 获取所有网站列表
+            $websites = $this->website->select()->fetchArray();
+            $this->assign('websites', $websites);
             $this->assign('action', $this->_url->getCurrentUrl());
             $this->assign('store', $store);
             return $this->fetch('form');

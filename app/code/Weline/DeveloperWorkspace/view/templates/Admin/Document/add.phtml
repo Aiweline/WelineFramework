@@ -155,7 +155,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                 <var>$v.name</var>
                                                             </option>
                                                         </w:if>
-                                                        <w:notempty name="$v.nodes">
+                                                        <w:notempty name="$v.nodes">    
                                                             <w:foreach name="$v.nodes" item="node">
                                                                 <w:if condition="$document.category_id === $node.id">
                                                                     <option value="@var{$node.id}"
