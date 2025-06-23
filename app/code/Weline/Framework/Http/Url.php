@@ -209,7 +209,19 @@ class Url implements UrlInterface
 
     static function getPrefix()
     {
-        return ($_SERVER['WELINE_USER_CURRENCY'] ? '/' . $_SERVER['WELINE_USER_CURRENCY'] : '') . ($_SERVER['WELINE_USER_LANG'] ? '/' . $_SERVER['WELINE_USER_LANG'] : '');
+        $prefix = '';
+        
+        // 安全地获取货币前缀
+        if (!empty($_SERVER['WELINE_USER_CURRENCY'])) {
+            $prefix .= '/' . $_SERVER['WELINE_USER_CURRENCY'];
+        }
+        
+        // 安全地获取语言前缀
+        if (!empty($_SERVER['WELINE_USER_LANG'])) {
+            $prefix .= '/' . $_SERVER['WELINE_USER_LANG'];
+        }
+        
+        return $prefix;
     }
 
     public static function removeExtraDoubleSlashes(null|string $url = ''): string
@@ -698,31 +710,31 @@ class Url implements UrlInterface
         if($url !== $decode_url){
             $uri = $decode_url;
         }
-        // ====== 新增逻辑：去除区域、货币、语言前缀，得到纯路由部分 =====
+        # 新增逻辑：去除区域、货币、语言前缀，得到纯路由部分
         $pure_uri = $uri;
-        // 去除区域
+        # 去除区域
         $area_route = $data['area_route'] ?? '';
         if ($area_route && str_starts_with(ltrim($pure_uri, '/'), $area_route)) {
             $pure_uri = substr(ltrim($pure_uri, '/'), strlen($area_route));
         }
-        // 去除货币
+        # 去除货币
         $currency = $data['currency'] ?? '';
         if ($currency && str_starts_with(ltrim($pure_uri, '/'), $currency)) {
             $pure_uri = substr(ltrim($pure_uri, '/'), strlen($currency));
         }
-        // 去除语言
+        # 去除语言
         $language = $data['language'] ?? '';
         if ($language && str_starts_with(ltrim($pure_uri, '/'), $language)) {
             $pure_uri = substr(ltrim($pure_uri, '/'), strlen($language));
         }
         $pure_uri = ltrim($pure_uri, '/');
         $data['uri'] = $pure_uri;
-        // ====== 新增逻辑结束 =====
+        # 新增逻辑结束
         if ($data['all_match']) {
             $match_url = $data['website_url'] . ($has_area ? $area : '') . '/' . $data['currency'] . '/' . $data['language'];
             self::$parserMatchs[$match_url] = $data;
         }
-        // 解析缓存
+        # 解析缓存
         self::$parserCache[$url] = $data;
         self::$parserServer['ORIGIN_REQUEST_URI'] = $uri;
         self::$parserServer['REQUEST_URI'] = $pure_uri;

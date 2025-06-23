@@ -39,6 +39,27 @@ if (!function_exists('w_obj')) {
         return ObjectManager::getInstance($class);
     }
 }
+# url url生成实例化方法
+if (!function_exists('w_url')) {
+    function w_url(string $path, array $params=[], string $area='auto', bool $merge_url_params = false)
+    {
+        /**@var Weline\Framework\Http\Url $urlObj */
+        $urlObj = w_obj('Weline\Framework\Http\Url');
+        if('auto'===$area or 0 === $area){
+           return $urlObj->getUrl($path, $params, $merge_url_params);
+        }elseif('backend'===$area or 1 === $area){
+            return $urlObj->getBackendUrl($path, $params, $merge_url_params);
+        }elseif('backend_api'===$area or 2 === $area){
+            return $urlObj->getBackendApiUrl($path, $params, $merge_url_params);
+        }elseif('frontend'===$area or 3 === $area){
+            return $urlObj->getFrontendUrl($path, $params, $merge_url_params);
+        }elseif('frontend_api'===$area or 4 === $area){
+            return $urlObj->getFrontendApiUrl($path, $params, $merge_url_params);
+        }else{
+            return $urlObj->getUrl($path, $params, $merge_url_params);
+        }
+    }
+}
 if (!function_exists('getStringBetweenContents')) {
     function getStringBetweenContents(string $str, string $startDelimiter, string $endDelimiter): array
     {
