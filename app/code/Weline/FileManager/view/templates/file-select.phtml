@@ -33,13 +33,11 @@
     $('#{{target}}-select-modal').on('shown.bs.modal', () => {
         const iframe = $("#{{target}}-file-manager-iframe");
         if (iframe.attr('src') === '') {
-            iframe.attr('src', '{{connector}}')
+            iframe.attr('src', '{{connector}}');
         }
 
         function checkIframeLoaded() {
             const iframe = $("#{{target}}-file-manager-iframe");
-            // Get a handle to the iframe element
-            // console.log(iframe)
             let iframeDoc = iframe[0].contentDocument || undefined;
             if (iframeDoc === undefined && iframe[0].contentWindow) {
                 iframeDoc = iframe[0].contentWindow.document;

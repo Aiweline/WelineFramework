@@ -23,7 +23,7 @@ class Connector extends FrontendController
                 die(__('main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder'));
             }
             $mainJsContent = file_get_contents($mainJs);
-            $mainJs = __DIR__ . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
+            $mainJs = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
             $mainJsDir = dirname($mainJs);
             if (!is_dir($mainJsDir)) {
                 mkdir($mainJsDir, 755, true);
@@ -36,6 +36,7 @@ class Connector extends FrontendController
                 $baseUrl = array_shift($baseUrlArr);
             }
             $urlPath = $this->_url->getUrl('elfinder/frontend/connector');
+            
             $replaces = [
                 "baseUrl : 'js'" => "baseUrl : '{$baseUrl}'",
                 "php/connector.minimal.php" => "$urlPath",

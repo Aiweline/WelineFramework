@@ -312,9 +312,9 @@ class EavAttribute extends \Weline\Framework\Database\Model
         }
         $options = $this->getOptions();
         $values = $this->getValue();
-        foreach ($values as $value) {
-            foreach ($options as $op_key => $option) {
-                if ($option[Option::fields_option_id] == $value) {
+        if(is_string($values)){
+             foreach ($options as $op_key => $option) {
+                if ($option[Option::fields_option_id] == $values) {
                     $option['selected'] = 1;
                     $options[$op_key] = $option;
                 } else {
@@ -326,7 +326,24 @@ class EavAttribute extends \Weline\Framework\Database\Model
                     }
                 }
             }
+        }elseif(is_array($values)){
+            foreach ($values as $value) {
+                foreach ($options as $op_key => $option) {
+                    if ($option[Option::fields_option_id] == $value) {
+                        $option['selected'] = 1;
+                        $options[$op_key] = $option;
+                    } else {
+                        if ($only_has_value) {
+                            unset($options[$op_key]);
+                        } else {
+                            $option['selected'] = 0;
+                            $options[$op_key] = $option;
+                        }
+                    }
+                }
+            }
         }
+        
         if ($this->hasData('value_with_options')) {
             return $this->getData('value_with_options');
         }

@@ -105,6 +105,7 @@ class Product extends EavModel
                         ->setData(EavAttribute::fields_group_id, $group_id)
                         ->setData(EavAttribute::fields_set_id, $set_id)
                         ->setData(EavAttribute::fields_type_id, $type_id)
+                        ->setData(EavAttribute::fields_is_system, true)
                         ->setData(EavAttribute::fields_name, '图片')
                         ->forceCheck(true, [EavAttribute::fields_code, EavAttribute::fields_eav_entity_id, EavAttribute::fields_set_id])
                         ->save();
@@ -112,6 +113,7 @@ class Product extends EavModel
                         ->setData(EavAttribute::fields_eav_entity_id, $this->getEavEntityId())
                         ->setData(EavAttribute::fields_group_id, $group_id)
                         ->setData(EavAttribute::fields_set_id, $set_id)
+                        ->setData(EavAttribute::fields_is_system, true)
                         ->setData(EavAttribute::fields_name, '子图')
                         ->setData(EavAttribute::fields_type_id, $type_id)
                         ->forceCheck(true, [EavAttribute::fields_code, EavAttribute::fields_eav_entity_id, EavAttribute::fields_set_id])

@@ -28,7 +28,7 @@ class Catalog extends \Weline\Admin\Controller\BaseController
     public function index()
     {
         $catalogModel = $this->getCatalogModel();
-        $catalogs = $catalogModel->getTree();
+        $catalogs = $catalogModel->getTree('pid');
         $this->assign('catalogs', $catalogs);
         # 清理模型
         $catalogModel->clearData();
@@ -116,7 +116,7 @@ class Catalog extends \Weline\Admin\Controller\BaseController
         $pid = array_shift($pid_arr);
         $pid_level = (int)array_shift($pid_arr);
         $level = $pid_level;
-        if ($pid === $post['id']) {
+        if ($pid !=="0" and $pid === $post['id']) {
             $this->getMessageManager()->addError(__('不能自己选择自己作为父类！'));
             $this->redirect($this->_url->getBackendUrl('dev/tool/admin/document/catalog', ['id' => $post['id']]));
         }

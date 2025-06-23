@@ -149,8 +149,8 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                 <div id='bar' class='progress mt-5'>
                     <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
                 </div>
-                <form id="productForm" action='{{action}}' method='post' class="needs-validation" novalidate=''>
-                    <input type="hidden" class="hidden" id="product_id" name="product_id"
+                <form id="storeForm" action='{{action}}' method='post' class="needs-validation" novalidate=''>
+                    <input type="hidden" class="hidden" id="product_id" name="product_id" scope="store"
                            value="{{product.product_id}}">
                     <div class='tab-content twitter-bs-wizard-tab-content'>
                         <div class='tab-pane @if{product.progress==="product_base_info"=>"active"}'
@@ -160,7 +160,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="name" class="form-label">
                                         <lang>产品名</lang>
                                     </label>
-                                    <input scope="product" type='text' class='form-control rounded' id='name'
+                                    <input scope="store" type='text' class='form-control rounded' id='name'
                                            placeholder='@lang{请输入产品名}' name="name" value="{{product.name}}"
                                            required autocomplete/>
                                     <div class="valid-feedback">
@@ -174,7 +174,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="sku" class="form-label">
                                         <lang>SKU</lang>
                                     </label>
-                                    <input scope="product" type='text' class='form-control rounded' id='sku'
+                                    <input scope="store" type='text' class='form-control rounded' id='sku'
                                            placeholder='@lang{请输入SKU}' name="sku" value="{{product.sku}}"
                                            data-origin-value="{{product.sku}}"
                                            event="change input"
@@ -190,7 +190,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="spu" class="form-label">
                                         <lang>SPU</lang>
                                     </label>
-                                    <input scope="product" type='text' class='form-control rounded' id='spu'
+                                    <input scope="store" type='text' class='form-control rounded' id='spu'
                                            placeholder='@lang{请输入SPU}' name="spu" value="{{product.spu}}"
                                            required/>
                                     <div class="valid-feedback">
@@ -204,7 +204,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="cost" class="form-label">
                                         <lang>成本价</lang>
                                     </label>
-                                    <input scope="product" type='number' step="0.01" class='form-control rounded'
+                                    <input scope="store" type='number' step="0.01" class='form-control rounded'
                                            id='cost'
                                            placeholder='@lang{请输入成本价}' name="cost" value="{{product.cost}}"
                                            required/>
@@ -219,7 +219,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="price" class="form-label">
                                         <lang>价格</lang>
                                     </label>
-                                    <input scope="product" type='number' step="0.01" class='form-control rounded'
+                                    <input scope="store" type='number' step="0.01" class='form-control rounded'
                                            id='price'
                                            placeholder='@lang{请输入价格}' name="price" value="{{product.price}}"
                                            required/>
@@ -234,7 +234,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="weight" class="form-label">
                                         <lang>重量</lang>
                                     </label>
-                                    <input scope="product" type='number' step="0.01" class='form-control rounded'
+                                    <input scope="store" type='number' step="0.01" class='form-control rounded'
                                            id='weight'
                                            placeholder='@lang{请输入重量}' name="weight" value="{{product.weight}}"
                                            required/>
@@ -249,7 +249,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="stock" class="form-label">
                                         <lang>库存</lang>
                                     </label>
-                                    <input scope="product" type='number' step="1" class='form-control rounded'
+                                    <input scope="store" type='number' step="1" class='form-control rounded'
                                            id='stock'
                                            placeholder='@lang{请输入库存}' name="stock" value="{{product.stock}}"
                                            required/>
@@ -264,7 +264,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="product-status" class="form-label">
                                         <lang>状态</lang>
                                     </label>
-                                    <select scope="product" type='number' step="1" class='form-control rounded'
+                                    <select scope="store" type='number' step="1" class='form-control rounded'
                                             id='product-status'
                                             name="status"
                                             required>
@@ -289,7 +289,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="image" class="form-label">
                                         <lang>主图</lang>
                                     </label>
-                                    <input scope="product" type='hidden' class='form-control rounded' id='image'
+                                    <input scope="store" type='hidden' class='form-control rounded' id='image'
                                            placeholder='@lang{请选择主图}' name="image" value="{{product.image}}"
                                            required/>
                                     <file-manager target='#image'
@@ -314,7 +314,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="images" class="form-label">
                                         <lang>子图</lang>
                                     </label>
-                                    <input scope="product" type='hidden' class='form-control rounded' id='images'
+                                    <input scope="store" type='hidden' class='form-control rounded' id='images'
                                            placeholder='@lang{请选择图片}' name="images" value="{{product.images}}"
                                            required/>
                                     <file-manager target='#images'
@@ -341,7 +341,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="short_description" class="form-label">
                                         <lang>简述</lang>
                                     </label>
-                                    <textarea scope="product" editor="1" type='text' class='form-control rounded editor'
+                                    <textarea scope="store" editor="1" type='text' class='form-control rounded editor'
                                               id='short_description'
                                               placeholder='@lang{请输入简述}' name="short_description" rows="5"
                                               required>{{product.short_description}}</textarea>
@@ -356,7 +356,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="description" class="form-label">
                                         <lang>详情</lang>
                                     </label>
-                                    <textarea scope="product" editor="1" type='text' class='form-control rounded editor'
+                                    <textarea scope="store" editor="1" type='text' class='form-control rounded editor'
                                               id='description'
                                               placeholder='@lang{请输入详情内容}' name="description" rows="8"
                                               required>{{product.description}}</textarea>
@@ -375,7 +375,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="set_id" class="form-label">
                                         <lang>属性集</lang>
                                     </label>
-                                    <select scope="product" name="set_id" id="set_id" type="number"
+                                    <select scope="store" name="set_id" id="set_id" type="number"
                                             class="form-control" list="Sets"
                                             event="click change"
                                             placeholder='@lang{属性集}'
@@ -405,7 +405,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                              id='configurable_attributes'>
                             <div id="selectAttribute"></div>
                             <div id="configurableProducts"></div>
-                            <input type="hidden" name="configurableProductItems" id="configurableProductItems"
+                            <input type="hidden" name="configurableProductItems" id="configurableProductItems" scope="store"
                                    value="{{product.configurableProducts}}">
                         </div>
                         <div class='tab-pane' id='seo'>
@@ -414,7 +414,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="meta_name" class="form-label">
                                         <lang>Meta元数据名</lang>
                                     </label>
-                                    <input scope="product" type='text' class='form-control rounded' id='meta_name'
+                                    <input scope="store" type='text' class='form-control rounded' id='meta_name'
                                            placeholder='@lang{请输入Meta元数据名}' name="meta_name"
                                            value="{{product.meta_name}}"
                                            required/>
@@ -443,11 +443,28 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="meta_description" class="form-label">
                                         <lang>Meta元数据描述</lang>
                                     </label>
-                                    <textarea scope="product" type='text' class='form-control rounded'
+                                    <textarea scope="store" type='text' class='form-control rounded'
                                               id='meta_description'
                                               placeholder='@lang{请输入Meta元数据名}' name="meta_description" rows="8"
 
                                               required>{{product.meta_description}}</textarea>
+                                    <div class="valid-feedback">
+                                        <lang>填写正确！</lang>
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        <lang>请输入正确填写！</lang>
+                                    </div>
+                                </div>
+                                
+                                <div class='col-lg-6 mt-2 mb-6'>
+                                    <label for="meta_keywords" class="form-label">
+                                        <lang>Meta关键词</lang>
+                                    </label>
+                                    <textarea scope="store" type='text' class='form-control rounded'
+                                              id='meta_keywords'
+                                              placeholder='@lang{请输入Meta关键词}' name="meta_keywords" rows="8"
+
+                                              required>{{product.meta_keywords}}</textarea>
                                     <div class="valid-feedback">
                                         <lang>填写正确！</lang>
                                     </div>
@@ -539,7 +556,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 let selectTemplate = '';
                                 if (attribute.is_swatch !== 1) {
                                     selectTemplate = `
-                            <select scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}   id="${attribute.code}" type="number"
+                            <select scope="store" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}   id="${attribute.code}" type="number"
                                             class="form-control"
                                             placeholder='@lang{请输入}${attribute.name}'
                                             value="${attribute.name}"
@@ -552,7 +569,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 }
                                 if (is_disable && attribute.is_swatch !== 1) {
                                     selectTemplate = `
-                            <select scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs} disabled='disabled'  id="${attribute.code}" type="number"
+                            <select scope="store" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs} disabled='disabled'  id="${attribute.code}" type="number"
                                             class="form-control"
                                             placeholder='@lang{请输入}${attribute.name}'
                                             value="${attribute.name}"
@@ -612,7 +629,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                 <div class="form-check form-check-inline d-flex">
                                     <input class="form-check-input"
                                         type="checkbox"
-                                        scope="product"
+                                        scope="store"
                                         data-attribute-attribute-id="${attribute.attribute_id}"
                                         data-attribute-entity-id="${attribute.entity_id}"
                                         data-attribute-group-id="${attribute.group_id}"
@@ -654,7 +671,7 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                                     <label for="${attribute.code}" class="form-label">
                                         ${attribute.name}
                                     </label>
-                                    <input scope="product" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}
+                                    <input scope="store" name="attribute[${group.group_id}][${attribute.attribute_id}]" ${attribute.frontend_attrs}
                                             id="${group.code}-${group.set_id}-${attribute.entity_id}-${attribute.code}"
                                             class="form-control"
                                             placeholder='@lang{请输入}${attribute.name}'
@@ -1225,6 +1242,6 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
 
 </script>
 <w:editor-manager container-id="progress-wizard" submit=""/>
-<w:data-field url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
+<w:scope url="@backend-url('backend/user-data')" container-id="product" event="change click"/>
 </body>
 </html>
