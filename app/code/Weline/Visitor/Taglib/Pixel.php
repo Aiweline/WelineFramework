@@ -88,6 +88,15 @@ class Pixel implements TaglibInterface
         return true;
     }
 
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    static function parent(): ?string
+    {
+        return null; // Pixel标签没有依赖
+    }
+
     static function document(): string
     {
         return "统计网站流量。使用方法:在想要统计的页面引入<pixel name=\"default\"/>。 name为自定义统计名称，用于区分统计来源，默认使用sys。<br>
