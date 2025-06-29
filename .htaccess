@@ -16,6 +16,7 @@
     php_flag session.auto_start off
 
 ############################################
+
     ## 启用html结果压缩
 
     #php_flag zlib.output_compression on

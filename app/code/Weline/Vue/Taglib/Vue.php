@@ -76,6 +76,15 @@ class Vue implements TaglibInterface
         return false;
     }
 
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    public static function parent(): ?string
+    {
+        return null; // Vue标签没有依赖
+    }
+
     public static function document(): string
     {
         return '<v>demo</v>.解析到vue: {{ demo }}';

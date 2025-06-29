@@ -53,14 +53,17 @@ class TagParser implements \Weline\Framework\Event\ObserverInterface
             }
             $this->cache->set($cache_key, $modules_tags);
         }
+        
+        // 收集所有标签数据
         $module_tags = [];
         foreach ($modules_tags as $module_name => $module_tag) {
             foreach ($module_tag as $item) {
                 /**@var \Weline\Taglib\TaglibInterface $tagObject */
                 $tagObject = ObjectManager::getInstance($item);
                 if (!($tagObject instanceof \Weline\Taglib\TaglibInterface)) {
-                    throw new \Exception(__('标签类{ %{1} }必须继承自：\Weline\Taglib\TaglibInterface 接口, 标签文件：%{2}', [$tagObject::class, $tag]));
+                    throw new \Exception(__('标签类{ %{1} }必须继承自：\Weline\Taglib\TaglibInterface 接口, 标签文件：%{2}', [$tagObject::class, $item]));
                 }
+                
                 $tag_data = [];
                 if ($tagObject::tag()) {
                     $tag_data['tag'] = $tagObject::tag();
@@ -83,16 +86,180 @@ class TagParser implements \Weline\Framework\Event\ObserverInterface
                 if ($tagObject::tag_self_close_with_attrs()) {
                     $tag_data['tag-self-close-with-attrs'] = $tagObject::tag_self_close_with_attrs();
                 }
+                
                 if ($tag_data) {
                     $tag_data['is_custom'] = true;
                     $tag_data['module_name'] = $module_name;
                     $tag_data['doc'] = $tagObject::document();
+                    $tag_data['class'] = $tagObject::class;
+                    
+                    // 检查是否有parent()方法
+                    if (method_exists($tagObject, 'parent')) {
+                        $parentTag = $tagObject::parent();
+                        if ($parentTag) {
+                            // 支持多个父标签，用逗号分隔
+                            if (strpos($parentTag, ',') !== false) {
+                                $parentTags = array_map('trim', explode(',', $parentTag));
+                                $tag_data['parent'] = $parentTags;
+                            } else {
+                                $tag_data['parent'] = $parentTag;
+                            }
+                        }
+                    }
+                    
                     $module_tags[$tagObject::name()] = $tag_data;
                 }
             }
         }
-        if ($module_tags) {
-            $event->getData('data')->setData('tags', array_merge($frameworkTags, $module_tags));
+        
+        // 对标签进行依赖排序
+        $sortedTags = $this->sortTagsByDependencies($module_tags);
+        
+        if ($sortedTags) {
+            $event->getData('data')->setData('tags', array_merge($frameworkTags, $sortedTags));
         }
+    }
+
+    /**
+     * 根据依赖关系对标签进行排序
+     * @param array $allTags 所有标签数据
+     * @return array 排序后的标签数据
+     */
+    private function sortTagsByDependencies(array $allTags): array
+    {
+        if (empty($allTags)) {
+            return $allTags;
+        }
+
+        $sorted = [];
+        $visited = [];
+        $recursionStack = [];
+
+        // 对每个标签进行拓扑排序
+        foreach (array_keys($allTags) as $tagName) {
+            if (!isset($visited[$tagName])) {
+                $this->topologicalSort($tagName, $allTags, $visited, $recursionStack, $sorted);
+            }
+        }
+
+        // 构建排序后的标签数组
+        $result = [];
+        foreach ($sorted as $tagName) {
+            if (isset($allTags[$tagName])) {
+                $result[$tagName] = $allTags[$tagName];
+            }
+        }
+
+        // 添加没有依赖关系的标签
+        foreach ($allTags as $tagName => $tagData) {
+            if (!in_array($tagName, $sorted)) {
+                $result[$tagName] = $tagData;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * 拓扑排序算法
+     * @param string $tagName 当前标签名
+     * @param array $allTags 所有标签数据
+     * @param array $visited 已访问的标签
+     * @param array $recursionStack 递归栈（用于检测循环依赖）
+     * @param array $sorted 排序结果
+     */
+    private function topologicalSort(
+        string $tagName, 
+        array $allTags, 
+        array &$visited, 
+        array &$recursionStack, 
+        array &$sorted
+    ): void {
+        // 检测循环依赖
+        if (isset($recursionStack[$tagName])) {
+            $cycle = implode(' -> ', array_keys($recursionStack)) . ' -> ' . $tagName;
+            throw new \Exception(__('检测到标签循环依赖：%{1}', [$cycle]));
+        }
+
+        // 如果已经访问过，直接返回
+        if (isset($visited[$tagName])) {
+            return;
+        }
+
+        // 标记为正在访问
+        $recursionStack[$tagName] = true;
+
+        // 如果有依赖的父标签，先处理父标签
+        if (isset($allTags[$tagName]['parent'])) {
+            $parentTags = $allTags[$tagName]['parent'];
+            
+            // 支持多个父标签
+            if (is_array($parentTags)) {
+                foreach ($parentTags as $parentTag) {
+                    if (isset($allTags[$parentTag])) {
+                        $this->topologicalSort($parentTag, $allTags, $visited, $recursionStack, $sorted);
+                    }
+                }
+            } else {
+                // 单个父标签
+                if (isset($allTags[$parentTags])) {
+                    $this->topologicalSort($parentTags, $allTags, $visited, $recursionStack, $sorted);
+                }
+            }
+        }
+
+        // 标记为已访问
+        $visited[$tagName] = true;
+        unset($recursionStack[$tagName]);
+
+        // 添加到排序结果
+        $sorted[] = $tagName;
+    }
+
+    /**
+     * 验证依赖关系的完整性
+     * @param array $allTags 所有标签数据
+     * @return array 验证结果
+     */
+    private function validateDependencies(array $allTags): array
+    {
+        $errors = [];
+        $warnings = [];
+
+        foreach ($allTags as $childTag => $tagData) {
+            // 检查父标签是否存在
+            if (isset($tagData['parent'])) {
+                $parentTags = $tagData['parent'];
+                
+                if (is_array($parentTags)) {
+                    // 多个父标签
+                    foreach ($parentTags as $parentTag) {
+                        if (!isset($allTags[$parentTag])) {
+                            $errors[] = __("标签 '%{1}' 依赖的父标签 '%{2}' 不存在", [$childTag, $parentTag]);
+                        }
+                        
+                        // 检查父标签是否也有parent()方法
+                        if (isset($allTags[$parentTag]) && !isset($allTags[$parentTag]['parent'])) {
+                            $warnings[] = __("标签 '%{1}' 依赖的父标签 '%{2}' 没有parent()方法，可能不是预期的父标签", [$childTag, $parentTag]);
+                        }
+                    }
+                } else {
+                    // 单个父标签
+                    if (!isset($allTags[$parentTags])) {
+                        $errors[] = __("标签 '%{1}' 依赖的父标签 '%{2}' 不存在", [$childTag, $parentTags]);
+                    }
+                    
+                    // 检查父标签是否也有parent()方法
+                    if (isset($allTags[$parentTags]) && !isset($allTags[$parentTags]['parent'])) {
+                        $warnings[] = __("标签 '%{1}' 依赖的父标签 '%{2}' 没有parent()方法，可能不是预期的父标签", [$childTag, $parentTags]);
+                    }
+                }
+            }
+        }
+
+        return [
+            'errors' => $errors,
+            'warnings' => $warnings
+        ];
     }
 }
