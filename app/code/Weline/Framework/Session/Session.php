@@ -174,7 +174,7 @@ Session implements SessionInterface
 
     public function getLoginUserID()
     {
-        return $this->session->get($this::login_KEY_ID);
+        return (int)$this->session->get($this::login_KEY_ID);
     }
 
     public function logout(): bool

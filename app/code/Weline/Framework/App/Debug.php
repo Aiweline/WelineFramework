@@ -13,7 +13,7 @@ class Debug
             return $_ENV['w-debug'][$env_key];
         }
         if (!$value) {
-            # 获取上级调用文件和行数
+            # 获取上级调用文件和行数，限制追踪层数
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $file = str_replace(BP, '', $backtrace[0]['file']);
             $line = $backtrace[0]['line'];
@@ -33,19 +33,23 @@ class Debug
             $value = $value ? 'true' : 'false';
         }
         if ($value !== 'debug::skip') {
-            # 获取触发位置
+            # 获取触发位置，限制追踪层数
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $file = str_replace(BP, '', $backtrace[0]['file']);
             $line = $backtrace[0]['line'];
-            # 调用者位置
-            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+            # 调用者位置，限制追踪层数
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $call_file = str_replace(BP, '', $backtrace[1]['file']);
             $call_line = $backtrace[1]['line'];
 
             $printerClass = 'Weline\Framework\Output\\' . (CLI ? 'Cli' : 'Debug') . '\Printing';
             /**@var \Weline\Framework\Output\Debug\Printing $printer */
             $printer = ObjectManager::getInstance($printerClass);
-            $printer->printing($_ENV['w-debug'][$env_key] . PHP_EOL . __('触发位置：') . "{$file}({$line})" . PHP_EOL . __('调用者位置：') . "{$call_file}({$call_line})");
+            
+            // 美化输出格式
+            $debugInfo = self::formatDebugInfo($_ENV['w-debug'][$env_key], $file, $line, $call_file, $call_line);
+            $printer->printing($debugInfo);
+            
             if (is_string($value)) {
                 $printer->printing($value);
             } else {
@@ -103,5 +107,79 @@ class Debug
                 </script>';
         echo $html;
         return true;
+    }
+
+    /**
+     * 格式化调试信息，美化输出
+     * @param string $debugValue 调试值
+     * @param string $file 文件路径
+     * @param int $line 行号
+     * @param string $callFile 调用文件
+     * @param int $callLine 调用行号
+     * @return string 格式化后的调试信息
+     */
+    private static function formatDebugInfo(string $debugValue, string $file, int $line, string $callFile, int $callLine): string
+    {
+        $isCli = (PHP_SAPI === 'cli');
+        $separator = $isCli ? '=' : '═';
+        $lineBreak = $isCli ? PHP_EOL : '<br>';
+        
+        $formatted = '';
+        
+        // 添加调试标题
+        $formatted .= self::colorize('🔍 ' . __('调试信息'), 'info') . $lineBreak;
+        $formatted .= str_repeat($separator, 50) . $lineBreak;
+        
+        // 调试位置信息
+        $formatted .= self::colorize('📍 ' . __('调试位置'), 'note') . ': ' . self::colorize($file . '(' . $line . ')', 'file') . $lineBreak;
+        $formatted .= self::colorize('📞 ' . __('调用位置'), 'note') . ': ' . self::colorize($callFile . '(' . $callLine . ')', 'file') . $lineBreak;
+        
+        // 调试值
+        $formatted .= $lineBreak . self::colorize('💡 ' . __('调试内容'), 'success') . ':' . $lineBreak;
+        $formatted .= str_repeat($separator, 30) . $lineBreak;
+        $formatted .= $debugValue . $lineBreak;
+        $formatted .= str_repeat($separator, 50) . $lineBreak;
+        
+        return $formatted;
+    }
+    
+    /**
+     * 添加颜色支持
+     * @param string $text 文本
+     * @param string $type 颜色类型
+     * @return string 带颜色的文本
+     */
+    private static function colorize(string $text, string $type): string
+    {
+        $isCli = (PHP_SAPI === 'cli');
+        
+        if ($isCli) {
+            // CLI环境使用ANSI颜色
+            $colors = [
+                'info' => "\033[36m",    // 青色
+                'note' => "\033[34m",    // 蓝色
+                'success' => "\033[32m", // 绿色
+                'warning' => "\033[33m", // 黄色
+                'error' => "\033[31m",   // 红色
+                'file' => "\033[35m",    // 紫色
+            ];
+            $reset = "\033[0m";
+            
+            $color = $colors[$type] ?? $colors['info'];
+            return $color . $text . $reset;
+        } else {
+            // Web环境使用HTML颜色
+            $colors = [
+                'info' => '#00bcd4',     // 青色
+                'note' => '#2196f3',     // 蓝色
+                'success' => '#4caf50',  // 绿色
+                'warning' => '#ff9800',  // 橙色
+                'error' => '#f44336',    // 红色
+                'file' => '#9c27b0',     // 紫色
+            ];
+            
+            $color = $colors[$type] ?? $colors['info'];
+            return '<span style="color: ' . $color . '; font-weight: bold;">' . $text . '</span>';
+        }
     }
 }

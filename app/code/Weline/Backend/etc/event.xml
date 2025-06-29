@@ -14,4 +14,7 @@
     <event name="Framework_View::footer">
         <observer name="Weline_Backend::footer" instance="Weline\Backend\Observer\Footer" disabled="false" shared="true"/>
     </event>
+    <event name="Framework_RestController::init_before">
+        <observer name="Weline_Backend::init_before" instance="Weline\Backend\Observer\ApiControllerInitBefore" disabled="false" shared="true"/>
+    </event>
 </config>

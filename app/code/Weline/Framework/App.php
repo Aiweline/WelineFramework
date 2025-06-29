@@ -203,6 +203,19 @@ class App
         //报告错误
         DEBUG ? error_reporting(E_ALL) : error_reporting(0);
 
+        // 根据调试模式设置PHP错误显示
+        if (DEBUG) {
+            // 调试模式：显示所有错误
+            ini_set('display_errors', '1');
+            ini_set('display_startup_errors', '1');
+            ini_set('log_errors', '1');
+        } else {
+            // 生产模式：关闭错误显示，但记录到日志
+            ini_set('display_errors', '0');
+            ini_set('display_startup_errors', '0');
+            ini_set('log_errors', '1');
+        }
+
         // 错误报告
         if (DEV || CLI) {
             ini_set('error_reporting', E_ALL);
@@ -222,7 +235,7 @@ class App
                         echo __('消息：') . $_error['message'] . '</br>';
                         echo '</pre>';
                     }
-                    debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 100);
+                    // debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 5);
                 }
             });
         }

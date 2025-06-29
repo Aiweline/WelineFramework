@@ -67,6 +67,15 @@ class CssPart implements \Weline\Taglib\TaglibInterface
     }
 
     /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    public static function parent(): ?string
+    {
+        return null; // CssPart标签没有依赖
+    }
+
+    /**
      * @inheritDoc
      */
     public static function callback(): callable

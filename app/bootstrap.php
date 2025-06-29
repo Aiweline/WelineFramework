@@ -53,7 +53,6 @@ try {
             echo '</pre>';
             echo 'DEBUG 堆栈追踪信息：' . PHP_EOL;
             echo '<pre>';
-            var_dump($exception->getTrace());
         }
     } else {
         echo '<pre>';

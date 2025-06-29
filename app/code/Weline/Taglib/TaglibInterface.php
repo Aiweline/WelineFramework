@@ -102,5 +102,24 @@ interface TaglibInterface
      */
     static function tag_self_close_with_attrs(): bool;
 
+    /**
+     * @DESC          # 标签依赖管理（可选方法）
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/1/1 10:00
+     * 参数区：
+     * @return string|null # 返回父标签名称，用于依赖管理。如果标签没有依赖，可以不实现此方法或返回null
+     * 
+     * 说明：
+     * 1. 此方法用于指定标签的依赖关系，确保父标签在子标签之前渲染
+     * 2. 如果标签需要依赖其他标签，请实现此方法并返回父标签的名称
+     * 3. 系统会自动检测此方法并进行依赖排序
+     * 4. 支持单个父标签：public static function parent(): ?string { return 'parent-tag'; }
+     * 5. 支持多个父标签：public static function parent(): ?string { return 'parent-tag1,parent-tag2'; }
+     * 6. 多个父标签用逗号分隔，系统会确保所有父标签都在子标签之前渲染
+     */
+    static function parent(): ?string;
+
     static function document():string;
 }
