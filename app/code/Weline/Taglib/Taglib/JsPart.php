@@ -130,6 +130,15 @@ class JsPart implements \Weline\Taglib\TaglibInterface
         return true;
     }
 
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    public static function parent(): ?string
+    {
+        return null; // JsPart标签没有依赖
+    }
+
     public static function document(): string
     {
         return htmlentities(

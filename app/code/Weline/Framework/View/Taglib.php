@@ -471,6 +471,7 @@ class Taglib
                                 $name = $this->varParser($content_arr[0][0]);
                                 $result = "<?php if(!empty({$name})):echo {$content_arr[0][1]};endif;?>";
                             } else {
+                                $result = '';
                                 foreach ($content_arr as $key => $data) {
                                     if (0 === $key) {
                                         $name = $this->varParser($data[0]);
@@ -934,11 +935,15 @@ class Taglib
         $event = ObjectManager::getInstance(EventsManager::class);
         $data = (new DataObject(['template' => $template, 'tags' => $tags, 'Taglib' => $this]));
         $event->dispatch('Framework_Template::after_tags_config', $data);
-        $tags = $data->getData('tags');
-        # 构造w:tag
+        $tags = $data->getData('tags') ?: $tags;
+        
+        # 构造w:tag，确保w:标签紧挨着原始标签且优先处理
+        $reordered_tags = [];
         foreach ($tags as $tag => $tag_data) {
-            $tags["w:$tag"] = $tag_data;
+            $reordered_tags["w:$tag"] = $tag_data;  // w:标签优先
+            $reordered_tags[$tag] = $tag_data;      // 原始标签紧随其后
         }
+        $tags = $reordered_tags;
         return $tags;
     }
 
@@ -959,6 +964,8 @@ class Taglib
 
         # 系统自带的标签
         $tags = $this->getTags($template, $fileName, $content);
+        
+        # 直接按getTags返回的顺序处理标签
         foreach ($tags as $tag => $tag_configs) {
             $tag_patterns = [
                 'tag-self-close-with-attrs' => '/<' . $tag . '([\s\S]*?)\/>/m',
@@ -969,12 +976,14 @@ class Taglib
                 '@tag()' => '/\@' . $tag . '\(([\s\S]*?)\)/m',
                 '@tag{}' => '/\@' . $tag . '\{([\s\S]*?)\}/m',
             ];
+            
             # 检测标签所需要的元素，不需要的就跳过
             foreach ($tag_patterns as $tag_key => $tag_pattern) {
                 if (str_starts_with($tag_key, 'tag') && !isset($tag_configs[$tag_key])) {
                     unset($tag_patterns[$tag_key]);
                 }
             }
+            
             # 匹配标签所需处理的tag
             $tag_config_patterns = [];
             foreach ($tag_configs as $config_name => $tag_config) {
@@ -986,19 +995,11 @@ class Taglib
             $tag_config_patterns['@tag()'] = $tag_patterns['@tag()'];
             $tag_config_patterns['@tag{}'] = $tag_patterns['@tag{}'];
 
-            # 标签验证测试
-            //            if('var'===$tag){
-            //                foreach ($tag_config_patterns as &$tag_config_pattern) {
-            //                    $tag_config_pattern = htmlentities($tag_config_pattern);
-            //                }
-            //                p($tag_config_patterns);
-            //            }
-            # 匹配处理
-            $format_function = $tag_configs['callback'];
             foreach ($tag_config_patterns as $tag_key => $tag_pattern) {
                 preg_match_all($tag_pattern, $content, $customTags, PREG_SET_ORDER);
                 foreach ($customTags as $customTag) {
-                    $originalTag = $customTag[0];
+                    $format_function = $tag_configs['callback'];
+                    
                     if (isset($customTag[1])) {
                         if ($tag_key == 'tag' or $tag_key == 'tag-self-close-with-attrs' or $tag_key == 'tag-start') {
                             // 替换操作符
@@ -1040,14 +1041,6 @@ class Taglib
                         }
                     }
 
-                    //                    if($tag_key==='tag-self-close-with-attrs'&&$tag==='block') {
-                    //                        p( $rawAttributes,1);
-                    //                        p( $attributes);
-                    //                        if(str_contains($rawAttributes, "item='sub_menu'")){
-                    //                            p( $formatedAttributes,1);
-                    //                            p( $attributes);
-                    //                        };
-                    //                    }
                     # 验证标签属性
                     $attrs = $tag_configs['attr'] ?? [];
                     if ($attrs && ('tar-start' === $tag_key || 'tag-self-close-with-attrs' === $tag_key || 'tag' === $tag_key)) {
@@ -1062,14 +1055,11 @@ class Taglib
                     }
 
                     $result = $format_function($tag_key, $tag_configs, $customTag, $formatedAttributes);
-                    //                    if (DEV) {
-                    //                        $origin_tag = htmlspecialchars($customTag[0]) ?? '';
-                    //                        $result    = "<!-- {$origin_tag} START -->" . $result . "<!-- {$origin_tag} -->";
-                    //                    }
-                    $content = str_replace($originalTag, $result, $content);
+                    $content = str_replace($customTag[0], $result, $content);
                 }
             }
         }
+        
         return $content;
     }
 }
