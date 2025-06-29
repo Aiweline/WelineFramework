@@ -16,3 +16,9 @@
 .php-cs-fixer.cache
 
 ssh_tools.jsonc
+
+# generated目录规则：只保留.gitkeep和code目录
+/generated/*
+!/generated/.gitkeep
+!/generated/code/
+!/generated/code/**
