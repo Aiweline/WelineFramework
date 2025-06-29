@@ -121,6 +121,15 @@ class Breadcrumb implements \Weline\Taglib\TaglibInterface
         return true;
     }
 
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    static function parent(): ?string
+    {
+        return null; // Breadcrumb标签没有依赖
+    }
+
     static function document(): string
     {
         return htmlentities(<<<DOC

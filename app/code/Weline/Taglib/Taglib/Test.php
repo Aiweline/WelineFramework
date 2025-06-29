@@ -58,7 +58,16 @@ class Test implements \Weline\Taglib\TaglibInterface
 
     static function tag_self_close_with_attrs(): bool
     {
-        return false; # 控制自闭和标签(携带属性) <test_test class="demo"/> 如果你的标签支持自闭和，返回true。然后在callback中处理
+        return true;
+    }
+
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    static function parent(): ?string
+    {
+        return null; // Test标签没有依赖
     }
 
     static function document(): string

@@ -2,13 +2,8 @@
 
 namespace WeShop\Store\Model;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\Locale;
-use Weline\I18n\Model\Locals;
-use WeShop\Store\Model\Store\LocalDescription;
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 

@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Controller;
 
+use Weline\Framework\Event\EventsManager;
+
 abstract class AbstractRestController extends Core
 {
     public const fetch_JSON = 'json';
@@ -16,6 +18,16 @@ abstract class AbstractRestController extends Core
     public const fetch_XML = 'xml';
 
     public const fetch_STRING = 'string';
+
+    public function __construct()
+    {
+        # 设置前置事件
+        $event = w_obj(EventsManager::class);
+        $event->dispatch('Framework_RestController::init_before', $this);
+        parent::__construct();
+        # 设置后置事件
+        $event->dispatch('Framework_RestController::init_after', $this);
+    }
 
     /**
      * @DESC         |方法描述
