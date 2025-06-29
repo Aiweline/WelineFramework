@@ -17,8 +17,7 @@
 
 ssh_tools.jsonc
 
-# generated目录规则：只保留.gitkeep和code目录
+# generated目录规则：只保留.gitkeep和code目录下的.gitkeep
 /generated/*
 !/generated/.gitkeep
-!/generated/code/
-!/generated/code/**
+!/generated/code/.gitkeep
