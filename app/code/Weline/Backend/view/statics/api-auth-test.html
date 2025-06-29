@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API认证测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.danger {
+            background-color: #dc3545;
+        }
+        button.danger:hover {
+            background-color: #c82333;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>API认证测试工具</h1>
+    
+    <div class="section">
+        <h2>登录</h2>
+        <div class="form-group">
+            <label for="username">用户名:</label>
+            <input type="text" id="username" value="admin">
+        </div>
+        <div class="form-group">
+            <label for="password">密码:</label>
+            <input type="password" id="password" value="">
+        </div>
+        <div class="form-group">
+            <label for="expireTime">过期时间(秒，0为默认7天):</label>
+            <input type="number" id="expireTime" value="0">
+        </div>
+        <button onclick="login()">登录</button>
+        <div id="loginResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>用户信息</h2>
+        <button onclick="getCurrentUser()">获取当前用户信息</button>
+        <button onclick="getTokenInfo()">获取Token信息</button>
+        <div id="userResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Token管理</h2>
+        <button onclick="refreshToken()">刷新Token</button>
+        <button onclick="logout()" class="danger">登出</button>
+        <div id="tokenResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>API测试</h2>
+        <div class="form-group">
+            <label for="apiUrl">API URL:</label>
+            <input type="text" id="apiUrl" value="datatable/rest/v1/data-table/model-fields?model=Weline\\Backend\\Model\\BackendUser" style="width: 100%;">
+        </div>
+        <div class="form-group">
+            <label for="apiMethod">请求方法:</label>
+            <select id="apiMethod">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="apiData">请求数据 (JSON):</label>
+            <textarea id="apiData" rows="4" style="width: 100%; font-family: monospace;"></textarea>
+        </div>
+        <button onclick="testApi()">测试API</button>
+        <div id="apiResult" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Token状态</h2>
+        <div id="tokenStatus" class="result"></div>
+        <button onclick="updateTokenStatus()">更新状态</button>
+        <button onclick="clearToken()" class="danger">清除Token</button>
+    </div>
+
+    <script src="js/api-auth-test.js"></script>
+    <script>
+        function showResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(data, null, 2);
+            element.className = 'result ' + (isError ? 'error' : 'success');
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const expireTime = parseInt(document.getElementById('expireTime').value) || 0;
+
+            try {
+                const result = await apiAuthTest.login(username, password, expireTime);
+                showResult('loginResult', result);
+                updateTokenStatus();
+            } catch (error) {
+                showResult('loginResult', { error: error.message }, true);
+            }
+        }
+
+        async function getCurrentUser() {
+            try {
+                const result = await apiAuthTest.getCurrentUser();
+                showResult('userResult', result);
+            } catch (error) {
+                showResult('userResult', { error: error.message }, true);
+            }
+        }
+
+        async function getTokenInfo() {
+            try {
+                const result = await apiAuthTest.getTokenInfo();
+                showResult('userResult', result);
+            } catch (error) {
+                showResult('userResult', { error: error.message }, true);
+            }
+        }
+
+        async function refreshToken() {
+            const expireTime = parseInt(document.getElementById('expireTime').value) || 0;
+            try {
+                const result = await apiAuthTest.refreshToken(expireTime);
+                showResult('tokenResult', result);
+                updateTokenStatus();
+            } catch (error) {
+                showResult('tokenResult', { error: error.message }, true);
+            }
+        }
+
+        async function logout() {
+            try {
+                const result = await apiAuthTest.logout();
+                showResult('tokenResult', result);
+                updateTokenStatus();
+            } catch (error) {
+                showResult('tokenResult', { error: error.message }, true);
+            }
+        }
+
+        async function testApi() {
+            const url = document.getElementById('apiUrl').value;
+            const method = document.getElementById('apiMethod').value;
+            const dataText = document.getElementById('apiData').value;
+            
+            let data = null;
+            if (dataText.trim()) {
+                try {
+                    data = JSON.parse(dataText);
+                } catch (error) {
+                    showResult('apiResult', { error: 'JSON格式错误: ' + error.message }, true);
+                    return;
+                }
+            }
+
+            try {
+                const result = await apiAuthTest.testApiRequest(url, method, data);
+                showResult('apiResult', result);
+            } catch (error) {
+                showResult('apiResult', { error: error.message }, true);
+            }
+        }
+
+        function updateTokenStatus() {
+            const token = apiAuthTest.getToken();
+            const status = {
+                hasToken: !!token,
+                token: token ? token.substring(0, 20) + '...' : null,
+                tokenLength: token ? token.length : 0
+            };
+            showResult('tokenStatus', status);
+        }
+
+        function clearToken() {
+            apiAuthTest.clearToken();
+            updateTokenStatus();
+            showResult('tokenStatus', { message: 'Token已清除' });
+        }
+
+        // 页面加载时更新token状态
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTokenStatus();
+        });
+    </script>
+</body>
+</html> 
