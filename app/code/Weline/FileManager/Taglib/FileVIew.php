@@ -88,6 +88,15 @@ class FileVIew implements TaglibInterface
         return true;
     }
 
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    static function parent(): ?string
+    {
+        return null; // FileVIew标签没有依赖
+    }
+
     static function document(): string
     {
         $doc = htmlentities(
@@ -99,7 +108,7 @@ class FileVIew implements TaglibInterface
 参数解释：
 type：可选，文件类型，目前仅支持image。默认就是图片
 vars：可选，变量名，用于变量导入。
-value：必选，图片名。多张图片用,号隔开。所以图片地址中不能包含英文逗号“,”
+value：必选，图片名。多张图片用,号隔开。所以图片地址中不能包含英文逗号"，"
 HTML;
     }
 }

@@ -83,6 +83,18 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-12'>
                         <div class='card'>
                             <div class='card-body'>
+                            <w:d-table model="WeShop\Store\Model\Store" scope="store-listing">
+                                <w:t-filter>
+                                    <w:field belong="t-filter" name="name" type="text" placeholder="搜索名称"></w:field>
+                                    <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"></w:field>
+                                </w:t-filter>
+                                <w:t-header>
+                                    <w:field belong="t-header" name="store_id" sortable="true" width="80">ID</w:field>
+                                    <w:field belong="t-header" name="name" sortable="true" width="200">名称</w:field>
+                                    <w:field belong="t-header" name="status" sortable="true" width="100">状态</w:field>
+                                </w:t-header>
+                            </w:d-table>
+                            
                                 <div class='table-rep-plugin'>
                                     <!-- search form -->
                                     <div class='row d-flex align-items-center justify-content-between'>

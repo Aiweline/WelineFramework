@@ -16,7 +16,6 @@ use TheSeer\Tokenizer\Exception;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Taglib;
-use WeShop\Store\Model\Store;
 
 class Local implements \Weline\Taglib\TaglibInterface
 {
@@ -197,6 +196,15 @@ TAG,
     static function tag_self_close_with_attrs(): bool
     {
         return false;
+    }
+
+    /**
+     * 指定父标签，用于依赖管理
+     * @return string|null 父标签名称
+     */
+    static function parent(): ?string
+    {
+        return null; // Local标签没有依赖
     }
 
     static function document(): string
