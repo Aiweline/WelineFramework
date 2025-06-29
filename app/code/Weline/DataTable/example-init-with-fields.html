@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据表初始化时加载字段配置示例</title>
+    <link rel="stylesheet" href="view/statics/css/datatable.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .description {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+        .test-info {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }
+        .console-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>数据表初始化时加载字段配置示例</h1>
+        
+        <div class="description">
+            <h3>功能说明</h3>
+            <p>这个示例演示了数据表在初始化时自动加载字段配置的功能：</p>
+            <ul>
+                <li><strong>初始化时加载字段</strong>：表格初始化时自动请求字段配置接口</li>
+                <li><strong>缓存机制</strong>：第一次请求后，字段配置会被缓存，后续点击字段设置不再重复请求</li>
+                <li><strong>立即渲染</strong>：获取到用户配置的展示字段和筛选字段后，立即渲染到数据表格上</li>
+                <li><strong>配置保存</strong>：保存字段配置后，表格会立即重新构建并加载数据</li>
+            </ul>
+        </div>
+        
+        <div class="test-info">
+            <h3>测试步骤</h3>
+            <ol>
+                <li>页面加载后，观察控制台输出，查看字段配置加载过程</li>
+                <li>点击"字段设置"按钮，观察是否使用了缓存的字段数据</li>
+                <li>修改字段配置并保存，观察表格是否立即重新渲染</li>
+                <li>再次点击"字段设置"，确认使用了缓存数据</li>
+            </ol>
+        </div>
+        
+        <!-- 数据表容器 -->
+        <div id="datatable-container">
+            <table class="w-datatable" id="test-datatable-init">
+                <thead>
+                    <tr>
+                        <th data-w-field='{"name":"id","label":"ID","type":"number","visible":true,"sortable":true}'>ID</th>
+                        <th data-w-field='{"name":"name","label":"名称","type":"text","visible":true,"sortable":true}'>名称</th>
+                        <th data-w-field='{"name":"email","label":"邮箱","type":"email","visible":true,"sortable":true}'>邮箱</th>
+                        <th data-w-field='{"name":"status","label":"状态","type":"select","visible":true,"sortable":true}'>状态</th>
+                        <th data-w-field='{"name":"created_at","label":"创建时间","type":"datetime","visible":true,"sortable":true}'>创建时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>测试用户1</td><td>user1@example.com</td><td>启用</td><td>2024-01-01 10:00:00</td></tr>
+                    <tr><td>2</td><td>测试用户2</td><td>user2@example.com</td><td>禁用</td><td>2024-01-02 11:00:00</td></tr>
+                    <tr><td>3</td><td>测试用户3</td><td>user3@example.com</td><td>启用</td><td>2024-01-03 12:00:00</td></tr>
+                </tbody>
+            </table>
+            
+            <!-- 筛选器 -->
+            <div class="datatable-filter">
+                <div class="filter-row">
+                    <input type="text" data-field="name" placeholder="请输入名称" class="w-input">
+                    <input type="email" data-field="email" placeholder="请输入邮箱" class="w-input">
+                    <select data-field="status" class="w-select">
+                        <option value="">全部状态</option>
+                        <option value="启用">启用</option>
+                        <option value="禁用">禁用</option>
+                    </select>
+                    <button onclick="DataTableManager.applyFilters(DataTableManager.instances['test-datatable-init'])">搜索</button>
+                    <button onclick="DataTableManager.resetFilters(DataTableManager.instances['test-datatable-init'])">重置</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 控制台输出 -->
+        <div class="console-output" id="console-output">
+            <div>控制台输出将显示在这里...</div>
+        </div>
+    </div>
+
+    <!-- 引入必要的脚本 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="view/statics/js/datatable-manager.js"></script>
+    
+    <script>
+        // 重写console.log来显示在页面上
+        const originalLog = console.log;
+        const originalError = console.error;
+        const consoleOutput = document.getElementById('console-output');
+        
+        function addToConsole(message, type = 'log') {
+            const div = document.createElement('div');
+            div.style.color = type === 'error' ? '#dc3545' : '#28a745';
+            div.style.marginBottom = '5px';
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToConsole(args.join(' '));
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToConsole(args.join(' '), 'error');
+        };
+        
+        // 页面加载完成后初始化数据表
+        $(document).ready(function() {
+            console.log('=== 页面加载完成，开始初始化数据表 ===');
+            
+            // 初始化数据表
+            const instance = DataTableManager.initTable('#test-datatable-init', {
+                model: 'Weline\\DataTable\\Model\\DataTable',
+                scope: 'test_scope',
+                pageSize: 10,
+                showPagination: true,
+                showToolbar: true,
+                showConfig: true
+            });
+            
+            console.log('数据表初始化完成:', {
+                tableId: instance.container.attr('id'),
+                config: instance.config,
+                options: instance.options
+            });
+            
+            // 3秒后检查字段配置状态
+            setTimeout(() => {
+                console.log('=== 3秒后检查字段配置状态 ===');
+                console.log('所有字段:', instance.allFields?.length || 0);
+                console.log('显示字段:', instance.displayFields?.length || 0);
+                console.log('筛选字段:', instance.filterFields?.length || 0);
+                console.log('表格配置字段:', instance.config.fields?.length || 0);
+                console.log('筛选器配置:', instance.filterConfig?.length || 0);
+                
+                // 检查表头是否正确渲染
+                const $thead = instance.container.find('thead tr');
+                console.log('表头行数:', $thead.length);
+                console.log('表头列数:', $thead.find('th').length);
+                console.log('表头内容:', $thead.find('th').map(function() {
+                    return $(this).text().trim();
+                }).get());
+            }, 3000);
+            
+            // 5秒后再次检查
+            setTimeout(() => {
+                console.log('=== 5秒后再次检查字段配置状态 ===');
+                console.log('所有字段:', instance.allFields?.length || 0);
+                console.log('显示字段:', instance.displayFields?.length || 0);
+                console.log('筛选字段:', instance.filterFields?.length || 0);
+                console.log('表格配置字段:', instance.config.fields?.length || 0);
+                console.log('筛选器配置:', instance.filterConfig?.length || 0);
+                
+                // 检查表头是否正确渲染
+                const $thead = instance.container.find('thead tr');
+                console.log('表头行数:', $thead.length);
+                console.log('表头列数:', $thead.find('th').length);
+                console.log('表头内容:', $thead.find('th').map(function() {
+                    return $(this).text().trim();
+                }).get());
+            }, 5000);
+        });
+        
+        // 添加测试按钮
+        function testFieldConfig() {
+            console.log('=== 测试字段配置功能 ===');
+            DataTableManager.openFieldConfig('test-datatable-init');
+        }
+        
+        function testCache() {
+            console.log('=== 测试缓存功能 ===');
+            const instance = DataTableManager.instances['test-datatable-init'];
+            if (instance) {
+                console.log('缓存状态:', {
+                    hasAllFields: !!instance.allFields?.length,
+                    hasDisplayFields: !!instance.displayFields?.length,
+                    hasFilterFields: !!instance.filterFields?.length
+                });
+            }
+        }
+        
+        // 模拟API响应测试
+        function testMockApiResponse() {
+            console.log('=== 测试模拟API响应 ===');
+            const instance = DataTableManager.instances['test-datatable-init'];
+            if (!instance) {
+                console.error('实例不存在');
+                return;
+            }
+            
+            // 模拟API响应数据
+            const mockResponse = {
+                code: 200,
+                data: {
+                    all_fields: [
+                        {name: 'id', label: '用户ID', type: 'number', sortable: true, searchable: true},
+                        {name: 'username', label: '用户名', type: 'text', sortable: true, searchable: true},
+                        {name: 'email', label: '邮箱地址', type: 'email', sortable: true, searchable: true},
+                        {name: 'phone', label: '手机号', type: 'text', sortable: false, searchable: true},
+                        {name: 'status', label: '状态', type: 'select', sortable: true, searchable: true},
+                        {name: 'created_at', label: '创建时间', type: 'datetime', sortable: true, searchable: false},
+                        {name: 'updated_at', label: '更新时间', type: 'datetime', sortable: true, searchable: false},
+                        {name: 'last_login', label: '最后登录', type: 'datetime', sortable: true, searchable: false}
+                    ],
+                    display_fields: [
+                        {name: 'id', label: '用户ID', type: 'number', sortable: true, searchable: true},
+                        {name: 'username', label: '用户名', type: 'text', sortable: true, searchable: true},
+                        {name: 'email', label: '邮箱地址', type: 'email', sortable: true, searchable: true},
+                        {name: 'status', label: '状态', type: 'select', sortable: true, searchable: true},
+                        {name: 'created_at', label: '创建时间', type: 'datetime', sortable: true, searchable: false}
+                    ],
+                    filter_fields: [
+                        {name: 'username', label: '用户名', type: 'text', searchable: true},
+                        {name: 'email', label: '邮箱地址', type: 'email', searchable: true},
+                        {name: 'status', label: '状态', type: 'select', searchable: true}
+                    ]
+                }
+            };
+            
+            console.log('模拟API响应:', mockResponse);
+            
+            // 应用模拟的字段配置
+            DataTableManager.applyFieldsToTable('test-datatable-init', mockResponse.data);
+        }
+        
+        // 测试完整重新构建过程
+        function testCompleteRebuild() {
+            console.log('=== 测试完整重新构建过程 ===');
+            const instance = DataTableManager.instances['test-datatable-init'];
+            if (!instance) {
+                console.error('实例不存在');
+                return;
+            }
+            
+            // 模拟保存配置后的重新构建
+            const displayFields = [
+                {name: 'id', label: '记录ID', type: 'number', sortable: true, searchable: true},
+                {name: 'title', label: '标题', type: 'text', sortable: true, searchable: true},
+                {name: 'category', label: '分类', type: 'select', sortable: true, searchable: true},
+                {name: 'priority', label: '优先级', type: 'number', sortable: true, searchable: true},
+                {name: 'created_at', label: '创建时间', type: 'datetime', sortable: true, searchable: false}
+            ];
+            
+            const filterFields = [
+                {name: 'title', label: '标题', type: 'text', searchable: true},
+                {name: 'category', label: '分类', type: 'select', searchable: true},
+                {name: 'priority', label: '优先级', type: 'number', searchable: true}
+            ];
+            
+            console.log('开始完整重新构建', {
+                displayFields: displayFields.length,
+                filterFields: filterFields.length
+            });
+            
+            // 调用完整重新构建方法
+            DataTableManager.rebuildTableFromConfig('test-datatable-init', displayFields, filterFields);
+        }
+    </script>
+    
+    <!-- 添加测试按钮 -->
+    <div style="margin-top: 20px; text-align: center;">
+        <button onclick="testFieldConfig()" style="margin: 0 10px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            测试字段设置
+        </button>
+        <button onclick="testCache()" style="margin: 0 10px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            检查缓存状态
+        </button>
+        <button onclick="testMockApiResponse()" style="margin: 0 10px; padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            测试模拟API响应
+        </button>
+        <button onclick="testCompleteRebuild()" style="margin: 0 10px; padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            测试完整重新构建过程
+        </button>
+    </div>
+</body>
+</html> 
