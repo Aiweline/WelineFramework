@@ -544,6 +544,7 @@ trait SqlTrait
         # 预置sql
         $sql = $this::formatSql($sql);
         $this->sql = $sql;
+        $this->PDOStatement = $this->getLink()->prepare($this->sql);
     }
 
 
