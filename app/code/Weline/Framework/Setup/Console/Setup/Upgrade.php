@@ -83,6 +83,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('访问后台API：%{1}', 'http://127.0.0.1:9981/' . Env::get('api_admin')), __('安装'));
             $this->printing->warning(__('默认使用sqlite作为开发数据库，若要修改数据库，请转到 %{1} 下的env.php按照数组键sample_db中的配置样本，修改db键即可。', APP_ETC_PATH), __('安装'));
             $this->printing->setup(__('由于您属于第一次安装，您可以使用命令行：php bin/w setup:upgrade , 然后使用：php bin/w server:start 快速开启本地开发服务器。'), __('安装'));
+            # 设置环境用户
+            Env::set('user',Env::user());
             # 设置安装文件
             file_put_contents(BP . 'setup/install.lock', date('Y-m-d H:i:s'));
         }
