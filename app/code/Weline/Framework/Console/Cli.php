@@ -27,14 +27,20 @@ class Cli extends CliAbstract
      */
     public function run(): void
     {
-        # 检测用户
-        \Weline\Framework\App\Env::check_user();
-        // 没有任何参数
-        if (!isset($this->argv[0])) {
-            $this->execute();
-            exit();
-        }
         $args = $this->parseArgs($this->argv);
+        // 有命令时，需要接受用户检查 和 参数检查 但是在检测到env环境为空时，允许执行，方便安装
+        if (isset($args['command'])) {
+            $env = Env::get('env');
+            if ($env) {
+                # 检测用户
+                \Weline\Framework\App\Env::check_user();
+                // 没有任何参数
+                if (!isset($this->argv[0])) {
+                    $this->execute();
+                    exit();
+                }
+            }
+        }
         $command_class = $this->checkCommand($args);
         $data = $command_class['data'];
         ObjectManager::getInstance($command_class['class'])->execute($args, $data);
