@@ -28,7 +28,8 @@ class Start implements CommandInterface
         $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
         $port = $args['port'] ?? $args['p'] ?? '9981';
         # 咨询，WEB服务器会将部署模式设置为DEV
-        $this->printer->note(__('启用PHP内资本地WebServer服务...'));
+        $this->printer->warning(__('开发专用，请勿用于生产环境。'));
+        $this->printer->note(__('启用PHP内置本地WebServer服务...'));
         $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
         $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
         # 局域网
@@ -62,6 +63,6 @@ class Start implements CommandInterface
      */
     public function tip(): string
     {
-        return '启用PHP内资本地WebServer服务。';
+        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。';
     }
 }

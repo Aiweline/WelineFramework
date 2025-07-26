@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\Admin\Controller;
 
 use Weline\Admin\Helper\Data;
-use Weline\Admin\Model\BackendUserToken;
+use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;

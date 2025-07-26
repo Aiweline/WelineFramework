@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?? '数据表格管理' ?></title>
+    <link rel="stylesheet" href="/static/datatable/css/datatable.css">
+    <style>
+        .dashboard-container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .welcome-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .welcome-section h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+        }
+        .welcome-section p {
+            margin: 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .feature-card h3 {
+            color: #333;
+            margin: 0 0 15px 0;
+            font-size: 1.3em;
+        }
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+            margin: 0;
+        }
+        .table-list {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .table-list h3 {
+            color: #333;
+            margin: 0 0 20px 0;
+            font-size: 1.3em;
+        }
+        .table-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .table-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+        .table-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        .table-item h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .table-item p {
+            margin: 0 0 15px 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 0.9em;
+            transition: background 0.3s ease;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- 欢迎区域 -->
+        <div class="welcome-section">
+            <h1><?= $title ?? '数据表格管理' ?></h1>
+            <p><?= $description ?? 'Weline DataTable 模块提供强大的数据表格功能' ?></p>
+        </div>
+
+        <!-- 功能特性 -->
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3>🚀 自动生成</h3>
+                <p>只需传入模型和范围参数，即可自动生成完整的数据表格，包括表头、过滤器、分页等功能。</p>
+            </div>
+            <div class="feature-card">
+                <h3>🎨 灵活配置</h3>
+                <p>支持手动配置表格结构，精确控制显示字段、样式、过滤器等，满足各种复杂需求。</p>
+            </div>
+            <div class="feature-card">
+                <h3>📊 数据操作</h3>
+                <p>内置增删改查功能，支持批量操作、数据导出、排序筛选等高级功能。</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔧 开发友好</h3>
+                <p>提供丰富的API接口和事件钩子，便于扩展和自定义功能。</p>
+            </div>
+        </div>
+
+        <!-- 可用表格列表 -->
+        <div class="table-list">
+            <h3>📋 可用数据表格</h3>
+            <div class="table-grid">
+                <?php if (isset($available_tables) && is_array($available_tables)): ?>
+                    <?php foreach ($available_tables as $key => $table): ?>
+                        <div class="table-item">
+                            <h4><?= htmlspecialchars($table['name']) ?></h4>
+                            <p><?= htmlspecialchars($table['description']) ?></p>
+                            <a href="/datatable/backend/test/<?= $key ?>" class="btn">查看表格</a>
+                            <a href="/datatable/backend/test/<?= $key ?>/config" class="btn btn-secondary">配置</a>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="table-item">
+                        <h4>暂无可用表格</h4>
+                        <p>请先创建数据模型和测试数据</p>
+                        <a href="/datatable/backend/test/createAllTestData" class="btn">创建测试数据</a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- 快速操作 -->
+        <div class="table-list">
+            <h3>⚡ 快速操作</h3>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <a href="/datatable/backend/test/createAllTestData" class="btn">创建所有测试数据</a>
+                <a href="/datatable/backend/test/viewTestData" class="btn btn-secondary">查看测试数据</a>
+                <a href="/datatable/backend/test/clearTestData" class="btn btn-secondary">清空测试数据</a>
+                <a href="/datatable/config" class="btn">表格配置</a>
+                <a href="/datatable/templates" class="btn">模板管理</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/datatable/js/datatable-manager.js"></script>
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DataTable 管理页面已加载');
+        });
+    </script>
+</body>
+</html> 
