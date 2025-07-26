@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataTable 前端测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .test-pass {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .test-fail {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .test-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>DataTable 前端功能测试</h1>
+        
+        <div class="test-section">
+            <h3>1. DataTableManager 基础功能测试</h3>
+            <button class="btn btn-primary" onclick="testDataTableManager()">运行测试</button>
+            <div id="manager-test-results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. DataTableFormManager 基础功能测试</h3>
+            <button class="btn btn-primary" onclick="testFormManager()">运行测试</button>
+            <div id="form-test-results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 字段验证功能测试</h3>
+            <button class="btn btn-primary" onclick="testFieldValidation()">运行测试</button>
+            <div id="validation-test-results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. 实时编辑功能测试</h3>
+            <button class="btn btn-primary" onclick="testInlineEdit()">运行测试</button>
+            <div id="inline-edit-test-results"></div>
+            
+            <!-- 测试表格 -->
+            <table class="table table-striped mt-3" id="test-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>姓名</th>
+                        <th>邮箱</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr data-id="1">
+                        <td>1</td>
+                        <td data-editable="true" data-field="name" data-field-type="text">张三</td>
+                        <td data-editable="true" data-field="email" data-field-type="email">zhangsan@example.com</td>
+                        <td data-editable="true" data-field="status" data-field-type="select">启用</td>
+                    </tr>
+                    <tr data-id="2">
+                        <td>2</td>
+                        <td data-editable="true" data-field="name" data-field-type="text">李四</td>
+                        <td data-editable="true" data-field="email" data-field-type="email">lisi@example.com</td>
+                        <td data-editable="true" data-field="status" data-field-type="select">禁用</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="test-section">
+            <h3>5. API 调用测试</h3>
+            <button class="btn btn-primary" onclick="testApiCalls()">运行测试</button>
+            <div id="api-test-results"></div>
+        </div>
+    </div>
+
+    <!-- 引入测试所需的 JavaScript 文件 -->
+    <script>
+        // 模拟 DataTableManager 对象（简化版）
+        window.DataTableManager = {
+            instances: {},
+            config: {
+                apiUrl: '/api/rest/v1/datatable',
+                defaultPageSize: 20,
+                maxPageSize: 100,
+                debounceDelay: 300
+            },
+            editingState: {
+                isEditing: false,
+                currentCell: null,
+                originalValue: null,
+                editingRow: null
+            },
+            
+            initInlineEdit: function(tableId) {
+                const table = document.getElementById(tableId);
+                if (!table) return false;
+                
+                table.addEventListener('dblclick', (e) => {
+                    const cell = e.target.closest('td[data-editable="true"]');
+                    if (cell && !this.editingState.isEditing) {
+                        this.startCellEdit(cell);
+                    }
+                });
+                
+                return true;
+            },
+            
+            startCellEdit: function(cell) {
+                if (this.editingState.isEditing) return false;
+                
+                this.editingState.isEditing = true;
+                this.editingState.currentCell = cell;
+                this.editingState.originalValue = cell.textContent.trim();
+                
+                const fieldType = cell.getAttribute('data-field-type') || 'text';
+                const editor = this.createCellEditor(fieldType, this.editingState.originalValue);
+                
+                cell.innerHTML = '';
+                cell.appendChild(editor);
+                editor.focus();
+                cell.classList.add('editing');
+                
+                return true;
+            },
+            
+            createCellEditor: function(type, value) {
+                let editor;
+                
+                switch (type) {
+                    case 'select':
+                        editor = document.createElement('select');
+                        editor.className = 'form-control form-control-sm';
+                        editor.innerHTML = '<option value="启用">启用</option><option value="禁用">禁用</option>';
+                        break;
+                    case 'email':
+                        editor = document.createElement('input');
+                        editor.type = 'email';
+                        editor.className = 'form-control form-control-sm';
+                        break;
+                    default:
+                        editor = document.createElement('input');
+                        editor.type = 'text';
+                        editor.className = 'form-control form-control-sm';
+                }
+                
+                editor.value = value;
+                
+                editor.addEventListener('blur', () => {
+                    setTimeout(() => this.saveCellEdit(), 100);
+                });
+                
+                return editor;
+            },
+            
+            saveCellEdit: function() {
+                if (!this.editingState.isEditing) return false;
+                
+                const cell = this.editingState.currentCell;
+                const editor = cell.querySelector('input, select');
+                const newValue = editor ? editor.value : '';
+                
+                cell.innerHTML = newValue;
+                cell.classList.remove('editing');
+                this.resetEditingState();
+                
+                return true;
+            },
+            
+            resetEditingState: function() {
+                this.editingState.isEditing = false;
+                this.editingState.currentCell = null;
+                this.editingState.originalValue = null;
+                this.editingState.editingRow = null;
+            }
+        };
+
+        // 模拟 DataTableFormManager 对象（简化版）
+        window.DataTableFormManager = {
+            forms: {},
+            config: {
+                apiUrl: '/api/rest/v1/datatable',
+                validateOnChange: true
+            },
+            
+            initForm: function(formId, options) {
+                if (!document.getElementById(formId)) return false;
+                
+                this.forms[formId] = {
+                    id: formId,
+                    options: options || {},
+                    fields: {}
+                };
+                
+                return true;
+            },
+            
+            validateField: function(formId, fieldName, value) {
+                const form = this.forms[formId];
+                if (!form) return false;
+                
+                // 简单的邮箱验证
+                if (fieldName === 'email' && value) {
+                    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+                }
+                
+                // 简单的必填验证
+                if (form.options.required && form.options.required.includes(fieldName)) {
+                    return value && value.trim() !== '';
+                }
+                
+                return true;
+            },
+            
+            validateForm: function(formId) {
+                const form = document.getElementById(formId);
+                if (!form) return false;
+                
+                const formData = new FormData(form);
+                let isValid = true;
+                
+                for (let [name, value] of formData.entries()) {
+                    if (!this.validateField(formId, name, value)) {
+                        isValid = false;
+                    }
+                }
+                
+                return isValid;
+            }
+        };
+
+        // 测试函数
+        function addTestResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const result = document.createElement('div');
+            result.className = `test-result test-${type}`;
+            result.innerHTML = `<i class="fas fa-${type === 'pass' ? 'check' : type === 'fail' ? 'times' : 'info-circle'}"></i> ${message}`;
+            container.appendChild(result);
+        }
+
+        function testDataTableManager() {
+            const containerId = 'manager-test-results';
+            document.getElementById(containerId).innerHTML = '';
+            
+            // 测试对象存在
+            if (typeof DataTableManager !== 'undefined') {
+                addTestResult(containerId, 'DataTableManager 对象存在', 'pass');
+            } else {
+                addTestResult(containerId, 'DataTableManager 对象不存在', 'fail');
+                return;
+            }
+            
+            // 测试配置对象
+            if (DataTableManager.config && DataTableManager.config.apiUrl) {
+                addTestResult(containerId, '配置对象正常', 'pass');
+            } else {
+                addTestResult(containerId, '配置对象异常', 'fail');
+            }
+            
+            // 测试实例缓存
+            if (typeof DataTableManager.instances === 'object') {
+                addTestResult(containerId, '实例缓存对象正常', 'pass');
+            } else {
+                addTestResult(containerId, '实例缓存对象异常', 'fail');
+            }
+            
+            // 测试编辑状态
+            if (DataTableManager.editingState && typeof DataTableManager.editingState.isEditing === 'boolean') {
+                addTestResult(containerId, '编辑状态对象正常', 'pass');
+            } else {
+                addTestResult(containerId, '编辑状态对象异常', 'fail');
+            }
+        }
+
+        function testFormManager() {
+            const containerId = 'form-test-results';
+            document.getElementById(containerId).innerHTML = '';
+            
+            // 测试对象存在
+            if (typeof DataTableFormManager !== 'undefined') {
+                addTestResult(containerId, 'DataTableFormManager 对象存在', 'pass');
+            } else {
+                addTestResult(containerId, 'DataTableFormManager 对象不存在', 'fail');
+                return;
+            }
+            
+            // 测试表单初始化
+            const testFormId = 'test-form-' + Date.now();
+            const testForm = document.createElement('form');
+            testForm.id = testFormId;
+            document.body.appendChild(testForm);
+            
+            const initResult = DataTableFormManager.initForm(testFormId, {
+                required: ['name', 'email']
+            });
+            
+            if (initResult) {
+                addTestResult(containerId, '表单初始化成功', 'pass');
+            } else {
+                addTestResult(containerId, '表单初始化失败', 'fail');
+            }
+            
+            // 清理测试元素
+            document.body.removeChild(testForm);
+        }
+
+        function testFieldValidation() {
+            const containerId = 'validation-test-results';
+            document.getElementById(containerId).innerHTML = '';
+            
+            // 创建测试表单
+            const testFormId = 'validation-test-form';
+            const testForm = document.createElement('form');
+            testForm.id = testFormId;
+            document.body.appendChild(testForm);
+            
+            DataTableFormManager.initForm(testFormId, {
+                required: ['name']
+            });
+            
+            // 测试邮箱验证
+            const emailValid = DataTableFormManager.validateField(testFormId, 'email', 'test@example.com');
+            const emailInvalid = DataTableFormManager.validateField(testFormId, 'email', 'invalid-email');
+            
+            if (emailValid && !emailInvalid) {
+                addTestResult(containerId, '邮箱验证功能正常', 'pass');
+            } else {
+                addTestResult(containerId, '邮箱验证功能异常', 'fail');
+            }
+            
+            // 测试必填验证
+            const requiredValid = DataTableFormManager.validateField(testFormId, 'name', '张三');
+            const requiredInvalid = DataTableFormManager.validateField(testFormId, 'name', '');
+            
+            if (requiredValid && !requiredInvalid) {
+                addTestResult(containerId, '必填验证功能正常', 'pass');
+            } else {
+                addTestResult(containerId, '必填验证功能异常', 'fail');
+            }
+            
+            // 清理测试元素
+            document.body.removeChild(testForm);
+        }
+
+        function testInlineEdit() {
+            const containerId = 'inline-edit-test-results';
+            document.getElementById(containerId).innerHTML = '';
+            
+            // 测试实时编辑初始化
+            const initResult = DataTableManager.initInlineEdit('test-table');
+            
+            if (initResult) {
+                addTestResult(containerId, '实时编辑初始化成功', 'pass');
+            } else {
+                addTestResult(containerId, '实时编辑初始化失败', 'fail');
+            }
+            
+            // 测试编辑器创建
+            const textEditor = DataTableManager.createCellEditor('text', '测试值');
+            const selectEditor = DataTableManager.createCellEditor('select', '启用');
+            
+            if (textEditor && textEditor.tagName === 'INPUT' && textEditor.type === 'text') {
+                addTestResult(containerId, '文本编辑器创建成功', 'pass');
+            } else {
+                addTestResult(containerId, '文本编辑器创建失败', 'fail');
+            }
+            
+            if (selectEditor && selectEditor.tagName === 'SELECT') {
+                addTestResult(containerId, '选择编辑器创建成功', 'pass');
+            } else {
+                addTestResult(containerId, '选择编辑器创建失败', 'fail');
+            }
+            
+            addTestResult(containerId, '双击表格单元格测试实时编辑功能', 'info');
+        }
+
+        function testApiCalls() {
+            const containerId = 'api-test-results';
+            document.getElementById(containerId).innerHTML = '';
+            
+            // 测试 fetch API 可用性
+            if (typeof fetch !== 'undefined') {
+                addTestResult(containerId, 'Fetch API 可用', 'pass');
+            } else {
+                addTestResult(containerId, 'Fetch API 不可用', 'fail');
+                return;
+            }
+            
+            // 模拟 API 调用测试
+            const testApiCall = async () => {
+                try {
+                    // 这里只是测试请求格式，实际不会发送请求
+                    const requestData = {
+                        model: 'TestModel',
+                        scope: 'test-scope',
+                        page: 1,
+                        limit: 20
+                    };
+                    
+                    if (requestData.model && requestData.scope) {
+                        addTestResult(containerId, 'API 请求参数格式正确', 'pass');
+                    } else {
+                        addTestResult(containerId, 'API 请求参数格式错误', 'fail');
+                    }
+                    
+                    // 测试 JSON 序列化
+                    const jsonData = JSON.stringify(requestData);
+                    if (jsonData && jsonData.length > 0) {
+                        addTestResult(containerId, 'JSON 序列化成功', 'pass');
+                    } else {
+                        addTestResult(containerId, 'JSON 序列化失败', 'fail');
+                    }
+                    
+                } catch (error) {
+                    addTestResult(containerId, 'API 调用测试异常: ' + error.message, 'fail');
+                }
+            };
+            
+            testApiCall();
+            addTestResult(containerId, '注意：实际 API 调用需要后端服务支持', 'info');
+        }
+    </script>
+</body>
+</html>

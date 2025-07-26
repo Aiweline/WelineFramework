@@ -70,77 +70,61 @@ class TableHeader implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 属性继承与校验
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
             $sortable = filter_var($attributes['sortable'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $draggable = filter_var($attributes['draggable'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $draggable = filter_var($attributes['draggable'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $configurable = filter_var($attributes['configurable'] ?? true, FILTER_VALIDATE_BOOLEAN);
             $resizable = filter_var($attributes['resizable'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
-            // 使用TableContext助手类继承表格属性
+            // 从父表格继承属性
             $inheritedAttributes = TableContext::inheritTableAttributes(
-                $attributes, 
-                $scope, 
-                ['model', 'scope', 'sortable']
+                $attributes,
+                $scope,
+                ['model', 'scope', 'sortable', 'editable', 'searchable']
             );
 
-
-            // 更新变量值
             $model = $inheritedAttributes['model'] ?? $model;
             $scope = $inheritedAttributes['scope'] ?? $scope;
+
             if (isset($inheritedAttributes['sortable'])) {
                 $sortable = filter_var($inheritedAttributes['sortable'], FILTER_VALIDATE_BOOLEAN);
             }
 
             // 验证必需的属性
             TableContext::validateRequiredAttributes(
-                ['model' => $model, 'scope' => $scope], 
-                ['model', 'scope'], 
+                ['model' => $model, 'scope' => $scope],
+                ['model', 'scope'],
                 't-header'
             );
 
-            $scope = $scope . '-header';
+            // 生成子scope
+            $headerScope = $scope . '-header';
 
-            // 推入表头标签到渲染栈
-            TableContext::pushChildTag('t-header', $scope, $inheritedAttributes);
+            // 设置表头上下文
+            $headerContext = array_merge($inheritedAttributes, [
+                'type' => 't-header',
+                'scope' => $headerScope,
+                'sortable' => $sortable,
+                'draggable' => $draggable,
+                'configurable' => $configurable,
+                'resizable' => $resizable
+            ]);
+
+            TableContext::pushChildTag('t-header', $headerScope, $headerContext);
 
             $content = $tag_data[2] ?? '';
 
-            // 转换为JavaScript布尔值
-            $sortableJs = $sortable ? 'true' : 'false';
-            $draggableJs = $draggable ? 'true' : 'false';
-            $configurableJs = $configurable ? 'true' : 'false';
-            $resizableJs = $resizable ? 'true' : 'false';
+            // 如果没有手动配置字段，尝试自动生成
+            if (empty(trim($content))) {
+                $content = self::generateDefaultHeaderFields($model, $headerScope, $inheritedAttributes);
+            }
 
-            // 修复模型名称的转义问题
-            $modelJs = str_replace('\\', '\\\\', $model);
+            // 生成表头HTML
+            $result = self::generateHeaderHtml($model, $headerScope, $content, $headerContext);
 
-            $result = <<<HTML
-<thead>
-    <tr class="datatable-header-row" data-model="{$model}" data-scope="{$scope}">
-        {$content}
-    </tr>
-</thead>
-<script>
-$(function() {
-    // 初始化表头配置
-    if (window.DataTableManager) {
-        window.DataTableManager.initHeader('{$scope}', {
-            model: '{$modelJs}',
-            scope: '{$scope}',
-            sortable: {$sortableJs},
-            draggable: {$draggableJs},
-            configurable: {$configurableJs},
-            resizable: {$resizableJs}
-        });
-    }
-});
-</script>
-HTML;
-
-            // 渲染结束后弹出表头标签
-            // TableContext::popTag();
-            
+            TableContext::popTag();
             return $result;
         };
     }
@@ -159,6 +143,114 @@ HTML;
     public static function tag_self_close_with_attrs(): bool
     {
         return false;
+    }
+
+    /**
+     * 生成默认的表头字段
+     * @param string $model 模型类名
+     * @param string $scope 作用域
+     * @param array $context 上下文
+     * @return string 字段HTML
+     */
+    private static function generateDefaultHeaderFields(string $model, string $scope, array $context): string
+    {
+        try {
+            // 尝试实例化模型获取字段信息
+            $modelInstance = w_obj($model);
+            $fields = [];
+
+            // 尝试多种方式获取字段信息
+            if (method_exists($modelInstance, 'getColumns')) {
+                $columns = $modelInstance->getColumns();
+                foreach ($columns as $column) {
+                    $fields[] = [
+                        'name' => $column['Field'],
+                        'label' => $column['Comment'] ?: $column['Field'],
+                        'type' => $column['Type'],
+                        'sortable' => true,
+                        'width' => self::getDefaultWidth($column['Field'])
+                    ];
+                }
+            } else {
+                // 使用默认字段
+                $defaultFields = ['id', 'name', 'status', 'created_at'];
+                foreach ($defaultFields as $fieldName) {
+                    $fields[] = [
+                        'name' => $fieldName,
+                        'label' => ucfirst($fieldName),
+                        'sortable' => true,
+                        'width' => self::getDefaultWidth($fieldName)
+                    ];
+                }
+            }
+
+            // 限制字段数量
+            $fields = array_slice($fields, 0, 6);
+
+            // 生成字段HTML
+            $fieldsHtml = '';
+            foreach ($fields as $field) {
+                $sortableAttr = $field['sortable'] ? 'sortable="true"' : '';
+                $fieldsHtml .= "<w:field belong=\"t-header\" name=\"{$field['name']}\" {$sortableAttr} width=\"{$field['width']}\">{$field['label']}</w:field>\n";
+            }
+
+            return $fieldsHtml;
+
+        } catch (\Exception $e) {
+            error_log("TableHeader: 自动生成字段失败: " . $e->getMessage());
+            return '<w:field belong="t-header" name="id" sortable="true" width="80">ID</w:field>';
+        }
+    }
+
+    /**
+     * 生成表头HTML
+     * @param string $model 模型类名
+     * @param string $scope 作用域
+     * @param string $content 内容
+     * @param array $context 上下文
+     * @return string HTML
+     */
+    private static function generateHeaderHtml(string $model, string $scope, string $content, array $context): string
+    {
+        $sortableJs = $context['sortable'] ? 'true' : 'false';
+        $draggableJs = $context['draggable'] ? 'true' : 'false';
+        $configurableJs = $context['configurable'] ? 'true' : 'false';
+        $resizableJs = $context['resizable'] ? 'true' : 'false';
+
+        return <<<HTML
+<thead class="datatable-header"
+       data-model="{$model}"
+       data-scope="{$scope}"
+       data-sortable="{$sortableJs}"
+       data-draggable="{$draggableJs}"
+       data-configurable="{$configurableJs}"
+       data-resizable="{$resizableJs}">
+    <tr class="datatable-header-row">
+        {$content}
+    </tr>
+</thead>
+HTML;
+    }
+
+    /**
+     * 获取默认字段宽度
+     * @param string $fieldName 字段名
+     * @return string 宽度
+     */
+    private static function getDefaultWidth(string $fieldName): string
+    {
+        $widthMap = [
+            'id' => '80',
+            'status' => '100',
+            'created_at' => '150',
+            'updated_at' => '150',
+            'name' => '200',
+            'title' => '200',
+            'email' => '180',
+            'phone' => '120'
+        ];
+
+        return $widthMap[$fieldName] ?? '150';
     }
 
     public static function document(): string
@@ -196,4 +288,4 @@ resizable: 可选，是否启用列宽调整，默认true
 3. 无需手动指定model和scope，除非需要覆盖继承的值
 DOC;
     }
-} 
+}

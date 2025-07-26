@@ -77,110 +77,22 @@ class TableBody implements TaglibInterface
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
             $editable = filter_var($attributes['editable'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $inlineEdit = filter_var($attributes['inline-edit'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $modalEdit = filter_var($attributes['modal-edit'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $selectable = filter_var($attributes['selectable'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $multiSelect = filter_var($attributes['multi-select'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $rowActions = filter_var($attributes['row-actions'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $emptyText = $attributes['empty-text'] ?? __('暂无数据');
-            $loadingText = $attributes['loading-text'] ?? __('加载中...');
-
-            // 使用TableContext助手类继承表格属性
-            $inheritedAttributes = TableContext::inheritTableAttributes(
-                $attributes, 
-                $scope, 
-                ['model', 'scope', 'editable', 'inline-edit', 'modal-edit']
-            );
-
-            // 更新变量值
+            $inheritedAttributes = TableContext::inheritTableAttributes($attributes, $scope, ['model', 'scope', 'editable', 'inline-edit', 'modal-edit']);
             $model = $inheritedAttributes['model'] ?? $model;
             $scope = $inheritedAttributes['scope'] ?? $scope;
             if (isset($inheritedAttributes['editable'])) {
                 $editable = filter_var($inheritedAttributes['editable'], FILTER_VALIDATE_BOOLEAN);
             }
-            if (isset($inheritedAttributes['inline-edit'])) {
-                $inlineEdit = filter_var($inheritedAttributes['inline-edit'], FILTER_VALIDATE_BOOLEAN);
-            }
-            if (isset($inheritedAttributes['modal-edit'])) {
-                $modalEdit = filter_var($inheritedAttributes['modal-edit'], FILTER_VALIDATE_BOOLEAN);
-            }
-
-            // 验证必需的属性
-            TableContext::validateRequiredAttributes(
-                ['model' => $model, 'scope' => $scope], 
-                ['model', 'scope'], 
-                't-body'
-            );
-
+            TableContext::validateRequiredAttributes(['model' => $model, 'scope' => $scope], ['model', 'scope'], 't-body');
             $scope = $scope . '-body';
-
-            // 推入表格主体标签到渲染栈
             TableContext::pushChildTag('t-body', $scope, $inheritedAttributes);
-
             $content = $tag_data[2] ?? '';
-
-            // 转换为JavaScript布尔值
-            $editableJs = $editable ? 'true' : 'false';
-            $inlineEditJs = $inlineEdit ? 'true' : 'false';
-            $modalEditJs = $modalEdit ? 'true' : 'false';
-            $selectableJs = $selectable ? 'true' : 'false';
-            $multiSelectJs = $multiSelect ? 'true' : 'false';
-            $rowActionsJs = $rowActions ? 'true' : 'false';
-
-            // 修复模型名称的转义问题
-            $modelJs = str_replace('\\', '\\\\', $model);
-
             $result = <<<HTML
 <tbody class="datatable-body" data-model="{$model}" data-scope="{$scope}">
-    <!-- 加载状态 -->
-    <tr class="datatable-loading" style="display: none;">
-        <td colspan="100%" class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">{$loadingText}</span>
-            </div>
-            <div class="mt-2">{$loadingText}</div>
-        </td>
-    </tr>
-    
-    <!-- 空数据状态 -->
-    <tr class="datatable-empty" style="display: none;">
-        <td colspan="100%" class="text-center py-4 text-muted">
-            <i class="fas fa-inbox fa-2x mb-2"></i>
-            <div>{$emptyText}</div>
-        </td>
-    </tr>
-    
-    <!-- 数据行内容 -->
-    <tr class="datatable-data-row" style="display: none;">
-        <td colspan="100%">
-            {$content}
-        </td>
-    </tr>
+    {$content}
 </tbody>
-<script>
-$(function() {
-    // 初始化表格主体配置
-    if (window.DataTableManager) {
-        window.DataTableManager.initBody('{$scope}', {
-            model: '{$modelJs}',
-            scope: '{$scope}',
-            editable: {$editableJs},
-            inlineEdit: {$inlineEditJs},
-            modalEdit: {$modalEditJs},
-            selectable: {$selectableJs},
-            multiSelect: {$multiSelectJs},
-            rowActions: {$rowActionsJs},
-            emptyText: '{$emptyText}',
-            loadingText: '{$loadingText}'
-        });
-    }
-});
-</script>
 HTML;
-
-            // 渲染结束后弹出表格主体标签
-            // TableContext::popTag();
-            
+            TableContext::popTag();
             return $result;
         };
     }
