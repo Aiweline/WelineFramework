@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?></title>
+    <template>Weline_Backend::public\head.phtml</template>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 0;
+            margin-bottom: 40px;
+        }
+        .test-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        .test-card:hover {
+            transform: translateY(-5px);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border: none;
+        }
+        .card-body {
+            padding: 30px;
+        }
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        .btn-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .status-badge {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-table me-2"></i>DataTable 多模型测试
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('datatable/backend/test/index//multimodel/basic') ?>">基本测试</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('datatable/backend/test/index//multimodel/join') ?>">JOIN测试</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('datatable/backend/test/index//multimodel/complex') ?>">复杂查询</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('datatable/backend/test/index//multimodel/manual') ?>">手动配置</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主标题区域 -->
+    <section class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 mb-3">
+                <i class="fas fa-database me-3"></i><?= $title ?>
+            </h1>
+            <p class="lead mb-4"><?= $description ?></p>
+            <span class="status-badge">
+                <i class="fas fa-check-circle me-1"></i>功能已就绪
+            </span>
+        </div>
+    </section>
+
+    <!-- 功能特性展示 -->
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="test-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-layer-group feature-icon"></i>
+                        <h4>多模型支持</h4>
+                        <p class="text-muted">支持同时查询多个模型，每个模型可以使用别名，自动处理字段冲突。</p>
+                        <a href="<?= $this->getUrl('datatable/backend/test/index//multimodel/basic') ?>" class="btn btn-custom">
+                            <i class="fas fa-play me-2"></i>开始测试
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="test-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-link feature-icon"></i>
+                        <h4>JOIN查询</h4>
+                        <p class="text-muted">支持LEFT、RIGHT、INNER、OUTER JOIN，灵活的关联查询配置。</p>
+                        <a href="<?= $this->getUrl('datatable/backend/test/index//multimodel/join') ?>" class="btn btn-custom">
+                            <i class="fas fa-play me-2"></i>开始测试
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="test-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-cogs feature-icon"></i>
+                        <h4>手动配置</h4>
+                        <p class="text-muted">支持手动配置字段显示和过滤器，精确控制多模型字段。</p>
+                        <a href="<?= $this->getUrl('datatable/backend/test/index//multimodel/manual') ?>" class="btn btn-custom">
+                            <i class="fas fa-play me-2"></i>开始测试
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 使用示例 -->
+        <div class="test-card">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="fas fa-code me-2"></i>使用示例
+                </h3>
+            </div>
+            <div class="card-body">
+                <h5>基本多模型查询：</h5>
+                <div class="code-block">
+&lt;w:d-table 
+    model="Weline\Admin\Model\Admin as main, Weline\SystemConfig\Model\Config as config" 
+    scope="admin_config_test"
+    searchable="true"
+    sortable="true"&gt;
+&lt;/w:d-table&gt;
+                </div>
+
+                <h5>带JOIN查询的多模型：</h5>
+                <div class="code-block">
+&lt;w:d-table 
+    model="Weline\Admin\Model\Admin as main, Weline\SystemConfig\Model\Config as config" 
+    join="left main.username = config.scope"
+    scope="admin_config_join_test"
+    searchable="true"
+    sortable="true"&gt;
+&lt;/w:d-table&gt;
+                </div>
+
+                <h5>手动配置字段：</h5>
+                <div class="code-block">
+&lt;w:d-table 
+    model="Weline\Admin\Model\Admin as admin, Weline\Store\Model\Store as store" 
+    join="left admin.store_id = store.store_id"
+    scope="admin_store_manual"&gt;
+    
+    &lt;w:t-filter&gt;
+        &lt;w:field belong="t-filter" name="admin.username" type="text" placeholder="搜索用户名"&gt;&lt;/w:field&gt;
+        &lt;w:field belong="t-filter" name="store.name" type="text" placeholder="搜索店铺名"&gt;&lt;/w:field&gt;
+    &lt;/w:t-filter&gt;
+    
+    &lt;w:t-header&gt;
+        &lt;w:field belong="t-header" name="admin.admin_id" sortable="true" width="80"&gt;管理员ID&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="admin.username" sortable="true" width="150"&gt;用户名&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="store.name" sortable="true" width="200"&gt;店铺名&lt;/w:field&gt;
+    &lt;/w:t-header&gt;
+&lt;/w:d-table&gt;
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能特性列表 -->
+        <div class="test-card">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="fas fa-star me-2"></i>功能特性
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-check-circle text-success me-2"></i>多模型支持</h5>
+                        <ul class="list-unstyled ms-4">
+                            <li>• 支持同时查询多个模型</li>
+                            <li>• 每个模型可以使用别名</li>
+                            <li>• 自动处理字段冲突</li>
+                            <li>• 智能字段前缀处理</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-check-circle text-success me-2"></i>JOIN查询</h5>
+                        <ul class="list-unstyled ms-4">
+                            <li>• 支持LEFT、RIGHT、INNER、OUTER JOIN</li>
+                            <li>• 灵活的JOIN条件配置</li>
+                            <li>• 自动构建SQL查询</li>
+                            <li>• 支持复杂的多表关联</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-check-circle text-success me-2"></i>智能字段处理</h5>
+                        <ul class="list-unstyled ms-4">
+                            <li>• 自动为字段添加别名前缀</li>
+                            <li>• 支持手动配置别名字段</li>
+                            <li>• 智能过滤敏感字段</li>
+                            <li>• 自动设置合适的列宽</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><i class="fas fa-check-circle text-success me-2"></i>向后兼容</h5>
+                        <ul class="list-unstyled ms-4">
+                            <li>• 完全兼容单模型查询</li>
+                            <li>• 现有配置无需修改</li>
+                            <li>• 新功能可选使用</li>
+                            <li>• 平滑升级体验</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white text-center py-4 mt-5">
+        <div class="container">
+            <p class="mb-0">
+                <i class="fas fa-code me-2"></i>
+                DataTable 多模型JOIN查询功能测试页面
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
