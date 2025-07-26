@@ -236,9 +236,10 @@ class TableContext
                 return $item['type'] === $belong;
             });
             $stack = array_values($stack);
-            $stack = end($stack);
+            $lastItem = end($stack);
+            $stack = $lastItem !== false ? $lastItem : [];
         }
-        return $stack;
+        return $stack ?: [];
     }
 
     /**
@@ -252,7 +253,7 @@ class TableContext
     /**
      * 记录模板中定义的字段
      * @param string $scope 表格作用域
-     * @param string $belong 字段所属类型 (t-header 或 t-filter)
+     * @param string $belong 字段所属类型 (t-header、t-filter 或 d-form)
      * @param string $fieldName 字段名称
      * @param array $fieldAttributes 字段属性
      */
@@ -261,7 +262,8 @@ class TableContext
         if (!isset(self::$templateFields[$scope])) {
             self::$templateFields[$scope] = [
                 't-header' => [],
-                't-filter' => []
+                't-filter' => [],
+                'd-form' => []
             ];
         }
 
@@ -280,7 +282,7 @@ class TableContext
     /**
      * 获取模板中定义的字段
      * @param string $scope 表格作用域
-     * @param string $belong 字段所属类型 (t-header 或 t-filter)
+     * @param string $belong 字段所属类型 (t-header、t-filter 或 d-form)
      * @return array 字段配置数组
      */
     public static function getTemplateFields(string $scope, string $belong = ''): array
@@ -309,7 +311,8 @@ class TableContext
 
         $allFields = [
             't-header' => [],
-            't-filter' => []
+            't-filter' => [],
+            'd-form' => []
         ];
 
         // 处理表头字段
@@ -346,6 +349,25 @@ class TableContext
                     'searchable' => true,
                     'sortable' => false, // 过滤器字段默认不可排序
                     'editable' => false, // 过滤器字段不可编辑
+                ]);
+            }
+        }
+
+        // 处理表单字段
+        foreach ($modelFields as $fieldName => $fieldConfig) {
+            $isTemplateDefined = isset($templateFields['d-form'][$fieldName]);
+            
+            if ($isTemplateDefined) {
+                // 使用模板中定义的配置
+                $allFields['d-form'][$fieldName] = $templateFields['d-form'][$fieldName];
+            } else {
+                // 使用模型默认配置
+                $allFields['d-form'][$fieldName] = array_merge($fieldConfig, [
+                    'template_defined' => false,
+                    'visible' => true, // 表单字段默认可见
+                    'searchable' => false, // 表单字段不可搜索
+                    'sortable' => false, // 表单字段不可排序
+                    'editable' => $fieldConfig['editable'] ?? true, // 表单字段默认可编辑
                 ]);
             }
         }

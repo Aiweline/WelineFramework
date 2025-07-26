@@ -14,5 +14,8 @@ Register::register(
     'Weline_DataTable',
     __DIR__,
     '1.0.0',
-    '提供数据表格功能'
+    '提供数据表格功能',
+    [
+        'Weline_Taglib'
+    ]
 );
