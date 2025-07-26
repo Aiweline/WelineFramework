@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - DataTable演示</title>
+    <link rel="stylesheet" href="/static/datatable/css/datatable.css">
+    <link rel="stylesheet" href="/static/datatable/css/datatable-form.css">
+    <style>
+        .page-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .page-header h1 {
+            margin: 0 0 10px 0;
+        }
+        .page-header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        .back-link {
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .demo-section {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .demo-section h3 {
+            margin: 0 0 20px 0;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .code-example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 0.9em;
+            transition: background 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <!-- 页面头部 -->
+        <div class="page-header">
+            <a href="/datatable" class="back-link">← 返回数据表格管理</a>
+            <h1>👥 用户管理</h1>
+            <p>DataTable 用户数据管理演示 - 展示完整的增删改查功能</p>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="demo-section">
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="createTestUsers()">创建测试用户</button>
+                <button class="btn btn-secondary" onclick="viewTestData('users')">查看数据</button>
+                <button class="btn btn-danger" onclick="clearTestData('users')">清空数据</button>
+                <button class="btn" onclick="refreshTable()">刷新表格</button>
+            </div>
+        </div>
+
+        <!-- 自动生成表格演示 -->
+        <div class="demo-section">
+            <h3>🚀 自动生成表格</h3>
+            <p>只需传入模型和范围参数，即可自动生成完整的数据表格：</p>
+            
+            <div class="code-example">
+&lt;w:d-table model="Weline\DataTable\Model\TestUser" scope="user-demo"&gt;&lt;/w:d-table&gt;
+            </div>
+
+            <!-- 实际的数据表格 -->
+            <w:d-table model="Weline\DataTable\Model\TestUser" scope="user-demo"></w:d-table>
+        </div>
+
+        <!-- 手动配置表格演示 -->
+        <div class="demo-section">
+            <h3>🎨 手动配置表格</h3>
+            <p>手动配置表格结构，精确控制显示字段和功能：</p>
+            
+            <div class="code-example">
+&lt;w:d-table model="Weline\DataTable\Model\TestUser" scope="user-manual"&gt;
+    &lt;w:d-form for="add,edit" title="用户管理" form-mode="modal"&gt;
+        &lt;w:field name="username" type="text" label="用户名" required="true"&gt;&lt;/w:field&gt;
+        &lt;w:field name="email" type="email" label="邮箱" required="true"&gt;&lt;/w:field&gt;
+        &lt;w:field name="status" type="select" label="状态" options="1:启用,0:禁用"&gt;&lt;/w:field&gt;
+    &lt;/w:d-form&gt;
+    &lt;w:t-filter&gt;
+        &lt;w:field belong="t-filter" name="username" type="text" placeholder="搜索用户名"&gt;&lt;/w:field&gt;
+        &lt;w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"&gt;&lt;/w:field&gt;
+    &lt;/w:t-filter&gt;
+    &lt;w:t-header&gt;
+        &lt;w:field belong="t-header" name="user_id" sortable="true" width="80"&gt;ID&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="username" sortable="true" width="150"&gt;用户名&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="email" sortable="true" width="200"&gt;邮箱&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="status" sortable="true" width="100"&gt;状态&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="created_at" sortable="true" width="150"&gt;创建时间&lt;/w:field&gt;
+    &lt;/w:t-header&gt;
+&lt;/w:d-table&gt;
+            </div>
+
+            <!-- 手动配置的数据表格 -->
+            <w:d-table model="Weline\DataTable\Model\TestUser" scope="user-manual">
+                <w:d-form for="add,edit" title="用户管理" form-mode="modal">
+                    <w:field name="username" type="text" label="用户名" required="true"></w:field>
+                    <w:field name="email" type="email" label="邮箱" required="true"></w:field>
+                    <w:field name="status" type="select" label="状态" options="1:启用,0:禁用"></w:field>
+                </w:d-form>
+                <w:t-filter>
+                    <w:field belong="t-filter" name="username" type="text" placeholder="搜索用户名"></w:field>
+                    <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"></w:field>
+                </w:t-filter>
+                <w:t-header>
+                    <w:field belong="t-header" name="user_id" sortable="true" width="80">ID</w:field>
+                    <w:field belong="t-header" name="username" sortable="true" width="150">用户名</w:field>
+                    <w:field belong="t-header" name="email" sortable="true" width="200">邮箱</w:field>
+                    <w:field belong="t-header" name="status" sortable="true" width="100">状态</w:field>
+                    <w:field belong="t-header" name="created_at" sortable="true" width="150">创建时间</w:field>
+                </w:t-header>
+            </w:d-table>
+        </div>
+
+        <!-- 功能特性说明 -->
+        <div class="demo-section">
+            <h3>✨ 功能特性</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div>
+                    <h4>📊 数据操作</h4>
+                    <ul>
+                        <li>自动分页和排序</li>
+                        <li>实时搜索和过滤</li>
+                        <li>批量操作支持</li>
+                        <li>数据导出功能</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>🎨 界面功能</h4>
+                    <ul>
+                        <li>响应式设计</li>
+                        <li>主题切换</li>
+                        <li>列宽调整</li>
+                        <li>列显示控制</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>🔧 开发功能</h4>
+                    <ul>
+                        <li>事件钩子</li>
+                        <li>自定义渲染</li>
+                        <li>API接口</li>
+                        <li>配置持久化</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/datatable/js/datatable-manager.js"></script>
+    <script src="/static/datatable/js/datatable-form-manager.js"></script>
+    <script>
+        // 创建测试用户数据
+        function createTestUsers() {
+            fetch('/datatable/backend/test/testUsers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('测试用户数据创建成功！');
+                    refreshTable();
+                } else {
+                    alert('创建失败：' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('创建失败，请查看控制台');
+            });
+        }
+
+        // 查看测试数据
+        function viewTestData(type) {
+            fetch(`/datatable/backend/test/viewTestData?type=${type}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('测试数据：', data.data);
+                    alert(`查看成功，共 ${data.count} 条数据，详情请查看控制台`);
+                } else {
+                    alert('查看失败：' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('查看失败，请查看控制台');
+            });
+        }
+
+        // 清空测试数据
+        function clearTestData(type) {
+            if (confirm('确定要清空测试数据吗？此操作不可恢复！')) {
+                fetch(`/datatable/backend/test/clearTestData?type=${type}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('测试数据已清空！');
+                        refreshTable();
+                    } else {
+                        alert('清空失败：' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('清空失败，请查看控制台');
+                });
+            }
+        }
+
+        // 刷新表格
+        function refreshTable() {
+            // 触发表格刷新事件
+            const event = new CustomEvent('datatable:refresh', {
+                detail: { scope: 'user-demo' }
+            });
+            document.dispatchEvent(event);
+            
+            const event2 = new CustomEvent('datatable:refresh', {
+                detail: { scope: 'user-manual' }
+            });
+            document.dispatchEvent(event2);
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('用户管理页面已加载');
+        });
+    </script>
+</body>
+</html> 

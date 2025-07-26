@@ -2,7 +2,7 @@
 
 namespace Weline\Admin\Observer;
 
-use Weline\Admin\Model\BackendUserToken;
+use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Session\BackendSession;
 use Weline\Framework\Event\Event;
@@ -12,6 +12,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Admin\Observer\BackendWhitelistUrl;
 
 class BackendControllerInitAfter implements ObserverInterface
 {
@@ -20,7 +21,7 @@ class BackendControllerInitAfter implements ObserverInterface
     public function __construct(Request $request)
     {
         $this->request = $request;
-    }
+    }   
 
     private function getSession(): BackendSession
     {

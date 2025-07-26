@@ -83,165 +83,35 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class='col-12'>
                         <div class='card'>
                             <div class='card-body'>
+                            <!-- 独立的d-form测试 -->
+                            <div style="margin-bottom: 20px; padding: 15px; border: 2px dashed #007bff; border-radius: 8px; background-color: #f8f9fa;">
+                                <h5 style="color: #007bff; margin-bottom: 15px;">
+                                    <i class="fas fa-vial"></i> d-form 独立测试
+                                </h5>
+                                <p style="margin-bottom: 15px; color: #6c757d;">
+                                    这是一个独立的d-form，应该显示为一个"添加店铺"按钮，点击后弹出模态框表单。
+                                </p>
+                                <w:d-form model="WeShop\Store\Model\Store" scope="store-form-test" title="添加店铺">
+                                    <w:field belong="d-form" name="name" type="text" placeholder="请输入店铺名称" required="true">店铺名称</w:field>
+                                    <w:field belong="d-form" name="status" type="select" options="1:启用,0:禁用">状态</w:field>
+                                </w:d-form>
+                            </div>
+
                             <w:d-table model="WeShop\Store\Model\Store" scope="store-listing">
+                                <w:d-form title="添加店铺" form-mode="modal" form-title="添加店铺">
+                                    <w:field name="name" type="text" label="名称" placeholder="请输入名称"></w:field>
+                                    <w:field name="status" type="select" label="状态" options="1:启用,0:禁用"></w:field>
+                                </w:d-form>
                                 <w:t-filter>
                                     <w:field belong="t-filter" name="name" type="text" placeholder="搜索名称"></w:field>
                                     <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"></w:field>
                                 </w:t-filter>
                                 <w:t-header>
                                     <w:field belong="t-header" name="store_id" sortable="true" width="80">ID</w:field>
-                                    <w:field belong="t-header" name="name" sortable="true" width="200">名称</w:field>
+                                    <w:field belong="t-header" name="name" display_orderable="false" sortable="true" width="200">名称</w:field>
                                     <w:field belong="t-header" name="status" sortable="true" width="100">状态</w:field>
                                 </w:t-header>
                             </w:d-table>
-                            
-                                <div class='table-rep-plugin'>
-                                    <!-- search form -->
-                                    <div class='row d-flex align-items-center justify-content-between'>
-                                        <div class='col-2'>
-                                            <block class='Weline\Component\Block\Form\Search' id='shop-store-search'
-                                                   action='*/backend/store' method='get' keyword='q' value=''
-                                                   placeholder='请输入店铺关键词回车搜索'></block>
-                                        </div>
-                                        <div class='col-1 text-end'>
-                                            <block class="Weline\Component\Block\OffCanvas"
-                                                   template="Weline_Component::off-canvas.phtml"
-                                                   cache="300"
-                                                   id="store_add_canvas"
-                                                   action="*/backend/store/add"
-                                                   target-tag="button"
-                                                   icon="mdi mdi-plus"
-                                                   submit-button-text="保存"
-                                                   target-button-text="添加"
-                                                   target-button-class="btn btn-primary"
-                                                   title="店铺添加"
-                                                   close-button-show="1"
-                                                   close-button-text="取消"
-                                                   direction="right"
-                                                   class-names="w-75"
-                                                   off-canvas-body-style=""
-                                            />
-                                        </div>
-                                    </div>
-                                    <!-- end search form -->
-                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                                            <thead>
-                                            <tr>
-                                                <th data-priority='1'>
-                                                    <lang>店铺ID</lang>
-                                                </th>
-                                                <th data-priority='2'>
-                                                    <lang>店铺名</lang>
-                                                </th>
-                                                <th data-priority='3'>
-                                                    <lang>图片</lang>
-                                                </th>
-                                                <th data-priority='4'><?= __('代码') ?></th>
-                                                <th data-priority='5'><?= __('网站') ?></th>
-                                                <th data-priority='6'><?= __('启用') ?></th>
-                                                <th data-priority='6'><?= __('地址') ?></th>
-                                                <th data-priority='6'><?= __('手机') ?></th>
-                                                <th data-priority='6'><?= __('邮箱') ?></th>
-                                                <th><?= __('开业时间') ?></th>
-                                                <th><?= __('休息时间') ?></th>
-                                                <th data-priority='6'><?= __('详情') ?></th>
-                                                <th data-priority='6'><?= __('维度') ?></th>
-                                                <th data-priority='6'><?= __('经度') ?></th>
-                                                <th><?= __('地区码') ?></th>
-                                                <th><?= __('创建时间') ?></th>
-                                                <th><?= __('更新时间') ?></th>
-                                                <th><?= __('操作') ?></th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <foreach name="stores" item="store" key="key">
-                                                <tr style="vertical-align: middle;">
-                                                    <td class='co-name'>{{store.store_id}}</td>
-                                                    <td class='co-name'>
-                                                        <local model="WeShop\Store\Model\Store\LocalDescription"
-                                                               field="name" id="store.store_id" name="store-name">
-                                                            {{store.local_name|store.name}}
-                                                        </local>
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.local}}
-                                                        <if condition="store.local_name">
-                                                            : {{store.local_name}}
-                                                        </if>
-                                                    </td>
-                                                    <td>
-                                                        <has name="store.image"><img
-                                                                    src="/media/image/{{store.image}}?w=50&h=50"
-                                                                    alt="{{store.name}}"></has>
-                                                    </td>
-                                                    <td>{{store.code}}</td>
-                                                    <td>{{store.website}}</td>
-                                                    <td class='co-name'>
-                                                        <if condition="store.status"><span
-                                                                    class="text-success">启用</span>
-                                                            <else/>
-                                                            <span class="text-danger">禁用</span></if>
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.address}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.phone}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.email}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.opening_hours}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.closing_hours}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.description}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.latitude}}
-                                                    </td>
-                                                    <td class='co-name'>
-                                                        {{store.longitude}}
-                                                    </td>
-                                                    <td class='co-name'>{{store.create_time}}</td>
-                                                    <td class='co-name'>{{store.update_time}}</td>
-                                                    <td class='co-name'>
-                                                        <div class="d-flex gap-2">
-                                                            <block class='Weline\Component\Block\OffCanvas'
-                                                                   template='Weline_Component::off-canvas.phtml'
-                                                                   cache='0'
-                                                                   id='off_canvas_store_edit'
-                                                                   action="*/backend/store/edit"
-                                                                   target-tag="a"
-                                                                   vars="store"
-                                                                   action-params="{id: store.store_id}"
-                                                                   submit-button-text='保存'
-                                                                   target-button-text='修改'
-                                                                   target-button-class='text-info'
-                                                                   title='编辑店铺'
-                                                                   close-button-show='1'
-                                                                   close-button-text='关闭'
-                                                                   direction='right'
-                                                                   class-names='w-75'
-                                                                   off-canvas-body-style=''
-                                                            />
-                                                            <a class="store-delete-btn text-danger" type="button"
-                                                               data-id="{{store.store_id}}">
-                                                                <lang>删除</lang>
-                                                            </a>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </foreach>
-                                            </tbody>
-                                        </table>
-                                        {{pagination}}
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div> <!-- end col -->
