@@ -1,24 +1,32 @@
 {
   "name": "weline/module-data-table",
-  "description": "WelineFramework 提供数据表格功能模块",
+  "description": "Weline Framework DataTable Module - 提供强大的数据表格功能",
   "type": "weline-module",
-  "require": {
-    "php": "^8.1",
-    "weline/framework": "^v1.3"
-  },
+  "license": "MIT",
   "authors": [
     {
-      "name": "Weline",
-      "email": "aiweline@qq.com"
+      "name": "秋枫雁飞",
+      "email": "aiweline@qq.com",
+      "homepage": "https://aiweline.com"
     }
   ],
+  "require": {
+    "php": ">=8.0",
+    "weline/module-taglib": "*"
+  },
   "autoload": {
     "psr-4": {
       "Weline\\DataTable\\": ""
-    },
-    "psr-0": {
-      "Weline\\DataTable\\": ""
     }
   },
-  "license": "MIT"
+  "extra": {
+    "weline-module": {
+      "name": "Weline_DataTable",
+      "version": "1.0.0",
+      "description": "提供数据表格功能",
+      "dependencies": [
+        "Weline_Taglib"
+      ]
+    }
+  }
 }

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>d-form 测试页面</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background-color: #fafafa;
+        }
+        .test-section h2 {
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-vial"></i> d-form 表单测试页面</h1>
+        
+        <div class="test-section">
+            <h2>1. 基础表单测试</h2>
+            <p>这是一个基础的d-form表单，应该显示为一个"添加"按钮，点击后弹出模态框。</p>
+            
+            <div class="code-block">
+                &lt;w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="添加用户"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" placeholder="请输入用户名" required="true"&gt;用户名&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="email" type="email" placeholder="请输入邮箱"&gt;邮箱&lt;/w:field&gt;<br>
+                &lt;/w:d-form&gt;
+            </div>
+            
+            <div style="margin: 20px 0; padding: 20px; border: 2px dashed #007bff; border-radius: 6px;">
+                <w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="添加用户">
+                    <w:field belong="d-form" name="name" type="text" placeholder="请输入用户名" required="true">用户名</w:field>
+                    <w:field belong="d-form" name="email" type="email" placeholder="请输入邮箱">邮箱</w:field>
+                </w:d-form>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. 带文件上传的表单测试</h2>
+            <p>这个表单包含文件和图片字段，测试文件上传功能。</p>
+            
+            <div class="code-block">
+                &lt;w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="添加产品"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" required="true"&gt;产品名称&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="price" type="number"&gt;价格&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB"&gt;产品图片&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB"&gt;产品文档&lt;/w:field&gt;<br>
+                &lt;/w:d-form&gt;
+            </div>
+            
+            <div style="margin: 20px 0; padding: 20px; border: 2px dashed #28a745; border-radius: 6px;">
+                <w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="添加产品">
+                    <w:field belong="d-form" name="name" type="text" required="true">产品名称</w:field>
+                    <w:field belong="d-form" name="price" type="number">价格</w:field>
+                    <w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB">产品图片</w:field>
+                    <w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB">产品文档</w:field>
+                </w:d-form>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. 自定义按钮样式测试</h2>
+            <p>测试自定义按钮文本、样式和图标。</p>
+            
+            <div class="code-block">
+                &lt;w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="创建订单"<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button-text="创建新订单" button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="order_number" type="text" required="true"&gt;订单号&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="amount" type="number" required="true"&gt;金额&lt;/w:field&gt;<br>
+                &lt;/w:d-form&gt;
+            </div>
+            
+            <div style="margin: 20px 0; padding: 20px; border: 2px dashed #ffc107; border-radius: 6px;">
+                <w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="创建订单"
+                          button-text="创建新订单" button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart">
+                    <w:field belong="d-form" name="order_number" type="text" required="true">订单号</w:field>
+                    <w:field belong="d-form" name="amount" type="number" required="true">金额</w:field>
+                </w:d-form>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. 测试说明</h2>
+            <ul>
+                <li><strong>预期行为</strong>：每个测试区域应该显示一个按钮，点击按钮后弹出模态框表单</li>
+                <li><strong>模态框</strong>：应该有遮罩层、标题栏、表单内容区域和操作按钮</li>
+                <li><strong>文件字段</strong>：应该支持文件选择、预览和上传进度显示</li>
+                <li><strong>表单验证</strong>：必填字段应该有验证提示</li>
+                <li><strong>响应式</strong>：在不同屏幕尺寸下都应该正常显示</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>5. 路由测试</h2>
+            <p><strong>当前页面路由</strong>：<code>http://127.0.0.1:9981/datatable/test/index/form/index</code></p>
+            <p><strong>控制器</strong>：<code>Weline\DataTable\Controller\Test\Index::form()</code></p>
+            <p><strong>模板</strong>：<code>Weline_DataTable::test/form.phtml</code></p>
+        </div>
+    </div>
+
+    <script>
+        // 添加一些调试信息
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成');
+            console.log('DataTableFormManager:', typeof DataTableFormManager !== 'undefined' ? '已加载' : '未加载');
+            
+            // 检查模态框元素
+            const modals = document.querySelectorAll('.w-form-modal');
+            console.log('找到模态框数量:', modals.length);
+            
+            // 检查按钮元素
+            const buttons = document.querySelectorAll('.w-form-trigger');
+            console.log('找到触发按钮数量:', buttons.length);
+        });
+    </script>
+</body>
+</html>

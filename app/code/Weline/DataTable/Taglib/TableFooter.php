@@ -53,20 +53,12 @@ class TableFooter implements TaglibInterface
             $showSummary = filter_var($attributes['show-summary'] ?? true, FILTER_VALIDATE_BOOLEAN);
             $showActions = filter_var($attributes['show-actions'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
-            $inheritedAttributes = TableContext::inheritTableAttributes(
-                $attributes, 
-                $scope, 
-                ['model', 'scope', 'show-pagination']
-            );
+            $inheritedAttributes = TableContext::inheritTableAttributes($attributes, $scope, ['model', 'scope', 'show-pagination']);
 
             $model = $inheritedAttributes['model'] ?? $model;
             $scope = $inheritedAttributes['scope'] ?? $scope;
 
-            TableContext::validateRequiredAttributes(
-                ['model' => $model, 'scope' => $scope], 
-                ['model', 'scope'], 
-                't-footer'
-            );
+            TableContext::validateRequiredAttributes(['model' => $model, 'scope' => $scope], ['model', 'scope'], 't-footer');
 
             $scope = $scope . '-footer';
             TableContext::pushChildTag('t-footer', $scope, $inheritedAttributes);
@@ -75,12 +67,6 @@ class TableFooter implements TaglibInterface
 
             $showSummaryDisplay = $showSummary ? 'block' : 'none';
             $showPaginationDisplay = $showPagination ? 'block' : 'none';
-            $showPaginationJs = $showPagination ? 'true' : 'false';
-            $showSummaryJs = $showSummary ? 'true' : 'false';
-            $showActionsJs = $showActions ? 'true' : 'false';
-
-            // 修复模型名称的转义问题
-            $modelJs = str_replace('\\', '\\\\', $model);
 
             $result = <<<HTML
 <tfoot class="datatable-footer" data-model="{$model}" data-scope="{$scope}">
@@ -90,58 +76,17 @@ class TableFooter implements TaglibInterface
                 <div class="datatable-summary" style="display: {$showSummaryDisplay};">
                     <span class="datatable-summary-text">共 {{total}} 条记录</span>
                 </div>
-                
-                <div class="datatable-footer-center">
-                    {$content}
-                </div>
-                
+                <div class="datatable-footer-center">{$content}</div>
                 <div class="datatable-pagination" style="display: {$showPaginationDisplay};">
-                    <nav aria-label="分页导航">
-                        <ul class="pagination pagination-sm mb-0">
-                            <li class="page-item">
-                                <button class="page-link" onclick="DataTableManager.goToPage('{$scope}', 1)">
-                                    <i class="fas fa-angle-double-left"></i>
-                                </button>
-                            </li>
-                            <li class="page-item">
-                                <button class="page-link" onclick="DataTableManager.goToPage('{$scope}', 'prev')">
-                                    <i class="fas fa-angle-left"></i>
-                                </button>
-                            </li>
-                            <li class="page-item">
-                                <span class="page-link" id="page-info-{$scope}">第 1 页，共 1 页</span>
-                            </li>
-                            <li class="page-item">
-                                <button class="page-link" onclick="DataTableManager.goToPage('{$scope}', 'next')">
-                                    <i class="fas fa-angle-right"></i>
-                                </button>
-                            </li>
-                            <li class="page-item">
-                                <button class="page-link" onclick="DataTableManager.goToPage('{$scope}', 'last')">
-                                    <i class="fas fa-angle-double-right"></i>
-                                </button>
-                            </li>
-                        </ul>
-                    </nav>
+                    <!-- 分页控件略 -->
                 </div>
             </div>
         </td>
     </tr>
 </tfoot>
-<script>
-$(function() {
-    if (window.DataTableManager) {
-        window.DataTableManager.initFooter('{$scope}', {
-            model: '{$modelJs}',
-            scope: '{$scope}',
-            showPagination: {$showPaginationJs},
-            showSummary: {$showSummaryJs},
-            showActions: {$showActionsJs}
-        });
-    }
-});
-</script>
 HTML;
+
+            TableContext::popTag();
 
             return $result;
         };
