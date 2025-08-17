@@ -64,7 +64,7 @@ class Parser
                 if (is_numeric($key)) {
                     $key += 1;
                 }
-                $words = str_replace('%{' . $key . '}', $arg, $words);
+                $words = str_replace('%{' . $key . '}', $arg ?? '', $words);
             }
         }
 
