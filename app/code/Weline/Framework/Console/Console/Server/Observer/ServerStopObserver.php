@@ -18,14 +18,15 @@ class ServerStopObserver implements ObserverInterface
         $data = $event->getData();
         
         // 记录服务器停止日志
-        $stoppedPids = implode(', ', $data['stopped_pids']);
+        $stoppedPids = $data['stopped_pids'] ?? [];
+        $stoppedPidsStr = is_array($stoppedPids) ? implode(', ', $stoppedPids) : '无';
         $logMessage = sprintf(
             '[%s] 服务器停止 - Host: %s, Port: %d, Force: %s, Stopped PIDs: [%s]',
             date('Y-m-d H:i:s'),
             $data['host'],
             $data['port'],
             $data['force'] ? '是' : '否',
-            $stoppedPids ?: '无'
+            $stoppedPidsStr
         );
         
         // 可以在这里添加自定义逻辑，比如：
