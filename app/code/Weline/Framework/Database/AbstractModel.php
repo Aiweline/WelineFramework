@@ -1128,6 +1128,9 @@ abstract class AbstractModel extends DataObject
     public function getId(mixed $default = 0)
     {
         if (!$this->_primary_key) {
+            if($this::fields_ID){
+                return $this->getData($this::fields_ID) ?: $default;
+            }
             return $default;
         }
         return $this->getData($this->_primary_key) ?: $default;
