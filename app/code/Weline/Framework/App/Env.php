@@ -300,8 +300,7 @@ class Env extends DataObject
             return self::$user;
         }
         // 读取当前脚本运行用户
-        exec('whoami', $output);
-        self::$user = $output[0] ?? 'SYSTEM';
+        self::$user = get_current_user();
         return self::$user;
     }
 
@@ -315,20 +314,29 @@ class Env extends DataObject
 
     public function reload(): static
     {
+        // 检查环境配置文件是否存在，不存在则创建
         if (!is_file(self::path_ENV_FILE)) {
             $file = new File();
-            $file->open(self::path_ENV_FILE, $file::mode_w_add);
-            $text = '<?php return ' . w_var_export([], true) . ';?>';
-
             try {
+                $file->open(self::path_ENV_FILE, $file::mode_w_add);
+                $text = '<?php return ' . w_var_export([], true) . '; ?>';
                 $file->write($text);
+                $file->close();
             } catch (Exception $e) {
-                throw new Exception(__('错误：' . $e->getMessage()));
+                $file->close();
+                throw new Exception(__('错误：%{1}', $e->getMessage()));
             }
-            $file->close();
         }
-        // 覆盖默认配置
-        $this->config = array_merge(self::default_CONFIG, (array)include self::path_ENV_FILE);
+        // 合并默认配置与环境配置文件内容
+        $envConfig = [];
+        $envFile = self::path_ENV_FILE;
+        if (is_file($envFile)) {
+            $envConfig = include $envFile;
+            if (!is_array($envConfig)) {
+                $envConfig = [];
+            }
+        }
+        $this->config = array_merge(self::default_CONFIG, $envConfig);
         $this->setData($this->config);
         return $this;
     }

@@ -435,6 +435,9 @@ class Url implements UrlInterface
             return self::$splitUrlCache[$url];
         }
         $parse = self::parse_url($url);
+        if (!is_array($parse)) {
+            $parse = [];
+        }
         $path = $parse['path'] ?? '';
         $paths = [];
         if ($path) {
@@ -478,7 +481,9 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         }
         if ($url) {
-            $uri = self::parse_url($url, 'path') . self::parse_url($url, 'query');
+            $path = self::parse_url($url, 'path') ?: '';
+            $query = self::parse_url($url, 'query') ?: '';
+            $uri = $path . $query;
         } else {
             $uri = $_SERVER['REQUEST_URI'];
             $url = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . '/' . $_SERVER['REQUEST_URI'];
@@ -522,17 +527,21 @@ class Url implements UrlInterface
 
         # 匹配网站 self::$parserSites 最长倒序
         $parsers = self::parse_url($url);
+        if (!is_array($parsers)) {
+            $parsers = [];
+        }
         $data['website_url'] = ($parsers['scheme'] ?? '') . '://' . ($parsers['host'] ?? '').(($parsers['port'] ?? '') == '80' || ($parsers['port'] ?? '') == '443' ? '' : ':' . ($parsers['port'] ?? ''));
         self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
         foreach (self::$parserSites as $site_url => $site) {
             if (str_starts_with($url, $site_url)) {
                 $url = str_replace($site_url, '', $url);
-                $uri = self::parse_url($url, 'path');
+                $uri = self::parse_url($url, 'path') ?: '';
                 if (isset(self::$parserSiteMatchs[$site_url])) {
                     $data = array_merge((array)$data, self::$parserSiteMatchs[$site_url]);
                 }
                 $data['url'] = $url;
-                $data['parse'] = self::parse_url($url);
+                $parsed_url = self::parse_url($url);
+                $data['parse'] = is_array($parsed_url) ? $parsed_url : [];
                 $data['website_url'] = $site_url;
                 $data['website'] = $site;
                 self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
@@ -548,7 +557,8 @@ class Url implements UrlInterface
                 }
                 # 如果URI是空的，后边就不用判断了，直接返回环境包含的参数
                 if (empty($uri)) {
-                    $query = self::parse_url($url, 'query') ? '?' . self::parse_url($url, 'query') : '';
+                    $query_part = self::parse_url($url, 'query') ?: '';
+                    $query = $query_part ? '?' . $query_part : '';
                     $data['url'] = $site_url . $query;
                     $data['server'] = self::$parserServer;
                     $data['language'] = self::$parserServer['WELINE_USER_LANG'];
