@@ -36,6 +36,9 @@ class SqlFile
      */
     public function import_data(string $db_filepath): array
     {
+        // 从文件路径中提取模块名称
+        $module = $this->extractModuleNameFromPath($db_filepath);
+        
         if (!file_exists($db_filepath)) {
             return ['status' => false, 'info' => __('数据库文件不存在'), 'module' => $module];
         }
@@ -46,6 +49,28 @@ class SqlFile
             return ['status' => false, 'file' => $db_filepath, 'info' => __('导入数据库失败'), 'e' => $e->getMessage(), 'module' => $module];
         }
         return ['status' => true, 'file' => $db_filepath, 'info' => __('导入数据库成功'), 'module' => $module];
+    }
+
+    /**
+     * @DESC         |从文件路径中提取模块名称
+     *
+     * 参数区：
+     *
+     * @param string $filepath
+     * @return string
+     */
+    private function extractModuleNameFromPath(string $filepath): string
+    {
+        // 标准化路径分隔符
+        $filepath = str_replace(['\\', '/'], DS, $filepath);
+        
+        // 查找包含 'Setup/Data/sql' 的路径部分
+        if (preg_match('/app\/code\/([^\/]+)\/Setup\/Data\/sql/', $filepath, $matches)) {
+            return $matches[1];
+        }
+        
+        // 如果无法从路径提取，返回默认值
+        return 'Unknown';
     }
 
     /**
