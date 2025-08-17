@@ -7,6 +7,11 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Debug
 {
+    /**
+     * 是否已注入过Web调试浮窗，避免重复注入
+     */
+    private static bool $panelInjected = false;
+
     public static function env(string $env_key, bool $target_stop = true, mixed $value = null): mixed
     {
         if (isset($_ENV['w-debug'][$env_key])) {
@@ -60,6 +65,9 @@ class Debug
             }
         }
         # 无值看看是否有键名
+        if('debug::skip' === $value){
+            $value = null;
+        }
         if (!$value) {
             if (array_key_exists($env_key, $_ENV['w-debug'])) {
                 return true;
@@ -91,21 +99,33 @@ class Debug
         } else {
             file_put_contents($log, $content);
         }
-        # 输出一个debug悬浮窗，便于前端直接看到输出内容，通过页面加载后访问文件内容前10条
-        $html = '<script>
-                var debug = document.createElement("div");
-                debug.style.position = "fixed";
-                debug.style.top = "0";
-                debug.style.right = "0";
-                debug.style.width = "300px";
-                debug.style.height = "100%";
-                debug.style.backgroundColor = "#f5f5f5";
-                debug.style.zIndex = "9999";
-                debug.style.overflow = "auto";
-                debug.innerHTML = "<pre>' . str_replace("\n", '<br>', $content) . '</pre>";
-                document.body.appendChild(debug);
+        // CLI模式下直接输出，Web模式下输出JS悬浮窗
+        if (PHP_SAPI === 'cli') {
+            // 终端直接输出内容
+            echo $content . PHP_EOL;
+        } else {
+            // Web模式输出debug悬浮窗
+            $html = '<script>
+                (function(){
+                    var debug = document.createElement("div");
+                    debug.style.position = "fixed";
+                    debug.style.top = "0";
+                    debug.style.right = "0";
+                    debug.style.width = "300px";
+                    debug.style.height = "100%";
+                    debug.style.backgroundColor = "#f5f5f5";
+                    debug.style.zIndex = "9999";
+                    debug.style.overflow = "auto";
+                    debug.style.fontSize = "12px";
+                    debug.style.fontFamily = "monospace";
+                    debug.style.borderLeft = "1px solid #ccc";
+                    debug.style.boxShadow = "-2px 0 8px rgba(0,0,0,0.08)";
+                    debug.innerHTML = "<pre style=\"margin:0;padding:10px;\">" + ' . json_encode(str_replace("\n", '<br>', $content)) . ' + "</pre>";
+                    document.body.appendChild(debug);
+                })();
                 </script>';
-        echo $html;
+            echo $html;
+        }
         return true;
     }
 
