@@ -55,18 +55,57 @@ class File
      *
      * @return File
      */
+    /**
+     * 打开文件流
+     * 如果目录不存在则自动创建，打开文件并加锁，失败时抛出异常。
+     *
+     * @param string $filename 文件名
+     * @param string $mode 打开模式
+     * @return File
+     * @throws Exception
+     */
     public function open(string $filename, string $mode = self::mode_a_add)
     {
+        // 将路径分隔符标准化
         $filename = str_replace('/', DS, $filename);
         $position = strrpos($filename, DS);
-//        if(!$position) throw new Exception(__('系统文件路径层级表达符号错误：当前系统文件分隔符为%{1},当前路径：%{2}',[DS,$filename]));
         $path = substr($filename, 0, $position);
+
+        // 检查并创建目录
         if (!file_exists($path)) {
-            mkdir($path, 0770, true);
+            if (!@mkdir($path, 0770, true)) {
+                $error = error_get_last();
+                $message = __("目录创建失败: %{1}", [$path]);
+                if ($error && isset($error['message'])) {
+                    $message .= __("，错误信息: %{1}", [$error['message']]);
+                }
+                throw new Exception($message);
+            }
         }
+
         $this->_filename = $filename;
-        $this->_file = fopen($filename, $mode);
-        flock($this->_file, LOCK_EX);
+        $this->_file = @fopen($filename, $mode);
+        if ($this->_file === false) {
+            $error = error_get_last();
+            $message = __("文件打开失败: %{1}，模式: %{2}", [$filename, $mode]);
+            if ($error && isset($error['message'])) {
+                $message .= __("，错误信息: %{1}", [$error['message']]);
+            }
+            if (!is_writable($path)) {
+                $message .= __("，目录不可写，请检查权限。");
+            }
+            throw new Exception($message);
+        }
+
+        // 获取文件锁，直到成功为止
+        $locked = false;
+        while (!$locked) {
+            $locked = flock($this->_file, LOCK_EX);
+            if (!$locked) {
+                // 等待100毫秒后重试
+                usleep(100000);
+            }
+        }
 
         return $this;
     }
