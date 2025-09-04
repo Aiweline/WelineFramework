@@ -21,6 +21,15 @@ use Weline\Framework\Manager\ObjectManager;
 abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 {
     use SqlTrait;
+    
+    // 重试配置
+    private const MAX_RETRY_ATTEMPTS = 5;
+    private const RETRY_DELAY_MS = 100;
+
+    /**
+     * 获取数据库连接
+     */
+    abstract public function getLink(): PDO;
 
     public function splitSqlStatements($sql)
     {
@@ -57,29 +66,39 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
-            $origin_data = $this->getLink()->exec($this->getSql());
-            if ($origin_data === false) {
-                $result = false;
-            } else {
-                $result = $this->getLink()->lastInsertId();
-            }
-            $origin_data = $result;
+            // 使用重试机制执行批量插入
+            $origin_data = $this->executeWithRetry(function() {
+                $result = $this->getLink()->exec($this->getSql());
+                if ($result === false) {
+                    return false;
+                } else {
+                    return $this->getLink()->lastInsertId();
+                }
+            });
             $this->reset();
         } else {
             # SQLITE 不支持多结果集：将SQL语句打散，并逐条执行后返回结果集
             $sql = $this->getSqlWithBounds($this->sql);
             $statements = $this->splitSqlStatements($sql);
+            
             if (count($statements) == 1) {
-                $this->PDOStatement = $this->getLink()->prepare($this->sql);
-                $this->PDOStatement->execute($this->bound_values);
-                $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                // 使用重试机制执行单条语句
+                $origin_data = $this->executeWithRetry(function() {
+                    $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                    $this->PDOStatement->execute($this->bound_values);
+                    return $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                });
             } else {
+                // 使用重试机制执行多条语句
                 $origin_data = [];
                 foreach ($statements as $statement) {
-                    $state_res = $this->getLink()->exec($statement);
-                    if ($state_res !== false) {
-                        $state_res = $this->getLink()->lastInsertId();
-                    }
+                    $state_res = $this->executeWithRetry(function() use ($statement) {
+                        $result = $this->getLink()->exec($statement);
+                        if ($result !== false) {
+                            return $this->getLink()->lastInsertId();
+                        }
+                        return $result;
+                    });
                     $origin_data[] = $state_res;
                 }
             }
@@ -153,7 +172,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 break;
             default:
                 throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。'));
-                break;
         }
         $this->fetch_type = '';
         if (Env::get('db_log.enabled') or DEBUG) {
@@ -188,7 +206,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         $this->backup($backup_file, $table);
         # 清理表
-        $PDOStatement = $this->getLink()->prepare("delete from TABLE $table");
+        $PDOStatement = $this->getLink()->prepare("DELETE FROM $table");
         $PDOStatement->execute();
         return $this;
     }
@@ -201,5 +219,64 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->fetch_type = __FUNCTION__;
         $this->PDOStatement = $this->getLink()->prepare($sql);
         return $this;
+    }
+
+    /**
+     * 执行带重试机制的数据库操作
+     */
+    protected function executeWithRetry(callable $operation, array $params = []): mixed
+    {
+        $attempts = 0;
+        $lastException = null;
+
+        while ($attempts < self::MAX_RETRY_ATTEMPTS) {
+            try {
+                return call_user_func_array($operation, $params);
+                
+            } catch (\PDOException $e) {
+                $lastException = $e;
+                $attempts++;
+                
+                // 如果是数据库锁定错误，进行重试
+                if ($this->isDatabaseLockedError($e) && $attempts < self::MAX_RETRY_ATTEMPTS) {
+                    $this->waitBeforeRetry($attempts);
+                    continue;
+                }
+                
+                // 如果不是锁定错误或达到最大重试次数，抛出异常
+                break;
+            }
+        }
+
+        throw new Exception("数据库操作失败，已重试 {$attempts} 次。最后错误: " . $lastException->getMessage());
+    }
+
+    /**
+     * 检查是否是数据库锁定错误
+     */
+    protected function isDatabaseLockedError(\PDOException $e): bool
+    {
+        $message = strtolower($e->getMessage());
+        return str_contains($message, 'database is locked') || 
+               str_contains($message, 'database table is locked') ||
+               str_contains($message, 'sqlite_busy') ||
+               $e->getCode() === 5; // SQLITE_BUSY
+    }
+
+    /**
+     * 重试前等待
+     */
+    protected function waitBeforeRetry(int $attempt): void
+    {
+        // 指数退避算法：每次重试等待时间递增
+        $delay = self::RETRY_DELAY_MS * pow(2, $attempt - 1);
+        $maxDelay = 1000; // 最大延迟1秒
+        $delay = min($delay, $maxDelay);
+        
+        // 添加随机抖动避免惊群效应
+        $jitter = rand(0, intval($delay * 0.1));
+        $delay += $jitter;
+        
+        usleep($delay * 1000); // 转换为微秒
     }
 }
