@@ -84,7 +84,31 @@ class File
         }
 
         $this->_filename = $filename;
-        $this->_file = @fopen($filename, $mode);
+        
+        // 重试机制处理文件打开问题
+        $maxRetries = 3;
+        $retryDelay = 100000; // 100毫秒
+        $this->_file = false;
+        
+        for ($i = 0; $i < $maxRetries; $i++) {
+            $this->_file = @fopen($filename, $mode);
+            if ($this->_file !== false) {
+                break; // 成功打开文件
+            }
+            
+            $error = error_get_last();
+            if ($i < $maxRetries - 1) {
+                // 如果是权限错误，等待后重试
+                if ($error && (strpos($error['message'], 'Permission denied') !== false || 
+                               strpos($error['message'], 'errno=13') !== false ||
+                               strpos($error['message'], 'Resource temporarily unavailable') !== false)) {
+                    error_log(__("文件打开权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filename]));
+                    usleep($retryDelay);
+                    continue;
+                }
+            }
+        }
+        
         if ($this->_file === false) {
             $error = error_get_last();
             $message = __("文件打开失败: %{1}，模式: %{2}", [$filename, $mode]);
@@ -129,10 +153,10 @@ class File
     {
         if (!$this->_file) {
             if (PHP_SAPI !== 'cli') {
-                throw new Exception("文件:{$this->_filename} 读取异常！");
+                throw new Exception(__("文件:%{1} 读取异常！", [$this->_filename]));
             }
 
-            throw new ConsoleException("文件:{$this->_filename} 读取异常！");
+            throw new ConsoleException(__("文件:%{1} 读取异常！", [$this->_filename]));
         }
         fwrite($this->_file, $content);
 
