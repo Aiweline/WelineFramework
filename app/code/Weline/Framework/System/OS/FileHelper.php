@@ -180,7 +180,7 @@ class FileHelper
             
             return $result;
         } catch (Exception $e) {
-            throw new Exception("无法创建目录 '{$directory}': " . $e->getMessage());
+            throw new Exception(__("无法创建目录 '%{1}': %{2}", [$directory, $e->getMessage()]));
         }
     }
 
@@ -245,7 +245,7 @@ class FileHelper
             
             return $result;
         } catch (Exception $e) {
-            throw new Exception("无法创建文件 '{$filePath}': " . $e->getMessage());
+            throw new Exception(__("无法创建文件 '%{1}': %{2}", [$filePath, $e->getMessage()]));
         }
     }
 
@@ -281,7 +281,7 @@ class FileHelper
         $destination = self::normalizePath($destination);
         
         if (!file_exists($source)) {
-            throw new Exception("源文件不存在: {$source}");
+            throw new Exception(__("源文件不存在: %{1}", [$source]));
         }
 
         if ($createDirectory) {
@@ -309,7 +309,7 @@ class FileHelper
         $destination = self::normalizePath($destination);
         
         if (!file_exists($source)) {
-            throw new Exception("源文件不存在: {$source}");
+            throw new Exception(__("源文件不存在: %{1}", [$source]));
         }
 
         if ($createDirectory) {
@@ -431,15 +431,17 @@ class FileHelper
     }
 
     /**
-     * 安全写入文件（带错误处理和权限检查）
+     * 安全写入文件（带错误处理、权限检查和重试机制）
      * 
      * @param string $filePath
      * @param string $content
      * @param int $permissions
+     * @param int $maxRetries 最大重试次数
+     * @param int $retryDelay 重试延迟（微秒）
      * @return bool
      * @throws Exception
      */
-    public static function safeWriteFile(string $filePath, string $content, int $permissions = self::DEFAULT_FILE_PERMISSIONS): bool
+    public static function safeWriteFile(string $filePath, string $content, int $permissions = self::DEFAULT_FILE_PERMISSIONS, int $maxRetries = 3, int $retryDelay = 100000): bool
     {
         $filePath = self::normalizePath($filePath);
         $directory = dirname($filePath);
@@ -448,52 +450,118 @@ class FileHelper
             // 确保目录存在且可写
             if (!is_dir($directory)) {
                 if (!self::createDirectory($directory)) {
-                    throw new Exception("无法创建目录: {$directory}");
+                    throw new Exception(__("无法创建目录: %{1}", [$directory]));
                 }
             }
 
             if (!self::isWritable($directory)) {
-                throw new Exception("目录不可写: {$directory}");
+                throw new Exception(__("目录不可写: %{1}", [$directory]));
             }
 
-            // 写入文件
-            if (file_put_contents($filePath, $content, LOCK_EX) === false) {
-                throw new Exception("无法写入文件: {$filePath}");
+            // 重试机制处理文件锁定问题
+            for ($i = 0; $i < $maxRetries; $i++) {
+                try {
+                    // 写入文件
+                    $result = file_put_contents($filePath, $content, LOCK_EX);
+                    if ($result !== false) {
+                        // 设置权限
+                        if (!self::isWindows()) {
+                            self::setPermissions($filePath, $permissions);
+                        }
+                        return true;
+                    }
+                    
+                    // 如果是权限错误且还有重试机会，等待后重试
+                    if ($i < $maxRetries - 1) {
+                        $error = error_get_last();
+                        if ($error && (strpos($error['message'], 'Permission denied') !== false || 
+                                       strpos($error['message'], 'errno=13') !== false)) {
+                            error_log(__("文件写入权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
+                            usleep($retryDelay);
+                            continue;
+                        }
+                    }
+                    
+                    throw new Exception(__("无法写入文件: %{1}", [$filePath]));
+                    
+                } catch (Exception $e) {
+                    if ($i < $maxRetries - 1) {
+                        $error = error_get_last();
+                        if ($error && (strpos($error['message'], 'Permission denied') !== false || 
+                                       strpos($error['message'], 'errno=13') !== false)) {
+                            error_log(__("文件写入异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
+                            usleep($retryDelay);
+                            continue;
+                        }
+                    }
+                    throw $e;
+                }
             }
-
-            // 设置权限
-            if (!self::isWindows()) {
-                self::setPermissions($filePath, $permissions);
-            }
-
-            return true;
+            
+            throw new Exception(__("文件写入最终失败: %{1}", [$filePath]));
+            
         } catch (Exception $e) {
-            error_log("文件写入失败: " . $e->getMessage());
+            error_log(__("文件写入失败: %{1}", [$e->getMessage()]));
             throw $e;
         }
     }
 
     /**
-     * 安全读取文件
+     * 安全读取文件（带重试机制）
      * 
      * @param string $filePath
+     * @param int $maxRetries 最大重试次数
+     * @param int $retryDelay 重试延迟（微秒）
      * @return string|false
      */
-    public static function safeReadFile(string $filePath)
+    public static function safeReadFile(string $filePath, int $maxRetries = 3, int $retryDelay = 100000)
     {
         $filePath = self::normalizePath($filePath);
         
         if (!file_exists($filePath)) {
-            error_log("文件不存在: {$filePath}");
+            error_log(__("文件不存在: %{1}", [$filePath]));
             return false;
         }
 
         if (!self::isReadable($filePath)) {
-            error_log("文件不可读: {$filePath}");
+            error_log(__("文件不可读: %{1}", [$filePath]));
             return false;
         }
 
-        return file_get_contents($filePath);
+        // 重试机制处理文件锁定问题
+        for ($i = 0; $i < $maxRetries; $i++) {
+            try {
+                $content = file_get_contents($filePath);
+                if ($content !== false) {
+                    return $content;
+                }
+                
+                // 如果是权限错误且还有重试机会，等待后重试
+                if ($i < $maxRetries - 1) {
+                    $error = error_get_last();
+                    if ($error && (strpos($error['message'], 'Permission denied') !== false || 
+                                   strpos($error['message'], 'errno=13') !== false)) {
+                        error_log(__("文件读取权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
+                        usleep($retryDelay);
+                        continue;
+                    }
+                }
+                
+                error_log(__("文件读取失败: %{1}", [$filePath]));
+                return false;
+                
+            } catch (Exception $e) {
+                if ($i < $maxRetries - 1) {
+                    error_log(__("文件读取异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
+                    usleep($retryDelay);
+                    continue;
+                }
+                error_log(__("文件读取最终失败: %{1} - %{2}", [$filePath, $e->getMessage()]));
+                return false;
+            }
+        }
+        
+        return false;
     }
 
     /**
