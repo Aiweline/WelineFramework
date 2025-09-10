@@ -1,0 +1,72 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Shopify订单管理</h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <select class="form-control" id="shopFilter">
+                            <option value="">所有店铺</option>
+                            <!-- 店铺选项将通过JavaScript动态加载 -->
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" class="form-control" id="startDate" placeholder="开始日期">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" class="form-control" id="endDate" placeholder="结束日期">
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary" onclick="filterOrders()">筛选</button>
+                        <acl source="FlashForge_ShopifyOrderManager::order_export">
+                            <button class="btn btn-success" onclick="exportOrders()">导出</button>
+                        </acl>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="ordersTable">
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>店铺</th>
+                                <th>客户</th>
+                                <th>总金额</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" class="text-center">暂无数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function filterOrders() {
+    console.log('筛选订单');
+}
+function exportOrders() {
+    console.log('导出订单');
+}
+</script>
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
