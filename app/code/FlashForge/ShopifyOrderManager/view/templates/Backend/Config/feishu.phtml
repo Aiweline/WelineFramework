@@ -1,0 +1,70 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>飞书通知配置</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+    <!-- ========== Topnav Start ========== -->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!-- ========== Left Sidebar Start ========== -->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">飞书通知配置</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="feishuConfigForm">
+                            <div class="form-group">
+                                <label>Webhook URL</label>
+                                <input type="text" class="form-control" name="webhook_url" placeholder="请输入Webhook URL">
+                            </div>
+                            <div class="form-group">
+                                <label>Secret</label>
+                                <input type="text" class="form-control" name="secret" placeholder="请输入Secret">
+                            </div>
+                            <div class="form-group form-check">
+                                <input type="checkbox" class="form-check-input" name="enable_error" id="enableError">
+                                <label class="form-check-label" for="enableError">订单同步错误通知</label>
+                            </div>
+                            <div class="form-group form-check">
+                                <input type="checkbox" class="form-check-input" name="enable_overdue" id="enableOverdue">
+                                <label class="form-check-label" for="enableOverdue">未发货超时通知</label>
+                            </div>
+                            <acl source="FlashForge_ShopifyOrderManager::feishu_save">
+                                <button type="submit" class="btn btn-primary">保存设置</button>
+                            </acl>
+                        </form>
+                    </div>
+                </div>
+            </div> <!-- container-fluid -->
+        </div> <!-- page-content -->
+    </div> <!-- main-content -->
+    <!--右边栏-->
+    @template(Weline_Admin::common/right-sidebar.phtml)
+    <!--页脚-->
+    @template(Weline_Admin::common/footer.phtml)
+</div> <!-- layout-wrapper -->
+</body>
+</html>
