@@ -211,6 +211,36 @@ class Data extends AbstractHelper
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
                             }
+                            
+                            // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
+                            if ($request_method && $rule_method !== strtolower($method)) {
+                                $full_method_router = strtolower($baseRouter . '/' . $method);
+                                $full_method_route = $full_method_router . ($request_method ? '::' . $request_method : '');
+                                $full_method_params = [
+                                    'type' => DataInterface::type_API,
+                                    'area' => $ctl_area,
+                                    'module' => $name,
+                                    'base_router' => $router_,
+                                    'router' => $full_method_route,
+                                    'class' => $api_class,
+                                    'module_path' => $path,
+                                    'method' => $method,
+                                    'request_method' => $request_method,
+                                    'is_backend' => $backend,
+                                    'is_enable' => true
+                                ];
+                                $data = new DataObject($full_method_params);
+                                /**@var \ReflectionAttribute $attribute */
+                                foreach ($attributes as $attribute) {
+                                    $data->setData('attribute', $attribute);
+                                    $data->setData('type', 'api');
+                                    $data->setData('controller_data', $ctl_data);
+                                    $data->setData('params', $full_method_params);
+                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                }
+                                // 路由注册+
+                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);
+                            }
                         }
                     }
                 }
@@ -353,6 +383,36 @@ class Data extends AbstractHelper
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
+                            }
+                            
+                            // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
+                            if ($request_method && $rule_method !== strtolower($method)) {
+                                $full_method_router = strtolower($baseRouter . '/' . $method);
+                                $full_method_route = $full_method_router . ($request_method ? '::' . $request_method : '');
+                                $full_method_params = [
+                                    'type' => DataInterface::type_PC,
+                                    'area' => $ctl_area,
+                                    'module' => $name,
+                                    'base_router' => $router_,
+                                    'router' => $full_method_route,
+                                    'class' => $pc_class,
+                                    'module_path' => $path,
+                                    'method' => $method,
+                                    'request_method' => $request_method,
+                                    'is_backend' => $backend,
+                                    'is_enable' => true,
+                                ];
+                                $data = new DataObject($full_method_params);
+                                /**@var \ReflectionAttribute $attribute */
+                                foreach ($attributes as $attribute) {
+                                    $data->setData('attribute', $attribute);
+                                    $data->setData('type', 'pc');
+                                    $data->setData('controller_data', $ctl_data);
+                                    $data->setData('params', $full_method_params);
+                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                }
+                                // 路由注册+
+                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);
                             }
                         }
                     }
