@@ -359,10 +359,9 @@ trait SqlTrait
         if (str_contains($sql, 'order by order')) {
             $sql = str_replace('order by order', 'order by `order`', $sql);
         }
-        if (str_contains($sql, 'order') and str_contains($sql, 'create')) {
-            $sql = str_replace('order', '`order`', $sql);
-            $sql = str_replace('``order``', '`order`', $sql);
-        }
+        // 避免将字段或表名中的 order 当关键字替换，故注释掉通用替换
+        // $sql = str_replace('order', '`order`', $sql);
+        // $sql = str_replace('``order``', '`order`', $sql);
         if (str_contains($sql, '`order` by')) {
             $sql = str_replace('`order` by', 'order by', $sql);
         }
