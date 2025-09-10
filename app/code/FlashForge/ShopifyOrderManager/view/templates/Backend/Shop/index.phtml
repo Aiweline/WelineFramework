@@ -1,0 +1,109 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>Acl资源</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+        <div class="main-content">
+            <div class="page-content">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">Shopify店铺管理</h3>
+                                    <acl source="FlashForge_ShopifyOrderManager::shop_add">
+                                        <button class="btn btn-primary float-right" onclick="addShop()">添加店铺</button>
+                                    </acl>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-striped" id="shopsTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>店铺名称</th>
+                                                    <th>店铺URL</th>
+                                                    <th>状态</th>
+                                                    <th>最后同步</th>
+                                                    <th>创建时间</th>
+                                                    <th>操作</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td colspan="6" class="text-center">暂无数据</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- container-fluid end -->
+            </div> <!-- page-content end -->
+        </div> <!-- main-content end -->
+
+        </div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
