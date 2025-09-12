@@ -31,6 +31,7 @@ class Catalog extends \Weline\Framework\Database\Model
     public const fields_backColor = 'backColor';
     public const fields_position = 'position';
     public const fields_is_active = 'is_active';
+    public const fields_is_system = 'is_system';
 
     /**
      * @inheritDoc
@@ -45,8 +46,22 @@ class Catalog extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        # 更新提示
+        // 更新提示
         $setup->getPrinting()->setup($context->getVersion());
+
+        // 确保ModelSetup关联当前模型
+        $setup->putModel($this);
+
+        // 如果数据库中缺少 is_system 字段，则通过 alterTable 添加（兼容 sqlite/mysql）
+        if (!$setup->hasField(self::fields_is_system)) {
+            $setup->getPrinting()->note(__('检测到缺失字段：%{1}，正在添加...', [self::fields_is_system]));
+            $alter = $setup->alterTable();
+            // SQLite 不支持 COMMENT / AFTER，所以传入最兼容的参数（空的 after_column 与 comment）
+            // 对 sqlite 传入合法的 length（integer 类型使用 1）以避免类型错误
+            $alter->addColumn(self::fields_is_system, '', 'integer', 1, 'default 0', '系统创建');
+            $alter->alter();
+            $setup->getPrinting()->success(__('字段 %{1} 已添加', [self::fields_is_system]));
+        }
     }
 
     /**
@@ -67,6 +82,7 @@ class Catalog extends \Weline\Framework\Database\Model
                 ->addColumn('backColor', TableInterface::column_type_VARCHAR, 60, '', '背景色')
                 ->addColumn('position', TableInterface::column_type_INTEGER, null, 'default 0', '排序')
                 ->addColumn('is_active', TableInterface::column_type_INTEGER, 1, 'default 0', '是否激活')
+                ->addColumn('is_system', TableInterface::column_type_INTEGER, 1, 'default 0', '是否系统创建')
                 ->addColumn('pid', TableInterface::column_type_INTEGER, 0, '', '父目录')
                 ->create();
         }
