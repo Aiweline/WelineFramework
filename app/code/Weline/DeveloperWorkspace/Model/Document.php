@@ -35,7 +35,6 @@ class Document extends \Weline\Framework\Database\Model
      */
     public function setup(ModelSetup $setup, Context $context): void
     {
-//        $setup->dropTable();
         $this->install($setup, $context);
     }
 
