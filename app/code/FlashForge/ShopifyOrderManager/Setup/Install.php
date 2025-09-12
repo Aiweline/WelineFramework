@@ -4,7 +4,7 @@ namespace FlashForge\ShopifyOrderManager\Setup;
 
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\InstallInterface;
-use Weline\Framework\Setup\Data\DataInterface;
+use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Manager\ObjectManager;
 use FlashForge\ShopifyOrderManager\Model\Shop;
 use FlashForge\ShopifyOrderManager\Model\Order;
@@ -19,15 +19,15 @@ class Install implements InstallInterface
     /**
      * 执行安装
      */
-    public function setup(DataInterface $setup, Context $context): string
+    public function setup(Setup $setup, Context $context): void
     {
-        return $this->install($context);
+        $this->install($context);
     }
 
     /**
      * 执行安装
      */
-    public function install(Context $context): string
+    public function install(Context $context): void
     {
         try {
             // 安装店铺表
@@ -53,7 +53,8 @@ class Install implements InstallInterface
             $context->getOutput()->writeln('<info>- shopify_order_items (订单项目表)</info>');
             $context->getOutput()->writeln('<info>- shopify_feishu_config (飞书配置表)</info>');
             
-            return 'Shopify订单管理模块安装完成';
+            // 安装完成
+            return;
             
         } catch (\Exception $e) {
             $context->getOutput()->writeln('<error>安装失败: ' . $e->getMessage() . '</error>');
