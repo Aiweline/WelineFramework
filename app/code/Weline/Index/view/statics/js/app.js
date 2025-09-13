@@ -1,5 +1,4 @@
 
-
 /********************* Menu Js **********************/
 
 function windowScroll() {
@@ -55,6 +54,7 @@ function setColor(theme) {
   document.getElementById("color-opt").href = window.media("/css/colors/" + theme + ".css");
   toggleSwitcher(false);
 }
+
 
 
 
@@ -131,38 +131,22 @@ function validateForm() {
   document.getElementById("error-msg").style.opacity = 0;
   document.getElementById('error-msg').innerHTML = "";
   if (name == "" || name == null) {
-<<<<<<< HEAD
-      document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*Please enter a Name*</div>";
-=======
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入称呼*</div>";
->>>>>>> dev
       fadeIn();
       return false;
   }
   if (email == "" || email == null) {
-<<<<<<< HEAD
-      document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*Please enter a Email*</div>";
-=======
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入电子邮件地址*</div>";
->>>>>>> dev
       fadeIn();
       return false;
   }
   if (subject == "" || subject == null) {
-<<<<<<< HEAD
-      document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*Please enter a Subject*</div>";
-=======
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入你的主题*</div>";
->>>>>>> dev
       fadeIn();
       return false;
   }
   if (comments == "" || comments == null) {
-<<<<<<< HEAD
-      document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*Please enter a Comments*</div>";
-=======
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入你的评论*</div>";
->>>>>>> dev
       fadeIn();
       return false;
   }
@@ -177,12 +161,8 @@ function validateForm() {
           document.forms["myForm"]["comments"].value = "";
       }
   };
-<<<<<<< HEAD
-  xhttp.open("POST", "php/contact.php", true);
-=======
   // xhttp.open("POST", "php/contact.php", true);
   xhttp.open("POST", window.url('*/contact'), true);
->>>>>>> dev
   xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
   xhttp.send("name=" + name + "&email=" + email + "&subject=" + subject + "&comments=" + comments);
   return false;
@@ -200,3 +180,4 @@ function fadeIn() {
       }
   }, 200);
 }
+
