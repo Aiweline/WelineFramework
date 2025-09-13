@@ -67,39 +67,24 @@ class Shop extends BackendController
     }
 
     /**
-     * 添加店铺页面
+     * 添加/编辑店铺表单页面
      */
     #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_add', '添加店铺', '', '添加新店铺')]
-    public function add()
+    public function form()
     {
-        $this->assign('title', '添加店铺');
-        return $this->fetch();
+        $shopId = $this->request->getGet('id');
+        $shop = null;
+        
+        if ($shopId) {
+            $shop = $this->shopModel->load($shopId);
+        }
+        
+        $this->assign('shop', $shop ? $shop->getData() : []);
+        $this->assign('title', $shopId ? '编辑店铺' : '添加店铺');
+        // OffCanvas 组件通过 iframe 加载指定模板，需要显式返回 form 模板
+        return $this->fetch('form');
     }
 
-    /**
-     * 编辑店铺页面
-     */
-    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_edit', '编辑店铺', '', '编辑店铺信息')]
-    public function edit()
-    {
-        $shopId = intval($this->request->getGet('id'));
-        
-        if (!$shopId) {
-            $this->getMessageManager()->addError('店铺ID不能为空');
-            return $this->redirect('*/*/index');
-        }
-
-        $shop = $this->shopModel->where(ShopModel::fields_ID, $shopId)->find()->fetch();
-        
-        if (!$shop->getId()) {
-            $this->getMessageManager()->addError('店铺不存在');
-            return $this->redirect('*/*/index');
-        }
-
-        $this->assign('shop', $shop->getData());
-        $this->assign('title', '编辑店铺');
-        return $this->fetch();
-    }
 
     /**
      * 保存店铺
