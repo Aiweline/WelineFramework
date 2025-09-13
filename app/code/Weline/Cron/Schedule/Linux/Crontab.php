@@ -38,11 +38,29 @@ cd $base_project_dir &&
 $php_binary bin/w cron:task:run 2>&1 >> $log";
         file_put_contents($cron_shell_file_path, $shell_string);
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {
-            exec(
-                'echo -e "`crontab -l` ' . PHP_EOL . ' */1 * * * * sh ' . $cron_shell_file_path . '" | crontab -',
-                $output
-            );
-            return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%{1}', $name), 'result' => $output];
+            // 获取现有的crontab内容
+            $existing_crontab = [];
+            exec('crontab -l 2>/dev/null', $existing_crontab);
+            
+            // 添加新的定时任务
+            $new_cron_job = "*/1 * * * * sh " . $cron_shell_file_path;
+            $existing_crontab[] = $new_cron_job;
+            
+            // 创建临时文件
+            $temp_file = tempnam(sys_get_temp_dir(), 'crontab_');
+            file_put_contents($temp_file, implode("\n", $existing_crontab) . "\n");
+            
+            // 安装新的crontab
+            exec("crontab " . $temp_file, $output, $return_code);
+            
+            // 清理临时文件
+            unlink($temp_file);
+            
+            if ($return_code === 0) {
+                return ['status' => true, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装成功：%{1}', $name), 'result' => $output];
+            } else {
+                return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务安装失败：%{1}', $name), 'result' => $output];
+            }
         }
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%{1}', $name), 'result' => ''];
     }
