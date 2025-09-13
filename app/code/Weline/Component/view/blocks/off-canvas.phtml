@@ -66,7 +66,9 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
                     } else {
                         <?php if (DEBUG) {
                    $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%1}", $save_form);
-                   echo " confirm({$msg});";
+                   // 转义一下
+                   $msg = htmlspecialchars($msg);
+                   echo " confirm('{$msg}');";
                     }
                         ?>
                     }
@@ -108,7 +110,9 @@ data-bs-target='#{{id}}' aria-controls='{{id}}'>
                 } else {
                     <?php if (DEBUG) {
                     $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%1}", $save_form);
-                   echo " confirm({$msg});";
+                    // 转义一下
+                    $msg = htmlspecialchars($msg);
+                   echo " confirm('{$msg}');";
                 }
                     ?>
                 }

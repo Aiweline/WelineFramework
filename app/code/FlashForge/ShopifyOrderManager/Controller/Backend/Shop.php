@@ -115,13 +115,15 @@ class Shop extends BackendController
                 ]);
             }
 
-            // 测试API连接
+            // 测试API连接（即使测试失败也允许保存，但将店铺设为未启用并返回警告）
             $this->shopifyApi->init($data['shop_url'], $data['access_token']);
-            if (!$this->shopifyApi->testConnection()) {
-                return $this->fetchJson([
-                    'code' => 1,
-                    'msg' => 'API连接测试失败，请检查店铺配置'
-                ]);
+            $apiOk = true;
+            try {
+                if (!$this->shopifyApi->testConnection()) {
+                    $apiOk = false;
+                }
+            } catch (\Exception $e) {
+                $apiOk = false;
             }
 
             if ($shopId) {
@@ -138,20 +140,31 @@ class Shop extends BackendController
                 $shop = new ShopModel();
             }
 
+            $status = intval($data['status'] ?? 1);
+            if (!$apiOk) {
+                // 如果 API 链接失败，安全起见默认保存为未启用
+                $status = ShopModel::STATUS_INACTIVE;
+            }
+
             $shop->setData([
                 ShopModel::fields_NAME => $data['shop_name'],
                 ShopModel::fields_SHOP_URL => rtrim($data['shop_url'], '/'),
                 ShopModel::fields_API_KEY => $data['api_key'],
                 ShopModel::fields_API_SECRET => $data['api_secret'],
                 ShopModel::fields_ACCESS_TOKEN => $data['access_token'],
-                ShopModel::fields_STATUS => intval($data['status'] ?? 1)
+                ShopModel::fields_STATUS => $status
             ]);
 
             $shop->save();
 
+            $msg = $shopId ? '更新成功' : '添加成功';
+            if (!$apiOk) {
+                $msg .= '（警告：API连接测试失败，店铺已保存为未启用）';
+            }
+
             return $this->fetchJson([
                 'code' => 0,
-                'msg' => $shopId ? '更新成功' : '添加成功'
+                'msg' => $msg
             ]);
 
         } catch (\Exception $e) {
