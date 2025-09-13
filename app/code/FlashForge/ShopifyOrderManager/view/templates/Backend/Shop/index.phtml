@@ -59,7 +59,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <div class="card-header">
                                     <h3 class="card-title">Shopify店铺管理</h3>
                                     <acl source="FlashForge_ShopifyOrderManager::shop_add">
-                                        <button class="btn btn-primary float-right" onclick="addShop()">添加店铺</button>
+                                        <block class='Weline\Component\Block\OffCanvas'
+                                               template='Weline_Component::off-canvas.phtml'
+                                               cache='0'
+                                               id='off_canvas_shop_add'
+                                               action='shopify/backend/shop/form'
+                                               target-tag='button'
+                                               target-button-class='btn btn-primary float-right'
+                                               target-button-text='添加店铺'
+                                               title='添加店铺'
+                                               close-button-show='1'
+                                               close-button-text='关闭'
+                                               direction='right'
+                                               class-names='w-75'
+                                               save='1'
+                                               save-form='#shopForm'
+                                               submit-button-text='保存店铺'
+                                               submit-button-class='btn btn-primary'
+                                        />
                                     </acl>
                                 </div>
                                 <div class="card-body">
