@@ -36,31 +36,61 @@
             msg.className = `w-delete-message w-delete-${type}`;
             msg.textContent = message;
 
-            // 计算位置 - 类似tooltip的智能定位
+            // 先添加到DOM中获取实际尺寸
+            msg.style.visibility = 'hidden';
+            msg.style.position = 'absolute';
+            document.body.appendChild(msg);
+
+            // 获取实际尺寸
+            const msgWidth = msg.offsetWidth;
+            const msgHeight = msg.offsetHeight;
             const viewportWidth = document.documentElement.clientWidth;
+            const viewportHeight = document.documentElement.clientHeight;
+
+            // 计算最佳位置
+            let left, top;
+            
+            // 水平方向自适应
             const triggerRight = rect.right + window.scrollX;
             const triggerLeft = rect.left + window.scrollX;
-            const msgWidth = msg.offsetWidth;
-
-            // 判断触发元素位置
-            if (triggerRight > viewportWidth - 20) {
-                // 靠近右边 - 显示在左边
-                left = Math.max(10, triggerLeft - msgWidth - 10);
-            } else if (triggerLeft < 20) {
-                // 靠近左边 - 显示在右边
-                left = Math.min(viewportWidth - msgWidth - 10, rect.right + window.scrollX + 10);
+            
+            if (triggerRight + msgWidth + 20 > viewportWidth) {
+                // 右边空间不够，尝试左边
+                if (triggerLeft - msgWidth - 20 > 10) {
+                    left = triggerLeft - msgWidth - 10;
+                } else {
+                    // 左右都不够，居中显示
+                    left = Math.max(10, (viewportWidth - msgWidth) / 2);
+                }
             } else {
-                // 正常情况 - 显示在右边
-                left = Math.min(viewportWidth - msgWidth - 10, rect.left + window.scrollX);
+                // 右边有足够空间
+                left = Math.min(viewportWidth - msgWidth - 10, triggerLeft + 10);
+            }
+            
+            // 垂直方向自适应
+            const triggerTop = rect.top + window.scrollY;
+            const triggerBottom = rect.bottom + window.scrollY;
+            
+            if (triggerBottom + msgHeight + 20 > viewportHeight + window.scrollY) {
+                // 下方空间不够，显示在上方
+                if (triggerTop - msgHeight - 20 > window.scrollY) {
+                    top = triggerTop - msgHeight - 10;
+                } else {
+                    // 上下都不够，显示在视口中央
+                    top = Math.max(window.scrollY + 20, (viewportHeight - msgHeight) / 2 + window.scrollY);
+                }
+            } else {
+                // 下方有足够空间
+                top = triggerBottom + 10;
             }
 
-            const top = rect.top + window.scrollY + 30;
+            // 应用位置并显示
             Object.assign(msg.style, {
                 left: `${left}px`,
-                top: `${top}px`
+                top: `${top}px`,
+                visibility: 'visible'
             });
 
-            document.body.appendChild(msg);
             setTimeout(() => msg.remove(), 3000);
         };
 
@@ -78,28 +108,59 @@
                 </div>
             `;
 
-                // 计算位置 - 类似tooltip的智能定位
+                // 先添加到DOM中获取实际尺寸
+                confirmBox.style.visibility = 'hidden';
+                confirmBox.style.position = 'absolute';
+                document.body.appendChild(confirmBox);
+
+                // 获取实际尺寸
+                const boxWidth = confirmBox.offsetWidth;
+                const boxHeight = confirmBox.offsetHeight;
                 const viewportWidth = document.documentElement.clientWidth;
+                const viewportHeight = document.documentElement.clientHeight;
+                
+                // 计算最佳位置
+                let left, top;
+                
+                // 水平方向自适应
                 const triggerRight = rect.right + window.scrollX;
                 const triggerLeft = rect.left + window.scrollX;
-                const boxWidth = confirmBox.offsetWidth;
-
-                // 判断触发元素位置
-                if (triggerRight > viewportWidth - 20) {
-                    // 靠近右边 - 显示在左边
-                    left = Math.max(10, triggerLeft - boxWidth - 10);
-                } else if (triggerLeft < 20) {
-                    // 靠近左边 - 显示在右边
-                    left = Math.min(viewportWidth - boxWidth - 10, rect.right + window.scrollX + 10);
+                
+                if (triggerRight + boxWidth + 20 > viewportWidth) {
+                    // 右边空间不够，尝试左边
+                    if (triggerLeft - boxWidth - 20 > 10) {
+                        left = triggerLeft - boxWidth - 10;
+                    } else {
+                        // 左右都不够，居中显示
+                        left = Math.max(10, (viewportWidth - boxWidth) / 2);
+                    }
                 } else {
-                    // 正常情况 - 显示在右边
-                    left = Math.min(viewportWidth - boxWidth - 10, rect.left + window.scrollX);
+                    // 右边有足够空间
+                    left = Math.min(viewportWidth - boxWidth - 10, triggerLeft + 10);
+                }
+                
+                // 垂直方向自适应
+                const triggerTop = rect.top + window.scrollY;
+                const triggerBottom = rect.bottom + window.scrollY;
+                
+                if (triggerBottom + boxHeight + 20 > viewportHeight + window.scrollY) {
+                    // 下方空间不够，显示在上方
+                    if (triggerTop - boxHeight - 20 > window.scrollY) {
+                        top = triggerTop - boxHeight - 10;
+                    } else {
+                        // 上下都不够，显示在视口中央
+                        top = Math.max(window.scrollY + 20, (viewportHeight - boxHeight) / 2 + window.scrollY);
+                    }
+                } else {
+                    // 下方有足够空间
+                    top = triggerBottom + 10;
                 }
 
-                const top = rect.top + window.scrollY;
+                // 应用位置并显示
                 Object.assign(confirmBox.style, {
                     left: `${left}px`,
-                    top: `${top}px`
+                    top: `${top}px`,
+                    visibility: 'visible'
                 });
 
                 // 事件处理
