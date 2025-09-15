@@ -414,6 +414,30 @@ class Handle implements HandleInterface, RegisterInterface
         return $module;
     }
 
+    // setupUpgrade
+    public function setupUpgrade(Module $module): Module{
+        $setup_context = ObjectManager::make(SetupContext::class, [
+            'module_name' => $module->getName(),
+            'module_version' => $module->getVersion(),
+            'module_description' => $module->getDescription()
+        ], '__construct');
+        $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
+        $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
+        if (is_dir($setup_dir) && DEV) {
+            $this->printer->setup(__('升级 %{1} 到 %{2}', [$module->getVersion(), $module->getVersion()]));
+        }
+        foreach (\Weline\Framework\Setup\Data\DataInterface::upgrade_FILES as $upgrade_FILE) {
+            $setup_file = $setup_dir . DS . $upgrade_FILE . '.php';
+            if (file_exists($setup_file)) {
+                $setup = ObjectManager::getInstance($setup_namespace . $upgrade_FILE);
+                $this->setup_data->setModuleContext($setup_context);
+                $result = $setup->setup($this->setup_data, $setup_context);
+                $this->printer->note(__("{$result}"));
+            }
+        }
+        return $module;
+    }
+
     /**
      * @DESC          # 注册路由
      *
