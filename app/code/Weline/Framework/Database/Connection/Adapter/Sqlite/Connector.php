@@ -271,9 +271,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         $table = self::processName($table);
         $idx_name = self::processName($idx_name);
-        $sql = "SELECT name FROM pragma_index_list($table) WHERE name LIKE '{$idx_name}';";
+        $sql = "SELECT name FROM pragma_index_list('{$table}') WHERE name LIKE '{$idx_name}';";
         $res = $this->query($sql)->fetch();
-        return ($res[0]['count'] ?? 0) > 0;
+        return !empty($res);
     }
 
     public function getQuery(): QueryInterface
