@@ -43,6 +43,27 @@ class Config extends BackendController
     }
 
     /**
+     * 获取飞书配置数据（API接口）
+     */
+    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::feishu_config', '飞书配置', '', '获取飞书配置数据')]
+    public function getFeishuData()
+    {
+        // 获取当前配置
+        $config = $this->feishuConfigModel->getActiveConfig();
+        
+        if ($config) {
+            // 解析通知关键词
+            $config['notify_keywords'] = json_decode($config['notify_keywords'] ?: '[]', true);
+        }
+
+        return $this->fetchJson([
+            'code' => 0,
+            'msg' => '获取配置成功',
+            'data' => $config ?: []
+        ]);
+    }
+
+    /**
      * 保存飞书配置
      */
     #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::feishu_save', '保存飞书配置', '', '保存飞书通知配置')]
