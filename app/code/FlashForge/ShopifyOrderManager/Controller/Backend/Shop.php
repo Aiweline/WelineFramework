@@ -30,6 +30,29 @@ class Shop extends BackendController
     public function index()
     {
         $this->assign('title', '店铺管理');
+        
+        // 搜索功能
+        if ($search = $this->request->getGet('search')) {
+            $this->shopModel->where('concat(shop_name,shop_url,api_key)', "%$search%", 'like');
+        }
+        
+        // 状态筛选
+        if ($status = $this->request->getGet('status')) {
+            $this->shopModel->where(ShopModel::fields_STATUS, $status);
+        }
+        
+        // 排序和分页
+        $this->shopModel->order(ShopModel::fields_CREATED_AT, 'DESC')
+            ->pagination()
+            ->select()
+            ->fetch();
+        
+        // 分配数据到模板
+        $this->assign('shops', $this->shopModel->getItems());
+        $this->assign('pagination', $this->shopModel->getPagination());
+        $this->assign('search', $search ?? '');
+        $this->assign('status', $status ?? '');
+        
         return $this->fetch();
     }
 
@@ -47,7 +70,6 @@ class Shop extends BackendController
                 ->order(ShopModel::fields_ID, 'DESC')
                 ->select()
                 ->fetchArray();
-
             $total = $this->shopModel->total();
 
             return $this->fetchJson([
@@ -62,6 +84,45 @@ class Shop extends BackendController
                 'code' => 1,
                 'msg' => '获取失败: ' . $e->getMessage(),
                 'data' => []
+            ]);
+        }
+    }
+
+    /**
+     * 获取单个店铺数据
+     */
+    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_edit', '编辑店铺', '', '编辑店铺信息')]
+    public function getShop()
+    {
+        try {
+            $shopId = intval($this->request->getGet('id'));
+            
+            if (!$shopId) {
+                return $this->fetchJson([
+                    'code' => 1,
+                    'msg' => '店铺ID不能为空'
+                ]);
+            }
+
+            $shop = $this->shopModel->where(ShopModel::fields_ID, $shopId)->find()->fetch();
+            
+            if (!$shop->getId()) {
+                return $this->fetchJson([
+                    'code' => 1,
+                    'msg' => '店铺不存在'
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 0,
+                'msg' => '获取成功',
+                'data' => $shop->getData()
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'code' => 1,
+                'msg' => '获取失败: ' . $e->getMessage()
             ]);
         }
     }
@@ -94,7 +155,7 @@ class Shop extends BackendController
     {
         try {
             $data = $this->request->getPost();
-            $shopId = intval($data['shop_id'] ?? 0);
+            $shopId = intval($data['id'] ?? 0);
 
             // 验证必填字段
             $requiredFields = ['shop_name', 'shop_url', 'api_key', 'api_secret', 'access_token'];
@@ -136,13 +197,20 @@ class Shop extends BackendController
                     ]);
                 }
             } else {
-                // 新增店铺
+                // 新增店铺 - 检查 shop_url 是否已存在
+                $existingShop = $this->shopModel->where(ShopModel::fields_SHOP_URL, rtrim($data['shop_url'], '/'))->find()->fetch();
+                if ($existingShop->getId()) {
+                    return $this->fetchJson([
+                        'code' => 1,
+                        'msg' => '店铺URL已存在，请使用不同的URL或编辑现有店铺'
+                    ]);
+                }
                 $shop = new ShopModel();
             }
 
             $status = intval($data['status'] ?? 1);
-            if (!$apiOk) {
-                // 如果 API 链接失败，安全起见默认保存为未启用
+            if (!$apiOk && !$shopId) {
+                // 如果 API 链接失败且是新增店铺，安全起见默认保存为未启用
                 $status = ShopModel::STATUS_INACTIVE;
             }
 
@@ -158,7 +226,7 @@ class Shop extends BackendController
             $shop->save();
 
             $msg = $shopId ? '更新成功' : '添加成功';
-            if (!$apiOk) {
+            if (!$apiOk && !$shopId) {
                 $msg .= '（警告：API连接测试失败，店铺已保存为未启用）';
             }
 
@@ -176,10 +244,10 @@ class Shop extends BackendController
     }
 
     /**
-     * 删除店铺
+     * 切换店铺状态
      */
-    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_delete', '删除店铺', '', '删除店铺')]
-    public function postDelete()
+    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_toggle_status', '切换店铺状态', '', '启用或禁用店铺')]
+    public function postToggleStatus()
     {
         try {
             $shopId = intval($this->request->getPost('id'));
@@ -200,17 +268,61 @@ class Shop extends BackendController
                 ]);
             }
 
-            $shop->delete();
+            // 切换状态
+            $newStatus = $shop->getData(ShopModel::fields_STATUS) == 1 ? 0 : 1;
+            $shop->setData(ShopModel::fields_STATUS, $newStatus);
+            $shop->save();
 
+            $statusText = $newStatus == 1 ? '启用' : '禁用';
             return $this->fetchJson([
                 'code' => 0,
-                'msg' => '删除成功'
+                'msg' => "店铺已{$statusText}"
             ]);
 
         } catch (\Exception $e) {
             return $this->fetchJson([
                 'code' => 1,
-                'msg' => '删除失败: ' . $e->getMessage()
+                'msg' => '状态切换失败: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 删除店铺
+     */
+    #[\Weline\Framework\Acl\Acl('FlashForge_ShopifyOrderManager::shop_delete', '删除店铺', '', '删除店铺')]
+    public function postDelete()
+    {
+        try {
+            $shopId = intval($this->request->getBodyParam('id'));
+            
+            if (!$shopId) {
+                return $this->fetchJson([
+                    'code' => 1,
+                    'msg' => '店铺ID不能为空'
+                ]);
+            }
+
+            $shop = $this->shopModel->where(ShopModel::fields_ID, $shopId)->find()->fetch();
+            
+            if (!$shop->getId()) {
+                return $this->fetchJson([
+                    'code' => 1,
+                    'msg' => '店铺不存在'
+                ]);
+            }
+
+            $shop->delete()->fetch();
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => '删除成功'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => '删除失败: ' . $e->getMessage()
             ]);
         }
     }
@@ -258,47 +370,4 @@ class Shop extends BackendController
         }
     }
 
-    /**
-     * 切换店铺状态
-     */
-    public function postToggleStatus()
-    {
-        try {
-            $shopId = intval($this->request->getPost('id'));
-            
-            if (!$shopId) {
-                return $this->fetchJson([
-                    'code' => 1,
-                    'msg' => '店铺ID不能为空'
-                ]);
-            }
-
-            $shop = $this->shopModel->where(ShopModel::fields_ID, $shopId)->find()->fetch();
-            
-            if (!$shop->getId()) {
-                return $this->fetchJson([
-                    'code' => 1,
-                    'msg' => '店铺不存在'
-                ]);
-            }
-
-            $currentStatus = $shop->getData(ShopModel::fields_STATUS);
-            $newStatus = $currentStatus ? ShopModel::STATUS_INACTIVE : ShopModel::STATUS_ACTIVE;
-
-            $shop->setData(ShopModel::fields_STATUS, $newStatus);
-            $shop->save();
-
-            return $this->fetchJson([
-                'code' => 0,
-                'msg' => '状态更新成功',
-                'data' => ['status' => $newStatus]
-            ]);
-
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'code' => 1,
-                'msg' => '状态更新失败: ' . $e->getMessage()
-            ]);
-        }
-    }
 }

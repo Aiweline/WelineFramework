@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 开发文件
+*.md
+*.txt
+*.log
+
+# 缓存和临时文件
+var/cache/*
+var/log/*
+var/session/*
+generated/*
+!var/cache/.gitkeep
+!var/log/.gitkeep
+!var/session/.gitkeep
+!generated/.gitkeep
+
+# 环境文件
+.env
+.env.local
+.env.production
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 测试文件
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# 文档
+docs/
+*.md
+
+# 备份文件
+*.bak
+*.backup
