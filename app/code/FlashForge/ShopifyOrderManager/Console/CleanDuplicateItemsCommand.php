@@ -23,50 +23,58 @@ class CleanDuplicateItemsCommand implements CommandInterface
 
     public function execute(array $args = [], array $data = []): void
     {
-        echo "开始检查重复的订单项目...\n";
+        echo "开始检查重复的订单项目（基于shop_id和shopify_line_item_id）...\n";
         
-        // 获取所有订单
-        $orders = $this->orderModel->select()->fetchArray();
-        $totalOrders = count($orders);
+        // 查找重复的订单项目 - 基于shop_id和shopify_line_item_id组合
+        $duplicates = $this->orderItemModel->getConnection()->query("
+            SELECT shop_id, shopify_item_id, COUNT(*) as count, GROUP_CONCAT(item_id) as item_ids
+            FROM shopify_order_items 
+            WHERE shopify_item_id IS NOT NULL AND shopify_item_id != ''
+            GROUP BY shop_id, shopify_item_id 
+            HAVING COUNT(*) > 1
+        ")->fetchArray();
+        
         $totalDuplicates = 0;
-        $ordersWithDuplicates = 0;
+        $cleanedCount = 0;
         
-        echo "检查 {$totalOrders} 个订单...\n";
+        if (empty($duplicates)) {
+            echo "没有发现重复的订单项目！\n";
+            return;
+        }
         
-        foreach ($orders as $order) {
-            $orderId = $order['order_id'];
-            $orderNumber = $order['order_number'];
+        echo "发现 " . count($duplicates) . " 组重复的订单项目:\n";
+        
+        foreach ($duplicates as $duplicate) {
+            $shopId = $duplicate['shop_id'];
+            $shopifyItemId = $duplicate['shopify_item_id'];
+            $count = $duplicate['count'];
+            $itemIds = explode(',', $duplicate['item_ids']);
             
-            // 获取订单项目统计
-            $stats = $this->orderItemModel->getOrderItemStats($orderId);
+            $totalDuplicates += ($count - 1); // 保留一个，删除其余的
             
-            if (!empty($stats['duplicates'])) {
-                $ordersWithDuplicates++;
-                $duplicateCount = array_sum($stats['duplicates']);
-                $totalDuplicates += $duplicateCount;
+            echo "店铺ID: {$shopId}, Shopify项目ID: {$shopifyItemId}, 重复数量: {$count}\n";
+            echo "  项目IDs: " . implode(', ', $itemIds) . "\n";
+            
+            // 保留第一个，删除其余的
+            $keepId = array_shift($itemIds);
+            $deleteIds = $itemIds;
+            
+            if (!empty($deleteIds)) {
+                $deleteIdsStr = implode(',', $deleteIds);
+                $result = $this->orderItemModel->getConnection()->query("
+                    DELETE FROM shopify_order_items 
+                    WHERE item_id IN ({$deleteIdsStr})
+                ");
+                $deleted = $result ? count($deleteIds) : 0;
                 
-                echo "订单 {$orderNumber} (ID: {$orderId}) 发现 {$duplicateCount} 个重复项目:\n";
-                
-                foreach ($stats['duplicates'] as $key => $count) {
-                    echo "  - {$key}: {$count} 个重复\n";
-                }
-                
-                // 清理重复项目
-                $cleanedCount = $this->orderItemModel->cleanDuplicateItems($orderId);
-                echo "  已清理 {$cleanedCount} 个重复项目\n";
+                $cleanedCount += $deleted;
+                echo "  保留项目ID: {$keepId}, 删除项目IDs: " . implode(', ', $deleteIds) . " (共{$deleted}个)\n";
             }
         }
         
-        echo "检查完成！\n";
-        echo "总订单数: {$totalOrders}\n";
-        echo "有重复项目的订单数: {$ordersWithDuplicates}\n";
+        echo "清理完成！\n";
         echo "总重复项目数: {$totalDuplicates}\n";
-        
-        if ($totalDuplicates > 0) {
-            echo "已清理所有重复项目！\n";
-        } else {
-            echo "没有发现重复项目！\n";
-        }
+        echo "已清理项目数: {$cleanedCount}\n";
     }
 
     public function tip(): string
