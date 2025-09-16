@@ -65,13 +65,13 @@ class OrderItem extends Model
     public function upgrade(ModelSetup $setup, Context $context): void
     {
         // 添加唯一索引防止重复订单项目
-        if (!$setup->hasIndex('idx_unique_order_shopify_item')) {
+        if (!$setup->hasIndex('idx_unique_shop_shopify_item')) {
             $setup->alterTable('添加唯一索引防止重复订单项目')
                 ->addIndex(
                     TableInterface::index_type_UNIQUE,
-                    'idx_unique_order_shopify_item',
-                    [self::fields_ORDER_ID, self::fields_SHOPIFY_ITEM_ID],
-                    '订单和Shopify项目ID唯一索引'
+                    'idx_unique_shop_shopify_item',
+                    [self::fields_SHOP_ID, self::fields_SHOPIFY_ITEM_ID],
+                    '店铺和Shopify项目ID唯一索引'
                 );
         }
     }
@@ -332,9 +332,9 @@ class OrderItem extends Model
                 )
                 ->addIndex(
                     TableInterface::index_type_UNIQUE,
-                    'idx_unique_order_shopify_item',
-                    [self::fields_ORDER_ID, self::fields_SHOPIFY_ITEM_ID],
-                    '订单和Shopify项目ID唯一索引'
+                    'idx_unique_shop_shopify_item',
+                    [self::fields_SHOP_ID, self::fields_SHOPIFY_ITEM_ID],
+                    '店铺和Shopify项目ID唯一索引'
                 )
                 ->create();
         }
