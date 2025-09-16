@@ -24,3 +24,7 @@ ssh_tools.jsonc
 !/generated/code/
 !/generated/code/.gitkeep
 app/code/FlashForge/Tool/
+
+# 数据库文件
+*.sqlite
+*.db

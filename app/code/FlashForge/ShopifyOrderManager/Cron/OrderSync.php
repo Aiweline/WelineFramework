@@ -58,6 +58,7 @@ class OrderSync implements CronTaskInterface
     {
         try {
             // 同步所有店铺订单
+            
             $results = $this->orderSyncHelper->syncAllShops();
 
             // 统计结果

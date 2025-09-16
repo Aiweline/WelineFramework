@@ -36,25 +36,99 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     </div>
                     <div class="card-body">
                         <form id="feishuConfigForm">
-                            <div class="form-group">
-                                <label>Webhook URL</label>
-                                <input type="text" class="form-control" name="webhook_url" placeholder="请输入Webhook URL">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label">Webhook URL <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" name="webhook_url" 
+                                               placeholder="请输入飞书机器人Webhook URL" required>
+                                        <small class="form-text text-muted">从飞书群机器人获取的Webhook地址</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label">Secret</label>
+                                        <input type="text" class="form-control" name="secret" 
+                                               placeholder="请输入签名密钥（可选）">
+                                        <small class="form-text text-muted">用于验证消息来源的安全性</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" name="enable_error_notify" 
+                                                   id="enableErrorNotify" value="1" checked>
+                                            <label class="form-check-label" for="enableErrorNotify">
+                                                <strong>订单同步错误通知</strong>
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">当订单同步出现错误时发送通知</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" name="enable_overdue_notify" 
+                                                   id="enableOverdueNotify" value="1" checked>
+                                            <label class="form-check-label" for="enableOverdueNotify">
+                                                <strong>未发货超时通知</strong>
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">当订单超过15天未发货时发送提醒</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label class="form-label">通知关键词</label>
+                                <textarea class="form-control" name="notify_keywords" rows="6" 
+                                          placeholder="请输入通知关键词，每行一个关键词&#10;例如：&#10;导单系统&#10;订单异常&#10;系统故障"></textarea>
+                                <small class="form-text text-muted">
+                                    每行输入一个关键词，这些关键词将用于飞书消息的标识和分类。<br>
+                                    <strong>常用关键词：</strong>导单系统、订单异常、系统故障、同步成功、超时提醒
+                                </small>
                             </div>
                             <div class="form-group">
-                                <label>Secret</label>
-                                <input type="text" class="form-control" name="secret" placeholder="请输入Secret">
+                                <acl source="FlashForge_ShopifyOrderManager::feishu_save">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="mdi mdi-content-save me-1"></i>保存配置
+                                    </button>
+                                </acl>
+                                <button type="button" class="btn btn-outline-info" onclick="testFeishuConnection()">
+                                    <i class="mdi mdi-test-tube me-1"></i>测试连接
+                                </button>
                             </div>
-                            <div class="form-group form-check">
-                                <input type="checkbox" class="form-check-input" name="enable_error" id="enableError">
-                                <label class="form-check-label" for="enableError">订单同步错误通知</label>
+                            <div class="form-group mb-3">
+                                <div class="alert alert-info">
+                                    <h6 class="alert-heading">📋 配置说明</h6>
+                                    <ul class="mb-0">
+                                        <li><strong>导单系统：</strong>用于标识订单导入相关的系统消息</li>
+                                        <li><strong>订单异常：</strong>用于标识订单处理过程中的异常情况</li>
+                                        <li><strong>系统故障：</strong>用于标识系统级别的故障和错误</li>
+                                        <li><strong>同步成功：</strong>用于标识订单同步成功的消息</li>
+                                        <li><strong>超时提醒：</strong>用于标识订单超时未处理的提醒</li>
+                                    </ul>
+                                </div>
                             </div>
-                            <div class="form-group form-check">
-                                <input type="checkbox" class="form-check-input" name="enable_overdue" id="enableOverdue">
-                                <label class="form-check-label" for="enableOverdue">未发货超时通知</label>
+                            
+                            <div class="form-group mb-3">
+                                <div class="alert alert-warning">
+                                    <h6 class="alert-heading">⚠️ 飞书机器人配置步骤</h6>
+                                    <ol class="mb-0">
+                                        <li><strong>创建机器人：</strong>在飞书群聊中点击"设置" → "群机器人" → "添加机器人" → "自定义机器人"</li>
+                                        <li><strong>配置机器人：</strong>设置机器人名称和描述，选择"自定义"类型</li>
+                                        <li><strong>获取Webhook：</strong>复制生成的Webhook URL，格式为：<code>https://open.feishu.cn/open-apis/bot/v2/hook/[hook-id]</code></li>
+                                        <li><strong>获取密钥：</strong>复制签名密钥，用于验证消息来源（如果遇到签名验证失败，请确保密钥正确且系统时间准确）</li>
+                                        <li><strong>添加权限：</strong>确保机器人有发送消息的权限</li>
+                                        <li><strong>测试连接：</strong>使用"测试连接"按钮验证配置是否正确</li>
+                                    </ol>
+                                </div>
                             </div>
-                            <acl source="FlashForge_ShopifyOrderManager::feishu_save">
-                                <button type="submit" class="btn btn-primary">保存设置</button>
-                            </acl>
+                            
+                            
                         </form>
                     </div>
                 </div>
@@ -66,5 +140,134 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!--页脚-->
     @template(Weline_Admin::common/footer.phtml)
 </div> <!-- layout-wrapper -->
+
+<script>
+$(document).ready(function() {
+    // 加载现有配置
+    loadFeishuConfig();
+    
+    // 表单提交处理
+    $('#feishuConfigForm').on('submit', function(e) {
+        e.preventDefault();
+        saveFeishuConfig();
+    });
+});
+
+// 加载飞书配置
+function loadFeishuConfig() {
+    fetch('<?= $this->getUrl("shopify/backend/config/getFeishuData") ?>')
+        .then(response => response.json())
+        .then(data => {
+            console.log('加载配置数据:', data);
+            if (data && data.code === 0 && data.data) {
+                const config = data.data;
+                
+                // 填充表单数据
+                $('input[name="webhook_url"]').val(config.webhook_url || '');
+                $('input[name="secret"]').val(config.secret || '');
+                $('input[name="enable_error_notify"]').prop('checked', config.enable_error_notify == 1);
+                $('input[name="enable_overdue_notify"]').prop('checked', config.enable_overdue_notify == 1);
+                
+                // 填充关键词
+                if (config.notify_keywords && Array.isArray(config.notify_keywords)) {
+                    $('textarea[name="notify_keywords"]').val(config.notify_keywords.join('\n'));
+                }
+            } else {
+                console.log('没有找到配置数据或数据格式错误');
+            }
+        })
+        .catch(error => {
+            console.error('加载配置失败:', error);
+        });
+}
+
+// 保存飞书配置
+function saveFeishuConfig() {
+    const formData = new FormData($('#feishuConfigForm')[0]);
+    
+    // 显示加载状态
+    const submitBtn = $('#feishuConfigForm button[type="submit"]');
+    const originalText = submitBtn.html();
+    submitBtn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin me-1"></i>保存中...');
+    
+    fetch('<?= $this->getUrl("shopify/backend/config/saveFeishu") ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.code === 0) {
+            showMessage('success', '✅ 飞书配置保存成功！');
+            // 保存成功后重新加载配置数据
+            setTimeout(() => {
+                loadFeishuConfig();
+            }, 500);
+        } else {
+            showMessage('error', '❌ 保存失败：' + (data.msg || '未知错误'));
+        }
+    })
+    .catch(error => {
+        console.error('保存配置失败:', error);
+        showMessage('error', '❌ 保存失败：网络错误');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        submitBtn.prop('disabled', false).html(originalText);
+    });
+}
+
+// 测试飞书连接
+function testFeishuConnection() {
+    const testBtn = $('button[onclick="testFeishuConnection()"]');
+    const originalText = testBtn.html();
+    testBtn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...');
+    
+    fetch('<?= $this->getUrl("shopify/backend/config/testFeishu") ?>', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.code === 0) {
+            showMessage('success', '✅ 飞书连接测试成功！');
+        } else {
+            showMessage('error', '❌ 连接测试失败：' + (data.msg || '未知错误'));
+        }
+    })
+    .catch(error => {
+        console.error('测试连接失败:', error);
+        showMessage('error', '❌ 连接测试失败：网络错误');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        testBtn.prop('disabled', false).html(originalText);
+    });
+}
+
+// 显示消息提示
+function showMessage(type, message) {
+    // 移除现有的消息
+    $('.message-toast').remove();
+    
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle';
+    
+    const messageHtml = `
+        <div class="alert ${alertClass} alert-dismissible fade show message-toast" role="alert">
+            <i class="mdi ${icon} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // 在表单上方显示消息
+    $('#feishuConfigForm').before(messageHtml);
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+        $('.message-toast').fadeOut();
+    }, 3000);
+}
+</script>
+
 </body>
 </html>
