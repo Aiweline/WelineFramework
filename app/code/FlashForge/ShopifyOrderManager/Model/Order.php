@@ -17,23 +17,39 @@ class Order extends Model
     
     public const fields_ID = 'order_id';
     public const fields_SHOP_ID = 'shop_id';
+    public const fields_PLATFORM = 'platform';
     public const fields_SHOPIFY_ORDER_ID = 'shopify_order_id';
     public const fields_ORDER_NUMBER = 'order_number';
+    public const fields_NAME = 'name';
     public const fields_CUSTOMER_EMAIL = 'customer_email';
     public const fields_CUSTOMER_NAME = 'customer_name';
-    public const fields_TOTAL_PRICE = 'total_price';
-    public const fields_SUBTOTAL_PRICE = 'subtotal_price';
-    public const fields_TOTAL_TAX = 'total_tax';
-    public const fields_CURRENCY = 'currency';
+    public const fields_CUSTOMER_PHONE = 'customer_phone';
+    public const fields_SHOPIFY_CREATED_AT = 'shopify_created_at';
+    public const fields_SHOPIFY_UPDATED_AT = 'shopify_updated_at';
+    public const fields_PROCESSED_AT = 'processed_at';
+    public const fields_CANCELLED_AT = 'cancelled_at';
+    public const fields_CLOSED_AT = 'closed_at';
     public const fields_FINANCIAL_STATUS = 'financial_status';
     public const fields_FULFILLMENT_STATUS = 'fulfillment_status';
     public const fields_ORDER_STATUS = 'order_status';
+    public const fields_TOTAL_PRICE = 'total_price';
+    public const fields_SUBTOTAL_PRICE = 'subtotal_price';
+    public const fields_TOTAL_TAX = 'total_tax';
+    public const fields_TOTAL_DISCOUNTS = 'total_discounts';
+    public const fields_TOTAL_SHIPPING_PRICE = 'total_shipping_price';
+    public const fields_CURRENCY = 'currency';
+    public const fields_GATEWAY = 'gateway';
+    public const fields_PAYMENT_METHOD_NAME = 'payment_method_name';
+    public const fields_PAYMENT_METHOD_TYPE = 'payment_method_type';
+    public const fields_PAYMENT_GATEWAY_NAMES = 'payment_gateway_names';
+    public const fields_TRANSACTIONS = 'transactions';
+    public const fields_TEST = 'test';
     public const fields_TAGS = 'tags';
     public const fields_NOTE = 'note';
-    public const fields_SHIPPING_ADDRESS = 'shipping_address';
     public const fields_BILLING_ADDRESS = 'billing_address';
-    public const fields_SHOPIFY_CREATED_AT = 'shopify_created_at';
-    public const fields_SHOPIFY_UPDATED_AT = 'shopify_updated_at';
+    public const fields_SHIPPING_ADDRESS = 'shipping_address';
+    public const fields_CUSTOMER = 'customer';
+    public const fields_RAW_DATA = 'raw_data';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
     
@@ -65,7 +81,91 @@ class Order extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 升级逻辑（如果需要）
+        // 添加支付方式相关字段
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_PAYMENT_METHOD_NAME)) {
+            $setup->alterTable('添加支付方式名称字段')
+                ->addColumn(
+                    self::fields_PAYMENT_METHOD_NAME,
+                    '',
+                    TableInterface::column_type_VARCHAR,
+                    100,
+                    'not null default ""',
+                    '支付方式名称'
+                );
+        }
+        
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_PAYMENT_METHOD_TYPE)) {
+            $setup->alterTable('添加支付方式类型字段')
+                ->addColumn(
+                    self::fields_PAYMENT_METHOD_TYPE,
+                    '',
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'not null default ""',
+                    '支付方式类型'
+                );
+        }
+        
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_PAYMENT_GATEWAY_NAMES)) {
+            $setup->alterTable('添加支付网关名称字段')
+                ->addColumn(
+                    self::fields_PAYMENT_GATEWAY_NAMES,
+                    '',
+                    TableInterface::column_type_TEXT,
+                    '',
+                    'null',
+                    '支付网关名称'
+                );
+        }
+        
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_TRANSACTIONS)) {
+            $setup->alterTable('添加交易信息字段')
+                ->addColumn(
+                    self::fields_TRANSACTIONS,
+                    '',
+                    TableInterface::column_type_TEXT,
+                    '',
+                    'null',
+                    '交易信息'
+                );
+        }
+        
+        // 添加时间字段
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_PROCESSED_AT)) {
+            $setup->alterTable('添加处理时间字段')
+                ->addColumn(
+                    self::fields_PROCESSED_AT,
+                    '',
+                    TableInterface::column_type_DATETIME,
+                    '',
+                    'null',
+                    '处理时间'
+                );
+        }
+        
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_CANCELLED_AT)) {
+            $setup->alterTable('添加取消时间字段')
+                ->addColumn(
+                    self::fields_CANCELLED_AT,
+                    '',
+                    TableInterface::column_type_DATETIME,
+                    '',
+                    'null',
+                    '取消时间'
+                );
+        }
+        
+        if (!$setup->getConnection()->getConnector()->hasField($this->getTable(), self::fields_CLOSED_AT)) {
+            $setup->alterTable('添加关闭时间字段')
+                ->addColumn(
+                    self::fields_CLOSED_AT,
+                    '',
+                    TableInterface::column_type_DATETIME,
+                    '',
+                    'null',
+                    '关闭时间'
+                );
+        }
     }
 
     /**
@@ -104,6 +204,20 @@ class Order extends Model
                     '订单号'
                 )
                 ->addColumn(
+                    self::fields_PLATFORM,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'default "shopify"',
+                    '平台标识'
+                )
+                ->addColumn(
+                    self::fields_NAME,
+                    TableInterface::column_type_VARCHAR,
+                    100,
+                    'null',
+                    '订单名称'
+                )
+                ->addColumn(
                     self::fields_CUSTOMER_EMAIL,
                     TableInterface::column_type_VARCHAR,
                     255,
@@ -116,6 +230,13 @@ class Order extends Model
                     255,
                     'null',
                     '客户姓名'
+                )
+                ->addColumn(
+                    self::fields_CUSTOMER_PHONE,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'null',
+                    '客户电话'
                 )
                 ->addColumn(
                     self::fields_TOTAL_PRICE,
@@ -139,11 +260,67 @@ class Order extends Model
                     '税费'
                 )
                 ->addColumn(
+                    self::fields_TOTAL_DISCOUNTS,
+                    TableInterface::column_type_DECIMAL,
+                    '10,2',
+                    'default 0.00',
+                    '折扣总额'
+                )
+                ->addColumn(
+                    self::fields_TOTAL_SHIPPING_PRICE,
+                    TableInterface::column_type_DECIMAL,
+                    '10,2',
+                    'default 0.00',
+                    '运费'
+                )
+                ->addColumn(
                     self::fields_CURRENCY,
                     TableInterface::column_type_VARCHAR,
                     10,
                     'default "USD"',
                     '货币'
+                )
+                ->addColumn(
+                    self::fields_GATEWAY,
+                    TableInterface::column_type_VARCHAR,
+                    100,
+                    'null',
+                    '支付网关'
+                )
+                ->addColumn(
+                    self::fields_PAYMENT_METHOD_NAME,
+                    TableInterface::column_type_VARCHAR,
+                    100,
+                    'null',
+                    '支付方式名称'
+                )
+                ->addColumn(
+                    self::fields_PAYMENT_METHOD_TYPE,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'null',
+                    '支付方式类型'
+                )
+                ->addColumn(
+                    self::fields_PAYMENT_GATEWAY_NAMES,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    'null',
+                    '支付网关名称列表JSON'
+                )
+                ->addColumn(
+                    self::fields_TRANSACTIONS,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    'null',
+                    '交易信息JSON'
+                )
+                ->addColumn(
+                    self::fields_TEST,
+                    TableInterface::column_type_SMALLINT,
+                    1,
+                    'default 0',
+                    '是否测试订单'
                 )
                 ->addColumn(
                     self::fields_FINANCIAL_STATUS,
@@ -165,6 +342,27 @@ class Order extends Model
                     50,
                     'default "pending"',
                     '订单状态'
+                )
+                ->addColumn(
+                    self::fields_PROCESSED_AT,
+                    TableInterface::column_type_DATETIME,
+                    0,
+                    'null',
+                    '处理时间'
+                )
+                ->addColumn(
+                    self::fields_CANCELLED_AT,
+                    TableInterface::column_type_DATETIME,
+                    0,
+                    'null',
+                    '取消时间'
+                )
+                ->addColumn(
+                    self::fields_CLOSED_AT,
+                    TableInterface::column_type_DATETIME,
+                    0,
+                    'null',
+                    '关闭时间'
                 )
                 ->addColumn(
                     self::fields_TAGS,
@@ -193,6 +391,20 @@ class Order extends Model
                     0,
                     'null',
                     '账单地址JSON'
+                )
+                ->addColumn(
+                    self::fields_CUSTOMER,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    'null',
+                    '客户信息JSON'
+                )
+                ->addColumn(
+                    self::fields_RAW_DATA,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    'null',
+                    '原始数据JSON'
                 )
                 ->addColumn(
                     self::fields_SHOPIFY_CREATED_AT,
@@ -242,9 +454,9 @@ class Order extends Model
                 )
                 ->addIndex(
                     TableInterface::index_type_KEY,
-                    'idx_created_at',
+                    'idx_shopify_created_at',
                     self::fields_SHOPIFY_CREATED_AT,
-                    '创建时间索引'
+                    'Shopify创建时间索引'
                 )
                 ->create();
         }
