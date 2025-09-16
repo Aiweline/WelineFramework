@@ -293,12 +293,8 @@ class OrderSync extends Helper
         $shopId = $this->getCurrentShopId();
         
         foreach ($lineItems as $item) {
-            // 检查是否已存在相同的商品项目
-            $existingItem = $this->orderItemModel
-                ->where('shopify_item_id', $item['id'] ?? null)
-                ->where('shop_id', $shopId)
-                ->find()
-                ->fetch();
+            // 检查是否已存在相同的商品项目 - 使用shop_id和shopify_line_item_id组合确保唯一性
+            $existingItem = $this->checkDuplicateOrderItem($shopId, $item['id'] ?? '');
             
             // 计算税费信息
             $taxInfo = $this->calculateTaxInfo($item);
@@ -342,13 +338,28 @@ class OrderSync extends Helper
                 // 更新现有商品项目
                 $existingItem->setData($itemData);
                 $existingItem->save();
+                error_log("更新订单项目 - 店铺ID: {$shopId}, Shopify项目ID: {$item['id']}, 订单ID: {$orderId}");
             } else {
                 // 插入新商品项目
                 $newItem = new \FlashForge\ShopifyOrderManager\Model\OrderItem();
                 $newItem->setData($itemData);
                 $newItem->save();
+                error_log("新增订单项目 - 店铺ID: {$shopId}, Shopify项目ID: {$item['id']}, 订单ID: {$orderId}");
             }
         }
+    }
+
+    /**
+     * 检查订单项目是否重复
+     * 使用shop_id和shopify_line_item_id组合确保唯一性
+     */
+    private function checkDuplicateOrderItem(int $shopId, string $shopifyLineItemId): ?\FlashForge\ShopifyOrderManager\Model\OrderItem
+    {
+        return $this->orderItemModel
+            ->where('shop_id', $shopId)
+            ->where('shopify_item_id', $shopifyLineItemId)
+            ->find()
+            ->fetch();
     }
 
     /**
