@@ -24,19 +24,30 @@ class OverdueCheckCommand implements CommandInterface
      */
     public function execute(array $args = [], array $data = []): void
     {
-        echo "开始检查超时订单...\n";
+        echo "⏰ 开始检查超时订单...\n";
+        echo "==================\n";
+
+        $startTime = microtime(true);
 
         try {
             $success = $this->orderSync->checkOverdueOrders();
 
+            $endTime = microtime(true);
+            $duration = round($endTime - $startTime, 2);
+
             if ($success) {
-                echo "✅ 超时订单检查完成，相关通知已发送\n";
+                echo "✅ 超时订单检查完成\n";
+                echo "⏱️  耗时: {$duration}秒\n";
+                echo "📧 相关通知已发送\n";
             } else {
                 echo "⚠️  超时订单检查完成，但通知发送失败\n";
+                echo "⏱️  耗时: {$duration}秒\n";
+                echo "📝 请检查飞书通知配置\n";
             }
 
         } catch (\Exception $e) {
             echo "❌ 检查过程中发生错误: " . $e->getMessage() . "\n";
+            echo "📝 错误详情: " . $e->getFile() . ":" . $e->getLine() . "\n";
         }
     }
 

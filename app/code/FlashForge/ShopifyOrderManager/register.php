@@ -11,7 +11,7 @@ Register::register(
     Register::MODULE,
     'FlashForge_ShopifyOrderManager',
     __DIR__,
-    '1.0.0',
+    '1.0.4',
     'Shopify订单管理系统 - 支持多店铺订单抓取、状态监控、飞书通知',
     [
         'Weline_Framework',
