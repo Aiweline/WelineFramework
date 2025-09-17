@@ -433,6 +433,7 @@ COMMAND_LIST;
         $style = $options['style'] ?? 'default';
         $padding = $options['padding'] ?? 1;
         $border = $options['border'] ?? true;
+        $maxWidth = $options['maxWidth'] ?? $this->getTerminalWidth();
         
         // 计算列宽（去除ANSI颜色代码）
         $columnWidths = [];
@@ -451,11 +452,15 @@ COMMAND_LIST;
             $columnWidths[$i] += $padding * 2;
         }
         
+        // 检查总宽度是否超过终端宽度，如果超过则调整列宽
         $totalWidth = array_sum($columnWidths) + count($columnWidths) + 1;
+        if ($totalWidth > $maxWidth) {
+            $columnWidths = $this->adjustColumnWidths($columnWidths, $maxWidth, count($headers));
+        }
         
         // 输出表格
         if ($border) {
-            $this->printTableBorder($totalWidth, $style);
+            $this->printTableBorder(array_sum($columnWidths) + count($columnWidths) + 1, $style);
         }
         
         // 表头
@@ -471,8 +476,36 @@ COMMAND_LIST;
         }
         
         if ($border) {
-            $this->printTableBorder($totalWidth, $style);
+            $this->printTableBorder(array_sum($columnWidths) + count($columnWidths) + 1, $style);
         }
+    }
+    
+    /**
+     * 调整列宽以适应终端宽度
+     * 
+     * @param array $columnWidths 原始列宽
+     * @param int $maxWidth 最大宽度
+     * @param int $columnCount 列数
+     * @return array 调整后的列宽
+     */
+    private function adjustColumnWidths(array $columnWidths, int $maxWidth, int $columnCount): array
+    {
+        $availableWidth = $maxWidth - $columnCount - 1; // 减去分隔符和边框
+        $totalContentWidth = array_sum($columnWidths);
+        
+        if ($totalContentWidth <= $availableWidth) {
+            return $columnWidths;
+        }
+        
+        // 按比例缩小列宽
+        $ratio = $availableWidth / $totalContentWidth;
+        $adjustedWidths = [];
+        
+        foreach ($columnWidths as $i => $width) {
+            $adjustedWidths[$i] = max(8, (int)($width * $ratio)); // 最小宽度8
+        }
+        
+        return $adjustedWidths;
     }
     
     /**
