@@ -170,44 +170,17 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private function getCacheStats(CacheInterface $cache): array
     {
         // 尝试获取缓存的统计信息
-        // 这里可以根据具体的缓存实现来获取更准确的信息
         try {
-            // 如果缓存对象有统计方法，使用它
-            if (method_exists($cache, 'getStats')) {
-                return $cache->getStats();
-            }
-            
-            // 如果缓存对象有获取大小的方法
-            if (method_exists($cache, 'getSize')) {
-                return [
-                    'items' => 1,
-                    'size' => $cache->getSize(),
-                    'files' => 1
-                ];
-            }
-            
-            // 尝试通过反射获取缓存大小
-            $reflection = new \ReflectionClass($cache);
-            if ($reflection->hasProperty('size')) {
-                $sizeProperty = $reflection->getProperty('size');
-                $sizeProperty->setAccessible(true);
-                $size = $sizeProperty->getValue($cache);
-                return [
-                    'items' => 1,
-                    'size' => $size ?? 0,
-                    'files' => 1
-                ];
-            }
+            // 调用接口定义的 getStats 方法
+            return $cache->getStats();
         } catch (\Exception $e) {
             // 如果获取统计信息失败，返回默认值
+            return [
+                'items' => 1,
+                'size' => 0,
+                'files' => 1
+            ];
         }
-        
-        // 返回默认统计信息
-        return [
-            'items' => 1,
-            'size' => 0,
-            'files' => 1
-        ];
     }
     
     /**

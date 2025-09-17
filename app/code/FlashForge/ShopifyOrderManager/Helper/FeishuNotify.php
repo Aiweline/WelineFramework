@@ -138,6 +138,7 @@ class FeishuNotify extends Helper
      */
     public function sendSyncSuccessNotify(string $shopName, int $orderCount, int $newOrderCount): bool
     {
+        return true;
         if (!$this->init()) {
             return false;
         }

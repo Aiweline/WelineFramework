@@ -202,4 +202,19 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     {
         return ObjectManager::getInstance(Request::class);
     }
+
+    /**
+     * 获取缓存统计信息
+     * 
+     * @return array 返回包含 items, size, files 等统计信息的数组
+     */
+    public function getStats(): array
+    {
+        // 默认实现，子类可以重写此方法提供更准确的统计信息
+        return [
+            'items' => 1,
+            'size' => 0,
+            'files' => 1
+        ];
+    }
 }
