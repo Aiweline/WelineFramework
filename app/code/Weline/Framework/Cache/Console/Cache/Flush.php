@@ -201,6 +201,6 @@ class Flush implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('缓存刷新。');
+        return __('缓存刷新。清理掉过期的缓存文件。');
     }
 }
