@@ -24,7 +24,7 @@ class CacheFactory implements CacheFactoryInterface
     private string $tip;
     private string $status;
 
-    private ?CacheInterface $driver = null;
+    private static ?CacheInterface $driver = null;
 
     // 是否持久缓存
     private bool $keep;
@@ -77,8 +77,41 @@ class CacheFactory implements CacheFactoryInterface
             $driver_class = $driver;
         }
         $status = (bool)Env::getInstance()->getData('cache/status/' . $this->identity);
-        $this->driver = new $driver_class($this->identity, $this->config['drivers'][$driver], $tip ?: $this->tip, $status ?: $this->status);
-        return $this->driver;
+        self::$driver = new $driver_class($this->identity, $this->config['drivers'][$driver], $tip ?: $this->tip, $status ?: $this->status);
+        return self::$driver;
+    }
+    /**
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public static function get(string $key,mixed $default = null):mixed{
+        if(self::$driver === null){
+            self::$driver = self::create();
+        }
+        return self::$driver->get($key, $default);
+    }
+    /**
+     * @param string $key
+     * @return bool
+     */
+    public static function exists(string $key):bool{
+        if(self::$driver === null){
+            self::$driver = self::create();
+        }
+        return self::$driver->exists($key) ? true : false;
+    }
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @param int $duration
+     * @return bool
+     */
+    public static function set(string $key, mixed $value, int $duration = 1800):bool{
+        if(self::$driver === null){
+            self::$driver = self::create();
+        }
+        return self::$driver->set($key, $value, $duration) ? true : false;
     }
 
     /**
