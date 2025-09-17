@@ -240,7 +240,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
                 ];
             }
             
-            $this->printing->table($headers, $rows, ['padding' => 1, 'border' => false, 'maxWidth' => 120]);
+            $this->printing->table($headers, $rows, ['padding' => 0, 'border' => false, 'maxWidth' => 100]);
         }
         
         return $stats;
