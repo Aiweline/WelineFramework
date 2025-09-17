@@ -29,9 +29,11 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
         $this->config   = $config;
         $this->tip      = $tip;
         $this->status   = $status;
-        if (method_exists($this, '__init')) {
-            $this->__init();
-        }
+        $this->__init();
+    }
+
+    public function __init()
+    {
     }
 
     private function __clone()
@@ -46,7 +48,6 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     public function setIdentity(string $identity): static
     {
         $this->identity = $identity;
-        $this->__init();
         return $this;
     }
 
