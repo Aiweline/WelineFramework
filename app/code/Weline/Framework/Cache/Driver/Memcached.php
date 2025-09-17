@@ -110,4 +110,41 @@ class Memcached extends CacheDriverAbstract
         $this->connection->getMemcached()->flushBuffers();
         return true;
     }
+
+    /**
+     * 获取 Memcached 缓存统计信息
+     * 
+     * @return array 返回包含 items, size, files 等统计信息的数组
+     */
+    public function getStats(): array
+    {
+        try {
+            $memcached = $this->connection->getMemcached();
+            $stats = $memcached->getStats();
+            
+            if (empty($stats)) {
+                return [
+                    'items' => 0,
+                    'size' => 0,
+                    'files' => 0
+                ];
+            }
+
+            // 获取第一个服务器的统计信息
+            $serverStats = reset($stats);
+            
+            return [
+                'items' => (int)($serverStats['curr_items'] ?? 0),
+                'size' => (int)($serverStats['bytes'] ?? 0),
+                'files' => (int)($serverStats['total_items'] ?? 0)
+            ];
+        } catch (\Exception $e) {
+            // 如果获取统计信息失败，返回默认值
+            return [
+                'items' => 0,
+                'size' => 0,
+                'files' => 0
+            ];
+        }
+    }
 }

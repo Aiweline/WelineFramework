@@ -118,13 +118,14 @@ class Status implements \Weline\Framework\Console\CommandInterface
         $totalStats = ['enabled' => 0, 'disabled' => 0, 'total' => 0, 'size' => 0];
         
         // 模块缓存
+        $this->printing->separator('─', 60, $this->printing::NOTE);
         $this->printing->coloredText(__('📱 模块缓存'), $this->printing::WARNING, 'bold');
+        $this->printing->separator('─', 60, $this->printing::NOTE);
         $appStats = $this->printCacheGroup($caches['app'] ?? [], 'app');
         $totalStats = $this->mergeStats($totalStats, $appStats);
         
-        $this->printing->separator('─', 60, $this->printing::NOTE);
-        
         // 框架缓存
+        $this->printing->separator('─', 60, $this->printing::NOTE);
         $this->printing->coloredText(__('🔧 框架缓存'), $this->printing::WARNING, 'bold');
         $this->printing->separator('─', 60, $this->printing::NOTE);
         $frameworkStats = $this->printCacheGroup($caches['framework'] ?? [], 'framework');
