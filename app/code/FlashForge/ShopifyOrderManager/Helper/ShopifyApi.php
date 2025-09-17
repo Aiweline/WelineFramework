@@ -27,7 +27,7 @@ class ShopifyApi extends Helper
     }
 
     /**
-     * 获取订单列表
+     * 获取订单列表（单页）
      */
     public function getOrders(array $params = []): array
     {
@@ -43,6 +43,52 @@ class ShopifyApi extends Helper
         $url = $this->shopUrl . '/admin/api/2024-10/orders.json?' . $queryString;
         
         return $this->makeRequest($url);
+    }
+
+    /**
+     * 获取所有订单（支持分页）
+     */
+    public function getAllOrders(array $params = []): array
+    {
+        $allOrders = [];
+        $sinceId = 0;
+        $hasMore = true;
+        
+        while ($hasMore) {
+            $pageParams = array_merge($params, [
+                'limit' => 250,
+                'since_id' => $sinceId,
+                'status' => 'any'
+            ]);
+            
+            $response = $this->getOrders($pageParams);
+            
+            if (empty($response['orders'])) {
+                $hasMore = false;
+                break;
+            }
+            
+            $orders = $response['orders'];
+            $allOrders = array_merge($allOrders, $orders);
+            
+            // 更新since_id为当前页面最后一个订单的ID
+            $lastOrder = end($orders);
+            $sinceId = $lastOrder['id'];
+            
+            // 如果返回的订单数量少于limit，说明已经是最后一页
+            if (count($orders) < 250) {
+                $hasMore = false;
+            }
+            
+            // 防止无限循环，最多获取10000个订单
+            if (count($allOrders) >= 10000) {
+                break;
+            }
+        }
+        
+        return [
+            'orders' => $allOrders
+        ];
     }
 
     /**
@@ -104,7 +150,7 @@ class ShopifyApi extends Helper
     }
 
     /**
-     * 获取指定时间范围内的订单
+     * 获取指定时间范围内的订单（支持分页）
      */
     public function getOrdersByDateRange(string $createdAtMin = '', string $createdAtMax = ''): array
     {
@@ -118,11 +164,12 @@ class ShopifyApi extends Helper
             $params['created_at_max'] = $createdAtMax;
         }
         
-        return $this->getOrders($params);
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
     }
 
     /**
-     * 获取最近更新的订单
+     * 获取最近更新的订单（支持分页）
      */
     public function getRecentlyUpdatedOrders(string $updatedAtMin = ''): array
     {
@@ -135,16 +182,16 @@ class ShopifyApi extends Helper
             $params['updated_at_min'] = date('c', strtotime('-10 minutes'));
         }
         
-        return $this->getOrders($params);
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
     }
 
     /**
-     * 从指定订单ID开始获取订单（避免重复同步）
+     * 从指定订单ID开始获取订单（避免重复同步，支持分页）
      */
     public function getOrdersFromId(int $sinceId = 0, string $createdAtMin = ''): array
     {
         $params = [
-            'limit' => 250,
             'status' => 'any'
             // 移除fields限制，获取完整的订单数据
         ];
@@ -161,7 +208,8 @@ class ShopifyApi extends Helper
             $params['created_at_min'] = date('c', strtotime('-3 days'));
         }
         
-        return $this->getOrders($params);
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
     }
 
     /**
