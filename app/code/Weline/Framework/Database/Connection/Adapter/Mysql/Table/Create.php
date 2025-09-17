@@ -32,7 +32,7 @@ class Create extends AbstractTable implements CreateInterface
     public function reset(): void
     {
         $this->fields = [];
-        $this->indexs = [];
+        $this->indexes = [];
         $this->foreign_keys = [];
         $this->constraints = '';
         $this->additional = ';';
