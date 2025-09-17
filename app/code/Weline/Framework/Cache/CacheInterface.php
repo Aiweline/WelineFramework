@@ -192,4 +192,15 @@ interface CacheInterface
      * @return bool
      */
     public function clear(): bool;
+
+    /**
+     * @DESC          # 获取缓存统计信息
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2024/12/19
+     * 参数区：
+     * @return array 返回包含 items, size, files 等统计信息的数组
+     */
+    public function getStats(): array;
 }
