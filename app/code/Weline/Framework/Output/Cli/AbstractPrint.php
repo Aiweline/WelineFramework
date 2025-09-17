@@ -545,7 +545,31 @@ COMMAND_LIST;
     {
         // 去除ANSI颜色代码
         $cleanStr = preg_replace('/\033\[[0-9;]*m/', '', $str);
-        return mb_strlen($cleanStr);
+        return $this->getDisplayWidth($cleanStr);
+    }
+    
+    /**
+     * 获取字符串的显示宽度（考虑中英文字符宽度差异）
+     * 
+     * @param string $str 字符串
+     * @return int 显示宽度
+     */
+    private function getDisplayWidth(string $str): int
+    {
+        $width = 0;
+        $length = mb_strlen($str, 'UTF-8');
+        
+        for ($i = 0; $i < $length; $i++) {
+            $char = mb_substr($str, $i, 1, 'UTF-8');
+            // 中文字符、全角字符等占用2个字符宽度
+            if (mb_strwidth($char) > 1) {
+                $width += 2;
+            } else {
+                $width += 1;
+            }
+        }
+        
+        return $width;
     }
     
     /**
@@ -556,13 +580,31 @@ COMMAND_LIST;
         $output = '│';
         foreach ($row as $i => $cell) {
             $width = $columnWidths[$i] ?? 10;
-            $padded = str_pad($cell, $width, ' ');
+            $padded = $this->padString($cell, $width);
             if ($isHeader) {
                 $padded = $this->colorize($padded, self::WARNING);
             }
             $output .= ' ' . $padded . ' │';
         }
         echo $output . PHP_EOL;
+    }
+    
+    /**
+     * 填充字符串到指定显示宽度
+     * 
+     * @param string $str 原字符串
+     * @param int $width 目标宽度
+     * @return string 填充后的字符串
+     */
+    private function padString(string $str, int $width): string
+    {
+        $currentWidth = $this->getDisplayWidth($str);
+        if ($currentWidth >= $width) {
+            return $str;
+        }
+        
+        $padding = $width - $currentWidth;
+        return $str . str_repeat(' ', $padding);
     }
     
     /**
