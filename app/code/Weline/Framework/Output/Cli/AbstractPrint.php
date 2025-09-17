@@ -742,7 +742,7 @@ COMMAND_LIST;
         $padding = ($width - $titleLength - 4) / 2;
         
         $line = str_repeat($char, $width);
-        $titleLine = str_repeat($char, max(1, $padding)) . ' ' . $title . ' ' . str_repeat($char, max(1, $padding));
+        $titleLine = str_repeat($char, max(1, (int)$padding)) . ' ' . $title . ' ' . str_repeat($char, max(1, (int)$padding));
         
         echo $this->colorize($line, $color) . PHP_EOL;
         echo $this->colorize($titleLine, $color) . PHP_EOL;
