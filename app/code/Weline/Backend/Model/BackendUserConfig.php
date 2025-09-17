@@ -21,7 +21,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class BackendUserConfig extends \Weline\Framework\Database\Model
 {
-    public const fields_ID = 'user_id';
+    public const fields_ID = 'id';
     public const fields_user_id = 'user_id';
     public const fields_value = 'value';
     public const fields_key = 'key';
@@ -31,8 +31,8 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
     private array $config = [];
     private array $default_config = [];
 
-    public array $_index_sort_keys = [self::fields_ID, self::fields_key, self::fields_name, self::fields_module];
-    public array $_unit_primary_keys = [self::fields_ID, self::fields_key];
+    public array $_index_sort_keys = [self::fields_ID, self::fields_user_id, self::fields_key, self::fields_name, self::fields_module];
+    public array $_unit_primary_keys = [self::fields_user_id, self::fields_key];
 
     /**
      * @inheritDoc
@@ -59,18 +59,17 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
 //        $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'not null default 0', '管理员ID')
-                ->addColumn(self::fields_key, TableInterface::column_type_VARCHAR, 248, 'not null', '配置key')
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
+                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, null, 'not null default 0', '管理员ID')
+                ->addColumn(self::fields_key, TableInterface::column_type_VARCHAR, 50, 'not null', '配置key')
                 ->addColumn(self::fields_value, TableInterface::column_type_TEXT, 0, '', '配置信息')
                 ->addColumn(self::fields_module, TableInterface::column_type_VARCHAR, 255, 'not null', '模组')
                 ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 255, 'not null', '配置名')
-                # 建立联合索引
-                ->addConstraints(
-                    'PRIMARY KEY (`' . self::fields_ID . '`,`' . self::fields_key . '`) USING BTREE'
-                )
+                # 建立唯一索引：管理员ID和key的组合必须唯一
+                ->addIndex(TableInterface::index_type_UNIQUE, 'idx_user_key', [self::fields_user_id, self::fields_key], '管理员配置唯一索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_module', self::fields_module, '模组索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_name', self::fields_name, '配置名')
-                ->addAdditional('ENGINE=MyIsam;')
+                ->addAdditional('ENGINE=InnoDB;')
                 ->create();
         }
     }
