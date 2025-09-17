@@ -39,30 +39,76 @@ class Flush implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        $caches = $this->scanner->getCaches();
-        foreach ($caches as $form => $cache) {
-            switch ($form) {
-                case 'app_caches':
-                    $this->printing->note(__('模块缓存刷新中...'));
-                    foreach ($cache as $app_cache) {
-                        $this->printing->printing(__($app_cache['class'] . '...'));
-                        ObjectManager::getInstance($app_cache['class'] . 'Factory')->flush();
-                    }
+        $cleanedCount = 0;
+        $totalSize = 0;
+        $errors = [];
 
-                    break;
-                case 'framework_caches':
-                    $this->printing->note(__('框架缓存刷新中...'));
-                    foreach ($cache as $framework_cache) {
-                        $this->printing->printing(__($framework_cache['class'] . '...'));
-                        ObjectManager::getInstance($framework_cache['class'] . 'Factory')->flush();
-                    }
+        // 获取缓存目录
+        $cacheDir = BP . 'var' . DS . 'cache';
+        
+        if (!is_dir($cacheDir)) {
+            $this->printing->error(__('缓存目录不存在: %1', $cacheDir));
+            return;
+        }
 
-                    break;
-                default:
-                    $this->printing->error(__('没有任何类型的缓存需要刷新！'));
+        $this->printing->note(__('开始清理过期缓存...'));
+
+        // 遍历缓存目录
+        $cacheTypes = ['file', 'backend_cache', 'frontend_cache', 'system_cache'];
+        
+        foreach ($cacheTypes as $cacheType) {
+            $typeDir = $cacheDir . DS . $cacheType;
+            
+            if (!is_dir($typeDir)) {
+                continue;
+            }
+
+            try {
+                $result = $this->cleanupExpiredCache($typeDir);
+                $cleanedCount += $result['count'];
+                $totalSize += $result['size'];
+            } catch (\Exception $e) {
+                $errors[] = __('清理 %1 缓存失败: %2', $cacheType, $e->getMessage());
             }
         }
-        $this->printing->success(__('缓存已刷新！'));
+
+        // 清理其他缓存目录
+        $otherDirs = [
+            'cache_hooks', 'cache_system', 'config', 'database_model', 'eav_cache',
+            'framework_controller', 'framework_event', 'framework_hooks', 'framework_object',
+            'framework_phrase', 'framework_plugin', 'framework_router', 'framework_view',
+            'i18n', 'request_cache', 'system_config', 'taglib_cache'
+        ];
+
+        foreach ($otherDirs as $dir) {
+            $dirPath = $cacheDir . DS . $dir;
+            
+            if (!is_dir($dirPath)) {
+                continue;
+            }
+
+            try {
+                $result = $this->cleanupExpiredCache($dirPath);
+                $cleanedCount += $result['count'];
+                $totalSize += $result['size'];
+            } catch (\Exception $e) {
+                $errors[] = __('清理 %1 缓存失败: %2', $dir, $e->getMessage());
+            }
+        }
+
+        // 输出结果
+        if ($cleanedCount > 0) {
+            $this->printing->success(__('过期缓存清理完成！清理文件数量: %1，释放空间: %2', 
+                $cleanedCount, $this->formatBytes($totalSize)));
+        } else {
+            $this->printing->note(__('没有发现过期的缓存文件'));
+        }
+        
+        if (!empty($errors)) {
+            foreach ($errors as $error) {
+                $this->printing->error($error);
+            }
+        }
     }
 
     /**
@@ -70,6 +116,6 @@ class Flush implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return '缓存刷新。';
+        return __('缓存刷新。');
     }
 }
