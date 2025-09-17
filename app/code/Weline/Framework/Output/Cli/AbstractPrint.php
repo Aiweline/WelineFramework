@@ -497,13 +497,13 @@ COMMAND_LIST;
             return $columnWidths;
         }
         
-        // 为不同列设置优先级和最大宽度
+        // 为不同列设置优先级和最大宽度（基于实际内容自适应）
         $columnPriorities = [
-            0 => ['max' => 25, 'min' => 15], // 标识列
+            0 => ['max' => 35, 'min' => 15], // 标识列
             1 => ['max' => 8, 'min' => 6],   // 状态列
-            2 => ['max' => 12, 'min' => 8],  // 占用空间列
-            3 => ['max' => 10, 'min' => 6],  // 可清理列
-            4 => ['max' => 20, 'min' => 10]  // 描述列
+            2 => ['max' => 18, 'min' => 8],  // 占用空间列
+            3 => ['max' => 15, 'min' => 6],  // 可清理列
+            4 => ['max' => 35, 'min' => 10]  // 描述列
         ];
         
         $adjustedWidths = [];
@@ -516,11 +516,24 @@ COMMAND_LIST;
             $remainingWidth -= $minWidth;
         }
         
-        // 然后按优先级分配剩余宽度
+        // 然后按优先级分配剩余宽度，优先满足内容较长的列
         $totalExtra = array_sum($columnWidths) - array_sum($adjustedWidths);
         if ($totalExtra > 0 && $remainingWidth > 0) {
+            // 按内容长度排序，优先分配空间给内容较长的列
+            $sortedColumns = [];
             foreach ($columnWidths as $i => $width) {
-                $maxWidth = $columnPriorities[$i]['max'] ?? $width;
+                $sortedColumns[] = ['index' => $i, 'width' => $width, 'priority' => $columnPriorities[$i] ?? ['max' => $width, 'min' => 8]];
+            }
+            
+            // 按内容长度降序排序
+            usort($sortedColumns, function($a, $b) {
+                return $b['width'] - $a['width'];
+            });
+            
+            foreach ($sortedColumns as $column) {
+                $i = $column['index'];
+                $width = $column['width'];
+                $maxWidth = $column['priority']['max'];
                 $currentWidth = $adjustedWidths[$i];
                 $extraNeeded = min($width - $currentWidth, $maxWidth - $currentWidth);
                 $extraAllocated = min($extraNeeded, $remainingWidth);
@@ -561,15 +574,38 @@ COMMAND_LIST;
         
         for ($i = 0; $i < $length; $i++) {
             $char = mb_substr($str, $i, 1, 'UTF-8');
-            // 中文字符、全角字符等占用2个字符宽度
-            if (mb_strwidth($char) > 1) {
-                $width += 2;
-            } else {
-                $width += 1;
-            }
+            $charWidth = $this->getCharWidth($char);
+            $width += $charWidth;
         }
         
         return $width;
+    }
+    
+    /**
+     * 获取单个字符的显示宽度
+     * 
+     * @param string $char 字符
+     * @return int 字符宽度
+     */
+    private function getCharWidth(string $char): int
+    {
+        // 使用 mb_strwidth 获取字符的显示宽度
+        $width = mb_strwidth($char, 'UTF-8');
+        
+        // 特殊字符处理
+        if ($width === 0) {
+            // 控制字符、零宽度字符等
+            return 0;
+        } elseif ($width === 1) {
+            // 半角字符：英文字母、数字、标点符号等
+            return 1;
+        } elseif ($width === 2) {
+            // 全角字符：中文、日文、韩文、全角标点等
+            return 2;
+        } else {
+            // 其他情况，按实际宽度返回
+            return $width;
+        }
     }
     
     /**
