@@ -109,18 +109,18 @@ class OrderSync extends Helper
             throw new \Exception($errorMsg);
         }
 
-        // 只同步近一个月的订单
-        $oneMonthAgo = date('Y-m-d H:i:s', strtotime('-1 month'));
-        $lastSyncTime = $shop['last_sync_time'] ?: $oneMonthAgo;
+        // 只同步近三天的订单
+        $threeDaysAgo = date('Y-m-d H:i:s', strtotime('-3 days'));
+        $lastSyncTime = $shop['last_sync_time'] ?: $threeDaysAgo;
 
-        // 获取近一个月的所有订单
-        $ordersData = $this->shopifyApi->getOrdersByDateRange($oneMonthAgo);
+        // 获取近三天的所有订单
+        $ordersData = $this->shopifyApi->getOrdersByDateRange($threeDaysAgo);
 
         // 记录同步信息
         $syncInfo = [
             'shop_id' => $shop['shop_id'],
             'shop_name' => $shop['shop_name'],
-            'sync_from_date' => $oneMonthAgo,
+            'sync_from_date' => $threeDaysAgo,
             'total_fetched' => count($ordersData['orders'] ?? [])
         ];
 
