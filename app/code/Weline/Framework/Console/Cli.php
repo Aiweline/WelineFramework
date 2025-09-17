@@ -40,6 +40,12 @@ class Cli extends CliAbstract
             }
         }
         $command_class = $this->checkCommand($args);
+        // 如果返回的是推荐列表，显示推荐列表
+        if (is_array($command_class) && !isset($command_class['class'])) {
+            $this->showRecommendations($command_class, $args);
+            return;
+        }
+        
         $data = $command_class['data'];
         ObjectManager::getInstance($command_class['class'])->execute($args, $data);
         $this->printer->printing("\n");
@@ -91,12 +97,21 @@ class Cli extends CliAbstract
     }
 
     /**
-     * @DESC         |简化推荐命令
+     * @DESC         |推荐命令函数 - 按分段匹配逻辑
      *
      * @Author       秋枫雁飞
      * @Email        aiweline@qq.com
      * @Forum        https://bbs.aiweline.com
      * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 推荐逻辑：
+     * 1. 用户输入的命令分段
+     * 2. 找出命令行大于等于分段数的命令
+     * 3. 命令行分段数从小到大排序
+     * 4. 开始匹配
+     * 5. 先匹配开头，符合则标记到开头匹配，开头匹配不到则使用包含去匹配，匹配到标记放入低优先级
+     * 6. 返回推荐的状态
+     * 7. 根据状态做对应的推荐操作
      *
      * 参数区：
      *
@@ -106,43 +121,116 @@ class Cli extends CliAbstract
      */
     private function recommendCommand(array $commands): array
     {
-        // 新算法
-
-        // 旧算法
-        $arg0 = strtolower(trim($this->argv[0]));
-        $input_command_arr = explode(':', $arg0);
-        $recommendCommands = [];
-        $matchCommand = [];
-        foreach ($commands as $group => $command) {
-            $keys = array_keys($command);
-            foreach ($keys as $command_key) {
-                // 匹配参考
-                if (is_int(strpos($command_key, $arg0))) {
-                    $matchCommand[$group][] = [$command_key => $command[$command_key]];
-                }
-
-                $command_key_arr = explode(':', $command_key);
-                $k = 0;
-                foreach ($input_command_arr as $input_key => $input_command_head) {
-                    // 如果长度和首匹配都相同
-                    if (count($command_key_arr) === count($input_command_arr)) {
-                        if ($input_command_head) {
-                            $input_str_pos = strpos($command_key_arr[$input_key], $input_command_head);
-                            if (isset($command_key_arr[$input_key]) && !is_bool($input_str_pos) && $input_str_pos === 0) {
-                                $k += 1;
-                            }
-                        }
-                    }
-                }
-                if (count($input_command_arr) === $k) {
-                    $matchCommand[$group][] = [$command_key => $command[$command_key]];
-                }
-                if ($k > 0) {
-                    $recommendCommands[$group][] = [$command_key => $command[$command_key]];
+        // 第一步：用户输入的命令分段
+        $arg0 = strtolower(trim($this->argv[0] ?? ''));
+        $input_segments = explode(':', $arg0);
+        
+        // 第二步：使用分段递进匹配
+        $matched_commands = $this->progressiveMatchCommands($input_segments, $commands);
+        
+        // 第三步：按分段数排序
+        usort($matched_commands, function($a, $b) {
+            return $a['seg_count'] <=> $b['seg_count'];
+        });
+        
+        // 第四步：返回推荐结果
+        $recommend = [];
+        foreach ($matched_commands as $item) {
+            $recommend[$item['group']][] = [$item['key'] => $item['data']];
+        }
+        
+        return $recommend;
+    }
+    
+    /**
+     * @DESC         |匹配命令分段
+     *
+     * @param array $input_segments 用户输入的分段
+     * @param array $command_segments 命令的分段
+     * @return array 匹配结果
+     */
+    private function matchCommandSegments(array $input_segments, array $command_segments): array
+    {
+        $start_match_count = 0;
+        $contain_positions = [];
+        
+        // 对每个分段进行匹配：开头匹配优先，一旦开头匹配成功就不再考虑包含匹配
+        for ($i = 0; $i < count($input_segments); $i++) {
+            $input_seg = $input_segments[$i];
+            $command_seg = $command_segments[$i];
+            
+            // 先尝试开头匹配
+            if (str_starts_with($command_seg, $input_seg)) {
+                $start_match_count++;
+                // 开头匹配成功，该分段不再考虑包含匹配
+            } else {
+                // 开头匹配失败，该分段才考虑包含匹配
+                if (($pos = strpos($command_seg, $input_seg)) !== false) {
+                    $contain_positions[] = $pos;
+                } else {
+                    // 包含匹配也失败，完全不匹配
+                    return [
+                        'is_exact_match' => false,
+                        'start_match_count' => 0,
+                        'contain_positions' => []
+                    ];
                 }
             }
         }
-        return $matchCommand ?: $recommendCommands;
+        
+        // 如果所有输入分段都开头匹配，且命令分段数等于输入分段数，才是完全匹配
+        $is_exact_match = ($start_match_count === count($input_segments)) && (count($command_segments) === count($input_segments));
+        
+        return [
+            'is_exact_match' => $is_exact_match,
+            'start_match_count' => $start_match_count,
+            'contain_positions' => $contain_positions
+        ];
+    }
+    
+    /**
+     * @DESC         |分段递进匹配命令
+     *
+     * @param array $input_segments 用户输入的分段
+     * @param array $commands 所有命令
+     * @return array 匹配结果
+     */
+    private function progressiveMatchCommands(array $input_segments, array $commands): array
+    {
+        $matched_commands = [];
+        
+        foreach ($commands as $group => $group_commands) {
+            foreach ($group_commands as $key => $command_data) {
+                $key_lower = strtolower($key);
+                $key_segments = explode(':', $key_lower);
+                
+                // 检查命令分段数是否大于等于输入分段数
+                if (count($key_segments) < count($input_segments)) {
+                    continue;
+                }
+                
+                // 逐段检查开头匹配
+                $all_segments_match = true;
+                for ($i = 0; $i < count($input_segments); $i++) {
+                    if (!str_starts_with($key_segments[$i], $input_segments[$i])) {
+                        $all_segments_match = false;
+                        break;
+                    }
+                }
+                
+                if ($all_segments_match) {
+                    $matched_commands[] = [
+                        'group' => $group,
+                        'key' => $key,
+                        'data' => $command_data,
+                        'segments' => $key_segments,
+                        'seg_count' => count($key_segments)
+                    ];
+                }
+            }
+        }
+        
+        return $matched_commands;
     }
 
     /**
@@ -155,7 +243,7 @@ class Cli extends CliAbstract
      */
     private function checkCommand(array $args): array
     {
-        $arg0 = strtolower(trim($this->argv[0]));
+        $arg0 = strtolower(trim($this->argv[0] ?? ''));
         if ($arg0 === 'command:upgrade') {
             try {
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
@@ -190,19 +278,238 @@ class Cli extends CliAbstract
         }
         if (count($commands) === 1 && $command = $commands[0]) {
             foreach ($command as $c => $data) {
-                return ['class' => $data['class'], 'command' => $c, 'data' => $data];
+                if (is_array($data) && isset($data['class'])) {
+                    return ['class' => $data['class'], 'command' => $c, 'data' => $data];
+                }
             }
         }
-        foreach ($recommendCommands as $key => &$command) {
+        
+        // 如果没有找到唯一匹配，返回推荐列表
+        if (empty($commands)) {
+            return $recommendCommands;
+        }
+        
+        // 重新组织推荐结果，保持排序
+        $sortedRecommendCommands = [];
+        foreach ($recommendCommands as $key => $command) {
             foreach ($command as $k => $item) {
-                unset($command[$k]);
                 $keys = array_keys($item);
-                $command[array_shift($keys)] = array_pop($item);
+                $command_key = array_shift($keys);
+                $command_data = array_pop($item);
+                // 确保数据结构正确
+                if (is_array($command_data) && isset($command_data['class'])) {
+                    $sortedRecommendCommands[$key][$command_key] = $command_data;
+                }
             }
         }
-        $this->printer->error('无效命令：' . $arg0, 'CLI');
-        $this->printer->note('参考命令', '系统');
-        $this->printer->printList($recommendCommands);
-        exit();
+        
+        // 计算每个group的最高分数
+        $groupScores = [];
+        foreach ($sortedRecommendCommands as $group => $groupCommands) {
+            foreach ($groupCommands as $commandKey => $commandData) {
+                if (isset($commandData['group']) && isset($commandData['score'])) {
+                    if (!isset($groupScores[$commandData['group']]) || $commandData['score'] > $groupScores[$commandData['group']]) {
+                        $groupScores[$commandData['group']] = $commandData['score'];
+                    }
+                }
+            }
+        }
+
+        // To make it simple, let's move the group sorting to checkCommand before printing
+
+        // Since the problem is in display order, let's move the sorting to checkCommand
+
+        // For now, let's assume the loop order is sufficient, but to force, let's sort the groups
+
+        $groupList = array_keys($sortedRecommendCommands);
+        usort($groupList, function($a, $b) use ($groupScores) {
+            return ($groupScores[$b] ?? 0) <=> ($groupScores[$a] ?? 0);
+        });
+
+        $finalList = [];
+        foreach ($groupList as $group) {
+            $finalList[$group] = $sortedRecommendCommands[$group];
+        }
+
+        return $finalList;
+    }
+    
+    /**
+     * @DESC         |显示推荐命令列表
+     *
+     * @param array $recommendations 推荐命令列表
+     * @return void
+     */
+    private function showRecommendations(array $recommendations, array $args): void
+    {
+        if ($args && empty($recommendations)) {
+            $this->printer->error(__('没有找到匹配的命令'));
+            return;
+        }
+        
+        // 使用简洁美观的标题
+        $this->printer->note(__('🎯 找到以下匹配的命令'));
+        $this->printer->separator('─', 0, 'NOTE');
+        
+        foreach ($recommendations as $group => $commands) {
+            // 使用更形象的分组图标
+            $icon = $this->getGroupIcon($group);
+            $this->printer->note("{$icon} {$group}");
+            
+            // 使用美化的列表显示
+            $items = [];
+            foreach ($commands as $cmd => $data) {
+                if (is_array($data) && isset($data['tip'])) {
+                    $items[] = $this->printer->colorize($cmd, 'SUCCESS') . ' - ' . $this->printer->colorize($data['tip'], 'NOTE');
+                } else {
+                    $items[] = $this->printer->colorize($cmd, 'SUCCESS');
+                }
+            }
+            $this->printer->list($items, "", 'NOTE');
+        }
+        
+        // 添加底部装饰
+        $this->printer->separator('═', 0, 'SUCCESS');
+        $this->printer->note(__('💡 提示：可以使用短命令形式，如 u:r 匹配 user:reset:password'));
+    }
+
+    /**
+     * 根据分组名称获取对应的图标
+     *
+     * @param string $group 分组名称
+     * @return string 图标
+     */
+    private function getGroupIcon(string $group): string
+    {
+        // 根据分组名称的关键词匹配图标
+        $groupLower = strtolower($group);
+        
+        if (strpos($groupLower, 'user') !== false) {
+            return '👤'; // 用户相关
+        } elseif (strpos($groupLower, 'cache') !== false) {
+            return '💾'; // 缓存相关
+        } elseif (strpos($groupLower, 'module') !== false) {
+            return '📦'; // 模块相关
+        } elseif (strpos($groupLower, 'theme') !== false) {
+            return '🎨'; // 主题相关
+        } elseif (strpos($groupLower, 'queue') !== false) {
+            return '⏳'; // 队列相关
+        } elseif (strpos($groupLower, 'cron') !== false) {
+            return '⏰'; // 定时任务相关
+        } elseif (strpos($groupLower, 'server') !== false) {
+            return '🖥️'; // 服务器相关
+        } elseif (strpos($groupLower, 'database') !== false || strpos($groupLower, 'index') !== false) {
+            return '🗄️'; // 数据库相关
+        } elseif (strpos($groupLower, 'event') !== false) {
+            return '⚡'; // 事件相关
+        } elseif (strpos($groupLower, 'i18n') !== false || strpos($groupLower, 'translate') !== false) {
+            return '🌐'; // 国际化相关
+        } elseif (strpos($groupLower, 'maintenance') !== false) {
+            return '🔧'; // 维护相关
+        } elseif (strpos($groupLower, 'deploy') !== false) {
+            return '🚀'; // 部署相关
+        } elseif (strpos($groupLower, 'dev') !== false) {
+            return '🛠️'; // 开发相关
+        } elseif (strpos($groupLower, 'system') !== false) {
+            return '⚙️'; // 系统相关
+        } elseif (strpos($groupLower, 'plugin') !== false) {
+            return '🔌'; // 插件相关
+        } elseif (strpos($groupLower, 'setup') !== false) {
+            return '🔨'; // 设置相关
+        } elseif (strpos($groupLower, 'menu') !== false) {
+            return '📋'; // 菜单相关
+        } elseif (strpos($groupLower, 'resource') !== false) {
+            return '📄'; // 资源相关
+        } elseif (strpos($groupLower, 'rpc') !== false) {
+            return '🔗'; // RPC相关
+        } elseif (strpos($groupLower, 'command') !== false) {
+            return '⌨️'; // 命令相关
+        } elseif (strpos($groupLower, 'shopify') !== false) {
+            return '🛒'; // Shopify相关
+        } elseif (strpos($groupLower, 'phpunit') !== false) {
+            return '🧪'; // 测试相关
+        } elseif (strpos($groupLower, 'doc') !== false) {
+            return '📚'; // 文档相关
+        } else {
+            return '📁'; // 默认文件夹图标
+        }
+    }
+
+    /**
+     * 根据命令名称获取对应的图标
+     *
+     * @param string $command 命令名称
+     * @return string 图标
+     */
+    private function getCommandIcon(string $command): string
+    {
+        $cmdLower = strtolower($command);
+        
+        // 根据命令类型匹配图标
+        if (strpos($cmdLower, 'create') !== false || strpos($cmdLower, 'add') !== false) {
+            return '➕'; // 创建/添加
+        } elseif (strpos($cmdLower, 'delete') !== false || strpos($cmdLower, 'remove') !== false) {
+            return '🗑️'; // 删除/移除
+        } elseif (strpos($cmdLower, 'update') !== false || strpos($cmdLower, 'upgrade') !== false) {
+            return '🔄'; // 更新/升级
+        } elseif (strpos($cmdLower, 'clear') !== false || strpos($cmdLower, 'flush') !== false) {
+            return '🧹'; // 清理/刷新
+        } elseif (strpos($cmdLower, 'reset') !== false) {
+            return '🔄'; // 重置
+        } elseif (strpos($cmdLower, 'status') !== false || strpos($cmdLower, 'listing') !== false) {
+            return '📊'; // 状态/列表
+        } elseif (strpos($cmdLower, 'start') !== false || strpos($cmdLower, 'run') !== false) {
+            return '▶️'; // 启动/运行
+        } elseif (strpos($cmdLower, 'stop') !== false) {
+            return '⏹️'; // 停止
+        } elseif (strpos($cmdLower, 'enable') !== false || strpos($cmdLower, 'active') !== false) {
+            return '✅'; // 启用/激活
+        } elseif (strpos($cmdLower, 'disable') !== false) {
+            return '❌'; // 禁用
+        } elseif (strpos($cmdLower, 'install') !== false) {
+            return '📥'; // 安装
+        } elseif (strpos($cmdLower, 'uninstall') !== false) {
+            return '📤'; // 卸载
+        } elseif (strpos($cmdLower, 'sync') !== false) {
+            return '🔄'; // 同步
+        } elseif (strpos($cmdLower, 'collect') !== false) {
+            return '📋'; // 收集
+        } elseif (strpos($cmdLower, 'compile') !== false) {
+            return '🔨'; // 编译
+        } elseif (strpos($cmdLower, 'debug') !== false) {
+            return '🐛'; // 调试
+        } elseif (strpos($cmdLower, 'test') !== false || strpos($cmdLower, 'phpunit') !== false) {
+            return '🧪'; // 测试
+        } elseif (strpos($cmdLower, 'import') !== false) {
+            return '📥'; // 导入
+        } elseif (strpos($cmdLower, 'export') !== false) {
+            return '📤'; // 导出
+        } elseif (strpos($cmdLower, 'backup') !== false) {
+            return '💾'; // 备份
+        } elseif (strpos($cmdLower, 'restore') !== false) {
+            return '🔄'; // 恢复
+        } elseif (strpos($cmdLower, 'migrate') !== false) {
+            return '🚀'; // 迁移
+        } elseif (strpos($cmdLower, 'deploy') !== false) {
+            return '🚀'; // 部署
+        } elseif (strpos($cmdLower, 'build') !== false) {
+            return '🏗️'; // 构建
+        } elseif (strpos($cmdLower, 'generate') !== false) {
+            return '⚡'; // 生成
+        } elseif (strpos($cmdLower, 'validate') !== false) {
+            return '✅'; // 验证
+        } elseif (strpos($cmdLower, 'check') !== false) {
+            return '🔍'; // 检查
+        } elseif (strpos($cmdLower, 'monitor') !== false) {
+            return '👁️'; // 监控
+        } elseif (strpos($cmdLower, 'log') !== false) {
+            return '📝'; // 日志
+        } elseif (strpos($cmdLower, 'config') !== false) {
+            return '⚙️'; // 配置
+        } elseif (strpos($cmdLower, 'info') !== false || strpos($cmdLower, 'detail') !== false) {
+            return 'ℹ️'; // 信息/详情
+        } else {
+            return '⚡'; // 默认命令图标
+        }
     }
 }
