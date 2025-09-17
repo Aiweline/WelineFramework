@@ -335,7 +335,6 @@ trait SqlTrait
                     $existsQuery = $this->getLink()->prepare($exist_sql);
                     $existsQuery->execute($bound_filed_values);
                     $exists = $existsQuery->fetchAll();
-
                     $insert_update_where_fields_times = count($this->insert_update_where_fields);
                     if (count($exists) > 0) {
                         # 对比数据是否有变更
@@ -393,7 +392,6 @@ trait SqlTrait
                             }
                         }
                     }
-
                     # 其他不存在的，直接合并到插入
                     if (count($insert_or_update_items) > 0) {
                         $insert_items = array_merge($insert_items, $insert_or_update_items);
@@ -412,6 +410,12 @@ trait SqlTrait
                             }
                             $update_inserts_sql = rtrim($update_inserts_sql, ', ') . ' ' . $insert_update_where . '; ';
                         }
+                    }
+                    if(empty($insert_items)){
+                        $this->reset();
+                        $this->sql = '';
+                        $this->PDOStatement = null;
+                        return;
                     }
                 }
                 # 主键为空时新增
