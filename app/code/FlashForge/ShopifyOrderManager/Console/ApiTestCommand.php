@@ -147,8 +147,8 @@ class ApiTestCommand implements CommandInterface
             throw new \Exception("获取店铺信息失败: " . $e->getMessage());
         }
 
-        // 测试3: 获取订单列表
-        echo "3️⃣ 获取订单列表...\n";
+        // 测试3: 获取订单列表（单页）
+        echo "3️⃣ 获取订单列表（单页）...\n";
         try {
             $orders = $this->shopifyApi->getOrders(['limit' => 5]);
             if (isset($orders['orders'])) {
@@ -167,43 +167,67 @@ class ApiTestCommand implements CommandInterface
             throw new \Exception("获取订单列表失败: " . $e->getMessage());
         }
 
-        // 测试4: 获取产品列表
-        echo "4️⃣ 获取产品列表...\n";
+        // 测试3.5: 分页获取订单测试
+        echo "3️⃣.5 分页获取订单测试...\n";
         try {
-            $products = $this->shopifyApi->getProducts(['limit' => 5]);
-            if (isset($products['products'])) {
-                $productCount = count($products['products']);
-                echo "   ✅ 成功获取 {$productCount} 个产品\n";
+            // 获取近3天的订单，测试分页逻辑
+            $threeDaysAgo = date('Y-m-d H:i:s', strtotime('-3 days'));
+            $allOrders = $this->shopifyApi->getOrdersByDateRange($threeDaysAgo);
+            
+            if (isset($allOrders['orders'])) {
+                $totalOrderCount = count($allOrders['orders']);
+                echo "   ✅ 近3天总订单数: {$totalOrderCount}\n";
                 
-                if ($productCount > 0) {
-                    $latestProduct = $products['products'][0];
-                    echo "   ✅ 最新产品: {$latestProduct['title']} (ID: {$latestProduct['id']})\n";
+                if ($totalOrderCount > 0) {
+                    $firstOrder = $allOrders['orders'][0];
+                    $lastOrder = end($allOrders['orders']);
+                    echo "   ✅ 最早订单: #{$firstOrder['order_number']} (ID: {$firstOrder['id']})\n";
+                    echo "   ✅ 最晚订单: #{$lastOrder['order_number']} (ID: {$lastOrder['id']})\n";
+                    
+                    // 检查是否有重复订单
+                    $orderIds = array_column($allOrders['orders'], 'id');
+                    $uniqueOrderIds = array_unique($orderIds);
+                    if (count($orderIds) === count($uniqueOrderIds)) {
+                        echo "   ✅ 无重复订单，分页逻辑正常\n";
+                    } else {
+                        echo "   ⚠️  发现重复订单，分页逻辑可能有问题\n";
+                    }
                 }
             } else {
-                throw new \Exception("无法获取产品列表");
+                echo "   ⚠️  近3天无订单数据\n";
             }
         } catch (\Exception $e) {
-            throw new \Exception("获取产品列表失败: " . $e->getMessage());
+            echo "   ⚠️  分页测试失败: " . $e->getMessage() . "\n";
         }
 
-        // 测试5: 获取客户列表
-        echo "5️⃣ 获取客户列表...\n";
+        // 测试4: 获取单个订单详情
+        echo "4️⃣ 获取单个订单详情...\n";
         try {
-            $customers = $this->shopifyApi->getCustomers(['limit' => 5]);
-            if (isset($customers['customers'])) {
-                $customerCount = count($customers['customers']);
-                echo "   ✅ 成功获取 {$customerCount} 个客户\n";
+            // 先获取一个订单ID
+            $orders = $this->shopifyApi->getOrders(['limit' => 1]);
+            if (isset($orders['orders']) && !empty($orders['orders'])) {
+                $orderId = $orders['orders'][0]['id'];
+                $orderDetail = $this->shopifyApi->getOrder($orderId);
+                
+                if (isset($orderDetail['order'])) {
+                    $order = $orderDetail['order'];
+                    echo "   ✅ 成功获取订单详情: #{$order['order_number']}\n";
+                    echo "   ✅ 订单总金额: {$order['total_price']} {$order['currency']}\n";
+                    echo "   ✅ 订单状态: {$order['financial_status']}\n";
+                } else {
+                    throw new \Exception("无法获取订单详情");
+                }
             } else {
-                throw new \Exception("无法获取客户列表");
+                echo "   ⚠️  无订单数据，跳过订单详情测试\n";
             }
         } catch (\Exception $e) {
-            throw new \Exception("获取客户列表失败: " . $e->getMessage());
+            echo "   ⚠️  获取订单详情失败: " . $e->getMessage() . "\n";
         }
 
-        // 测试6: API限制检查
-        echo "6️⃣ API限制检查...\n";
+        // 测试5: API限制检查
+        echo "5️⃣ API限制检查...\n";
         try {
-            $rateLimit = $this->shopifyApi->getRateLimit();
+            $rateLimit = $this->shopifyApi->getRateLimitInfo();
             if ($rateLimit) {
                 echo "   ✅ 当前调用次数: {$rateLimit['current']}\n";
                 echo "   ✅ 最大调用次数: {$rateLimit['max']}\n";
@@ -243,10 +267,10 @@ Shopify API连接测试命令
 测试项目:
   1. 基础连接测试
   2. 获取店铺信息
-  3. 获取订单列表
-  4. 获取产品列表
-  5. 获取客户列表
-  6. API限制检查
+  3. 获取订单列表（单页）
+  3.5 分页获取订单测试（测试分页逻辑）
+  4. 获取单个订单详情
+  5. API限制检查
 
 示例:
   php bin/w shopify:test-api
