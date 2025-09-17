@@ -132,6 +132,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
         // 总体统计
         $this->printing->separator('=', 60, $this->printing::SUCCESS);
         $this->printing->coloredText(__('📊 总体统计'), $this->printing::SUCCESS, 'bold');
+        $this->printing->coloredText(__('📁 缓存目录位置: %{1}', ['var/cache/']), $this->printing::NOTE);
         $this->printing->keyValue([
             __('总缓存数') => $totalStats['total'],
             __('已启用') => $totalStats['enabled'],
@@ -222,7 +223,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
         
         // 显示表格
         if ($cacheData) {
-            $headers = [__('标识'), __('状态'), __('目录'), __('占用空间'), __('可清理'), __('描述')];
+            $headers = [__('标识'), __('状态'), __('占用空间'), __('可清理'), __('描述')];
             $rows = [];
             
             foreach ($cacheData as $data) {
@@ -233,7 +234,6 @@ class Status implements \Weline\Framework\Console\CommandInterface
                 $rows[] = [
                     $data['identify'],
                     $statusText,
-                    $data['info']['path'],
                     $this->formatBytes($data['info']['size']),
                     $this->formatBytes($data['info']['cleanable']),
                     $data['info']['description']
@@ -266,7 +266,6 @@ class Status implements \Weline\Framework\Console\CommandInterface
             
             $this->printing->keyValue([
                 __('状态') => $statusText,
-                __('所在目录') => $cacheInfo['path'],
                 __('占用空间') => $this->formatBytes($cacheInfo['size']),
                 __('可清理空间') => $this->formatBytes($cacheInfo['cleanable']),
                 __('文件数量') => $cacheInfo['files'],
