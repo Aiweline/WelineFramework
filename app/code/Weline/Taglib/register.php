@@ -14,5 +14,8 @@ Register::register(
     'Weline_Taglib',
     __DIR__,
     '1.0.1',
-    'Taglib标签库插件，协助支持自定义标签功能'
+    'Taglib标签库插件，协助支持自定义标签功能',
+    [
+        'Weline_ModuleManager'
+    ]
 );
