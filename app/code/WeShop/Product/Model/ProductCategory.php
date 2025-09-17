@@ -41,7 +41,7 @@ class ProductCategory extends Model
         $setup->createTable('产品分类表')
             ->addColumn(
                 self::fields_ID, 'int', 11,
-                'primary_key auto_increment', '产品分类ID')
+                'primary key auto_increment', '产品分类ID')
             ->addColumn(
                 self::fields_product_id, 'int', 11,
                 'not null', '产品ID')

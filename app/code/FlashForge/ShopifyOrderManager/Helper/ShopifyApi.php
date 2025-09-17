@@ -27,22 +27,68 @@ class ShopifyApi extends Helper
     }
 
     /**
-     * 获取订单列表
+     * 获取订单列表（单页）
      */
     public function getOrders(array $params = []): array
     {
         $defaultParams = [
             'limit' => 250,
-            'status' => 'any',
-            'fields' => 'id,order_number,email,created_at,updated_at,total_price,subtotal_price,total_tax,currency,financial_status,fulfillment_status,tags,note,customer,billing_address,shipping_address,line_items'
+            'status' => 'any'
+            // 移除fields限制，获取完整的订单数据
         ];
         
         $params = array_merge($defaultParams, $params);
         $queryString = http_build_query($params);
         
-        $url = $this->shopUrl . '/admin/api/2023-10/orders.json?' . $queryString;
+        $url = $this->shopUrl . '/admin/api/2024-10/orders.json?' . $queryString;
         
         return $this->makeRequest($url);
+    }
+
+    /**
+     * 获取所有订单（支持分页）
+     */
+    public function getAllOrders(array $params = []): array
+    {
+        $allOrders = [];
+        $sinceId = 0;
+        $hasMore = true;
+        
+        while ($hasMore) {
+            $pageParams = array_merge($params, [
+                'limit' => 250,
+                'since_id' => $sinceId,
+                'status' => 'any'
+            ]);
+            
+            $response = $this->getOrders($pageParams);
+            
+            if (empty($response['orders'])) {
+                $hasMore = false;
+                break;
+            }
+            
+            $orders = $response['orders'];
+            $allOrders = array_merge($allOrders, $orders);
+            
+            // 更新since_id为当前页面最后一个订单的ID
+            $lastOrder = end($orders);
+            $sinceId = $lastOrder['id'];
+            
+            // 如果返回的订单数量少于limit，说明已经是最后一页
+            if (count($orders) < 250) {
+                $hasMore = false;
+            }
+            
+            // 防止无限循环，最多获取10000个订单
+            if (count($allOrders) >= 10000) {
+                break;
+            }
+        }
+        
+        return [
+            'orders' => $allOrders
+        ];
     }
 
     /**
@@ -50,7 +96,17 @@ class ShopifyApi extends Helper
      */
     public function getOrder(string $orderId): array
     {
-        $url = $this->shopUrl . '/admin/api/2023-10/orders/' . $orderId . '.json';
+        $url = $this->shopUrl . '/admin/api/2024-10/orders/' . $orderId . '.json';
+        
+        return $this->makeRequest($url);
+    }
+
+    /**
+     * 获取订单的交易信息
+     */
+    public function getOrderTransactions(string $orderId): array
+    {
+        $url = $this->shopUrl . '/admin/api/2024-10/orders/' . $orderId . '/transactions.json';
         
         return $this->makeRequest($url);
     }
@@ -94,7 +150,7 @@ class ShopifyApi extends Helper
     }
 
     /**
-     * 获取指定时间范围内的订单
+     * 获取指定时间范围内的订单（支持分页）
      */
     public function getOrdersByDateRange(string $createdAtMin = '', string $createdAtMax = ''): array
     {
@@ -108,11 +164,12 @@ class ShopifyApi extends Helper
             $params['created_at_max'] = $createdAtMax;
         }
         
-        return $this->getOrders($params);
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
     }
 
     /**
-     * 获取最近更新的订单
+     * 获取最近更新的订单（支持分页）
      */
     public function getRecentlyUpdatedOrders(string $updatedAtMin = ''): array
     {
@@ -125,7 +182,34 @@ class ShopifyApi extends Helper
             $params['updated_at_min'] = date('c', strtotime('-10 minutes'));
         }
         
-        return $this->getOrders($params);
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
+    }
+
+    /**
+     * 从指定订单ID开始获取订单（避免重复同步，支持分页）
+     */
+    public function getOrdersFromId(int $sinceId = 0, string $createdAtMin = ''): array
+    {
+        $params = [
+            'status' => 'any'
+            // 移除fields限制，获取完整的订单数据
+        ];
+        
+        // 从指定ID开始获取（避免重复同步）
+        if ($sinceId > 0) {
+            $params['since_id'] = $sinceId;
+        }
+        
+        // 只获取近三天的订单
+        if ($createdAtMin) {
+            $params['created_at_min'] = $createdAtMin;
+        } else {
+            $params['created_at_min'] = date('c', strtotime('-3 days'));
+        }
+        
+        // 使用分页方法获取所有订单
+        return $this->getAllOrders($params);
     }
 
     /**
@@ -156,17 +240,32 @@ class ShopifyApi extends Helper
         curl_close($ch);
         
         if ($error) {
-            throw new \Exception("cURL错误: " . $error);
+            throw new \Exception("cURL错误: " . $error . " (URL: " . $url . ")");
         }
         
         if ($httpCode >= 400) {
-            throw new \Exception("HTTP错误: " . $httpCode . " - " . $response);
+            $errorDetails = "HTTP错误: " . $httpCode;
+            if ($httpCode === 401) {
+                $errorDetails .= " - 未授权访问，请检查访问令牌是否正确";
+            } elseif ($httpCode === 403) {
+                $errorDetails .= " - 禁止访问，请检查API权限";
+            } elseif ($httpCode === 404) {
+                $errorDetails .= " - 店铺URL不存在或API端点错误";
+            } elseif ($httpCode === 429) {
+                $errorDetails .= " - API调用频率超限";
+            }
+            $errorDetails .= " (URL: " . $url . ", 响应: " . $response . ")";
+            throw new \Exception($errorDetails);
         }
         
         $result = json_decode($response, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception("JSON解析错误: " . json_last_error_msg());
+            $errorMsg = "JSON解析错误: " . json_last_error_msg();
+            $errorMsg .= "\n原始响应: " . substr($response, 0, 500);
+            $errorMsg .= "\nHTTP状态码: " . $httpCode;
+            $errorMsg .= "\n请求URL: " . $url;
+            throw new \Exception($errorMsg);
         }
         
         return $result ?? [];
@@ -178,12 +277,31 @@ class ShopifyApi extends Helper
     public function testConnection(): bool
     {
         try {
-            $url = $this->shopUrl . '/admin/api/2023-10/shop.json';
+            $url = $this->shopUrl . '/admin/api/2024-10/shop.json';
             $result = $this->makeRequest($url);
             
             return !empty($result['shop']);
         } catch (\Exception $e) {
+            // 记录详细错误信息
+            error_log("Shopify API连接失败: " . $e->getMessage());
+            error_log("店铺URL: " . $this->shopUrl);
+            error_log("访问令牌: " . (empty($this->accessToken) ? '未设置' : '已设置'));
             return false;
+        }
+    }
+
+    /**
+     * 获取店铺信息
+     */
+    public function getShopInfo(): array
+    {
+        try {
+            $url = $this->shopUrl . '/admin/api/2024-10/shop.json';
+            $result = $this->makeRequest($url);
+            
+            return $result['shop'] ?? [];
+        } catch (\Exception $e) {
+            throw new \Exception("获取店铺信息失败: " . $e->getMessage());
         }
     }
 
@@ -195,7 +313,7 @@ class ShopifyApi extends Helper
         $ch = curl_init();
         
         curl_setopt_array($ch, [
-            CURLOPT_URL => $this->shopUrl . '/admin/api/2023-10/shop.json',
+            CURLOPT_URL => $this->shopUrl . '/admin/api/2024-10/shop.json',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $this->headers,
             CURLOPT_TIMEOUT => 30,
