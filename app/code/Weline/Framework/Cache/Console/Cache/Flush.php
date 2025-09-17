@@ -47,41 +47,30 @@ class Flush implements \Weline\Framework\Console\CommandInterface
         $cacheDir = BP . 'var' . DS . 'cache';
         
         if (!is_dir($cacheDir)) {
-            $this->printing->error(__('缓存目录不存在: %1', $cacheDir));
+            $this->printing->errorIcon(__('缓存目录不存在: %{1}', [$cacheDir]));
             return;
         }
 
-        $this->printing->note(__('开始清理过期缓存...'));
-
-        // 遍历缓存目录
-        $cacheTypes = ['file', 'backend_cache', 'frontend_cache', 'system_cache'];
+        // 收集所有需要清理的目录
+        $allDirs = $this->getAllCacheDirectories($cacheDir);
+        $totalDirs = count($allDirs);
         
-        foreach ($cacheTypes as $cacheType) {
-            $typeDir = $cacheDir . DS . $cacheType;
-            
-            if (!is_dir($typeDir)) {
-                continue;
-            }
-
-            try {
-                $result = $this->cleanupExpiredCache($typeDir);
-                $cleanedCount += $result['count'];
-                $totalSize += $result['size'];
-            } catch (\Exception $e) {
-                $errors[] = __('清理 %1 缓存失败: %2', $cacheType, $e->getMessage());
-            }
+        if ($totalDirs === 0) {
+            $this->printing->infoIcon(__('没有找到需要清理的缓存目录'));
+            return;
         }
 
-        // 清理其他缓存目录
-        $otherDirs = [
-            'cache_hooks', 'cache_system', 'config', 'database_model', 'eav_cache',
-            'framework_controller', 'framework_event', 'framework_hooks', 'framework_object',
-            'framework_phrase', 'framework_plugin', 'framework_router', 'framework_view',
-            'i18n', 'request_cache', 'system_config', 'taglib_cache'
-        ];
-
-        foreach ($otherDirs as $dir) {
-            $dirPath = $cacheDir . DS . $dir;
+        // 显示进度条
+        $this->printing->progressBar(0, $totalDirs, __('过期缓存清理中...'), 30);
+        
+        $currentIndex = 0;
+        foreach ($allDirs as $dirInfo) {
+            $currentIndex++;
+            $dirPath = $dirInfo['path'];
+            $dirName = $dirInfo['name'];
+            
+            // 更新进度条
+            $this->printing->progressBar($currentIndex, $totalDirs, __('过期缓存清理中...'), 30);
             
             if (!is_dir($dirPath)) {
                 continue;
@@ -92,23 +81,65 @@ class Flush implements \Weline\Framework\Console\CommandInterface
                 $cleanedCount += $result['count'];
                 $totalSize += $result['size'];
             } catch (\Exception $e) {
-                $errors[] = __('清理 %1 缓存失败: %2', $dir, $e->getMessage());
+                $errors[] = __('清理 %{1} 缓存失败: %{2}', [$dirName, $e->getMessage()]);
             }
         }
 
         // 输出结果
         if ($cleanedCount > 0) {
-            $this->printing->success(__('过期缓存清理完成！清理文件数量: %1，释放空间: %2', 
-                $cleanedCount, $this->formatBytes($totalSize)));
+            $sizeFormatted = $this->formatBytes($totalSize);
+            $this->printing->successIcon(__('过期缓存清理完成！'));
+            $this->printing->coloredText(__('   📁 清理文件: %{1} 个', [$cleanedCount]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   🗂️  释放空间: %{1}', [$sizeFormatted]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   📊 处理目录: %{1} 个', [$totalDirs]), $this->printing::NOTE);
         } else {
-            $this->printing->note(__('没有发现过期的缓存文件'));
+            $this->printing->infoIcon(__('没有发现过期的缓存文件'));
         }
         
         if (!empty($errors)) {
+            $this->printing->separator('─', 50, $this->printing::WARNING);
+            $this->printing->warningIcon(__('清理过程中出现 %{1} 个错误:', [count($errors)]));
             foreach ($errors as $error) {
-                $this->printing->error($error);
+                $this->printing->coloredText("   • {$error}", $this->printing::ERROR);
             }
         }
+    }
+    
+    /**
+     * 获取所有缓存目录
+     * 
+     * @param string $cacheDir 缓存根目录
+     * @return array 目录信息数组
+     */
+    private function getAllCacheDirectories(string $cacheDir): array
+    {
+        $dirs = [];
+        
+        // 主要缓存类型
+        $cacheTypes = ['file', 'backend_cache', 'frontend_cache', 'system_cache'];
+        foreach ($cacheTypes as $cacheType) {
+            $typeDir = $cacheDir . DS . $cacheType;
+            if (is_dir($typeDir)) {
+                $dirs[] = ['name' => $cacheType, 'path' => $typeDir];
+            }
+        }
+        
+        // 其他缓存目录
+        $otherDirs = [
+            'cache_hooks', 'cache_system', 'config', 'database_model', 'eav_cache',
+            'framework_controller', 'framework_event', 'framework_hooks', 'framework_object',
+            'framework_phrase', 'framework_plugin', 'framework_router', 'framework_view',
+            'i18n', 'request_cache', 'system_config', 'taglib_cache'
+        ];
+        
+        foreach ($otherDirs as $dir) {
+            $dirPath = $cacheDir . DS . $dir;
+            if (is_dir($dirPath)) {
+                $dirs[] = ['name' => $dir, 'path' => $dirPath];
+            }
+        }
+        
+        return $dirs;
     }
 
     /**
