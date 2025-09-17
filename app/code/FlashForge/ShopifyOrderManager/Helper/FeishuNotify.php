@@ -13,7 +13,7 @@ class FeishuNotify extends Helper
     private ?array $config = null;
     
     // 环境标志
-    private bool $isLocal = true;
+    private bool $isLocal = false;
     private bool $isProd = false;
 
     /**
