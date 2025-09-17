@@ -9,6 +9,7 @@ use FlashForge\ShopifyOrderManager\Model\Order;
 use FlashForge\ShopifyOrderManager\Model\OrderItem;
 use FlashForge\ShopifyOrderManager\Helper\ShopifyApi;
 use FlashForge\ShopifyOrderManager\Helper\FeishuNotify;
+use FlashForge\ShopifyOrderManager\Cache\ShopifyCache;
 
 /**
  * 订单同步服务类
@@ -39,6 +40,12 @@ class OrderSync extends Helper
      */
     public function syncAllShops(): array
     {
+        // $this->feishuNotify->sendSyncSuccessNotify(
+        //     'us  测试',
+        //    10,
+        //     1
+        // );
+        // dd('');
         $shops = $this->shopModel->getActiveShops();
         $results = [];
 
@@ -110,11 +117,20 @@ class OrderSync extends Helper
         }
 
         // 只同步近三天的订单
-        $threeDaysAgo = date('Y-m-d H:i:s', strtotime('-3 days'));
+        $threeDaysAgo = date('Y-m-d H', strtotime('-3 days'));
         $lastSyncTime = $shop['last_sync_time'] ?: $threeDaysAgo;
 
         // 获取近三天的所有订单
-        $ordersData = $this->shopifyApi->getOrdersByDateRange($threeDaysAgo);
+        // 配置缓存，同一个参数的缓存就不用重复获取
+        $cacheKey = 'shopify_orders_by_date_range_' . $threeDaysAgo.'_shop_'.$shop['shop_id'];
+        /**@var CacheInterface $cache */
+        $cache = w_obj(ShopifyCache::class.'Factory');
+
+        $ordersData = $cache->get($cacheKey);
+        if (!$ordersData) {
+            $ordersData = $this->shopifyApi->getOrdersByDateRange($threeDaysAgo);
+            $cache->set($cacheKey, $ordersData, 3600);
+        }
 
         // 记录同步信息
         $syncInfo = [
@@ -143,6 +159,13 @@ class OrderSync extends Helper
 
         try {
             foreach ($ordersData['orders'] as $orderData) {
+                // 只允许订单号为 21173 的
+                // $allowOrderNumber = [
+                //     21173,21178,21161
+                // ];
+                // if (isset($orderData['order_number']) && !in_array($orderData['order_number'], $allowOrderNumber)) {
+                //     continue;
+                // }
                 $isNewOrder = $this->processOrder($shop['shop_id'], $orderData);
                 
                 if ($isNewOrder) {
@@ -201,7 +224,11 @@ class OrderSync extends Helper
                 ->fetch();
 
             $isNewOrder = !$existingOrder->getId();
-
+            // raw_data
+            // dd(json_decode($orderData['line_items']));
+            unset($orderData['customer']);
+            unset($orderData['billing_address']);
+            // dd(json_encode($orderData));
         // 准备订单数据
         $orderInsertData = [
             Order::fields_PLATFORM => 'shopify',
@@ -239,10 +266,9 @@ class OrderSync extends Helper
             Order::fields_SHOPIFY_CREATED_AT => $this->formatDateTime($orderData['created_at']),
             Order::fields_SHOPIFY_UPDATED_AT => $this->formatDateTime($orderData['updated_at'])
         ];
-
         if ($isNewOrder) {
             // 创建新订单
-            $order = new Order();
+            $order = ObjectManager::make(Order::class);
             $order->setData($orderInsertData);
             $order->save();
             $orderId = $order->getId();
@@ -256,7 +282,7 @@ class OrderSync extends Helper
         // 处理订单项目（先删除旧的，再插入新的，确保不重复）
         if (!empty($orderData['line_items'])) {
             try {
-                $this->processOrderItems($orderId, $orderData['line_items']);
+                $this->processOrderItems($orderId, $orderData['line_items'], $orderData['id'] ?? null);
             } catch (\Exception $e) {
                 // 记录商品同步错误，但不影响订单同步
                 error_log("商品同步失败 - 订单ID: {$orderId}, 错误: " . $e->getMessage());
@@ -288,10 +314,9 @@ class OrderSync extends Helper
     /**
      * 处理订单项目
      */
-    private function processOrderItems(int $orderId, array $lineItems): void
+    private function processOrderItems(int $orderId, array $lineItems, ?string $shopifyOrderId = null): void
     {
         $shopId = $this->getCurrentShopId();
-        
         foreach ($lineItems as $item) {
             // 检查是否已存在相同的商品项目 - 使用shop_id和shopify_line_item_id组合确保唯一性
             $existingItem = $this->checkDuplicateOrderItem($shopId, $item['id'] ?? '');
@@ -299,13 +324,13 @@ class OrderSync extends Helper
             // 计算税费信息
             $taxInfo = $this->calculateTaxInfo($item);
             
-            // 计算真实销售价格（基于您提供的逻辑）
-            $priceInfo = $this->calculateRealPrice($item);
+            // 获取商品价格信息（直接使用Shopify API数据）
+            $priceInfo = $this->getItemPriceInfo($item);
             
             $itemData = [
                 OrderItem::fields_PLATFORM => 'shopify',
                 OrderItem::fields_ORDER_ID => $orderId,
-                OrderItem::fields_ORDER_REF_ID => $orderId, // 使用相同的订单ID
+                OrderItem::fields_ORDER_REF_ID => $shopifyOrderId, // 使用Shopify订单ID
                 OrderItem::fields_SHOP_ID => $shopId,
                 OrderItem::fields_ORDER_NUMBER => $this->getCurrentOrderNumber(),
                 OrderItem::fields_SHOPIFY_ITEM_ID => $item['id'] ?? null,
@@ -333,17 +358,16 @@ class OrderSync extends Helper
                 OrderItem::fields_DISCOUNT_ALLOCATIONS => json_encode($item['discount_allocations'] ?? []),
                 OrderItem::fields_RAW_DATA => json_encode($item)
             ];
-            
             if ($existingItem->getId()) {
                 // 更新现有商品项目
                 $existingItem->setData($itemData);
-                $existingItem->save();
+                $item_id = $existingItem->save();
                 error_log("更新订单项目 - 店铺ID: {$shopId}, Shopify项目ID: {$item['id']}, 订单ID: {$orderId}");
             } else {
                 // 插入新商品项目
-                $newItem = new \FlashForge\ShopifyOrderManager\Model\OrderItem();
+                $newItem = ObjectManager::make(OrderItem::class);
                 $newItem->setData($itemData);
-                $newItem->save();
+                $item_id = $newItem->save();
                 error_log("新增订单项目 - 店铺ID: {$shopId}, Shopify项目ID: {$item['id']}, 订单ID: {$orderId}");
             }
         }
@@ -363,49 +387,37 @@ class OrderSync extends Helper
     }
 
     /**
-     * 计算真实销售价格（基于Shopify API数据）
-     * 参考您提供的导出脚本逻辑
+     * 获取商品价格信息（直接使用Shopify API数据）
+     * Shopify API已经计算好了所有价格和折扣信息
      */
-    private function calculateRealPrice(array $item): array
+    private function getItemPriceInfo(array $item): array
     {
         $qty = intval($item['quantity'] ?? 1);
         
-        // 统计折扣分配金额（整行）
-        $alloc = 0.0;
-        if (!empty($item['discount_allocations']) && is_array($item['discount_allocations'])) {
-            foreach ($item['discount_allocations'] as $da) {
-                $alloc += floatval($da['amount'] ?? 0);
-            }
-        }
-        
-        // 如果discount_allocations为空，使用total_discount字段
-        if ($alloc == 0) {
-            $alloc = floatval($item['total_discount'] ?? 0);
-        }
-        
-        // 获取Shopify API中的价格字段
+        // 获取Shopify API中的原始单价
         $shopifyPrice = floatval($item['price'] ?? 0);
         
-        // 计算原始单价和真实销售单价
-        $originalUnit = 0.0;
-        $realUnitPrice = 0.0;
-        
-        if ($alloc > 0) {
-            // 有折扣的情况：Shopify的price字段是原始价格，需要减去折扣
-            $originalUnit = $shopifyPrice;
-            $realUnitPrice = $shopifyPrice - ($alloc / $qty);
+        // 计算实际折扣金额 - 优先使用discount_allocations中的实际分配金额
+        $actualDiscount = 0.0;
+        if (!empty($item['discount_allocations']) && is_array($item['discount_allocations'])) {
+            // 使用discount_allocations中的实际分配金额
+            foreach ($item['discount_allocations'] as $allocation) {
+                $actualDiscount += floatval($allocation['amount'] ?? 0);
+            }
         } else {
-            // 无折扣的情况：原始价格和销售价格相同
-            $originalUnit = $shopifyPrice;
-            $realUnitPrice = $shopifyPrice;
+            // 如果没有discount_allocations，使用total_discount字段
+            $actualDiscount = floatval($item['total_discount'] ?? 0);
         }
         
+        // 计算单价折扣和实际销售单价
+        $unitDiscount = $qty > 0 ? $actualDiscount / $qty : 0;
+        $realUnitPrice = $shopifyPrice - $unitDiscount;
         
         return [
-            'original_unit_price' => $originalUnit,
-            'real_unit_price' => $realUnitPrice,
-            'total_discount' => $alloc,
-            'unit_discount' => $qty > 0 ? $alloc / $qty : 0
+            'original_unit_price' => $shopifyPrice,      // 原始单价
+            'real_unit_price' => $realUnitPrice,         // 实际销售单价（原价 - 单价折扣）
+            'total_discount' => $actualDiscount,         // 实际总折扣金额
+            'unit_discount' => $unitDiscount             // 单价折扣
         ];
     }
 
