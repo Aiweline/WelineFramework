@@ -87,16 +87,25 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     {
         $totalCount = 0;
         $totalSize = 0;
+        $totalFiles = 0;
         $processedClasses = [];
+        $currentIndex = 0;
+        $totalItems = 0;
+        
+        // 计算总项目数
+        foreach ($modules_caches as $module => $module_caches) {
+            $totalItems += count($module_caches);
+        }
         
         foreach ($modules_caches as $module => $module_caches) {
-            $moduleClasses = [];
-            $moduleCount = 0;
-            $moduleSize = 0;
-            
             foreach ($module_caches as $cache) {
+                $currentIndex++;
                 $className = $this->getShortClassName($cache['class']);
-                $moduleClasses[] = $className;
+                $processedClasses[] = $className;
+                
+                // 显示进度条式的单行更新
+                $progress = round(($currentIndex / $totalItems) * 100);
+                $this->printing->printing("\r🔄 正在清理: {$module}::{$className} ({$progress}%)");
                 
                 try {
                     /**@var CacheFactory $cacheObjectManager */
@@ -105,32 +114,32 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                     if ($cacheObjectManager instanceof CacheFactoryInterface) {
                         if ($is_force || !$cacheObjectManager->isKeep()) {
                             $result = $this->clearCacheWithStats($cacheObjectManager->create());
-                            $moduleCount += $result['count'];
-                            $moduleSize += $result['size'];
+                            $totalCount += $result['count'];
+                            $totalSize += $result['size'];
+                            $totalFiles += $result['files'];
                         }
                     } else {
                         /**@var CacheInterface $cacheObjectManager */
                         $result = $this->clearCacheWithStats($cacheObjectManager);
-                        $moduleCount += $result['count'];
-                        $moduleSize += $result['size'];
+                        $totalCount += $result['count'];
+                        $totalSize += $result['size'];
+                        $totalFiles += $result['files'];
                     }
                 } catch (\Exception $e) {
                     // 静默处理错误，继续清理其他缓存
                 }
             }
-            
-            if (!empty($moduleClasses)) {
-                $processedClasses = array_merge($processedClasses, $moduleClasses);
-                $totalCount += $moduleCount;
-                $totalSize += $moduleSize;
-                
-                // 显示模块清理信息（同行显示所有类）
-                $classesStr = implode(', ', array_unique($moduleClasses));
-                $this->printing->printing('  └─ ' . $module . ': ' . $classesStr);
-            }
         }
         
-        return ['count' => $totalCount, 'size' => $totalSize, 'classes' => count(array_unique($processedClasses))];
+        // 清理进度条显示
+        $this->printing->printing("\r" . str_repeat(' ', 80) . "\r");
+        
+        return [
+            'count' => $totalCount, 
+            'size' => $totalSize, 
+            'files' => $totalFiles,
+            'classes' => count(array_unique($processedClasses))
+        ];
     }
     
     /**
@@ -141,10 +150,64 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     private function clearCacheWithStats(CacheInterface $cache): array
     {
-        // 这里可以根据实际的缓存实现来获取更准确的统计信息
-        // 目前返回基本统计，实际项目中可能需要根据具体缓存类型调整
+        // 获取缓存统计信息
+        $stats = $this->getCacheStats($cache);
         $cache->clear();
-        return ['count' => 1, 'size' => 0]; // 简化统计，实际可以更精确
+        
+        return [
+            'count' => $stats['items'] ?? 1,
+            'size' => $stats['size'] ?? 0,
+            'files' => $stats['files'] ?? 1
+        ];
+    }
+    
+    /**
+     * 获取缓存统计信息
+     * 
+     * @param CacheInterface $cache 缓存对象
+     * @return array 缓存统计信息
+     */
+    private function getCacheStats(CacheInterface $cache): array
+    {
+        // 尝试获取缓存的统计信息
+        // 这里可以根据具体的缓存实现来获取更准确的信息
+        try {
+            // 如果缓存对象有统计方法，使用它
+            if (method_exists($cache, 'getStats')) {
+                return $cache->getStats();
+            }
+            
+            // 如果缓存对象有获取大小的方法
+            if (method_exists($cache, 'getSize')) {
+                return [
+                    'items' => 1,
+                    'size' => $cache->getSize(),
+                    'files' => 1
+                ];
+            }
+            
+            // 尝试通过反射获取缓存大小
+            $reflection = new \ReflectionClass($cache);
+            if ($reflection->hasProperty('size')) {
+                $sizeProperty = $reflection->getProperty('size');
+                $sizeProperty->setAccessible(true);
+                $size = $sizeProperty->getValue($cache);
+                return [
+                    'items' => 1,
+                    'size' => $size ?? 0,
+                    'files' => 1
+                ];
+            }
+        } catch (\Exception $e) {
+            // 如果获取统计信息失败，返回默认值
+        }
+        
+        // 返回默认统计信息
+        return [
+            'items' => 1,
+            'size' => 0,
+            'files' => 1
+        ];
     }
     
     /**
@@ -168,9 +231,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private function printCategorySummary(string $categoryName, array $stats): void
     {
         if ($stats['count'] > 0) {
-            $this->printing->success(__('✅ %{1} 清理完成: %{2} 个缓存类，清理了 %{3} 个缓存项', 
-                [$categoryName, $stats['classes'], $stats['count']]
-            ));
+            $sizeFormatted = $this->formatBytes($stats['size']);
+            $this->printing->success(__('✅ %{1} 清理完成', [$categoryName]));
+            $this->printing->printing(__('   📊 缓存类: %{1} 个', [$stats['classes']]));
+            $this->printing->printing(__('   📁 缓存文件: %{1} 个', [$stats['files']]));
+            $this->printing->printing(__('   💾 缓存项: %{1} 个', [$stats['count']]));
+            $this->printing->printing(__('   🗂️  释放空间: %{1}', [$sizeFormatted]));
         } else {
             $this->printing->note(__('ℹ️  %{1} 无需清理', [$categoryName]));
         }
@@ -185,13 +251,37 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     {
         $totalCount = $totalStats['app']['count'] + $totalStats['framework']['count'];
         $totalClasses = $totalStats['app']['classes'] + $totalStats['framework']['classes'];
+        $totalFiles = $totalStats['app']['files'] + $totalStats['framework']['files'];
+        $totalSize = $totalStats['app']['size'] + $totalStats['framework']['size'];
         
         if ($totalCount > 0) {
-            $this->printing->success(__('🎉 缓存清理完成！总共清理了 %{1} 个缓存类，%{2} 个缓存项', 
-                [$totalClasses, $totalCount]));
+            $sizeFormatted = $this->formatBytes($totalSize);
+            $this->printing->success(__('🎉 缓存清理完成！'));
+            $this->printing->printing(__('   📊 总计缓存类: %{1} 个', [$totalClasses]));
+            $this->printing->printing(__('   📁 总计缓存文件: %{1} 个', [$totalFiles]));
+            $this->printing->printing(__('   💾 总计缓存项: %{1} 个', [$totalCount]));
+            $this->printing->printing(__('   🗂️  总计释放空间: %{1}', [$sizeFormatted]));
         } else {
             $this->printing->note(__('✨ 所有缓存都是最新的，无需清理'));
         }
+    }
+    
+    /**
+     * 格式化字节大小
+     * 
+     * @param int $bytes 字节数
+     * @return string 格式化后的大小
+     */
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        
+        $bytes /= pow(1024, $pow);
+        
+        return round($bytes, 2) . ' ' . $units[$pow];
     }
 
     /**
