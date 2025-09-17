@@ -29,9 +29,11 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
         $this->config   = $config;
         $this->tip      = $tip;
         $this->status   = $status;
-        if (method_exists($this, '__init')) {
-            $this->__init();
-        }
+        $this->__init();
+    }
+
+    public function __init()
+    {
     }
 
     private function __clone()
@@ -46,7 +48,6 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     public function setIdentity(string $identity): static
     {
         $this->identity = $identity;
-        $this->__init();
         return $this;
     }
 
@@ -201,5 +202,20 @@ abstract class CacheDriverAbstract implements \Weline\Framework\Cache\CacheDrive
     private function getRequest(): Request
     {
         return ObjectManager::getInstance(Request::class);
+    }
+
+    /**
+     * 获取缓存统计信息
+     * 
+     * @return array 返回包含 items, size, files 等统计信息的数组
+     */
+    public function getStats(): array
+    {
+        // 默认实现，子类可以重写此方法提供更准确的统计信息
+        return [
+            'items' => 1,
+            'size' => 0,
+            'files' => 1
+        ];
     }
 }

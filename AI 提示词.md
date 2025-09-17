@@ -11,7 +11,16 @@
 - 了解国际化、命令行工具等扩展功能
 
 ## 开发文档参考
-在回答任何关于WelineFramework的问题时，请参考项目根目录下的`开发文档.md`文件，该文档包含了：
+在回答任何关于WelineFramework的问题时，请务必参考项目根目录下的以下两个重要文档：
+
+### 📚 必读文档
+1. **`开发文档.md`** - 完整的框架开发指南和API文档
+2. **`AI 测试.md`** - AI测试指南和最佳实践
+
+这两个文档包含了框架的核心知识，在开发过程中必须同时参阅，确保：
+- 使用正确的框架API和最佳实践
+- 遵循正确的测试方法和验证流程
+- 避免常见的开发错误和配置问题
 
 ### 框架概述
 - 核心特性和架构设计
@@ -152,6 +161,12 @@
 - 模型接口实现：ModelInterface接口、setup/upgrade/install方法、方法签名要求
 - 路由系统详解：后台路由、PC路由、REST API路由、路由组成规则、控制器方法解析、路由测试
 - 学以致用原则：学习知识后要主动运用去检查和修复相关问题，不能只学不用
+- 知识记录原则：学到新的技术要点如果开发文档没提到就自动记录到提示词中，持续完善知识库
+- 文档参考原则：开发过程中必须同时参阅"开发文档.md"和"AI 测试.md"，确保使用正确的API和测试方法
+- 框架升级机制：WelineFramework采用基于版本控制的升级机制，仅修改模型代码不会自动修改数据库结构，必须更新模块版本号并执行upgrade()方法才能触发数据库变更。升级流程：1)修改模型代码添加字段常量，2)在upgrade()方法中实现数据库变更逻辑，3)更新register.php中的版本号，4)执行php bin/w setup:upgrade --model命令触发升级
+- 框架加载方法：优先使用框架自带的showLoading()和hideLoading()方法，避免自定义复杂的加载动画
+- ORM链式调用：`save()`方法内部已包含数据库执行逻辑，直接调用即可，**不需要**链式调用`fetch()`。但`delete()`、`update()`、`insert()`等方法需要链式调用`->fetch()`来执行操作，如$model->delete()->fetch()、$model->update()->fetch()、$model->insert()->fetch()
+- ACL权限控制：模板中使用<acl source="Module::permission">标签控制按钮显示，Controller中使用#[\Weline\Framework\Acl\Acl()]注解控制方法访问
 - 系统性能调优
 
 ## 代码示例格式
@@ -210,6 +225,13 @@ $users = [
 ];
 $result = $this->getModel(UserModel::class)->insert($users)->fetch(); // 直接填写值，ORM内置预执行
 
+// ORM链式调用示例 - 重要：save()方法不需要fetch()，其他方法需要
+$model = $this->getModel(UserModel::class);
+$model->setData('name', 'John')->save();                 // 保存数据 - 直接调用
+$model->load(1)->delete()->fetch();                      // 删除数据 - 需要fetch()
+$model->where('id', 1)->update(['status' => 0])->fetch(); // 更新数据
+$model->insert($data)->fetch();                          // 插入数据
+
 // ACL权限控制示例
 #[\Weline\Framework\Acl\Acl('Weline_Admin::system_user_listing', '用户管理', '管理后台用户', '')]
 class User extends BackendController
@@ -256,6 +278,17 @@ class MyTag implements TaglibInterface
 // <acl source="Weline_Admin::system_user_add"><button>添加用户</button></acl>
 // <file-manager target="#demo" title="文件管理器" />
 
+// ACL权限控制模板示例 - 重要：控制按钮显示
+<acl source="FlashForge_ShopifyOrderManager::shop_edit">
+    <button class="btn btn-primary">编辑店铺</button>
+</acl>
+<acl source="FlashForge_ShopifyOrderManager::shop_delete">
+    <button class="btn btn-danger">删除店铺</button>
+</acl>
+<acl source="FlashForge_ShopifyOrderManager::shop_toggle_status">
+    <button class="btn btn-warning">切换状态</button>
+</acl>
+
 // 路由规则示例
 class UserController extends BackendController
 {
@@ -284,6 +317,53 @@ class UserController extends BackendController
         // 同时支持两种路由：/user/get-data 和 /user/getgetdata
     }
 }
+
+// 框架加载方法使用示例
+// 1. 基本用法
+function loadData() {
+    showLoading();  // 显示加载动画
+    
+    fetch('/api/data')
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();  // 隐藏加载动画
+            // 处理数据
+        })
+        .catch(error => {
+            hideLoading();  // 隐藏加载动画
+            showMessage('error', '加载失败: ' + error.message);
+        });
+}
+
+// 2. 导出功能示例
+function exportData() {
+    showLoading();  // 显示加载动画
+    
+    const link = document.createElement('a');
+    link.href = '/export/data';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    link.addEventListener('click', function() {
+        setTimeout(() => {
+            hideLoading();  // 隐藏加载动画
+            showMessage('success', '导出成功！');
+            document.body.removeChild(link);
+        }, 1000);
+    });
+    
+    link.click();
+}
+
+// 3. 加载动画HTML结构（框架自带）
+// <div class="loading-overlay" id="loadingOverlay">
+//     <div class="loading-spinner">
+//         <div class="spinner-border" role="status">
+//             <span class="visually-hidden">加载中...</span>
+//         </div>
+//         <p class="mt-3 mb-0">正在加载数据...</p>
+//     </div>
+// </div>
 
 // 模块开发示例
 // 1. 创建模块注册文件
@@ -605,6 +685,10 @@ php bin/w module:disable Weline_Demo    // 禁用模块
 php bin/w module:list                   // 查看模块列表
 php bin/w module:uninstall Weline_Demo  // 卸载模块
 
+// 服务器管理
+php bin/w server:start -b               // 启动后台服务
+php bin/w cache:clear                   // 清理缓存（不要直接删除目录）
+
 // 开发部署流程
 php bin/w setup:upgrade                 // 1. 模块注册
 php bin/w setup:upgrade --route         // 2. 收集路由
@@ -773,14 +857,33 @@ return [
 5. **文档更新**: 当框架更新时，及时更新相关建议
 6. **学以致用**: 学习新知识后，要主动运用去检查和修复相关问题，不能只学不用
 7. **边开发边验证**: 开发过程中要持续测试和验证，参考`AI 测试.md`中的测试方法
+8. **代码修改限制**: 
+   - 禁止对app/code/Weline目录进行修改，除非用户明确指定
+   - 禁止对app/code/目录以外的代码进行修改，除非用户明确提到需要修改的文件，如果必要修改可以提醒用户
+9. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
+10. **Git提交规则**: 
+    - 所有git提交操作都必须等待用户确认后才能执行
+    - 完成代码修改后，使用`git add`暂存文件，但不要直接执行`git commit`
+    - 向用户展示准备提交的内容和提交信息，等待用户确认
+    - 只有在用户明确同意后才能执行`git commit`和`git push`操作
+    - 如果用户没有明确要求提交，应该询问用户是否需要提交更改
 
 ## 学习资源
 
-- 项目根目录的`开发文档.md` - 完整的开发指南
-- `AI 测试.md` - AI测试指南和最佳实践
+### 🎯 核心文档（必读）
+- **`开发文档.md`** - 完整的框架开发指南，包含所有API和最佳实践
+- **`AI 测试.md`** - AI测试指南和验证方法，包含测试环境配置和常见问题解决方案
+
+### 📖 辅助资源
 - 框架源码 - 最佳的学习资源
 - 官方论坛 - 社区支持和问题讨论
 - 示例模块 - 实际开发参考
+
+### ⚠️ 重要提醒
+在开发过程中，必须同时参阅上述两个核心文档，确保：
+1. 使用正确的框架API和设计模式
+2. 遵循正确的测试和验证流程
+3. 避免重复已知的问题和错误
 
 通过以上指导原则，我将为您提供专业、准确、实用的WelineFramework开发建议和解决方案。
 
