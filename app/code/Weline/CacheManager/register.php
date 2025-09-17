@@ -13,8 +13,8 @@ Register::register(
     Register::MODULE,
     'Weline_CacheManager',
     __DIR__,
-    '1.1.0',
-    '<a href="bbs.aiweline.com">缓存管理器</a>',
+    '1.2.0',
+    '<a href="bbs.aiweline.com">缓存管理器</a> - 新增定时清理功能',
     [
         'Weline_Admin'
     ]

@@ -49,7 +49,7 @@ class OrderItem extends Model
     public const fields_UPDATED_AT = 'updated_at';
     
     public array $_unit_primary_keys = ['item_id'];
-    public array $_index_sort_keys = ['item_id', 'order_id', 'shopify_product_id'];
+    public array $_index_sort_keys = ['item_id', 'order_id'];
 
     /**
      * 设置模型
@@ -81,6 +81,7 @@ class OrderItem extends Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
+        // $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable('Shopify订单项目表')
                 ->addColumn(
@@ -96,6 +97,13 @@ class OrderItem extends Model
                     11,
                     'not null',
                     '订单ID'
+                )
+                ->addColumn(
+                    self::fields_ORDER_REF_ID,
+                    TableInterface::column_type_VARCHAR,
+                    50,
+                    'null',
+                    '订单Ref ID'
                 )
                 ->addColumn(
                     self::fields_PLATFORM,
