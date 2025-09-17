@@ -249,4 +249,44 @@ class File extends CacheDriverAbstract
         }
         return $cacheFile;
     }
+
+    /**
+     * 获取文件缓存统计信息
+     * 
+     * @return array 返回包含 items, size, files 等统计信息的数组
+     */
+    public function getStats(): array
+    {
+        $items = 0;
+        $size = 0;
+        $files = 0;
+
+        if (is_dir($this->cachePath)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($this->cachePath, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $files++;
+                    $size += $file->getSize();
+                    
+                    // 尝试读取缓存文件内容来统计项目数
+                    $content = file_get_contents($file->getPathname());
+                    if ($content !== false) {
+                        $data = unserialize($content);
+                        if (is_array($data) && isset($data['data'])) {
+                            $items++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return [
+            'items' => $items,
+            'size' => $size,
+            'files' => $files
+        ];
+    }
 }
