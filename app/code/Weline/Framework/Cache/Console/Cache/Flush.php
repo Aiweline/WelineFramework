@@ -112,6 +112,60 @@ class Flush implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
+     * 清理过期缓存
+     * 
+     * @param string $cacheDir 缓存目录路径
+     * @return array 返回清理结果 ['count' => 文件数量, 'size' => 文件大小]
+     */
+    private function cleanupExpiredCache(string $cacheDir): array
+    {
+        $cleanedCount = 0;
+        $totalSize = 0;
+        
+        if (!is_dir($cacheDir)) {
+            return ['count' => 0, 'size' => 0];
+        }
+        
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($cacheDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                // 检查文件是否过期（超过24小时）
+                if (time() - $file->getMTime() > 86400) {
+                    $fileSize = $file->getSize();
+                    if (unlink($file->getPathname())) {
+                        $cleanedCount++;
+                        $totalSize += $fileSize;
+                    }
+                }
+            }
+        }
+        
+        return ['count' => $cleanedCount, 'size' => $totalSize];
+    }
+    
+    /**
+     * 格式化字节大小
+     * 
+     * @param int $bytes 字节数
+     * @return string 格式化后的大小
+     */
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        
+        $bytes /= pow(1024, $pow);
+        
+        return round($bytes, 2) . ' ' . $units[$pow];
+    }
+
+    /**
      * @inheritDoc
      */
     public function tip(): string
