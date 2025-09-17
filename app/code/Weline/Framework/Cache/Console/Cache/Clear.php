@@ -56,14 +56,14 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                     $this->printing->note(__('📱 模块缓存清理中...'));
                     $appStats = $this->clearCacheGroup($modules_caches, $is_force, 'app');
                     $totalStats['app'] = $appStats;
-                    $this->printCategorySummary('模块缓存', $appStats);
+                    $this->printCategorySummary(__('模块缓存'), $appStats);
                     break;
                     
                 case 'framework':
                     $this->printing->note(__('🔧 框架缓存清理中...'));
                     $frameworkStats = $this->clearCacheGroup($modules_caches, $is_force, 'framework');
                     $totalStats['framework'] = $frameworkStats;
-                    $this->printCategorySummary('框架缓存', $frameworkStats);
+                    $this->printCategorySummary(__('框架缓存'), $frameworkStats);
                     break;
                     
                 default:
@@ -168,9 +168,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private function printCategorySummary(string $categoryName, array $stats): void
     {
         if ($stats['count'] > 0) {
-            $this->printing->success('✅ ' . $categoryName . ' 清理完成: ' . $stats['classes'] . ' 个缓存类，清理了 ' . $stats['count'] . ' 个缓存项');
+            $this->printing->success(__('✅ %{1} 清理完成: %{2} 个缓存类，清理了 %{3} 个缓存项', 
+                [$categoryName, $stats['classes'], $stats['count']]
+            ));
         } else {
-            $this->printing->note('ℹ️  ' . $categoryName . ' 无需清理');
+            $this->printing->note(__('ℹ️  %{1} 无需清理', [$categoryName]));
         }
     }
     
@@ -185,9 +187,10 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $totalClasses = $totalStats['app']['classes'] + $totalStats['framework']['classes'];
         
         if ($totalCount > 0) {
-            $this->printing->success('🎉 缓存清理完成！总共清理了 ' . $totalClasses . ' 个缓存类，' . $totalCount . ' 个缓存项');
+            $this->printing->success(__('🎉 缓存清理完成！总共清理了 %{1} 个缓存类，%{2} 个缓存项', 
+                [$totalClasses, $totalCount]));
         } else {
-            $this->printing->note('✨ 所有缓存都是最新的，无需清理');
+            $this->printing->note(__('✨ 所有缓存都是最新的，无需清理'));
         }
     }
 
