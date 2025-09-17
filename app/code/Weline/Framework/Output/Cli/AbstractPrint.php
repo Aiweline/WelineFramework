@@ -497,12 +497,39 @@ COMMAND_LIST;
             return $columnWidths;
         }
         
-        // 按比例缩小列宽
-        $ratio = $availableWidth / $totalContentWidth;
-        $adjustedWidths = [];
+        // 为不同列设置优先级和最大宽度
+        $columnPriorities = [
+            0 => ['max' => 25, 'min' => 15], // 标识列
+            1 => ['max' => 8, 'min' => 6],   // 状态列
+            2 => ['max' => 12, 'min' => 8],  // 占用空间列
+            3 => ['max' => 10, 'min' => 6],  // 可清理列
+            4 => ['max' => 20, 'min' => 10]  // 描述列
+        ];
         
+        $adjustedWidths = [];
+        $remainingWidth = $availableWidth;
+        
+        // 首先分配最小宽度
         foreach ($columnWidths as $i => $width) {
-            $adjustedWidths[$i] = max(8, (int)($width * $ratio)); // 最小宽度8
+            $minWidth = $columnPriorities[$i]['min'] ?? 8;
+            $adjustedWidths[$i] = $minWidth;
+            $remainingWidth -= $minWidth;
+        }
+        
+        // 然后按优先级分配剩余宽度
+        $totalExtra = array_sum($columnWidths) - array_sum($adjustedWidths);
+        if ($totalExtra > 0 && $remainingWidth > 0) {
+            foreach ($columnWidths as $i => $width) {
+                $maxWidth = $columnPriorities[$i]['max'] ?? $width;
+                $currentWidth = $adjustedWidths[$i];
+                $extraNeeded = min($width - $currentWidth, $maxWidth - $currentWidth);
+                $extraAllocated = min($extraNeeded, $remainingWidth);
+                
+                $adjustedWidths[$i] += $extraAllocated;
+                $remainingWidth -= $extraAllocated;
+                
+                if ($remainingWidth <= 0) break;
+            }
         }
         
         return $adjustedWidths;
