@@ -53,14 +53,14 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         foreach ($caches as $form => $modules_caches) {
             switch ($form) {
                 case 'app':
-                    $this->printing->note(__('📱 模块缓存清理中...'));
+                    $this->printing->infoIcon(__('模块缓存清理中...'));
                     $appStats = $this->clearCacheGroup($modules_caches, $is_force, 'app');
                     $totalStats['app'] = $appStats;
                     $this->printCategorySummary(__('模块缓存'), $appStats);
                     break;
                     
                 case 'framework':
-                    $this->printing->note(__('🔧 框架缓存清理中...'));
+                    $this->printing->infoIcon(__('框架缓存清理中...'));
                     $frameworkStats = $this->clearCacheGroup($modules_caches, $is_force, 'framework');
                     $totalStats['framework'] = $frameworkStats;
                     $this->printCategorySummary(__('框架缓存'), $frameworkStats);
@@ -104,8 +104,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 $processedClasses[] = $className;
                 
                 // 显示进度条式的单行更新
-                $progress = round(($currentIndex / $totalItems) * 100);
-                $this->printing->printing("\r🔄 正在清理: {$module}::{$className} ({$progress}%)");
+                $message = __('正在清理: %{1}::%{2}', [$module, $className]);
+                $this->printing->progressBar($currentIndex, $totalItems, $message, 30);
                 
                 try {
                     /**@var CacheFactory $cacheObjectManager */
@@ -131,8 +131,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             }
         }
         
-        // 清理进度条显示
-        $this->printing->printing("\r" . str_repeat(' ', 80) . "\r");
+        // 进度条会自动在完成时换行，无需手动清理
         
         return [
             'count' => $totalCount, 
@@ -232,13 +231,13 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     {
         if ($stats['count'] > 0) {
             $sizeFormatted = $this->formatBytes($stats['size']);
-            $this->printing->success(__('✅ %{1} 清理完成', [$categoryName]));
-            $this->printing->printing(__('   📊 缓存类: %{1} 个', [$stats['classes']]));
-            $this->printing->printing(__('   📁 缓存文件: %{1} 个', [$stats['files']]));
-            $this->printing->printing(__('   💾 缓存项: %{1} 个', [$stats['count']]));
-            $this->printing->printing(__('   🗂️  释放空间: %{1}', [$sizeFormatted]));
+            $this->printing->successIcon(__('%{1} 清理完成', [$categoryName]));
+            $this->printing->coloredText(__('   📊 缓存类: %{1} 个', [$stats['classes']]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   📁 缓存文件: %{1} 个', [$stats['files']]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   💾 缓存项: %{1} 个', [$stats['count']]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   🗂️  释放空间: %{1}', [$sizeFormatted]), $this->printing::NOTE);
         } else {
-            $this->printing->note(__('ℹ️  %{1} 无需清理', [$categoryName]));
+            $this->printing->infoIcon(__('%{1} 无需清理', [$categoryName]));
         }
     }
     
@@ -256,13 +255,13 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         
         if ($totalCount > 0) {
             $sizeFormatted = $this->formatBytes($totalSize);
-            $this->printing->success(__('🎉 缓存清理完成！'));
-            $this->printing->printing(__('   📊 总计缓存类: %{1} 个', [$totalClasses]));
-            $this->printing->printing(__('   📁 总计缓存文件: %{1} 个', [$totalFiles]));
-            $this->printing->printing(__('   💾 总计缓存项: %{1} 个', [$totalCount]));
-            $this->printing->printing(__('   🗂️  总计释放空间: %{1}', [$sizeFormatted]));
+            $this->printing->doneIcon(__('缓存清理完成！'));
+            $this->printing->coloredText(__('   📊 总计缓存类: %{1} 个', [$totalClasses]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   📁 总计缓存文件: %{1} 个', [$totalFiles]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   💾 总计缓存项: %{1} 个', [$totalCount]), $this->printing::NOTE);
+            $this->printing->coloredText(__('   🗂️  总计释放空间: %{1}', [$sizeFormatted]), $this->printing::NOTE);
         } else {
-            $this->printing->note(__('✨ 所有缓存都是最新的，无需清理'));
+            $this->printing->infoIcon(__('所有缓存都是最新的，无需清理'));
         }
     }
     
