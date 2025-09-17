@@ -289,7 +289,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
         $cacheDir = BP . 'var' . DS . 'cache' . DS . $identify;
         
         $info = [
-            'path' => $cacheDir,
+            'path' => $this->getRelativePath($cacheDir),
             'size' => 0,
             'cleanable' => 0,
             'files' => 0,
@@ -303,6 +303,21 @@ class Status implements \Weline\Framework\Console\CommandInterface
         }
         
         return $info;
+    }
+    
+    /**
+     * 获取相对路径
+     * 
+     * @param string $path 绝对路径
+     * @return string 相对路径
+     */
+    private function getRelativePath(string $path): string
+    {
+        $basePath = BP;
+        if (strpos($path, $basePath) === 0) {
+            return 'var/cache/' . basename($path);
+        }
+        return $path;
     }
     
     /**
