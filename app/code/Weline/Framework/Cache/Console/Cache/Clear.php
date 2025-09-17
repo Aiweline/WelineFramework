@@ -53,15 +53,13 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         foreach ($caches as $form => $modules_caches) {
             switch ($form) {
                 case 'app':
-                    $this->printing->infoIcon(__('模块缓存清理中...'));
-                    $appStats = $this->clearCacheGroup($modules_caches, $is_force, 'app');
+                    $appStats = $this->clearCacheGroup($modules_caches, $is_force, 'app', __('模块缓存清理中...'));
                     $totalStats['app'] = $appStats;
                     $this->printCategorySummary(__('模块缓存'), $appStats);
                     break;
                     
                 case 'framework':
-                    $this->printing->infoIcon(__('框架缓存清理中...'));
-                    $frameworkStats = $this->clearCacheGroup($modules_caches, $is_force, 'framework');
+                    $frameworkStats = $this->clearCacheGroup($modules_caches, $is_force, 'framework', __('框架缓存清理中...'));
                     $totalStats['framework'] = $frameworkStats;
                     $this->printCategorySummary(__('框架缓存'), $frameworkStats);
                     break;
@@ -81,9 +79,10 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      * @param array $modules_caches 模块缓存数组
      * @param bool $is_force 是否强制清理
      * @param string $type 缓存类型
+     * @param string $title 标题
      * @return array 清理统计信息
      */
-    private function clearCacheGroup(array $modules_caches, bool $is_force, string $type): array
+    private function clearCacheGroup(array $modules_caches, bool $is_force, string $type, string $title): array
     {
         $totalCount = 0;
         $totalSize = 0;
@@ -97,15 +96,17 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             $totalItems += count($module_caches);
         }
         
+        // 显示固定的标题进度条
+        $this->printing->progressBar(0, $totalItems, $title, 30);
+        
         foreach ($modules_caches as $module => $module_caches) {
             foreach ($module_caches as $cache) {
                 $currentIndex++;
                 $className = $this->getShortClassName($cache['class']);
                 $processedClasses[] = $className;
                 
-                // 显示进度条式的单行更新
-                $message = __('正在清理: %{1}::%{2}', [$module, $className]);
-                $this->printing->progressBar($currentIndex, $totalItems, $message, 30);
+                // 更新进度条，保持标题不变
+                $this->printing->progressBar($currentIndex, $totalItems, $title, 30);
                 
                 try {
                     /**@var CacheFactory $cacheObjectManager */
