@@ -154,11 +154,11 @@ class ShopifyApi extends Helper
             $params['since_id'] = $sinceId;
         }
         
-        // 只获取近一个月的订单
+        // 只获取近三天的订单
         if ($createdAtMin) {
             $params['created_at_min'] = $createdAtMin;
         } else {
-            $params['created_at_min'] = date('c', strtotime('-1 month'));
+            $params['created_at_min'] = date('c', strtotime('-3 days'));
         }
         
         return $this->getOrders($params);
