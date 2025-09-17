@@ -209,6 +209,12 @@ COMMAND_LIST;
      */
     public function printList(array $data, $flag = '#', $pad_length = 45)
     {
+        // 如果数据是命令格式，使用自适应宽度
+        if ($this->isCommandListFormat($data)) {
+            $this->printAdaptiveCommandList($data, $flag, $pad_length);
+            return;
+        }
+        
         $doc_tmp = '';
         foreach ($data as $key => $datum) {
             if (is_int(strpos($key, $flag))) {
@@ -234,6 +240,53 @@ COMMAND_LIST;
                         }
                     }
                     $doc_tmp .= '-' . str_pad($this->colorize($datum_key, self::SUCCESS), $pad_length) . $this->colorize($flag . ' ' . $datum_value, self::NOTE) . PHP_EOL;
+                }
+            }
+        }
+        $this->printing($doc_tmp);
+    }
+    
+    /**
+     * 检查是否为命令列表格式
+     */
+    private function isCommandListFormat(array $data): bool
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value) && isset($value['tip']) && isset($value['class'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 打印自适应宽度的命令列表
+     */
+    private function printAdaptiveCommandList(array $data, $flag = '#', $pad_length = 45): void
+    {
+        // 计算最长命令的长度
+        $maxCommandLength = 0;
+        foreach ($data as $key => $value) {
+            if (is_array($value) && isset($value['tip'])) {
+                $maxCommandLength = max($maxCommandLength, strlen($key));
+            }
+        }
+        
+        // 设置命令列宽度（最长命令长度 + 4个字符的额外填充）
+        $commandWidth = $maxCommandLength + 4;
+        
+        $doc_tmp = '';
+        foreach ($data as $key => $value) {
+            if (is_array($value) && isset($value['tip'])) {
+                $paddedCommand = str_pad($key, $commandWidth);
+                $coloredCommand = $this->colorize($paddedCommand, self::SUCCESS);
+                $coloredDescription = $this->colorize($value['tip'], self::NOTE);
+                $doc_tmp .= $coloredCommand . $coloredDescription . PHP_EOL;
+            } else {
+                // 非命令格式，使用原有逻辑
+                $doc_tmp .= $this->colorize($key, self::WARNING) . PHP_EOL;
+                if (is_string($value)) {
+                    $doc_tmp .= $this->colorize($value, self::NOTE) . PHP_EOL;
                 }
             }
         }
@@ -735,7 +788,7 @@ COMMAND_LIST;
      * @param string $char 装饰字符
      * @param string $color 颜色
      */
-    public function title(string $title, string $char = '=', string $color = self::SUCCESS): void
+    public function title(string $title, string $char = '-', string $color = self::SUCCESS): void
     {
         $width = $this->getTerminalWidth();
         $titleLength = mb_strlen($title);
@@ -744,9 +797,9 @@ COMMAND_LIST;
         $line = str_repeat($char, $width);
         $titleLine = str_repeat($char, max(1, (int)$padding)) . ' ' . $title . ' ' . str_repeat($char, max(1, (int)$padding));
         
-        echo $this->colorize($line, $color) . PHP_EOL;
+        // echo $this->colorize($line, $color) . PHP_EOL;
         echo $this->colorize($titleLine, $color) . PHP_EOL;
-        echo $this->colorize($line, $color) . PHP_EOL;
+        // echo $this->colorize($line, $color) . PHP_EOL;
     }
     
     /**
@@ -760,6 +813,210 @@ COMMAND_LIST;
     {
         foreach ($items as $item) {
             echo $this->colorize($bullet, $color) . ' ' . $item . PHP_EOL;
+        }
+    }
+    
+    /**
+     * 树形目录显示命令列表
+     * 
+     * @param array $recommendations 推荐命令列表，按分组组织
+     * @param string $color 颜色
+     */
+    public function treeList(array $recommendations, string $color = self::NOTE): void
+    {
+        foreach ($recommendations as $group => $commands) {
+            // 显示分组标题
+            $this->printing($this->colorize("📁 {$group}", self::WARNING) . PHP_EOL);
+            
+            // 构建命令树
+            $commandTree = $this->buildCommandTree($commands);
+            $this->printTree($commandTree, '', true, $color);
+            
+            // 分组间添加空行
+            $this->printing(PHP_EOL);
+        }
+    }
+    
+    /**
+     * 构建命令树结构
+     * 
+     * @param array $commands 命令数组
+     * @return array 树形结构
+     */
+    private function buildCommandTree(array $commands): array
+    {
+        $tree = [];
+        
+        foreach ($commands as $cmd => $data) {
+            $parts = explode(':', $cmd);
+            $current = &$tree;
+            $path = [];
+            
+            // 构建树形结构
+            for ($i = 0; $i < count($parts); $i++) {
+                $part = $parts[$i];
+                $path[] = $part;
+                $isLast = ($i === count($parts) - 1);
+                
+                if (!isset($current[$part])) {
+                    $current[$part] = [
+                        'is_command' => $isLast,
+                        'children' => [],
+                        'data' => $isLast ? $data : null,
+                        'path' => implode(':', $path)
+                    ];
+                }
+                
+                if ($isLast) {
+                    $current[$part]['is_command'] = true;
+                    $current[$part]['data'] = $data;
+                }
+                
+                $current = &$current[$part]['children'];
+            }
+        }
+        
+        return $tree;
+    }
+    
+    /**
+     * 打印树形结构
+     * 
+     * @param array $tree 树形数据
+     * @param string $prefix 前缀
+     * @param bool $isLast 是否为最后一个节点
+     * @param string $color 颜色
+     */
+    private function printTree(array $tree, string $prefix = '', bool $isLast = true, string $color = self::NOTE): void
+    {
+        $keys = array_keys($tree);
+        $lastKey = end($keys);
+        
+        foreach ($tree as $key => $node) {
+            $isLastNode = ($key === $lastKey);
+            
+            // 确定连接符
+            $connector = $isLastNode ? '└── ' : '├── ';
+            $newPrefix = $prefix . ($isLast ? '    ' : '│   ');
+            
+            if ($node['is_command']) {
+                // 这是一个完整的命令
+                $command = $node['path'];
+                $description = $node['data']['tip'] ?? '';
+                
+                $coloredCommand = $this->colorize($command, self::SUCCESS);
+                $coloredDescription = $this->colorize($description, $color);
+                
+                $this->printing($prefix . $connector . $coloredCommand);
+                if ($description) {
+                    $this->printing(' - ' . $coloredDescription);
+                }
+                $this->printing(PHP_EOL);
+            } else {
+                // 这是一个目录节点
+                $coloredDir = $this->colorize($key, self::WARNING);
+                $this->printing($prefix . $connector . $coloredDir . PHP_EOL);
+            }
+            
+            // 递归打印子节点
+            if (!empty($node['children'])) {
+                $this->printTree($node['children'], $newPrefix, $isLastNode, $color);
+            }
+        }
+    }
+
+    /**
+     * 简洁的树形目录显示命令列表
+     * 
+     * @param array $recommendations 推荐命令列表，按分组组织
+     * @param string $color 颜色
+     */
+    public function simpleTreeList(array $recommendations, string $color = self::NOTE): void
+    {
+        foreach ($recommendations as $group => $commands) {
+            // 显示分组标题
+            $this->printing($this->colorize("📁 {$group}", self::WARNING) . PHP_EOL);
+            
+            // 直接显示命令，使用缩进表示层级
+            foreach ($commands as $cmd => $data) {
+                $parts = explode(':', $cmd);
+                $indent = str_repeat('  ', count($parts) - 1);
+                $lastPart = end($parts);
+                
+                $description = is_array($data) && isset($data['tip']) ? $data['tip'] : '';
+                
+                $coloredCommand = $this->colorize($cmd, self::SUCCESS);
+                $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
+                
+                $this->printing($indent . '└── ' . $coloredCommand . $coloredDescription . PHP_EOL);
+            }
+            
+            // 分组间添加空行
+            $this->printing(PHP_EOL);
+        }
+    }
+
+    /**
+     * 自适应宽度的命令列表显示
+     * 
+     * @param array $items 命令项数组，格式：[['command' => 'cmd', 'description' => 'desc'], ...]
+     * @param string $bullet 项目符号
+     * @param string $color 颜色
+     * @param int $extraPadding 额外填充字符数
+     */
+    public function adaptiveList(array $items, string $bullet = '•', string $color = self::NOTE, int $extraPadding = 4): void
+    {
+        if (empty($items)) {
+            return;
+        }
+        
+        // 计算最长命令的长度
+        $maxCommandLength = 0;
+        foreach ($items as $item) {
+            if (is_string($item)) {
+                // 如果是字符串格式 "command - description"
+                $parts = explode(' - ', $item, 2);
+                if (count($parts) >= 2) {
+                    $commandLength = strlen($parts[0]);
+                    $maxCommandLength = max($maxCommandLength, $commandLength);
+                }
+            } elseif (is_array($item) && isset($item['command'])) {
+                // 如果是数组格式 ['command' => 'cmd', 'description' => 'desc']
+                $commandLength = strlen($item['command']);
+                $maxCommandLength = max($maxCommandLength, $commandLength);
+            }
+        }
+        
+        // 设置命令列宽度（最长命令长度 + 额外填充）
+        $commandWidth = $maxCommandLength + $extraPadding;
+        
+        foreach ($items as $item) {
+            if (is_string($item)) {
+                // 处理字符串格式
+                $parts = explode(' - ', $item, 2);
+                if (count($parts) >= 2) {
+                    $command = $parts[0];
+                    $description = $parts[1];
+                    $paddedCommand = str_pad($command, $commandWidth);
+                    $coloredCommand = $this->colorize($paddedCommand, self::SUCCESS);
+                    $coloredDescription = $this->colorize($description, $color);
+                    echo $this->colorize($bullet, $color) . ' ' . $coloredCommand . $coloredDescription . PHP_EOL;
+                } else {
+                    // 如果没有描述，直接显示
+                    echo $this->colorize($bullet, $color) . ' ' . $this->colorize($item, self::SUCCESS) . PHP_EOL;
+                }
+            } elseif (is_array($item) && isset($item['command'])) {
+                // 处理数组格式
+                $command = $item['command'];
+                $description = $item['description'] ?? '';
+                $paddedCommand = str_pad($command, $commandWidth);
+                $coloredCommand = $this->colorize($paddedCommand, self::SUCCESS);
+                $coloredDescription = $this->colorize($description, $color);
+                echo $this->colorize($bullet, $color) . ' ' . $coloredCommand . $coloredDescription . PHP_EOL;
+            } else {
+                // 其他格式直接显示
+                echo $this->colorize($bullet, $color) . ' ' . $item . PHP_EOL;
+            }
         }
     }
     
