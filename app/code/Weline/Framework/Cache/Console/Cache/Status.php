@@ -126,6 +126,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
         
         // 框架缓存
         $this->printing->coloredText(__('🔧 框架缓存'), $this->printing::WARNING, 'bold');
+        $this->printing->separator('─', 60, $this->printing::NOTE);
         $frameworkStats = $this->printCacheGroup($caches['framework'] ?? [], 'framework');
         $totalStats = $this->mergeStats($totalStats, $frameworkStats);
         
