@@ -157,10 +157,12 @@ class Shop extends Model
      */
     public function updateLastSyncTime(int $shopId): bool
     {
-        return $this->where(self::fields_ID, $shopId)
+        $result = $this->where(self::fields_ID, $shopId)
             ->update([
                 self::fields_LAST_SYNC => date('Y-m-d H:i:s')
-            ]);
+            ])->fetch();
+        
+        return $result !== false;
     }
 
     /**

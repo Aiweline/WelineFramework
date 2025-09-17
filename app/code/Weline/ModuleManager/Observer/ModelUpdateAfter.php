@@ -38,12 +38,27 @@ class ModelUpdateAfter implements ObserverInterface
             # 检查是否存在表
             $table = $model->getTable();
             $table = str_replace('`', '', $table);
+            
+            # 检查模型类是否已存在
+            /**@var Table $existingModel */
+            $existingModel = $this->table->where($this->table::fields_model, $model::class)->find()->fetch();
+            if ($existingModel->getId()) {
+                # 如果模型已存在，跳过插入
+                return;
+            }
+            
+            # 检查表名是否已被其他模型使用
             /**@var Table $has */
             $has = $this->table->where($this->table::fields_name, $table)->find()->fetch();
             if ($has->getId() and $has->getModuleName() != $module->getName() and $has->getModel() != $model::class) {
                 throw new Exception($table . __('表已存在！该表已被：%{1} 模组下的 %{2} 模型创建，请为当前模型 %{3} 更换表名。如果你确认需要移除表，请访问module_table表，手动删除表。', [$has->getModuleName(), $has->getModel(), $model::class]));
             }
-            Debug::env('dd');
+            
+            # 如果表名已存在且是同一个模型，跳过插入
+            if ($has->getId() and $has->getModel() == $model::class) {
+                return;
+            }
+            
             $this->table->reset()->clearData()
                 ->setData($this->table::fields_module_name, $module->getName())
                 ->setData($this->table::fields_name, $table, true)

@@ -130,7 +130,7 @@ class FeishuConfig extends Model
             ->find()
             ->fetch();
             
-        return $config->getId() ? $config->getData() : null;
+        return $config && $config->getId() ? $config->getData() : null;
     }
 
     /**
@@ -139,7 +139,9 @@ class FeishuConfig extends Model
     public function saveConfig(array $configData): bool
     {
         // 先禁用所有配置
-        $this->update([self::fields_STATUS => self::STATUS_INACTIVE]);
+        $this->where(self::fields_STATUS, self::STATUS_ACTIVE)
+             ->update([self::fields_STATUS => self::STATUS_INACTIVE])
+             ->fetch();
         
         // 创建新配置
         $this->setData($configData);

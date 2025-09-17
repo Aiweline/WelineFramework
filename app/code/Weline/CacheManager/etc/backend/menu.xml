@@ -5,4 +5,12 @@
     <!--缓存管理-->
     <add source="Weline_CacheManager::system_cache" name="system_cache" title="缓存管理" action="admin/system/cache"
          parent="Weline_Backend::system_configuration" icon="mdi mdi-cached" order="1"/>
+    
+    <!--缓存清理管理-->
+    <add source="Weline_CacheManager::cache_cleanup" name="cache_cleanup" title="缓存清理" action="admin/cachecleanup/index"
+         parent="Weline_Backend::system_configuration" icon="mdi mdi-broom" order="2"/>
+    
+    <!--定时任务状态-->
+    <add source="Weline_CacheManager::cron_status" name="cron_status" title="定时任务状态" action="admin/cachecleanup/cronstatus"
+         parent="Weline_Backend::system_configuration" icon="mdi mdi-clock" order="3"/>
 </menus>
