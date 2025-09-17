@@ -434,15 +434,15 @@ COMMAND_LIST;
         $padding = $options['padding'] ?? 1;
         $border = $options['border'] ?? true;
         
-        // 计算列宽
+        // 计算列宽（去除ANSI颜色代码）
         $columnWidths = [];
         foreach ($headers as $i => $header) {
-            $columnWidths[$i] = mb_strlen($header);
+            $columnWidths[$i] = $this->getStringLength($header);
         }
         
         foreach ($rows as $row) {
             foreach ($row as $i => $cell) {
-                $columnWidths[$i] = max($columnWidths[$i] ?? 0, mb_strlen($cell));
+                $columnWidths[$i] = max($columnWidths[$i] ?? 0, $this->getStringLength($cell));
             }
         }
         
@@ -473,6 +473,19 @@ COMMAND_LIST;
         if ($border) {
             $this->printTableBorder($totalWidth, $style);
         }
+    }
+    
+    /**
+     * 获取字符串长度（去除ANSI颜色代码）
+     * 
+     * @param string $str 字符串
+     * @return int 实际显示长度
+     */
+    private function getStringLength(string $str): int
+    {
+        // 去除ANSI颜色代码
+        $cleanStr = preg_replace('/\033\[[0-9;]*m/', '', $str);
+        return mb_strlen($cleanStr);
     }
     
     /**
