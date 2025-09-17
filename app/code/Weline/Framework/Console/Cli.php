@@ -351,22 +351,8 @@ class Cli extends CliAbstract
         $this->printer->note(__('🎯 找到以下匹配的命令'));
         $this->printer->separator('─', 0, 'NOTE');
         
-        foreach ($recommendations as $group => $commands) {
-            // 使用更形象的分组图标
-            $icon = $this->getGroupIcon($group);
-            $this->printer->note("{$icon} {$group}");
-            
-            // 使用美化的列表显示
-            $items = [];
-            foreach ($commands as $cmd => $data) {
-                if (is_array($data) && isset($data['tip'])) {
-                    $items[] = $this->printer->colorize($cmd, 'SUCCESS') . ' - ' . $this->printer->colorize($data['tip'], 'NOTE');
-                } else {
-                    $items[] = $this->printer->colorize($cmd, 'SUCCESS');
-                }
-            }
-            $this->printer->list($items, "", 'NOTE');
-        }
+        // 使用简洁的树形目录显示所有推荐命令
+        $this->printer->simpleTreeList($recommendations, 'NOTE');
         
         // 添加底部装饰
         $this->printer->separator('═', 0, 'SUCCESS');

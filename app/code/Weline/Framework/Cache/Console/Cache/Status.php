@@ -58,7 +58,18 @@ class Status implements \Weline\Framework\Console\CommandInterface
             /**@var CacheInterface $cacheObj */
             $status = $op == 'enable' ? 1 : 0;
             $cache_config = Env::getInstance()->getData('cache');
-            $identify_s = array_slice($args, 2, count($args));
+            // 获取除了'command'键和索引0、1之外的所有参数
+            $identify_s = [];
+            foreach ($args as $key => $value) {
+                // 跳过命令名（索引0和'command'键）和操作符（索引1）
+                if ($key === 0 || $key === 1 || $key === 'command') {
+                    continue;
+                }
+                // 收集其他有效参数
+                if (!empty($value)) {
+                    $identify_s[] = $value;
+                }
+            }
             $no_has_data = [];
             $set_data = $cache_config['status'] ?? [];
             if ($identify_s) {
@@ -93,14 +104,21 @@ class Status implements \Weline\Framework\Console\CommandInterface
             }
         } else {
             # 处理缓存状态默认查看 所有缓存状态
-            $identify_s = array_slice($args, 0, count($args));
-            // 过滤掉命令本身
-            $identify_s = array_filter($identify_s, function($arg) {
-                return $arg !== 'cache:status' && !empty($arg);
-            });
+            // 获取除了'command'键和索引0之外的所有参数
+            $identify_s = [];
+            foreach ($args as $key => $value) {
+                // 跳过命令名（索引0和'command'键）
+                if ($key === 0 || $key === 'command') {
+                    continue;
+                }
+                // 收集其他有效参数
+                if (!empty($value)) {
+                    $identify_s[] = $value;
+                }
+            }
             
             if ($identify_s) {
-                $this->printSpecific(array_values($identify_s));
+                $this->printSpecific($identify_s);
             } else {
                 $this->printAll();
             }
@@ -112,7 +130,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
      */
     public function printAll()
     {
-        $this->printing->title(__('缓存状态总览'), '=', $this->printing::SUCCESS);
+        $this->printing->title(__('缓存状态总览'), '-', $this->printing::SUCCESS);
         
         $caches = $this->scanner->getCaches();
         $totalStats = ['enabled' => 0, 'disabled' => 0, 'total' => 0, 'size' => 0];
@@ -150,7 +168,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
      */
     public function printSpecific(array $identifies)
     {
-        $this->printing->title(__('指定缓存状态'), '=', $this->printing::SUCCESS);
+        $this->printing->title(__('指定缓存状态'), '-', $this->printing::SUCCESS);
         
         $caches = $this->scanner->getCaches();
         $foundCaches = [];
@@ -242,7 +260,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
                 ];
             }
             
-            $this->printing->table($headers, $rows, ['padding' => 0, 'border' => false, 'maxWidth' => 100]);
+            $this->printing->table($headers, $rows, ['padding' => 1, 'border' => true, 'maxWidth' => 120]);
         }
         
         return $stats;
@@ -255,27 +273,29 @@ class Status implements \Weline\Framework\Console\CommandInterface
      */
     private function printCacheDetails(array $caches)
     {
+        $headers = [__('缓存标识'), __('状态'), __('占用空间'), __('可清理空间'), __('文件数量'), __('描述')];
+        $rows = [];
+        
         foreach ($caches as $cache) {
             $identify = $cache->getIdentify();
             $status = $cache->getStatus();
             $cacheInfo = $this->getCacheInfo($cache);
             
-            $this->printing->coloredText(__('缓存标识: %{1}', [$identify]), $this->printing::WARNING, 'bold');
-            
             $statusText = $status ? 
                 $this->printing->colorize(__('启用'), $this->printing::SUCCESS) : 
                 $this->printing->colorize(__('禁用'), $this->printing::ERROR);
             
-            $this->printing->keyValue([
-                __('状态') => $statusText,
-                __('占用空间') => $this->formatBytes($cacheInfo['size']),
-                __('可清理空间') => $this->formatBytes($cacheInfo['cleanable']),
-                __('文件数量') => $cacheInfo['files'],
-                __('描述') => $cacheInfo['description']
-            ], ':', 12);
-            
-            $this->printing->separator('─', 40, $this->printing::NOTE);
+            $rows[] = [
+                $identify,
+                $statusText,
+                $this->formatBytes($cacheInfo['size']),
+                $this->formatBytes($cacheInfo['cleanable']),
+                $cacheInfo['files'],
+                $cacheInfo['description']
+            ];
         }
+        
+        $this->printing->table($headers, $rows, ['padding' => 1, 'border' => true, 'maxWidth' => 120]);
     }
     
     /**
