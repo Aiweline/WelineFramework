@@ -12,111 +12,8 @@ class FeishuNotify extends Helper
 {
     private ?array $config = null;
     
-    // 环境标志
+    // 环境标志 - 默认本地环境
     private bool $isLocal = false;
-    private bool $isProd = false;
-
-    /**
-     * 构造函数 - 自动检测环境
-     */
-    public function __construct()
-    {
-        $this->detectEnvironment();
-    }
-
-    /**
-     * 检测当前环境
-     */
-    private function detectEnvironment(): void
-    {
-        // 检测是否为本地开发环境
-        $this->isLocal = $this->isLocalEnvironment();
-        
-        // 检测是否为生产环境
-        $this->isProd = $this->isProductionEnvironment();
-    }
-
-    /**
-     * 判断是否为本地环境
-     */
-    private function isLocalEnvironment(): bool
-    {
-        // 检查多个本地环境标识
-        $localIndicators = [
-            'localhost',
-            '127.0.0.1',
-            '::1',
-            'local',
-            'dev',
-            'development'
-        ];
-        
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        $appEnv = $_ENV['APP_ENV'] ?? getenv('APP_ENV') ?? '';
-        
-        // 检查主机名
-        foreach ($localIndicators as $indicator) {
-            if (strpos($host, $indicator) !== false) {
-                return true;
-            }
-        }
-        
-        // 检查环境变量
-        if (in_array(strtolower($appEnv), ['local', 'dev', 'development'])) {
-            return true;
-        }
-        
-        // 检查是否为CLI环境且没有设置生产标志
-        if (php_sapi_name() === 'cli' && !$this->isProductionEnvironment()) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    /**
-     * 判断是否为生产环境
-     */
-    private function isProductionEnvironment(): bool
-    {
-        $appEnv = $_ENV['APP_ENV'] ?? getenv('APP_ENV') ?? '';
-        
-        // 检查环境变量
-        if (in_array(strtolower($appEnv), ['prod', 'production', 'live'])) {
-            return true;
-        }
-        
-        // 检查是否为生产域名（示例）
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        if (strpos($host, '.com') !== false && strpos($host, 'localhost') === false) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    /**
-     * 手动设置环境标志
-     */
-    public function setEnvironment(bool $isLocal = false, bool $isProd = false): void
-    {
-        $this->isLocal = $isLocal;
-        $this->isProd = $isProd;
-    }
-
-    /**
-     * 获取当前环境信息
-     */
-    public function getEnvironmentInfo(): array
-    {
-        return [
-            'isLocal' => $this->isLocal,
-            'isProd' => $this->isProd,
-            'host' => $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'unknown',
-            'app_env' => $_ENV['APP_ENV'] ?? getenv('APP_ENV') ?? 'unknown',
-            'sapi' => php_sapi_name()
-        ];
-    }
 
     /**
      * 本地环境消息日志记录
@@ -128,7 +25,11 @@ class FeishuNotify extends Helper
             'message' => $message,
             'keywords' => $keywords,
             'timestamp' => date('Y-m-d H:i:s'),
-            'environment' => $this->getEnvironmentInfo()
+            'environment' => [
+                'isLocal' => $this->isLocal,
+                'host' => $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'unknown',
+                'sapi' => php_sapi_name()
+            ]
         ];
 
         // 输出到控制台（CLI环境）
@@ -159,8 +60,10 @@ class FeishuNotify extends Helper
     {
         $feishuConfig = new FeishuConfig();
         $this->config = $feishuConfig->getActiveConfig();
-        
-        return !empty($this->config);
+        if (empty($this->config['status']) || $this->config['status'] == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
