@@ -351,7 +351,23 @@ COMMAND_LIST;
     private function isTerminal(): bool
     {
         if ($this->isTerminal === null) {
-            $this->isTerminal = (php_sapi_name() === 'cli' && posix_isatty(STDOUT));
+            // 检查是否为 CLI 环境
+            if (php_sapi_name() !== 'cli') {
+                $this->isTerminal = false;
+                return $this->isTerminal;
+            }
+            
+            // 检查 posix_isatty 函数是否可用（Windows 下可能不可用）
+            if (function_exists('posix_isatty')) {
+                $this->isTerminal = posix_isatty(STDOUT);
+            } else {
+                // Windows 下的替代方案：检查环境变量和流类型
+                $this->isTerminal = (
+                    stream_isatty(STDOUT) || 
+                    (isset($_SERVER['TERM']) && $_SERVER['TERM'] !== 'dumb') ||
+                    (isset($_SERVER['ANSICON']) || isset($_SERVER['ConEmuANSI']))
+                );
+            }
         }
         return $this->isTerminal;
     }
@@ -365,12 +381,66 @@ COMMAND_LIST;
     {
         if ($this->terminalWidth === null) {
             if ($this->isTerminal()) {
-                $this->terminalWidth = (int)shell_exec('tput cols 2>/dev/null') ?: 80;
+                // 尝试获取终端宽度
+                $width = $this->getTerminalWidthFromSystem();
+                $this->terminalWidth = $width ?: 80;
             } else {
                 $this->terminalWidth = 80;
             }
         }
         return $this->terminalWidth;
+    }
+    
+    /**
+     * 从系统获取终端宽度
+     * 
+     * @return int
+     */
+    private function getTerminalWidthFromSystem(): int
+    {
+        // 检查 shell_exec 是否可用
+        if (!function_exists('shell_exec') || !is_callable('shell_exec')) {
+            // 如果 shell_exec 不可用，使用默认值
+            return PHP_OS_FAMILY === 'Windows' ? 120 : 80;
+        }
+        
+        // Windows 系统
+        if (PHP_OS_FAMILY === 'Windows') {
+            // 尝试使用 mode 命令获取控制台宽度
+            $output = \shell_exec('mode con 2>nul | findstr "列"');
+            if ($output && preg_match('/(\d+)/', $output, $matches)) {
+                return (int)$matches[1];
+            }
+            
+            // 尝试使用 PowerShell 获取
+            $output = \shell_exec('powershell -Command "Write-Host $Host.UI.RawUI.WindowSize.Width" 2>nul');
+            if ($output && is_numeric(trim($output))) {
+                return (int)trim($output);
+            }
+            
+            // 默认返回 120（Windows 控制台默认宽度）
+            return 120;
+        }
+        
+        // Unix/Linux 系统
+        // 尝试使用 tput 命令
+        $output = \shell_exec('tput cols 2>/dev/null');
+        if ($output && is_numeric(trim($output))) {
+            return (int)trim($output);
+        }
+        
+        // 尝试使用 stty 命令
+        $output = \shell_exec('stty size 2>/dev/null');
+        if ($output && preg_match('/\d+\s+(\d+)/', $output, $matches)) {
+            return (int)$matches[1];
+        }
+        
+        // 尝试使用 COLUMNS 环境变量
+        if (isset($_SERVER['COLUMNS']) && is_numeric($_SERVER['COLUMNS'])) {
+            return (int)$_SERVER['COLUMNS'];
+        }
+        
+        return 0;
     }
     
     /**
