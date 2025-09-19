@@ -182,7 +182,7 @@ class Url implements UrlInterface
         $url_site = $parse['website_url'] ?? '';
         /** @var Request $req */
         $req = w_obj(Request::class);
-        $req_parse = self::parser($req->getUrlPath());
+        $req_parse = self::parser($req->getUrlBuilder()->getCurrentUrl());
         $req_host = $req_parse['website_url'] ?? '';
         return $url_site === $req_host;
     }
