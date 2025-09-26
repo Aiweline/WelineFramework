@@ -920,26 +920,29 @@ COMMAND_LIST;
         foreach ($commands as $cmd => $data) {
             $parts = explode(':', $cmd);
             $current = &$tree;
-            $path = [];
             
-            // 构建树形结构
+            // 构建树形结构，只有当有多个相同前缀的命令时才创建目录
             for ($i = 0; $i < count($parts); $i++) {
                 $part = $parts[$i];
-                $path[] = $part;
                 $isLast = ($i === count($parts) - 1);
+                
+                // 检查是否需要创建目录节点
+                $shouldCreateDirectory = $this->shouldCreateDirectory($commands, $parts, $i);
                 
                 if (!isset($current[$part])) {
                     $current[$part] = [
                         'is_command' => $isLast,
                         'children' => [],
                         'data' => $isLast ? $data : null,
-                        'path' => implode(':', $path)
+                        'full_command' => $cmd,
+                        'is_directory' => !$isLast && $shouldCreateDirectory
                     ];
                 }
                 
                 if ($isLast) {
                     $current[$part]['is_command'] = true;
                     $current[$part]['data'] = $data;
+                    $current[$part]['full_command'] = $cmd;
                 }
                 
                 $current = &$current[$part]['children'];
@@ -947,6 +950,36 @@ COMMAND_LIST;
         }
         
         return $tree;
+    }
+
+    /**
+     * 判断是否应该创建目录节点
+     * 
+     * @param array $commands 所有命令
+     * @param array $parts 当前命令的部分
+     * @param int $index 当前索引
+     * @return bool 是否应该创建目录
+     */
+    private function shouldCreateDirectory(array $commands, array $parts, int $index): bool
+    {
+        if ($index === 0) {
+            // 第一级总是创建目录
+            return true;
+        }
+        
+        // 构建当前路径
+        $currentPath = implode(':', array_slice($parts, 0, $index + 1));
+        
+        // 统计有多少命令以当前路径开头
+        $count = 0;
+        foreach ($commands as $cmd => $data) {
+            if (strpos($cmd, $currentPath . ':') === 0) {
+                $count++;
+            }
+        }
+        
+        // 只有当有多个子命令时才创建目录
+        return $count > 1;
     }
     
     /**
@@ -956,8 +989,9 @@ COMMAND_LIST;
      * @param string $prefix 前缀
      * @param bool $isLast 是否为最后一个节点
      * @param string $color 颜色
+     * @param string $parentKey 父级键名，用于判断是否重复
      */
-    private function printTree(array $tree, string $prefix = '', bool $isLast = true, string $color = self::NOTE): void
+    private function printTree(array $tree, string $prefix = '', bool $isLast = true, string $color = self::NOTE, string $parentKey = ''): void
     {
         $keys = array_keys($tree);
         $lastKey = end($keys);
@@ -971,26 +1005,25 @@ COMMAND_LIST;
             
             if ($node['is_command']) {
                 // 这是一个完整的命令
-                $command = $node['path'];
+                $command = $node['full_command'];
                 $description = $node['data']['tip'] ?? '';
                 
                 $coloredCommand = $this->colorize($command, self::SUCCESS);
-                $coloredDescription = $this->colorize($description, $color);
+                $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
                 
-                $this->printing($prefix . $connector . $coloredCommand);
-                if ($description) {
-                    $this->printing(' - ' . $coloredDescription);
+                $this->printing($prefix . $connector . $coloredCommand . $coloredDescription . PHP_EOL);
+            } elseif (isset($node['is_directory']) && $node['is_directory']) {
+                // 只有当目录名称与父级不同时才显示目录节点
+                // 第一级目录总是显示，其他级别只有当与父级不同时才显示
+                if ($parentKey === '' || $key !== $parentKey) {
+                    $coloredDir = $this->colorize($key, self::WARNING);
+                    $this->printing($prefix . $connector . $coloredDir . PHP_EOL);
                 }
-                $this->printing(PHP_EOL);
-            } else {
-                // 这是一个目录节点
-                $coloredDir = $this->colorize($key, self::WARNING);
-                $this->printing($prefix . $connector . $coloredDir . PHP_EOL);
             }
             
             // 递归打印子节点
             if (!empty($node['children'])) {
-                $this->printTree($node['children'], $newPrefix, $isLastNode, $color);
+                $this->printTree($node['children'], $newPrefix, $isLastNode, $color, $key);
             }
         }
     }
@@ -1023,6 +1056,246 @@ COMMAND_LIST;
             
             // 分组间添加空行
             $this->printing(PHP_EOL);
+        }
+    }
+
+    /**
+     * 按命令前缀分组的树形目录显示命令列表
+     * 
+     * @param array $recommendations 推荐命令列表，按分组组织
+     * @param string $color 颜色
+     */
+    public function groupedTreeList(array $recommendations, string $color = self::NOTE): void
+    {
+        // 重新组织命令，按命令前缀分组而不是模块分组
+        $prefixGroups = $this->reorganizeByCommandPrefix($recommendations);
+        
+        foreach ($prefixGroups as $prefix => $commands) {
+            // 显示分组标题
+            $this->printing($this->colorize("📁 {$prefix}", self::WARNING) . PHP_EOL);
+            
+            // 直接显示命令，不进行二次分组
+            $this->printCommandsDirectly($commands, '', true, $color);
+            
+            // 分组间添加空行
+            $this->printing(PHP_EOL);
+        }
+    }
+
+    /**
+     * 按命令前缀重新组织所有命令
+     * 
+     * @param array $recommendations 原始推荐命令列表
+     * @return array 按命令前缀分组的命令
+     */
+    private function reorganizeByCommandPrefix(array $recommendations): array
+    {
+        $prefixGroups = [];
+        
+        foreach ($recommendations as $group => $commands) {
+            foreach ($commands as $cmd => $data) {
+                $parts = explode(':', $cmd);
+                $prefix = $parts[0]; // 取命令的第一个部分作为前缀
+                
+                if (!isset($prefixGroups[$prefix])) {
+                    $prefixGroups[$prefix] = [];
+                }
+                
+                $prefixGroups[$prefix][$cmd] = $data;
+            }
+        }
+        
+        return $prefixGroups;
+    }
+
+    /**
+     * 直接打印命令列表，按冒号重新组织成树形结构
+     * 
+     * @param array $commands 命令数组
+     * @param string $prefix 前缀
+     * @param bool $isLast 是否为最后一个节点
+     * @param string $color 颜色
+     */
+    private function printCommandsDirectly(array $commands, string $prefix = '', bool $isLast = true, string $color = self::NOTE): void
+    {
+        // 按冒号重新组织成树形结构
+        $tree = $this->buildColonTree($commands);
+        
+        // 打印树形结构
+        $this->printColonTree($tree, $prefix, $isLast, $color);
+    }
+
+    /**
+     * 按冒号构建树形结构
+     * 
+     * @param array $commands 命令数组
+     * @return array 树形结构
+     */
+    private function buildColonTree(array $commands): array
+    {
+        $tree = [];
+        
+        foreach ($commands as $cmd => $data) {
+            $parts = explode(':', $cmd);
+            $current = &$tree;
+            
+            // 构建树形结构
+            for ($i = 0; $i < count($parts); $i++) {
+                $part = $parts[$i];
+                $isLast = ($i === count($parts) - 1);
+                
+                if (!isset($current[$part])) {
+                    $current[$part] = [
+                        'is_leaf' => $isLast,
+                        'children' => [],
+                        'data' => $isLast ? $data : null,
+                        'full_command' => $cmd
+                    ];
+                }
+                
+                if ($isLast) {
+                    $current[$part]['is_leaf'] = true;
+                    $current[$part]['data'] = $data;
+                    $current[$part]['full_command'] = $cmd;
+                }
+                
+                $current = &$current[$part]['children'];
+            }
+        }
+        
+        return $tree;
+    }
+
+    /**
+     * 打印冒号树形结构
+     * 
+     * @param array $tree 树形数据
+     * @param string $prefix 前缀
+     * @param bool $isLast 是否为最后一个节点
+     * @param string $color 颜色
+     * @param string $parentKey 父级键名，用于判断是否重复
+     * @param bool $isFirstLevel 是否为第一级，用于判断是否显示重复的分组名称
+     */
+    private function printColonTree(array $tree, string $prefix = '', bool $isLast = true, string $color = self::NOTE, string $parentKey = '', bool $isFirstLevel = true): void
+    {
+        $keys = array_keys($tree);
+        $lastKey = end($keys);
+        
+        foreach ($tree as $key => $node) {
+            $isLastNode = ($key === $lastKey);
+            
+            // 确定连接符
+            $connector = $isLastNode ? '└── ' : '├── ';
+            $newPrefix = $prefix . ($isLast ? '    ' : '│   ');
+            
+            if ($node['is_leaf']) {
+                // 这是一个叶子节点（完整命令）
+                $command = $node['full_command'];
+                $description = $node['data']['tip'] ?? '';
+                
+                $coloredCommand = $this->colorize($command, self::SUCCESS);
+                $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
+                
+                $this->printing($prefix . $connector . $coloredCommand . $coloredDescription . PHP_EOL);
+            } else {
+                // 只有当有多个子节点时才显示分支节点，否则直接显示叶子节点
+                if (count($node['children']) > 1) {
+                    // 第一级不显示重复的分组名称，其他级别只有当分支名称与父级不同时才显示分支节点
+                    if (!$isFirstLevel && $key !== $parentKey) {
+                        $coloredBranch = $this->colorize($key, self::WARNING);
+                        $this->printing($prefix . $connector . $coloredBranch . PHP_EOL);
+                    }
+                    
+                    // 递归打印子节点
+                    $this->printColonTree($node['children'], $newPrefix, $isLastNode, $color, $key, false);
+                } else {
+                    // 只有一个子节点，直接显示叶子节点
+                    $this->printColonTree($node['children'], $prefix, $isLastNode, $color, $key, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * 按命令前缀分组命令
+     * 
+     * @param array $commands 命令数组
+     * @return array 分组后的命令
+     */
+    private function groupCommandsByPrefix(array $commands): array
+    {
+        $grouped = [];
+        
+        foreach ($commands as $cmd => $data) {
+            $parts = explode(':', $cmd);
+            
+            if (count($parts) === 1) {
+                // 单段命令直接显示
+                $grouped[$cmd] = $data;
+            } else {
+                // 多段命令按前缀分组，但避免重复显示前缀
+                $prefix = $parts[0];
+                $suffix = implode(':', array_slice($parts, 1));
+                
+                if (!isset($grouped[$prefix])) {
+                    $grouped[$prefix] = [];
+                }
+                
+                // 如果后缀不是以相同前缀开头，直接添加
+                if (!str_starts_with($suffix, $prefix . ':')) {
+                    $grouped[$prefix][$suffix] = $data;
+                } else {
+                    // 如果后缀以相同前缀开头，去掉重复的前缀
+                    $cleanSuffix = substr($suffix, strlen($prefix) + 1);
+                    $grouped[$prefix][$cleanSuffix] = $data;
+                }
+            }
+        }
+        
+        return $grouped;
+    }
+
+    /**
+     * 打印分组后的命令树
+     * 
+     * @param array $groupedCommands 分组后的命令
+     * @param string $prefix 前缀
+     * @param bool $isLast 是否为最后一个节点
+     * @param string $color 颜色
+     * @param string $parentPrefix 父级前缀，用于判断是否重复
+     */
+    private function printGroupedCommands(array $groupedCommands, string $prefix = '', bool $isLast = true, string $color = self::NOTE, string $parentPrefix = ''): void
+    {
+        $keys = array_keys($groupedCommands);
+        $lastKey = end($keys);
+        
+        foreach ($groupedCommands as $key => $value) {
+            $isLastNode = ($key === $lastKey);
+            
+            // 确定连接符
+            $connector = $isLastNode ? '└── ' : '├── ';
+            $newPrefix = $prefix . ($isLast ? '    ' : '│   ');
+            
+            if (is_array($value) && !empty($value) && !isset($value['tip'])) {
+                // 这是一个分组节点（包含子命令的数组）
+                // 如果分组名称和父级前缀相同，直接显示子命令，不显示重复的分组名称
+                if ($key === $parentPrefix) {
+                    $this->printGroupedCommands($value, $prefix, $isLastNode, $color, $key);
+                } else {
+                    $coloredGroup = $this->colorize($key, self::WARNING);
+                    $this->printing($prefix . $connector . $coloredGroup . PHP_EOL);
+                    // 递归打印子节点
+                    $this->printGroupedCommands($value, $newPrefix, $isLastNode, $color, $key);
+                }
+            } else {
+                // 这是一个命令节点
+                $description = is_array($value) && isset($value['tip']) ? $value['tip'] : '';
+                
+                $coloredCommand = $this->colorize($key, self::SUCCESS);
+                $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
+                
+                $this->printing($prefix . $connector . $coloredCommand . $coloredDescription . PHP_EOL);
+            }
         }
     }
 
