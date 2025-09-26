@@ -54,19 +54,40 @@ class Cli extends CliAbstract
 
     function parseArgs(array $args): array
     {
+        $command = '';
+        $argName = null;
+        
         foreach ($args as $k => $arg) {
             if ($k == 0) {
-                $args['command'] = $arg;
+                // 第一个参数，检查是否是命令还是参数
+                if (str_starts_with($arg, '-')) {
+                    // 如果第一个参数以 - 开头，说明没有命令，只有参数
+                    $args['command'] = '';
+                    // 处理这个参数
+                    $argName = trim($arg, '-');
+                    $next = $args[$k + 1] ?? null;
+                    if (empty($next) || str_starts_with($next, '-')) {
+                        $args[$argName] = true;
+                        $args[$arg] = true;
+                    }
+                } else {
+                    // 第一个参数不是以 - 开头，说明是命令
+                    $args['command'] = $arg;
+                    $command = $arg;
+                }
                 continue;
             }
+            
             if (is_string($k)) {
                 continue;
             }
+            
             if (str_contains($arg, '=')) {
                 $arg = explode('=', $arg);
                 $args[trim($arg[0], '-')] = $arg[1] ?? true;
                 continue;
             }
+            
             # 参数名
             if (str_starts_with($arg, '-')) {
                 $argName = trim($arg, '-');
@@ -119,11 +140,10 @@ class Cli extends CliAbstract
      *
      * @return array
      */
-    private function recommendCommand(array $commands): array
+    private function recommendCommand(array $commands, string $command): array
     {
         // 第一步：用户输入的命令分段
-        $arg0 = strtolower(trim($this->argv[0] ?? ''));
-        $input_segments = explode(':', $arg0);
+        $input_segments = explode(':', $command);
         
         // 第二步：使用分段递进匹配
         $matched_commands = $this->progressiveMatchCommands($input_segments, $commands);
@@ -243,8 +263,8 @@ class Cli extends CliAbstract
      */
     private function checkCommand(array $args): array
     {
-        $arg0 = strtolower(trim($this->argv[0] ?? ''));
-        if ($arg0 === 'command:upgrade') {
+        $command = strtolower(trim($args['command'] ?? ''));
+        if ($command === 'command:upgrade') {
             try {
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
             } catch (Exception $exception) {
@@ -253,7 +273,7 @@ class Cli extends CliAbstract
             }
         }
         $commands = Env::getCommands();
-        if ($arg0 !== 'command:upgrade' && empty($commands)) {
+        if ($command !== 'command:upgrade' && empty($commands)) {
             try {
                 ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class)->execute();
             } catch (Exception $exception) {
@@ -265,13 +285,12 @@ class Cli extends CliAbstract
 
         // 检查完整命令
         foreach ($commands as $group => $group_commands) {
-            if (isset($group_commands[$arg0]) && $command_data = $group_commands[$arg0]) {
+            if (isset($group_commands[$command]) && $command_data = $group_commands[$command]) {
                 $command_class = $command_data['class'];
-                return ['class' => $command_class, 'command' => $arg0, 'data' => $command_data];
+                return ['class' => $command_class, 'command' => $command, 'data' => $command_data];
             }
         }
-
-        $recommendCommands = $this->recommendCommand($commands);
+        $recommendCommands = $this->recommendCommand($commands, $command);
         $commands = [];
         foreach ($recommendCommands as $recommendCommand) {
             $commands = array_merge($commands, $recommendCommand);
@@ -351,8 +370,8 @@ class Cli extends CliAbstract
         $this->printer->note(__('🎯 找到以下匹配的命令'));
         $this->printer->separator('─', 0, 'NOTE');
         
-        // 使用简洁的树形目录显示所有推荐命令
-        $this->printer->simpleTreeList($recommendations, 'NOTE');
+        // 使用新的分组树形显示
+        $this->printer->groupedTreeList($recommendations, 'NOTE');
         
         // 添加底部装饰
         $this->printer->separator('═', 0, 'SUCCESS');
