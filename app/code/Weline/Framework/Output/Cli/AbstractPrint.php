@@ -368,6 +368,7 @@ COMMAND_LIST;
                     (isset($_SERVER['ANSICON']) || isset($_SERVER['ConEmuANSI']))
                 );
             }
+            
         }
         return $this->isTerminal;
     }

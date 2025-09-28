@@ -77,14 +77,31 @@ class Locales extends BaseController
 
     public function getIndex()
     {
-        $this->locale
+        // 执行查询
+        $query_copy = clone $this->locale;
+        $locales_result = $this->locale
             ->fields('main_table.*')
             ->pagination()
             ->select()
             ->fetch();
+            
+        // 如果查不到数据就自动更新区域数据
+        if ($locales_result->getTotal() == 0) {
+            $this->autoUpdateLocaleData();
+            // 重新查询
+            $locales_result = $query_copy
+                ->fields('main_table.*')
+                ->pagination()
+                ->select()
+                ->fetch();
+        }
+        
+        // 每次访问都自动更新区域名称数据（确保当前语言的显示名称存在）
+        $this->autoUpdateMissingLocaleNames();
+        
 //        p($this->locale->getLastSql());
-        $this->assign('locales', $this->locale->getItems());
-        $this->assign('pagination', $this->locale->getPagination());
+        $this->assign('locales', $locales_result->getItems());
+        $this->assign('pagination', $locales_result->getPagination());
         return $this->fetch();
     }
 
@@ -200,5 +217,142 @@ class Locales extends BaseController
         $locale->setData($locale::fields_IS_INSTALL, 0)->save();
         $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
+    }
+
+    /**
+     * 自动更新区域数据
+     */
+    private function autoUpdateLocaleData(): void
+    {
+        try {
+            $country_code = $this->request->getParam('country_code');
+            if (!$country_code) {
+                return;
+            }
+            
+            // 检查国家是否存在
+            if (!\Symfony\Component\Intl\Countries::exists($country_code)) {
+                return;
+            }
+            
+            // 获取该国家的所有区域
+            $country = $this->i18n->getCountry($country_code);
+            $locales = $country->getLocales();
+            
+            if (empty($locales)) {
+                return;
+            }
+            
+            $locales_data = [];
+            $locales_display = [];
+            
+            foreach ($locales as $locale) {
+                $locales_data[] = [
+                    $this->locale::fields_CODE => $locale,
+                    $this->locale::fields_COUNTRY_CODE => $country_code,
+                    $this->locale::fields_IS_INSTALL => 0,
+                    $this->locale::fields_IS_ACTIVE => 0,
+                    $this->locale::fields_FLAG => ''
+                ];
+                
+                $locales_display[] = [
+                    Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
+                    Name::fields_LOCALE_CODE => $locale,
+                    Name::fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
+                ];
+            }
+            
+            $this->locale->beginTransaction();
+            
+            // 插入区域数据
+            $this->locale->reset()->insert($locales_data, $this->locale::fields_CODE)->fetch();
+            
+            // 插入区域显示名称数据
+            $this->localeName->reset()->insert($locales_display, [
+                $this->localeName::fields_LOCALE_CODE,
+                $this->localeName::fields_DISPLAY_LOCALE_CODE
+            ])->fetch();
+            
+            $this->locale->commit();
+            
+        } catch (\Exception $e) {
+            $this->locale->rollBack();
+            // 静默处理异常，不影响页面显示
+            error_log('Auto update locale data failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 自动更新缺失的区域名称数据（优化版本，只检查当前语言）
+     */
+    private function autoUpdateMissingLocaleNames(): void
+    {
+        try {
+            $country_code = $this->request->getParam('country_code');
+            $currentLang = Cookie::getLangLocal();
+            
+            if (!$country_code) {
+                return;
+            }
+            
+            // 首先检查该国家的当前语言是否已经有区域名称数据
+            $existingNamesCount = $this->localeName->clearQuery()
+                ->joinModel(
+                    Locale::class,
+                    'l',
+                    'main_table.' . Name::fields_LOCALE_CODE . '=l.' . Locale::fields_CODE,
+                    'inner'
+                )
+                ->where('l.' . Locale::fields_COUNTRY_CODE, $country_code)
+                ->where('main_table.' . Name::fields_DISPLAY_LOCALE_CODE, $currentLang)
+                ->count();
+            
+            if ($existingNamesCount > 0) {
+                // 当前语言的区域名称已存在，无需更新
+                return;
+            }
+            
+            // 获取该国家下所有已存在的区域
+            $existingLocales = $this->locale->clearQuery()
+                ->where($this->locale::fields_COUNTRY_CODE, $country_code)
+                ->select($this->locale::fields_CODE)
+                ->fetch()
+                ->getItems();
+            
+            if (empty($existingLocales)) {
+                return;
+            }
+            
+            // 批量准备当前语言的区域名称数据
+            $missingNames = [];
+            
+            foreach ($existingLocales as $locale) {
+                $localeCode = $locale->getData($this->locale::fields_CODE);
+                
+                // 获取区域显示名称
+                $displayName = $this->i18n->getLocaleName($localeCode, $currentLang);
+                if ($displayName) {
+                    $missingNames[] = [
+                        Name::fields_DISPLAY_LOCALE_CODE => $currentLang,
+                        Name::fields_LOCALE_CODE => $localeCode,
+                        Name::fields_DISPLAY_NAME => $displayName,
+                    ];
+                }
+            }
+            
+            // 批量插入当前语言的区域名称数据
+            if (!empty($missingNames)) {
+                $this->localeName->clearQuery()
+                    ->insert($missingNames, [
+                        Name::fields_LOCALE_CODE,
+                        Name::fields_DISPLAY_LOCALE_CODE
+                    ])
+                    ->fetch();
+            }
+            
+        } catch (\Exception $e) {
+            // 静默处理异常，不影响页面显示
+            error_log('Auto update missing locale names failed: ' . $e->getMessage());
+        }
     }
 }

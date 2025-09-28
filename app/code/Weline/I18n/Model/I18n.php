@@ -420,8 +420,16 @@ class I18n
             foreach ($iterator as $file) {
                 if ($file->isFile() && in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
                     $content = file_get_contents($file->getPathname());
-                    $content = str_replace('<lang>', '__(', $content);
-                    $content = str_replace('</lang>', ')', $content);
+                    // 直接提取<lang>标签内容
+                    if (preg_match_all('/<lang>(.*?)<\/lang>/', $content, $matches)) {
+                        foreach ($matches[1] as $match) {
+                            if ($match) {
+                                $translations[$match] = $match;
+                                $module_words[$match] = $match;
+                            }
+                        }
+                    }
+                    
                     # 正则替换@lang()和@lang{}情况
                     if (preg_match_all('/@lang\((.*?)\)/', $content, $matches)) {
                         foreach ($matches[1] as $match) {

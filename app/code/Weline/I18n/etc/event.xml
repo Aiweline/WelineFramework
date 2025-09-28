@@ -26,4 +26,12 @@
         <observer name="Weline_I18n::i18n_locals_upgrade" instance="Weline\I18n\Observer\I18nLocalsUpgrade"
                   disabled="false" shared="true"/>
     </event>
+    <event name="Framework_System::system_update_after">
+        <observer name="Weline_I18n::system_update_observer" instance="Weline\I18n\Observer\SystemUpdateObserver"
+                  disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Module::module_install_after">
+        <observer name="Weline_I18n::module_install_observer" instance="Weline\I18n\Observer\SystemUpdateObserver"
+                  disabled="false" shared="true"/>
+    </event>
 </config>

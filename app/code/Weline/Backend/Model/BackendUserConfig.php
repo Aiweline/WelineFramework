@@ -56,7 +56,7 @@ class BackendUserConfig extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-//        $setup->dropTable();
+    //    $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->createTable()
                 ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
