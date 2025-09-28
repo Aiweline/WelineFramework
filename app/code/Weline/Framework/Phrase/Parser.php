@@ -57,7 +57,6 @@ class Parser
             $words = str_replace('%{}', $args, $words);
             return $words;
         }
-
         // 如果是数组
         if (is_array($args)) {
             foreach ($args as $key => $arg) {

@@ -19,6 +19,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 class Dictionary extends \Weline\Framework\Database\Model
 {
 
+    public const table = "i18n_dictionary";
     const fields_ID = 'word';
     const fields_WORD = 'word';
     const fields_IS_BACKEND = 'is_backend';
