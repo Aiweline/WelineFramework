@@ -27,6 +27,7 @@
  * @return array
  */
 
+use Weline\Framework\App\Debug;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;

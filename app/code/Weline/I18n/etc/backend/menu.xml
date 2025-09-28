@@ -7,12 +7,16 @@
          parent="Weline_Backend::system_configuration"
          icon="ri-translate"
          order="99"/>
+    <add source="Weline_I18n::i18n_localization" name="i18n_localization" title="本地化" action="/i18n/backend/localization"
+         parent="Weline_I18n::i18n"
+         icon="ri-translate-2"
+         order="1"/>
     <add source="Weline_I18n::i18n_countries" name="i18n_countries" title="国家" action="/i18n/backend/countries"
          parent="Weline_I18n::i18n"
          icon="ri-global-fill"
-         order="1"/>
+         order="2"/>
     <add source="Weline_I18n::i18n_dictionaries" name="i18n_dictionaries" title="词典" action="/i18n/backend/dictionary"
          parent="Weline_I18n::i18n"
          icon="mdi mdi-bookshelf"
-         order="2"/>
+         order="3"/>
 </menus>

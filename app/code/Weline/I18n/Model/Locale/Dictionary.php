@@ -18,6 +18,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Dictionary extends \Weline\Framework\Database\Model
 {
+    public const table = 'i18n_locale_dictionary';
     public const fields_ID = 'md5';
     public const fields_MD5 = 'md5';
     public const fields_WORD = 'word';
@@ -55,5 +56,30 @@ class Dictionary extends \Weline\Framework\Database\Model
                 ->addIndex(\Weline\Framework\Database\Api\Db\TableInterface::index_type_KEY, 'idx_code', self::fields_LOCALE_CODE, '区码索引')
                 ->create();
         }
+    }
+
+    /**
+     * 生成统一的MD5指纹
+     * 确保所有地方使用相同的算法生成MD5
+     * 
+     * @param string $word 词汇
+     * @param string $locale_code 语言代码
+     * @return string MD5指纹
+     */
+    public static function generateMd5(string $word, string $locale_code): string
+    {
+        return md5($word . $locale_code);
+    }
+
+    /**
+     * 根据词汇和语言代码获取MD5
+     * 
+     * @param string $word 词汇
+     * @param string $locale_code 语言代码
+     * @return string MD5指纹
+     */
+    public function getMd5(string $word, string $locale_code): string
+    {
+        return self::generateMd5($word, $locale_code);
     }
 }

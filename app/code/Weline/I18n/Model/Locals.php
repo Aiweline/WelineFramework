@@ -19,6 +19,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Locals extends \Weline\Framework\Database\Model
 {
+    public const table = "i18n_locals";
     public const fields_ID = 'code';
     public const fields_CODE = 'code';
     public const fields_TARGET_CODE = 'target_code';
@@ -65,6 +66,60 @@ class Locals extends \Weline\Framework\Database\Model
                 ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '状态索引')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_is_install', self::fields_IS_INSTALL, '安装索引')
                 ->create();
+        }
+        
+        // 安装时一次性安装全球所有语言包
+        $this->installAllGlobalLocales();
+    }
+    
+    /**
+     * 安装全球所有语言包
+     */
+    private function installAllGlobalLocales(): void
+    {
+        try {
+            // 获取所有可用的语言代码
+            $allLocales = \Symfony\Component\Intl\Locales::getLocales();
+            $insertData = [];
+            
+            foreach ($allLocales as $locale) {
+                // 获取语言名称（使用英语作为显示语言）
+                $localeName = \Symfony\Component\Intl\Locales::getName($locale, 'en');
+                
+                // 获取对应的国家代码
+                $countryCode = substr($locale, -2);
+                
+                // 获取国旗SVG
+                $flagSvg = '';
+                try {
+                    $country = country($countryCode);
+                    if ($country) {
+                        $flagSvg = $country->getFlag();
+                    }
+                } catch (\Exception $e) {
+                    // 如果获取国旗失败，使用默认值
+                    $flagSvg = '';
+                }
+                
+                $insertData[] = [
+                    self::fields_CODE => $locale,
+                    self::fields_TARGET_CODE => $locale,
+                    self::fields_NAME => $localeName,
+                    self::fields_IS_ACTIVE => 0, // 默认未激活
+                    self::fields_IS_INSTALL => 1, // 默认已安装
+                    self::fields_FLAG => $flagSvg
+                ];
+            }
+            
+            // 批量插入数据
+            if (!empty($insertData)) {
+                $this->clearQuery();
+                $this->insert($insertData, [self::fields_CODE, self::fields_TARGET_CODE])->fetch();
+            }
+            
+        } catch (\Exception $e) {
+            // 记录错误但不中断安装过程
+            error_log('I18n global locales installation failed: ' . $e->getMessage());
         }
     }
 }

@@ -151,12 +151,12 @@ class Words extends BaseController
         foreach ($collected_words as $key => $collected_word) {
             unset($collected_words[$key]);
             if ($key and $key = trim((string)$key)) {
-                $md5 = md5($locale_code . $key);
+                $md5 = $this->localeDictionary->getMd5($key, $locale_code);
                 if (!isset($md5s[$md5])) {
                     $collected_words[] = [
                         $this->localeDictionary::fields_WORD => $key,
                         $this->localeDictionary::fields_LOCALE_CODE => $locale_code,
-                        $this->localeDictionary::fields_MD5 => md5($locale_code . $key),
+                        $this->localeDictionary::fields_MD5 => $md5,
                         $this->localeDictionary::fields_TRANSLATE => $key,
                     ];
                 }

@@ -69,11 +69,12 @@ class Catalog extends \Weline\Framework\Database\Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
+        // $setup->dropTable();
         if (!$setup->tableExist()) {
             $setup->getPrinting()->setup('安装数据表...', $setup->getTable());
             $setup->createTable('目录')
                 ->addColumn('id', TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
-                ->addColumn('name', TableInterface::column_type_VARCHAR, 60, 'not null unique ', '目录名')
+                ->addColumn('name', TableInterface::column_type_VARCHAR, 60, 'not null ', '目录名')
                 ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, 0, 'not null', '简介')
                 ->addColumn('level', TableInterface::column_type_INTEGER, null, 'not null default 0', '目录层级')
                 ->addColumn('icon', TableInterface::column_type_VARCHAR, 60, '', 'icon 图标')

@@ -34,27 +34,24 @@ class BaseController extends \Weline\Framework\App\Controller\BackendController
         I18n   $i18n
     )
     {
-        $cache_key     = 'CurrentLang' . Cookie::getLangLocal();
-        $target_locale = $i18n->i18nCache->get($cache_key);
-        if (!$target_locale) {
-            $locale = $locale->joinModel(Locale\Name::class, 'lln', 'main_table.code=lln.locale_code')
-                             ->where('lln.' . Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-                             ->where($locale::fields_CODE, Cookie::getLangLocal())
-                             ->find()
-                             ->fetch();
-            if (!$locale->getId()) {
-                $target_locale = [
-                    'code' => Cookie::getLangLocal(),
-                    'name' => $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal()),
-                ];
-            } else {
-                $target_locale         = $locale->getData();
-                $target_locale['name'] = $locale->getData(Locale\Name::fields_DISPLAY_NAME);
-            }
-            $i18n->i18nCache->set($cache_key, $target_locale);
+        // 尝试使用JOIN查询，如果失败则使用基本查询
+        $locale = $locale->joinModel(Locale\Name::class, 'ln', 'main_table.code=ln.locale_code')
+            ->where('ln.' . Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
+        $this->locale = $locale;
+        $targetLocale = clone $locale;
+        $targetLocale = $targetLocale->where($locale::fields_CODE, Cookie::getLangLocal())
+        ->find()
+        ->fetch();
+        if (!$targetLocale->getId()) {
+            $target_locale = [
+                'code' => Cookie::getLangLocal(),
+                'name' => $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal()),
+            ];
+        } else {
+            $target_locale         = $targetLocale->getData();
+            $target_locale['name'] = $locale->getData(Locale\Name::fields_DISPLAY_NAME);
         }
         $this->assign('target_locale', $target_locale);
-        $this->locale = $locale;
         $this->i18n   = $i18n;
     }
 }

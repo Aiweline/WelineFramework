@@ -20,6 +20,7 @@ use Weline\I18n\Model\Locale\Name;
 
 class Locale extends \Weline\Framework\Database\Model
 {
+    public const table = "i18n_locale";
     public const fields_ID = 'code';
     public const fields_CODE = 'code';
     public const fields_COUNTRY_CODE = 'country_code';
