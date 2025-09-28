@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- AI助手主菜单 -->
+    <add source="Weline_Ai::ai" 
+         name="ai_main" 
+         title="AI助手" 
+         action="" 
+         parent=""
+         icon="mdi mdi-robot"
+         order="15000"/>
+    
+    <!-- AI模型管理 -->
+    <add source="Weline_Ai::ai_model_manager" 
+         name="ai_model_manager" 
+         title="AI模型管理" 
+         action="ai/backend/model" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-robot"
+         order="10"/>
+    
+    <!-- 场景适配器管理 -->
+    <add source="Weline_Ai::ai_adapter_manager" 
+         name="ai_adapter_manager" 
+         title="场景适配器" 
+         action="ai/backend/adapter" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-puzzle"
+         order="20"/>
+    
+    <!-- API密钥管理 -->
+    <add source="Weline_Ai::ai_apikey_manager" 
+         name="ai_apikey_manager" 
+         title="API密钥管理" 
+         action="ai/backend/apikey" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-key"
+         order="30"/>
+    
+    <!-- 助手管理 -->
+    <add source="Weline_Ai::ai_assistant_manager" 
+         name="ai_assistant_manager" 
+         title="助手管理" 
+         action="ai/backend/assistant" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-account-supervisor"
+         order="40"/>
+    
+    <!-- 默认模型配置 -->
+    <add source="Weline_Ai::ai_default_model" 
+         name="ai_default_model" 
+         title="默认模型配置" 
+         action="ai/backend/defaultmodel" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-star-settings"
+         order="50"/>
+    
+    <!-- 商业洞察报表 -->
+    <add source="Weline_Ai::ai_business_insights" 
+         name="ai_business_insights" 
+         title="商业洞察报表" 
+         action="ai/backend/insights" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-chart-line"
+         order="60"/>
+         
+</menus>
