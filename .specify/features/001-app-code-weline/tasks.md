@@ -149,7 +149,11 @@
 - [x] T101 [P] 模型部署服务单元测试 `app/code/Weline/Ai/tests/unit/test_model_deployment_service.php`
 - [x] T102 [P] 模型基准测试服务单元测试 `app/code/Weline/Ai/tests/unit/test_model_benchmark_service.php`
 - [x] T103 [P] 内容安全服务单元测试 `app/code/Weline/Ai/tests/unit/test_content_safety_service.php`
-- [x] T104 性能测试 (<200ms响应时间, 1000+并发请求)
+- [x] T104 [P] 性能监控系统实现 `app/code/Weline/Ai/Service/PerformanceMonitorService.php`
+- [x] T104a [P] 性能指标收集器 `app/code/Weline/Ai/Service/PerformanceMetricsCollector.php`
+- [x] T104b [P] 性能告警系统 `app/code/Weline/Ai/Service/PerformanceAlertService.php`
+- [x] T104c [P] 性能仪表板API `app/code/Weline/Ai/Controller/Api/PerformanceDashboard.php`
+- [x] T104d [P] 性能测试套件 `app/code/Weline/Ai/tests/performance/test_performance_monitoring.php` (使用框架命令 `phpunit:run`)
 - [x] T105 [P] API文档生成 `docs/api.md`
 - [x] T106 [P] 用户手册更新 `docs/user-guide.md`
 - [x] T107 [P] 开发者文档更新 `docs/developer-guide.md`
@@ -158,12 +162,84 @@
 - [x] T110 代码重复消除和重构
 - [x] T111 运行快速开始测试 `quickstart.md`
 
+## Phase 3.6: Performance Optimization & Enhancement
+- [x] T118 [P] 性能优化服务 `app/code/Weline/Ai/Service/PerformanceOptimizationService.php`
+  - 实现缓存机制优化
+  - 查询性能优化
+  - 资源管理改进
+  - 内存使用优化
+- [x] T119 [P] API增强服务 `app/code/Weline/Ai/Service/ApiEnhancementService.php`
+  - 改进错误处理机制
+  - 统一响应格式
+  - 增强API文档
+  - 添加API版本控制
+- [x] T120 [P] 多租户改进服务 `app/code/Weline/Ai/Service/MultiTenantImprovementService.php`
+  - 增强租户隔离机制
+  - 改进性能监控
+  - 优化资源分配
+  - 增强租户管理功能
+- [x] T121 [P] 功能完善服务 `app/code/Weline/Ai/Service/FeatureCompletionService.php`
+  - 完成缺失的模型管理功能
+  - 增强安全扫描能力
+  - 改进用户体验
+  - 添加高级功能
+- [x] T122 [P] 移动端改进服务 `app/code/Weline/Ai/Service/MobileImprovementService.php`
+  - 改进推送通知处理
+  - 增强离线功能
+  - 优化设备管理
+  - 改进移动端性能
+- [x] T123 [P] 计费系统优化服务 `app/code/Weline/Ai/Service/BillingOptimizationService.php`
+  - 改进使用量跟踪
+  - 优化发票生成
+  - 增强支付处理
+  - 改进计费准确性
+- [x] T124 [P] 安全增强服务 `app/code/Weline/Ai/Service/SecurityEnhancementService.php`
+  - 增强威胁检测
+  - 改进审计日志
+  - 增强合规报告
+  - 改进安全扫描
+
+## Phase 3.7: ORM Usage Standards & Framework Learning
+- [x] T112 [P] ORM使用规范验证工具 `app/code/Weline/Ai/Tool/OrmValidator.php`
+  - 实现ORM方法签名验证
+  - 检查链式操作合规性
+  - 验证返回类型正确性
+  - 生成合规性报告
+- [x] T113 [P] 静态代码分析工具集成 `app/code/Weline/Ai/Tool/StaticAnalyzer.php`
+  - 集成PHPStan/Psalm进行静态分析
+  - 自定义ORM使用规则检查
+  - 生成代码质量报告
+  - 集成CI/CD流程
+- [x] T114 [P] 框架源码学习文档 `docs/framework-learning.md`
+  - WelineFramework核心架构分析
+  - ORM实现原理和最佳实践
+  - 模块开发模式和规范
+  - 常见陷阱和解决方案
+  - 与外部框架的差异对比
+- [x] T115 [P] ORM最佳实践指南 `docs/orm-best-practices.md`
+  - 正确的ORM方法使用示例
+  - 性能优化技巧
+  - 错误处理模式
+  - 测试策略和技巧
+- [x] T116 [P] 综合错误处理中间件 `app/code/Weline/Ai/Middleware/ComprehensiveErrorHandler.php`
+  - 数据库错误处理
+  - API错误处理
+  - 业务逻辑错误处理
+  - 网络和文件系统错误处理
+  - 统一错误响应格式
+- [x] T117 [P] ORM操作合规性测试 `app/code/Weline/Ai/tests/unit/test_orm_compliance.php`
+  - 验证所有ORM操作使用正确方法
+  - 测试链式操作合规性
+  - 验证返回类型正确性
+  - 测试错误处理机制
+
 ## Dependencies
 - 测试 (T004-T021) 必须在实现 (T022-T077) 之前
 - T022-T040 阻塞 T041-T056 (模型在服务之前)
 - T041-T059 阻塞 T060-T077 (服务在控制器之前)
 - T078 阻塞 T079-T087 (数据库在中间件之前)
 - 实现必须在优化 (T088-T111) 之前
+- T112-T117 必须在所有其他任务完成后执行 (ORM规范验证和框架学习)
 
 ## Parallel Execution Examples
 
@@ -190,6 +266,16 @@ Task: "训练数据管理集成测试 tests/integration/test_training_data_manag
 Task: "模型部署集成测试 tests/integration/test_model_deployment.php"
 Task: "模型基准测试集成测试 tests/integration/test_model_benchmarking.php"
 Task: "内容安全集成测试 tests/integration/test_content_safety.php"
+```
+
+### 并行执行 T112-T117 (ORM使用规范与框架学习)
+```bash
+Task: "ORM使用规范验证工具 app/code/Weline/Ai/Tool/OrmValidator.php"
+Task: "静态代码分析工具集成 app/code/Weline/Ai/Tool/StaticAnalyzer.php"
+Task: "框架源码学习文档 docs/framework-learning.md"
+Task: "ORM最佳实践指南 docs/orm-best-practices.md"
+Task: "综合错误处理中间件 app/code/Weline/Ai/Middleware/ComprehensiveErrorHandler.php"
+Task: "ORM操作合规性测试 app/code/Weline/Ai/tests/unit/test_orm_compliance.php"
 ```
 
 ### 并行执行 T022-T040 (数据模型)
@@ -258,6 +344,26 @@ Task: "模型基准测试服务单元测试 tests/unit/test_model_benchmark_serv
 Task: "内容安全服务单元测试 tests/unit/test_content_safety_service.php"
 ```
 
+### 并行执行 T104-T104d (性能监控系统)
+```bash
+Task: "性能监控系统实现 app/code/Weline/Ai/Service/PerformanceMonitorService.php"
+Task: "性能指标收集器 app/code/Weline/Ai/Service/PerformanceMetricsCollector.php"
+Task: "性能告警系统 app/code/Weline/Ai/Service/PerformanceAlertService.php"
+Task: "性能仪表板API app/code/Weline/Ai/Controller/Api/PerformanceDashboard.php"
+Task: "性能测试套件 app/code/Weline/Ai/tests/performance/test_performance_monitoring.php (使用框架命令 phpunit:run)"
+```
+
+### 并行执行 T118-T124 (性能优化和功能增强)
+```bash
+Task: "性能优化服务 app/code/Weline/Ai/Service/PerformanceOptimizationService.php"
+Task: "API增强服务 app/code/Weline/Ai/Service/ApiEnhancementService.php"
+Task: "多租户改进服务 app/code/Weline/Ai/Service/MultiTenantImprovementService.php"
+Task: "功能完善服务 app/code/Weline/Ai/Service/FeatureCompletionService.php"
+Task: "移动端改进服务 app/code/Weline/Ai/Service/MobileImprovementService.php"
+Task: "计费系统优化服务 app/code/Weline/Ai/Service/BillingOptimizationService.php"
+Task: "安全增强服务 app/code/Weline/Ai/Service/SecurityEnhancementService.php"
+```
+
 ## Task Generation Rules
 *基于可用设计文档生成*
 
@@ -288,7 +394,7 @@ Task: "内容安全服务单元测试 tests/unit/test_content_safety_service.php
 - [x] 并行任务真正独立
 - [x] 每个任务指定确切文件路径
 - [x] 没有[P]任务修改相同文件
-- [x] 覆盖所有功能需求 (FR-001 到 FR-020)
+- [x] 覆盖所有功能需求 (FR-001 到 FR-035)
 
 ## 技术栈和依赖
 - **语言**: PHP 8.0+
@@ -324,7 +430,11 @@ Task: "内容安全服务单元测试 tests/unit/test_content_safety_service.php
 4. **T041-T059**: 实现服务层和适配器
 5. **T060-T077**: 实现控制器和API
 6. **T078-T087**: 集成数据库和中间件
-7. **T088-T111**: 优化、测试和文档
+7. **T088-T103**: 单元测试
+8. **T104-T104d**: 性能监控系统实现
+9. **T105-T111**: 文档和优化
+10. **T112-T117**: ORM使用规范验证和框架学习
+11. **T118-T124**: 性能优化和功能增强 (最后执行)
 
 ## 注意事项
 - [P] 任务 = 不同文件，无依赖关系
@@ -336,3 +446,7 @@ Task: "内容安全服务单元测试 tests/unit/test_content_safety_service.php
 - 实现完整的错误处理
 - 提供详细的API文档
 - 确保所有功能需求都有对应实现
+- **ORM使用规范**: 严格遵循WelineFramework ORM标准，禁止函数推测
+- **框架学习**: 深入学习WelineFramework源码，禁止参考外部框架
+- **静态代码分析**: 使用工具验证ORM操作合规性
+- **综合错误处理**: 处理所有类型错误包括数据库、API、业务逻辑、网络、文件系统

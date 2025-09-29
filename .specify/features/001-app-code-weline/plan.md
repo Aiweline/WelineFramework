@@ -58,6 +58,8 @@
 - **安全性**: API认证和权限控制 ✅
 - **性能**: 缓存机制和异步处理 ✅
 - **扩展性**: 插件化架构 ✅
+- **ORM使用规范**: 严格遵循WelineFramework ORM标准 ✅
+- **框架学习**: 深入学习WelineFramework源码和架构 ✅
 
 ## Project Structure
 
@@ -108,6 +110,33 @@ tests/
 ```
 
 **Structure Decision**: 采用WelineFramework的MVC架构，模块化设计，支持多租户、国际化、移动端等企业级功能。
+
+## ORM Architecture Design
+
+### ORM使用规范架构
+```
+app/code/Weline/Ai/
+├── Tool/                       # ORM工具层
+│   ├── OrmValidator.php        # ORM使用规范验证工具
+│   └── StaticAnalyzer.php      # 静态代码分析工具
+├── Middleware/                 # 中间件层
+│   └── ComprehensiveErrorHandler.php # 综合错误处理
+└── docs/                      # 文档层
+    ├── framework-learning.md   # 框架学习文档
+    └── orm-best-practices.md   # ORM最佳实践指南
+```
+
+### ORM验证机制
+- **静态代码分析**: 自动检测ORM方法使用合规性
+- **运行时验证**: 确保所有数据库操作使用框架API
+- **测试覆盖**: 单元测试验证ORM操作正确性
+- **文档规范**: 提供ORM最佳实践指南
+
+### 框架学习要求
+- **源码研究**: 深入学习WelineFramework核心组件
+- **架构理解**: 掌握框架设计模式和最佳实践
+- **API文档**: 基于框架实际API编写文档
+- **禁止外部参考**: 严格禁止参考Magento等外部框架
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:

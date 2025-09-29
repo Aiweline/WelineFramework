@@ -129,7 +129,6 @@ class ShopifyOrderService implements OrderInterface
             'billing_address' => $this->normalizeAddress($rawOrder['billing_address'] ?? []),
             'shipping_address' => $this->normalizeAddress($rawOrder['shipping_address'] ?? []),
             'customer' => $this->normalizeCustomer($rawOrder['customer'] ?? []),
-            'raw_data' => json_encode($rawOrder) // 保存原始数据用于调试
         ];
     }
 
@@ -170,7 +169,6 @@ class ShopifyOrderService implements OrderInterface
             'properties' => json_encode($rawItem['properties'] ?? []),
             'tax_lines' => json_encode($rawItem['tax_lines'] ?? []),
             'discount_allocations' => json_encode($rawItem['discount_allocations'] ?? []),
-            'raw_data' => json_encode($rawItem) // 保存原始数据用于调试
         ];
     }
 
