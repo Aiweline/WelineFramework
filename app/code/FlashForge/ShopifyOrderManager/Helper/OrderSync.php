@@ -224,7 +224,6 @@ class OrderSync extends Helper
                 ->fetch();
 
             $isNewOrder = !$existingOrder->getId();
-            // raw_data
             // dd(json_decode($orderData['line_items']));
             unset($orderData['customer']);
             unset($orderData['billing_address']);
@@ -259,7 +258,6 @@ class OrderSync extends Helper
             Order::fields_SHIPPING_ADDRESS => json_encode($orderData['shipping_address'] ?? []),
             Order::fields_BILLING_ADDRESS => json_encode($orderData['billing_address'] ?? []),
             Order::fields_CUSTOMER => json_encode($orderData['customer'] ?? []),
-            Order::fields_RAW_DATA => json_encode($orderData),
             // Order::fields_PROCESSED_AT => $this->formatDateTime($orderData['processed_at'] ?? null), // 暂时注释掉
             Order::fields_CANCELLED_AT => $this->formatDateTime($orderData['cancelled_at'] ?? null),
             Order::fields_CLOSED_AT => $this->formatDateTime($orderData['closed_at'] ?? null),
@@ -356,7 +354,6 @@ class OrderSync extends Helper
                 OrderItem::fields_PROPERTIES => json_encode($item['properties'] ?? []),
                 OrderItem::fields_TAX_LINES => json_encode($item['tax_lines'] ?? []),
                 OrderItem::fields_DISCOUNT_ALLOCATIONS => json_encode($item['discount_allocations'] ?? []),
-                OrderItem::fields_RAW_DATA => json_encode($item)
             ];
             if ($existingItem->getId()) {
                 // 更新现有商品项目

@@ -2,16 +2,29 @@
 
 更新内容
 
-1. 像素自支持和第三方像素对接支持
-2. 优化支持URL结构：[网站]/[区域]/[货币]/[语言]/[路由]/[控制器]/[方法]/[参数]
+1. **新增Weline_Database企业级数据库迁移系统**
+   - 支持版本控制、数据备份、安全回滚
+   - 语义化命名规范：`{action}__{description}_{date}-{version}.php`
+   - 智能数据备份和恢复，即使删除表结构也能完整恢复数据
+   - 支持依赖管理、条件验证、批量操作
+   - 命令行工具：`db:migrate:upgrade`、`db:migrate:rollback`、`db:migrate:status`
+
+2. **新增Weline_Ai AI助手工具模块**
+   - 统一的AI模型管理和多租户支持
+   - 国际化、移动端、计费系统等企业级功能
+   - ORM使用规范验证和静态代码分析工具
+   - 综合错误处理中间件
+
+3. 像素自支持和第三方像素对接支持
+4. 优化支持URL结构：[网站]/[区域]/[货币]/[语言]/[路由]/[控制器]/[方法]/[参数]
    结合i18n的多语言支持可提供全球化静态SEO页面，提升全球本地化SEO权重，提升搜索引擎收录。
    提供精密结合CDN实现静态资源缓存，提升网站访问速度，提升搜索引擎收录。
-3. [建设中]提供幂等缓存穿透标志，解决缓存穿透问题。
+5. [建设中]提供幂等缓存穿透标志，解决缓存穿透问题。
    【更新中...请求头提供缓存击穿标志，促使cdn层或者服务器曾直接拒绝max id服务, 队列记录max范围和对应的id】
    【url规则限制，每条URL设置具体规则，越界阻止访问】
-4. [建设中]缓存雪崩问题解决，提供配置随机间隔过期时间，解决缓存雪崩问题。
-5. [建设中]缓存击穿，使用ES，redis设置热点数据，解决缓存击穿问题。
-6. [建设中]框架常驻内存，无需请求内存，提升性能，提升网站访问速度，提升搜索引擎收录。
+6. [建设中]缓存雪崩问题解决，提供配置随机间隔过期时间，解决缓存雪崩问题。
+7. [建设中]缓存击穿，使用ES，redis设置热点数据，解决缓存击穿问题。
+8. [建设中]框架常驻内存，无需请求内存，提升性能，提升网站访问速度，提升搜索引擎收录。
 
 发行版本：
 
@@ -277,6 +290,180 @@ dianji-tijiao:value。
 首页内有简单的介绍以及前后台，默认账户密码都是admin，进入后台后在用户管理内修改账户密码，以免账户信息泄露。
 
 另外，请修改后端入口以及rest接口入口。修改位置：app/code/etc/env.php
+
+## Weline_Database 企业级数据库迁移系统
+
+### 核心特性
+
+- **企业级稳定性**: 事务安全、依赖管理、错误恢复、状态跟踪
+- **数据安全保障**: 智能备份、安全回滚、数据验证、版本控制
+- **语义化命名**: 清晰的文件命名规范，便于管理和维护
+- **智能数据恢复**: 即使删除表结构也能完整恢复数据
+
+### 快速开始
+
+#### 1. 查看迁移状态
+```bash
+php bin/w db:migrate:status --module=Weline_Ai
+```
+
+#### 2. 升级迁移
+```bash
+php bin/w db:migrate:upgrade --module=Weline_Ai --file=create_table__users_20250101-v1.0.0.php
+```
+
+#### 3. 回滚迁移
+```bash
+php bin/w db:migrate:rollback --module=Weline_Ai --file=create_table__users_20250101-v1.0.0.php
+```
+
+### 迁移脚本配置
+
+#### 文件命名规范
+```
+{action}__{description}_{date}-{version}.php
+```
+
+**示例**:
+- `create_table__users_20250101-v1.0.0.php` - 创建用户表
+- `add_column__email_20250102-v1.0.1.php` - 添加邮箱字段
+- `drop_column__raw_data_20250103-v1.0.2.php` - 删除原始数据字段
+
+#### 迁移脚本模板
+```php
+<?php
+namespace Weline\YourModule\Setup\Db\Migration;
+
+use Weline\Database\Interface\MigrationInterface;
+use Weline\Framework\Database\ConnectionFactory;
+
+class YourMigrationClassName implements MigrationInterface
+{
+    private ConnectionFactory $connectionFactory;
+    
+    public function __construct(ConnectionFactory $connectionFactory)
+    {
+        $this->connectionFactory = $connectionFactory;
+    }
+    
+    public function install(): bool
+    {
+        // 您的迁移逻辑
+        return true;
+    }
+    
+    public function uninstall(): bool
+    {
+        // 您的回滚逻辑
+        return true;
+    }
+    
+    public function getInfo(): array
+    {
+        return [
+            'name' => '迁移名称',
+            'description' => '迁移描述',
+            'version' => '1.0.0',
+            'date' => '2025-01-01',
+            'author' => 'YourName'
+        ];
+    }
+    
+    public function validate(): bool
+    {
+        // 验证前置条件
+        return true;
+    }
+    
+    public function getDependencies(): array
+    {
+        // 返回依赖的迁移文件
+        return [];
+    }
+    
+    public function getDescription(): string
+    {
+        return '迁移描述';
+    }
+    
+    public function getVersion(): string
+    {
+        return '1.0.0';
+    }
+    
+    public function getDate(): string
+    {
+        return '2025-01-01';
+    }
+}
+```
+
+### 数据安全特性
+
+#### 智能备份机制
+```php
+// 删除字段前自动备份数据
+private function backupColumnData(string $table, string $column): array
+{
+    $connection = $this->connectionFactory->getConnection();
+    $query = $connection->select()
+        ->from($table, ['id', $column])
+        ->where("{$column} IS NOT NULL");
+    
+    return $connection->fetchAll($query);
+}
+```
+
+#### 安全回滚机制
+```php
+// 回滚时自动恢复数据
+private function restoreColumnData(string $table, string $column, array $data): void
+{
+    if (empty($data)) {
+        return;
+    }
+    
+    $connection = $this->connectionFactory->getConnection();
+    
+    foreach ($data as $row) {
+        $connection->update(
+            $table,
+            [$column => $row[$column]],
+            ['id = ?' => $row['id']]
+        );
+    }
+}
+```
+
+### 高级功能
+
+- **依赖管理**: 自动检查迁移依赖关系
+- **条件验证**: 验证迁移前置条件
+- **批量操作**: 支持复杂的批量数据操作
+- **事务安全**: 所有操作都在事务中执行
+- **错误恢复**: 失败时自动回滚
+
+### 文档资源
+
+- [开发文档](app/code/Weline/Database/doc/开发/数据库迁移系统开发文档.md)
+- [使用手册](app/code/Weline/Database/doc/用户/数据库迁移系统使用手册.md)
+
+## Weline_Ai AI助手工具模块
+
+### 核心功能
+
+- **统一AI模型管理**: 支持多种AI提供商
+- **多租户支持**: 完整的数据隔离和权限管理
+- **国际化支持**: 多语言接口和内容本地化
+- **移动端优化**: 推送通知和离线支持
+- **企业级功能**: 计费系统、A/B测试、安全扫描
+
+### ORM使用规范
+
+- **严格合规**: 完全符合WelineFramework ORM标准
+- **静态分析**: 自动检测ORM使用合规性
+- **框架学习**: 深入学习WelineFramework源码
+- **错误处理**: 处理所有类型错误的中间件
 
 #### 升级指南
 

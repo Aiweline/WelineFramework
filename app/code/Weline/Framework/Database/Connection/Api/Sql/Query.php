@@ -614,8 +614,13 @@ abstract class Query implements QueryInterface
         $this->batch = false;
         $data = [];
         if ($model_class) {
-            foreach ($origin_data as $origin_datum) {
-                $data[] = ObjectManager::make($model_class, ['data' => $origin_datum], '__construct');
+            // 确保 $origin_data 是数组或对象，而不是字符串
+            if (is_array($origin_data) || is_object($origin_data)) {
+                foreach ($origin_data as $origin_datum) {
+                    $data[] = ObjectManager::make($model_class, ['data' => $origin_datum], '__construct');
+                }
+            } else {
+                $data = $origin_data;
             }
         } else {
             $data = $origin_data;

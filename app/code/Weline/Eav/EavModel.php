@@ -192,16 +192,19 @@ abstract class EavModel extends Model implements EavInterface
 //            throw new Exception(__('实体（%{1}）已经存在属性（%{2}）', [$this->getEntityCode(), $code]));
             return false;
         }
+        $set = $this->getAttributeSet($set_code);
+        $group = $this->getAttributeGroup($group_code, $set_code);
+        dd($group->getData());
         $type = $this->existType($type);
         $eavEntity = $this->existEavEntity($this->getEntityCode());
         try {
             $this->attribute->current_setEntity($this)->clear()->setData(
                 [
                     $this->attribute::fields_code => $code,
-                    $this->attribute::fields_group_id => $group_code,
-                    $this->attribute::fields_set_id => $set_code,
+                    $this->attribute::fields_set_id => $set->getId(),
                     $this->attribute::fields_name => $name,
                     $this->attribute::fields_type_id => $type->getId(),
+                    $this->attribute::fields_group_id => $group->getId(),
                     $this->attribute::fields_eav_entity_id => $eavEntity->getId(),
                     $this->attribute::fields_multiple_valued => intval($multi_value),
                     $this->attribute::fields_has_option => intval($has_option),

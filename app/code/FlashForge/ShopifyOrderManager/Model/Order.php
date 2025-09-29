@@ -49,7 +49,6 @@ class Order extends Model
     public const fields_BILLING_ADDRESS = 'billing_address';
     public const fields_SHIPPING_ADDRESS = 'shipping_address';
     public const fields_CUSTOMER = 'customer';
-    public const fields_RAW_DATA = 'raw_data';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
     
@@ -398,13 +397,6 @@ class Order extends Model
                     0,
                     'null',
                     '客户信息JSON'
-                )
-                ->addColumn(
-                    self::fields_RAW_DATA,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '原始数据JSON'
                 )
                 ->addColumn(
                     self::fields_SHOPIFY_CREATED_AT,
