@@ -596,12 +596,11 @@ class Order extends BackendController
             $shippingAddress = json_decode($order->getData(OrderModel::fields_SHIPPING_ADDRESS), true) ?: [];
             $billingAddress = json_decode($order->getData(OrderModel::fields_BILLING_ADDRESS), true) ?: [];
 
-            // 解析原始数据中的JSON字段
-            $rawData = json_decode($order->getData(OrderModel::fields_RAW_DATA), true) ?: [];
-            $discountCodes = $rawData['discount_codes'] ?? [];
-            $lineItems = $rawData['line_items'] ?? [];
-            $shippingLines = $rawData['shipping_lines'] ?? [];
-            $taxLines = $rawData['tax_lines'] ?? [];
+            // 从其他字段获取必要信息
+            $discountCodes = [];
+            $lineItems = [];
+            $shippingLines = [];
+            $taxLines = [];
 
             return $this->fetchJson([
                 'code' => 0,

@@ -44,7 +44,6 @@ class OrderItem extends Model
     public const fields_PROPERTIES = 'properties';
     public const fields_TAX_LINES = 'tax_lines';
     public const fields_DISCOUNT_ALLOCATIONS = 'discount_allocations';
-    public const fields_RAW_DATA = 'raw_data';
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
     
@@ -286,13 +285,6 @@ class OrderItem extends Model
                     0,
                     'null',
                     '折扣分配JSON'
-                )
-                ->addColumn(
-                    self::fields_RAW_DATA,
-                    TableInterface::column_type_TEXT,
-                    0,
-                    'null',
-                    '原始数据JSON'
                 )
                 ->addColumn(
                     self::fields_CREATED_AT,

@@ -1,7 +1,7 @@
 <!-- Sync Impact Report -->
-<!-- Version change: 2.1.0 → 2.2.0 -->
+<!-- Version change: 2.2.0 → 2.3.0 -->
 <!-- Modified principles: None -->
-<!-- Added sections: PHP Language Compliance Standards -->
+<!-- Added sections: ORM Usage Standards, Framework Learning Requirements -->
 <!-- Templates requiring updates: ✅ plan-template.md, ✅ spec-template.md, ✅ tasks-template.md -->
 <!-- Follow-up TODOs: None -->
 
@@ -86,11 +86,33 @@ AI模块必须采用WelineFramework的模块化设计原则：
 - 方法签名必须与父类或接口完全匹配
 - 必须处理所有可能的异常情况
 
+### X. ORM使用规范 (ORM Usage Standards - NON-NEGOTIABLE)
+禁止在ORM使用时自己揣测函数，必须严格遵循框架规范：
+- 禁止基于个人经验或外部框架（如Magento）进行ORM操作
+- 必须深入学习WelineFramework的ORM实现和API文档
+- 所有ORM操作必须基于框架提供的实际方法
+- 禁止使用未在框架文档中明确说明的方法
+- 必须通过阅读源码和文档确认ORM方法的正确用法
+- 遇到不确定的ORM操作时必须查阅框架源码和文档
+- 禁止参考Magento或其他框架的ORM模式
+- 必须使用框架自研的ORM特性和方法
+
+### XI. 框架学习要求 (Framework Learning Requirements - NON-NEGOTIABLE)
+这是自研框架，必须深入学习框架本身而非外部参考：
+- 禁止参考Magento或其他外部框架的结构和模式
+- 必须深入学习WelineFramework的源码和架构设计
+- 所有开发必须基于对WelineFramework框架的深入理解
+- 必须阅读框架的开发文档和API文档
+- 必须研究现有模块的实现模式和最佳实践
+- 禁止基于外部框架经验进行开发决策
+- 必须通过框架源码学习正确的实现方式
+- 所有功能实现必须符合WelineFramework的设计理念
+
 ## WelineFramework开发标准
 
 ### 代码规范
 - 遵循PSR-4自动加载规范
-- 使用框架提供的ORM链式操作
+- 使用框架提供的ORM链式操作（禁止揣测函数）
 - 遵循框架的命名约定
 - 使用框架的异常处理机制
 - 保持代码注释的完整性
@@ -98,6 +120,8 @@ AI模块必须采用WelineFramework的模块化设计原则：
 - 所有类必须正确实现继承的接口或抽象类
 - 必须使用严格类型声明
 - 禁止使用已废弃的PHP语法
+- 禁止参考Magento或其他外部框架的ORM模式
+- 必须深入学习WelineFramework的ORM实现
 
 ### 目录结构规范
 ```
@@ -123,11 +147,13 @@ app/code/Weline/Ai/
 ```
 
 ### 数据库设计规范
-- 使用框架的ORM进行数据库操作
+- 使用框架的ORM进行数据库操作（禁止揣测函数）
 - 遵循框架的表命名约定
 - 实现完整的索引设计
 - 支持数据库迁移
 - 实现数据验证规则
+- 必须深入学习WelineFramework的ORM API
+- 禁止参考Magento或其他外部框架的数据库模式
 
 ### API设计规范
 - 遵循RESTful API设计原则
@@ -181,6 +207,8 @@ app/code/Weline/Ai/
 - 必须遵循安全最佳实践
 - 必须提供完整的文档
 - 必须通过性能测试
+- 必须验证ORM操作的正确性（禁止揣测函数）
+- 必须确认所有方法都基于WelineFramework的实际API
 
 ### 质量门禁
 - 测试覆盖率必须达到90%以上
@@ -191,6 +219,8 @@ app/code/Weline/Ai/
 - PHP 8.2+语法合规性检查必须通过
 - 接口和抽象类实现完整性检查必须通过
 - 严格类型声明检查必须通过
+- ORM方法使用正确性检查必须通过（禁止揣测函数）
+- WelineFramework API合规性检查必须通过
 
 ### 部署要求
 - 支持自动化部署
@@ -215,4 +245,4 @@ app/code/Weline/Ai/
 - 测试必须验证功能完整性
 - 部署前必须进行安全检查
 
-**Version**: 2.2.0 | **Ratified**: 2024-12-19 | **Last Amended**: 2024-12-19
+**Version**: 2.3.0 | **Ratified**: 2024-12-19 | **Last Amended**: 2024-12-19
