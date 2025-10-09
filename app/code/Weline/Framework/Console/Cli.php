@@ -46,6 +46,12 @@ class Cli extends CliAbstract
             return;
         }
         
+        // 检查是否需要显示help
+        if (isset($args['h']) || isset($args['help']) || isset($args['-h']) || isset($args['--help'])) {
+            $this->showHelp($command_class);
+            return;
+        }
+        
         $data = $command_class['data'];
         ObjectManager::getInstance($command_class['class'])->execute($args, $data);
         $this->printer->printing("\n");
@@ -516,5 +522,36 @@ class Cli extends CliAbstract
         } else {
             return '⚡'; // 默认命令图标
         }
+    }
+
+    /**
+     * @DESC         |显示命令帮助信息
+     *
+     * @param array $command_info 命令信息数组
+     * @return void
+     */
+    private function showHelp(array $command_info): void
+    {
+        if (!isset($command_info['data']['help'])) {
+            $this->printer->error(__('该命令没有帮助信息'));
+            return;
+        }
+
+        $help = $command_info['data']['help'];
+        
+        // 如果help是数组，使用CommandHelper格式化
+        if (is_array($help)) {
+            $help = CommandHelper::parseHelpArray($help);
+        }
+        
+        // 显示命令名称和tip
+        $this->printer->note(__('命令') . ': ' . $command_info['command']);
+        if (isset($command_info['data']['tip'])) {
+            $this->printer->success(__('简述') . ': ' . $command_info['data']['tip']);
+        }
+        $this->printer->separator('═', 0, 'NOTE');
+        
+        // 显示help信息
+        $this->printer->printing($help);
     }
 }

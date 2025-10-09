@@ -42,4 +42,18 @@ class Sample extends CommandAbstract
     {
         return '安装脚本样例';
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }

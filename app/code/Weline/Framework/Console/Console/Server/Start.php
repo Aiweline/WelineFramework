@@ -393,4 +393,18 @@ class Start implements CommandInterface
     {
         return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认实时运行，使用 -b 或 -backend 参数后台运行，使用 -f 或 --force 参数强制重启。';
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }

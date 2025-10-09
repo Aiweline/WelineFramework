@@ -283,6 +283,17 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success((string)$command['return_vars']);
         }
         
+        # 判断是否为文件或方法测试模式（快速测试）
+        $isQuickTest = !empty($fileName);
+        
+        # 文件或方法测试时，如果没有指定后台运行，直接输出结果后返回
+        if ($isQuickTest && !$isBackground) {
+            $this->printing->separator('─', 0, 'SUCCESS');
+            $this->printing->success(__('✓ 测试完成！'));
+            $this->printing->note(__('提示：如需生成详细报告，请添加 -b 参数后台运行'));
+            return;
+        }
+        
         # 生成自定义HTML报告（包含测试文件数据）
         $testFiles = $this->generateCustomHtmlReport($command['output'], $command['return_vars'], $totalTestCount, $php_unit_report_path);
         
@@ -299,7 +310,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
         if ($isBackground) {
             $this->startPhpUnitServerBackground($php_unit_report_path, $port);
             # 在服务器启动后输出测试完成标志
+            $this->printing->separator('═', 0, 'SUCCESS');
+            $this->printing->success(__('✓ 测试已完成，报告服务器已在后台运行'));
             $this->printing->success(__('=== PHPUNIT_TEST_COMPLETED ==='));
+            $this->printing->separator('═', 0, 'SUCCESS');
+            # 确保立即返回
+            return;
         } else {
             $this->system->exec("php -S localhost:$port -t $php_unit_report_path");
         }
@@ -335,13 +351,52 @@ class Run implements \Weline\Framework\Console\CommandInterface
             mkdir($logDir, 0755, true);
         }
         
-        # 启动后台服务器
-        $command = "php -S localhost:$port -t $reportPath > $logFile 2>&1 & echo $!";
-        $output = [];
-        exec($command, $output);
+        # 检测操作系统并使用相应的后台启动命令
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $pid = 0;
         
-        if (!empty($output)) {
-            $pid = (int)$output[0];
+        if ($isWindows) {
+            # Windows系统使用VBScript启动隐藏窗口
+            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
+            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
+            
+            # 创建批处理文件
+            $batContent = "@echo off\n";
+            $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
+            file_put_contents($batFile, $batContent);
+            
+            # 创建VBScript文件来隐藏窗口启动
+            $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
+            $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
+            file_put_contents($vbsFile, $vbsContent);
+            
+            # 执行VBScript（不等待返回）
+            pclose(popen("start /B cscript //nologo \"$vbsFile\"", "r"));
+            
+            # 等待服务器启动
+            sleep(1);
+            
+            # 查找PHP进程ID
+            $output = [];
+            exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
+            foreach ($output as $line) {
+                $line = trim($line);
+                if (is_numeric($line) && $line > 0) {
+                    $pid = (int)$line;
+                    break;
+                }
+            }
+            
+            # 不删除VBS和BAT文件，因为服务器正在使用它们
+        } else {
+            # Linux/Mac系统使用&符号后台启动
+            $command = "nohup php -S localhost:$port -t $reportPath > $logFile 2>&1 & echo $!";
+            $output = [];
+            exec($command, $output);
+            $pid = !empty($output) ? (int)$output[0] : 0;
+        }
+        
+        if (!empty($pid) && $pid > 0) {
             file_put_contents($pidFile, $pid);
             
             # 更新env.php中的服务器信息
@@ -351,11 +406,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('访问地址: http://localhost:%{1}', $port));
             $this->printing->note(__('日志文件: %{1}', $logFile));
             $this->printing->note(__('停止命令: php bin/w phpunit:stop'));
-            
-            # 实时显示测试日志
-            $this->displayTestLogs($logFile);
         } else {
             $this->printing->error(__('启动PHPUnit报告服务器失败'));
+            $this->printing->note(__('将尝试在前台启动服务器...'));
         }
     }
     
@@ -1067,54 +1120,80 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return 'PHPUnit测试套件命令使用指南：
+        return 'PHPUnit测试套件运行工具，支持套件、模块、文件和方法级别的测试';
+    }
+
+    public function help(): array|string
+    {
+        return '
+════════════════════════════════════════════════════════════════════════════════
+命令名称: phpunit:run
+════════════════════════════════════════════════════════════════════════════════
+
+📖 描述：
+    PHPUnit测试套件命令使用指南
+    支持多种测试方式：套件测试、模块测试、文件测试、方法测试
+    提供智能文件名匹配和后台运行功能
+    
+    ⚡ 快速测试模式：
+    文件或方法测试时，直接输出测试结果到命令行，无需打开浏览器
+    添加 -b 参数可生成详细HTML报告并启动服务器
 
 🎯 基本语法：
-php bin/w phpunit:run [选项] [参数]
+    php bin/w phpunit:run [选项] [套件名]
 
 🔧 常用选项：
--b, --backend    后台运行（推荐）
--p, --port=端口  指定报告服务器端口（默认9980）
--h, --help       显示帮助信息
---debug         显示详细调试信息
---module=模块名  指定模块
---name=文件名    指定文件或测试方法
+    -b, --backend           后台运行并生成报告（启动报告服务器）
+    -p, --port=<端口>       指定报告服务器端口（默认：9980）
+    --debug                 显示详细的调试信息
+    --module=<模块名>       指定要测试的模块
+    --name=<文件名|方法名>  指定测试文件或方法（支持智能匹配）
+    -h, --help              显示此帮助信息
+
+📝 参数：
+    <套件名>                可选的测试套件名称（例如：unit）
 
 📋 使用方式：
 
-1️⃣ 指定套件测试：
-php bin/w phpunit:run -b                    # 运行默认套件
-php bin/w phpunit:run -b unit              # 运行指定套件
+1️⃣ 快速文件测试（直接输出结果）：
+    php bin/w phpunit:run --name=Eav                # 快速测试，直接看结果
+    php bin/w phpunit:run --name=Eav::testMethod   # 快速测试单个方法
 
-2️⃣ 指定模块测试：
-php bin/w phpunit:run -b --module=Weline_Eav        # 运行整个模块
-php bin/w phpunit:run -b --module=Weline_Database   # 运行指定模块
+2️⃣ 生成报告的文件测试：
+    php bin/w phpunit:run -b --name=Eav            # 生成详细HTML报告
+    php bin/w phpunit:run -b --name=Eav::testMethod
 
-3️⃣ 指定文件名测试：
-php bin/w phpunit:run -b --name=Eav                # 运行EavTest.php
-php bin/w phpunit:run -b --name=TestEav            # 运行EavTest.php
-php bin/w phpunit:run -b --name=EavTest            # 运行EavTest.php
+3️⃣ 指定套件测试（生成报告）：
+    php bin/w phpunit:run -b                       # 运行默认套件
+    php bin/w phpunit:run -b unit                  # 运行指定套件
 
-4️⃣ 指定测试方法：
-php bin/w phpunit:run -b --name=Eav::testAddAttribute      # 运行单个方法
-php bin/w phpunit:run -b --name=TestEav::testAddAttribute  # 运行单个方法
+4️⃣ 指定模块测试（生成报告）：
+    php bin/w phpunit:run -b --module=Weline_Eav        # 运行整个模块
+    php bin/w phpunit:run -b --module=Weline_Database   # 运行指定模块
 
 5️⃣ 组合使用：
-php bin/w phpunit:run -b --module=Weline_Eav --name=Eav                    # 模块+文件
-php bin/w phpunit:run -b --module=Weline_Eav --name=Eav::testAddAttribute  # 模块+方法
+    php bin/w phpunit:run --name=Eav --module=Weline_Eav              # 快速测试
+    php bin/w phpunit:run -b --name=Eav --module=Weline_Eav           # 详细报告
+    php bin/w phpunit:run -b --name=Eav::testMethod --module=Weline_Eav
 
-🎨 智能文件名匹配：
-Eav → EavTest.php
-TestEav → EavTest.php
-EavTest → EavTest.php
-EavTest.php → EavTest.php
+🎨 智能文件名匹配规则：
+    Eav         → EavTest.php
+    TestEav     → EavTest.php
+    EavTest     → EavTest.php
+    EavTest.php → EavTest.php
 
 🚀 最佳实践：
-- 开发时使用 -b 参数后台运行
-- 调试时添加 --debug 参数
-- 快速测试使用 --name=文件名::方法名
-- 完整测试使用 --module=模块名
-- 查看帮助使用 -h 或 --help 参数';
+    · 快速调试：直接使用 --name=文件名::方法名（不加-b）
+    · 详细报告：添加 -b 参数生成HTML报告
+    · 完整测试：使用 --module=模块名 或套件测试
+    · 调试时添加 --debug 参数查看详细信息
+
+💡 提示：
+    文件或方法测试时，不加 -b 参数会直接输出结果，方便快速调试
+    套件或模块测试建议加 -b 参数，生成详细的HTML测试报告
+
+════════════════════════════════════════════════════════════════════════════════
+';
     }
     
     /**

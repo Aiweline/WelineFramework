@@ -73,6 +73,35 @@ abstract class CliAbstract implements CommandInterface
     }
 
     /**
+     * @DESC         |命令帮助信息
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @return array|string
+     */
+    public function help(): array|string
+    {
+        return CommandHelper::formatHelp(
+            'cli',
+            '命令行接口系统',
+            [
+                '-h, --help' => '显示帮助信息',
+                '-v, --version' => '显示版本信息',
+            ],
+            [],
+            [
+                '显示所有可用命令' => 'php bin/w',
+                '查看命令帮助' => 'php bin/w <command> -h',
+            ]
+        );
+    }
+
+    /**
      * @DESC         |方法描述
      *
      * @Author       秋枫雁飞
