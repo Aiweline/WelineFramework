@@ -39,4 +39,19 @@ class Run extends BaseCommand
     {
         return '运行系统定时任务。';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'cron:run',
+            '手动运行系统定时任务',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '运行定时任务' => 'php bin/w cron:run',
+            ]
+        );
+    }
 }

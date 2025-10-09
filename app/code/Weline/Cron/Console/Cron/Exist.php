@@ -28,4 +28,19 @@ class Exist extends BaseCommand
     {
         return '查看系统定时任务是否存在。';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'cron:exist',
+            '查看系统定时任务是否存在',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '查看定时任务是否存在' => 'php bin/w cron:exist',
+            ]
+        );
+    }
 }
