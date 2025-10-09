@@ -267,4 +267,18 @@ Shopify订单同步命令
   php bin/w shopify:sync shop_id=1
         ';
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }
