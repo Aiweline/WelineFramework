@@ -70,8 +70,8 @@ class MigrationService
             }
             
             // 开始事务
-            $connection = $this->connectionFactory->getConnection();
-            $connection->beginTransaction();
+            $query = $this->connectionFactory->query('SELECT 1');
+            $query->beginTransaction();
             
             try {
                 // 执行迁移
@@ -84,13 +84,13 @@ class MigrationService
                 // 记录迁移
                 $this->recordMigration($moduleName, $migrationFile, $migrationClass);
                 
-                $connection->commit();
+                $query->commit();
                 
                 $this->printing->success("迁移升级成功: {$migrationFile}");
                 return true;
                 
             } catch (\Exception $e) {
-                $connection->rollBack();
+                $query->rollBack();
                 throw $e;
             }
             
@@ -122,8 +122,8 @@ class MigrationService
             }
             
             // 开始事务
-            $connection = $this->connectionFactory->getConnection();
-            $connection->beginTransaction();
+            $query = $this->connectionFactory->query('SELECT 1');
+            $query->beginTransaction();
             
             try {
                 // 执行回滚
@@ -136,18 +136,70 @@ class MigrationService
                 // 更新迁移状态
                 $this->updateMigrationStatus($moduleName, basename($migrationFile), Migration::STATUS_ROLLED_BACK);
                 
-                $connection->commit();
+                $query->commit();
                 
                 $this->printing->success("迁移回滚成功: {$migrationFile}");
                 return true;
                 
             } catch (\Exception $e) {
-                $connection->rollBack();
+                $query->rollBack();
                 throw $e;
             }
             
         } catch (\Exception $e) {
             $this->printing->error("迁移回滚失败: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 执行迁移卸载
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $migrationFile 迁移文件路径
+     * @return bool
+     */
+    public function uninstallMigration(string $moduleName, string $migrationFile): bool
+    {
+        try {
+            // 检查迁移是否已安装
+            if (!$this->migrationModel->isMigrationExists($moduleName, basename($migrationFile))) {
+                throw new \Exception("迁移记录不存在: {$migrationFile}");
+            }
+            
+            // 加载迁移类
+            $migrationClass = $this->loadMigrationClass($migrationFile);
+            if (!$migrationClass instanceof MigrationInterface) {
+                throw new \Exception("迁移类必须实现MigrationInterface接口");
+            }
+            
+            // 开始事务
+            $query = $this->connectionFactory->query('SELECT 1');
+            $query->beginTransaction();
+            
+            try {
+                // 执行卸载
+                $result = $migrationClass->uninstall();
+                
+                if (!$result) {
+                    throw new \Exception("迁移卸载失败");
+                }
+                
+                // 删除迁移记录
+                $this->migrationModel->deleteMigration($moduleName, basename($migrationFile));
+                
+                $query->commit();
+                
+                $this->printing->success("迁移卸载成功: {$migrationFile}");
+                return true;
+                
+            } catch (\Exception $e) {
+                $query->rollBack();
+                throw $e;
+            }
+            
+        } catch (\Exception $e) {
+            $this->printing->error("迁移卸载失败: " . $e->getMessage());
             return false;
         }
     }
@@ -229,23 +281,6 @@ class MigrationService
         return new $className();
     }
     
-    /**
-     * 获取迁移类名
-     * 
-     * @param string $migrationFile 迁移文件路径
-     * @return string
-     */
-    private function getMigrationClassName(string $migrationFile): string
-    {
-        $filename = basename($migrationFile, '.php');
-        
-        // 将文件名转换为类名
-        $className = str_replace(['__', '_'], ['', ''], $filename);
-        $className = ucwords($className, '_');
-        $className = str_replace('_', '', $className);
-        
-        return $className;
-    }
     
     /**
      * 检查迁移依赖
@@ -317,29 +352,41 @@ class MigrationService
         }
     }
     
+    
     /**
-     * 获取待执行的迁移
+     * 通过版本获取迁移文件
      * 
      * @param string $moduleName 模块名称
+     * @param string $version 版本号
+     * @param string $specificFile 指定的迁移文件（可选）
      * @return array
      */
-    public function getPendingMigrations(string $moduleName): array
+    public function getMigrationsByVersion(string $moduleName, string $version, string $specificFile = ''): array
     {
         $migrationPath = $this->getMigrationPath($moduleName);
+        $versionPath = $migrationPath . $version . '/';
         
-        if (!is_dir($migrationPath)) {
+        if (!is_dir($versionPath)) {
             return [];
         }
         
-        $migrationFiles = glob($migrationPath . '*.php');
-        $pendingMigrations = [];
+        $files = glob($versionPath . "*.php");
+        $migrations = [];
         
-        foreach ($migrationFiles as $file) {
+        foreach ($files as $file) {
             $filename = basename($file);
             
-            // 检查迁移是否已执行
-            if (!$this->migrationModel->isMigrationExists($moduleName, $filename)) {
-                $pendingMigrations[] = [
+            // 如果指定了特定文件，只返回该文件
+            if (!empty($specificFile)) {
+                if ($filename === $specificFile) {
+                    return [[
+                        'file' => $file,
+                        'filename' => $filename,
+                        'class' => $this->getMigrationClassName($filename)
+                    ]];
+                }
+            } else {
+                $migrations[] = [
                     'file' => $file,
                     'filename' => $filename,
                     'class' => $this->getMigrationClassName($filename)
@@ -348,11 +395,102 @@ class MigrationService
         }
         
         // 按文件名排序
-        usort($pendingMigrations, function($a, $b) {
+        usort($migrations, function($a, $b) {
             return strcmp($a['filename'], $b['filename']);
         });
         
-        return $pendingMigrations;
+        return $migrations;
+    }
+    
+    /**
+     * 执行版本迁移升级
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $version 版本号
+     * @param string $specificFile 指定的迁移文件（可选）
+     * @return bool
+     */
+    public function upgradeMigrationsByVersion(string $moduleName, string $version, string $specificFile = ''): bool
+    {
+        $migrations = $this->getMigrationsByVersion($moduleName, $version, $specificFile);
+        
+        if (empty($migrations)) {
+            $this->printing->error(__("未找到版本 %{1} 的迁移文件", $version));
+            return false;
+        }
+        
+        $success = true;
+        foreach ($migrations as $migration) {
+            $this->printing->note(__("执行迁移: %{1}", $migration['filename']));
+            $result = $this->upgradeMigration($moduleName, $migration['filename']);
+            if (!$result) {
+                $success = false;
+            }
+        }
+        
+        return $success;
+    }
+    
+    /**
+     * 执行版本迁移回滚
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $version 版本号
+     * @param string $specificFile 指定的迁移文件（可选）
+     * @return bool
+     */
+    public function rollbackMigrationsByVersion(string $moduleName, string $version, string $specificFile = ''): bool
+    {
+        $migrations = $this->getMigrationsByVersion($moduleName, $version, $specificFile);
+        
+        if (empty($migrations)) {
+            $this->printing->error(__("未找到版本 %{1} 的迁移文件", $version));
+            return false;
+        }
+        
+        $success = true;
+        // 按相反顺序执行回滚
+        $migrations = array_reverse($migrations);
+        foreach ($migrations as $migration) {
+            $this->printing->note(__("回滚迁移: %{1}", $migration['filename']));
+            $result = $this->rollbackMigration($moduleName, $migration['filename']);
+            if (!$result) {
+                $success = false;
+            }
+        }
+        
+        return $success;
+    }
+    
+    /**
+     * 执行版本迁移卸载
+     * 
+     * @param string $moduleName 模块名称
+     * @param string $version 版本号
+     * @param string $specificFile 指定的迁移文件（可选）
+     * @return bool
+     */
+    public function uninstallMigrationsByVersion(string $moduleName, string $version, string $specificFile = ''): bool
+    {
+        $migrations = $this->getMigrationsByVersion($moduleName, $version, $specificFile);
+        
+        if (empty($migrations)) {
+            $this->printing->error(__("未找到版本 %{1} 的迁移文件", $version));
+            return false;
+        }
+        
+        $success = true;
+        // 按相反顺序执行卸载
+        $migrations = array_reverse($migrations);
+        foreach ($migrations as $migration) {
+            $this->printing->note(__("卸载迁移: %{1}", $migration['filename']));
+            $result = $this->uninstallMigration($moduleName, $migration['filename']);
+            if (!$result) {
+                $success = false;
+            }
+        }
+        
+        return $success;
     }
     
     /**
@@ -363,6 +501,15 @@ class MigrationService
      */
     private function getMigrationPath(string $moduleName): string
     {
+        // 获取模块信息
+        $moduleInfo = \Weline\Framework\App\Env::getInstance()->getModuleInfo($moduleName);
+        
+        if ($moduleInfo && isset($moduleInfo['base_path'])) {
+            // 使用模块的基础路径
+            return $moduleInfo['base_path'] . 'Setup/Db/Migration/';
+        }
+        
+        // 如果没有找到模块信息，尝试默认路径
         // 解析模块名称
         $parts = explode('_', $moduleName);
         if (count($parts) < 2) {
@@ -372,7 +519,20 @@ class MigrationService
         $vendor = $parts[0];
         $module = $parts[1];
         
-        return "app/code/{$vendor}/{$module}/Setup/Db/Migration/";
+        // 尝试 app/code 路径
+        $appPath = "app/code/{$vendor}/{$module}/Setup/Db/Migration/";
+        if (is_dir($appPath)) {
+            return $appPath;
+        }
+        
+        // 尝试 vendor 路径
+        $vendorPath = "vendor/{$vendor}/{$module}/Setup/Db/Migration/";
+        if (is_dir($vendorPath)) {
+            return $vendorPath;
+        }
+        
+        // 默认返回 app/code 路径
+        return $appPath;
     }
     
     /**

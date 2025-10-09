@@ -34,26 +34,28 @@ class Uninstall implements CommandInterface
     public function execute(array $args = [], array $data = []): void
     {
         $moduleName = $args['module'] ?? '';
+        $version = $args['version'] ?? '';
         $migrationFile = $args['file'] ?? '';
         
         if (empty($moduleName)) {
-            $this->printing->error('请指定模块名称: --module=ModuleName');
+            $this->printing->error(__('请指定模块名称: --module=ModuleName'));
             return;
         }
         
-        if (empty($migrationFile)) {
-            $this->printing->error('请指定迁移文件: --file=MigrationFile.php');
+        if (empty($version)) {
+            $this->printing->error(__('请指定版本号: --version=1.0.0'));
             return;
         }
         
-        $this->printing->info("开始卸载迁移: {$moduleName} -> {$migrationFile}");
+        $this->printing->note(__("开始卸载迁移: %{1} -> 版本 %{2}", [$moduleName, $version]) . 
+            (!empty($migrationFile) ? __(" -> 文件 %{1}", $migrationFile) : ""));
         
-        $result = $this->migrationService->uninstallMigration($moduleName, $migrationFile);
+        $result = $this->migrationService->uninstallMigrationsByVersion($moduleName, $version, $migrationFile);
         
         if ($result) {
-            $this->printing->success("迁移卸载完成");
+            $this->printing->success(__("迁移卸载完成"));
         } else {
-            $this->printing->error("迁移卸载失败");
+            $this->printing->error(__("迁移卸载失败"));
         }
     }
     
@@ -64,7 +66,7 @@ class Uninstall implements CommandInterface
      */
     public function getName(): string
     {
-        return 'Weline:Database:Migrate:Rollback';
+        return 'Weline:Database:Migrate:Uninstall';
     }
     
     /**
@@ -74,7 +76,7 @@ class Uninstall implements CommandInterface
      */
     public function getDescription(): string
     {
-        return '回滚数据库迁移';
+        return __('卸载数据库迁移');
     }
     
     /**
@@ -84,19 +86,28 @@ class Uninstall implements CommandInterface
      */
     public function getHelp(): string
     {
-        return <<<HELP
-数据库迁移回滚命令
+        return __("数据库迁移卸载命令
 
 用法:
-  php bin/w db:migrate:rollback --module=ModuleName --file=MigrationFile.php
+  php bin/w db:migrate:uninstall --module=ModuleName --version=1.0.0 [--file=MigrationFile.php]
 
 参数:
   --module    模块名称 (必需)
-  --file      迁移文件路径 (必需)
+  --version   版本号 (必需)
+  --file      迁移文件路径 (可选，指定时只卸载该文件)
 
 示例:
-  php bin/w db:migrate:rollback --module=Weline_Ai --file=create_table__users_20250101-v1.0.0.php
-
-HELP;
+  php bin/w db:migrate:uninstall --module=Weline_Ai --version=1.0.0
+  php bin/w db:migrate:uninstall --module=Weline_Ai --version=1.0.0 --file=create_table__users_20250101-v1.0.0.php");
+    }
+    
+    /**
+     * 获取命令提示
+     * 
+     * @return string
+     */
+    public function tip(): string
+    {
+        return __('数据库迁移卸载命令');
     }
 }

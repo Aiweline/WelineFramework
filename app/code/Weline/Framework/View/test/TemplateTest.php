@@ -33,9 +33,7 @@ class TemplateTest extends TestCore
      * @test
      */
     public function testFetchTagSource()
-    {
-        dd(__FILE__);
-        
+    {        
         $string = '@backend-url("/")';
         $res = $this->template->tmp_replace($string);
         // 建议不要在单元测试中直接dd($res)，可以用断言或输出
