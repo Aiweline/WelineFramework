@@ -63,4 +63,21 @@ class Remove extends AbstractConsole
     {
         return __('卸载主题');
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'theme:remove',
+            '卸载并移除指定的主题',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [
+                '<主题名>' => '要卸载的主题名称（例如：Weline_Default）',
+            ],
+            [
+                '卸载指定主题' => 'php bin/w theme:remove Weline_Default',
+            ]
+        );
+    }
 }

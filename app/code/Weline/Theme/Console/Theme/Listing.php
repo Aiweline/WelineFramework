@@ -32,4 +32,19 @@ class Listing extends AbstractConsole
     {
         return __('查看主题列表');
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'theme:listing',
+            '查看系统中已安装的所有主题',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '查看主题列表' => 'php bin/w theme:listing',
+            ]
+        );
+    }
 }
