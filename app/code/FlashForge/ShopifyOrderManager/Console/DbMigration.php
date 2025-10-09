@@ -78,28 +78,22 @@ class DbMigration implements CommandInterface
     /**
      * 显示帮助信息
      */
-    public function help(): void
+    public function help(): array|string
     {
-        echo "ShopifyOrderManager raw_data字段管理工具\n";
-        echo "\n";
-        echo "使用方法:\n";
-        echo "  php bin/w db-migration:install --date=20241219   # 删除raw_data字段\n";
-        echo "  php bin/w db-migration:uninstall --date=20241219 # 恢复raw_data字段\n";
-        echo "  php bin/w db-migration                           # 显示帮助信息\n";
-        echo "\n";
-        echo "功能说明:\n";
-        echo "  install   - 删除订单表和订单项表中的raw_data字段\n";
-        echo "  uninstall - 恢复订单表和订单项表中的raw_data字段\n";
-        echo "  help      - 显示此帮助信息\n";
-        echo "\n";
-        echo "参数说明:\n";
-        echo "  --date=YYYYMMDD - 指定搬迁脚本日期 (默认: 20241219)\n";
-        echo "\n";
-        echo "注意事项:\n";
-        echo "  - 删除操作不可逆，请确保已备份数据\n";
-        echo "  - 恢复操作会重新创建字段，但不会恢复已删除的数据\n";
-        echo "  - 建议在维护窗口期间执行此操作\n";
-        echo "  - 搬迁脚本位于: app/code/FlashForge/ShopifyOrderManager/Console/DbMigration/\n";
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'db-migration',
+            '管理ShopifyOrderManager模块中的raw_data字段',
+            [
+                '--date=<YYYYMMDD>' => '指定搬迁脚本日期（默认：20241219）',
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '删除raw_data字段' => 'php bin/w db-migration:install --date=20241219',
+                '恢复raw_data字段' => 'php bin/w db-migration:uninstall --date=20241219',
+                '显示帮助信息' => 'php bin/w db-migration',
+            ]
+        );
     }
 
     /**
