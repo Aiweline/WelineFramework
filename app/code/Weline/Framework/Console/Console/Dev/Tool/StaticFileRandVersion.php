@@ -46,4 +46,18 @@ class StaticFileRandVersion implements \Weline\Framework\Console\CommandInterfac
     {
         return '随机静态文件版本号：协助开发模式下实时刷新浏览器更新静态css,js,less等静态文件。';
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }

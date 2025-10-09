@@ -53,4 +53,18 @@ interface CommandInterface
      * @return string
      */
     public function tip(): string;
+
+    /**
+     * @DESC         |命令帮助信息
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @return array|string 返回帮助信息数组或字符串
+     */
+    public function help(): array|string;
 }

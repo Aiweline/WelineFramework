@@ -46,4 +46,39 @@ abstract class CommandAbstract implements CommandInterface
 
         return $module_path . '\\' . self::dir . '\\' . implode('\\', $command_array);
     }
+
+    /**
+     * @DESC         |命令帮助信息
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @return array|string
+     */
+    public function help(): array|string
+    {
+        // 默认help实现，子类应该重写此方法提供详细帮助
+        return $this->tip();
+    }
+
+    /**
+     * @DESC         |命令提示
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @return string
+     */
+    public function tip(): string
+    {
+        return '命令';
+    }
 }
