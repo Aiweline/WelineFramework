@@ -1,0 +1,252 @@
+<?php
+/**
+ * 商业洞察报表页面
+ * 
+ * 变量：
+ * @var array $stats 总体统计
+ * @var array $model_stats 模型统计
+ * @var array $daily_trend 每日趋势
+ * @var array $top_scenarios 热门场景
+ * @var string $date_range 日期范围
+ */
+?>
+
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="mdi mdi-chart-line"></i> 商业洞察报表
+    </h1>
+</div>
+
+<!-- 日期范围选择 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <label class="me-2">时间范围：</label>
+            <select class="form-select" style="width: auto;" id="dateRange" onchange="changeDateRange(this.value)">
+                <option value="7" <?= $date_range == '7' ? 'selected' : '' ?>>最近7天</option>
+                <option value="30" <?= $date_range == '30' ? 'selected' : '' ?>>最近30天</option>
+                <option value="90" <?= $date_range == '90' ? 'selected' : '' ?>>最近90天</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 总体统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">总请求数</p>
+                        <h3 class="mb-0"><?= number_format($stats['total_requests']) ?></h3>
+                        <small class="text-muted">平均 <?= $stats['avg_tokens_per_request'] ?> tokens/请求</small>
+                    </div>
+                    <div class="text-primary">
+                        <i class="mdi mdi-chart-bar" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">总Token数</p>
+                        <h3 class="mb-0"><?= number_format($stats['total_tokens']) ?></h3>
+                        <small class="text-muted">
+                            输入: <?= number_format($stats['total_input_tokens']) ?> | 
+                            输出: <?= number_format($stats['total_output_tokens']) ?>
+                        </small>
+                    </div>
+                    <div class="text-info">
+                        <i class="mdi mdi-counter" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">总成本</p>
+                        <h3 class="mb-0">$<?= $stats['total_cost'] ?></h3>
+                        <small class="text-muted">平均 $<?= $stats['avg_cost_per_request'] ?>/请求</small>
+                    </div>
+                    <div class="text-success">
+                        <i class="mdi mdi-currency-usd" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">活跃模型</p>
+                        <h3 class="mb-0"><?= count($model_stats) ?></h3>
+                        <small class="text-muted">使用中的模型数量</small>
+                    </div>
+                    <div class="text-warning">
+                        <i class="mdi mdi-robot" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 模型使用排行 -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-trophy"></i> 模型使用排行 TOP10
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php if (empty($model_stats)): ?>
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information"></i> 暂无数据
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>排名</th>
+                                    <th>模型</th>
+                                    <th>请求数</th>
+                                    <th>Token数</th>
+                                    <th>成本</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($model_stats as $index => $model): ?>
+                                    <tr>
+                                        <td>
+                                            <?php if ($index < 3): ?>
+                                                <span class="badge bg-warning">#<?= $index + 1 ?></span>
+                                            <?php else: ?>
+                                                #<?= $index + 1 ?>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <strong><?= htmlspecialchars($model['model_code']) ?></strong>
+                                            <br><small class="text-muted"><?= htmlspecialchars($model['vendor']) ?></small>
+                                        </td>
+                                        <td><?= number_format($model['requests']) ?></td>
+                                        <td><?= number_format($model['tokens']) ?></td>
+                                        <td>$<?= number_format($model['cost'], 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- 热门场景 -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-fire"></i> 热门场景 TOP5
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php if (empty($top_scenarios)): ?>
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information"></i> 暂无场景数据
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>排名</th>
+                                    <th>场景</th>
+                                    <th>请求数</th>
+                                    <th>Token数</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($top_scenarios as $index => $scenario): ?>
+                                    <tr>
+                                        <td>
+                                            <?php if ($index < 3): ?>
+                                                <span class="badge bg-danger">#<?= $index + 1 ?></span>
+                                            <?php else: ?>
+                                                #<?= $index + 1 ?>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><strong><?= htmlspecialchars($scenario['scenario_code']) ?></strong></td>
+                                        <td><?= number_format($scenario['requests']) ?></td>
+                                        <td><?= number_format($scenario['tokens']) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 每日趋势图表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="mdi mdi-chart-line"></i> 每日使用趋势
+        </h5>
+    </div>
+    <div class="card-body">
+        <?php if (empty($daily_trend)): ?>
+            <div class="alert alert-info">
+                <i class="mdi mdi-information"></i> 暂无趋势数据
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>请求数</th>
+                            <th>Token数</th>
+                            <th>成本</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($daily_trend as $day): ?>
+                            <tr>
+                                <td><?= $day['date'] ?></td>
+                                <td><?= number_format($day['requests']) ?></td>
+                                <td><?= number_format($day['tokens']) ?></td>
+                                <td>$<?= number_format($day['cost'], 2) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<script>
+function changeDateRange(range) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('range', range);
+    window.location.href = url.toString();
+}
+</script>
+

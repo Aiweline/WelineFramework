@@ -33,7 +33,7 @@ class ModelCollector
     /**
      * 模型配置目录
      */
-    private const MODEL_CONFIG_DIR = 'app/code/Weline/Ai/etc/models/';
+    private const MODEL_CONFIG_DIR = 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Ai' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR;
     
     /**
      * 配置文件扩展名
@@ -86,8 +86,12 @@ class ModelCollector
             throw new Exception("模型配置目录不存在: {$configDir}");
         }
 
-        $configFiles = [];
-        $this->fileScanner->globFile($configDir . '/*' . self::CONFIG_FILE_EXTENSION, $configFiles);
+        $pattern = $configDir . '*' . self::CONFIG_FILE_EXTENSION;
+        
+        $configFiles = glob($pattern);
+        if ($configFiles === false) {
+            $configFiles = [];
+        }
         $collectedModels = [];
 
         foreach ($configFiles as $configFile) {
@@ -235,7 +239,7 @@ class ModelCollector
 
         $protectedModels = [];
 
-        foreach ($allModels as $model) {
+        foreach ($allModels->getItems() as $model) {
             $modelCode = $model->getData(AiModel::fields_MODEL_CODE);
             if ($this->defaultModelManager->isProtectedModel($modelCode)) {
                 $protectedModels[] = [
@@ -273,12 +277,19 @@ class ModelCollector
             throw new Exception("JSON解析错误: " . json_last_error_msg() . ", 文件: {$configFile}");
         }
 
-        // 验证必需字段
-        $requiredFields = ['model_code', 'name', 'vendor'];
+        // 验证必需字段（兼容name和model_name）
+        $requiredFields = ['model_code', 'vendor'];
         foreach ($requiredFields as $field) {
             if (!isset($config[$field]) || empty($config[$field])) {
                 throw new Exception("缺少必需字段 '{$field}' 在文件: {$configFile}");
             }
+        }
+        
+        // 兼容name和model_name字段
+        if (isset($config['model_name'])) {
+            $config['name'] = $config['model_name'];
+        } elseif (!isset($config['name']) || empty($config['name'])) {
+            throw new Exception("缺少必需字段 'name' 或 'model_name' 在文件: {$configFile}");
         }
 
         return $config;
@@ -317,14 +328,24 @@ class ModelCollector
      */
     private function createNewModel(array $modelData): AiModel
     {
+        // 处理is_active字段，兼容status和is_active两种格式
+        $isActive = 1;
+        if (isset($modelData['status'])) {
+            $isActive = $modelData['status'] === 'active' ? 1 : 0;
+        } elseif (isset($modelData['is_active'])) {
+            $isActive = (int)$modelData['is_active'];
+        }
+
         $data = [
             AiModel::fields_MODEL_CODE => $modelData['model_code'],
             AiModel::fields_MODEL_NAME => $modelData['name'],
             AiModel::fields_VENDOR => $modelData['vendor'],
+            AiModel::fields_MODEL_VERSION => $modelData['model_version'] ?? '1.0',
             AiModel::fields_CONFIG_JSON => json_encode($modelData['config'] ?? []),
-            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price'] ?? 0.0000,
+            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000,
+            AiModel::fields_TOKEN_PRICE_OUTPUT => $modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000,
             AiModel::fields_PROXY_INFO => json_encode($modelData['proxy_info'] ?? []),
-            AiModel::fields_IS_ACTIVE => ($modelData['status'] ?? 'active') === 'active' ? 1 : 0,
+            AiModel::fields_IS_ACTIVE => $isActive,
             AiModel::fields_IS_DEFAULT => $modelData['is_default'] ?? 0,
             AiModel::fields_CREATED_TIME => time(),
             AiModel::fields_UPDATED_TIME => time()
@@ -345,14 +366,24 @@ class ModelCollector
      */
     private function updateExistingModel(AiModel $existingModel, array $modelData): AiModel
     {
+        // 处理is_active字段，兼容status和is_active两种格式
+        $isActive = 1;
+        if (isset($modelData['status'])) {
+            $isActive = $modelData['status'] === 'active' ? 1 : 0;
+        } elseif (isset($modelData['is_active'])) {
+            $isActive = (int)$modelData['is_active'];
+        }
+
         // 只更新允许更新的字段
         $updateData = [
             AiModel::fields_MODEL_NAME => $modelData['name'],
             AiModel::fields_VENDOR => $modelData['vendor'],
+            AiModel::fields_MODEL_VERSION => $modelData['model_version'] ?? '1.0',
             AiModel::fields_CONFIG_JSON => json_encode($modelData['config'] ?? []),
-            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price'] ?? 0.0000,
+            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000,
+            AiModel::fields_TOKEN_PRICE_OUTPUT => $modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000,
             AiModel::fields_PROXY_INFO => json_encode($modelData['proxy_info'] ?? []),
-            AiModel::fields_IS_ACTIVE => ($modelData['status'] ?? 'active') === 'active' ? 1 : 0,
+            AiModel::fields_IS_ACTIVE => $isActive,
             AiModel::fields_UPDATED_TIME => time()
         ];
 

@@ -17,6 +17,7 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Manager\Message;
 
 /**
  * 默认模型管理后台控制器
@@ -200,15 +201,15 @@ class DefaultModel extends BackendController
             $result = $this->defaultModelManager->initializeDefaults();
             
             if ($result) {
-                $this->messageManager->addSuccess(__('默认配置初始化成功'));
+                Message::success(__('默认配置初始化成功'));
             } else {
-                $this->messageManager->addInfo(__('默认配置已存在，无需初始化'));
+                Message::notes(__('默认配置已存在，无需初始化'));
             }
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('初始化失败: %{error}', ['error' => $e->getMessage()]));
+            Message::error(__('初始化失败: %{error}', ['error' => $e->getMessage()]));
         }
 
-        return $this->redirect($this->getBackendUrl('*/backend/defaultmodel'));
+        return $this->redirect($this->_url->getBackendUrl('*/backend/defaultmodel'));
     }
 
     /**
@@ -288,12 +289,12 @@ class DefaultModel extends BackendController
         try {
             $this->defaultModelManager->clearCache();
             
-            $this->messageManager->addSuccess(__('默认模型缓存清除成功'));
+            Message::success(__('默认模型缓存清除成功'));
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('清除缓存失败: %{error}', ['error' => $e->getMessage()]));
+            Message::error(__('清除缓存失败: %{error}', ['error' => $e->getMessage()]));
         }
 
-        return $this->redirect($this->getBackendUrl('*/backend/defaultmodel'));
+        return $this->redirect($this->_url->getBackendUrl('*/backend/defaultmodel'));
     }
 
     /**
