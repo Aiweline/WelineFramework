@@ -57,4 +57,22 @@ class Active extends AbstractConsole
     {
         return '查看当前主题或者激活特定主题';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'theme:active',
+            '查看当前激活的主题或激活指定主题',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [
+                '<主题名>' => '要激活的主题名称（可选，例如：Weline_Default）',
+            ],
+            [
+                '查看当前激活的主题' => 'php bin/w theme:active',
+                '激活指定主题' => 'php bin/w theme:active Weline_Default',
+            ]
+        );
+    }
 }
