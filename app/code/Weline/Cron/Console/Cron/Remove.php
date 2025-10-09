@@ -36,4 +36,19 @@ class Remove extends BaseCommand
     {
         return '移除系统定时任务。';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'cron:remove',
+            '从系统中移除已安装的定时任务',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '移除定时任务' => 'php bin/w cron:remove',
+            ]
+        );
+    }
 }

@@ -20,4 +20,19 @@ class Listing extends BaseCommand
     {
         return '查看系统定时任务是否存在。';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'cron:listing',
+            '查看系统中已安装的所有定时计划任务',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '查看所有定时任务' => 'php bin/w cron:listing',
+            ]
+        );
+    }
 }

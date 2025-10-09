@@ -38,4 +38,19 @@ class Install extends BaseCommand
     {
         return '安装系统定时任务。';
     }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'cron:install',
+            '安装系统定时任务到系统计划任务中',
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '安装定时任务' => 'php bin/w cron:install',
+            ]
+        );
+    }
 }
