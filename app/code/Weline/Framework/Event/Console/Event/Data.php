@@ -72,4 +72,18 @@ class Data implements \Weline\Framework\Console\CommandInterface
     {
         return __('事件观察者列表！具体模组的事件请在命令后写明。例如：（ php bin/w event:data Weline_Core Weline_Base）');
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }

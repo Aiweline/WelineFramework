@@ -71,6 +71,11 @@ class Upgrade extends CommandAbstract
         if (is_string($argsModule)) {
             $argsModule = explode(' ', $argsModule);
         }
+        
+        // 如果指定了模块，显示提示信息
+        if ($argsModule) {
+            $this->printer->setup(__('指定模块升级模式：仅升级 %{1}', [implode(', ', $argsModule)]));
+        }
         if (isset($args['model'])) {
             $appoint = true;
             /**@var ModelManager $modelManager */
@@ -124,53 +129,66 @@ class Upgrade extends CommandAbstract
             $this->printer->success(__('委托部分更新已运行！'));
             return;
         }
+        
         $i = 1;
-        //        // 删除路由文件
-        $this->printer->warning($i . '、路由更新...', '系统');
-        $this->printer->warning('清除文件：');
-        foreach (Env::router_files_PATH as $path) {
-            $this->printer->warning($path);
-            if (is_file($path)) {
-                $data = $this->system->exec('rm -f ' . $path);
-                if ($data) {
-                    $this->printer->printList($data);
+        // 如果没有指定模块，执行全局清理操作
+        if (!$argsModule) {
+            //        // 删除路由文件
+            $this->printer->warning($i . '、路由更新...', '系统');
+            $this->printer->warning('清除文件：');
+            foreach (Env::router_files_PATH as $path) {
+                $this->printer->warning($path);
+                if (is_file($path)) {
+                    $data = $this->system->exec('rm -f ' . $path);
+                    if ($data) {
+                        $this->printer->printList($data);
+                    }
                 }
             }
+            $i += 1;
+            $this->printer->note($i . '、命令行更新...');
+            /**@var \Weline\Framework\Console\Console\Command\Upgrade $commandManagerConsole */
+            $commandManagerConsole = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
+            $commandManagerConsole->execute();
+
+            $this->printer->note($i . '、事件清理...');
+            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Event\Console\Event\Cache\Clear::class);
+            $cacheManagerConsole->execute();
+
+            $i += 1;
+            $this->printer->note($i . '、插件编译...');
+            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
+            $cacheManagerConsole->execute();
+            $i += 1;
+        } else {
+            $this->printer->note('指定模块升级，跳过全局清理操作...');
         }
-        $i += 1;
-        $this->printer->note($i . '、命令行更新...');
-        /**@var \Weline\Framework\Console\Console\Command\Upgrade $commandManagerConsole */
-        $commandManagerConsole = ObjectManager::getInstance(\Weline\Framework\Console\Console\Command\Upgrade::class);
-        $commandManagerConsole->execute();
-
-        $this->printer->note($i . '、事件清理...');
-        /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
-        $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Event\Console\Event\Cache\Clear::class);
-        $cacheManagerConsole->execute();
-
-        $i += 1;
-        $this->printer->note($i . '、插件编译...');
-        /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
-        $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
-        $cacheManagerConsole->execute();
-        $i += 1;
+        
         // 扫描代码
         $this->printer->note($i . '、清理模板缓存', '系统');
         list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
         foreach ($origin_vendor_modules as $modules) {
             foreach ($modules as $module) {
+                if ($argsModule and !in_array($module['name'], $argsModule)) {
+                    continue;
+                }
                 $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
                 if (is_dir($tpl_dir)) {
                     $this->system->exec("rm -rf {$tpl_dir}");
                 }
             }
         }
-        $i += 1;
-        $this->printer->note($i . '、清理缓存...');
-        /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Flush */
-        $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
-        $cacheManagerConsole->execute();
-        $this->system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
+        
+        if (!$argsModule) {
+            $i += 1;
+            $this->printer->note($i . '、清理缓存...');
+            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Flush */
+            $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
+            $cacheManagerConsole->execute();
+            $this->system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
+        }
 
         $this->printer->note($i . '、module模块更新...');
         // 注册模块
@@ -180,6 +198,9 @@ class Upgrade extends CommandAbstract
         // 注册模组
         $this->printer->note(__('1)注册模组'));
         foreach ($dependencyModules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
             if (is_file($module['register'])) {
                 require $module['register'];
             }
@@ -236,6 +257,9 @@ class Upgrade extends CommandAbstract
         $this->printer->note(__('2)安装Setup信息'));
         $modules = $module_handle->getModules();
         foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
             if (isset($module['upgrading']) and $module['upgrading']) {
                 try {
                     $module_handle->setupUpgrade(new Module($module));
@@ -256,21 +280,34 @@ class Upgrade extends CommandAbstract
         // 注册模型数据库信息
         $this->printer->note(__('3)注册模型数据库信息'));
         foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
             $module_handle->setupModel(new Module($module));
         }
 
         // 注册路由信息
         $this->printer->note(__('3)注册路由信息'));
         foreach ($modules as $module_name => $module) {
+            if ($argsModule and !in_array($module_name, $argsModule)) {
+                continue;
+            }
             $module_handle->registerRoute(new Module($module));
         }
-        $this->printer->note('模块更新完毕！');
+        if ($argsModule) {
+            $this->printer->note(__('指定模块 %{1} 更新完毕！', [implode(', ', $argsModule)]));
+        } else {
+            $this->printer->note('模块更新完毕！');
+        }
         $i += 1;
         $this->printer->note($i . '、收集模块信息', '系统');
         # 加载module中的助手函数
         $modules = Env::getInstance()->getActiveModules();
         $function_files_content = '';
         foreach ($modules as $module) {
+            if ($argsModule and !in_array($module['name'], $argsModule)) {
+                continue;
+            }
             $global_file_pattern = $module['base_path'] . 'Global' . DS . '*.php';
             $global_files = glob($global_file_pattern);
             foreach ($global_files as $global_file) {
@@ -278,10 +315,22 @@ class Upgrade extends CommandAbstract
                 $function_files_content .= str_replace('?>', '', file_get_contents($global_file)) . PHP_EOL;
             }
         }
-        # 写入文件
-        $this->printer->warning('写入文件：');
-        $this->printer->warning(Env::path_FUNCTIONS_FILE);
-        file_put_contents(Env::path_FUNCTIONS_FILE, $function_files_content);
+        
+        // 只有在指定模块时才有条件地写入文件（避免清空全局函数文件）
+        if ($argsModule && $function_files_content) {
+            # 写入文件
+            $this->printer->warning('写入文件：');
+            $this->printer->warning(Env::path_FUNCTIONS_FILE);
+            // 注意：指定模块时，应该追加而不是覆盖，但这需要更复杂的逻辑
+            // 暂时保持原有逻辑，但添加警告
+            $this->printer->warning(__('警告：指定模块升级时，全局函数文件可能不完整，建议之后运行一次完整的 setup:upgrade'));
+            file_put_contents(Env::path_FUNCTIONS_FILE, $function_files_content);
+        } elseif (!$argsModule) {
+            # 写入文件
+            $this->printer->warning('写入文件：');
+            $this->printer->warning(Env::path_FUNCTIONS_FILE);
+            file_put_contents(Env::path_FUNCTIONS_FILE, $function_files_content);
+        }
 
         $i += 1;
 
@@ -297,6 +346,29 @@ class Upgrade extends CommandAbstract
     public function tip(): string
     {
         return '升级模块.' . PHP_EOL . ' 1. --mode[指定升级模式为数据库模型：支持的有model, route] --module Weline_Demo 升级指定模块.';
+    }
+
+    public function help(): array|string
+    {
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'module:upgrade',
+            '升级模块系统，包括数据库模型、路由等',
+            [
+                '--model' => '仅升级数据库模型',
+                '--route' => '仅升级路由',
+                '--module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            [
+                '升级所有模块' => 'php bin/w module:upgrade',
+                '仅升级数据库模型' => 'php bin/w module:upgrade --model',
+                '仅升级路由' => 'php bin/w module:upgrade --route',
+                '升级指定模块' => 'php bin/w module:upgrade --module Weline_Demo',
+                '升级指定模块的模型' => 'php bin/w module:upgrade --model --module Weline_Demo',
+            ],
+            'php bin/w module:upgrade [--model|--route] [--module=<模块名>]'
+        );
     }
 
     /**

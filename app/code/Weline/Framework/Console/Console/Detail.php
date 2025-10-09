@@ -31,4 +31,18 @@ class Detail extends \Weline\Framework\Console\CommandAbstract
     {
         return __('查看命令详情，示例：php bin/w detail dev:debug');
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }

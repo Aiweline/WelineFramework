@@ -43,6 +43,20 @@ class Set extends CommandAbstract
         return '部署模式设置。（dev:开发模式；prod:生产环境。）';
     }
 
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
+
     /**
      * @DESC         |清理模块编译目录
      *

@@ -452,4 +452,18 @@ class Status implements \Weline\Framework\Console\CommandInterface
     {
         return __('缓存状态。[enable/disable]:开启/关闭 [identify...]:缓存识别名');
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }
