@@ -38,7 +38,11 @@ if (!defined('ENV_TEST')) {
 }
 $_SERVER['REQUEST_URI'] = '/test';
 // 初始化session
-ObjectManager::getInstance(Session::class);
+$session = ObjectManager::getInstance(Session::class);
+// 强制初始化session（在CLI环境下）
+if (method_exists($session, '__init')) {
+    $session->__init();
+}
 
 
 class TestCore extends TestCase

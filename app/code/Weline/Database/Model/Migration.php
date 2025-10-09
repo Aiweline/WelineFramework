@@ -8,8 +8,10 @@
 
 namespace Weline\Database\Model;
 
-use Weline\Framework\Database\Api\Db\ModelInterface;
+use Weline\Framework\Database\ModelInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
 
 class Migration extends Model implements ModelInterface
 {
@@ -35,6 +37,46 @@ class Migration extends Model implements ModelInterface
     public function _construct()
     {
         $this->init('weline_database_migrations', self::fields_ID);
+    }
+    
+    /**
+     * 设置模型
+     */
+    public function setup(ModelSetup $setup, Context $context): void
+    {
+        // 创建迁移记录表
+        $setup->createTable($this->getTable(), [
+            'migration_id' => 'INT AUTO_INCREMENT PRIMARY KEY',
+            'module_name' => 'VARCHAR(255) NOT NULL',
+            'version' => 'VARCHAR(50) NOT NULL',
+            'migration_file' => 'VARCHAR(255) NOT NULL',
+            'description' => 'TEXT',
+            'status' => 'VARCHAR(50) NOT NULL DEFAULT "pending"',
+            'executed_at' => 'DATETIME',
+            'rollback_at' => 'DATETIME',
+            'dependencies' => 'TEXT',
+            'checksum' => 'VARCHAR(255)',
+            'created_at' => 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+            'updated_at' => 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
+        ]);
+    }
+    
+    /**
+     * 升级模型
+     */
+    public function upgrade(ModelSetup $setup, Context $context): void
+    {
+        // 升级迁移记录表结构
+        $this->setup($setup, $context);
+    }
+    
+    /**
+     * 安装模型
+     */
+    public function install(ModelSetup $setup, Context $context): void
+    {
+        // 安装迁移记录表
+        $this->setup($setup, $context);
     }
     
     /**

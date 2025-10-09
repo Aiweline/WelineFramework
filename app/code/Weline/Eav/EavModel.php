@@ -194,7 +194,6 @@ abstract class EavModel extends Model implements EavInterface
         }
         $set = $this->getAttributeSet($set_code);
         $group = $this->getAttributeGroup($group_code, $set_code);
-        dd($group->getData());
         $type = $this->existType($type);
         $eavEntity = $this->existEavEntity($this->getEntityCode());
         try {
@@ -363,6 +362,44 @@ abstract class EavModel extends Model implements EavInterface
         /**@var Group $attributeSetsModel */
         $attributeGroupsModel = ObjectManager::getInstance(Group::class);
         return $attributeGroupsModel->getEavEntityGroup($this);
+    }
+    
+    /**
+     * @DESC          # Eav: 获取属性组
+     *
+     * @AUTH    秋枫雁飞
+     * @EMAIL aiweline@qq.com
+     * @DateTime: 2023/3/15 22:43
+     * 参数区：
+     * @param string $group_code 属性组代码
+     * @param string $set_code 属性集代码
+     * @return \Weline\Eav\Model\EavAttribute\Group
+     */
+    public function getAttributeGroup(string $group_code = 'default', string $set_code = 'default'): \Weline\Eav\Model\EavAttribute\Group
+    {
+        /** @var \Weline\Eav\Model\EavAttribute\Group $attributeGroup */
+        $attributeGroup = ObjectManager::getInstance(Group::class);
+        $eav_entity_id = $this->eav_Entity()->getId();
+        $set_id = $this->getAttributeSet($set_code)->getId();
+        
+        $attributeGroup = $attributeGroup->where($attributeGroup::fields_code, $group_code)
+            ->where($attributeGroup::fields_eav_entity_id, $eav_entity_id)
+            ->where($attributeGroup::fields_set_id, $set_id)
+            ->find()
+            ->fetch();
+            
+        if (!$attributeGroup->getId()) {
+            # 创建属性组
+            /** @var \Weline\Eav\Model\EavAttribute\Group $attributeGroup */
+            $attributeGroup = ObjectManager::getInstance(Group::class);
+            $attributeGroup->setEntityId($eav_entity_id)
+                ->setCode($group_code)
+                ->setSetId($set_id)
+                ->setName($group_code === 'default' ? '默认属性组' : $group_code)
+                ->save();
+        }
+        
+        return $attributeGroup;
     }
 
     /**
