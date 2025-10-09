@@ -14,9 +14,11 @@ declare(strict_types=1);
 namespace Weline\Ai\Service;
 
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Model\AiUsageLog;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\I18nIntegration;
+use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 
@@ -63,23 +65,39 @@ class AiService
     private I18nIntegration $i18nIntegration;
 
     /**
+     * @var ProviderFactory
+     */
+    private ProviderFactory $providerFactory;
+
+    /**
+     * @var AiUsageLog
+     */
+    private AiUsageLog $usageLog;
+
+    /**
      * 构造函数
      * 
      * @param AiModel $aiModel
      * @param DefaultModelManager $defaultModelManager
      * @param AdapterScanner $adapterScanner
      * @param I18nIntegration $i18nIntegration
+     * @param ProviderFactory $providerFactory
+     * @param AiUsageLog $usageLog
      */
     public function __construct(
         AiModel $aiModel,
         DefaultModelManager $defaultModelManager,
         AdapterScanner $adapterScanner,
-        I18nIntegration $i18nIntegration
+        I18nIntegration $i18nIntegration,
+        ProviderFactory $providerFactory,
+        AiUsageLog $usageLog
     ) {
         $this->aiModel = $aiModel;
         $this->defaultModelManager = $defaultModelManager;
         $this->adapterScanner = $adapterScanner;
         $this->i18nIntegration = $i18nIntegration;
+        $this->providerFactory = $providerFactory;
+        $this->usageLog = $usageLog;
     }
 
     /**
@@ -226,8 +244,8 @@ class AiService
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
             $model = $this->aiModel->reset()
-                ->where(AiModel::fields_CODE, $modelCode)
-                ->where(AiModel::fields_STATUS, 'active')
+                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->where(AiModel::fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
             
@@ -323,14 +341,23 @@ class AiService
      */
     private function callModelApi(AiModel $model, string $prompt, array $params): string
     {
-        // 这里是模拟实现，实际需要根据不同模型调用相应的API
-        $modelName = $model->getName();
-        $modelCode = $model->getData(AiModel::fields_CODE);
-        
-        // 模拟API调用延迟
-        usleep(500000); // 0.5秒
-        
-        return "这是来自模型 {$modelName} ({$modelCode}) 的响应：{$prompt}";
+        try {
+            // 获取合适的提供者
+            $provider = $this->providerFactory->getProvider($model);
+            
+            // 调用API
+            $result = $provider->generate($model, $prompt, $params);
+            
+            // 记录使用量
+            $this->logUsage($model, $result['usage'], $params);
+            
+            return $result['content'];
+            
+        } catch (\Exception $e) {
+            // 记录错误
+            error_log("AI API调用失败: " . $e->getMessage());
+            throw new Exception("AI生成失败: " . $e->getMessage());
+        }
     }
 
     /**
@@ -352,21 +379,54 @@ class AiService
         ?string $locale, 
         array $params
     ): void {
-        // 模拟流式响应
-        $fullResponse = $this->callModelApi($model, $prompt, $params);
-        $chunks = str_split($fullResponse, max(1, (int)ceil(strlen($fullResponse) / 10)));
+        try {
+            // 获取合适的提供者
+            $provider = $this->providerFactory->getProvider($model);
+            
+            // 流式调用API
+            $result = $provider->generateStream($model, $prompt, $callback, $params);
+            
+            // 记录使用量
+            $this->logUsage($model, $result['usage'], $params);
+            
+        } catch (\Exception $e) {
+            // 记录错误
+            error_log("AI流式API调用失败: " . $e->getMessage());
+            throw new Exception("AI流式生成失败: " . $e->getMessage());
+        }
+    }
 
-        foreach ($chunks as $chunk) {
-            // 应用场景适配器处理
-            $processedChunk = $this->processScenarioResponse($chunk, $scenarioCode, $params);
-            
-            // 应用语言处理
-            if ($locale) {
-                $processedChunk = $this->processLanguageResponse($processedChunk, $locale);
-            }
-            
-            $callback($processedChunk);
-            usleep(100000); // 模拟延迟
+    /**
+     * 记录使用量
+     * 
+     * @param AiModel $model
+     * @param array $usage
+     * @param array $params
+     * @return void
+     */
+    private function logUsage(AiModel $model, array $usage, array $params = []): void
+    {
+        try {
+            $this->usageLog->reset();
+            $this->usageLog->setData([
+                'model_code' => $model->getModelCode(),
+                'vendor' => $model->getVendor(),
+                'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
+                'completion_tokens' => $usage['completion_tokens'] ?? 0,
+                'total_tokens' => $usage['total_tokens'] ?? 0,
+                'input_cost' => ($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') / 1000,
+                'output_cost' => ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output') / 1000,
+                'total_cost' => (($usage['prompt_tokens'] ?? 0) * $model->getData('token_price_input') + 
+                               ($usage['completion_tokens'] ?? 0) * $model->getData('token_price_output')) / 1000,
+                'scenario_code' => $params['scenario_code'] ?? null,
+                'locale' => $params['locale'] ?? null,
+                'user_id' => $params['user_id'] ?? 0,
+                'created_time' => time(),
+            ]);
+            $this->usageLog->save();
+        } catch (\Exception $e) {
+            // 记录失败不影响主流程
+            error_log("记录AI使用量失败: " . $e->getMessage());
         }
     }
 

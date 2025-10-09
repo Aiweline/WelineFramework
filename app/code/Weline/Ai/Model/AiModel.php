@@ -43,6 +43,8 @@ class AiModel extends Model
     public const fields_PROXY_INFO = 'proxy_info';
     public const fields_IS_ACTIVE = 'is_active';
     public const fields_IS_DEFAULT = 'is_default';
+    public const fields_IS_COPIED = 'is_copied';
+    public const fields_PARENT_MODEL_ID = 'parent_model_id';
     public const fields_CREATED_TIME = 'created_time';
     public const fields_UPDATED_TIME = 'updated_time';
 
@@ -59,7 +61,41 @@ class AiModel extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 添加模型复制相关字段
+        if (!$setup->columnExist(self::fields_IS_COPIED)) {
+            $setup->addColumn(
+                self::fields_IS_COPIED, 
+                TableInterface::column_type_INTEGER, 
+                1, 
+                'not null default 0', 
+                '是否为复制模型'
+            );
+        }
+        
+        if (!$setup->columnExist(self::fields_PARENT_MODEL_ID)) {
+            $setup->addColumn(
+                self::fields_PARENT_MODEL_ID, 
+                TableInterface::column_type_INTEGER, 
+                11, 
+                'null', 
+                '父模型ID'
+            );
+            $setup->addIndex(
+                TableInterface::index_type_KEY, 
+                'idx_parent_model_id', 
+                self::fields_PARENT_MODEL_ID, 
+                '父模型ID索引'
+            );
+        }
+        
+        if (!$setup->indexExist('idx_is_copied')) {
+            $setup->addIndex(
+                TableInterface::index_type_KEY, 
+                'idx_is_copied', 
+                self::fields_IS_COPIED, 
+                '复制状态索引'
+            );
+        }
     }
 
     /**
@@ -154,6 +190,27 @@ class AiModel extends Model
     public function isDefault(): bool
     {
         return (bool)$this->getData(self::fields_IS_DEFAULT);
+    }
+
+    /**
+     * 检查是否为复制模型
+     * 
+     * @return bool
+     */
+    public function isCopied(): bool
+    {
+        return (bool)$this->getData(self::fields_IS_COPIED);
+    }
+
+    /**
+     * 获取父模型ID
+     * 
+     * @return int|null
+     */
+    public function getParentModelId(): ?int
+    {
+        $parentId = $this->getData(self::fields_PARENT_MODEL_ID);
+        return $parentId ? (int)$parentId : null;
     }
 
     /**

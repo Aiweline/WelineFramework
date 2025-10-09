@@ -109,10 +109,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <td><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?></td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <a href="<?= $this->getBackendUrl('*/backend/adapter/detail', ['id' => $adapter->getId()]) ?>" 
-                                                       class="btn btn-outline-primary">
+                                                    <button type="button" 
+                                                            class="btn btn-outline-primary" 
+                                                            data-bs-toggle="offcanvas" 
+                                                            data-bs-target="#adapterDetail<?= $adapter->getId() ?>" 
+                                                            aria-controls="adapterDetail<?= $adapter->getId() ?>"
+                                                            title="<?= __('详情') ?>">
                                                         <i class="mdi mdi-eye"></i>
-                                                    </a>
+                                                    </button>
                                                     <button type="button" class="btn btn-outline-warning" 
                                                             onclick="toggleStatus(<?= $adapter->getId() ?>)">
                                                         <i class="mdi mdi-toggle-switch"></i>
@@ -141,6 +145,47 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         </div>
     </div>
 </div>
+
+<!-- OffCanvas 弹窗区域 -->
+<?php if (isset($adapters) && $adapters): ?>
+    <?php foreach ($adapters as $adapter): ?>
+        <div class="offcanvas offcanvas-end w-75" 
+             tabindex="-1" 
+             id="adapterDetail<?= $adapter->getId() ?>" 
+             aria-labelledby="adapterDetailLabel<?= $adapter->getId() ?>">
+            <div class="offcanvas-header">
+                <h5 id="adapterDetailLabel<?= $adapter->getId() ?>">
+                    <i class="mdi mdi-puzzle me-2"></i>
+                    <?= __('适配器详情') ?>: <?= $adapter->getCode() ?>
+                </h5>
+                <button type="button" 
+                        class="btn-close text-reset" 
+                        data-bs-dismiss="offcanvas" 
+                        aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0 w-100 h-100 overflow-hidden">
+                <div class="position-relative w-100 h-100">
+                    <iframe id="adapterDetailFrame<?= $adapter->getId() ?>"
+                            class="w-100 h-100"
+                            data-src="<?= $this->getBackendUrl('*/backend/adapter/detail', ['id' => $adapter->getId(), 'isIframe' => 'true']) ?>"
+                            frameborder="0"></iframe>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    
+    <script>
+    $(document).ready(function() {
+        // 为所有offcanvas绑定事件
+        $('.offcanvas').on('show.bs.offcanvas', function () {
+            let iframe = $(this).find('iframe');
+            if (iframe.length && !iframe.attr('src')) {
+                iframe.attr('src', iframe.attr('data-src'));
+            }
+        });
+    });
+    </script>
+<?php endif; ?>
 
 <script>
 function scanAdapters() {

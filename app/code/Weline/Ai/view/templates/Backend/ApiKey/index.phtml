@@ -1,0 +1,267 @@
+<?php
+/**
+ * API密钥管理列表页面
+ * 
+ * 变量：
+ * @var array $api_keys API密钥列表
+ * @var object $pagination 分页对象
+ * @var int $total 总数
+ * @var string $current_status 当前状态过滤
+ * @var array $stats 统计数据
+ */
+?>
+
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="mdi mdi-key"></i> API密钥管理
+    </h1>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">总密钥数</p>
+                        <h3 class="mb-0"><?= $stats['total'] ?></h3>
+                    </div>
+                    <div class="text-primary">
+                        <i class="mdi mdi-key" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">待审核</p>
+                        <h3 class="mb-0"><?= $stats['pending'] ?></h3>
+                    </div>
+                    <div class="text-warning">
+                        <i class="mdi mdi-clock-outline" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">已激活</p>
+                        <h3 class="mb-0"><?= $stats['active'] ?></h3>
+                    </div>
+                    <div class="text-success">
+                        <i class="mdi mdi-check-circle" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <p class="text-muted mb-1">已拒绝</p>
+                        <h3 class="mb-0"><?= $stats['rejected'] ?></h3>
+                    </div>
+                    <div class="text-danger">
+                        <i class="mdi mdi-close-circle" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 过滤和操作 -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">API密钥列表</h5>
+            <div>
+                <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
+                    <option value="">全部状态</option>
+                    <option value="pending" <?= $current_status === 'pending' ? 'selected' : '' ?>>待审核</option>
+                    <option value="approved" <?= $current_status === 'approved' ? 'selected' : '' ?>>已批准</option>
+                    <option value="rejected" <?= $current_status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <?php if (empty($api_keys)): ?>
+            <div class="alert alert-info">
+                <i class="mdi mdi-information"></i> 暂无API密钥数据
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>密钥名称</th>
+                            <th>用户ID</th>
+                            <th>状态</th>
+                            <th>配额</th>
+                            <th>已使用</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($api_keys as $key): ?>
+                            <tr>
+                                <td><?= $key->getId() ?></td>
+                                <td><?= htmlspecialchars($key->getData('key_name') ?? '-') ?></td>
+                                <td><?= $key->getData('user_id') ?? '-' ?></td>
+                                <td>
+                                    <?php
+                                    $status = $key->getData('status');
+                                    $statusClass = [
+                                        'pending' => 'warning',
+                                        'approved' => 'success',
+                                        'rejected' => 'danger'
+                                    ][$status] ?? 'secondary';
+                                    $statusText = [
+                                        'pending' => '待审核',
+                                        'approved' => '已批准',
+                                        'rejected' => '已拒绝'
+                                    ][$status] ?? $status;
+                                    ?>
+                                    <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                    <?php if ($key->getData('is_active')): ?>
+                                        <span class="badge bg-success ms-1">激活</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= number_format($key->getData('quota_limit') ?? 0) ?></td>
+                                <td><?= number_format($key->getData('quota_used') ?? 0) ?></td>
+                                <td><?= date('Y-m-d H:i', $key->getData('created_time')) ?></td>
+                                <td>
+                                    <?php if ($status === 'pending'): ?>
+                                        <button class="btn btn-sm btn-success" onclick="approveKey(<?= $key->getId() ?>, 'approve')">
+                                            <i class="mdi mdi-check"></i> 批准
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="approveKey(<?= $key->getId() ?>, 'reject')">
+                                            <i class="mdi mdi-close"></i> 拒绝
+                                        </button>
+                                    <?php endif; ?>
+                                    <button class="btn btn-sm btn-primary" onclick="setQuota(<?= $key->getId() ?>, <?= $key->getData('quota_limit') ?? 0 ?>)">
+                                        <i class="mdi mdi-counter"></i> 配额
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteKey(<?= $key->getId() ?>)">
+                                        <i class="mdi mdi-delete"></i> 删除
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页 -->
+            <?php if ($pagination && method_exists($pagination, 'getHtml')): ?>
+                <div class="mt-3">
+                    <?= $pagination->getHtml() ?>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
+<script>
+function filterByStatus(status) {
+    const url = new URL(window.location.href);
+    if (status) {
+        url.searchParams.set('status', status);
+    } else {
+        url.searchParams.delete('status');
+    }
+    window.location.href = url.toString();
+}
+
+function approveKey(id, action) {
+    if (!confirm(`确定要${action === 'approve' ? '批准' : '拒绝'}这个API密钥吗？`)) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/approve') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}&action=${action}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('操作失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('请求失败：' + error);
+    });
+}
+
+function setQuota(id, currentQuota) {
+    const newQuota = prompt('请输入新的配额限制：', currentQuota);
+    if (newQuota === null) return;
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/setQuota') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}&quota_limit=${newQuota}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('设置失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('请求失败：' + error);
+    });
+}
+
+function deleteKey(id) {
+    if (!confirm('确定要删除这个API密钥吗？此操作不可恢复！')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/delete') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('删除失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('请求失败：' + error);
+    });
+}
+</script>
+

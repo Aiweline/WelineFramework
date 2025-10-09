@@ -17,6 +17,7 @@ use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Manager\Message;
 use Weline\Framework\Acl\Acl;
 
 /**
@@ -90,15 +91,15 @@ class Adapter extends BackendController
         $id = (int)$this->request->getGet('id');
         
         if (!$id) {
-            $this->messageManager->addError(__('适配器ID不能为空'));
-            return $this->redirect($this->getBackendUrl('*/backend/adapter'));
+            Message::error(__('适配器ID不能为空'));
+            return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
         }
 
         $adapter = $this->scenarioAdapter->reset()->load($id);
         
         if (!$adapter->getId()) {
-            $this->messageManager->addError(__('适配器不存在'));
-            return $this->redirect($this->getBackendUrl('*/backend/adapter'));
+            Message::error(__('适配器不存在'));
+            return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
         }
 
         // 获取适配器实例信息
@@ -124,14 +125,14 @@ class Adapter extends BackendController
         try {
             $scannedAdapters = $this->adapterScanner->scanAllAdapters();
             
-            $this->messageManager->addSuccess(
+            Message::success(
                 __('成功扫描 %{count} 个适配器', ['count' => count($scannedAdapters)])
             );
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('适配器扫描失败: %{error}', ['error' => $e->getMessage()]));
+            Message::error(__('适配器扫描失败: %{error}', ['error' => $e->getMessage()]));
         }
 
-        return $this->redirect($this->getBackendUrl('*/backend/adapter'));
+        return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
     }
 
     /**
@@ -229,14 +230,14 @@ class Adapter extends BackendController
         try {
             $cleanedCount = $this->adapterScanner->cleanupInvalidAdapters();
             
-            $this->messageManager->addSuccess(
+            Message::success(
                 sprintf('成功清理 %d 个无效适配器', $cleanedCount)
             );
         } catch (\Exception $e) {
-            $this->messageManager->addError('清理失败: ' . $e->getMessage());
+            Message::error('清理失败: ' . $e->getMessage());
         }
 
-        return $this->redirect($this->getBackendUrl('*/backend/adapter'));
+        return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
     }
 
     /**

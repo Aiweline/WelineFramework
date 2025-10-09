@@ -1,0 +1,250 @@
+<?php
+/**
+ * AI模型测试页面模板
+ */
+?>
+
+<div class="page-header">
+    <h1><?= __('AI模型测试') ?></h1>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><?= __('测试配置') ?></h5>
+            </div>
+            <div class="card-body">
+                <form id="testForm">
+                    <div class="form-group">
+                        <label><?= __('选择模型') ?></label>
+                        <select class="form-control" id="modelCode" name="model_code">
+                            <option value=""><?= __('使用默认模型') ?></option>
+                            <?php foreach ($models as $model): ?>
+                                <option value="<?= $model->getModelCode() ?>">
+                                    <?= $model->getName() ?> (<?= $model->getVendor() ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label><?= __('场景适配器') ?></label>
+                        <select class="form-control" id="scenarioCode" name="scenario_code">
+                            <option value=""><?= __('无') ?></option>
+                            <?php foreach ($adapters as $adapter): ?>
+                                <option value="<?= $adapter['code'] ?>">
+                                    <?= $adapter['name'] ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label><?= __('输入提示词') ?></label>
+                        <textarea class="form-control" id="prompt" name="prompt" rows="5" placeholder="<?= __('请输入您的提示词...') ?>"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="streamMode">
+                            <label class="custom-control-label" for="streamMode"><?= __('流式响应') ?></label>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-block" onclick="testAI()">
+                        <i class="mdi mdi-rocket-launch"></i> <?= __('开始测试') ?>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><?= __('测试结果') ?></h5>
+            </div>
+            <div class="card-body">
+                <div id="resultContainer" class="result-container">
+                    <p class="text-muted text-center"><?= __('等待测试...') ?></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><?= __('性能指标') ?></h5>
+            </div>
+            <div class="card-body">
+                <div id="metricsContainer">
+                    <p class="text-muted"><?= __('暂无数据') ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let startTime = 0;
+
+function testAI() {
+    const prompt = document.getElementById('prompt').value;
+    const modelCode = document.getElementById('modelCode').value;
+    const scenarioCode = document.getElementById('scenarioCode').value;
+    const streamMode = document.getElementById('streamMode').checked;
+
+    if (!prompt.trim()) {
+        alert('<?= __('请输入提示词') ?>');
+        return;
+    }
+
+    const resultContainer = document.getElementById('resultContainer');
+    resultContainer.innerHTML = '<div class="spinner-border" role="status"><span class="sr-only"><?= __('生成中...') ?></span></div>';
+
+    startTime = Date.now();
+
+    if (streamMode) {
+        testStreamMode(prompt, modelCode, scenarioCode);
+    } else {
+        testNormalMode(prompt, modelCode, scenarioCode);
+    }
+}
+
+function testNormalMode(prompt, modelCode, scenarioCode) {
+    const data = new FormData();
+    data.append('prompt', prompt);
+    if (modelCode) data.append('model_code', modelCode);
+    if (scenarioCode) data.append('scenario_code', scenarioCode);
+
+    fetch('<?= $this->getBackendUrl('*/backend/test/generate') ?>', {
+        method: 'POST',
+        body: data
+    })
+    .then(response => response.json())
+    .then(data => {
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+
+        if (data.success) {
+            displayResult(data.data.response, duration, data.data);
+        } else {
+            displayError(data.message);
+        }
+    })
+    .catch(error => {
+        displayError(error.message);
+    });
+}
+
+function testStreamMode(prompt, modelCode, scenarioCode) {
+    const resultContainer = document.getElementById('resultContainer');
+    resultContainer.innerHTML = '<div class="stream-content"></div>';
+    const streamContent = resultContainer.querySelector('.stream-content');
+
+    let url = `<?= $this->getBackendUrl('*/backend/test/stream') ?>?prompt=${encodeURIComponent(prompt)}`;
+    if (modelCode) url += `&model_code=${encodeURIComponent(modelCode)}`;
+    if (scenarioCode) url += `&scenario_code=${encodeURIComponent(scenarioCode)}`;
+
+    const eventSource = new EventSource(url);
+    let fullResponse = '';
+
+    eventSource.addEventListener('message', (e) => {
+        const data = JSON.parse(e.data);
+        fullResponse += data.chunk;
+        streamContent.textContent = fullResponse;
+    });
+
+    eventSource.addEventListener('done', (e) => {
+        eventSource.close();
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        displayMetrics(duration, { mode: 'stream', length: fullResponse.length });
+    });
+
+    eventSource.addEventListener('error', (e) => {
+        eventSource.close();
+        displayError('<?= __('流式传输出错') ?>');
+    });
+}
+
+function displayResult(response, duration, metadata = {}) {
+    const resultContainer = document.getElementById('resultContainer');
+    resultContainer.innerHTML = `
+        <div class="alert alert-success">
+            <strong><?= __('生成成功！') ?></strong>
+        </div>
+        <div class="response-text">${escapeHtml(response)}</div>
+    `;
+
+    displayMetrics(duration, metadata);
+}
+
+function displayError(message) {
+    const resultContainer = document.getElementById('resultContainer');
+    resultContainer.innerHTML = `
+        <div class="alert alert-danger">
+            <strong><?= __('错误：') ?></strong> ${escapeHtml(message)}
+        </div>
+    `;
+}
+
+function displayMetrics(duration, metadata = {}) {
+    const metricsContainer = document.getElementById('metricsContainer');
+    metricsContainer.innerHTML = `
+        <table class="table table-sm">
+            <tr>
+                <th><?= __('响应时间') ?></th>
+                <td>${duration}ms</td>
+            </tr>
+            <tr>
+                <th><?= __('模型') ?></th>
+                <td>${metadata.model_code || '<?= __('默认') ?>'}</td>
+            </tr>
+            <tr>
+                <th><?= __('场景适配器') ?></th>
+                <td>${metadata.scenario_code || '<?= __('无') ?>'}</td>
+            </tr>
+            <tr>
+                <th><?= __('响应长度') ?></th>
+                <td>${metadata.length || 0} <?= __('字符') ?></td>
+            </tr>
+        </table>
+    `;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+
+<style>
+.result-container {
+    min-height: 300px;
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
+.response-text {
+    white-space: pre-wrap;
+    font-family: 'Courier New', monospace;
+    background-color: white;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.stream-content {
+    white-space: pre-wrap;
+    font-family: 'Courier New', monospace;
+}
+
+.page-header {
+    margin-bottom: 20px;
+}
+</style>
+
