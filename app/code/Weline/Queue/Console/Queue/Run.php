@@ -87,4 +87,18 @@ class Run implements \Weline\Framework\Console\CommandInterface
     {
         return __('运行队列. ') . 'php bin/w queue:run --id=1';
     }
+
+    public function help(): array|string
+    {
+        // 基于tip的默认help实现
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            '',
+            $this->tip(),
+            [
+                '-h, --help' => '显示帮助信息',
+            ],
+            [],
+            []
+        );
+    }
 }
