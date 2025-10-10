@@ -1,194 +1,83 @@
 <?php
+
 declare(strict_types=1);
-
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：<?= date('Y/m/d H:i:s') ?>
-
- */
 
 namespace Weline\Ai\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
 
 /**
- * AI助手数据模型
+ * AI Assistant Entity
  * 
- * 功能：
- * - 管理AI助手的基本信息
- * - 存储助手提示词和配置
- * - 关联AI模型和用户
- * - 支持助手状态管理
+ * @package Weline_Ai
  */
 class AiAssistant extends Model
 {
-    public const table = 'ai_assistant';
-    
-    // 字段常量
-    public const fields_ID = 'id';
-    public const fields_USER_ID = 'user_id';
-    public const fields_NAME = 'name';
-    public const fields_DESCRIPTION = 'description';
-    public const fields_MODEL_CODE = 'model_code';
-    public const fields_PROMPT = 'prompt';
-    public const fields_CONFIG_JSON = 'config_json';
-    public const fields_PROXY_INFO = 'proxy_info';
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_IS_PUBLIC = 'is_public';
-    public const fields_CREATED_TIME = 'created_time';
-    public const fields_UPDATED_TIME = 'updated_time';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_INACTIVE = 'inactive';
+    public const STATUS_ARCHIVED = 'archived';
 
-    /**
-     * @inheritDoc
-     */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function _init(): void
     {
-        $this->install($setup, $context);
+        $this->_table = 'ai_assistant';
+        $this->_id_field_name = 'id';
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
-    }
+    public function setup(ModelSetup $setup, Context $context): void {}
+    public function upgrade(ModelSetup $setup, Context $context): void {}
+    public function install(ModelSetup $setup, Context $context): void {}
 
-    /**
-     * @inheritDoc
-     */
-    public function install(ModelSetup $setup, Context $context): void
-    {
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_USER_ID, TableInterface::column_type_INTEGER, 11, 'not null', '用户ID')
-                ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '助手名称')
-                ->addColumn(self::fields_DESCRIPTION, TableInterface::column_type_TEXT, null, 'null', '助手描述')
-                ->addColumn(self::fields_MODEL_CODE, TableInterface::column_type_VARCHAR, 100, 'not null', '模型代码')
-                ->addColumn(self::fields_PROMPT, TableInterface::column_type_TEXT, null, 'not null', '提示词')
-                ->addColumn(self::fields_CONFIG_JSON, TableInterface::column_type_TEXT, null, 'null', '配置JSON')
-                ->addColumn(self::fields_PROXY_INFO, TableInterface::column_type_TEXT, null, 'null', '代理信息JSON')
-                ->addColumn(self::fields_IS_ACTIVE, TableInterface::column_type_INTEGER, 1, 'not null default 1', '是否激活')
-                ->addColumn(self::fields_IS_PUBLIC, TableInterface::column_type_INTEGER, 1, 'not null default 0', '是否公开')
-                ->addColumn(self::fields_CREATED_TIME, TableInterface::column_type_INTEGER, 11, 'not null', '创建时间')
-                ->addColumn(self::fields_UPDATED_TIME, TableInterface::column_type_INTEGER, 11, 'not null', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_user_id', self::fields_USER_ID, '用户ID索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_model_code', self::fields_MODEL_CODE, '模型代码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '激活状态索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_public', self::fields_IS_PUBLIC, '公开状态索引')
-                ->create();
-        }
-    }
-
-    /**
-     * 获取助手配置
-     * 
-     * @return array
-     */
-    public function getConfig(): array
-    {
-        $config = $this->getData(self::fields_CONFIG_JSON);
-        return $config ? json_decode($config, true) : [];
-    }
-
-    /**
-     * 设置助手配置
-     * 
-     * @param array $config
-     * @return $this
-     */
-    public function setConfig(array $config): self
-    {
-        $this->setData(self::fields_CONFIG_JSON, json_encode($config));
-        return $this;
-    }
-
-    /**
-     * 获取代理信息
-     * 
-     * @return array
-     */
-    public function getProxyInfo(): array
-    {
-        $proxyInfo = $this->getData(self::fields_PROXY_INFO);
-        return $proxyInfo ? json_decode($proxyInfo, true) : [];
-    }
-
-    /**
-     * 设置代理信息
-     * 
-     * @param array $proxyInfo
-     * @return $this
-     */
-    public function setProxyInfo(array $proxyInfo): self
-    {
-        $this->setData(self::fields_PROXY_INFO, json_encode($proxyInfo));
-        return $this;
-    }
-
-    /**
-     * 检查是否为激活状态
-     * 
-     * @return bool
-     */
     public function isActive(): bool
     {
-        return (bool)$this->getData(self::fields_IS_ACTIVE);
+        return $this->getData('status') === self::STATUS_ACTIVE;
     }
 
-    /**
-     * 检查是否为公开助手
-     * 
-     * @return bool
-     */
-    public function isPublic(): bool
+    public function getConfig(): array
     {
-        return (bool)$this->getData(self::fields_IS_PUBLIC);
+        $config = $this->getData('config');
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($config) ? $config : [];
     }
 
-    /**
-     * 获取关联的AI模型
-     * 
-     * @return AiModel|null
-     */
-    public function getAiModel(): ?AiModel
+    public function incrementUsageCount(): void
     {
-        $modelCode = $this->getData(self::fields_MODEL_CODE);
-        if (!$modelCode) {
-            return null;
+        $this->setData('usage_count', $this->getData('usage_count') + 1);
+    }
+
+    public function validate(): bool
+    {
+        if (empty($this->getData('name'))) {
+            throw new \InvalidArgumentException('Assistant name is required');
         }
 
-        $aiModel = new AiModel();
-        return $aiModel->reset()
-            ->where(AiModel::fields_MODEL_CODE, $modelCode)
-            ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->find()
-            ->fetch();
+        if (empty($this->getData('prompt_template'))) {
+            throw new \InvalidArgumentException('Prompt template is required');
+        }
+
+        if (empty($this->getData('model_id'))) {
+            throw new \InvalidArgumentException('Model ID is required');
+        }
+
+        if (empty($this->getData('tenant_id'))) {
+            throw new \InvalidArgumentException('Tenant ID is required');
+        }
+
+        return true;
     }
 
-    /**
-     * 保存前的数据处理
-     * 
-     * @return $this
-     */
     public function beforeSave(): self
     {
-        parent::beforeSave();
+        $this->validate();
         
-        $currentTime = time();
-        if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_TIME, $currentTime);
+        if (is_array($this->getData('config'))) {
+            $this->setData('config', json_encode($this->getData('config')));
         }
-        $this->setData(self::fields_UPDATED_TIME, $currentTime);
-        
-        return $this;
+
+        return parent::beforeSave();
     }
 }

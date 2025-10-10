@@ -1,59 +1,47 @@
 <?php
+
 declare(strict_types=1);
-
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：<?= date('Y/m/d H:i:s') ?>
-
- */
 
 namespace Weline\Ai\Model;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
 
 /**
- * AI模型数据模型
+ * AI Model Entity
  * 
- * 功能：
- * - 管理AI模型的基本信息
- * - 存储模型配置和代理信息
- * - 支持模型版本控制
- * - 提供模型状态管理
+ * Represents an AI model with its metadata, configuration, and capabilities.
+ * Supports model copying functionality with origin tracking.
+ * 
+ * @package Weline_Ai
  */
 class AiModel extends Model
 {
-    public const table = 'ai_model';
-    
-    // 字段常量
-    public const fields_ID = 'id';
-    public const fields_VENDOR = 'vendor';
-    public const fields_MODEL_CODE = 'model_code';
-    public const fields_MODEL_NAME = 'model_name';
-    public const fields_MODEL_VERSION = 'model_version';
-    public const fields_CONFIG_JSON = 'config_json';
-    public const fields_TOKEN_PRICE_INPUT = 'token_price_input';
-    public const fields_TOKEN_PRICE_OUTPUT = 'token_price_output';
-    public const fields_PROXY_INFO = 'proxy_info';
-    public const fields_IS_ACTIVE = 'is_active';
-    public const fields_IS_DEFAULT = 'is_default';
-    public const fields_IS_COPIED = 'is_copied';
-    public const fields_PARENT_MODEL_ID = 'parent_model_id';
-    public const fields_CREATED_TIME = 'created_time';
-    public const fields_UPDATED_TIME = 'updated_time';
+    /**
+     * Model status constants
+     */
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_DEPRECATED = 'deprecated';
+    public const STATUS_MAINTENANCE = 'maintenance';
+
+    /**
+     * Initialize model
+     *
+     * @return void
+     */
+    public function _init(): void
+    {
+        $this->_table = 'ai_model';
+        $this->_id_field_name = 'id';
+    }
 
     /**
      * @inheritDoc
      */
     public function setup(ModelSetup $setup, Context $context): void
     {
-        $this->install($setup, $context);
+        // Table creation is handled in Setup/Install.php
     }
 
     /**
@@ -61,41 +49,7 @@ class AiModel extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 添加模型复制相关字段
-        if (!$setup->columnExist(self::fields_IS_COPIED)) {
-            $setup->addColumn(
-                self::fields_IS_COPIED, 
-                TableInterface::column_type_INTEGER, 
-                1, 
-                'not null default 0', 
-                '是否为复制模型'
-            );
-        }
-        
-        if (!$setup->columnExist(self::fields_PARENT_MODEL_ID)) {
-            $setup->addColumn(
-                self::fields_PARENT_MODEL_ID, 
-                TableInterface::column_type_INTEGER, 
-                11, 
-                'null', 
-                '父模型ID'
-            );
-            $setup->addIndex(
-                TableInterface::index_type_KEY, 
-                'idx_parent_model_id', 
-                self::fields_PARENT_MODEL_ID, 
-                '父模型ID索引'
-            );
-        }
-        
-        if (!$setup->indexExist('idx_is_copied')) {
-            $setup->addIndex(
-                TableInterface::index_type_KEY, 
-                'idx_is_copied', 
-                self::fields_IS_COPIED, 
-                '复制状态索引'
-            );
-        }
+        // No upgrades yet
     }
 
     /**
@@ -103,181 +57,162 @@ class AiModel extends Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-        if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_VENDOR, TableInterface::column_type_VARCHAR, 100, 'not null', '供应商')
-                ->addColumn(self::fields_MODEL_CODE, TableInterface::column_type_VARCHAR, 100, 'not null', '模型代码')
-                ->addColumn(self::fields_MODEL_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '模型名称')
-                ->addColumn(self::fields_MODEL_VERSION, TableInterface::column_type_VARCHAR, 50, 'not null default "1.0"', '模型版本')
-                ->addColumn(self::fields_CONFIG_JSON, TableInterface::column_type_TEXT, null, 'null', '配置JSON')
-                ->addColumn(self::fields_TOKEN_PRICE_INPUT, TableInterface::column_type_DECIMAL, '10,6', 'not null default 0.000000', '输入Token价格')
-                ->addColumn(self::fields_TOKEN_PRICE_OUTPUT, TableInterface::column_type_DECIMAL, '10,6', 'not null default 0.000000', '输出Token价格')
-                ->addColumn(self::fields_PROXY_INFO, TableInterface::column_type_TEXT, null, 'null', '代理信息JSON')
-                ->addColumn(self::fields_IS_ACTIVE, TableInterface::column_type_INTEGER, 1, 'not null default 1', '是否激活')
-                ->addColumn(self::fields_IS_DEFAULT, TableInterface::column_type_INTEGER, 1, 'not null default 0', '是否默认')
-                ->addColumn(self::fields_CREATED_TIME, TableInterface::column_type_INTEGER, 11, 'not null', '创建时间')
-                ->addColumn(self::fields_UPDATED_TIME, TableInterface::column_type_INTEGER, 11, 'not null', '更新时间')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_vendor', self::fields_VENDOR, '供应商索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_model_code', self::fields_MODEL_CODE, '模型代码索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE, '激活状态索引')
-                ->addIndex(TableInterface::index_type_KEY, 'idx_is_default', self::fields_IS_DEFAULT, '默认状态索引')
-                ->create();
-        }
+        // Table creation is handled in Setup/Install.php
     }
 
     /**
-     * 获取模型配置
-     * 
+     * Check if this is a copy model
+     *
+     * @return bool
+     */
+    public function isCopy(): bool
+    {
+        return (bool) $this->getData('is_copy');
+    }
+
+    /**
+     * Check if this is an original model
+     *
+     * @return bool
+     */
+    public function isOriginal(): bool
+    {
+        return !$this->isCopy();
+    }
+
+    /**
+     * Get origin model ID (if this is a copy)
+     *
+     * @return int|null
+     */
+    public function getOriginModelId(): ?int
+    {
+        $originId = $this->getData('origin_model_id');
+        return $originId ? (int) $originId : null;
+    }
+
+    /**
+     * Check if model can be deleted
+     * Original models (is_copy=false) cannot be deleted
+     *
+     * @return bool
+     */
+    public function canDelete(): bool
+    {
+        return $this->isCopy();
+    }
+
+    /**
+     * Get model configuration as array
+     *
      * @return array
      */
     public function getConfig(): array
     {
-        $config = $this->getData(self::fields_CONFIG_JSON);
-        return $config ? json_decode($config, true) : [];
+        $config = $this->getData('config');
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($config) ? $config : [];
     }
 
     /**
-     * 设置模型配置
-     * 
-     * @param array $config
-     * @return $this
-     */
-    public function setConfig(array $config): self
-    {
-        $this->setData(self::fields_CONFIG_JSON, json_encode($config));
-        return $this;
-    }
-
-    /**
-     * 获取代理信息
-     * 
+     * Get model capabilities as array
+     *
      * @return array
      */
-    public function getProxyInfo(): array
+    public function getCapabilities(): array
     {
-        $proxyInfo = $this->getData(self::fields_PROXY_INFO);
-        return $proxyInfo ? json_decode($proxyInfo, true) : [];
+        $capabilities = $this->getData('capabilities');
+        if (is_string($capabilities)) {
+            $decoded = json_decode($capabilities, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($capabilities) ? $capabilities : [];
     }
 
     /**
-     * 设置代理信息
-     * 
-     * @param array $proxyInfo
-     * @return $this
-     */
-    public function setProxyInfo(array $proxyInfo): self
-    {
-        $this->setData(self::fields_PROXY_INFO, json_encode($proxyInfo));
-        return $this;
-    }
-
-    /**
-     * 检查是否为激活状态
-     * 
+     * Check if model is active
+     *
      * @return bool
      */
     public function isActive(): bool
     {
-        return (bool)$this->getData(self::fields_IS_ACTIVE);
+        return $this->getData('status') === self::STATUS_ACTIVE;
     }
 
     /**
-     * 检查是否为默认模型
-     * 
+     * Validate model data before save
+     *
      * @return bool
      */
-    public function isDefault(): bool
+    public function validate(): bool
     {
-        return (bool)$this->getData(self::fields_IS_DEFAULT);
+        // Original models must not have origin_model_id
+        if (!$this->isCopy() && $this->getOriginModelId() !== null) {
+            throw new \InvalidArgumentException(
+                'Original models (is_copy=false) cannot have origin_model_id'
+            );
+        }
+
+        // Copy models must have origin_model_id
+        if ($this->isCopy() && $this->getOriginModelId() === null) {
+            throw new \InvalidArgumentException(
+                'Copy models (is_copy=true) must have origin_model_id'
+            );
+        }
+
+        // Required fields
+        if (empty($this->getData('supplier'))) {
+            throw new \InvalidArgumentException('Supplier is required');
+        }
+
+        if (empty($this->getData('model_code'))) {
+            throw new \InvalidArgumentException('Model code is required');
+        }
+
+        if (empty($this->getData('name'))) {
+            throw new \InvalidArgumentException('Name is required');
+        }
+
+        return true;
     }
 
     /**
-     * 检查是否为复制模型
-     * 
-     * @return bool
-     */
-    public function isCopied(): bool
-    {
-        return (bool)$this->getData(self::fields_IS_COPIED);
-    }
-
-    /**
-     * 获取父模型ID
-     * 
-     * @return int|null
-     */
-    public function getParentModelId(): ?int
-    {
-        $parentId = $this->getData(self::fields_PARENT_MODEL_ID);
-        return $parentId ? (int)$parentId : null;
-    }
-
-    /**
-     * 获取完整的模型标识
-     * 
-     * @return string
-     */
-    public function getFullModelCode(): string
-    {
-        return $this->getData(self::fields_VENDOR) . '/' . $this->getData(self::fields_MODEL_CODE);
-    }
-
-    /**
-     * 获取模型名称
-     * 
-     * @return string
-     */
-    public function getName(): string
-    {
-        return $this->getData(self::fields_MODEL_NAME) ?? '';
-    }
-
-    /**
-     * 获取供应商名称
-     * 
-     * @return string
-     */
-    public function getVendor(): string
-    {
-        return $this->getData(self::fields_VENDOR) ?? '';
-    }
-
-    /**
-     * 获取模型状态
-     * 
-     * @return string
-     */
-    public function getStatus(): string
-    {
-        return $this->isActive() ? 'active' : 'inactive';
-    }
-
-    /**
-     * 获取模型代码
-     * 
-     * @return string
-     */
-    public function getModelCode(): string
-    {
-        return $this->getData(self::fields_MODEL_CODE) ?? '';
-    }
-
-    /**
-     * 保存前的数据处理
-     * 
+     * Before save callback
+     *
      * @return $this
      */
     public function beforeSave(): self
     {
-        parent::beforeSave();
+        $this->validate();
         
-        $currentTime = time();
-        if (!$this->getId()) {
-            $this->setData(self::fields_CREATED_TIME, $currentTime);
+        // Ensure JSON fields are properly encoded
+        if (is_array($this->getData('config'))) {
+            $this->setData('config', json_encode($this->getData('config')));
         }
-        $this->setData(self::fields_UPDATED_TIME, $currentTime);
-        
-        return $this;
+
+        if (is_array($this->getData('capabilities'))) {
+            $this->setData('capabilities', json_encode($this->getData('capabilities')));
+        }
+
+        return parent::beforeSave();
+    }
+
+    /**
+     * Before delete callback
+     *
+     * @return $this
+     */
+    public function beforeDelete(): self
+    {
+        if (!$this->canDelete()) {
+            throw new \RuntimeException(
+                'Cannot delete original model. Only copy models can be deleted.'
+            );
+        }
+
+        return parent::beforeDelete();
     }
 }
