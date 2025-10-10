@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd"
+         bootstrap="../../../bootstrap_phpunit.php"
+         colors="true"
+         verbose="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         failOnEmptyTestSuite="true"
+         beStrictAboutOutputDuringTests="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="Weline_Ai_Unit">
+            <directory>unit</directory>
+        </testsuite>
+        <testsuite name="Weline_Ai_Integration">
+            <directory>integration</directory>
+        </testsuite>
+        <testsuite name="Weline_Ai_Contract">
+            <directory>contract</directory>
+        </testsuite>
+    </testsuites>
+    <coverage>
+        <report>
+            <html outputDirectory="../../../dev/phpunit/report/coverage/Weline_Ai"/>
+            <text outputFile="php://stdout" showUncoveredFiles="false"/>
+        </report>
+    </coverage>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+    </php>
+    <logging>
+        <junit outputFile="../../../dev/phpunit/report/junit/Weline_Ai.xml"/>
+    </logging>
+</phpunit>
+
