@@ -1,9 +1,17 @@
 <!-- Sync Impact Report -->
-<!-- Version change: 2.2.0 → 2.3.0 -->
-<!-- Modified principles: None -->
-<!-- Added sections: ORM Usage Standards, Framework Learning Requirements -->
-<!-- Templates requiring updates: ✅ plan-template.md, ✅ spec-template.md, ✅ tasks-template.md -->
-<!-- Follow-up TODOs: None -->
+<!-- Version change: 2.4.0 → 2.5.0 -->
+<!-- Modified principles: -->
+<!-- - Added XVII. 禁止 Magento 写法与开发文档学习要求 -->
+<!-- - Strengthened XI. 框架学习要求，明确禁止 Magento 写法，要求自学并更新开发文档 -->
+<!-- - 强化所有开发必须基于 WelineFramework 开发文档，缺失时自学并更新文档 -->
+<!-- Added sections: Anti-Magento Pattern, Development Documentation Learning Requirement -->
+<!-- Templates requiring updates: ✅ .specify/templates/plan-template.md (updated version refs) / ⚠ .specify/templates/spec-template.md / ⚠ .specify/templates/tasks-template.md -->
+<!-- Follow-up TODOs: -->
+<!-- - TODO(DEV_DOC_UPDATE): review and update framework dev docs with Offcanvas examples -->
+<!-- - TODO(DOC_HTTP_REQUEST): add php bin/w http:request usage examples to quickstart/tests -->
+<!-- - TODO(DOC_SYNC): add doc-update checklist to CONTRIBUTING.md -->
+<!-- - TODO(SCOPE_NOTICE): implement PR-time detection of out-of-scope changes and require approver -->
+<!-- - TODO(ANTI_MAGENTO): add Magento pattern detection to code review checklist -->
 
 # WelineFramework AI模块开发宪法
 
@@ -74,6 +82,7 @@ AI模块必须采用WelineFramework的模块化设计原则：
 - 测试文件命名必须遵循test_*.php格式
 - 每个模块的测试必须独立可运行
 - 测试目录结构必须与源码目录结构保持一致
+- 运行单元测试命令参考：`php bin/w phpunit:run -h`
 
 ### IX. PHP语言合规性 (PHP Language Compliance - NON-NEGOTIABLE)
 必须严格按照PHP 8.2以上语法开发，严格遵守PHP语言特性：
@@ -99,14 +108,88 @@ AI模块必须采用WelineFramework的模块化设计原则：
 
 ### XI. 框架学习要求 (Framework Learning Requirements - NON-NEGOTIABLE)
 这是自研框架，必须深入学习框架本身而非外部参考：
-- 禁止参考Magento或其他外部框架的结构和模式
-- 必须深入学习WelineFramework的源码和架构设计
-- 所有开发必须基于对WelineFramework框架的深入理解
-- 必须阅读框架的开发文档和API文档
-- 必须研究现有模块的实现模式和最佳实践
-- 禁止基于外部框架经验进行开发决策
-- 必须通过框架源码学习正确的实现方式
-- 所有功能实现必须符合WelineFramework的设计理念
+- **MUST**: 禁止参考Magento或其他外部框架的结构和模式
+- **MUST**: 必须深入学习WelineFramework的源码和架构设计
+- **MUST**: 所有开发必须基于对WelineFramework框架的深入理解
+- **MUST**: 必须阅读框架的开发文档和API文档
+- **MUST**: 必须研究现有模块的实现模式和最佳实践
+- **MUST**: 禁止基于外部框架经验进行开发决策
+- **MUST**: 必须通过框架源码学习正确的实现方式
+- **MUST**: 所有功能实现必须符合WelineFramework的设计理念
+- **MUST**: 当开发文档缺失时，必须通过自学（阅读源码、现有模块示例）掌握正确写法
+- **MUST**: 自学完成后，必须在PR中记录学习要点并询问是否更新到开发文档
+
+### XIV. 架构与数据流验证 (Architecture & Data-flow Validation)
+
+在开始任何开发工作前，必须验证架构逻辑、数据流与字段定义能满足规格中列明的功能需求。
+
+- **MUST**: 在进入实现阶段前（Phase 1 设计完成后），团队必须证明关键路径的架构与数据字段覆盖所有功能需求（例如：租户ID、origin_model_id、is_copy 等字段的存在与约束）。
+- **MUST**: 任何新增的数据字段或架构调整必须在 `data-model.md` 中记录，并由设计审核通过后才能进入实现。
+- **SHOULD**: 使用简单的数据流图或表格在 `research.md` 中描述端到端数据流与关键字段，以便在代码实现前验证一致性。
+
+Rationale: 提前验证架构与数据流可以显著减少实现阶段的返工与数据一致性问题，确保开发与测试能直接对齐验收条件。
+
+### XV. 变更范围限制 (Change Scope Constraint)
+
+为降低大范围影响和意外变更的风险，本次特性相关的代码修改**禁止超出** `app\code\Weline\Ai` 目录范围，除非在设计评审中获得明确批准并记录在 `research.md` 中。
+
+- **MUST**: 所有 PR 的变更集默认应仅包含 `app\code\Weline\Ai` 目录内的文件。
+- **MUST**: 若确需修改其他目录（例如共享库或 infra 配置），开发团队必须在设计阶段提交变更影响分析并由技术负责人批准，批准记录需附在 PR 描述中。
+- **SHOULD**: CI/PR 模板需自动检测超出目录的改动并将 PR 标为需额外审批。
+
+Rationale: 限定初始变更范围可以防止大范围非预期影响，并使代码审查集中于模块边界和兼容性。
+
+### XVI. 已实现功能兼容性 (Existing Feature Compatibility)
+
+当新的宪法条款引入更严格的实现或流程要求时，必须优先保证已存在且运行中的功能继续可用与兼容。
+
+- **MUST**: 在修改现有功能或引入新约束前，进行兼容性评估并在 `research.md` 中记录回归风险与迁移步骤。
+- **MUST**: 对已实现功能的适配变更必须提供回退方案，以便出现兼容性问题时能迅速恢复服务。
+- **SHOULD**: 对生产中已存在的关键路径功能进行额外的回归测试，确保新变更不会破坏当前行为。
+
+Rationale: 保证对现有用户服务不中断是首要责任，宪法要求应引导但不破坏当前稳定运行的功能。
+
+### XII. 编辑与新建（Offcanvas 编辑流）
+编辑与新建交互必须采用框架统一的 Offcanvas（侧出式）编辑流以保证一致的用户体验与可复用组件。
+
+- **MUST**: 在实现任何后台或前端的“新建/编辑”界面时，优先使用框架提供的 Offcanvas 组件或官方推荐的实现模式。
+- **MUST**: 实施前必须查阅框架内的开发文档中关于 Offcanvas/侧出式组件的使用说明与示例。
+- **MUST**: 若开发文档中未包含 Offcanvas 使用说明，开发者必须通过阅读源码、现有模块示例或相关 view/templates 自学并记录学习要点（简短文档或 PR 描述中的学习摘要）。
+- **MUST**: 完成首个 Offcanvas 实现后，开发者须在 PR 中提交学习摘要并在 PR/Issue 中显式询问：是否将该示例与使用指南合并回框架开发文档（"是否更新到开发文档"）。
+- **SHOULD**: Offcanvas 实现必须满足可访问性要求（键盘导航、焦点管理、屏幕阅读器标签）。
+
+- **MUST**: 对于与模型相关的所有交互（新建 / 编辑 / 拷贝），UI 必须统一使用 Offcanvas 编辑流实现，保证交互一致性与行为可预测性。
+
+Rationale: 统一的编辑/新建交互有助于降低维护成本、提升用户一致性并避免重复实现。将学习过程纳入开发流程并在 PR 中触发文档更新请求，能确保知识沉淀到框架层并被后续开发复用。
+
+### XIII. 快速 E2E 测试指引（HTTP 请求测试建议）
+
+在给定路径或 API endpoint 时，鼓励使用框架内置或推荐的 `php bin/w http:request` 命令/工具进行快速端到端测试。
+
+- **SHOULD**: 在编写集成测试或手动验证 API 时，使用 `php bin/w http:request`（或等效工具）发起请求并验收响应状态码、响应体和头部信息。
+- **MUST**: 在测试敏感操作（例如：修改/删除资源）时，确保使用测试环境或隔离租户，并清理测试数据。
+- **SHOULD**: 将常用的 `php bin/w http:request` 示例放入 `quickstart.md` 或 `tests/` 示例文件中，供开发者快速复制运行。
+
+- **MUST**: 开发完成且本地/CI 测试通过后，必须使用 `php bin/w  http:request` 或等效工具对相关路径执行端到端验证，验证返回内容符合规格（状态码、响应结构、关键字段）。验证通过后方可继续部署或更新文档。
+
+Rationale: 明确的 E2E 测试建议能加速开发验证，同时降低误用生产资源的风险。
+
+### XVII. 禁止 Magento 写法与开发文档学习要求 (Anti-Magento Pattern & Documentation Learning - NON-NEGOTIABLE)
+
+**绝对禁止使用 Magento 框架的任何写法和模式**，所有开发必须严格遵循 WelineFramework 开发文档：
+
+- **MUST**: 绝对禁止使用 Magento 的 module.xml、registration.php、di.xml 等配置文件写法
+- **MUST**: 绝对禁止使用 Magento 的 Setup/InstallSchema.php、Setup/UpgradeSchema.php 等数据库迁移写法
+- **MUST**: 绝对禁止使用 Magento 的 Model、ResourceModel、Collection 等 ORM 写法
+- **MUST**: 绝对禁止使用 Magento 的 Controller、Block、Helper 等 MVC 写法
+- **MUST**: 绝对禁止使用 Magento 的 layout.xml、phtml 等视图模板写法
+- **MUST**: 任何写法必须严格依照 WelineFramework 开发文档
+- **MUST**: 当开发文档缺失时，必须通过自学（阅读 WelineFramework 源码、现有模块示例）掌握正确写法
+- **MUST**: 自学完成后，必须在 PR 中记录学习要点并询问："是否更新到开发文档？"
+- **MUST**: 所有代码审查必须检查是否包含 Magento 模式，发现即拒绝
+- **MUST**: 在实现任何功能前，必须先查阅 WelineFramework 开发文档或通过自学掌握正确写法
+
+**Rationale**: WelineFramework 是自研框架，与 Magento 完全不同。使用 Magento 写法会导致架构不兼容、功能异常、维护困难。必须通过严格的学习和文档更新机制确保所有开发都基于正确的框架模式。
 
 ## WelineFramework开发标准
 
@@ -120,8 +203,10 @@ AI模块必须采用WelineFramework的模块化设计原则：
 - 所有类必须正确实现继承的接口或抽象类
 - 必须使用严格类型声明
 - 禁止使用已废弃的PHP语法
-- 禁止参考Magento或其他外部框架的ORM模式
+- **绝对禁止使用 Magento 或其他外部框架的任何写法和模式**
 - 必须深入学习WelineFramework的ORM实现
+- 所有写法必须严格依照WelineFramework开发文档
+- 开发文档缺失时必须自学并更新文档
 
 ### 目录结构规范
 ```
@@ -221,6 +306,8 @@ app/code/Weline/Ai/
 - 严格类型声明检查必须通过
 - ORM方法使用正确性检查必须通过（禁止揣测函数）
 - WelineFramework API合规性检查必须通过
+- **Magento 模式检测必须通过（发现即拒绝）**
+- **WelineFramework 开发文档合规性检查必须通过**
 
 ### 部署要求
 - 支持自动化部署
@@ -245,4 +332,4 @@ app/code/Weline/Ai/
 - 测试必须验证功能完整性
 - 部署前必须进行安全检查
 
-**Version**: 2.3.0 | **Ratified**: 2024-12-19 | **Last Amended**: 2024-12-19
+**Version**: 2.5.0 | **Ratified**: 2024-12-19 | **Last Amended**: 2025-10-09
