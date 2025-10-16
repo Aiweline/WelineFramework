@@ -1,0 +1,194 @@
+<?php
+/**
+ * 默认样式 - Header
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局
+ * layout.logo_position => Logo位置:select:left|left,center,right
+ * 
+ * group:style => 样式
+ * style.background_color => 背景颜色:color:#ffffff
+ * style.border_bottom => 底部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#eeeeee
+ * 
+ * group:size => 尺寸
+ * size.height => 头部高度:number:80|px
+ * size.max_width => 内容最大宽度:number:1200|px
+ * size.padding_horizontal => 左右内边距:number:40|px
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style_settings') ?: [];
+$isPreview = $this->getData('is_preview');
+
+// 获取配置值的辅助函数
+function getConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+// 从页面配置中读取 Logo 信息
+$logoUrl = $page ? $page->getData('logo') : '';
+$pageTitle = $page ? $page->getData('title') : '';
+$logoLink = '/'; // 链接到首页
+
+// 从样式配置中读取 Logo 位置
+$logoPosition = getConfig($styleSettings, 'layout.logo_position', 'left');
+
+// 样式配置
+$bgColor = getConfig($styleSettings, 'style.background_color', '#ffffff');
+$borderBottom = getConfig($styleSettings, 'style.border_bottom', 'yes');
+$borderColor = getConfig($styleSettings, 'style.border_color', '#eeeeee');
+
+// 尺寸配置
+$height = getConfig($styleSettings, 'size.height', '80');
+$maxWidth = getConfig($styleSettings, 'size.max_width', '1200');
+$paddingH = getConfig($styleSettings, 'size.padding_horizontal', '40');
+
+// 从页面配置中读取跟踪代码 ID
+$ga4Id = $page ? $page->getData('ga4_id') : '';
+$gtmId = $page ? $page->getData('gtm_id') : '';
+$fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
+?>
+
+<!-- Head 跟踪代码（仅在非预览模式下执行） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Analytics 4 -->
+    <?php if ($ga4Id): ?>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($ga4Id) ?>"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '<?= htmlspecialchars($ga4Id) ?>');
+    </script>
+    <?php endif; ?>
+    
+    <!-- Google Tag Manager -->
+    <?php if ($gtmId): ?>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId) ?>');</script>
+    <?php endif; ?>
+<?php endif; ?>
+
+<style>
+.page-header {
+    background: <?= $bgColor ?>;
+    height: <?= $height ?>px;
+    display: flex;
+    align-items: center;
+    <?php if ($borderBottom === 'yes'): ?>
+    border-bottom: 1px solid <?= $borderColor ?>;
+    <?php endif; ?>
+}
+
+.header-container {
+    max-width: <?= $maxWidth ?>px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 <?= $paddingH ?>px;
+    display: flex;
+    align-items: center;
+    <?php if ($logoPosition === 'center'): ?>
+    justify-content: center;
+    <?php elseif ($logoPosition === 'right'): ?>
+    justify-content: flex-end;
+    <?php else: ?>
+    justify-content: flex-start;
+    <?php endif; ?>
+}
+
+.header-logo {
+    display: flex;
+    align-items: center;
+}
+
+.header-logo img {
+    max-height: <?= intval($height) - 30 ?>px;
+    width: auto;
+    max-width: 300px;
+    object-fit: contain;
+}
+
+.header-logo-text {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .page-header {
+        height: 60px;
+    }
+    
+    .header-container {
+        padding: 0 20px;
+    }
+    
+    .header-logo img {
+        max-height: 30px;
+        max-width: 200px;
+    }
+}
+</style>
+
+<!-- Header 头部 -->
+<header class="page-header">
+    <div class="header-container">
+        <div class="header-logo">
+            <?php if ($logoUrl): ?>
+                <a href="<?= htmlspecialchars($logoLink) ?>" title="<?= htmlspecialchars($pageTitle) ?>">
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+                </a>
+            <?php else: ?>
+                <a href="<?= htmlspecialchars($logoLink) ?>" class="header-logo-text">
+                    <?= htmlspecialchars($pageTitle ?: 'Logo') ?>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</header>
+
+<!-- Body 跟踪代码（仅在非预览模式下执行） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if ($gtmId): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <?php endif; ?>
+    
+    <!-- Facebook Pixel -->
+    <?php if ($fbPixelId): ?>
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '<?= htmlspecialchars($fbPixelId) ?>');
+    fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbPixelId) ?>&ev=PageView&noscript=1"
+    /></noscript>
+    <?php endif; ?>
+<?php else: ?>
+    <!-- 预览模式：跟踪代码已禁用 -->
+    <script>
+        console.log('[预览模式] 跟踪代码已禁用');
+        <?php if ($ga4Id): ?>console.log('Google Analytics 4 ID: <?= htmlspecialchars($ga4Id) ?>');<?php endif; ?>
+        <?php if ($gtmId): ?>console.log('Google Tag Manager ID: <?= htmlspecialchars($gtmId) ?>');<?php endif; ?>
+        <?php if ($fbPixelId): ?>console.log('Facebook Pixel ID: <?= htmlspecialchars($fbPixelId) ?>');<?php endif; ?>
+    </script>
+<?php endif; ?>
