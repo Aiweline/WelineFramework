@@ -239,16 +239,6 @@ class Preview extends BackendController
             $rawBody = file_get_contents('php://input');
             $data = json_decode($rawBody, true);
             
-            // 调试日志
-            $this->log('📥 自动保存请求', [
-                'rawBody' => $rawBody,
-                'jsonData' => $data,
-                'postData' => [
-                    'page_id' => $this->request->getPost('page_id'),
-                    'style_config' => $this->request->getPost('style_config')
-                ]
-            ]);
-            
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data) {
                 $data = [
@@ -260,14 +250,6 @@ class Preview extends BackendController
             $pageId = (int)($data['page_id'] ?? 0);
             $locale = $data['locale'] ?? ''; // 获取语言参数
             $styleCode = $data['style_code'] ?? ''; // 获取样式代码
-            
-            $this->log('🔍 解析后的数据', [
-                'pageId' => $pageId,
-                'locale' => $locale,
-                'styleCode' => $styleCode,
-                'dataKeys' => array_keys($data),
-                'styleConfigKeys' => isset($data['style_config']) ? array_keys($data['style_config']) : []
-            ]);
             
             if (!$pageId) {
                 return $this->fetchJson([
@@ -322,25 +304,12 @@ class Preview extends BackendController
                     $currentSettings[$styleCode][$locale],
                     $styleConfig
                 );
-                
-                $this->log('💾 按样式和语言保存配置', [
-                    'styleCode' => $styleCode,
-                    'locale' => $locale,
-                    'configCount' => count($styleConfig),
-                    'mergedCount' => count($currentSettings[$styleCode][$locale])
-                ]);
             } else {
                 // 不分语言保存：直接合并到该样式的根配置
                 $currentSettings[$styleCode] = array_merge(
                     is_array($currentSettings[$styleCode]) ? $currentSettings[$styleCode] : [],
                     $styleConfig
                 );
-                
-                $this->log('💾 保存样式通用配置', [
-                    'styleCode' => $styleCode,
-                    'configCount' => count($styleConfig),
-                    'totalCount' => count($currentSettings[$styleCode])
-                ]);
             }
             
             // 保存配置
