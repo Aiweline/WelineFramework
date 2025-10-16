@@ -2236,16 +2236,34 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
 
     // 切换语言
     window.switchVisualLanguage = function(language) {
-        console.log('🌐 切换语言:', language);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🌐 语言切换开始');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('旧语言:', currentVisualLanguage);
+        console.log('新语言:', language);
         
         // 更新当前语言
         currentVisualLanguage = language;
+        console.log('✅ 当前语言已更新为:', currentVisualLanguage);
+        
+        // 显示加载提示
+        document.getElementById('visualConfigFields').innerHTML = 
+            '<div class="alert alert-info m-3"><i class="mdi mdi-loading mdi-spin"></i> 正在加载 ' + language + ' 语言配置...</div>';
         
         // 重新加载配置（加载指定语言的配置）
-        loadVisualStyleConfig();
-        
-        // 刷新预览（传递语言参数）
-        refreshVisualPreview();
+        console.log('🔄 开始重新加载配置...');
+        loadVisualStyleConfig().then(() => {
+            console.log('✅ 配置加载完成');
+            // 刷新预览（传递语言参数）
+            console.log('🔄 开始刷新预览...');
+            refreshVisualPreview();
+            console.log('✅ 预览刷新完成');
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('🎉 语言切换完成！');
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        }).catch(error => {
+            console.error('❌ 语言切换失败:', error);
+        });
     };
 
     // 更新保存状态
@@ -2423,11 +2441,15 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
 
     // 渲染配置表单
     function renderVisualConfig(configGroups) {
-        console.log('🎨 开始渲染配置:', configGroups);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🎨 开始渲染可视化配置表单');
+        console.log('当前语言:', currentVisualLanguage);
+        console.log('配置分组数量:', Object.keys(configGroups || {}).length);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         
         // 验证数据
         if (!configGroups || typeof configGroups !== 'object') {
-            console.error('配置分组数据无效:', configGroups);
+            console.error('❌ 配置分组数据无效:', configGroups);
             document.getElementById('visualConfigFields').innerHTML = 
                 '<div class="alert alert-danger m-3"><?= __('配置数据格式错误') ?></div>';
             return;
@@ -2465,11 +2487,11 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                 
                 // 调试日志：显示配置值
                 if (config.value !== undefined) {
-                    console.log(`✅ ${configKey}: ${config.value} (来自页面配置)`);
+                    console.log(`✅ [${currentVisualLanguage}] ${configKey}: "${config.value}" (来自页面配置)`);
                 } else if (config.default) {
-                    console.log(`⚪ ${configKey}: ${config.default} (使用模板默认值)`);
+                    console.log(`⚪ [${currentVisualLanguage}] ${configKey}: "${config.default}" (使用模板默认值)`);
                 } else {
-                    console.log(`❌ ${configKey}: 无值`);
+                    console.log(`❌ [${currentVisualLanguage}] ${configKey}: 无值`);
                 }
                 
                 html += `<div class="mb-3">`;
@@ -2542,13 +2564,17 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
         
         // 检查是否有配置
         if (configCount === 0) {
-            console.warn('没有找到任何配置分组');
+            console.warn('⚠️ 没有找到任何配置分组');
             document.getElementById('visualConfigFields').innerHTML = 
                 '<div class="alert alert-warning m-3"><?= __('当前样式模板没有可配置项') ?></div>';
             return;
         }
         
-        console.log(`成功渲染 ${configCount} 个配置分组`);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`✅ 配置表单渲染完成`);
+        console.log(`   - 语言: ${currentVisualLanguage}`);
+        console.log(`   - 配置分组数: ${configCount}`);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         document.getElementById('visualConfigFields').innerHTML = html;
         
         // 监听所有自动保存字段
