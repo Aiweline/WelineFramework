@@ -28,7 +28,9 @@ use Weline\Framework\Setup\Db\ModelSetup;
  */
 class AiScenarioAdapter extends \Weline\Framework\Database\Model
 {
-    public const table = 'ai_scenario_adapter';
+    // 框架自动推导表名：AiScenarioAdapter → ai_scenario_adapter
+    // 禁止声明 protected $_table，让ORM自动推导
+    
     public const fields_ID = 'id';
     public const fields_CODE = 'code';
     public const fields_NAME = 'name';
@@ -41,6 +43,25 @@ class AiScenarioAdapter extends \Weline\Framework\Database\Model
     public const fields_IS_ACTIVE = 'is_active';
     public const fields_CREATED_TIME = 'created_time';
     public const fields_UPDATED_TIME = 'updated_time';
+
+    /**
+     * @var array 主键字段
+     */
+    public array $_unit_primary_keys = [self::fields_ID];
+    
+    /**
+     * @var array 索引排序字段
+     */
+    public array $_index_sort_keys = [self::fields_CREATED_TIME];
+
+    /**
+     * 初始化模型
+     */
+    public function _init(): void
+    {
+        $this->useMainDbMaster();
+        // 表名和主键已在属性声明时由框架自动推导
+    }
 
     /**
      * 设置模型

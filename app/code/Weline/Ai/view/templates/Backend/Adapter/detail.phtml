@@ -20,14 +20,52 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
 <!-- 开始 页面 -->
 <div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
     <!-- ============================================================== -->
     <!-- 开始 主要内容 -->
     <!-- ============================================================== -->
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-puzzle me-2"></i>
+                                <lang>适配器详情</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>详情</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 页面标题结束 -->
 
 <div class="adapter-detail-container">
     <!-- 基本信息 -->
@@ -156,6 +194,25 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             </table>
         </div>
     </div>
+
+    <!-- 操作按钮 -->
+    <div class="mb-3">
+        <a href="<?= $this->_url->getBackendUrl('*/backend/adapter') ?>" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left me-1"></i>
+            <lang>返回列表</lang>
+        </a>
+        <?php if ($adapter->getData('is_active')): ?>
+            <button type="button" class="btn btn-warning" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+                <i class="mdi mdi-power me-1"></i>
+                <lang>禁用</lang>
+            </button>
+        <?php else: ?>
+            <button type="button" class="btn btn-success" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+                <i class="mdi mdi-power me-1"></i>
+                <lang>启用</lang>
+            </button>
+        <?php endif; ?>
+    </div>
 </div>
 
 <style>
@@ -191,7 +248,39 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     </div><!-- main-content -->
 </div><!-- layout-wrapper -->
 
-@template(Weline_Admin::common/foot.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 切换适配器状态
+function toggleStatus(id) {
+    if (!confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->_url->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            id: id
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('网络错误，请稍后重试') ?>');
+    });
+}
+</script>
+
 </body>
 </html>
 

@@ -8,7 +8,12 @@ use Weline\Ai\Model\AiAssistant;
 
 class AiAssistantService
 {
-    public function __construct(private readonly AiAssistant $assistant) {}
+    private AiAssistant $assistant;
+
+    public function __construct(AiAssistant $assistant)
+    {
+        $this->assistant = $assistant;
+    }
 
     public function createAssistant(array $data): AiAssistant
     {

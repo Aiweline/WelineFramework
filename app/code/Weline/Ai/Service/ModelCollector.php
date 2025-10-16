@@ -87,11 +87,12 @@ class ModelCollector
         }
 
         $pattern = $configDir . '*' . self::CONFIG_FILE_EXTENSION;
-        
         $configFiles = glob($pattern);
+        
         if ($configFiles === false) {
             $configFiles = [];
         }
+        
         $collectedModels = [];
 
         foreach ($configFiles as $configFile) {
@@ -122,7 +123,7 @@ class ModelCollector
     {
         // 检查模型是否存在
         $model = $this->aiModel->reset()
-            ->where(AiModel::fields_MODEL_CODE, $modelCode)
+            ->where('model_code', $modelCode)
             ->find()
             ->fetch();
 
@@ -240,7 +241,7 @@ class ModelCollector
         $protectedModels = [];
 
         foreach ($allModels->getItems() as $model) {
-            $modelCode = $model->getData(AiModel::fields_MODEL_CODE);
+            $modelCode = $model->getData('model_code');
             if ($this->defaultModelManager->isProtectedModel($modelCode)) {
                 $protectedModels[] = [
                     'model_code' => $modelCode,
@@ -307,7 +308,7 @@ class ModelCollector
         
         // 检查模型是否已存在
         $existingModel = $this->aiModel->reset()
-            ->where(AiModel::fields_MODEL_CODE, $modelCode)
+            ->where('model_code', $modelCode)
             ->find()
             ->fetch();
 
@@ -337,22 +338,29 @@ class ModelCollector
         }
 
         $data = [
-            AiModel::fields_MODEL_CODE => $modelData['model_code'],
-            AiModel::fields_MODEL_NAME => $modelData['name'],
-            AiModel::fields_VENDOR => $modelData['vendor'],
-            AiModel::fields_MODEL_VERSION => $modelData['model_version'] ?? '1.0',
-            AiModel::fields_CONFIG_JSON => json_encode($modelData['config'] ?? []),
-            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000,
-            AiModel::fields_TOKEN_PRICE_OUTPUT => $modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000,
-            AiModel::fields_PROXY_INFO => json_encode($modelData['proxy_info'] ?? []),
-            AiModel::fields_IS_ACTIVE => $isActive,
-            AiModel::fields_IS_DEFAULT => $modelData['is_default'] ?? 0,
-            AiModel::fields_CREATED_TIME => time(),
-            AiModel::fields_UPDATED_TIME => time()
+            'model_code' => $modelData['model_code'],
+            'name' => $modelData['name'],
+            'supplier' => $modelData['vendor'],
+            'version' => $modelData['model_version'] ?? '1.0',
+            'config' => json_encode($modelData['config'] ?? []),
+            'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
+            // TODO(临时): 注释掉这两个字段，因为ORM报告字段不存在（虽然数据库中确实有这些字段）
+            // 'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
+            // 'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
+            'status' => $isActive ? 'active' : 'deprecated',
+            'is_copy' => 0,
+            'origin_model_id' => null,
+            'capabilities' => json_encode($modelData['capabilities'] ?? []),
+            'max_tokens' => $modelData['max_tokens'] ?? null,
         ];
 
         $model = $this->aiModel->reset();
-        $model->setData($data)->save();
+        
+        foreach ($data as $key => $value) {
+            $model->setData($key, $value);
+        }
+        
+        $model->save();
         
         return $model;
     }
@@ -376,15 +384,16 @@ class ModelCollector
 
         // 只更新允许更新的字段
         $updateData = [
-            AiModel::fields_MODEL_NAME => $modelData['name'],
-            AiModel::fields_VENDOR => $modelData['vendor'],
-            AiModel::fields_MODEL_VERSION => $modelData['model_version'] ?? '1.0',
-            AiModel::fields_CONFIG_JSON => json_encode($modelData['config'] ?? []),
-            AiModel::fields_TOKEN_PRICE_INPUT => $modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000,
-            AiModel::fields_TOKEN_PRICE_OUTPUT => $modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000,
-            AiModel::fields_PROXY_INFO => json_encode($modelData['proxy_info'] ?? []),
-            AiModel::fields_IS_ACTIVE => $isActive,
-            AiModel::fields_UPDATED_TIME => time()
+            'name' => $modelData['name'],
+            'supplier' => $modelData['vendor'],
+            'version' => $modelData['model_version'] ?? '1.0',
+            'config' => json_encode($modelData['config'] ?? []),
+            'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
+            'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
+            'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
+            'status' => $isActive ? 'active' : 'deprecated',
+            'capabilities' => json_encode($modelData['capabilities'] ?? []),
+            'max_tokens' => $modelData['max_tokens'] ?? null,
         ];
 
         // 注意：不更新 is_default 字段，避免覆盖用户设置
@@ -499,7 +508,7 @@ class ModelCollector
             ->count();
 
         $activeCount = $this->aiModel->reset()
-            ->where(AiModel::fields_IS_ACTIVE, 1)
+            ->where('status', 'active')
             ->select()
             ->fetch()
             ->count();

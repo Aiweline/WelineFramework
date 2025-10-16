@@ -154,7 +154,7 @@ class Chat extends FrontendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('生成失败：%1', $e->getMessage())
+                'message' => __('生成失败：%{1}', $e->getMessage())
             ]);
         }
     }

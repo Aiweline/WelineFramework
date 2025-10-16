@@ -30,10 +30,12 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         $locals = $localsModel->fetchArray();
         if (empty($locals)) {
             $url = $this->request->getUrlBuilder()->getUrl('*/backend/countries');
-            $this->getMessageManager()->addError(__('没有找到任何本地化数据！<a target="_blank" href="%{url}">前往I18n安装启用</a>搜索本地语言：%{search}', [
+            $this->getMessageManager()->addError(__('没有找到任何本地化数据！<a target="_blank" href="%{url}">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href="%{refresh}">刷新</a>', [
                 'search'=>$search,
-                'url'=>$url
+                'url'=>$url,
+                'refresh'=>$this->request->getUrlBuilder()->getCurrentUrl()
             ]));
+            $this->redirect(404);
         }
         $this->assign('local_pagination', $localsModel->getPagination());
         $modelName = $this->request->getGet('model');
@@ -56,6 +58,11 @@ class Local extends \Weline\Framework\App\Controller\BackendController
             $this->getMessageManager()->addError(__('请设置local标签id属性！'));
             $this->redirect(404);
         }
+        
+        // 判断字段是否是 config 嵌套字段（如：config.demo.title）
+        $isConfigField = str_starts_with($field, 'config.');
+        $configPath = $isConfigField ? substr($field, 7) : ''; // 去掉 "config." 前缀
+        
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
     //    $local_codes = [];
@@ -67,6 +74,16 @@ class Local extends \Weline\Framework\App\Controller\BackendController
             ->where($model::fields_ID, $id)
             ->select()
             ->fetchArray();
+        
+        // 处理 config 嵌套字段的数据提取
+        if ($isConfigField) {
+            foreach ($local_descriptions as &$local_description) {
+                $configData = isset($local_description['config']) ? json_decode($local_description['config'], true) : [];
+                $local_description[$field] = $this->getNestedValue($configData, $configPath) ?? $value;
+            }
+            unset($local_description);
+        }
+        
         foreach ($locals as $local) {
             $in_ = false;
             foreach ($local_descriptions as &$local_description) {
@@ -83,6 +100,15 @@ class Local extends \Weline\Framework\App\Controller\BackendController
                     $model::fields_ID => $id,
                     'local' => $local
                 ];
+            }else{
+                foreach ($local_descriptions as &$local_description) {
+                    if ($local_description[$model::fields_local_code] == $local['code']) {
+                        if(empty($local_description[$field])) {
+                            $local_description[$field] = $value;
+                        }
+                        break;
+                    }
+                }
             }
         }
         $this->assign('local_descriptions', $local_descriptions);
@@ -118,17 +144,104 @@ class Local extends \Weline\Framework\App\Controller\BackendController
             $this->getMessageManager()->addError(__('请设置local标签id属性！'));
             $this->redirect(404);
         }
+        
+        // 判断字段是否是 config 嵌套字段
+        $isConfigField = str_starts_with($field, 'config.');
+        $configPath = $isConfigField ? substr($field, 7) : '';
+        
         # 更新翻译
         $descriptions = $this->request->getPost('description');
         $insertDesriptions = [];
-        foreach ($descriptions as $description) {
-            $insertDesriptions[] = $description;
-        }
+        
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
-//        dd($model->reset()->insert($insertDesriptions,'eav_entity_id,local_code',$field)->getPrepareSql());
-        $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', $field)->fetch();
+        
+        if ($isConfigField) {
+            // 处理 config 嵌套字段：需要更新 JSON 数据
+            foreach ($descriptions as $description) {
+                // 获取现有的 config 数据
+                $existingModel = clone $model;
+                $existingModel->clear()
+                    ->where($model::fields_ID, $description[$model::fields_ID])
+                    ->where($model::fields_local_code, $description[$model::fields_local_code])
+                    ->find()
+                    ->fetch();
+                
+                $configData = [];
+                if ($existingModel->getId()) {
+                    $existingConfig = $existingModel->getData('config');
+                    $configData = $existingConfig ? json_decode($existingConfig, true) : [];
+                }
+                
+                // 设置嵌套值
+                $configData = $this->setNestedValue($configData, $configPath, $description[$field]);
+                
+                // 更新描述数据
+                $description['config'] = json_encode($configData, JSON_UNESCAPED_UNICODE);
+                unset($description[$field]); // 移除虚拟字段
+                $insertDesriptions[] = $description;
+            }
+            
+            // 使用 config 字段更新
+            $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', 'config')->fetch();
+        } else {
+            // 处理普通字段
+            foreach ($descriptions as $description) {
+                $insertDesriptions[] = $description;
+            }
+            $model->reset()->insert($insertDesriptions, $model::fields_ID . ',local_code', $field)->fetch();
+        }
+        
         $this->getMessageManager()->addSuccess(__('翻译完成!'));
         return $this->get();
+    }
+    
+    /**
+     * 从嵌套数组中获取值
+     * 
+     * @param array $data
+     * @param string $path 点号分隔的路径，如：demo.title
+     * @return mixed|null
+     */
+    private function getNestedValue(array $data, string $path)
+    {
+        $keys = explode('.', $path);
+        $value = $data;
+        
+        foreach ($keys as $key) {
+            if (!isset($value[$key])) {
+                return null;
+            }
+            $value = $value[$key];
+        }
+        
+        return $value;
+    }
+    
+    /**
+     * 在嵌套数组中设置值
+     * 
+     * @param array $data
+     * @param string $path 点号分隔的路径，如：demo.title
+     * @param mixed $value
+     * @return array
+     */
+    private function setNestedValue(array $data, string $path, $value): array
+    {
+        $keys = explode('.', $path);
+        $current = &$data;
+        
+        foreach ($keys as $index => $key) {
+            if ($index === count($keys) - 1) {
+                $current[$key] = $value;
+            } else {
+                if (!isset($current[$key]) || !is_array($current[$key])) {
+                    $current[$key] = [];
+                }
+                $current = &$current[$key];
+            }
+        }
+        
+        return $data;
     }
 }

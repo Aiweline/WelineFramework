@@ -1,208 +1,402 @@
+# Implementation Plan: Weline_Ai Phase 1 - 控制器单元测试补充
 
-# Implementation Plan: Weline_Ai Module
-
-**Branch**: `001-app-code-weline` | **Date**: 2025-10-09 | **Spec**: `spec.md`
-**Input**: Feature specification from `/specs/001-app-code-weline/spec.md`
+**Branch**: `001-app-code-weline` | **Date**: 2025-10-12 | **Spec**: [spec.md](./spec.md)  
+**Input**: Feature specification from `C:\Users\Administrator\Desktop\Weline\WelineFramework\specs\001-app-code-weline\spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
-1. Load feature spec from Input path
-   → If not found: ERROR "No feature spec at {path}"
-2. Fill Technical Context (scan for NEEDS CLARIFICATION)
-   → Detect Project Type from file system structure or context (web=frontend+backend, mobile=app+api)
-   → Set Structure Decision based on project type
-3. Fill the Constitution Check section based on the content of the constitution document.
-4. Evaluate Constitution Check section below
-   → If violations exist: Document in Complexity Tracking
-   → If no justification possible: ERROR "Simplify approach first"
-   → Update Progress Tracking: Initial Constitution Check
-5. Execute Phase 0 → research.md
-   → If NEEDS CLARIFICATION remain: ERROR "Resolve unknowns"
-6. Execute Phase 1 → contracts, data-model.md, quickstart.md, agent-specific template file (e.g., `CLAUDE.md` for Claude Code, `.github/copilot-instructions.md` for GitHub Copilot, `GEMINI.md` for Gemini CLI, `QWEN.md` for Qwen Code or `AGENTS.md` for opencode).
-7. Re-evaluate Constitution Check section
-   → If new violations: Refactor design, return to Phase 1
-   → Update Progress Tracking: Post-Design Constitution Check
-8. Plan Phase 2 → Describe task generation approach (DO NOT create tasks.md)
-9. STOP - Ready for /tasks command
+1. ✅ Load feature spec from Input path
+2. ✅ Fill Technical Context
+3. ✅ Fill Constitution Check section
+4. ✅ Evaluate Constitution Check
+5. ⏳ Execute Phase 0 → research.md
+6. ⏳ Execute Phase 1 → contracts, data-model.md, quickstart.md
+7. ⏳ Re-evaluate Constitution Check
+8. ⏳ Plan Phase 2 → Describe task generation approach
+9. 🎯 STOP - Ready for /tasks command
 ```
 
-**IMPORTANT**: The /plan command STOPS at step 7. Phases 2-4 are executed by other commands:
-- Phase 2: /tasks command creates tasks.md
-- Phase 3-4: Implementation execution (manual or via tools)
-
 ## Summary
-实现 WelineFramework AI 模块，提供统一的 AI 模型管理、助手工具、API 访问控制、多租户隔离、国际化支持和监控功能。采用 TDD 开发方式，严格遵循 WelineFramework 框架规范，禁止使用 Magento 等外部框架模式。基于已澄清的技术决策，使用 WelineFramework 内置 SecretStore、观察者模式进行场景适配器管理、支付宝微信支付集成、短信钉钉飞书告警通知。
+
+**⚠️ 重要说明**: 本计划为 **Phase 1: 控制器单元测试补充**，是 Weline_Ai 模块完整实施计划的第一阶段。
+
+**Phase 1 目标**: 为 Weline_Ai 模块的所有控制器 URL 补充完整的单元测试，确保符合 Constitution XX (路由测试要求) - 每个控制器必须进行双重测试：PHPUnit单元测试 + http:request HTTP测试。
+
+**当前状态**:
+- 控制器总数：22个（Backend: 18个，Frontend: 4个）
+- 已测试控制器：1个（Model.php - 部分测试）
+- 测试覆盖率：4.5%
+- 目标覆盖率：90%+
+
+**Phase 1 技术路径**:
+1. 分析所有22个控制器的路由和方法
+2. 为每个控制器方法创建 PHPUnit 单元测试
+3. 为每个路由创建 http:request 集成测试脚本
+4. 确保测试覆盖所有 CRUD 操作、错误场景和边界条件
+5. 生成测试报告并验证覆盖率
+
+**后续阶段**（Phase 2-4）:
+- **Phase 2**: 完整功能实现（覆盖spec.md中的43个功能需求）
+  - 计费系统（FR-025至FR-026）
+  - 监控运维（FR-027至FR-028）
+  - 国际化UI（FR-029至FR-030）
+  - 移动端API（FR-031至FR-032）
+  - 第三方集成（FR-033至FR-034）
+  - 开发者工具SDK（FR-035至FR-036）
+  - 客户支持工单（FR-037至FR-038）
+  - 营销工具推广（FR-039至FR-040）
+  - 默认模型管理（FR-015至FR-017）
+- **Phase 3**: 扩展功能与优化
+  - 模型版本管理、部署管理、基准测试
+  - A/B测试、安全扫描、性能监控详细功能
+  - 商业洞察报表前端展示
+- **Phase 4**: 生产化与上线
+  - 性能优化与压力测试
+  - 安全审计与合规检查
+  - 文档完善与培训材料
+
+**参考模块**（Constitution XI.A）:
+- `Weline_Queue`: 模型设计、ORM使用模式
+- `Weline_Admin`: 控制器测试、Offcanvas UI实现
 
 ## Technical Context
+
 **Language/Version**: PHP 8.2+  
-**Primary Dependencies**: WelineFramework internal modules, Redis (cache), Queue (e.g., RabbitMQ)  
-**Storage**: relational DB (MySQL/SQLite) per existing project conventions  
-**Testing**: PHPUnit (`php bin/w phpunit:run`)  
-**Target Platform**: Linux / PHP-FPM  
-**Project Type**: web (backend API + admin interface)  
-**Performance Goals**: P95 <= 3s for typical text generation requests, P99 <= 5s, 1000+ concurrent users  
-**Constraints**: Must not modify files outside `app/code/Weline/Ai` without approval, 数据聚合延迟 ≤ 10分钟  
-**Scale/Scope**: Multi-tenant SaaS with 1000+ concurrent users, 50+ AI models, 10+ API endpoints
+**Framework**: WelineFramework (自研框架)  
+**Primary Dependencies**: 
+- PHPUnit 9.6+ (单元测试)
+- WelineFramework ORM (数据访问)
+- WelineFramework HTTP (路由和请求处理)
+
+**Storage**: SQLite (开发/测试), MySQL/MariaDB (生产)  
+**Testing**: 
+- PHPUnit (单元测试框架)
+- `php bin/w phpunit:run -b` (测试执行命令)
+- `php bin/w http:request` (HTTP端到端测试命令)
+
+**Target Platform**: PHP 8.2+ Web Application  
+**Project Type**: Web (Backend + Frontend)  
+
+**Performance Goals**: 
+- 测试执行时间 < 30秒（所有测试）
+- 测试覆盖率 ≥ 90%
+- 每个控制器方法至少3个测试用例（成功、失败、边界）
+
+**Constraints**: 
+- 严格遵循 Constitution XX 路由测试要求
+- 每个路由必须有 PHPUnit 单元测试 + http:request 测试
+- 测试必须使用 Mock 对象隔离外部依赖
+- 禁止创建临时测试文件（Constitution II）
+- 必须使用 `php bin/w phpunit:run -b` 运行测试
+
+**Scale/Scope**: 
+- 22个控制器类
+- 估计 100+ 个控制器方法
+- 估计 300+ 个测试用例
+- 估计 100+ 个 http:request 测试场景
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Constitution v2.5.0 Compliance Gates**:
+### ✅ I. 框架一致性 (Framework Compliance)
+- **Status**: PASS
+- **Rationale**: 所有测试将严格遵循 WelineFramework 的测试规范和 ORM 使用模式
+- **Evidence**: 参考 `Weline_Queue` 等成熟模块的测试实现
 
-✅ **I. 框架一致性**: 严格遵循 WelineFramework 规范，禁止外部框架模式  
-✅ **II. 测试驱动开发**: TDD 流程，测试先行，覆盖功能/界面/数据/错误处理  
-✅ **III. 模块化设计**: 独立可测试组件，清晰依赖管理  
-✅ **IV. 多租户数据隔离**: 租户ID过滤，数据完全隔离  
-✅ **V. 国际化支持**: 依赖 I18n 模块，多语言界面和API  
-✅ **VI. 安全与合规**: API密钥加密存储，审计日志，权限控制  
-✅ **VII. 性能与可扩展性**: 1000+并发，<200ms响应，多级缓存  
-✅ **VIII. 测试组织规范**: 模块化测试结构，test_*.php 命名  
-✅ **IX. PHP语言合规性**: PHP 8.2+严格类型，接口实现完整性  
-✅ **X. ORM使用规范**: 禁止揣测函数，严格遵循框架ORM API  
-✅ **XI. 框架学习要求**: 禁止 Magento 模式，自学并更新文档  
-✅ **XII. Offcanvas编辑流**: 统一编辑/新建交互，立即打开编辑器  
-✅ **XIII. HTTP请求测试**: 使用 `php bin/w http:request` 进行E2E验证  
-✅ **XIV. 架构与数据流验证**: 验证关键字段覆盖功能需求  
-✅ **XV. 变更范围限制**: 禁止超出 `app/code/Weline/Ai` 目录  
-✅ **XVI. 已实现功能兼容性**: 优先保证现有功能可用  
-✅ **XVII. 禁止Magento写法**: 绝对禁止Magento模式，严格遵循开发文档
+### ✅ II. 测试驱动开发 (Test-Driven Development - NON-NEGOTIABLE)
+- **Status**: PASS
+- **Rationale**: 本计划的核心目标就是补充单元测试，完全符合 TDD 原则
+- **Requirements**:
+  - ✅ 所有测试文件必须放在 `Test/Unit/Controller/` 目录
+  - ✅ 测试类命名遵循 `{ControllerName}Test` 格式
+  - ✅ 测试方法命名遵循 `test{MethodName}{Scenario}` 格式
+  - ✅ 禁止创建临时测试脚本（如 `test_*.php`）
+  - ✅ 使用 `php bin/w phpunit:run -b` 生成详细HTML报告
 
-**Status**: ✅ PASS - All constitutional requirements satisfied
+### ✅ VIII. 测试组织规范 (Test Organization Standards)
+- **Status**: PASS
+- **Rationale**: 所有测试将按照 PSR-4 规范组织在模块的 Test/Unit 目录
+- **Structure**:
+  ```
+  app/code/Weline/Ai/Test/Unit/Controller/
+  ├── Backend/
+  │   ├── ModelTest.php (已存在，需完善)
+  │   ├── AbTestingTest.php (新建)
+  │   ├── AdapterTest.php (新建)
+  │   ├── ApiKeyTest.php (新建)
+  │   ├── AssistantTest.php (新建)
+  │   ├── ContentSafetyTest.php (新建)
+  │   ├── CustomerSupportTest.php (新建)
+  │   ├── DefaultModelTest.php (新建)
+  │   ├── DeveloperToolsTest.php (新建)
+  │   ├── InsightsTest.php (新建)
+  │   ├── MarketingToolsTest.php (新建)
+  │   ├── ModelBenchmarkTest.php (新建)
+  │   ├── ModelDeploymentTest.php (新建)
+  │   ├── ModelVersioningTest.php (新建)
+  │   ├── SecurityScanTest.php (新建)
+  │   ├── TestTest.php (新建)
+  │   ├── ThirdPartyIntegrationTest.php (新建)
+  │   └── TrainingDataTest.php (新建)
+  └── Frontend/
+      ├── AssistantTest.php (新建)
+      ├── CenterTest.php (新建)
+      ├── ChatTest.php (新建)
+      └── IndexTest.php (新建)
+  ```
+
+### ✅ XX. 路由测试要求 (Controller Route Testing Requirements - NON-NEGOTIABLE)
+- **Status**: PASS
+- **Rationale**: 本计划完全遵循双重测试策略
+- **Requirements**:
+  #### A. 单元测试要求（PHPUnit - 隔离测试）
+  - ✅ 每个控制器路由必须编写对应的单元测试
+  - ✅ 测试覆盖：成功请求、参数验证失败、资源不存在、权限验证失败、服务器内部错误、边界条件
+  - ✅ 测试文件必须放在 `Test/Unit/Controller/` 目录
+  - ✅ 使用 Mock 对象隔离外部依赖
+
+  #### B. HTTP请求测试要求（http:request - 端到端测试）
+  - ✅ 每个控制器路由必须使用 `php bin/w http:request` 进行实际HTTP请求测试
+  - ✅ 验证HTTP状态码、Content-Type、响应结构、关键字段
+  - ✅ 测试场景：GET、POST、PUT/PATCH、DELETE、错误情况
+  - ✅ 在PR中附上测试命令和响应内容验证记录
+
+  #### C. 路由收集要求（setup:upgrade - 系统信息更新）
+  - ✅ 新建或修改路由后运行 `php bin/w setup:upgrade -m Weline_Ai`
+  - ✅ 在 http:request 测试前确保路由已收集
+
+### ⚠️ Complexity Tracking
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| 无 | N/A | N/A |
 
 ## Project Structure
 
 ### Documentation (this feature)
 ```
 specs/001-app-code-weline/
-├── plan.md              # This file (/plan command output)
-├── research.md          # Phase 0 output (/plan command)
-├── data-model.md        # Phase 1 output (/plan command)
-├── quickstart.md        # Phase 1 output (/plan command)
-├── contracts/           # Phase 1 output (/plan command)
-└── tasks.md             # Phase 2 output (/tasks command - NOT created by /plan)
+├── plan.md              # ✅ This file
+├── research.md          # ⏳ Phase 0 output
+├── data-model.md        # ⏳ Phase 1 output
+├── quickstart.md        # ⏳ Phase 1 output
+├── contracts/           # ⏳ Phase 1 output
+│   └── controller-tests.json
+└── tasks.md             # 🎯 Phase 2 output (/tasks command)
 ```
 
 ### Source Code (repository root)
 ```
 app/code/Weline/Ai/
-├── Controller/          # 控制器层
-│   ├── Backend/        # 后台管理
-│   ├── Frontend/       # 前端用户
-│   └── Api/            # API接口
-├── Model/              # 数据模型层
-├── Service/            # 服务层
-├── Adapter/            # 场景适配器
-├── Helper/             # 辅助类
-├── Cache/              # 缓存层
-├── Queue/              # 队列系统
-├── Event/              # 事件系统
-├── Middleware/         # 中间件
-├── Setup/              # 安装脚本
-├── tests/              # 测试文件
-│   ├── unit/           # 单元测试
-│   ├── integration/    # 集成测试
-│   └── contract/       # 合约测试
-└── view/templates/     # 视图模板
-    ├── Backend/        # 后台模板
-    ├── Frontend/       # 前端模板
-    └── Api/            # API模板
+├── Controller/              # 控制器层 (22个控制器)
+│   ├── Backend/            # 后台控制器 (18个)
+│   │   ├── Model.php        # ✅ 已部分测试
+│   │   ├── AbTesting.php    # ❌ 无测试
+│   │   ├── Adapter.php      # ❌ 无测试
+│   │   ├── ApiKey.php       # ❌ 无测试
+│   │   ├── Assistant.php    # ❌ 无测试
+│   │   ├── ContentSafety.php # ❌ 无测试
+│   │   ├── CustomerSupport.php # ❌ 无测试
+│   │   ├── DefaultModel.php # ❌ 无测试
+│   │   ├── DeveloperTools.php # ❌ 无测试
+│   │   ├── Insights.php     # ❌ 无测试
+│   │   ├── MarketingTools.php # ❌ 无测试
+│   │   ├── ModelBenchmark.php # ❌ 无测试
+│   │   ├── ModelDeployment.php # ❌ 无测试
+│   │   ├── ModelVersioning.php # ❌ 无测试
+│   │   ├── SecurityScan.php # ❌ 无测试
+│   │   ├── Test.php         # ❌ 无测试
+│   │   ├── ThirdPartyIntegration.php # ❌ 无测试
+│   │   └── TrainingData.php # ❌ 无测试
+│   └── Frontend/           # 前端控制器 (4个)
+│       ├── Assistant.php    # ❌ 无测试
+│       ├── Center.php       # ❌ 无测试
+│       ├── Chat.php         # ❌ 无测试
+│       └── Index.php        # ❌ 无测试
+└── Test/Unit/Controller/   # 单元测试目录
+    ├── Backend/
+    │   └── ModelDeleteTest.php # ✅ 已存在 (4个测试方法)
+    └── Frontend/
 ```
 
-**Structure Decision**: 采用 WelineFramework 标准模块结构，包含完整的 MVC 层次、服务层、测试层和视图模板。遵循框架的目录命名规范和模块化设计原则。
+**Structure Decision**: WelineFramework 单体应用架构，所有功能模块按 PSR-4 规范组织在 `app/code/` 目录下。测试文件必须放在模块的 `Test/Unit/` 目录并与源文件结构保持一致。
 
 ## Phase 0: Outline & Research
-1. **Extract unknowns from Technical Context** above:
-   - ✅ All NEEDS CLARIFICATION resolved in spec.md clarifications section
-   - ✅ WelineFramework internal modules dependency patterns
-   - ✅ Redis cache integration patterns
-   - ✅ Queue system integration patterns
+*Status: ⏳ In Progress*
 
-2. **Research findings consolidated** in `research.md`:
-   - ✅ **SecretStore 实现**: 使用 WelineFramework 内置的 SecretStore 模块进行本地加密存储
-   - ✅ **数据保留期**: 审计日志 90天，模型训练数据 30天，API调用日志 7天，性能监控数据 365天
-   - ✅ **性能 SLO**: P95 响应时间 ≤ 3秒，P99 响应时间 ≤ 5秒，支持 1000+ 并发用户
-   - ✅ **默认模型策略**: 成本优先 → 性能优先 → 质量优先，支持自动降级和成本控制
-   - ✅ **场景适配器扫描机制**: 系统命令更新时自动通过观察者Observer更新，也支持命令行手动更新
-   - ✅ **商业洞察报表实时性**: 数据聚合和报表更新延迟 ≤ 10分钟
-   - ✅ **移动端推送通知**: 不实现推送通知功能
-   - ✅ **第三方OAuth集成**: 通过场景适配器自行接入第三方，系统无需关心具体提供商
-   - ✅ **营销推荐算法**: 按照常规推荐算法实现即可
-   - ✅ **客户支持工单分配**: 采用均分策略分配工单
-   - ✅ **开发者工具SDK语言**: 默认按照浏览器语言，不支持则使用AI解读语言返回对应语言
-   - ✅ **计费系统支付网关**: 支持支付宝和微信支付
-   - ✅ **监控告警配置**: 推荐配置阈值，默认通知方式为短信、钉钉和飞书
-   - ✅ **国际化默认设置**: 可配置，默认语言为zh_Hans_CN，默认货币为CNY
+### 1. 控制器分析任务
+- **Task**: 分析所有22个控制器的路由定义、方法签名和业务逻辑
+- **Output**: 控制器方法清单，包含路由URL、HTTP方法、参数、返回类型
 
-**Output**: ✅ research.md with all NEEDS CLARIFICATION resolved
+### 2. 现有测试模式研究
+- **Task**: 研究 `ModelDeleteTest.php` 的测试模式和最佳实践
+- **Decision**: 使用 PHPUnit Mock 对象隔离依赖
+- **Rationale**: 符合 Constitution XX 单元测试隔离要求
+
+### 3. WelineFramework 测试工具研究
+- **Task**: 研究 `php bin/w phpunit:run` 和 `php bin/w http:request` 命令的用法
+- **Decision**: 
+  - 单元测试：`php bin/w phpunit:run -b --module=Weline_Ai`
+  - HTTP测试：`php bin/w http:request GET /ai/backend/model/index`
+- **Rationale**: 框架提供的命令更规范且符合 Constitution XIII
+
+### 4. 测试数据准备策略
+- **Task**: 确定测试数据的创建和清理策略
+- **Decision**: 
+  - 使用 PHPUnit 的 `setUp()` 和 `tearDown()` 方法
+  - 测试数据使用唯一标识符（如时间戳）避免冲突
+  - 测试完成后清理创建的数据
+- **Rationale**: 保证测试环境的独立性和可重复性
+
+### Research Output Document
+将在 `research.md` 中记录：
+1. 控制器方法清单（100+个方法）
+2. 测试覆盖策略（优先级、测试场景）
+3. Mock 对象设计模式
+4. HTTP测试脚本模板
+5. 测试数据管理策略
+
+**Output**: ⏳ `research.md` (待生成)
 
 ## Phase 1: Design & Contracts
 *Prerequisites: research.md complete*
 
-1. **Extract entities from feature spec** → `data-model.md`:
-   - ✅ 23个核心数据表：ai_model, ai_assistant, ai_api_key, ai_scenario_adapter, ai_tenant, ai_audit_log, ai_performance_metric, ai_billing_record, ai_mobile_device, ai_third_party_integration, ai_marketing_campaign, ai_customer_support_ticket, ai_developer_tool, ai_monitoring_alert, ai_internationalization_config, ai_model_version, ai_assistant_prompt_template, ai_api_quota, ai_scenario_adapter_config, ai_tenant_config, ai_audit_log_detail, ai_performance_metric_detail, ai_billing_record_detail
-   - ✅ 10个扩展数据表：ai_model_training_data, ai_assistant_conversation, ai_api_key_usage, ai_scenario_adapter_usage, ai_tenant_usage, ai_audit_log_export, ai_performance_metric_export, ai_billing_record_export, ai_mobile_device_usage, ai_third_party_integration_usage
-   - ✅ 字段定义、关系、验证规则、状态转换
+### 1. Data Model (测试数据模型)
+将在 `data-model.md` 中定义：
+- 测试用例结构（Test Case Entity）
+- 测试场景分类（Scenario Types）
+- Mock 数据规范（Mock Data Schema）
+- 断言规则（Assertion Rules）
 
-2. **Generate API contracts** from functional requirements:
-   - ✅ Chat API: POST /api/v1/chat (流式/非流式)
-   - ✅ Model API: GET/POST/PUT/DELETE /api/v1/model/{id}
-   - ✅ Model Copy API: POST /api/v1/model/{id}/copy
-   - ✅ API Key API: GET/POST/PUT/DELETE /api/v1/api-key
-   - ✅ Assistant API: GET/POST/PUT/DELETE /api/v1/assistant
-   - ✅ 输出到 `/contracts/` 目录
+### 2. API Contracts (控制器测试契约)
+实际存在的 contract 文件：
+- `contracts/chat_post.json` - Chat API POST 请求契约
+- `contracts/model_get.json` - Model API GET 请求契约
+- `contracts/model_copy.json` - Model API 拷贝请求契约
+- `contracts/api_key_post.json` - API Key POST 请求契约
 
-3. **Generate contract tests** from contracts:
-   - ✅ chat_post.json, model_get.json, model_copy.json, api_key_post.json
-   - ✅ 请求/响应模式验证
-   - ✅ 测试必须失败（无实现）
+**Contract 示例** (`contracts/model_get.json`):
+```json
+{
+  "endpoint": "/api/v1/model/{id}",
+  "method": "GET",
+  "description": "获取AI模型详细信息",
+  "request": {
+    "params": {
+      "id": "integer"
+    }
+  },
+  "response": {
+    "success": {
+      "statusCode": 200,
+      "body": {
+        "model_code": "string",
+        "name": "string",
+        "supplier": "string",
+        "version": "string",
+        "is_active": "boolean"
+      }
+    },
+    "error": {
+      "statusCode": 404,
+      "body": {
+        "error": "Model not found"
+      }
+    }
+  }
+}
+```
 
-4. **Extract test scenarios** from user stories:
-   - ✅ 模型管理用户故事 → 集成测试场景
-   - ✅ 助手管理用户故事 → 集成测试场景
-   - ✅ API Key管理用户故事 → 集成测试场景
-   - ✅ 场景适配器用户故事 → 集成测试场景
-   - ✅ 商业洞察报表用户故事 → 集成测试场景
-   - ✅ 多租户管理用户故事 → 集成测试场景
+### 3. Test Scenarios (测试场景)
+从用户故事提取测试场景：
+- **模型管理**: 创建、编辑、复制、删除、切换状态、设置默认
+- **API密钥管理**: 创建、编辑、删除、配额管理
+- **助手管理**: 创建、编辑、删除、MCP工具配置
+- **场景适配器**: 注册、应用、验证、性能监控
+- **商业洞察**: 数据查询、报表生成、导出
 
-5. **Update agent file incrementally** (O(1) operation):
-   - ✅ 运行 `.specify/scripts/powershell/update-agent-context.ps1 -AgentType cursor`
-   - ✅ 添加新的技术栈信息
-   - ✅ 保持手动添加内容
-   - ✅ 更新最近变更（保留最后3个）
-   - ✅ 保持在150行以内
-   - ✅ 输出到仓库根目录
+### 4. Quickstart (快速测试指南)
+将在 `quickstart.md` 中提供：
+```bash
+# 1. 运行所有控制器测试
+php bin/w phpunit:run -b --path=app/code/Weline/Ai/Test/Unit/Controller
 
-**Output**: ✅ data-model.md, ✅ /contracts/*, ✅ failing tests, ✅ quickstart.md, ✅ agent-specific file
+# 2. 运行单个控制器测试
+php bin/w phpunit:run -b --name=ModelTest
+
+# 3. 运行单个测试方法
+php bin/w phpunit:run --name=ModelTest::testSaveNewModel
+
+# 4. HTTP端到端测试
+php bin/w server:start -b
+php bin/w http:request GET /ai/backend/model/index
+php bin/w http:request POST /ai/backend/model/save --data "name=test&supplier=openai"
+php bin/w server:stop
+
+# 5. 查看测试报告
+# 访问 http://localhost:9980
+```
+
+**Output**: ⏳ `data-model.md`, `contracts/`, `quickstart.md` (待生成)
 
 ## Phase 2: Task Planning Approach
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
-**Task Generation Strategy**:
-- Load `.specify/templates/tasks-template.md` as base
-- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
-- HTTP request verification tasks for each endpoint
-- Offcanvas UI implementation tasks
-- WelineFramework compliance validation tasks
+### Task Generation Strategy
+1. **从现有 contracts/ 文件生成任务**:
+   - 每个 contract 文件 → 对应的测试任务（已在 tasks.md T006-T009 中定义）
+   - 每个控制器 → 1个测试文件创建任务 [P]（已在 tasks.md T103-T124 中定义）
+   - 每个方法 → 3-5个测试场景任务
 
-**Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
-- Constitution compliance: Anti-Magento pattern validation
-- Framework learning: Documentation review and self-learning tasks
+2. **任务分组**:
+   - **P0 (Critical)**: 核心 CRUD 控制器（Model, ApiKey, Assistant）
+   - **P1 (High)**: 业务功能控制器（DefaultModel, Adapter, Insights）
+   - **P2 (Medium)**: 扩展功能控制器（AbTesting, ModelBenchmark, SecurityScan）
+   - **P3 (Low)**: 管理功能控制器（MarketingTools, CustomerSupport, DeveloperTools）
 
-**Estimated Output**: 55+ numbered, ordered tasks in tasks.md covering:
-- Phase 1: 核心实现 (模型管理、API Key、基础 API)
-- Phase 1: 集成测试 (数据库连接、中间件、端到端验证)
-- Phase 1: 完善 (单元测试、文档、性能优化)
-- Phase 2: 助手管理系统 (助手 CRUD、MCP 配置)
-- Phase 2: 多租户支持 (租户隔离、权限管理)
-- Phase 2: 监控系统 (性能监控、告警、报表)
-- Phase 3: 高级功能 (场景适配器、版本管理、国际化)
+3. **任务顺序**:
+   - 按优先级排序（P0 → P1 → P2 → P3）
+   - 同优先级内按依赖关系排序
+   - Backend 控制器优先于 Frontend 控制器
+   - 单元测试任务优先于 HTTP测试任务
+
+### Ordering Strategy
+```
+Phase 3.1: Setup (1-2 tasks)
+  - T001: 创建测试基础设施和 Mock 工具类
+  - T002: 配置 PHPUnit 测试套件
+
+Phase 3.2: P0 Critical Tests (15-20 tasks)
+  - T003-T007: Model 控制器完整测试 [P]
+  - T008-T012: ApiKey 控制器完整测试 [P]
+  - T013-T017: Assistant 控制器完整测试 [P]
+
+Phase 3.3: P1 High Priority Tests (20-25 tasks)
+  - T018-T021: DefaultModel 控制器测试 [P]
+  - T022-T025: Adapter 控制器测试 [P]
+  - T026-T029: Insights 控制器测试 [P]
+
+Phase 3.4: P2 Medium Priority Tests (30-40 tasks)
+  - T030-T033: AbTesting 控制器测试 [P]
+  - T034-T037: ModelBenchmark 控制器测试 [P]
+  - T038-T041: SecurityScan 控制器测试 [P]
+  - [... 其他 P2 控制器 ...]
+
+Phase 3.5: P3 Low Priority Tests (20-30 tasks)
+  - [MarketingTools, CustomerSupport, DeveloperTools 等]
+
+Phase 3.6: Frontend Controller Tests (15-20 tasks)
+  - T0XX-T0XX: Frontend 控制器测试
+
+Phase 3.7: HTTP Integration Tests (30-40 tasks)
+  - 每个控制器的 http:request 测试脚本
+
+Phase 3.8: Polish & Validation (5-10 tasks)
+  - 测试覆盖率验证
+  - 测试报告生成
+  - 测试文档完善
+```
+
+**Estimated Output**: 150-200 numbered, ordered tasks in tasks.md
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
@@ -211,33 +405,49 @@ app/code/Weline/Ai/
 
 **Phase 3**: Task execution (/tasks command creates tasks.md)  
 **Phase 4**: Implementation (execute tasks.md following constitutional principles)  
-**Phase 5**: Validation (run tests, execute quickstart.md, performance validation)
+**Phase 5**: Validation (run tests, execute quickstart.md, coverage validation)
+
+### Success Criteria
+- ✅ 所有22个控制器都有对应的测试文件
+- ✅ 测试覆盖率达到 90%+
+- ✅ 所有测试通过 `php bin/w phpunit:run -b --module=Weline_Ai`
+- ✅ 每个路由都有 http:request 测试验证
+- ✅ 测试文档完整（quickstart.md 可直接使用）
 
 ## Complexity Tracking
 *Fill ONLY if Constitution Check has violations that must be justified*
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
-
+| 无 | N/A | N/A |
 
 ## Progress Tracking
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [x] Phase 0: Research complete (/plan command)
-- [x] Phase 1: Design complete (/plan command)
-- [x] Phase 2: Task planning complete (/plan command - describe approach only)
+- [ ] Phase 0: Research complete (/plan command) - ⏳ Next
+- [ ] Phase 1: Design complete (/plan command)
+- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [x] Initial Constitution Check: PASS
-- [x] Post-Design Constitution Check: PASS
-- [x] All NEEDS CLARIFICATION resolved
-- [x] Complexity deviations documented
+- [x] Initial Constitution Check: PASS ✅
+- [ ] Post-Design Constitution Check: PASS
+- [ ] All NEEDS CLARIFICATION resolved
+- [x] Complexity deviations documented: NONE ✅
+
+**Execution Progress**:
+- [x] Step 1: Load feature spec ✅
+- [x] Step 2: Fill Technical Context ✅
+- [x] Step 3: Fill Constitution Check ✅
+- [x] Step 4: Evaluate Constitution Check ✅
+- [ ] Step 5: Execute Phase 0 → research.md ⏳
+- [ ] Step 6: Execute Phase 1 → contracts, data-model.md, quickstart.md
+- [ ] Step 7: Re-evaluate Constitution Check
+- [ ] Step 8: Plan Phase 2 → Describe task generation approach
+- [ ] Step 9: STOP - Ready for /tasks command
 
 ---
-*Based on Constitution v2.5.0 - See `/memory/constitution.md`*
+*Based on Constitution v2.13.3 - See `.specify/memory/constitution.md`*

@@ -67,7 +67,8 @@ class Upgrade extends CommandAbstract
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Framework_Module::module_upgrade_before');
         $appoint = false;
-        $argsModule = $args['module'] ?? [];
+        // 支持 --module 和 -m 两种写法
+        $argsModule = $args['module'] ?? $args['m'] ?? [];
         if (is_string($argsModule)) {
             $argsModule = explode(' ', $argsModule);
         }
@@ -356,7 +357,7 @@ class Upgrade extends CommandAbstract
             [
                 '--model' => '仅升级数据库模型',
                 '--route' => '仅升级路由',
-                '--module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
+                '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
                 '-h, --help' => '显示帮助信息',
             ],
             [],
@@ -364,10 +365,11 @@ class Upgrade extends CommandAbstract
                 '升级所有模块' => 'php bin/w module:upgrade',
                 '仅升级数据库模型' => 'php bin/w module:upgrade --model',
                 '仅升级路由' => 'php bin/w module:upgrade --route',
-                '升级指定模块' => 'php bin/w module:upgrade --module Weline_Demo',
-                '升级指定模块的模型' => 'php bin/w module:upgrade --model --module Weline_Demo',
+                '升级指定模块（长选项）' => 'php bin/w module:upgrade --module Weline_Demo',
+                '升级指定模块（短选项）' => 'php bin/w module:upgrade -m Weline_Demo',
+                '升级指定模块的模型' => 'php bin/w module:upgrade --model -m Weline_Demo',
             ],
-            'php bin/w module:upgrade [--model|--route] [--module=<模块名>]'
+            'php bin/w module:upgrade [--model|--route] [-m|--module=<模块名>]'
         );
     }
 

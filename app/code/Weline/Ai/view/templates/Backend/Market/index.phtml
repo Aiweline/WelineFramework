@@ -1,0 +1,477 @@
+<?php
+/**
+ * 助手市场首页
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $assistants array
+ * @var $categories array
+ * @var $total int
+ * @var $page int
+ * @var $totalPages int
+ */
+
+$assistants = $this->assistants ?? [];
+$categories = $this->categories ?? [];
+$total = $this->total ?? 0;
+$page = $this->page ?? 1;
+$totalPages = $this->totalPages ?? 1;
+$currentCategory = $this->currentCategory ?? '';
+$currentSearch = $this->currentSearch ?? '';
+$currentSort = $this->currentSort ?? 'popular';
+?>
+
+<style>
+.market-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.market-header {
+    margin-bottom: 32px;
+}
+
+.market-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+}
+
+.market-subtitle {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.market-filters {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 14px;
+    min-width: 150px;
+}
+
+.filter-group input[type="search"] {
+    min-width: 250px;
+}
+
+.btn-filter {
+    padding: 8px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-filter:hover {
+    background: #0056b3;
+}
+
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.assistant-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: all 0.3s;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.assistant-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    transform: translateY(-4px);
+}
+
+.assistant-cover {
+    width: 100%;
+    height: 180px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 48px;
+    font-weight: 700;
+}
+
+.assistant-cover.has-image {
+    background-size: cover;
+    background-position: center;
+}
+
+.assistant-body {
+    padding: 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.assistant-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.assistant-description {
+    font-size: 14px;
+    color: #6c757d;
+    line-height: 1.6;
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+
+.assistant-meta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #6c757d;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.meta-item i {
+    font-size: 16px;
+}
+
+.assistant-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.tag {
+    padding: 4px 10px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #495057;
+}
+
+.assistant-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid #e9ecef;
+}
+
+.assistant-price {
+    font-size: 20px;
+    font-weight: 700;
+    color: #007bff;
+}
+
+.price-unit {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 400;
+}
+
+.btn-rent {
+    padding: 8px 20px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-rent:hover {
+    background: #218838;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 32px;
+}
+
+.page-btn {
+    padding: 8px 16px;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.page-btn:hover:not(.active):not(:disabled) {
+    background: #f8f9fa;
+}
+
+.page-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.rating-stars {
+    color: #ffc107;
+}
+</style>
+
+<div class="market-container">
+    <!-- 页面标题 -->
+    <div class="market-header">
+        <h1 class="market-title">
+            <i class="mdi mdi-store"></i> <lang>助手市场</lang>
+        </h1>
+        <p class="market-subtitle">
+            <lang>发现和租用优质AI助手，共</lang> <?= $total ?> <lang>个助手可用</lang>
+        </p>
+    </div>
+
+    <!-- 筛选器 -->
+    <form class="market-filters" method="get" action="<?= $this->getBackendUrl('*/backend/market/index') ?>">
+        <div class="filter-group">
+            <label><i class="mdi mdi-shape"></i> <lang>分类</lang></label>
+            <select name="category" id="categoryFilter">
+                <option value=""><?= __('全部分类') ?></option>
+                <?php foreach ($categories as $key => $label): ?>
+                    <option value="<?= $key ?>" <?= $currentCategory === $key ? 'selected' : '' ?>>
+                        <?= $label ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label><i class="mdi mdi-sort"></i> <lang>排序</lang></label>
+            <select name="sort" id="sortFilter">
+                <option value="popular" <?= $currentSort === 'popular' ? 'selected' : '' ?>><?= __('最受欢迎') ?></option>
+                <option value="newest" <?= $currentSort === 'newest' ? 'selected' : '' ?>><?= __('最新上架') ?></option>
+                <option value="highest_rated" <?= $currentSort === 'highest_rated' ? 'selected' : '' ?>><?= __('评分最高') ?></option>
+                <option value="cheapest" <?= $currentSort === 'cheapest' ? 'selected' : '' ?>><?= __('价格最低') ?></option>
+            </select>
+        </div>
+
+        <div class="filter-group" style="flex: 1;">
+            <label><i class="mdi mdi-magnify"></i> <lang>搜索</lang></label>
+            <input type="search" 
+                   name="search" 
+                   id="searchInput"
+                   value="<?= htmlspecialchars($currentSearch) ?>"
+                   placeholder="<?= __('搜索助手名称、描述、标签...') ?>">
+        </div>
+
+        <button type="submit" class="btn-filter">
+            <i class="mdi mdi-filter"></i> <lang>应用筛选</lang>
+        </button>
+    </form>
+
+    <!-- 助手网格 -->
+    <?php if (empty($assistants)): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-package-variant"></i>
+            <h3><?= __('暂无助手') ?></h3>
+            <p><?= __('当前筛选条件下没有找到助手，请尝试其他筛选条件') ?></p>
+        </div>
+    <?php else: ?>
+        <div class="market-grid">
+            <?php foreach ($assistants as $assistant): 
+                $coverImage = $assistant->getData('cover_image');
+                $tags = $assistant->getData('tags') ? explode(',', $assistant->getData('tags')) : [];
+                $rating = $assistant->getData('rating_average') ?? 0;
+                $rentalCount = $assistant->getData('rental_count') ?? 0;
+                $usageCount = $assistant->getData('usage_count') ?? 0;
+                $rentalType = $assistant->getData('rental_type') ?? 'monthly';
+                $rentalPrice = $assistant->getData('rental_price') ?? 0;
+                
+                $priceUnit = [
+                    'per_use' => __('/次'),
+                    'daily' => __('/天'),
+                    'monthly' => __('/月'),
+                    'permanent' => __('买断')
+                ];
+            ?>
+                <div class="assistant-card" onclick="location.href='<?= $this->getBackendUrl('*/backend/market/detail', ['id' => $assistant->getId()]) ?>'">
+                    <!-- 封面 -->
+                    <div class="assistant-cover <?= $coverImage ? 'has-image' : '' ?>" 
+                         <?= $coverImage ? 'style="background-image: url(' . $coverImage . ')"' : '' ?>>
+                        <?php if (!$coverImage): ?>
+                            <?= strtoupper(mb_substr($assistant->getData('name'), 0, 1)) ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- 内容 -->
+                    <div class="assistant-body">
+                        <h3 class="assistant-name"><?= htmlspecialchars($assistant->getData('name')) ?></h3>
+                        <p class="assistant-description"><?= htmlspecialchars($assistant->getData('description') ?? '') ?></p>
+
+                        <!-- 元信息 -->
+                        <div class="assistant-meta">
+                            <div class="meta-item" title="<?= __('评分') ?>">
+                                <i class="mdi mdi-star rating-stars"></i>
+                                <?= number_format($rating, 1) ?>
+                            </div>
+                            <div class="meta-item" title="<?= __('租用次数') ?>">
+                                <i class="mdi mdi-account-multiple"></i>
+                                <?= $rentalCount ?>
+                            </div>
+                            <div class="meta-item" title="<?= __('使用次数') ?>">
+                                <i class="mdi mdi-chart-line"></i>
+                                <?= $usageCount ?>
+                            </div>
+                        </div>
+
+                        <!-- 标签 -->
+                        <?php if (!empty($tags)): ?>
+                            <div class="assistant-tags">
+                                <?php foreach (array_slice($tags, 0, 3) as $tag): ?>
+                                    <span class="tag"><?= htmlspecialchars(trim($tag)) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- 底部 -->
+                        <div class="assistant-footer">
+                            <div class="assistant-price">
+                                ¥<?= number_format($rentalPrice, 2) ?>
+                                <span class="price-unit"><?= $priceUnit[$rentalType] ?? '' ?></span>
+                            </div>
+                            <button class="btn-rent" onclick="event.stopPropagation(); rentAssistant(<?= $assistant->getId() ?>)">
+                                <i class="mdi mdi-cart-plus"></i> <lang>租用</lang>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- 分页 -->
+        <?php if ($totalPages > 1): ?>
+            <div class="pagination">
+                <button class="page-btn" <?= $page <= 1 ? 'disabled' : '' ?> 
+                        onclick="changePage(<?= $page - 1 ?>)">
+                    <i class="mdi mdi-chevron-left"></i> <lang>上一页</lang>
+                </button>
+
+                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                    <button class="page-btn <?= $i === $page ? 'active' : '' ?>" 
+                            onclick="changePage(<?= $i ?>)">
+                        <?= $i ?>
+                    </button>
+                <?php endfor; ?>
+
+                <button class="page-btn" <?= $page >= $totalPages ? 'disabled' : '' ?> 
+                        onclick="changePage(<?= $page + 1 ?>)">
+                    <lang>下一页</lang> <i class="mdi mdi-chevron-right"></i>
+                </button>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<script>
+// 分页跳转
+function changePage(page) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', page);
+    window.location.href = url.toString();
+}
+
+// 租用助手
+function rentAssistant(assistantId) {
+    if (!confirm('<?= __("确定要租用此助手吗？") ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/market/rent') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'assistant_id=' + assistantId
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // 刷新页面或跳转到我的租用列表
+            location.reload();
+        } else {
+            alert(data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __("操作失败，请稍后重试") ?>');
+        console.error('Error:', error);
+    });
+}
+</script>
+

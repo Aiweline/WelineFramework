@@ -235,8 +235,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 调试信息（可选）
         if (isset($args['debug']) || isset($data['debug'])) {
-            $this->printing->note(__('调试 - 命令输出行数: %{1}', count($command['output'])));
-            $this->printing->note(__('调试 - 退出代码: %{1}', $command['return_vars']));
+            $this->printing->note(__('调试 - 命令输出行数: %{1}', (string)count($command['output'])));
+            $this->printing->note(__('调试 - 退出代码: %{1}', (string)$command['return_vars']));
         }
         
         # 彩色输出测试结果
@@ -336,8 +336,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         if (file_exists($pidFile)) {
             $pid = (int)file_get_contents($pidFile);
             if (Processer::isRunningByPid($pid)) {
-                $this->printing->note(__('PHPUnit报告服务器已在运行 (PID: %{1})', $pid));
-                $this->printing->note(__('访问地址: http://localhost:%{1}', $port));
+                $this->printing->note(__('PHPUnit报告服务器已在运行 (PID: %{1})', (string)$pid));
+                $this->printing->note(__('访问地址: http://localhost:%{1}', (string)$port));
                 return;
             } else {
                 # 清理无效的PID文件
@@ -351,49 +351,65 @@ class Run implements \Weline\Framework\Console\CommandInterface
             mkdir($logDir, 0755, true);
         }
         
-        # 检测操作系统并使用相应的后台启动命令
+        # 检测操作系统
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        $pid = 0;
         
-        if ($isWindows) {
-            # Windows系统使用VBScript启动隐藏窗口
-            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
-            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
-            
-            # 创建批处理文件
-            $batContent = "@echo off\n";
-            $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
-            file_put_contents($batFile, $batContent);
-            
-            # 创建VBScript文件来隐藏窗口启动
-            $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
-            $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
-            file_put_contents($vbsFile, $vbsContent);
-            
-            # 执行VBScript（不等待返回）
-            pclose(popen("start /B cscript //nologo \"$vbsFile\"", "r"));
-            
-            # 等待服务器启动
-            sleep(1);
-            
-            # 查找PHP进程ID
-            $output = [];
-            exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
-            foreach ($output as $line) {
-                $line = trim($line);
-                if (is_numeric($line) && $line > 0) {
-                    $pid = (int)$line;
-                    break;
-                }
+        # 使用多层降级策略启动服务器
+        $pid = 0;
+        $method = '';
+        
+        # 方案1：popen/pclose (Windows) 或 exec (Linux) - 仅在函数可用时尝试
+        if ($isWindows && \function_exists('popen') && \function_exists('pclose') && \function_exists('exec')) {
+            $this->printing->note(__('尝试方案1：使用 popen/exec 启动服务器...'));
+            $pid = $this->startServerMethod1($reportPath, $port, $logFile, $isWindows);
+            if ($pid > 0) {
+                $method = 'popen/exec';
+                $this->printing->success(__('方案1成功！'));
             }
-            
-            # 不删除VBS和BAT文件，因为服务器正在使用它们
-        } else {
-            # Linux/Mac系统使用&符号后台启动
-            $command = "nohup php -S localhost:$port -t $reportPath > $logFile 2>&1 & echo $!";
-            $output = [];
-            exec($command, $output);
-            $pid = !empty($output) ? (int)$output[0] : 0;
+        } elseif (!$isWindows && \function_exists('exec')) {
+            $this->printing->note(__('尝试方案1：使用 exec 启动服务器...'));
+            $pid = $this->startServerMethod1($reportPath, $port, $logFile, $isWindows);
+            if ($pid > 0) {
+                $method = 'exec';
+                $this->printing->success(__('方案1成功！'));
+            }
+        }
+        
+        # 方案2：proc_open/proc_close
+        if ($pid === 0 && \function_exists('proc_open') && \function_exists('proc_close')) {
+            if ($method === '') {
+                $this->printing->note(__('尝试方案2：使用 proc_open 启动服务器...'));
+            } else {
+                $this->printing->warning(__('方案1失败，尝试方案2：使用 proc_open 启动服务器...'));
+            }
+            $pid = $this->startServerMethod2($reportPath, $port, $logFile, $isWindows);
+            if ($pid > 0) {
+                $method = 'proc_open';
+                $this->printing->success(__('方案2成功！'));
+            }
+        }
+        
+        # 方案3：shell_exec - 仅在函数可用时尝试
+        if ($pid === 0 && \function_exists('shell_exec')) {
+            if ($method === '') {
+                $this->printing->note(__('尝试方案3：使用 shell_exec 启动服务器...'));
+            } else {
+                $this->printing->warning(__('方案2失败，尝试方案3：使用 shell_exec 启动服务器...'));
+            }
+            $pid = $this->startServerMethod3($reportPath, $port, $logFile, $isWindows);
+            if ($pid > 0) {
+                $method = 'shell_exec';
+                $this->printing->success(__('方案3成功！'));
+            }
+        }
+        
+        # 如果所有后台启动方案都失败
+        if ($pid === 0) {
+            $this->printing->warning(__('所有后台启动方案均失败'));
+            $this->printing->note(__('可能的原因：'));
+            $this->printing->note(__('1. 所有进程控制函数都被禁用 (disable_functions)'));
+            $this->printing->note(__('2. 系统权限限制'));
+            $this->printing->note(__('3. 端口 %{1} 已被占用', (string)$port));
         }
         
         if (!empty($pid) && $pid > 0) {
@@ -402,13 +418,16 @@ class Run implements \Weline\Framework\Console\CommandInterface
             # 更新env.php中的服务器信息
             $this->updateServerInfo($pid, 'running', $port);
             
-            $this->printing->success(__('PHPUnit报告服务器已启动 (PID: %{1})', $pid));
-            $this->printing->note(__('访问地址: http://localhost:%{1}', $port));
+            $this->printing->success(__('PHPUnit报告服务器已启动 (PID: %{1}, 方法: %{2})', [(string)$pid, $method]));
+            $this->printing->note(__('访问地址: http://localhost:%{1}', (string)$port));
             $this->printing->note(__('日志文件: %{1}', $logFile));
             $this->printing->note(__('停止命令: php bin/w phpunit:stop'));
         } else {
             $this->printing->error(__('启动PHPUnit报告服务器失败'));
-            $this->printing->note(__('将尝试在前台启动服务器...'));
+            $this->printing->note(__('建议：'));
+            $this->printing->note(__('1. 检查 php.ini 中的 disable_functions 配置'));
+            $this->printing->note(__('2. 确认端口 %{1} 未被占用', (string)$port));
+            $this->printing->note(__('3. 尝试手动启动: php -S localhost:%{1} -t %{2}', [(string)$port, $reportPath]));
         }
     }
     
@@ -453,6 +472,236 @@ class Run implements \Weline\Framework\Console\CommandInterface
     }
     
     /**
+     * 检查必需的系统函数是否可用
+     * 
+     * @param array $functions 需要检查的函数列表
+     * @return bool 如果所有函数都可用返回true，否则返回false
+     */
+    private function checkRequiredFunctions(array $functions, bool $silent = false): bool
+    {
+        $disabledFunctions = [];
+        
+        foreach ($functions as $function) {
+            if (!\function_exists($function)) {
+                $disabledFunctions[] = $function;
+            }
+        }
+        
+        if (!empty($disabledFunctions)) {
+            if (!$silent) {
+                $this->printing->error(__('以下系统函数不可用或被禁用：'));
+                foreach ($disabledFunctions as $func) {
+                    $this->printing->note("  - $func()");
+                }
+                $this->printing->warning(__('这些函数可能在 php.ini 的 disable_functions 中被禁用'));
+                $this->printing->note(__('解决方案：'));
+                $this->printing->note(__('1. 检查 php.ini 文件中的 disable_functions 配置'));
+                $this->printing->note(__('2. 从 disable_functions 中移除上述函数'));
+                $this->printing->note(__('3. 重启 PHP 服务'));
+                $this->printing->note(__('4. 如果是生产环境限制，建议在开发环境中运行测试'));
+            }
+            
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 方案1：使用 popen/pclose (Windows) 或 exec (Linux)
+     * 
+     * @param string $reportPath 报告路径
+     * @param int $port 端口
+     * @param string $logFile 日志文件
+     * @param bool $isWindows 是否为Windows系统
+     * @return int 进程ID，失败返回0
+     */
+    private function startServerMethod1(string $reportPath, int $port, string $logFile, bool $isWindows): int
+    {
+        $requiredFunctions = ['exec'];
+        if ($isWindows) {
+            $requiredFunctions[] = 'popen';
+            $requiredFunctions[] = 'pclose';
+        }
+        
+        if (!$this->checkRequiredFunctions($requiredFunctions, true)) {
+            return 0;
+        }
+        
+        $pid = 0;
+        
+        if ($isWindows) {
+            # Windows系统使用VBScript启动隐藏窗口
+            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
+            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
+            
+            # 创建批处理文件
+            $batContent = "@echo off\n";
+            $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
+            file_put_contents($batFile, $batContent);
+            
+            # 创建VBScript文件来隐藏窗口启动
+            $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
+            $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
+            file_put_contents($vbsFile, $vbsContent);
+            
+            # 执行VBScript（不等待返回）
+            \pclose(\popen("start /B cscript //nologo \"$vbsFile\"", "r"));
+            
+            # 等待服务器启动
+            sleep(1);
+            
+            # 查找PHP进程ID
+            $output = [];
+            \exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
+            foreach ($output as $line) {
+                $line = trim($line);
+                if (is_numeric($line) && $line > 0) {
+                    $pid = (int)$line;
+                    break;
+                }
+            }
+        } else {
+            # Linux/Mac系统使用&符号后台启动
+            $command = "nohup php -S localhost:$port -t $reportPath > $logFile 2>&1 & echo $!";
+            $output = [];
+            \exec($command, $output);
+            $pid = !empty($output) ? (int)$output[0] : 0;
+        }
+        
+        return $pid;
+    }
+    
+    /**
+     * 方案2：使用 proc_open/proc_close
+     * 
+     * @param string $reportPath 报告路径
+     * @param int $port 端口
+     * @param string $logFile 日志文件
+     * @param bool $isWindows 是否为Windows系统
+     * @return int 进程ID，失败返回0
+     */
+    private function startServerMethod2(string $reportPath, int $port, string $logFile, bool $isWindows): int
+    {
+        if (!$this->checkRequiredFunctions(['proc_open', 'proc_close'], true)) {
+            return 0;
+        }
+        
+        $descriptorspec = [
+            0 => ['pipe', 'r'],  // stdin
+            1 => ['file', $logFile, 'w'],  // stdout
+            2 => ['file', $logFile, 'a']   // stderr
+        ];
+        
+        $command = "php -S localhost:$port -t \"$reportPath\"";
+        
+        if ($isWindows) {
+            # Windows下使用 start /B 后台启动
+            $command = "start /B $command";
+        } else {
+            # Linux/Mac下使用 nohup 和 & 后台启动
+            $command = "nohup $command > /dev/null 2>&1 &";
+        }
+        
+        $process = \proc_open($command, $descriptorspec, $pipes, BP);
+        
+        if (is_resource($process)) {
+            # 关闭stdin管道
+            if (isset($pipes[0])) {
+                fclose($pipes[0]);
+            }
+            
+            # 获取进程信息
+            $status = \proc_get_status($process);
+            $pid = $status['pid'] ?? 0;
+            
+            # 不要等待进程结束，让它在后台运行
+            # 注意：在某些系统上，这会立即返回，进程继续在后台运行
+            \proc_close($process);
+            
+            # 等待服务器启动
+            sleep(1);
+            
+            # Windows需要额外查找真实的PHP服务器进程ID
+            if ($isWindows && $this->checkRequiredFunctions(['exec'], true)) {
+                $output = [];
+                \exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
+                foreach ($output as $line) {
+                    $line = trim($line);
+                    if (is_numeric($line) && $line > 0) {
+                        $pid = (int)$line;
+                        break;
+                    }
+                }
+            }
+            
+            return $pid;
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * 方案3：使用 shell_exec（最后的降级方案）
+     * 
+     * @param string $reportPath 报告路径
+     * @param int $port 端口
+     * @param string $logFile 日志文件
+     * @param bool $isWindows 是否为Windows系统
+     * @return int 进程ID，失败返回0
+     */
+    private function startServerMethod3(string $reportPath, int $port, string $logFile, bool $isWindows): int
+    {
+        if (!$this->checkRequiredFunctions(['shell_exec'], true)) {
+            return 0;
+        }
+        
+        $pid = 0;
+        
+        if ($isWindows) {
+            # Windows系统
+            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
+            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
+            
+            # 创建批处理文件
+            $batContent = "@echo off\n";
+            $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
+            file_put_contents($batFile, $batContent);
+            
+            # 创建VBScript文件
+            $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
+            $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
+            file_put_contents($vbsFile, $vbsContent);
+            
+            # 使用shell_exec执行
+            \shell_exec("start /B cscript //nologo \"$vbsFile\"");
+            
+            # 等待服务器启动
+            sleep(1);
+            
+            # 尝试查找进程ID
+            if ($this->checkRequiredFunctions(['exec'], true)) {
+                $output = [];
+                \exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
+                foreach ($output as $line) {
+                    $line = trim($line);
+                    if (is_numeric($line) && $line > 0) {
+                        $pid = (int)$line;
+                        break;
+                    }
+                }
+            }
+        } else {
+            # Linux/Mac系统
+            $command = "nohup php -S localhost:$port -t $reportPath > $logFile 2>&1 & echo $!";
+            $output = \shell_exec($command);
+            $pid = $output ? (int)trim($output) : 0;
+        }
+        
+        return $pid;
+    }
+    
+    /**
      * 停止PHPUnit报告服务器
      */
     private function stopPhpUnitServer(): void
@@ -467,16 +716,93 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $pid = (int)file_get_contents($pidFile);
         
         if (!Processer::isRunningByPid($pid)) {
-            $this->printing->note(__('PHPUnit报告服务器未运行 (PID: %{1})', $pid));
+            $this->printing->note(__('PHPUnit报告服务器未运行 (PID: %{1})', (string)$pid));
             unlink($pidFile);
             return;
         }
         
-        # 停止进程
-        if (PHP_OS_FAMILY === 'Windows') {
-            exec("taskkill /PID $pid /F");
-        } else {
-            exec("kill $pid");
+        # 使用多层降级策略停止服务器
+        $success = false;
+        $method = '';
+        
+        # 方案1：使用 exec
+        if ($this->checkRequiredFunctions(['exec'], true)) {
+            $this->printing->note(__('尝试使用 exec 停止服务器...'));
+            if (PHP_OS_FAMILY === 'Windows') {
+                \exec("taskkill /PID $pid /F", $output, $return_var);
+            } else {
+                \exec("kill $pid", $output, $return_var);
+            }
+            $success = ($return_var === 0);
+            if ($success) {
+                $method = 'exec';
+                $this->printing->success(__('使用 exec 成功停止！'));
+            }
+        }
+        
+        # 方案2：使用 shell_exec
+        if (!$success && $this->checkRequiredFunctions(['shell_exec'], true)) {
+            $this->printing->warning(__('exec 失败，尝试使用 shell_exec...'));
+            if (PHP_OS_FAMILY === 'Windows') {
+                $result = \shell_exec("taskkill /PID $pid /F 2>&1");
+            } else {
+                $result = \shell_exec("kill $pid 2>&1");
+            }
+            # 等待一下看进程是否被终止
+            sleep(1);
+            $success = !Processer::isRunningByPid($pid);
+            if ($success) {
+                $method = 'shell_exec';
+                $this->printing->success(__('使用 shell_exec 成功停止！'));
+            }
+        }
+        
+        # 方案3：使用 proc_open (最后的尝试)
+        if (!$success && $this->checkRequiredFunctions(['proc_open', 'proc_close'], true)) {
+            $this->printing->warning(__('shell_exec 失败，尝试使用 proc_open...'));
+            $descriptorspec = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w']
+            ];
+            
+            if (PHP_OS_FAMILY === 'Windows') {
+                $command = "taskkill /PID $pid /F";
+            } else {
+                $command = "kill $pid";
+            }
+            
+            $process = \proc_open($command, $descriptorspec, $pipes);
+            if (is_resource($process)) {
+                fclose($pipes[0]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                \proc_close($process);
+                
+                # 等待一下看进程是否被终止
+                sleep(1);
+                $success = !Processer::isRunningByPid($pid);
+                if ($success) {
+                    $method = 'proc_open';
+                    $this->printing->success(__('使用 proc_open 成功停止！'));
+                }
+            }
+        }
+        
+        # 如果所有方法都失败
+        if (!$success) {
+            $this->printing->error(__('无法自动停止PHPUnit报告服务器'));
+            $this->printing->warning(__('所有停止方法均失败，可能是因为：'));
+            $this->printing->note(__('1. 所有进程控制函数都被禁用 (disable_functions)'));
+            $this->printing->note(__('2. 没有足够的权限终止进程'));
+            $this->printing->note(__(''));
+            $this->printing->note(__('请手动停止进程 (PID: %{1}):', (string)$pid));
+            if (PHP_OS_FAMILY === 'Windows') {
+                $this->printing->note(__('  Windows命令: taskkill /PID %{1} /F', (string)$pid));
+            } else {
+                $this->printing->note(__('  Linux/Mac命令: kill %{1}', (string)$pid));
+            }
+            return;
         }
         
         # 清理PID文件
@@ -485,7 +811,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 更新env.php中的服务器信息
         $this->updateServerInfo(0, 'stopped');
         
-        $this->printing->success(__('PHPUnit报告服务器已停止 (PID: %{1})', $pid));
+        $this->printing->success(__('PHPUnit报告服务器已停止 (PID: %{1}, 方法: %{2})', [(string)$pid, $method]));
     }
     
     /**

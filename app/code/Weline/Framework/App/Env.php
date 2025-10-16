@@ -134,6 +134,9 @@ class Env extends DataObject
 
     public const default_CONFIG = [
         'env' => 'local',
+        'event'=>[
+            'debug' => false,
+        ],
         'db_log' => [
             'enabled' => false,
             'file' => 'var' . DS . 'log' . DS . 'db.log',
