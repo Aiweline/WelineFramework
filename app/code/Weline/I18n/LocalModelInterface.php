@@ -16,4 +16,5 @@ interface LocalModelInterface
 {
     public const fields_local_code = 'local_code';
     public const fields_name       = 'name';
+    public const fields_config     = 'config';
 }

@@ -87,7 +87,7 @@ class Insights extends BackendController
             return $this->fetch();
 
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('加载报表失败：%1', $e->getMessage()));
+            $this->messageManager->addError(__('加载报表失败：%{1}', $e->getMessage()));
             return $this->fetch();
         }
     }

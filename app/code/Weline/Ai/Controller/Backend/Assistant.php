@@ -16,6 +16,7 @@ use Weline\Ai\Model\AiAssistant;
 use Weline\Ai\Model\AiModel;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\Manager\Message;
 
 /**
  * AI助手管理后台控制器
@@ -99,13 +100,63 @@ class Assistant extends BackendController
             return $this->fetch();
 
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('加载助手列表失败：%1', $e->getMessage()));
+            Message::error(__('加载助手列表失败：%{1}', $e->getMessage()));
+            $this->assign('assistants', []);
+            $this->assign('pagination', null);
+            $this->assign('total', 0);
+            $this->assign('current_status', '');
+            $this->assign('stats', ['total' => 0, 'active' => 0, 'inactive' => 0]);
             return $this->fetch();
         }
     }
 
     /**
-     * 创建助手页面
+     * Offcanvas 表单页面（创建/编辑）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_assistant_form', '助手表单', 'mdi-form-select', '助手表单')]
+    public function form(): string
+    {
+        $id = (int)$this->request->getGet('id', 0);
+        
+        try {
+            $assistant = null;
+            
+            if ($id > 0) {
+                $assistant = $this->aiAssistant->reset()->load($id);
+                if (!$assistant->getId()) {
+                    Message::error(__('助手不存在'));
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'message' => __('助手不存在')
+                    ]);
+                }
+            }
+            
+            // 获取可用的AI模型
+            $models = $this->aiModel->reset()
+                ->where('is_active', 1)
+                ->select()
+                ->fetch();
+
+            $this->assign('assistant', $assistant);
+            $this->assign('models', $models->getItems());
+            $this->assign('isEdit', $id > 0);
+
+            return $this->fetch();
+
+        } catch (\Exception $e) {
+            Message::error(__('加载失败：%{1}', $e->getMessage()));
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('加载失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 创建助手页面（保留用于直接访问）
      * 
      * @return string
      */
@@ -125,7 +176,7 @@ class Assistant extends BackendController
             return $this->fetch('edit');
 
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('加载失败：%1', $e->getMessage()));
+            Message::error(__('加载失败：%{1}', $e->getMessage()));
             return $this->redirect($this->getBackendUrl('*/backend/assistant'));
         }
     }
@@ -144,7 +195,7 @@ class Assistant extends BackendController
             $assistant = $this->aiAssistant->reset()->load($id);
             
             if (!$assistant->getId()) {
-                $this->messageManager->addError(__('助手不存在'));
+                Message::error(__('助手不存在'));
                 return $this->redirect($this->getBackendUrl('*/backend/assistant'));
             }
 
@@ -160,8 +211,142 @@ class Assistant extends BackendController
             return $this->fetch();
 
         } catch (\Exception $e) {
-            $this->messageManager->addError(__('加载失败：%1', $e->getMessage()));
+            Message::error(__('加载失败：%{1}', $e->getMessage()));
             return $this->redirect($this->getBackendUrl('*/backend/assistant'));
+        }
+    }
+
+    /**
+     * 获取模型配置（AJAX）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_assistant_get_model_config', '获取模型配置', '', '获取模型配置')]
+    public function getModelConfig(): string
+    {
+        $modelCode = $this->request->getGet('model_code', '');
+        
+        if (empty($modelCode)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('模型代码不能为空')
+            ]);
+        }
+        
+        try {
+            // 通过model_code查找模型
+            // 由于数据库中code字段可能为空，我们需要同时匹配code和name
+            // 前端传来的model_code可能是生成的code（如"gpt-3_5_turbo"）
+            $modelObj = $this->aiModel->reset();
+            $models = $modelObj->where('is_active', 1)->select()->fetch();
+            
+            $model = null;
+            foreach ($models->getItems() as $m) {
+                $name = strtolower($m->getData('name'));
+                $code = strtolower($m->getData('code') ?: '');
+                $searchTerm = strtolower($modelCode);
+                
+                // 如果code为空，尝试生成code并匹配
+                if (empty($code)) {
+                    $generatedCode = strtolower(str_replace([' ', '.'], ['_', '_'], $name));
+                    if ($generatedCode === $searchTerm) {
+                        $model = $m;
+                        break;
+                    }
+                }
+                
+                // 精确匹配code或name包含搜索词
+                if ($code === $searchTerm || strpos($name, $searchTerm) !== false) {
+                    $model = $m;
+                    break;
+                }
+            }
+            
+            if (!$model || !$model->getId()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => '模型不存在：' . $modelCode
+                ]);
+            }
+            
+            // 获取模型配置
+            $config = $model->getConfig();
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'config' => $config,
+                'model' => [
+                    'id' => $model->getId(),
+                    'code' => $model->getData('code'),
+                    'name' => $model->getData('name'),
+                    'supplier' => $model->getData('supplier'),
+                    'max_tokens' => $model->getData('max_tokens'),
+                    'cost_per_token' => $model->getData('cost_per_token')
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => '获取配置失败：' . $e->getMessage(),
+                'debug' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ]);
+        }
+    }
+
+    /**
+     * 搜索AI模型（AJAX）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_assistant_search_models', '搜索AI模型', '', '搜索AI模型')]
+    public function searchModels(): string
+    {
+        $keyword = $this->request->getGet('keyword', '');
+        
+        try {
+            $modelObj = $this->aiModel->reset();
+            
+            if (!empty($keyword)) {
+                $modelObj->where('name', 'LIKE', "%{$keyword}%")
+                         ->orWhere('code', 'LIKE', "%{$keyword}%")
+                         ->orWhere('supplier', 'LIKE', "%{$keyword}%");
+            }
+            
+            $models = $modelObj->where('is_active', 1)
+                              ->select()
+                              ->fetch();
+            
+            $modelList = [];
+            foreach ($models->getItems() as $model) {
+                // 如果code为空，使用name作为code
+                $code = $model->getData('code');
+                if (empty($code)) {
+                    $code = strtolower(str_replace([' ', '.'], ['_', '_'], $model->getData('name')));
+                }
+                
+                $modelList[] = [
+                    'id' => $model->getId(),
+                    'code' => $code,
+                    'name' => $model->getData('name'),
+                    'supplier' => $model->getData('supplier'),
+                    'is_active' => $model->getData('is_active')
+                ];
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'models' => $modelList
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('搜索失败：%{1}', $e->getMessage())
+            ]);
         }
     }
 
@@ -173,20 +358,22 @@ class Assistant extends BackendController
     #[Acl('Weline_Ai::ai_assistant_save', '保存助手', 'mdi-content-save', '保存助手')]
     public function save(): string
     {
-        if (!$this->request->isPost()) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => __('无效的请求方法')
-            ]);
-        }
-
-        $id = (int)$this->request->getPost('id', 0);
-        $name = $this->request->getPost('name', '');
-        $prompt = $this->request->getPost('prompt', '');
-        $modelCode = $this->request->getPost('model_code', '');
-        $description = $this->request->getPost('description', '');
-        $mcpConfig = $this->request->getPost('mcp_config', '[]');
-        $isActive = (int)$this->request->getPost('is_active', 1);
+        // 兼容GET和POST请求（方便调试）
+        $id = (int)($this->request->getPost('id', 0) ?: $this->request->getGet('id', 0));
+        $name = $this->request->getPost('name', '') ?: $this->request->getGet('name', '');
+        $prompt = $this->request->getPost('prompt', '') ?: $this->request->getGet('prompt', '');
+        $modelCode = $this->request->getPost('model_code', '') ?: $this->request->getGet('model_code', '');
+        $description = $this->request->getPost('description', '') ?: $this->request->getGet('description', '');
+        $modelConfig = $this->request->getPost('model_config', '{}') ?: $this->request->getGet('model_config', '{}');
+        $mcpConfig = $this->request->getPost('mcp_config', '[]') ?: $this->request->getGet('mcp_config', '[]');
+        $isActive = (int)($this->request->getPost('is_active', 1) ?: $this->request->getGet('is_active', 1));
+        
+        // 租赁相关字段
+        $isRentable = (int)($this->request->getPost('is_rentable', 0) ?: $this->request->getGet('is_rentable', 0));
+        $rentalType = $this->request->getPost('rental_type', 'monthly') ?: $this->request->getGet('rental_type', 'monthly');
+        $rentalPrice = (float)($this->request->getPost('rental_price', 0) ?: $this->request->getGet('rental_price', 0));
+        $category = $this->request->getPost('category', '') ?: $this->request->getGet('category', '');
+        $tags = $this->request->getPost('tags', '') ?: $this->request->getGet('tags', '');
 
         try {
             if ($id > 0) {
@@ -199,18 +386,47 @@ class Assistant extends BackendController
                 }
             } else {
                 $assistant = $this->aiAssistant->reset();
-                $assistant->setData('created_time', time());
+                // 确保表名被正确设置
+                $assistant->setTableName('ai_assistant');
             }
 
-            $assistant->setData([
+            // 设置数据
+            $currentTime = time();
+            $data = [
                 'name' => $name,
                 'prompt' => $prompt,
                 'model_code' => $modelCode,
                 'description' => $description,
+                'model_config' => $modelConfig,
                 'mcp_config' => $mcpConfig,
                 'is_active' => $isActive,
-                'updated_time' => time()
-            ]);
+                // 租赁相关字段
+                'is_rentable' => $isRentable,
+                'rental_type' => $rentalType,
+                'rental_price' => $rentalPrice,
+                'category' => $category,
+                'tags' => $tags,
+                'updated_time' => $currentTime
+            ];
+            
+            // 如果是新建，添加created_time和owner_id
+            if (!$assistant->getId()) {
+                $data['created_time'] = $currentTime;
+                // TODO: 从session获取当前登录用户ID作为owner_id
+                $data['owner_id'] = 1; // 暂时硬编码
+            }
+            
+            $assistant->setData($data);
+            
+            // 调试输出
+            $debug_data = [
+                'input' => $data,
+                'model_data' => $assistant->getData(),
+                'model_data_for_save' => $assistant->getModelData(),
+                'table' => $assistant->getTableName(),
+                'has_id' => $assistant->getId() ? true : false,
+                'primary_key' => $assistant->_primary_key ?? 'unknown'
+            ];
 
             $assistant->save();
 
@@ -223,7 +439,12 @@ class Assistant extends BackendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('保存失败：%1', $e->getMessage())
+                'message' => '保存失败：' . $e->getMessage(),
+                'debug' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'debug_data' => isset($debug_data) ? $debug_data : null
+                ]
             ]);
         }
     }
@@ -265,7 +486,7 @@ class Assistant extends BackendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('删除失败：%1', $e->getMessage())
+                'message' => __('删除失败：%{1}', $e->getMessage())
             ]);
         }
     }
@@ -310,7 +531,7 @@ class Assistant extends BackendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('操作失败：%1', $e->getMessage())
+                'message' => __('操作失败：%{1}', $e->getMessage())
             ]);
         }
     }
@@ -323,7 +544,7 @@ class Assistant extends BackendController
      */
     private function jsonResponse(array $data): string
     {
-        $this->response->setHeader('Content-Type', 'application/json');
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data);
     }
 }

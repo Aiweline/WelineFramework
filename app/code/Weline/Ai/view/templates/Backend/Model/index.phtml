@@ -183,7 +183,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         <td>
                                                             <code><?= $model->getModelCode() ?></code>
                                                         </td>
-                                                        <td><?= $model->getData('model_version') ?></td>
+                                                        <td><?= $model->getVersion() ?></td>
                                                         <td>
                                                             <?php if ($model->isCopied()): ?>
                                                                 <span class="badge bg-warning text-dark">
@@ -195,8 +195,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                 </span>
                                                             <?php endif; ?>
                                                         </td>
-                                                        <td>$<?= number_format($model->getData('token_price_input'), 6) ?>/1K</td>
-                                                        <td>$<?= number_format($model->getData('token_price_output'), 6) ?>/1K</td>
+                                                        <td>$<?= number_format((float)($model->getData('token_price_input') ?? 0), 6) ?>/1K</td>
+                                                        <td>$<?= number_format((float)($model->getData('token_price_output') ?? 0), 6) ?>/1K</td>
                                                         <td>
                                                             <?php if ($model->isActive()): ?>
                                                                 <span class="badge bg-success"><lang>激活</lang></span>
@@ -217,7 +217,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        template='Weline_Component::off-canvas.phtml'
                                                                        cache='0'
                                                                        id='model_detail'
-                                                                       action="*/backend/model/detail"
+                                                                       action="*/backend/model/detailOffcanvas"
                                                                        target-tag="button"
                                                                        vars="model"
                                                                        action-params="{id: model.id}"
@@ -237,7 +237,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        template='Weline_Component::off-canvas.phtml'
                                                                        cache='0'
                                                                        id='model_edit'
-                                                                       action="*/backend/model/edit"
+                                                                       action="*/backend/model/editOffcanvas"
                                                                        target-tag="button"
                                                                        vars="model"
                                                                        action-params="{id: model.id}"
@@ -248,8 +248,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        close-button-text='关闭'
                                                                        target-button-text=''
                                                                        direction='right'
-                                                                       class-names='w-75'
+                                                                       class-names='w-50'
                                                                        flush='1'
+                                                                       save='1'
                                                                        flush-button-text='刷新'
                                                                        off-canvas-body-style=''
                                                                 />
@@ -268,13 +269,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        action-params="{id: model.id}"
                                                                        target-button-class='btn btn-outline-secondary'
                                                                        icon='mdi mdi-content-copy'
-                                                                       title='<?= __("复制模型") ?>: <?= $model->getModelCode() ?>'
+                                                                       title='复制模型'
                                                                        close-button-show='1'
                                                                        close-button-text='<?= __("关闭") ?>'
                                                                        target-button-text=''
                                                                        direction='right'
                                                                        class-names='w-50'
-                                                                       flush='0'
+                                                                       flush='1'
+                                                                       save='1'
+                                                                       flush-button-text='<?= __("刷新") ?>'
                                                                        off-canvas-body-style=''
                                                                 />
                                                                 <?php if ($model->isCopied()): ?>
@@ -306,10 +309,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 <script>
 function collectModels() {
-    if (!confirm('<?= __('确定要收集模型配置文件吗？这将扫描并导入新的模型配置。') ?>')) {
-        return;
-    }
-
     const btn = event.target.closest('button');
     btn.disabled = true;
     btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('收集中...') ?>';
@@ -363,7 +362,29 @@ function deleteModel(modelId, modelCode, isCopied) {
         return;
     }
 
-    window.location.href = '<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId;
+    // 使用 fetch 发送 DELETE 请求
+    fetch('<?= $this->getBackendUrl('*/backend/model/delete') ?>?id=' + modelId, {
+        method: 'DELETE',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 删除成功，刷新页面
+            alert(data.message || '<?= __('删除成功') ?>');
+            window.location.reload();
+        } else {
+            // 删除失败，显示错误消息
+            alert(data.message || '<?= __('删除失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('删除失败:', error);
+        alert('<?= __('删除失败，请重试') ?>');
+    });
 }
 
 function applyFilters() {

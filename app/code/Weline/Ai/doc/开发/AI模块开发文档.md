@@ -1,8 +1,13 @@
 # AI模块开发文档
 
+**版本**: 2.0（基于实际开发经验更新）  
+**更新日期**: 2025-10-09
+
 ## 功能概述
 
 Weline_Ai 模块是一个企业级AI服务集成平台，提供统一的AI服务接口，支持多种AI模型、场景适配器和多语言处理。
+
+> **重要**: 本文档已根据实际开发经验更新。如与旧版本有冲突，以本版本为准。
 
 ### 主要功能
 
@@ -231,9 +236,211 @@ class CustomAdapter implements ScenarioAdapterInterface
 3. 处理响应格式转换
 4. 运行扫描命令注册适配器
 
+## 实际开发经验（2025-10-09更新）
+
+### 已实现的核心功能
+
+#### 1. 数据库表结构
+模块定义了5张核心数据表（已在 `Setup/Install.php` 中定义）:
+
+```php
+// app/code/Weline/Ai/Setup/Install.php
+public function setup(Setup $setup, Context $context)
+{
+    // 1. ai_model - AI模型元数据
+    $setup->getConnection()->createTable('ai_model', function ($table) {
+        $table->addColumn('id', 'int', 10, 'PRIMARY KEY AUTO_INCREMENT')
+              ->addColumn('supplier', 'varchar', 100, 'NOT NULL')
+              ->addColumn('model_code', 'varchar', 100, 'NOT NULL UNIQUE')
+              ->addColumn('name', 'varchar', 255, 'NOT NULL')
+              ->addColumn('is_copy', 'tinyint', 1, 'NOT NULL DEFAULT 0')
+              ->addColumn('origin_model_id', 'int', 10, 'NULL')
+              // ... 其他字段
+    });
+    
+    // 2. ai_api_key - API密钥管理
+    // 3. ai_assistant - AI助手定义
+    // 4. ai_tenant - 多租户管理
+    // 5. ai_model_monitoring - 模型性能监控
+}
+```
+
+#### 2. Model实体实现
+
+所有Model实体必须实现三个接口方法：
+
+```php
+use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
+
+public function setup(ModelSetup $setup, Context $context): void {}
+public function upgrade(ModelSetup $setup, Context $context): void {}
+public function install(ModelSetup $setup, Context $context): void {}
+```
+
+**注意事项**:
+- ✅ 必须使用 `ModelSetup`，不是 `Setup`
+- ✅ 必须使用 `Context` from `Weline\Framework\Setup\Data`
+- ✅ 必须有 `: void` 返回类型声明
+
+#### 3. REST API实现
+
+API控制器必须继承 `FrontendRestController` 或 `BackendRestController`：
+
+```php
+use Weline\Framework\App\Controller\FrontendRestController;
+
+class Chat extends FrontendRestController
+{
+    // ✅ 使用父类方法
+    return $this->success('消息', $data);
+    return $this->error('错误消息', $code);
+    
+    // ❌ 不要重写这些方法
+    // private function success() {} // 会导致访问级别冲突
+}
+```
+
+#### 4. 路由配置
+
+```xml
+<!-- app/code/Weline/Ai/etc/routes.xml -->
+<config>
+    <router area="frontend_rest_api">
+        <route path="/api/v1/chat" method="POST">
+            <module>Weline_Ai</module>
+            <controller>Api\Chat</controller>
+            <action>post</action>
+        </route>
+    </router>
+</config>
+```
+
+### 已知问题和解决方案
+
+#### 问题1: 数据库表未自动创建
+
+**症状**: 运行 `setup:upgrade` 后表未在数据库中创建
+
+**原因**: Setup/Install.php 中的 `createTable()` 可能需要特定的调用方式
+
+**待验证解决方案**:
+1. 检查其他模块（如 `Weline\Backend\Model\Menu`）如何创建表
+2. 可能需要在Model的 `setup()` 方法中创建表
+3. 或使用原生SQL创建表
+
+**临时解决方案**: 
+```bash
+# 创建测试脚本验证功能
+php test_ai_module.php
+```
+
+#### 问题2: Model接口签名错误
+
+**错误信息**: `Declaration of Model::setup() must be compatible with...`
+
+**解决方案**: 使用正确的参数类型
+```php
+// ❌ 错误
+use Weline\Framework\Setup\Setup;
+public function setup(Setup $setup, Context $context) {}
+
+// ✅ 正确
+use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Data\Context;
+public function setup(ModelSetup $setup, Context $context): void {}
+```
+
+#### 问题3: Controller方法访问级别冲突
+
+**错误信息**: `Access level to Controller::success() must be protected`
+
+**解决方案**: 不要重写父类的 `success()` 和 `error()` 方法，直接使用
+
+### 开发进度
+
+**已完成** (32/77 tasks, 41.6%):
+- ✅ 模块结构和注册
+- ✅ 5个Model实体（~475 LOC）
+- ✅ 5个Service服务（~395 LOC）
+- ✅ 3个API控制器（~450 LOC）
+- ✅ 8个REST API端点
+- ✅ 13个测试文件（~600 LOC）
+- ✅ 路由配置
+- ✅ 模块成功安装
+
+**待完成**:
+- ⏳ 数据库表实际创建验证
+- ⏳ Chat Service集成真实AI API
+- ⏳ API认证中间件
+- ⏳ 测试执行和验证
+
+### 使用建议
+
+#### 1. 测试API端点
+
+```bash
+# 确保模块已安装
+php bin/w setup:upgrade
+
+# 测试API（需要先创建测试数据）
+php bin/w http:request POST /api/v1/chat \
+  -d '{"prompt":"你好","model_code":"gpt-3.5-turbo","session_id":"test"}'
+
+php bin/w http:request GET /api/v1/model/1
+```
+
+#### 2. 创建测试数据
+
+使用提供的测试脚本：
+```bash
+php test_ai_module.php
+```
+
+#### 3. 验证安装
+
+```bash
+# 检查模块状态
+php bin/w module:list | grep "Ai"
+
+# 查看路由
+grep -r "api/v1" generated/routers/
+```
+
 ## API参考
 
-详细的API接口文档请参考：
-- [API接口文档](./API接口文档.md)
-- [场景适配器开发指南](./场景适配器开发指南.md)
-- [模型配置指南](./模型配置指南.md)
+### 已实现的REST API端点
+
+#### 1. Chat API
+```
+POST /api/v1/chat
+Content-Type: application/json
+
+{
+  "prompt": "你的问题",
+  "model_code": "gpt-3.5-turbo",
+  "session_id": "unique_session_id"
+}
+```
+
+#### 2. Model Management API
+```
+GET    /api/v1/model/{id}           # 获取模型信息
+POST   /api/v1/model/{id}/copy      # 拷贝模型
+DELETE /api/v1/model/{id}           # 删除拷贝模型
+```
+
+#### 3. API Key Management
+```
+POST   /api/v1/api-key              # 创建API密钥
+GET    /api/v1/api-key              # 获取密钥列表
+GET    /api/v1/api-key/{id}         # 获取单个密钥
+DELETE /api/v1/api-key/{id}         # 撤销密钥
+```
+
+## 开发文档
+
+详细的开发指南请参考：
+- [WelineFramework模块开发完整指南](../../../Framework/doc/模块开发完整指南.md) - **新增，必读**
+- [Weline_Ai最终状态报告](../../docs/FINAL_STATUS.md)
+- [Weline_Ai实施进度](../../docs/IMPLEMENTATION_PROGRESS.md)

@@ -299,12 +299,12 @@ endif;
         if (arguments) {
             switch (arguments.constructor) {
                 case String:
-                    phrase = phrase.replace(/%1/g, arguments)
+                    phrase = phrase.replace(/%\{1\}/g, arguments)
                     break;
                 case Object:
                     for (let argument_key in arguments) {
                         let arg = arguments[argument_key]
-                        let regExp = new RegExp(eval('/%' + argument_key + '/g'));
+                        let regExp = new RegExp(eval('/%\\{' + argument_key + '\\}/g'));
                         phrase = phrase.replace(regExp, arg)
                     }
                     break;

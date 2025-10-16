@@ -77,15 +77,50 @@ class Adapter extends BackendController
         $this->assign('adapters', $adapters->getItems());
         $this->assign('pagination', $adapters->getPagination());
 
-        return $this->fetch();/*  */
+        return $this->fetch();
     }
 
     /**
-     * 适配器详情页面
+     * 适配器详情页面（Offcanvas侧边栏）
      * 
      * @return string
      */
     #[Acl('Weline_Ai::ai_adapter_detail', '查看场景适配器详情', 'mdi-information', '查看场景适配器详情')]
+    public function detailOffcanvas(): string
+    {
+        $id = (int)$this->request->getGet('id');
+        
+        if (!$id) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => '适配器ID不能为空'
+            ]);
+        }
+
+        $adapter = $this->scenarioAdapter->reset()->load($id);
+        
+        if (!$adapter->getId()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => '适配器不存在'
+            ]);
+        }
+
+        // 获取适配器实例信息
+        $adapterInstance = $this->adapterScanner->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
+        
+        $this->assign('adapter', $adapter);
+        $this->assign('adapterInstance', $adapterInstance);
+
+        return $this->fetch('offcanvas_detail');
+    }
+
+    /**
+     * 适配器详情页面（完整页面，已废弃，使用 Offcanvas 代替）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_adapter_detail_page', '查看场景适配器详情页面', 'mdi-file-document', '查看场景适配器完整详情页面')]
     public function detail(): string
     {
         $id = (int)$this->request->getGet('id');

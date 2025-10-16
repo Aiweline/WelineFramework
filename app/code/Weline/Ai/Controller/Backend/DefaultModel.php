@@ -70,14 +70,21 @@ class DefaultModel extends BackendController
         // 获取所有可用模型
         $availableModels = $this->aiModel->reset()
             ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->order(AiModel::fields_VENDOR, 'ASC')
-            ->order(AiModel::fields_MODEL_NAME, 'ASC')
+            ->order(AiModel::fields_SUPPLIER, 'ASC')
+            ->order(AiModel::fields_NAME, 'ASC')
             ->select()
             ->fetch();
 
-        $this->assign('defaultModels', $defaultModels->getItems());
+        // 安全处理结果：确保是数组
+        $defaultModelsArray = is_array($defaultModels) ? $defaultModels : 
+            (is_object($defaultModels) && method_exists($defaultModels, 'getItems') ? $defaultModels->getItems() : []);
+        
+        $availableModelsArray = is_array($availableModels) ? $availableModels : 
+            (is_object($availableModels) && method_exists($availableModels, 'getItems') ? $availableModels->getItems() : []);
+
+        $this->assign('defaultModels', $defaultModelsArray);
         $this->assign('serviceTypes', $serviceTypes);
-        $this->assign('availableModels', $availableModels->getItems());
+        $this->assign('availableModels', $availableModelsArray);
 
         return $this->fetch();
     }

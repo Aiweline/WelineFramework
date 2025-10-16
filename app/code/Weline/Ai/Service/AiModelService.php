@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Weline\Ai\Service;
 
 use Weline\Ai\Model\AiModel;
-use Weline\Framework\Database\Connection\Db\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Database\ConnectionFactory;
 
 /**
  * AI Model Service
@@ -16,10 +17,20 @@ use Weline\Framework\Database\Connection\Db\ConnectionFactory;
  */
 class AiModelService
 {
-    public function __construct(
-        private readonly ConnectionFactory $connectionFactory,
-        private readonly AiModel $aiModel
-    ) {
+    private AiModel $aiModel;
+
+    public function __construct(AiModel $aiModel)
+    {
+        $this->aiModel = $aiModel;
+    }
+    
+    /**
+     * Get database connection
+     */
+    private function getConnection()
+    {
+        $connFactory = ObjectManager::getInstance(ConnectionFactory::class);
+        return $connFactory->getConnection();
     }
 
     /**
@@ -126,14 +137,14 @@ class AiModelService
      */
     public function getActiveModels(): array
     {
-        $connection = $this->connectionFactory->getConnection();
+        $connection = $this->getConnection();
         $select = $connection->select()
             ->from('ai_model')
             ->where('status = ?', AiModel::STATUS_ACTIVE)
             ->order('supplier ASC')
             ->order('name ASC');
 
-        $results = $connection->fetchAll($select);
+        $results = $connection->fetch($select);
         
         $models = [];
         foreach ($results as $data) {
@@ -153,14 +164,14 @@ class AiModelService
      */
     public function getCopyModels(int $originModelId): array
     {
-        $connection = $this->connectionFactory->getConnection();
+        $connection = $this->getConnection();
         $select = $connection->select()
             ->from('ai_model')
             ->where('origin_model_id = ?', $originModelId)
             ->where('is_copy = ?', 1)
             ->order('created_at DESC');
 
-        $results = $connection->fetchAll($select);
+        $results = $connection->fetch($select);
         
         $models = [];
         foreach ($results as $data) {

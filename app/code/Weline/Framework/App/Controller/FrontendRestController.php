@@ -22,7 +22,7 @@ class FrontendRestController extends AbstractRestController
      * @param bool   $data
      * @param int    $code
      */
-    public function errorXml(string $msg = '错误！', mixed $data = false, int $code = 400)
+    protected function errorXml(string $msg = '错误！', mixed $data = false, int $code = 400)
     {
         die($this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]));
     }

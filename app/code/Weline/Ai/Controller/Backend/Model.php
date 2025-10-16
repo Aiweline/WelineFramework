@@ -79,6 +79,9 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'mdi-view-list', '查看AI模型列表')]
     public function index(): string
     {
+        if ($this->request->isAjax() || $this->request->getGet('format') === 'json') {
+            return $this->indexJson();
+        }
         try {
             $page = (int)$this->request->getGet('page', 1);
             $pageSize = 20;
@@ -86,7 +89,7 @@ class Model extends BackendController
             // 获取模型列表
             $models = $this->getAiModel()->reset()
                 ->pagination($page, $pageSize)
-                ->order(AiModel::fields_CREATED_TIME, 'DESC')
+                ->order(AiModel::fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch();
 
@@ -121,8 +124,25 @@ class Model extends BackendController
         }
     }
 
+    private function indexJson(): string
+    {
+        try {
+            $models = $this->getAiModel()->reset()->select()->fetchArray();
+            return $this->jsonResponse([
+                'success' => true,
+                'total' => count($models),
+                'items' => $models,
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     /**
-     * 模型详情页面
+     * 模型详情页面（完整页面）
      * 
      * @return string
      */
@@ -151,6 +171,43 @@ class Model extends BackendController
     }
 
     /**
+     * Offcanvas 模型详情（侧边栏）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_detail', '查看AI模型详情', 'mdi-information', '查看AI模型详情')]
+    public function detailOffcanvas(): string
+    {
+        $id = (int)$this->request->getGet('id');
+        
+        if (!$id) {
+            return '<div class="alert alert-danger p-3">' 
+                . '<i class="bi bi-exclamation-triangle me-2"></i>' 
+                . __('模型ID不能为空') 
+                . '</div>';
+        }
+
+        $model = $this->getAiModel()->reset()->load($id);
+        
+        if (!$model->getId()) {
+            return '<div class="alert alert-danger p-3">' 
+                . '<i class="bi bi-exclamation-triangle me-2"></i>' 
+                . __('模型不存在') 
+                . '</div>';
+        }
+
+        $this->assign('model', $model);
+        $this->assign('config', $model->getConfig());
+        $proxyInfo = $model->getProxyInfo();
+        if (is_string($proxyInfo) && !empty($proxyInfo)) {
+            $proxyInfo = json_decode($proxyInfo, true);
+        }
+        $this->assign('proxyInfo', is_array($proxyInfo) ? $proxyInfo : []);
+
+        return $this->fetch('offcanvas_detail');
+    }
+
+    /**
      * 收集模型
      * 
      * @return string
@@ -161,14 +218,26 @@ class Model extends BackendController
         try {
             $collectedModels = $this->modelCollector->collectAllModels();
             
-            Message::success(
-                __('成功收集 %{count} 个模型', ['count' => count($collectedModels)])
-            );
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功收集 %{1} 个模型', [count($collectedModels)]),
+                'count' => count($collectedModels),
+                'models' => array_map(function($model) {
+                    return [
+                        'id' => $model->getId(),
+                        'name' => $model->getData('name'),
+                        'model_code' => $model->getData('model_code'),
+                        'supplier' => $model->getData('supplier')
+                    ];
+                }, $collectedModels)
+            ]);
         } catch (\Exception $e) {
-            Message::error(__('模型收集失败: %{error}', ['error' => $e->getMessage()]));
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('模型收集失败: %{1}', [$e->getMessage()]),
+                'error' => $e->getMessage()
+            ]);
         }
-
-        return $this->redirect($this->_url->getBackendUrl('*/backend/model'));
     }
 
     /**
@@ -326,7 +395,7 @@ class Model extends BackendController
     }
 
     /**
-     * 编辑模型
+     * 编辑模型（完整页面）
      * 
      * @return string
      */
@@ -353,6 +422,35 @@ class Model extends BackendController
     }
 
     /**
+     * Offcanvas 编辑模型（侧边栏）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_edit', '编辑AI模型', 'mdi-pencil', '编辑AI模型')]
+    public function editOffcanvas(): string
+    {
+        $id = (int)$this->request->getGet('id');
+        
+        if ($id) {
+            $model = $this->getAiModel()->reset()->load($id);
+            
+            if (!$model->getId()) {
+                return '<div class="alert alert-danger p-3">' 
+                    . '<i class="bi bi-exclamation-triangle me-2"></i>' 
+                    . __('模型不存在') 
+                    . '</div>';
+            }
+            
+            $this->assign('model', $model);
+        } else {
+            // 新建模型
+            $this->assign('model', null);
+        }
+        
+        return $this->fetch('offcanvas_edit');
+    }
+
+    /**
      * 保存模型
      * 
      * @return string
@@ -362,6 +460,7 @@ class Model extends BackendController
     {
         $id = (int)$this->request->getPost('id');
         $data = $this->request->getPost();
+        $isAjax = $this->request->isAjax();
         
         try {
             $model = $this->getAiModel()->reset();
@@ -370,6 +469,12 @@ class Model extends BackendController
                 $model->load($id);
                 
                 if (!$model->getId()) {
+                    if ($isAjax) {
+                        return $this->jsonResponse([
+                            'success' => false,
+                            'message' => __('模型不存在')
+                        ]);
+                    }
                     $this->getMessageManager()->addError(__('模型不存在'));
                     return $this->redirect('*/backend/model/index');
                 }
@@ -378,17 +483,41 @@ class Model extends BackendController
             // 设置基本数据
             // 如果是编辑原始模型（非复制模型），基本信息不可修改
             if (!$id || $model->isCopied()) {
-                $model->setData(AiModel::fields_VENDOR, $data['vendor'] ?? '');
-                $model->setData(AiModel::fields_MODEL_CODE, $data['model_code'] ?? '');
-                $model->setData(AiModel::fields_MODEL_VERSION, $data['model_version'] ?? '1.0');
+                // 只在明确提供时才更新供应商，避免清空已有值
+                if (isset($data['vendor']) || isset($data['supplier'])) {
+                    $model->setData(AiModel::fields_SUPPLIER, $data['vendor'] ?? $data['supplier']);
+                }
+                if (isset($data['model_code'])) {
+                    $model->setData(AiModel::fields_MODEL_CODE, $data['model_code']);
+                }
+                if (isset($data['model_version']) || isset($data['version'])) {
+                    $model->setData(AiModel::fields_VERSION, $data['model_version'] ?? $data['version'] ?? '1.0');
+                }
             }
             
             // 模型名称始终可以修改（用于区分复制模型）
-            $model->setData(AiModel::fields_MODEL_NAME, $data['model_name'] ?? '');
-            $model->setData(AiModel::fields_TOKEN_PRICE_INPUT, $data['token_price_input'] ?? 0);
-            $model->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $data['token_price_output'] ?? 0);
-            $model->setData(AiModel::fields_IS_ACTIVE, isset($data['is_active']) ? 1 : 0);
-            $model->setData(AiModel::fields_IS_DEFAULT, isset($data['is_default']) ? 1 : 0);
+            $model->setData(AiModel::fields_NAME, $data['model_name'] ?? $data['name'] ?? '');
+            
+            // 令牌价格：只在字段存在时更新，避免清空已有数据
+            if (isset($data['token_price_input'])) {
+                $model->setData(AiModel::fields_TOKEN_PRICE_INPUT, $data['token_price_input']);
+            }
+            if (isset($data['token_price_output'])) {
+                $model->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $data['token_price_output']);
+            }
+            
+            // 处理激活状态：如果提交了is_active字段则使用，否则根据status判断
+            if (isset($data['is_active'])) {
+                $model->setData(AiModel::fields_IS_ACTIVE, 1);
+            } elseif (isset($data['status'])) {
+                // 根据status状态设置is_active：active=1，其他=0
+                $model->setData(AiModel::fields_IS_ACTIVE, $data['status'] === 'active' ? 1 : 0);
+            }
+            
+            // 处理默认模型：只有明确勾选才设置，否则不修改
+            if (isset($data['is_default'])) {
+                $model->setData(AiModel::fields_IS_DEFAULT, 1);
+            }
             
             // 处理配置JSON
             if (isset($data['config']) && is_array($data['config'])) {
@@ -400,9 +529,9 @@ class Model extends BackendController
                 if (isset($config['stream'])) {
                     $config['stream'] = (bool)$config['stream'];
                 }
-                $model->setData(AiModel::fields_CONFIG_JSON, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                $model->setData(AiModel::fields_CONFIG, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
             } else {
-                $model->setData(AiModel::fields_CONFIG_JSON, $data['config_json'] ?? '');
+                $model->setData(AiModel::fields_CONFIG, $data['config_json'] ?? '');
             }
             
             // 处理代理信息JSON
@@ -420,14 +549,50 @@ class Model extends BackendController
                 $model->setData(AiModel::fields_PROXY_INFO, $data['proxy_info'] ?? '');
             }
             
+            // 处理其他字段
+            if (isset($data['max_tokens'])) {
+                $model->setData(AiModel::fields_MAX_TOKENS, (int)$data['max_tokens']);
+            }
+            if (isset($data['cost_per_token'])) {
+                $model->setData(AiModel::fields_COST_PER_TOKEN, (string)$data['cost_per_token']);
+            }
+            if (isset($data['status'])) {
+                $model->setData(AiModel::fields_STATUS, $data['status']);
+            }
+            
             // 保存
             $model->save();
             
+            // AJAX 请求返回 JSON
+            if ($isAjax) {
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => __('模型保存成功'),
+                    'model_id' => $model->getId()
+                ]);
+            }
+            
+            // 普通请求返回重定向
             $this->getMessageManager()->addSuccess(__('模型保存成功'));
             return $this->redirect('*/backend/model/index');
             
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('模型保存失败: %1', $e->getMessage()));
+            // 记录错误详情到日志
+            error_log('模型保存失败: ' . $e->getMessage());
+            error_log('错误堆栈: ' . $e->getTraceAsString());
+            
+            // AJAX 请求返回 JSON 错误
+            if ($isAjax) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('模型保存失败: %{1}', [$e->getMessage()]),
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+            
+            // 普通请求返回重定向
+            $this->getMessageManager()->addError(__('模型保存失败: %{1}', $e->getMessage()));
             return $this->redirect('*/backend/model/edit', ['id' => $id]);
         }
     }
@@ -490,12 +655,13 @@ class Model extends BackendController
             }
             
             // 检查模型代码是否已存在
-            $existingModel = $this->getAiModel()->reset()
+            $existingModel = $this->getAiModel()->clearData()->reset()
                 ->where(AiModel::fields_MODEL_CODE, $data['model_code'])
                 ->find()
                 ->fetch();
             
-            if ($existingModel) {
+            // 正确判断记录是否存在：使用 getId() 而不是直接判断对象
+            if ($existingModel && $existingModel->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('模型代码已存在，请使用其他代码')
@@ -506,10 +672,10 @@ class Model extends BackendController
             $copiedModel = $this->getAiModel()->reset();
             
             // 复制基本信息（使用新的名称和代码）
-            $copiedModel->setData(AiModel::fields_VENDOR, $originalModel->getVendor());
+            $copiedModel->setData(AiModel::fields_SUPPLIER, $originalModel->getVendor());
             $copiedModel->setData(AiModel::fields_MODEL_CODE, $data['model_code']);
-            $copiedModel->setData(AiModel::fields_MODEL_NAME, $data['model_name']);
-            $copiedModel->setData(AiModel::fields_MODEL_VERSION, $originalModel->getModelVersion());
+            $copiedModel->setData(AiModel::fields_NAME, $data['model_name']);
+            $copiedModel->setData(AiModel::fields_VERSION, $originalModel->getModelVersion());
             
             // 处理配置信息
             // 如果用户提供了新的配置，使用新配置；否则复制原配置
@@ -532,31 +698,46 @@ class Model extends BackendController
                     
                     // 合并配置：新配置覆盖原配置
                     $mergedConfig = array_merge($originalConfig, $newConfig);
-                    $copiedModel->setData(AiModel::fields_CONFIG_JSON, json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    $copiedModel->setData(AiModel::fields_CONFIG, json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 } else {
                     // 用户没有提供任何配置，使用原配置
-                    $copiedModel->setData(AiModel::fields_CONFIG_JSON, $originalModel->getConfigJson());
+                    $copiedModel->setData(AiModel::fields_CONFIG, $originalModel->getConfigJson());
                 }
             } else {
                 // 复制原配置
-                $copiedModel->setData(AiModel::fields_CONFIG_JSON, $originalModel->getConfigJson());
+                $copiedModel->setData(AiModel::fields_CONFIG, $originalModel->getConfigJson());
             }
             
             // 复制其他配置信息
             $copiedModel->setData(AiModel::fields_PROXY_INFO, $originalModel->getProxyInfo());
             $copiedModel->setData(AiModel::fields_TOKEN_PRICE_INPUT, $originalModel->getTokenPriceInput());
             $copiedModel->setData(AiModel::fields_TOKEN_PRICE_OUTPUT, $originalModel->getTokenPriceOutput());
+            $copiedModel->setData(AiModel::fields_MAX_TOKENS, $originalModel->getMaxTokens());
+            $copiedModel->setData(AiModel::fields_COST_PER_TOKEN, $originalModel->getCostPerToken());
+            
+            // 复制能力信息（如果有）
+            if ($originalModel->getData(AiModel::fields_CAPABILITIES)) {
+                $copiedModel->setData(AiModel::fields_CAPABILITIES, $originalModel->getData(AiModel::fields_CAPABILITIES));
+            }
             
             // 设置状态（复制模型默认启用但不是默认模型）
             $copiedModel->setData(AiModel::fields_IS_ACTIVE, 1);
             $copiedModel->setData(AiModel::fields_IS_DEFAULT, 0);
             
             // 标记为复制模型
-            $copiedModel->setData(AiModel::fields_IS_COPIED, 1);
-            $copiedModel->setData(AiModel::fields_PARENT_MODEL_ID, $originalModel->getId());
+            $copiedModel->setData(AiModel::fields_IS_COPY, 1);
+            $copiedModel->setData(AiModel::fields_ORIGIN_MODEL_ID, $originalModel->getId());
             
             // 保存
-            $copiedModel->save();
+            $saveResult = $copiedModel->save();
+            
+            // 验证保存是否成功
+            if (!$copiedModel->getId()) {
+                error_log('[AI Model Copy] Save failed - no ID generated');
+                throw new \RuntimeException('保存失败：未生成模型ID');
+            }
+            
+            error_log('[AI Model Copy] Success - New model ID: ' . $copiedModel->getId());
             
             return $this->jsonResponse([
                 'success' => true,
@@ -565,9 +746,14 @@ class Model extends BackendController
             ]);
             
         } catch (\Exception $e) {
+            error_log('[AI Model Copy] Exception: ' . $e->getMessage());
+            error_log('[AI Model Copy] Trace: ' . $e->getTraceAsString());
+            
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('模型复制失败: %1', $e->getMessage())
+                'message' => __('模型复制失败: %{1}', $e->getMessage()),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
@@ -581,31 +767,103 @@ class Model extends BackendController
     public function delete(): string
     {
         $id = (int)$this->request->getGet('id');
+        $isAjax = $this->request->isAjax();
         
         try {
             $model = $this->getAiModel()->reset()->load($id);
             
             if (!$model->getId()) {
+                if ($isAjax) {
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'message' => __('模型不存在')
+                    ]);
+                }
                 $this->getMessageManager()->addError(__('模型不存在'));
                 return $this->redirect('*/backend/model/index');
             }
             
             // 检查是否为原始模型（非复制模型）
             if (!$model->isCopied()) {
+                if ($isAjax) {
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'message' => __('原始模型不能删除，只能删除复制的模型')
+                    ]);
+                }
                 $this->getMessageManager()->addError(__('原始模型不能删除，只能删除复制的模型'));
                 return $this->redirect('*/backend/model/index');
             }
             
             // 删除模型
-            $model->delete();
+            $model->delete()->fetch();
+            
+            if ($isAjax) {
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => __('模型删除成功')
+                ]);
+            }
             
             $this->getMessageManager()->addSuccess(__('模型删除成功'));
             
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('模型删除失败: %1', $e->getMessage()));
+            if ($isAjax) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('模型删除失败: %{1}', $e->getMessage())
+                ]);
+            }
+            $this->getMessageManager()->addError(__('模型删除失败: %{1}', $e->getMessage()));
         }
         
         return $this->redirect('*/backend/model/index');
+    }
+
+    /**
+     * 删除模型接口：支持通过 id 参数删除已复制的模型
+     */
+    public function deleteAction()
+    {
+        // 支持 GET/POST 参数
+        $id = 0;
+        if (isset($this->request)) {
+            $id = (int)$this->request->getParam('id');
+        }
+        if (!$id && isset($_GET['id'])) {
+            $id = (int)$_GET['id'];
+        }
+        if (!$id && isset($_POST['id'])) {
+            $id = (int)$_POST['id'];
+        }
+
+        if (!$id) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Missing model id']);
+            return;
+        }
+
+        try {
+            $service = new \Weline\Ai\Service\ModelService();
+            $result = $service->deleteModel($id);
+
+            if ($result) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true]);
+                return;
+            }
+
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Delete failed for unknown reason']);
+            return;
+        } catch (\Exception $e) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            return;
+        }
     }
 
     /**
