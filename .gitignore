@@ -27,3 +27,8 @@ ssh_tools.jsonc
 # 数据库文件
 *.sqlite
 *.db
+
+# var 目录：缓存、日志等运行时文件
+/var/*
+!/var/
+!/var/.gitkeep
