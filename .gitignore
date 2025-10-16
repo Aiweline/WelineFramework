@@ -32,3 +32,12 @@ ssh_tools.jsonc
 /var/*
 !/var/
 !/var/.gitkeep
+
+# 临时文件和调试文件
+temp_*.json
+temp_*.txt
+temp_*.php
+debug_*.json
+debug_*.txt
+debug_*.php
+response_*.html
