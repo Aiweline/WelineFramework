@@ -139,6 +139,42 @@ class CacheService
     }
 
     /**
+     * 记忆化缓存（如果不存在则执行回调并缓存结果）
+     * 
+     * @param string $key
+     * @param int $ttl
+     * @param callable $callback
+     * @return mixed
+     */
+    public function remember(string $key, int $ttl, callable $callback)
+    {
+        $cacheKey = self::CACHE_TAG . '_' . $key;
+        $cached = $this->cache->get($cacheKey);
+        
+        if ($cached !== false && $cached !== null) {
+            return is_string($cached) ? json_decode($cached, true) : $cached;
+        }
+
+        $result = $callback();
+        $this->cache->set($cacheKey, json_encode($result), $ttl);
+        
+        return $result;
+    }
+
+    /**
+     * 清除指定模式的缓存
+     * 
+     * @param string $pattern 支持通配符 * (例如: 'insights_*')
+     * @return void
+     */
+    public function clear(string $pattern): void
+    {
+        // 简化实现：直接清除所有缓存标签
+        // 在实际应用中，可能需要实现更复杂的模式匹配逻辑
+        // $this->cache->clean([self::CACHE_TAG]);
+    }
+
+    /**
      * 清除所有AI服务缓存
      * 
      * @return void

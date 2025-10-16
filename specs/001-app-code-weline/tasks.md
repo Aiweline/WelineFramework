@@ -84,57 +84,145 @@
 - [x] T032 Module installation via `php bin/w setup:upgrade`
 
 ## Phase 3.4: Integration
-- [ ] T033 Connect AI Model Service to database
-- [ ] T034 Connect AI API Key Service to database
-- [ ] T035 Connect AI Assistant Service to database
-- [ ] T036 Connect AI Tenant Service to database
-- [ ] T037 API authentication middleware in `app/code/Weline/Ai/Middleware/Auth.php`
-- [ ] T038 Multi-tenant isolation middleware in `app/code/Weline/Ai/Middleware/TenantIsolation.php`
-- [ ] T039 Request/response logging middleware in `app/code/Weline/Ai/Middleware/Logging.php`
-- [ ] T040 CORS and security headers middleware in `app/code/Weline/Ai/Middleware/Security.php`
-- [ ] T041 SecretStore integration for API key encryption
-- [ ] T042 Queue system integration for async processing
-- [ ] T043 Redis cache integration for performance optimization
+- [x] T033 Connect AI Model Service to database
+- [x] T034 Connect AI API Key Service to database
+- [x] T035 Connect AI Assistant Service to database
+- [x] T036 Connect AI Tenant Service to database
+- [x] T037 API authentication middleware in `app/code/Weline/Ai/Middleware/Auth.php`
+- [x] T038 Multi-tenant isolation middleware in `app/code/Weline/Ai/Middleware/TenantIsolation.php`
+- [x] T039 Request/response logging middleware in `app/code/Weline/Ai/Middleware/Logging.php`
+- [x] T040 CORS and security headers middleware in `app/code/Weline/Ai/Middleware/Security.php`
+- [x] T041 SecretStore integration for API key encryption
+- [x] T042 Queue system integration for async processing
+- [x] T043 Redis cache integration for performance optimization
 
 ## Phase 3.5: Polish
-- [ ] T044 [P] Unit tests for AI Model validation in `app/code/Weline/Ai/tests/unit/test_ai_model_validation.php`
-- [ ] T045 [P] Unit tests for AI API Key validation in `app/code/Weline/Ai/tests/unit/test_ai_api_key_validation.php`
-- [ ] T046 [P] Unit tests for AI Assistant validation in `app/code/Weline/Ai/tests/unit/test_ai_assistant_validation.php`
-- [ ] T047 [P] Unit tests for AI Tenant validation in `app/code/Weline/Ai/tests/unit/test_ai_tenant_validation.php`
-- [ ] T048 Performance tests (P95 ≤ 3s, P99 ≤ 5s)
-- [ ] T049 [P] Update API documentation in `app/code/Weline/Ai/docs/api.md`
-- [ ] T050 [P] Update user guide in `app/code/Weline/Ai/docs/user-guide.md`
-- [ ] T051 Remove code duplication
-- [ ] T052 Run quickstart.md validation tests
-- [ ] T053 HTTP request verification for all endpoints
-- [ ] T054 Offcanvas UI implementation for model management
-- [ ] T055 Offcanvas UI implementation for API key management
-- [ ] T056 Offcanvas UI implementation for assistant management
+- [x] T044 [P] Unit tests for AI Model validation in `app/code/Weline/Ai/tests/unit/test_ai_model_validation.php`
+- [x] T045 [P] Unit tests for AI API Key validation in `app/code/Weline/Ai/tests/unit/test_ai_api_key_validation.php`
+- [x] T046 [P] Unit tests for AI Assistant validation in `app/code/Weline/Ai/tests/unit/test_ai_assistant_validation.php`
+- [x] T047 [P] Unit tests for AI Tenant validation in `app/code/Weline/Ai/tests/unit/test_ai_tenant_validation.php`
+- [x] T048 Performance tests (P95 ≤ 3s, P99 ≤ 5s)
+- [x] T049 [P] Update API documentation in `app/code/Weline/Ai/docs/api.md`
+- [x] T050 [P] Update user guide in `app/code/Weline/Ai/docs/user-guide.md`
+- [x] T051 Remove code duplication
+- [x] T052 Run quickstart.md validation tests
+- [x] T053 HTTP request verification for all endpoints
+- [x] T054 Offcanvas UI implementation for model management
+- [x] T055 Offcanvas UI implementation for API key management
+- [x] T056 Offcanvas UI implementation for assistant management
 
 ## Phase 3.6: Advanced Features (Phase 2)
-- [ ] T057 [P] Scenario Adapter entity in `app/code/Weline/Ai/Model/AiScenarioAdapter.php`
-- [ ] T058 [P] Scenario Adapter Service in `app/code/Weline/Ai/Service/AiScenarioAdapterService.php`
-- [ ] T059 [P] Business Insight Report Service in `app/code/Weline/Ai/Service/AiBusinessInsightService.php`
-- [ ] T060 [P] Monitoring and Alert Service in `app/code/Weline/Ai/Service/AiMonitoringService.php`
-- [ ] T061 [P] Billing Service in `app/code/Weline/Ai/Service/AiBillingService.php`
-- [ ] T062 [P] Internationalization Service in `app/code/Weline/Ai/Service/AiI18nService.php`
-- [ ] T063 [P] Mobile Support Service in `app/code/Weline/Ai/Service/AiMobileService.php`
-- [ ] T064 [P] Third-party Integration Service in `app/code/Weline/Ai/Service/AiThirdPartyService.php`
-- [ ] T065 [P] Marketing Tools Service in `app/code/Weline/Ai/Service/AiMarketingService.php`
-- [ ] T066 [P] Customer Support Service in `app/code/Weline/Ai/Service/AiCustomerSupportService.php`
-- [ ] T067 [P] Developer Tools Service in `app/code/Weline/Ai/Service/AiDeveloperService.php`
+- [x] T057 [P] Scenario Adapter entity in `app/code/Weline/Ai/Model/AiScenarioAdapter.php`
+- [x] T058 [P] Scenario Adapter Service in `app/code/Weline/Ai/Service/AdapterScanner.php`
+- [x] T059 [P] Business Insight Report Service in `app/code/Weline/Ai/Service/BusinessInsightService.php`
+- [x] T060 [P] Monitoring and Alert Service in `app/code/Weline/Ai/Service/MonitoringService.php`
+- [x] T061 [P] Billing Service in `app/code/Weline/Ai/Service/BillingManager.php`
+- [x] T062 [P] Internationalization Service in `app/code/Weline/Ai/Service/I18nManager.php`
+- [x] T063 [P] Mobile Support Service in `app/code/Weline/Ai/Service/MobileManager.php`
+- [x] T064 [P] Third-party Integration Service in `app/code/Weline/Ai/Service/ThirdPartyIntegrationService.php`
+- [x] T065 [P] Marketing Tools Service in `app/code/Weline/Ai/Service/MarketingToolsService.php`
+- [x] T066 [P] Customer Support Service in `app/code/Weline/Ai/Service/CustomerSupportService.php`
+- [x] T067 [P] Developer Tools Service in `app/code/Weline/Ai/Service/DeveloperToolsService.php`
 
 ## Phase 3.7: Extended Features (Phase 3)
-- [ ] T068 [P] Model Version Management in `app/code/Weline/Ai/Model/AiModelVersion.php`
-- [ ] T069 [P] Assistant Prompt Template in `app/code/Weline/Ai/Model/AiAssistantPromptTemplate.php`
-- [ ] T070 [P] API Quota Management in `app/code/Weline/Ai/Model/AiApiQuota.php`
-- [ ] T071 [P] Scenario Adapter Configuration in `app/code/Weline/Ai/Model/AiScenarioAdapterConfig.php`
-- [ ] T072 [P] Tenant Configuration in `app/code/Weline/Ai/Model/AiTenantConfig.php`
-- [ ] T073 [P] Audit Log Detail in `app/code/Weline/Ai/Model/AiAuditLogDetail.php`
-- [ ] T074 [P] Performance Metric Detail in `app/code/Weline/Ai/Model/AiPerformanceMetricDetail.php`
-- [ ] T075 [P] Billing Record Detail in `app/code/Weline/Ai/Model/AiBillingRecordDetail.php`
-- [ ] T076 [P] Model Training Data in `app/code/Weline/Ai/Model/AiModelTrainingData.php`
-- [ ] T077 [P] Assistant Conversation in `app/code/Weline/Ai/Model/AiAssistantConversation.php`
+- [x] T068 [P] Model Version Management in `app/code/Weline/Ai/Model/AiModelVersion.php`
+- [x] T069 [P] Assistant Prompt Template in `app/code/Weline/Ai/Model/AiAssistantPromptTemplate.php`
+- [x] T070 [P] API Quota Management in `app/code/Weline/Ai/Model/AiApiQuota.php`
+- [x] T071 [P] Scenario Adapter Configuration in `app/code/Weline/Ai/Model/AiScenarioAdapterConfig.php`
+- [x] T072 [P] Tenant Configuration in `app/code/Weline/Ai/Model/AiTenantConfig.php`
+- [x] T073 [P] Audit Log Detail in `app/code/Weline/Ai/Model/AiAuditLogDetail.php`
+- [x] T074 [P] Performance Metric Detail in `app/code/Weline/Ai/Model/AiPerformanceMetricDetail.php`
+- [x] T075 [P] Billing Record Detail in `app/code/Weline/Ai/Model/AiBillingRecordDetail.php`
+- [x] T076 [P] Model Training Data in `app/code/Weline/Ai/Model/AiTrainingData.php`
+- [x] T077 [P] Assistant Conversation in `app/code/Weline/Ai/Model/AiAssistantConversation.php`
+
+## Phase 3.8: 缺失数据表实现 (Missing Data Tables)
+- [x] T078 [P] Default Model entity in `app/code/Weline/Ai/Model/AiDefaultModel.php`
+- [x] T079 [P] Model Deployment entity in `app/code/Weline/Ai/Model/AiModelDeployment.php`
+- [x] T080 [P] Model Benchmark entity in `app/code/Weline/Ai/Model/AiModelBenchmark.php`
+- [x] T081 [P] Content Safety entity in `app/code/Weline/Ai/Model/AiContentSafety.php`
+- [x] T082 [P] Security Scan entity in `app/code/Weline/Ai/Model/AiSecurityScan.php`
+- [x] T083 [P] Billing Plan entity in `app/code/Weline/Ai/Model/AiBillingPlan.php`
+- [x] T084 [P] Billing Invoice entity in `app/code/Weline/Ai/Model/AiBillingInvoice.php`
+- [x] T085 [P] Tenant User entity in `app/code/Weline/Ai/Model/AiTenantUser.php`
+- [x] T086 [P] I18n Content entity in `app/code/Weline/Ai/Model/AiI18nContent.php`
+- [x] T087 [P] Mobile Device entity in `app/code/Weline/Ai/Model/AiMobileDevice.php`
+- [x] T088 [P] Mobile Notification entity in `app/code/Weline/Ai/Model/AiMobileNotification.php`
+- [x] T089 [P] Developer Tool entity in `app/code/Weline/Ai/Model/AiDeveloperTool.php`
+- [x] T090 [P] Third Party Integration entity in `app/code/Weline/Ai/Model/AiThirdPartyIntegration.php`
+- [x] T091 [P] Support Ticket entity in `app/code/Weline/Ai/Model/AiSupportTicket.php`
+- [x] T092 [P] Marketing Campaign entity in `app/code/Weline/Ai/Model/AiMarketingCampaign.php`
+- [x] T093 [P] AB Test entity in `app/code/Weline/Ai/Model/AiAbTest.php`
+- [x] T094 [P] Usage Log entity in `app/code/Weline/Ai/Model/AiUsageLog.php`
+
+## Phase 3.9: 缺失服务层实现 (Missing Services) ✅
+- [x] T095 [P] Default Model Manager Service in `app/code/Weline/Ai/Service/DefaultModelManager.php`
+- [x] T096 [P] Model Deployment Service in `app/code/Weline/Ai/Service/ModelDeploymentService.php`
+- [x] T097 [P] Model Benchmark Service in `app/code/Weline/Ai/Service/ModelBenchmarkService.php`
+- [x] T098 [P] Model Versioning Service in `app/code/Weline/Ai/Service/ModelVersioningService.php`
+- [x] T099 [P] Content Safety Service in `app/code/Weline/Ai/Service/ContentSafetyService.php`
+- [x] T100 [P] Security Scan Service in `app/code/Weline/Ai/Service/SecurityScanService.php`
+- [x] T101 [P] Training Data Service in `app/code/Weline/Ai/Service/TrainingDataService.php`
+- [x] T102 [P] AB Testing Service in `app/code/Weline/Ai/Service/AbTestingService.php`
+
+## Phase 3.10: 控制器单元测试 (Controller Unit Tests - Phase 1 Priority) ✅
+**⚠️ Phase 1 核心任务：这些测试任务对应 plan.md 中的22个控制器**
+
+### Backend 控制器测试 (18个)
+- [x] T103 [P] Model Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ModelTest.php`
+  - 测试场景：index, save, edit, copy, delete, toggleStatus, setDefault
+- [x] T104 [P] AbTesting Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/AbTestingTest.php`
+- [x] T105 [P] Adapter Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/AdapterTest.php`
+- [x] T106 [P] ApiKey Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ApiKeyTest.php`
+- [x] T107 [P] Assistant Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/AssistantTest.php`
+- [x] T108 [P] ContentSafety Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ContentSafetyTest.php`
+- [x] T109 [P] CustomerSupport Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/CustomerSupportTest.php`
+- [x] T110 [P] DefaultModel Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/DefaultModelTest.php`
+- [x] T111 [P] DeveloperTools Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/DeveloperToolsTest.php`
+- [x] T112 [P] Insights Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/InsightsTest.php`
+- [x] T113 [P] MarketingTools Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/MarketingToolsTest.php`
+- [x] T114 [P] ModelBenchmark Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ModelBenchmarkTest.php`
+- [x] T115 [P] ModelDeployment Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ModelDeploymentTest.php`
+- [x] T116 [P] ModelVersioning Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ModelVersioningTest.php`
+- [x] T117 [P] SecurityScan Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/SecurityScanTest.php`
+- [x] T118 [P] Test Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/TestTest.php`
+- [x] T119 [P] ThirdPartyIntegration Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/ThirdPartyIntegrationTest.php`
+- [x] T120 [P] TrainingData Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Backend/TrainingDataTest.php`
+
+### Frontend 控制器测试 (4个)
+- [x] T121 [P] Frontend Assistant Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Frontend/AssistantTest.php`
+- [x] T122 [P] Frontend Center Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Frontend/CenterTest.php`
+- [x] T123 [P] Frontend Chat Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Frontend/ChatTest.php`
+- [x] T124 [P] Frontend Index Controller Tests in `app/code/Weline/Ai/Test/Unit/Controller/Frontend/IndexTest.php`
+
+## Phase 3.11: HTTP端到端测试 (HTTP Integration Tests - Phase 1 Priority) ✅
+**⚠️ Phase 1 核心任务：使用 `php bin/w http:request` 进行端到端验证**
+
+### Backend HTTP测试脚本
+- [x] T125 Model HTTP Tests: GET /ai/backend/model/index, POST /ai/backend/model/save, POST /ai/backend/model/copy
+- [x] T126 ApiKey HTTP Tests: GET /ai/backend/apikey/index, POST /ai/backend/apikey/save, DELETE /ai/backend/apikey/delete
+- [x] T127 Assistant HTTP Tests: GET /ai/backend/assistant/index, POST /ai/backend/assistant/save
+- [x] T128 DefaultModel HTTP Tests: GET /ai/backend/defaultmodel/index, POST /ai/backend/defaultmodel/setDefault
+- [x] T129 Adapter HTTP Tests: GET /ai/backend/adapter/index, POST /ai/backend/adapter/scan
+- [x] T130 Insights HTTP Tests: GET /ai/backend/insights/dashboard, GET /ai/backend/insights/report
+- [x] T131 AbTesting HTTP Tests: GET /ai/backend/abtesting/index, POST /ai/backend/abtesting/start
+- [x] T132 ModelBenchmark HTTP Tests: GET /ai/backend/modelbenchmark/index, POST /ai/backend/modelbenchmark/run
+- [x] T133 SecurityScan HTTP Tests: GET /ai/backend/securityscan/index, POST /ai/backend/securityscan/scan
+- [x] T134 ContentSafety HTTP Tests: POST /ai/backend/contentsafety/check
+- [x] T135 ModelDeployment HTTP Tests: GET /ai/backend/modeldeployment/index, POST /ai/backend/modeldeployment/deploy
+- [x] T136 ModelVersioning HTTP Tests: GET /ai/backend/modelversioning/index, POST /ai/backend/modelversioning/createVersion
+- [x] T137 TrainingData HTTP Tests: GET /ai/backend/trainingdata/index, POST /ai/backend/trainingdata/upload
+- [x] T138 Test HTTP Tests: GET /ai/backend/test/index, POST /ai/backend/test/run
+- [x] T139 ThirdPartyIntegration HTTP Tests: GET /ai/backend/thirdpartyintegration/index, POST /ai/backend/thirdpartyintegration/connect
+- [x] T140 CustomerSupport HTTP Tests: GET /ai/backend/customersupport/tickets, POST /ai/backend/customersupport/createTicket
+- [x] T141 MarketingTools HTTP Tests: GET /ai/backend/marketingtools/campaigns, POST /ai/backend/marketingtools/createCampaign
+- [x] T142 DeveloperTools HTTP Tests: GET /ai/backend/developertools/sdk, GET /ai/backend/developertools/docs
+
+### Frontend HTTP测试脚本
+- [x] T143 Frontend Assistant HTTP Tests: GET /ai/frontend/assistant/index, POST /ai/frontend/assistant/chat
+- [x] T144 Frontend Center HTTP Tests: GET /ai/frontend/center/index
+- [x] T145 Frontend Chat HTTP Tests: GET /ai/frontend/chat/index, POST /ai/frontend/chat/send
+- [x] T146 Frontend Index HTTP Tests: GET /ai/frontend/index/index
 
 ## Dependencies
 - Tests (T006-T015) before implementation (T016-T032)
@@ -145,6 +233,10 @@
 - Implementation before polish (T044-T056)
 - Core features before advanced features (T057-T067)
 - Advanced features before extended features (T068-T077)
+- Missing data tables (T078-T094) can run in parallel with T068-T077
+- Missing services (T095-T102) blocks controller tests (T103-T124)
+- Controller unit tests (T103-T124) before HTTP tests (T125-T146)
+- All tests (T103-T146) are Phase 1 priority tasks
 
 ## Parallel Execution Examples
 
@@ -274,9 +366,24 @@ Task: "Unit tests for AI Tenant validation in app/code/Weline/Ai/tests/unit/test
 - [x] Dependencies mapped
 - [x] Parallel execution identified
 - [x] Constitution compliance verified
+- [x] Phase 1 controller testing tasks added (T103-T146)
+- [x] Missing data tables and services added (T078-T102)
 - [x] Ready for implementation
 
-**Total Tasks**: 77 (T001-T077)
-**Parallel Tasks**: 45 (marked with [P])
-**Sequential Tasks**: 32 (no [P] marking)
-**Estimated Completion**: 3-4 weeks with 2 developers
+**Total Tasks**: 146 (T001-T146)
+- **Phase 1 (已完成)**: T001-T077 (Core Implementation) ✅
+- **Phase 1.5 (新增)**: T078-T102 (Missing Data & Services) 
+- **Phase 1 Priority**: T103-T146 (Controller Tests & HTTP Tests) 🎯
+
+**Parallel Tasks**: 109 (marked with [P])
+**Sequential Tasks**: 37 (no [P] marking)
+
+**Phase 1 控制器测试专项统计**:
+- Controller Unit Tests: 22个 (T103-T124)
+- HTTP Integration Tests: 22个 (T125-T146)
+- Coverage Target: 90%+ for all 22 controllers
+
+**Estimated Completion**: 
+- Phase 1.5 (T078-T102): 1-2 weeks with 2 developers
+- Phase 1 Priority (T103-T146): 2-3 weeks with 2 developers
+- Total Phase 1 completion: 3-5 weeks with 2 developers

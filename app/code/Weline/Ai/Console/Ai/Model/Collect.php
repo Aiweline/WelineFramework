@@ -94,9 +94,9 @@ class Collect implements CommandInterface
             echo sprintf("成功收集 %d 个模型：\n", count($collectedModels));
             
             foreach ($collectedModels as $model) {
-                $modelName = $model->getData('model_name');
+                $modelName = $model->getName();
                 $modelCode = $model->getData('model_code');
-                $vendor = $model->getData('vendor');
+                $vendor = $model->getSupplier();
                 
                 if ($verbose) {
                     echo sprintf(

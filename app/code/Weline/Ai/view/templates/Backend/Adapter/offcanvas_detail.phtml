@@ -1,0 +1,268 @@
+<?php
+/**
+ * 场景适配器 Offcanvas 详情模板
+ * 
+ * 用于在侧边栏中显示适配器详情（纯净版，无页面布局）
+ * 
+ * @var \Weline\Ai\Model\AiScenarioAdapter $adapter
+ * @var object|null $adapterInstance
+ */
+
+$adapter = $this->getData('adapter');
+$adapterInstance = $this->getData('adapterInstance');
+$supportedModels = $adapter->getSupportedModels();
+$paramTemplate = $adapter->getParamTemplate();
+$examples = $adapter->getExamples();
+?>
+
+<!-- 适配器详情内容 -->
+<div class="adapter-detail-offcanvas">
+    
+    <!-- 基本信息 -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-information me-2"></i><?= __('基本信息') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('适配器ID') ?></th>
+                        <td class="py-2 px-3"><span class="badge bg-secondary"><?= $adapter->getId() ?></span></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('适配器代码') ?></th>
+                        <td class="py-2 px-3"><code class="text-primary"><?= $adapter->getData('code') ?></code></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('适配器名称') ?></th>
+                        <td class="py-2 px-3"><strong><?= $adapter->getData('name') ?></strong></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('版本') ?></th>
+                        <td class="py-2 px-3">
+                            <span class="badge bg-info"><?= $adapter->getData('version') ?></span>
+                        </td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('描述') ?></th>
+                        <td class="py-2 px-3"><?= $adapter->getData('description') ?></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('类名') ?></th>
+                        <td class="py-2 px-3">
+                            <code class="small"><?= $adapter->getData('class_name') ?></code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('状态') ?></th>
+                        <td class="py-2 px-3">
+                            <?php if ($adapter->getData('is_active')): ?>
+                                <span class="badge bg-success">
+                                    <i class="mdi mdi-check-circle me-1"></i><?= __('激活') ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">
+                                    <i class="mdi mdi-close-circle me-1"></i><?= __('未激活') ?>
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 支持的模型类型 -->
+    <?php if (!empty($supportedModels) && is_array($supportedModels)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-shape me-2"></i><?= __('支持的模型类型') ?>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+                <?php foreach ($supportedModels as $modelType): ?>
+                    <span class="badge bg-light text-dark border">
+                        <i class="mdi mdi-check me-1"></i><?= $modelType ?>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 参数模板 -->
+    <?php if (!empty($paramTemplate) && is_array($paramTemplate)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-secondary text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-cog me-2"></i><?= __('参数模板') ?>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <?php foreach ($paramTemplate as $key => $value): ?>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <span class="text-muted small fw-bold"><?= $key ?>:</span>
+                            <span class="text-end small">
+                                <?php if (is_array($value)): ?>
+                                    <code class="small"><?= json_encode($value) ?></code>
+                                <?php elseif (is_bool($value)): ?>
+                                    <span class="badge bg-<?= $value ? 'success' : 'secondary' ?>">
+                                        <?= $value ? __('是') : __('否') ?>
+                                    </span>
+                                <?php else: ?>
+                                    <code class="small"><?= htmlspecialchars((string)$value) ?></code>
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 使用示例 -->
+    <?php if (!empty($examples) && is_array($examples)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0">
+                <i class="mdi mdi-code-braces me-2"></i><?= __('使用示例') ?>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="accordion" id="examplesAccordion">
+                <?php foreach ($examples as $idx => $example): ?>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading<?= $idx ?>">
+                            <button class="accordion-button <?= $idx > 0 ? 'collapsed' : '' ?>" 
+                                    type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#collapse<?= $idx ?>"
+                                    aria-expanded="<?= $idx === 0 ? 'true' : 'false' ?>"
+                                    aria-controls="collapse<?= $idx ?>">
+                                <?= __('示例') ?> <?= $idx + 1 ?>
+                            </button>
+                        </h2>
+                        <div id="collapse<?= $idx ?>" 
+                             class="accordion-collapse collapse <?= $idx === 0 ? 'show' : '' ?>" 
+                             aria-labelledby="heading<?= $idx ?>"
+                             data-bs-parent="#examplesAccordion">
+                            <div class="accordion-body">
+                                <pre class="bg-light p-2 rounded small mb-0"><code><?= is_string($example) ? htmlspecialchars($example) : json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></code></pre>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 实例信息 -->
+    <?php if ($adapterInstance): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-success text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-information-variant me-2"></i><?= __('运行时信息') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('实例类名') ?></th>
+                        <td class="py-2 px-3"><code class="small"><?= get_class($adapterInstance) ?></code></td>
+                    </tr>
+                    <?php if (method_exists($adapterInstance, 'getVersion')): ?>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('运行时版本') ?></th>
+                        <td class="py-2 px-3">
+                            <span class="badge bg-info"><?= $adapterInstance->getVersion() ?></span>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 时间信息 -->
+    <div class="card mb-3">
+        <div class="card-header bg-dark text-white">
+            <h6 class="mb-0">
+                <i class="mdi mdi-clock-outline me-2"></i><?= __('时间信息') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('创建时间') ?></th>
+                        <td class="py-2 px-3">
+                            <small class="text-muted">
+                                <i class="mdi mdi-calendar me-1"></i><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?>
+                            </small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('更新时间') ?></th>
+                        <td class="py-2 px-3">
+                            <small class="text-muted">
+                                <i class="mdi mdi-calendar me-1"></i><?= date('Y-m-d H:i:s', $adapter->getData('updated_time')) ?>
+                            </small>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+</div>
+
+<style>
+.adapter-detail-offcanvas .card {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.adapter-detail-offcanvas .card-header {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+}
+
+.adapter-detail-offcanvas .table th {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.adapter-detail-offcanvas code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+
+.adapter-detail-offcanvas .badge {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.adapter-detail-offcanvas pre {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.adapter-detail-offcanvas .accordion-button {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+}
+</style>
+

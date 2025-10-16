@@ -195,8 +195,8 @@ $result = \Weline\Ai\Service\AiService::generateText(
         $pricingData = [];
         foreach ($models->getItems() as $model) {
             $pricingData[] = [
-                'name' => $model->getData(AiModel::fields_MODEL_NAME),
-                'vendor' => $model->getData(AiModel::fields_VENDOR),
+                'name' => $model->getData(AiModel::fields_NAME),
+                'vendor' => $model->getData(AiModel::fields_SUPPLIER),
                 'input_price' => $model->getData(AiModel::fields_TOKEN_PRICE_INPUT),
                 'output_price' => $model->getData(AiModel::fields_TOKEN_PRICE_OUTPUT),
             ];

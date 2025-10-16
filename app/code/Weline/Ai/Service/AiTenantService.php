@@ -8,7 +8,12 @@ use Weline\Ai\Model\AiTenant;
 
 class AiTenantService
 {
-    public function __construct(private readonly AiTenant $tenant) {}
+    private AiTenant $tenant;
+
+    public function __construct(AiTenant $tenant)
+    {
+        $this->tenant = $tenant;
+    }
 
     public function getById(int $id): AiTenant
     {

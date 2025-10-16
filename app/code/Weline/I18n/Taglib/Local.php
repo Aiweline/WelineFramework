@@ -75,12 +75,11 @@ class Local implements \Weline\Taglib\TaglibInterface
             $Taglib = ObjectManager::getInstance(Taglib::class);
             $origin_id = $attributes['id'];
             $parserId = '<?=(' . $Taglib->varParser($origin_id) . '?:\'' . str_replace('.', '-', $origin_id) . '\')?>';
-            $idName = 'local-off-canvas-' . $parserId;
+            $idName = 'local-off-canvas-' . $parserId . '-' . $field;
             if (in_array($idName, $ids)) {
                 throw new Exception('local标签ID不允许重复！');
             }
             $ids[] = $idName;
-
             $name = trim($tag_data[2] ?? '');
             /**@var Request $request */
             $request = ObjectManager::getInstance(Request::class);

@@ -469,7 +469,7 @@ class Url implements UrlInterface
             self::$parserServer = $_SERVER;
             self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = self::$parserServer['REQUEST_URI'];
             self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
-            self::$parserServer['WELINE_API_AREA'] = Env::get('api');
+            self::$parserServer['WELINE_API_AREA'] = Env::get('api')?:'rest';
             self::$parserServer['WELINE_API_ADMIN_AREA'] = Env::get('api_admin');
             self::$parserServer['WELINE_BACKEND_AREA'] = Env::get('admin');
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
@@ -480,6 +480,7 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
             self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         }
+        
         if ($url) {
             $path = self::parse_url($url, 'path') ?: '';
             $query = self::parse_url($url, 'query') ?: '';
@@ -597,12 +598,15 @@ class Url implements UrlInterface
         if (empty($area)) {
             return $url;
         }
+        // 如果 小写的url包含/rest/ 则认为是api
+        if(('rest' === self::$parserServer['WELINE_API_AREA']) && ('frontend' === self::$parserServer['WELINE_AREA']) && str_contains(strtolower($url), '/rest/')){
+            $area = 'rest';
+        }
         $has_area = $data['has_area'] ?? false;
         switch ($area) {
             case self::$parserServer['WELINE_API_AREA']:
                 self::$parserServer['WELINE_AREA'] = 'api';
                 self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_API_AREA'];
-                array_shift($splits);
                 $uri = '/' . implode('/', $splits);
                 $has_area = true;
                 break;
@@ -627,6 +631,7 @@ class Url implements UrlInterface
         $data['has_area'] = $has_area;
         $data['area'] = self::$parserServer['WELINE_AREA'];
         $data['area_route'] = self::$parserServer['WELINE_AREA_ROUTE'];
+        
         $url = $uri . (self::parse_url($url, 'query') ? '?' . self::parse_url($url, 'query') : '');
         # URL结构：[网站前缀]/[货币前缀]/[语言前缀]/[路由]
 

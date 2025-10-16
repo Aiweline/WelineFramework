@@ -39,7 +39,7 @@ abstract class AbstractRestController extends Core
      *
      * @return false|string
      */
-    public function fetch($data, string $type = self::fetch_JSON)
+    protected function fetch($data, string $type = self::fetch_JSON)
     {
         $result = null;
         switch ($type) {

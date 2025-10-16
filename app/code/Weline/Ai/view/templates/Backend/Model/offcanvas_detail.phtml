@@ -1,0 +1,246 @@
+<?php
+/**
+ * AI 模型 Offcanvas 详情模板
+ * 
+ * 用于在侧边栏中显示模型详情（纯净版，无页面布局）
+ * 
+ * @var \Weline\Ai\Model\AiModel $model
+ * @var array $config
+ * @var array $proxyInfo
+ */
+
+$model = $this->getData('model');
+$config = $this->getData('config') ?? [];
+$proxyInfo = $this->getData('proxyInfo') ?? [];
+?>
+
+<!-- 模型详情内容 -->
+<div class="model-detail-offcanvas">
+    
+    <!-- 基本信息 -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="bi bi-info-circle me-2"></i><?= __('基本信息') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('模型ID') ?></th>
+                        <td class="py-2 px-3"><span class="badge bg-secondary"><?= $model->getId() ?></span></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('模型名称') ?></th>
+                        <td class="py-2 px-3"><strong><?= $model->getName() ?></strong></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('供应商') ?></th>
+                        <td class="py-2 px-3">
+                            <span class="badge bg-info"><?= $model->getVendor() ?></span>
+                        </td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('模型代码') ?></th>
+                        <td class="py-2 px-3"><code class="text-primary"><?= $model->getModelCode() ?></code></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('版本') ?></th>
+                        <td class="py-2 px-3"><?= $model->getVersion() ?></td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('类型') ?></th>
+                        <td class="py-2 px-3">
+                            <?php if ($model->isCopied()): ?>
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-files me-1"></i><?= __('复制模型') ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i><?= __('原始模型') ?>
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('状态') ?></th>
+                        <td class="py-2 px-3">
+                            <?php if ($model->isActive()): ?>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i><?= __('激活') ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle me-1"></i><?= __('未激活') ?>
+                                </span>
+                            <?php endif; ?>
+                            
+                            <?php if ($model->isDefault()): ?>
+                                <span class="badge bg-primary ms-1">
+                                    <i class="bi bi-star-fill me-1"></i><?= __('默认') ?>
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('创建时间') ?></th>
+                        <td class="py-2 px-3">
+                            <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i><?= $model->getCreatedAt() ?>
+                            </small>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 技术参数 -->
+    <div class="card mb-3">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0">
+                <i class="bi bi-sliders me-2"></i><?= __('技术参数') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('最大Token数') ?></th>
+                        <td class="py-2 px-3">
+                            <?php if ($model->getMaxTokens()): ?>
+                                <span class="badge bg-light text-dark"><?= number_format($model->getMaxTokens()) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('输入Token价格') ?></th>
+                        <td class="py-2 px-3">
+                            <span class="text-success fw-bold">
+                                $<?= number_format($model->getTokenPriceInput(), 6) ?>/1K
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('输出Token价格') ?></th>
+                        <td class="py-2 px-3">
+                            <span class="text-danger fw-bold">
+                                $<?= number_format($model->getTokenPriceOutput(), 6) ?>/1K
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 配置信息 -->
+    <?php if (!empty($config)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-secondary text-white">
+            <h6 class="mb-0">
+                <i class="bi bi-gear me-2"></i><?= __('配置参数') ?>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <?php foreach ($config as $key => $value): ?>
+                    <?php if ($key === 'api_key'): continue; endif; // 跳过敏感信息 ?>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small"><?= ucfirst(str_replace('_', ' ', $key)) ?></span>
+                            <span class="fw-bold">
+                                <?php if (is_bool($value)): ?>
+                                    <span class="badge bg-<?= $value ? 'success' : 'secondary' ?>">
+                                        <?= $value ? __('是') : __('否') ?>
+                                    </span>
+                                <?php elseif (is_numeric($value)): ?>
+                                    <span class="badge bg-light text-dark"><?= $value ?></span>
+                                <?php else: ?>
+                                    <code class="small"><?= htmlspecialchars(substr((string)$value, 0, 50)) ?></code>
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 代理信息 -->
+    <?php if (!empty($proxyInfo)): ?>
+    <div class="card mb-3">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0">
+                <i class="bi bi-hdd-network me-2"></i><?= __('代理信息') ?>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-borderless mb-0">
+                <tbody>
+                    <?php if (!empty($proxyInfo['host'])): ?>
+                    <tr class="border-bottom">
+                        <th width="140" class="text-end text-muted py-2 px-3"><?= __('代理主机') ?></th>
+                        <td class="py-2 px-3"><code><?= htmlspecialchars($proxyInfo['host']) ?></code></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if (!empty($proxyInfo['port'])): ?>
+                    <tr class="border-bottom">
+                        <th class="text-end text-muted py-2 px-3"><?= __('端口') ?></th>
+                        <td class="py-2 px-3"><?= $proxyInfo['port'] ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if (!empty($proxyInfo['username'])): ?>
+                    <tr>
+                        <th class="text-end text-muted py-2 px-3"><?= __('用户名') ?></th>
+                        <td class="py-2 px-3"><?= htmlspecialchars($proxyInfo['username']) ?></td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($model->isCopied() && $model->getOriginModelId()): ?>
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        <?= __('此模型是从原始模型 ID: %{1} 复制而来', [$model->getOriginModelId()]) ?>
+    </div>
+    <?php endif; ?>
+    
+</div>
+
+<style>
+.model-detail-offcanvas .card {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.model-detail-offcanvas .card-header {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+}
+
+.model-detail-offcanvas .table th {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.model-detail-offcanvas code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+
+.model-detail-offcanvas .badge {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+</style>
+

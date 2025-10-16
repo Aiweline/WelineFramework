@@ -190,7 +190,7 @@ class Center extends FrontendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('创建失败：%1', $e->getMessage())
+                'message' => __('创建失败：%{1}', $e->getMessage())
             ]);
         }
     }
@@ -232,7 +232,7 @@ class Center extends FrontendController
         } catch (\Exception $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('删除失败：%1', $e->getMessage())
+                'message' => __('删除失败：%{1}', $e->getMessage())
             ]);
         }
     }

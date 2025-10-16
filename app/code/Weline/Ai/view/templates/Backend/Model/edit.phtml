@@ -15,7 +15,7 @@ $model = $this->getData('model');
 $isEdit = $model && $model->getId();
 $isCopied = $isEdit && $model->isCopied();
 $isReadonly = $isEdit && !$isCopied; // 只有原始模型（非复制）才只读
-$pageTitle = $isEdit ? __('编辑模型: %1', $model->getModelName()) : __('新建模型');
+$pageTitle = $isEdit ? __('编辑模型: %{1}', $model->getModelName()) : __('新建模型');
 
 // 解析配置JSON
 $config = [];

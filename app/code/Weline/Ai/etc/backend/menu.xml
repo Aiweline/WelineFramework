@@ -39,6 +39,33 @@
          icon="mdi mdi-key"
          order="30"/>
     
+    <!-- 账户充值 -->
+    <add source="Weline_Ai::ai_recharge" 
+         name="ai_recharge" 
+         title="账户充值" 
+         action="ai/backend/recharge" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-cash-multiple"
+         order="35"/>
+    
+    <!-- 助手市场 -->
+    <add source="Weline_Ai::ai_market" 
+         name="ai_market" 
+         title="助手市场" 
+         action="ai/backend/market" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-store"
+         order="38"/>
+    
+    <!-- 我的评分 -->
+    <add source="Weline_Ai::ai_rating_mylist" 
+         name="ai_rating_mylist" 
+         title="我的评分" 
+         action="ai/backend/rating/mylist" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-star"
+         order="39"/>
+    
     <!-- 助手管理 -->
     <add source="Weline_Ai::ai_assistant_manager" 
          name="ai_assistant_manager" 
@@ -47,6 +74,24 @@
          parent="Weline_Ai::ai"
          icon="mdi mdi-account-supervisor"
          order="40"/>
+    
+    <!-- 用户管理 -->
+    <add source="Weline_Ai::ai_user_manager" 
+         name="ai_user_manager" 
+         title="用户管理" 
+         action="ai/backend/user" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-account-multiple"
+         order="45"/>
+    
+    <!-- 租户管理 -->
+    <add source="Weline_Ai::ai_tenant_manager" 
+         name="ai_tenant_manager" 
+         title="租户管理" 
+         action="ai/backend/tenant" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-office-building"
+         order="46"/>
     
     <!-- 默认模型配置 -->
     <add source="Weline_Ai::ai_default_model" 

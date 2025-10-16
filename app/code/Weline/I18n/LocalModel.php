@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\I18n;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Http\Cookie;
 
 class LocalModel extends Model implements LocalModelInterface
 {

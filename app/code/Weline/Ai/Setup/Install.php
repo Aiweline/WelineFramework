@@ -36,6 +36,8 @@ class Install implements InstallInterface
         $connection = $this->connectionFactory->getConnection();
         
         // Core AI Model table
+        // 表名: ai_model (由 AiModel 类名自动推导，遵循 WelineFramework ORM 约定)
+        // 字段定义与 AiModel::install() 保持完全一致
         $connection->createTable('ai_model', [
             'id' => ['type' => 'INTEGER', 'primary' => true, 'auto_increment' => true],
             'supplier' => ['type' => 'VARCHAR', 'length' => 100, 'not_null' => true],
@@ -47,13 +49,19 @@ class Install implements InstallInterface
             'config' => ['type' => 'JSON', 'nullable' => true],
             'capabilities' => ['type' => 'JSON', 'nullable' => true],
             'max_tokens' => ['type' => 'INTEGER', 'nullable' => true],
-            'cost_per_token' => ['type' => 'DECIMAL', 'precision' => 10, 'scale' => 6, 'nullable' => true],
-            'status' => ['type' => 'ENUM', 'values' => ['active', 'deprecated', 'maintenance'], 'not_null' => true, 'default' => 'active'],
+            'cost_per_token' => ['type' => 'VARCHAR', 'length' => 20, 'nullable' => true],
+            // [修复] 2025-10-12 添加缺失字段，与 AiModel::install() 保持一致
+            'token_price_input' => ['type' => 'DECIMAL', 'precision' => 10, 'scale' => 6, 'not_null' => true, 'default' => 0],
+            'token_price_output' => ['type' => 'DECIMAL', 'precision' => 10, 'scale' => 6, 'not_null' => true, 'default' => 0],
+            'proxy_info' => ['type' => 'TEXT', 'nullable' => true],
+            'status' => ['type' => 'VARCHAR', 'length' => 20, 'not_null' => true, 'default' => 'active'],
+            'is_active' => ['type' => 'BOOLEAN', 'not_null' => true, 'default' => 1],
+            'is_default' => ['type' => 'BOOLEAN', 'not_null' => true, 'default' => 0],
             'created_at' => ['type' => 'TIMESTAMP', 'not_null' => true, 'default' => 'CURRENT_TIMESTAMP'],
             'updated_at' => ['type' => 'TIMESTAMP', 'not_null' => true, 'default' => 'CURRENT_TIMESTAMP', 'on_update' => 'CURRENT_TIMESTAMP'],
         ]);
         
-        // Create indexes for ai_model
+        // Create indexes for ai_model table
         $connection->addIndex('ai_model', 'idx_ai_model_supplier_code', ['supplier', 'model_code']);
         $connection->addIndex('ai_model', 'idx_ai_model_is_copy', ['is_copy']);
         $connection->addUniqueIndex('ai_model', 'idx_ai_model_supplier_code_unique', ['supplier', 'model_code']);

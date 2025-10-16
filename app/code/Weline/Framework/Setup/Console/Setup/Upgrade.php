@@ -102,13 +102,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         // 基于tip的默认help实现
         return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
+            'setup:upgrade',
             $this->tip(),
             [
+                '--model' => '仅升级数据库模型',
+                '--route' => '仅升级路由',
+                '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Ai）',
                 '-h, --help' => '显示帮助信息',
             ],
             [],
-            []
+            [
+                '完整系统升级' => 'php bin/w setup:upgrade',
+                '仅升级路由' => 'php bin/w setup:upgrade --route',
+                '仅升级数据库模型' => 'php bin/w setup:upgrade --model',
+                '升级指定模块' => 'php bin/w setup:upgrade -m Weline_Ai',
+                '升级指定模块的路由' => 'php bin/w setup:upgrade --route -m Weline_Ai',
+            ]
         );
     }
 }
