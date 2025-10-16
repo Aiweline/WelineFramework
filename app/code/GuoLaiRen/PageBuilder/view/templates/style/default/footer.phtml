@@ -1,0 +1,121 @@
+<?php
+/**
+ * 默认样式 - Footer
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:style => 样式
+ * style.background_color => 页脚背景色:color:#f8f9fa
+ * style.text_color => 页脚文字颜色:color:#666666
+ * style.link_color => 链接颜色:color:#666666
+ * style.link_hover_color => 链接悬停颜色:color:#333333
+ * 
+ * group:layout => 布局
+ * layout.padding => 页脚内边距:number:30|px
+ * layout.border_top => 显示顶部边框:select:yes|yes,no
+ * layout.border_color => 边框颜色:color:#eeeeee
+ * 
+ * group:content => 内容显示
+ * content.show_copyright => 显示版权信息:select:yes|yes,no
+ * content.show_publish_time => 显示发布时间:select:yes|yes,no
+ * content.show_language_switcher => 显示语言切换器:select:yes|yes,no
+ * content.copyright_text => 版权文本:text:© 2024 All Rights Reserved
+ * 
+ * group:typography => 排版
+ * typography.font_size => 字体大小:number:14|px
+ * typography.line_height => 行高:number:1.6
+ * 
+ * @fields_end
+ */
+$page = $this->getData('page');
+$availableLocales = $this->getData('available_locales') ?: [];
+$currentLocale = $this->getData('current_locale') ?: '';
+$styleSettings = $this->getData('style_settings') ?: [];
+$isPreview = $this->getData('is_preview');
+
+// 获取配置值的辅助函数
+function getFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+// 样式配置
+$bgColor = getFooterConfig($styleSettings, 'style.background_color', '#f8f9fa');
+$textColor = getFooterConfig($styleSettings, 'style.text_color', '#666666');
+$linkColor = getFooterConfig($styleSettings, 'style.link_color', '#666666');
+$linkHoverColor = getFooterConfig($styleSettings, 'style.link_hover_color', '#333333');
+
+// 布局配置
+$padding = getFooterConfig($styleSettings, 'layout.padding', '30');
+$borderTop = getFooterConfig($styleSettings, 'layout.border_top', 'yes');
+$borderColor = getFooterConfig($styleSettings, 'layout.border_color', '#eeeeee');
+
+// 内容配置
+$showCopyright = getFooterConfig($styleSettings, 'content.show_copyright', 'yes');
+$showPublishTime = getFooterConfig($styleSettings, 'content.show_publish_time', 'yes');
+$showLanguageSwitcher = getFooterConfig($styleSettings, 'content.show_language_switcher', 'yes');
+$copyrightText = getFooterConfig($styleSettings, 'content.copyright_text', '© ' . date('Y') . ' All Rights Reserved');
+
+// 排版配置
+$fontSize = getFooterConfig($styleSettings, 'typography.font_size', '14');
+$lineHeight = getFooterConfig($styleSettings, 'typography.line_height', '1.6');
+
+// 页面信息
+$pageName = $page ? $page->getData('name') : '';
+$pageTitle = $page ? $page->getData('title') : '';
+$createTime = $page ? $page->getData('create_time') : '';
+?>
+            <!-- Language Switcher -->
+            <?php if (!empty($availableLocales) && count($availableLocales) > 1): ?>
+                <div class="language-switcher">
+                    <div class="language-switcher-title"><?= __('切换语言：') ?></div>
+                    <div class="language-buttons">
+                        <?php foreach ($availableLocales as $locale): ?>
+                            <?php 
+                            $isCurrent = $locale['code'] === $currentLocale;
+                            $hasTranslation = $locale['has_translation'];
+                            ?>
+                            <a href="<?= $locale['url'] ?>" 
+                               class="language-button <?= $isCurrent ? 'active' : '' ?>">
+                                <?= htmlspecialchars($locale['name']) ?>
+                                <?php if (!$hasTranslation): ?>
+                                    <span title="<?= __('未翻译') ?>">⚠️</span>
+                                <?php endif; ?>
+                                <?php if ($isCurrent): ?>
+                                    <span>✓</span>
+                                <?php endif; ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="language-hint">
+                        <?= __('⚠️ 表示该语言版本尚未翻译') ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </main>
+    
+    <footer style="background: <?= htmlspecialchars($bgColor) ?>; padding: <?= intval($padding) ?>px 0; margin-top: 40px; <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor) . ';' : '' ?>">
+        <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
+            <div style="text-align: center; color: <?= htmlspecialchars($textColor) ?>; font-size: <?= intval($fontSize) ?>px; line-height: <?= floatval($lineHeight) ?>;">
+                <?php if ($showCopyright === 'yes'): ?>
+                    <p style="margin: 0;">
+                        <?php if ($copyrightText): ?>
+                            <?= htmlspecialchars($copyrightText) ?>
+                        <?php else: ?>
+                            &copy; <?= date('Y') ?> <?= htmlspecialchars($pageName ?: $pageTitle ?: 'Website') ?>. <?= __('保留所有权利。') ?>
+                        <?php endif; ?>
+                    </p>
+                <?php endif; ?>
+                
+                <?php if ($showPublishTime === 'yes' && $createTime): ?>
+                    <p style="margin: 10px 0 0 0;">
+                        <?= __('发布时间：') ?><?= htmlspecialchars($createTime) ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+

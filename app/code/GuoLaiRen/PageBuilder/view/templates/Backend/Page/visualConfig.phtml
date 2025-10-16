@@ -1,0 +1,721 @@
+<?php
+/**
+ * 可视化配置界面（左配置右预览）
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
+$page = $this->getData('page');
+$pageId = $page && $page->getId() ? $page->getId() : 0;
+$styleSettings = $page ? $page->getStyleSettings() : [];
+?>
+
+<style>
+/* 可视化配置容器 */
+.visual-config-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    background: #fff;
+    display: none;
+}
+
+.visual-config-wrapper.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 顶部工具栏 */
+.visual-toolbar {
+    height: 60px;
+    background: #2c3e50;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.visual-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.visual-toolbar-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.visual-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 设备切换按钮 */
+.device-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.device-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.device-btn.active {
+    background: #3498db;
+}
+
+/* 自动保存状态 */
+.save-status {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.1);
+}
+
+.save-status.saving {
+    background: #f39c12;
+}
+
+.save-status.saved {
+    background: #27ae60;
+}
+
+.save-status.error {
+    background: #e74c3c;
+}
+
+/* 主内容区域 */
+.visual-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 左侧配置面板 */
+.config-panel {
+    width: 400px;
+    background: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.config-panel-header {
+    padding: 15px 20px;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+}
+
+.config-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* 配置区域折叠面板 */
+.config-section {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.config-section-header {
+    padding: 15px 20px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.config-section-header:hover {
+    background: #f8f9fa;
+}
+
+.config-section-header i {
+    transition: transform 0.3s;
+}
+
+.config-section.collapsed .config-section-header i {
+    transform: rotate(-90deg);
+}
+
+.config-section-body {
+    padding: 20px;
+    background: #fff;
+    display: block;
+}
+
+.config-section.collapsed .config-section-body {
+    display: none;
+}
+
+/* 右侧预览面板 */
+.preview-panel {
+    flex: 1;
+    background: #ecf0f1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+}
+
+.preview-container {
+    background: #fff;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    height: 100%;
+    width: 100%;
+    transition: all 0.3s;
+    position: relative;
+}
+
+/* 设备视图 */
+.preview-container.device-mobile {
+    max-width: 375px;
+    height: 667px;
+}
+
+.preview-container.device-tablet {
+    max-width: 768px;
+    height: 1024px;
+}
+
+.preview-container.device-desktop {
+    width: 100%;
+    height: 100%;
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* 加载状态 */
+.preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.95);
+    padding: 20px 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.preview-loading.active {
+    display: block;
+}
+</style>
+
+<!-- 可视化配置容器 -->
+<div class="visual-config-wrapper" id="visualConfigWrapper">
+    <!-- 顶部工具栏 -->
+    <div class="visual-toolbar">
+        <div class="visual-toolbar-left">
+            <button type="button" class="btn btn-sm btn-light" onclick="closeVisualConfig()">
+                <i class="mdi mdi-close"></i> <?= __('退出') ?>
+            </button>
+            <h5 class="mb-0 text-white"><?= __('可视化配置') ?></h5>
+        </div>
+        
+        <div class="visual-toolbar-center">
+            <!-- 设备切换 -->
+            <button type="button" class="device-btn active" data-device="desktop" onclick="switchDevice('desktop')">
+                <i class="mdi mdi-monitor"></i> <?= __('桌面') ?>
+            </button>
+            <button type="button" class="device-btn" data-device="tablet" onclick="switchDevice('tablet')">
+                <i class="mdi mdi-tablet"></i> <?= __('平板') ?>
+            </button>
+            <button type="button" class="device-btn" data-device="mobile" onclick="switchDevice('mobile')">
+                <i class="mdi mdi-cellphone"></i> <?= __('手机') ?>
+            </button>
+        </div>
+        
+        <div class="visual-toolbar-right">
+            <!-- 保存状态 -->
+            <div class="save-status" id="saveStatus">
+                <i class="mdi mdi-check-circle"></i> <span id="saveStatusText"><?= __('已保存') ?></span>
+            </div>
+            
+            <!-- 刷新预览 -->
+            <button type="button" class="btn btn-sm btn-info" onclick="refreshPreview()">
+                <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 主内容区域 -->
+    <div class="visual-content">
+        <!-- 左侧配置面板 -->
+        <div class="config-panel">
+            <div class="config-panel-header">
+                <i class="mdi mdi-cog"></i> <?= __('样式配置') ?>
+            </div>
+            <div class="config-panel-body">
+                <!-- 头部配置 -->
+                <div class="config-section" id="headerConfig">
+                    <div class="config-section-header" onclick="toggleSection('headerConfig')">
+                        <span><i class="mdi mdi-page-layout-header"></i> <?= __('头部配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 头部Logo -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('Logo地址') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.logo"
+                                   value="<?= htmlspecialchars($styleSettings['header.logo'] ?? '') ?>"
+                                   placeholder="<?= __('输入Logo图片URL') ?>">
+                        </div>
+                        
+                        <!-- 网站名称 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('网站名称') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.site_name"
+                                   value="<?= htmlspecialchars($styleSettings['header.site_name'] ?? '') ?>"
+                                   placeholder="<?= __('输入网站名称') ?>">
+                        </div>
+                        
+                        <!-- Logo高度 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('Logo高度 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.logo_height"
+                                   value="<?= htmlspecialchars($styleSettings['header.logo_height'] ?? '50') ?>"
+                                   min="20" max="200">
+                        </div>
+                        
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.bg_color"
+                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.text_color"
+                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="header.link_color"
+                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="header.font_size"
+                                   value="<?= $styleSettings['header.font_size'] ?? '16' ?>"
+                                   min="12" max="24">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 内容配置 -->
+                <div class="config-section" id="contentConfig">
+                    <div class="config-section-header" onclick="toggleSection('contentConfig')">
+                        <span><i class="mdi mdi-text-box"></i> <?= __('内容配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.bg_color"
+                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.text_color"
+                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>">
+                        </div>
+                        
+                        <!-- 标题颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.heading_color"
+                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>">
+                        </div>
+                        
+                        <!-- H1大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('H1 标题大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.h1_size"
+                                   value="<?= $styleSettings['content.h1_size'] ?? '36' ?>"
+                                   min="24" max="72">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('正文字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.font_size"
+                                   value="<?= $styleSettings['content.font_size'] ?? '16' ?>"
+                                   min="12" max="24">
+                        </div>
+                        
+                        <!-- 行高 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('行高') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="content.line_height"
+                                   value="<?= $styleSettings['content.line_height'] ?? '1.6' ?>"
+                                   min="1" max="3" step="0.1">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="content.link_color"
+                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>">
+                        </div>
+                        
+                        <!-- 字体家族 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体家族') ?></label>
+                            <select class="form-select auto-save-field" data-config-key="content.font_family">
+                                <option value="Arial, sans-serif" <?= ($styleSettings['content.font_family'] ?? '') == 'Arial, sans-serif' ? 'selected' : '' ?>>Arial</option>
+                                <option value="'Times New Roman', serif" <?= ($styleSettings['content.font_family'] ?? '') == "'Times New Roman', serif" ? 'selected' : '' ?>>Times New Roman</option>
+                                <option value="'Microsoft YaHei', sans-serif" <?= ($styleSettings['content.font_family'] ?? '') == "'Microsoft YaHei', sans-serif" ? 'selected' : '' ?>>微软雅黑</option>
+                                <option value="'Courier New', monospace" <?= ($styleSettings['content.font_family'] ?? '') == "'Courier New', monospace" ? 'selected' : '' ?>>Courier New</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 页脚配置 -->
+                <div class="config-section" id="footerConfig">
+                    <div class="config-section-header" onclick="toggleSection('footerConfig')">
+                        <span><i class="mdi mdi-page-layout-footer"></i> <?= __('页脚配置') ?></span>
+                        <i class="mdi mdi-chevron-down"></i>
+                    </div>
+                    <div class="config-section-body">
+                        <!-- 背景颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('背景颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.bg_color"
+                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>">
+                        </div>
+                        
+                        <!-- 文字颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('文字颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.text_color"
+                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 标题颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.heading_color"
+                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 标题大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('标题大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.heading_size"
+                                   value="<?= $styleSettings['footer.heading_size'] ?? '18' ?>"
+                                   min="14" max="32">
+                        </div>
+                        
+                        <!-- 链接颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.link_color"
+                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>">
+                        </div>
+                        
+                        <!-- 链接悬停颜色 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('链接悬停颜色') ?></label>
+                            <input type="color" 
+                                   class="form-control form-control-color auto-save-field" 
+                                   data-config-key="footer.link_hover_color"
+                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>">
+                        </div>
+                        
+                        <!-- 字体大小 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('字体大小 (px)') ?></label>
+                            <input type="number" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.font_size"
+                                   value="<?= $styleSettings['footer.font_size'] ?? '14' ?>"
+                                   min="12" max="20">
+                        </div>
+                        
+                        <!-- 关于文本 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('关于我们文本') ?></label>
+                            <textarea class="form-control auto-save-field" 
+                                      data-config-key="footer.about_text" 
+                                      rows="3"><?= htmlspecialchars($styleSettings['footer.about_text'] ?? '') ?></textarea>
+                        </div>
+                        
+                        <!-- 联系邮箱 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系邮箱') ?></label>
+                            <input type="email" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_email"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_email'] ?? '') ?>"
+                                   placeholder="info@example.com">
+                        </div>
+                        
+                        <!-- 联系电话 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系电话') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_phone"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_phone'] ?? '') ?>"
+                                   placeholder="+86 123 4567 8900">
+                        </div>
+                        
+                        <!-- 联系地址 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('联系地址') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.contact_address"
+                                   value="<?= htmlspecialchars($styleSettings['footer.contact_address'] ?? '') ?>"
+                                   placeholder="<?= __('公司地址') ?>">
+                        </div>
+                        
+                        <!-- 版权文本 -->
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('版权文本') ?></label>
+                            <input type="text" 
+                                   class="form-control auto-save-field" 
+                                   data-config-key="footer.copyright_text"
+                                   value="<?= htmlspecialchars($styleSettings['footer.copyright_text'] ?? '') ?>"
+                                   placeholder="<?= __('版权所有') ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧预览面板 -->
+        <div class="preview-panel">
+            <div class="preview-container device-desktop" id="previewContainer">
+                <iframe id="previewIframe" 
+                        class="preview-iframe" 
+                        src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId]) ?>"></iframe>
+                
+                <div class="preview-loading" id="previewLoading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                    <div class="mt-2"><?= __('刷新预览中...') ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 页面ID（如果 form.phtml 中已定义则跳过）
+if (typeof pageId === 'undefined') {
+    var pageId = <?= $pageId ?>;
+}
+
+// 自动保存防抖定时器
+let autoSaveTimer = null;
+const AUTO_SAVE_DELAY = 1000; // 1秒
+
+// 打开可视化配置
+function openVisualConfig() {
+    document.getElementById('visualConfigWrapper').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// 关闭可视化配置
+function closeVisualConfig() {
+    document.getElementById('visualConfigWrapper').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// 切换配置区域
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    section.classList.toggle('collapsed');
+}
+
+// 切换设备视图
+function switchDevice(device) {
+    // 更新按钮状态
+    document.querySelectorAll('.device-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-device') === device);
+    });
+    
+    // 更新预览容器
+    const container = document.getElementById('previewContainer');
+    container.className = 'preview-container device-' + device;
+}
+
+// 更新保存状态
+function updateSaveStatus(status, text) {
+    const statusEl = document.getElementById('saveStatus');
+    const textEl = document.getElementById('saveStatusText');
+    
+    statusEl.className = 'save-status ' + status;
+    textEl.textContent = text;
+}
+
+// 自动保存配置
+function autoSaveConfig() {
+    // 清除之前的定时器
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+    }
+    
+    // 设置新的定时器
+    autoSaveTimer = setTimeout(async () => {
+        updateSaveStatus('saving', '<?= __('保存中...') ?>');
+        
+        try {
+            // 收集所有配置
+            const config = {};
+            document.querySelectorAll('.auto-save-field').forEach(field => {
+                const key = field.getAttribute('data-config-key');
+                config[key] = field.value;
+            });
+            
+            // 发送保存请求
+            const response = await fetch('<?= $this->getBackendUrl('*/backend/preview/autoSave') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    page_id: pageId,
+                    style_config: config
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                updateSaveStatus('saved', '<?= __('已保存') ?>');
+                
+                // 自动刷新预览
+                refreshPreview();
+            } else {
+                updateSaveStatus('error', '<?= __('保存失败') ?>');
+                console.error('保存失败:', result.message);
+            }
+        } catch (error) {
+            updateSaveStatus('error', '<?= __('保存失败') ?>');
+            console.error('保存异常:', error);
+        }
+    }, AUTO_SAVE_DELAY);
+}
+
+// 刷新预览
+function refreshPreview() {
+    const loading = document.getElementById('previewLoading');
+    const iframe = document.getElementById('previewIframe');
+    
+    loading.classList.add('active');
+    
+    // 重新加载iframe
+    iframe.src = iframe.src.split('?')[0] + '?page_id=' + pageId + '&t=' + Date.now();
+    
+    // 监听加载完成
+    iframe.onload = function() {
+        loading.classList.remove('active');
+    };
+}
+
+// 监听所有自动保存字段
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.auto-save-field').forEach(field => {
+        field.addEventListener('input', function() {
+            updateSaveStatus('', '<?= __('未保存') ?>');
+            autoSaveConfig();
+        });
+        
+        field.addEventListener('change', function() {
+            updateSaveStatus('', '<?= __('未保存') ?>');
+            autoSaveConfig();
+        });
+    });
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // ESC 退出全屏
+    if (e.key === 'Escape') {
+        closeVisualConfig();
+    }
+    
+    // Ctrl+S 保存
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        autoSaveConfig();
+    }
+});
+</script>
+
