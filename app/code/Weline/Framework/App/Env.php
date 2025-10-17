@@ -412,7 +412,7 @@ class Env extends DataObject
         }
         $content = $header_line . "\n" . $content . "\n" . $end_line . "\n\n";
         if (!str_contains($filename, BP)) {
-            $filename = BP . $filename;
+            $filename = Env::VAR_DIR . 'log' . DS . $filename.'.log';
         }
         if (!is_file($filename)) {
             if (!is_dir(dirname($filename))) {
