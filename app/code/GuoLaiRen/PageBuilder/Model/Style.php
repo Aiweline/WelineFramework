@@ -373,15 +373,38 @@ class Style extends Model
                 }
                 
                 // 检查是否是分组定义行
-                // 格式: group:group_key => 分组名称
+                // 格式: group:group_key => 分组名称[标记]:说明标题:说明内容
                 if (preg_match('/^group:([a-zA-Z0-9_-]+)\s*=>\s*(.+)$/', $line, $groupMatch)) {
                     $groupKey = trim($groupMatch[1]);
-                    $groupLabel = trim($groupMatch[2]);
+                    $groupValue = trim($groupMatch[2]);
+                    
+                    // 分解分组值：分组名称[标记]:说明标题:说明内容
+                    $groupParts = explode(':', $groupValue, 3);
+                    
+                    // 第一部分：分组名称（可能包含方括号标记）
+                    $groupLabelWithTag = trim($groupParts[0]);
+                    $groupLabel = $groupLabelWithTag;
+                    $groupTag = '';
+                    
+                    // 提取方括号中的标记
+                    if (preg_match('/^(.+?)\[(.+?)\]$/', $groupLabelWithTag, $tagMatch)) {
+                        $groupLabel = trim($tagMatch[1]);
+                        $groupTag = trim($tagMatch[2]);
+                    }
+                    
+                    // 第二部分：说明标题（可选）
+                    $helpTitle = isset($groupParts[1]) ? trim($groupParts[1]) : '';
+                    
+                    // 第三部分：说明内容（可选）
+                    $helpContent = isset($groupParts[2]) ? trim($groupParts[2]) : '';
                     
                     // 记录分组
                     $groups[$groupKey] = [
                         'key' => $groupKey,
                         'label' => $groupLabel,
+                        'tag' => $groupTag,
+                        'help_title' => $helpTitle,
+                        'help_content' => $helpContent,
                         'file' => $fileKey,
                     ];
                     
@@ -411,8 +434,29 @@ class Style extends Model
                     $default = '';
                     $options = [];
                     $unit = '';
+                    $description = '';
+                    $responsive = false;
                     
                     if (!empty($defaultValue)) {
+                        // 提取描述信息（在方括号中，如 [MD] [MTD]）
+                        if (preg_match('/^(.+?)\[(.+?)\]$/', $defaultValue, $matches)) {
+                            $defaultValue = trim($matches[1]);
+                            $descriptionPart = trim($matches[2]);
+                            
+                            // 检查是否包含响应式标记（MTD字母组合）
+                            // M = Mobile, T = Tablet, D = Desktop
+                            if (preg_match('/^[MTD]+$/', $descriptionPart)) {
+                                $responsive = true;
+                                $devices = [];
+                                if (strpos($descriptionPart, 'M') !== false) $devices[] = '移动端';
+                                if (strpos($descriptionPart, 'T') !== false) $devices[] = '平板';
+                                if (strpos($descriptionPart, 'D') !== false) $devices[] = 'PC端';
+                                $description = '支持响应式配置(' . implode('、', $devices) . ')';
+                            } else {
+                                $description = $descriptionPart;
+                            }
+                        }
+                        
                         // 检查是否有单位或选项列表（如 |px, |option1,option2）
                         if (strpos($defaultValue, '|') !== false) {
                             $valueParts = explode('|', $defaultValue, 2);
@@ -441,6 +485,14 @@ class Style extends Model
                         }
                     }
                     
+                    // 检查默认值中是否包含斜杠（响应式格式）
+                    if (!$responsive && !empty($default) && strpos($default, '/') !== false) {
+                        $responsive = true;
+                        if (empty($description)) {
+                            $description = '支持响应式配置';
+                        }
+                    }
+                    
                     // 确定字段所属的分组
                     $fieldGroup = null;
                     if ($currentGroup && strpos($key, $currentGroup . '.') === 0) {
@@ -464,6 +516,8 @@ class Style extends Model
                         'default' => $default,
                         'options' => $options,
                         'unit' => $unit,
+                        'description' => $description,
+                        'responsive' => $responsive,
                         'file' => $fileKey,
                     ];
                 }
@@ -477,21 +531,29 @@ class Style extends Model
     }
     
     /**
-     * 获取配置分组（支持group语法）
+     * 获取配置分组（两级结构：文件 -> 分组）
      * 
      * 返回格式：
      * [
-     *   'position' => [
-     *     'key' => 'position',
-     *     'label' => '位置',
-     *     'file' => 'header',
-     *     'icon' => 'mdi-crosshairs',
-     *     'configs' => [
-     *       'position.logo_position' => [...],
-     *       'position.nav_position' => [...]
+     *   'header' => [
+     *     'key' => 'header',
+     *     'label' => '头部配置',
+     *     'icon' => 'mdi-page-layout-header',
+     *     'groups' => [
+     *       'layout' => [
+     *         'key' => 'layout',
+     *         'label' => '布局',
+     *         'icon' => 'mdi-view-dashboard',
+     *         'configs' => [
+     *           'layout.logo_position' => [...]
+     *         ]
+     *       ],
+     *       'style' => [...],
+     *       'size' => [...],
      *     ]
      *   ],
-     *   ...
+     *   'content' => [...],
+     *   'footer' => [...],
      * ]
      * 
      * @return array
@@ -502,49 +564,81 @@ class Style extends Model
         $definedGroups = $parsed['groups'] ?? [];
         $allConfigs = $parsed['configs'] ?? [];
         
-        $groups = [];
+        // 按文件组织配置（两级结构）
+        $fileGroups = [
+            'header' => [
+                'key' => 'header',
+                'label' => __('头部配置'),
+                'icon' => 'mdi-page-layout-header',
+                'groups' => [],
+            ],
+            'content' => [
+                'key' => 'content',
+                'label' => __('内容配置'),
+                'icon' => 'mdi-file-document-edit',
+                'groups' => [],
+            ],
+            'footer' => [
+                'key' => 'footer',
+                'label' => __('页脚配置'),
+                'icon' => 'mdi-page-layout-footer',
+                'groups' => [],
+            ],
+        ];
         
-        // 首先处理明确定义的分组
+        // 为每个文件创建分组
         foreach ($definedGroups as $groupKey => $groupInfo) {
-            $groups[$groupKey] = [
+            $fileKey = $groupInfo['file'];
+            
+            if (!isset($fileGroups[$fileKey])) {
+                continue;
+            }
+            
+            $fileGroups[$fileKey]['groups'][$groupKey] = [
                 'key' => $groupKey,
                 'label' => $groupInfo['label'],
-                'file' => $groupInfo['file'],
+                'tag' => $groupInfo['tag'] ?? '',
+                'help_title' => $groupInfo['help_title'] ?? '',
+                'help_content' => $groupInfo['help_content'] ?? '',
                 'icon' => $this->getGroupIcon($groupKey),
                 'configs' => [],
             ];
         }
         
-        // 将配置分配到对应的分组
+        // 将配置分配到对应的文件和分组
         foreach ($allConfigs as $configKey => $config) {
+            $fileKey = $config['file'];
             $groupKey = $config['group'];
             
+            if (!isset($fileGroups[$fileKey])) {
+                continue;
+            }
+            
             // 如果分组不存在，自动创建
-            if (!isset($groups[$groupKey])) {
-                $groups[$groupKey] = [
+            if (!isset($fileGroups[$fileKey]['groups'][$groupKey])) {
+                $fileGroups[$fileKey]['groups'][$groupKey] = [
                     'key' => $groupKey,
                     'label' => $this->getGroupLabel($groupKey),
-                    'file' => $config['file'],
+                    'tag' => '',
+                    'help_title' => '',
+                    'help_content' => '',
                     'icon' => $this->getGroupIcon($groupKey),
                     'configs' => [],
                 ];
             }
             
             // 添加配置到分组
-            $groups[$groupKey]['configs'][$configKey] = $config;
+            $fileGroups[$fileKey]['groups'][$groupKey]['configs'][$configKey] = $config;
         }
         
-        // 按文件和定义顺序排序分组
-        $sortedGroups = [];
-        $fileOrder = ['header' => 1, 'content' => 2, 'footer' => 3];
+        // 移除空的文件分组
+        foreach ($fileGroups as $fileKey => $fileGroup) {
+            if (empty($fileGroup['groups'])) {
+                unset($fileGroups[$fileKey]);
+            }
+        }
         
-        uasort($groups, function($a, $b) use ($fileOrder) {
-            $fileA = $fileOrder[$a['file']] ?? 999;
-            $fileB = $fileOrder[$b['file']] ?? 999;
-            return $fileA - $fileB;
-        });
-        
-        return $groups;
+        return $fileGroups;
     }
     
     /**
