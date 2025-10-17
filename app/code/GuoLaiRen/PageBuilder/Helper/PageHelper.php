@@ -62,6 +62,12 @@ class PageHelper
             $result['meta_title'] = $translation->getData(LocalDescription::fields_META_TITLE) ?: $result['meta_title'];
             $result['meta_description'] = $translation->getData(LocalDescription::fields_META_DESCRIPTION) ?: $result['meta_description'];
             $result['meta_keywords'] = $translation->getData(LocalDescription::fields_META_KEYWORDS) ?: $result['meta_keywords'];
+            
+            // 添加config字段（包含样式配置覆盖）
+            $config = $translation->getData('config');
+            if ($config) {
+                $result['config'] = $config;
+            }
         }
 
         return $result;

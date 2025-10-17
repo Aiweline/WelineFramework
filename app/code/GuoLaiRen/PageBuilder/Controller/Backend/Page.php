@@ -574,6 +574,9 @@ class Page extends BackendController
                 ]);
             }
             
+            // 强制实时扫描模板配置（确保最新定义生效）
+            Style::forceScan();
+            
             // 获取模板配置定义
             $styleModel = clone $this->styleModel;
             $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
@@ -594,53 +597,72 @@ class Page extends BackendController
                 $page->load($pageId);
                 
                 if ($page->getId()) {
+                    $defaultLocale = $page->getData('default_locale') ?: '';
+                    
+                    // 先获取主表配置（默认配置）
                     $allSettings = $page->getStyleSetting();
+                    $mainSettings = isset($allSettings[$styleCode]) ? $allSettings[$styleCode] : [];
                     
-                    // 获取当前样式代码的配置
-                    $styleSettings = isset($allSettings[$styleCode]) ? $allSettings[$styleCode] : [];
-                    
-                    // 如果样式配置是数组，进一步处理语言
-                    if (is_array($styleSettings)) {
-                        // 如果指定了语言，优先使用该语言的配置
-                        if ($locale && isset($styleSettings[$locale])) {
-                            $pageSettings = $styleSettings[$locale];
-                        } else {
-                            // 使用默认语言的配置，或者根配置
-                            $defaultLocale = $page->getData('default_locale');
-                            if ($defaultLocale && isset($styleSettings[$defaultLocale])) {
-                                $pageSettings = $styleSettings[$defaultLocale];
-                            } else {
-                                // 如果不是嵌套结构（旧数据格式），直接使用
-                                // 检查是否有配置键（非语言键）
-                                $hasConfigKeys = false;
-                                foreach ($styleSettings as $key => $value) {
-                                    if (strpos($key, '.') !== false) { // 配置键通常包含点号
-                                        $hasConfigKeys = true;
-                                        break;
-                                    }
-                                }
-                                if ($hasConfigKeys) {
-                                    $pageSettings = $styleSettings;
-                                }
-                            }
+                    // 清理可能存在的三层结构（只保留配置项）
+                    $cleanMainSettings = [];
+                    foreach ($mainSettings as $key => $value) {
+                        if (!is_array($value)) {
+                            $cleanMainSettings[$key] = $value;
                         }
+                    }
+                    
+                    // 如果是非默认语言，尝试从LocalDescription获取覆盖配置
+                    if ($locale && $locale !== $defaultLocale) {
+                        $localDesc = clone $this->localDescriptionModel;
+                        $localDesc->clear()
+                            ->where(\GuoLaiRen\PageBuilder\Model\Page\LocalDescription::fields_ID, $pageId)
+                            ->where('local_code', $locale)
+                            ->find()
+                            ->fetch();
+                        
+                        if ($localDesc->getId()) {
+                            $configJson = $localDesc->getData('config');
+                            if ($configJson) {
+                                $config = json_decode($configJson, true);
+                                if (isset($config['style_config']) && is_array($config['style_config'])) {
+                                    // 语言特定配置覆盖主配置
+                                    $pageSettings = array_merge($cleanMainSettings, $config['style_config']);
+                                } else {
+                                    $pageSettings = $cleanMainSettings;
+                                }
+                            } else {
+                                $pageSettings = $cleanMainSettings;
+                            }
+                        } else {
+                            $pageSettings = $cleanMainSettings;
+                        }
+                    } else {
+                        // 默认语言直接使用主配置
+                        $pageSettings = $cleanMainSettings;
                     }
                 }
             }
             
             // 将页面配置值合并到配置定义中
+            // 数据结构：fileGroups[fileKey]['groups'][groupKey]['configs'][configKey]
             if (!empty($pageSettings)) {
-                foreach ($configGroups as $groupKey => &$group) {
-                    if (isset($group['configs']) && is_array($group['configs'])) {
-                        foreach ($group['configs'] as $configKey => &$config) {
-                            // 如果页面有该配置的值，使用页面值作为默认值
-                            if (isset($pageSettings[$configKey])) {
-                                $config['value'] = $pageSettings[$configKey];
+                foreach ($configGroups as $fileKey => &$fileGroup) {
+                    // 遍历文件下的分组
+                    if (isset($fileGroup['groups']) && is_array($fileGroup['groups'])) {
+                        foreach ($fileGroup['groups'] as $groupKey => &$group) {
+                            // 遍历分组下的配置项
+                            if (isset($group['configs']) && is_array($group['configs'])) {
+                                foreach ($group['configs'] as $configKey => &$config) {
+                                    // 如果页面有该配置的值，设置value字段
+                                    if (isset($pageSettings[$configKey])) {
+                                        $config['value'] = $pageSettings[$configKey];
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                unset($group, $config); // 清除引用
+                unset($fileGroup, $group, $config); // 清除引用
             }
             
             return $this->fetchJson([
@@ -650,9 +672,11 @@ class Page extends BackendController
                     'page_id' => $pageId,
                     'style_code' => $styleCode,
                     'locale' => $locale,
+                    'default_locale' => isset($defaultLocale) ? $defaultLocale : null,
+                    'is_default_locale' => isset($defaultLocale) && $locale === $defaultLocale,
                     'page_settings' => $pageSettings,
-                    'all_settings_structure' => isset($allSettings) ? array_keys($allSettings) : [],
-                    'style_settings_structure' => isset($styleSettings) ? array_keys($styleSettings) : []
+                    'main_settings' => isset($cleanMainSettings) ? $cleanMainSettings : [],
+                    'has_locale_override' => isset($config['style_config']) ? true : false
                 ]
             ]);
         } catch (\Exception $e) {
