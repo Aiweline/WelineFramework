@@ -349,55 +349,139 @@ class I18n
         $locals_names = Locales::getNames();
         // 所有语言对应存在的翻译词
         $locals_words = [];
+        $error_count = 0;
+        $first_error = true;
+        
         // 模块翻译覆盖语言包翻译
         $all_i18ns = $this->reader->getAllI18ns();
         foreach ($all_i18ns as $module_name => $i18n_files) {
             /**@var $i18n_file File */
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
-                    $handle = fopen($i18n_file, 'r');
+                    $handle = @fopen($i18n_file, 'r');
+                    if ($handle === false) {
+                        // 输出表格头（仅第一次）
+                        if ($first_error && php_sapi_name() === 'cli') {
+                            echo "\n" . str_repeat("=", 80) . "\n";
+                            echo "i18n 文件格式问题\n";
+                            echo str_repeat("=", 80) . "\n";
+                            $first_error = false;
+                        }
+                        // 使用相对路径，去掉开头的斜杠
+                        $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
+                        if (php_sapi_name() === 'cli') {
+                            echo $relative_path . "  【无法打开文件】\n";
+                        } else {
+                            error_log($relative_path . "  【无法打开文件】");
+                        }
+                        $error_count++;
+                        continue;
+                    }
                     $is_utf8 = false;
                     $line = 1;
+                    // 使用相对路径，去掉开头的斜杠
+                    $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
+                    
                     while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                        if (!isset($data[0])) {
-                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%{i18n_file} 错误行号：%{line}  错误消息：没有翻译原文! 读取内容：%{content}', [
-                                    'i18n_file' => $i18n_file,
-                                    'line' => $line,
-                                    'content' => PHP_EOL . w_var_export($data, true)
-                                ]));
+                        // 格式错误的行直接跳过，不抛出异常
+                        if (!isset($data[0]) || empty(trim($data[0]))) {
+                            // 输出表格头（仅第一次）
+                            if ($first_error && php_sapi_name() === 'cli') {
+                                echo "\n" . str_repeat("=", 80) . "\n";
+                                echo "i18n 文件格式问题\n";
+                                echo str_repeat("=", 80) . "\n";
+                                $first_error = false;
+                            }
+                            // 记录警告日志
+                            if (php_sapi_name() === 'cli') {
+                                echo $relative_path . ":" . $line . "  【没有翻译原文】\n";
+                            } else {
+                                error_log($relative_path . ":" . $line . "  【没有翻译原文】");
+                            }
+                            $error_count++;
+                            $line += 1;
+                            continue;
                         }
+                        
                         $data[0] = trim($data[0]);
+                        
                         if (!isset($data[1])) {
-                            throw new Exception(PHP_EOL . __('i18n翻译文件格式错误：%{i18n_file} 错误行号：%{line}  错误消息：没有翻译内容! 读取内容：%{content}', [
-                                    'i18n_file' => $i18n_file,
-                                    'line' => $line,
-                                    'content' => PHP_EOL . w_var_export($data, true)
-                                ]));
+                            // 输出表格头（仅第一次）
+                            if ($first_error && php_sapi_name() === 'cli') {
+                                echo "\n" . str_repeat("=", 80) . "\n";
+                                echo "i18n 文件格式问题\n";
+                                echo str_repeat("=", 80) . "\n";
+                                $first_error = false;
+                            }
+                            // 记录警告日志，跳过该行
+                            if (php_sapi_name() === 'cli') {
+                                echo $relative_path . ":" . $line . "  【没有翻译内容】\n";
+                            } else {
+                                error_log($relative_path . ":" . $line . "  【没有翻译内容】");
+                            }
+                            $error_count++;
+                            $line += 1;
+                            continue;
                         }
+                        
                         $data[1] = trim($data[1]);
+                        
                         if (!$is_utf8) {
                             if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
                                 $is_utf8 = true;
                             } else {
-                                throw new Exception(__('i18n翻译文件 %{i18n_file} 未匹配到任何local代码：支持的local代码[%{codes}]', [
-                                    'i18n_file' => $i18n_file,
-                                    'codes' => w_var_export($locals_names, true),
-                                ]));
+                                // 输出表格头（仅第一次）
+                                if ($first_error && php_sapi_name() === 'cli') {
+                                    echo "\n" . str_repeat("=", 80) . "\n";
+                                    echo "i18n 文件格式问题\n";
+                                    echo str_repeat("=", 80) . "\n";
+                                    $first_error = false;
+                                }
+                                // 记录警告日志，跳过该行
+                                if (php_sapi_name() === 'cli') {
+                                    echo $relative_path . ":" . $line . "  【编码不是UTF-8】\n";
+                                } else {
+                                    error_log($relative_path . ":" . $line . "  【编码不是UTF-8】");
+                                }
+                                $error_count++;
+                                $line += 1;
+                                continue;
                             }
                         }
+                        
                         $locals_words[$local][$data[0]] = $data[1];
                         $line += 1;
                     }
 
                     fclose($handle);
                 } else {
-                    throw new Exception(__('i18n翻译文件 %{i18n_file} 未能找到可用翻译词，仅支持utf-8格式的文件。', [
-                            'i18n_file' => $i18n_file,
-                        ]
-                    ));
+                    // 输出表格头（仅第一次）
+                    if ($first_error && php_sapi_name() === 'cli') {
+                        echo "\n" . str_repeat("=", 80) . "\n";
+                        echo "i18n 文件格式问题\n";
+                        echo str_repeat("=", 80) . "\n";
+                        $first_error = false;
+                    }
+                    // locale代码无效，记录警告并跳过
+                    // 使用相对路径，去掉开头的斜杠
+                    $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
+                    if (php_sapi_name() === 'cli') {
+                        echo $relative_path . "  【语言代码 " . $local . " 无效】\n";
+                    } else {
+                        error_log($relative_path . "  【语言代码 " . $local . " 无效】");
+                    }
+                    $error_count++;
                 }
             }
         }
+        
+        // 输出统计信息
+        if ($error_count > 0 && php_sapi_name() === 'cli') {
+            echo str_repeat("=", 80) . "\n";
+            echo "共发现 " . $error_count . " 个问题\n";
+            echo str_repeat("=", 80) . "\n\n";
+        }
+        
         # 收集项目下的所有被__()函数包裹的翻译词
         # --1 检索目录
         // 定义要搜索的目录
@@ -414,7 +498,23 @@ class I18n
         $translations = [];
         // 遍历目录
         foreach ($directories as $module => $directory) {
-            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory));
+            // 使用过滤器在迭代器层面就跳过不需要扫描的目录
+            $dirIterator = new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS);
+            $filterIterator = new \RecursiveCallbackFilterIterator($dirIterator, function ($current, $key, $iterator) {
+                // // 如果是目录，检查是否需要跳过
+                // if ($iterator->hasChildren()) {
+                //     $path = $current->getPathname();
+                //     // 跳过 statics/assets 和 statics/libs 目录
+                //     if (strpos($path, '/statics/assets') !== false || 
+                //         strpos($path, '/statics/libs') !== false ||
+                //         strpos($path, DIRECTORY_SEPARATOR . 'statics' . DIRECTORY_SEPARATOR . 'assets') !== false ||
+                //         strpos($path, DIRECTORY_SEPARATOR . 'statics' . DIRECTORY_SEPARATOR . 'libs') !== false) {
+                //         return false;
+                //     }
+                // }
+                return true;
+            });
+            $iterator = new \RecursiveIteratorIterator($filterIterator);
             # FIXME 未能更加精准搜索到词语
             $module_words = [];
             foreach ($iterator as $file) {
@@ -468,21 +568,25 @@ class I18n
                         // 读取csv文件内容，如果翻译词不存在翻译文件中则添加到文件中，
                         //文件形式：第一列为翻译词，第二列为翻译
                         $file_words = [];
-                        $handle = fopen($file->getPathname(), 'r');
-                        while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                            $file_words[$data[0]] = $data[1];
+                        $handle = @fopen($file->getPathname(), 'r');
+                        if ($handle !== false) {
+                            while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+                                $file_words[$data[0]] = $data[1];
+                            }
+                            fclose($handle);
                         }
-                        fclose($handle);
 
                         // 将翻译词写入csv翻译文件
                         $file_translations = array_merge($module_words, $file_words);
                         $file_translations = array_unique($file_translations);
                         // 将翻译词写入csv文件
-                        $csv_file = fopen($file->getPathname(), 'w+');
-                        foreach ($file_translations as $key => $value) {
-                            fputcsv($csv_file, [$key, $value], ',', '"', '\\');
+                        $csv_file = @fopen($file->getPathname(), 'w+');
+                        if ($csv_file !== false) {
+                            foreach ($file_translations as $key => $value) {
+                                fputcsv($csv_file, [$key, $value], ',', '"', '\\');
+                            }
+                            fclose($csv_file);
                         }
-                        fclose($csv_file);
                     }
                 }
             }
@@ -490,17 +594,38 @@ class I18n
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
             $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-            $file = fopen($default_local_file, 'w+');
-            $text = '<?php return ' . var_export($default_local_words, true) . ';';
-            fwrite($file, $text);
-            fclose($file);
+            
+            // 确保目录存在
+            $dir = dirname($default_local_file);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            
+            $file = @fopen($default_local_file, 'w+');
+            if ($file === false) {
+                error_log(__("警告：无法创建翻译文件 %{file}", ['file' => $default_local_file]));
+            } else {
+                $text = '<?php return ' . var_export($default_local_words, true) . ';';
+                fwrite($file, $text);
+                fclose($file);
+            }
         }
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
         if ($locals_words) {
+            // 确保目录存在
+            $words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
+            $dir = dirname($words_file);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            
             $text = '<?php return ' . w_var_export($locals_words, true) . ';';
-            file_put_contents(Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE, $text);
+            $result = @file_put_contents($words_file, $text);
+            if ($result === false) {
+                error_log(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]));
+            }
         }
         self::$local_words = $locals_words;
         return $locals_words;
@@ -538,6 +663,11 @@ class I18n
     {
         $locals_words = $this->getLocalsWords($cache);
         foreach ($locals_words as $local => $locals_word) {
+            // 过滤无效的 locale 代码（如 0、空字符串等）
+            if (empty($local) || is_numeric($local) || strlen($local) < 2) {
+                continue;
+            }
+            
             $words_filename = Env::path_TRANSLATE_FILES_PATH . $local . '.php';
             $file = new \Weline\Framework\System\File\Io\File();
             $file->open($words_filename, $file::mode_w);
@@ -546,7 +676,7 @@ class I18n
             try {
                 $file->write($text);
             } catch (Exception $e) {
-                throw new Exception(__('错误：' . $e->getMessage()));
+                throw new Exception('错误：' . $e->getMessage());
             }
             $file->close();
         }
@@ -603,3 +733,4 @@ class I18n
         return $LocalsModel;
     }
 }
+
