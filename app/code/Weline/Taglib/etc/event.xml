@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Template::after_tags_config">
+        <observer name="Weline_Taglib::custom_tag" instance="Weline\Taglib\Observer\TagParser" disabled="false" shared="true" sort="0"/>
+    </event>
+</config>

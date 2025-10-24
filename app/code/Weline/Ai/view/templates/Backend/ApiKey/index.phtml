@@ -1,0 +1,396 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+/**
+ * 变量：
+ * @var array $api_keys API密钥列表
+ * @var object $pagination 分页对象
+ * @var int $total 总数
+ * @var string $current_status 当前状态过滤
+ * @var array $stats 统计数据
+ */
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-key me-2"></i>
+                                <lang>API密钥管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI助手</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>API密钥</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- end message -->
+
+                <!-- 统计卡片 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-muted mb-1"><lang>总密钥数</lang></p>
+                                        <h3 class="mb-0"><?= $stats['total'] ?? 0 ?></h3>
+                                    </div>
+                                    <div class="text-primary">
+                                        <i class="mdi mdi-key" style="font-size: 2rem;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-muted mb-1"><lang>待审核</lang></p>
+                                        <h3 class="mb-0"><?= $stats['pending'] ?? 0 ?></h3>
+                                    </div>
+                                    <div class="text-warning">
+                                        <i class="mdi mdi-clock-outline" style="font-size: 2rem;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-muted mb-1"><lang>已激活</lang></p>
+                                        <h3 class="mb-0"><?= $stats['active'] ?? 0 ?></h3>
+                                    </div>
+                                    <div class="text-success">
+                                        <i class="mdi mdi-check-circle" style="font-size: 2rem;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-muted mb-1"><lang>已拒绝</lang></p>
+                                        <h3 class="mb-0"><?= $stats['rejected'] ?? 0 ?></h3>
+                                    </div>
+                                    <div class="text-danger">
+                                        <i class="mdi mdi-close-circle" style="font-size: 2rem;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API密钥列表 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class='card-title'>
+                        <lang>API密钥列表</lang>
+                    </h4>
+                    <div class="d-flex gap-2">
+                        <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
+                            <option value=""><lang>全部状态</lang></option>
+                            <option value="pending" <?= ($current_status ?? '') === 'pending' ? 'selected' : '' ?>><lang>待审核</lang></option>
+                            <option value="approved" <?= ($current_status ?? '') === 'approved' ? 'selected' : '' ?>><lang>已批准</lang></option>
+                            <option value="rejected" <?= ($current_status ?? '') === 'rejected' ? 'selected' : '' ?>><lang>已拒绝</lang></option>
+                        </select>
+                        
+                        <!-- 创建API密钥按钮 -->
+                        <block class='Weline\Component\Block\OffCanvas'
+                               template='Weline_Component::off-canvas.phtml'
+                               cache='0'
+                               id='create_apikey_offcanvas'
+                               action='*/backend/apikey/form'
+                               target-tag='button'
+                               icon='mdi mdi-plus'
+                               target-button-text='创建API密钥'
+                               target-button-class='btn btn-primary'
+                               title='创建API密钥'
+                               close-button-show='1'
+                               close-button-text='关闭'
+                               direction='right'
+                               class-names='w-50'
+                               flush='1'
+                               flush-button-text='刷新'
+                               save='0'
+                               off-canvas-body-style=''
+                        />
+                    </div>
+                </div>
+
+                                <div class='table-rep-plugin'>
+                                    <?php if (empty($api_keys)): ?>
+                                        <div class="alert alert-info">
+                                            <i class="mdi mdi-information me-2"></i><lang>暂无API密钥数据</lang>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                            <table class='table table-responsive table-striped table-bordered align-middle'>
+                                                <thead>
+                                                    <tr>
+                                                        <th data-priority='1'><?= __('ID') ?></th>
+                                                        <th data-priority='1'><?= __('密钥名称') ?></th>
+                                                        <th data-priority='1'><?= __('用户ID') ?></th>
+                                                        <th data-priority='2'><?= __('状态') ?></th>
+                                                        <th data-priority='3'><?= __('配额') ?></th>
+                                                        <th data-priority='3'><?= __('已使用') ?></th>
+                                                        <th data-priority='3'><?= __('创建时间') ?></th>
+                                                        <th data-priority='1'><?= __('操作') ?></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($api_keys as $key): ?>
+                                                        <tr>
+                                                            <td><?= $key->getId() ?></td>
+                                                            <td><?= htmlspecialchars($key->getData('key_name') ?? '-') ?></td>
+                                                            <td><?= $key->getData('user_id') ?? '-' ?></td>
+                                                            <td>
+                                                                <?php
+                                                                $status = $key->getData('status');
+                                                                $statusClass = [
+                                                                    'pending' => 'warning',
+                                                                    'approved' => 'success',
+                                                                    'rejected' => 'danger'
+                                                                ][$status] ?? 'secondary';
+                                                                $statusText = [
+                                                                    'pending' => __('待审核'),
+                                                                    'approved' => __('已批准'),
+                                                                    'rejected' => __('已拒绝')
+                                                                ][$status] ?? $status;
+                                                                ?>
+                                                                <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                                                <?php if ($key->getData('is_active')): ?>
+                                                                    <span class="badge bg-success ms-1"><?= __('激活') ?></span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td><?= number_format($key->getData('quota_limit') ?? 0) ?></td>
+                                                            <td><?= number_format($key->getData('quota_used') ?? 0) ?></td>
+                                                            <td><?= $key->getData('created_time') ?></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <?php if ($status === 'pending'): ?>
+                                                                        <a href="javascript:void(0)" class="text-success" onclick="approveKey(<?= $key->getId() ?>, 'approve')" title="<?= __('批准') ?>">
+                                                                            <i class="mdi mdi-check"></i>
+                                                                            <lang>批准</lang>
+                                                                        </a>
+                                                                        <a href="javascript:void(0)" class="text-danger" onclick="approveKey(<?= $key->getId() ?>, 'reject')" title="<?= __('拒绝') ?>">
+                                                                            <i class="mdi mdi-close"></i>
+                                                                            <lang>拒绝</lang>
+                                                                        </a>
+                                                                    <?php endif; ?>
+                                                                    <a href="javascript:void(0)" class="text-info" onclick="setQuota(<?= $key->getId() ?>, <?= $key->getData('quota_limit') ?? 0 ?>)" title="<?= __('设置配额') ?>">
+                                                                        <i class="mdi mdi-counter"></i>
+                                                                        <lang>配额</lang>
+                                                                    </a>
+                                                                    <a href="javascript:void(0)" class="text-danger" onclick="deleteKey(<?= $key->getId() ?>)" title="<?= __('删除') ?>">
+                                                                        <i class="mdi mdi-delete"></i>
+                                                                        <lang>删除</lang>
+                                                                    </a>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <!-- 分页 -->
+                                        <?php if ($pagination && is_object($pagination) && method_exists($pagination, 'getHtml')): ?>
+                                            <div class="mt-3">
+                                                <?= $pagination->getHtml() ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+
+<script>
+function filterByStatus(status) {
+    const url = new URL(window.location.href);
+    if (status) {
+        url.searchParams.set('status', status);
+    } else {
+        url.searchParams.delete('status');
+    }
+    url.searchParams.set('page', '1'); // 重置到第一页
+    window.location.href = url.toString();
+}
+
+function approveKey(id, action) {
+    if (!confirm('<?= __("确定要") ?>' + (action === 'approve' ? '<?= __("批准") ?>' : '<?= __("拒绝") ?>') + '<?= __("这个API密钥吗？") ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/approve') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}&action=${action}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __("操作失败：") ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+    });
+}
+
+function setQuota(id, currentQuota) {
+    const newQuota = prompt('<?= __("请输入新的配额限制：") ?>', currentQuota);
+    if (newQuota === null) return;
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/setQuota') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}&quota_limit=${newQuota}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __("设置失败：") ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+    });
+}
+
+function deleteKey(id) {
+    if (!confirm('<?= __("确定要删除这个API密钥吗？此操作不可恢复！") ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/apikey/delete') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __("删除失败：") ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+    });
+}
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

@@ -1,0 +1,575 @@
+/**
+ * DataTable 表单样式
+ */
+
+/* 模态框样式 */
+.w-form-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.w-form-modal.show {
+    display: flex;
+}
+
+.w-form-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.w-form-modal-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* 表单容器 */
+.w-form-container {
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 表单头部 */
+.w-form-header {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.w-form-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.w-form-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #374151;
+}
+
+.w-form-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.w-form-title i {
+    color: #3b82f6;
+    font-size: 1.125rem;
+}
+
+.w-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* 表单主体 */
+.w-form-body {
+    padding: 24px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.w-form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 表单字段 */
+.w-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.w-field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.w-required-mark {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.w-field-control {
+    position: relative;
+}
+
+.w-form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: #374151;
+    background: #ffffff;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.w-form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.w-form-control:hover {
+    border-color: #9ca3af;
+}
+
+.w-form-control:disabled {
+    background: #f9fafb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.w-form-control:readonly {
+    background: #f9fafb;
+}
+
+/* 文本域 */
+.w-form-control[type="textarea"],
+textarea.w-form-control {
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+}
+
+/* 下拉选择 */
+select.w-form-control {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 8px center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+    padding-right: 32px;
+}
+
+/* 复选框组 */
+.w-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.w-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.w-checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+}
+
+.w-checkbox-label {
+    cursor: pointer;
+}
+
+/* 单选框组 */
+.w-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.w-radio-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.w-radio-item input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+}
+
+.w-radio-label {
+    cursor: pointer;
+}
+
+/* 字段帮助文本 */
+.w-field-help {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+/* 字段验证 */
+.w-field-validation {
+    font-size: 0.75rem;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.w-field-validation.w-field-error {
+    color: #ef4444;
+}
+
+.w-field-validation i {
+    font-size: 0.875rem;
+}
+
+/* 字段错误状态 */
+.w-form-field.w-field-error .w-form-control {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.w-form-field.w-field-error .w-field-label {
+    color: #ef4444;
+}
+
+/* 表单底部 */
+.w-form-footer {
+    background: #f9fafb;
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* 按钮样式 */
+.w-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: none;
+    outline: none;
+}
+
+/* 表单触发按钮 */
+.w-form-trigger {
+    margin: 10px 0;
+}
+
+.w-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.w-btn-primary {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+}
+
+.w-btn-primary:hover:not(:disabled) {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.w-btn-secondary {
+    background: #ffffff;
+    color: #374151;
+    border-color: #d1d5db;
+}
+
+.w-btn-secondary:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+/* 表单消息 */
+.w-form-message {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 16px 24px 0 24px;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.w-form-message-success {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.w-form-message-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.w-form-message i {
+    font-size: 1rem;
+}
+
+/* 加载字段提示 */
+.w-loading-fields {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.w-loading-fields i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 水平布局 */
+.w-form-horizontal .w-form-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+}
+
+.w-form-horizontal .w-field-label {
+    min-width: 120px;
+    text-align: right;
+    margin-bottom: 0;
+}
+
+.w-form-horizontal .w-field-control {
+    flex: 1;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .w-form-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .w-form-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .w-form-body {
+        padding: 16px;
+    }
+    
+    .w-form-footer {
+        padding: 16px;
+    }
+    
+    .w-form-horizontal .w-form-field {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .w-form-horizontal .w-field-label {
+        min-width: auto;
+        text-align: left;
+    }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+    .w-form-container {
+        background: #1f2937;
+        border-color: #4b5563;
+    }
+    
+    .w-form-header {
+        background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+        border-bottom-color: #4b5563;
+    }
+    
+    .w-form-title {
+        color: #f9fafb;
+    }
+    
+    .w-form-control {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .w-form-control:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    
+    .w-form-control:hover {
+        border-color: #6b7280;
+    }
+    
+    .w-form-control:disabled {
+        background: #374151;
+        color: #6b7280;
+    }
+    
+    .w-form-control:readonly {
+        background: #374151;
+    }
+    
+    .w-field-label {
+        color: #d1d5db;
+    }
+    
+    .w-checkbox-item,
+    .w-radio-item {
+        color: #d1d5db;
+    }
+    
+    .w-field-help {
+        color: #9ca3af;
+    }
+    
+    .w-form-footer {
+        background: #374151;
+        border-top-color: #4b5563;
+    }
+    
+    .w-btn-secondary {
+        background: #374151;
+        color: #d1d5db;
+        border-color: #4b5563;
+    }
+    
+    .w-btn-secondary:hover:not(:disabled) {
+        background: #4b5563;
+        border-color: #6b7280;
+    }
+    
+    .w-loading-fields {
+        color: #9ca3af;
+    }
+}
+
+/* 动画效果 */
+.w-form-container {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 表单字段动画 */
+.w-form-field {
+    animation: slideInLeft 0.3s ease;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 消息动画 */
+.w-form-message {
+    animation: slideInDown 0.3s ease;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+} 

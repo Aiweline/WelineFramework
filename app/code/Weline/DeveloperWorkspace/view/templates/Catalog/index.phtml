@@ -1,0 +1,116 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir='rtl'" : '' ?> class='no-js'>
+<head>
+    <title><lang>WelineFramework开发文档</lang></title>
+    <!--模板Weline_DeveloperWorkspace::common/head.phtml-->
+    <template>Weline_Admin::common/head.phtml</template>
+    <!--树形插件-->
+    <css>Weline_Admin::/libs/bootstrap-treeview-master/dist/bootstrap-treeview.min.css</css>
+    <js a="1">Weline_Admin::/libs/bootstrap-treeview-master/dist/bootstrap-treeview.min.js</js>
+    <!--测试-->
+    @js(Weline_Admin::/libs/bootstrap-treeview-master/dist/bootstrap-treeview.min.js)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--加载中组件 开始-->
+@template(Weline_DeveloperWorkspace::common/page/loading.phtml)
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    @template(Weline_DeveloperWorkspace::common/page/topbar.phtml)
+    <!--页头工具条 结束-->
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <block>Weline\DeveloperWorkspace\Block\Catalogs</block>
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <?php /**@var \Weline\DeveloperWorkspace\Model\Document\Catalog $catelog */ ?>
+    <div class="main-content">
+        <div class="page-content" style="min-height: 800px">
+            <div class="container-fluid">
+                <div class='row'>
+                    <h4 class='card-title'>
+                        <var>$catalog->getName()</var>-
+                        <lang>开发文档</lang>
+                    </h4>
+                    <p class='card-title-desc'>
+                        <var>$catalog->getName()</var>
+                    </p>
+                    @template(Weline_DeveloperWorkspace::common/page/back_home.phtml)
+                    <div class="col-lg-12">
+                        <!--文章列表-->
+                        <ul>
+                            <foreach name="documents">
+                                <li><a href="@var{$v->getUrl()}"><var>$v->getTitle()</var></a></li>
+                            </foreach>
+                        </ul>
+                    </div>
+                </div> <!-- end row -->
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_DeveloperWorkspace::common/right-sidebar.phtml)
+<!--tinymce js-->
+<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
+
+<!-- init js -->
+<script src='@static(Weline_Admin::assets/js/pages/form-editor.init.js)'></script>
+
+<!--页脚-->
+@template(Weline_DeveloperWorkspace::common/footer.phtml)
+
+<!-- jquery.vectormap map -->
+<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
+</body>
+</html>
+

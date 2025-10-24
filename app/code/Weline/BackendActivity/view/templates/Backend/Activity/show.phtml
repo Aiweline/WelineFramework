@@ -1,0 +1,84 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='page-content'>
+        <div class='container-fluid'>
+            <!-- start page message -->
+            <div class='row'>
+                <template>Weline_Component::message.phtml</template>
+            </div> <!-- end message -->
+            <div class='row'>
+                <div class='col-12'>
+                    <div class='card'>
+                        <div class='card-body'>
+                            <h4 class='card-title'>
+                                <lang>查看数据</lang>
+                            </h4>
+                            <p class='card-title-desc'>
+                                <lang>查看日志数据</lang>
+                            </p>
+                            <pre class='card-text'>{{data}}</pre>
+                        </div>
+                    </div>
+                </div> <!-- end col -->
+            </div> <!-- end row -->
+        </div> <!-- container-fluid -->
+    </div>
+    <!-- end main content-->
+</div>
+<!-- END layout-wrapper -->
+<script>
+    let validationEntity = $('#validationEntity')
+    validationEntity.change(function () {
+        let selectedOption = $(this).find(':selected').val();
+        renderAttributeSet(selectedOption)
+    });
+    // 初始化
+    let initSelected = validationEntity.find(':selected').val()
+    let validationSet = $('#validationSet')
+    renderAttributeSet(initSelected)
+
+    function renderAttributeSet(entity_id) {
+        $.get("@backend-url('*/backend/attribute/set/apiSearch')?entity_id=" + entity_id).then((res) => {
+            let items = res['items']
+            validationSet.empty()
+            for (const itemsKey in items) {
+                let item = items[itemsKey]
+                let selected = '';
+                if (validationSet.attr('data-selected') === item.set_id) {
+                    selected = 'selected';
+                }
+                validationSet.append("<option value='" + item.set_id + "' " + selected + ">" + window.lang(item.name) + "</option>")
+            }
+        })
+    }
+</script>
+</body>
+</html>

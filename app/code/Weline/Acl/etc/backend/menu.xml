@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：系统-->
+    <add source="Weline_Acl::acl" name="acl" title="权限管理" action="" parent="Weline_Backend::system_configuration"
+         icon="mdi mdi-security"
+         order="1"/>
+    <add source="Weline_Acl::acl_role" name="acl_role" title="权限角色" action="acl/backend/acl/role" parent="Weline_Acl::acl"
+         icon="dripicons-user-group"
+         order="1"/>
+    <add source="Weline_Acl::acl_source" name="acl_source" title="权限资源" action="acl/backend/acl" parent="Weline_Acl::acl"
+         icon="mdi mdi-format-list-checks"
+         order="2"/>
+</menus>

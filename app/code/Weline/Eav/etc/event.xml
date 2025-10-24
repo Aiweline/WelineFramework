@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Eav::upgrade_default_attribute" instance="Weline\Eav\Observer\UpgradeDefaultAttribute"
+                  disabled="false" shared="true"/>
+    </event>
+</config>

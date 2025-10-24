@@ -1,0 +1,43 @@
+!.gitignore
+# 编辑器配置文件
+.idea
+.vscode
+# 流水线文件
+/.workflow
+
+# 第三方
+/vendor/*
+
+.user.ini
+.phpunit.result.cache
+
+# 代码美化
+.php_cs.cache
+.php-cs-fixer.cache
+
+ssh_tools.jsonc
+
+# generated目录规则：保留目录结构，但忽略具体文件
+/generated/**/*
+!/generated/
+!/generated/.gitkeep
+!/generated/code/
+!/generated/code/.gitkeep
+
+# 数据库文件
+*.sqlite
+*.db
+
+# var 目录：缓存、日志等运行时文件
+/var/*
+!/var/
+!/var/.gitkeep
+
+# 临时文件和调试文件
+temp_*.json
+temp_*.txt
+temp_*.php
+debug_*.json
+debug_*.txt
+debug_*.php
+response_*.html

@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/model/{id}/copy",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-API-Version": "v1"
+    },
+    "body": {
+      "new_name": "My Custom GPT-3.5 Turbo"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "success": true,
+      "data": {
+        "model_id": 101,
+        "origin_model_id": 1,
+        "name": "My Custom GPT-3.5 Turbo",
+        "is_copy": true
+      }
+    },
+    "assertions": {
+      "status_code": 200,
+      "body.success": true,
+      "body.data.model_id": "exists",
+      "body.data.origin_model_id": "exists",
+      "body.data.is_copy": true
+    }
+  }
+}

@@ -1,0 +1,24 @@
+.header-wapper {
+    height: 6vh;
+    border-bottom: 1px solid gray;
+}
+
+.avatar {
+    height: 6vh;
+    float: right;
+}
+
+.avatar > img {
+    width: 100%;
+    height: 100%;
+}
+
+.menu {
+    width: 10%;
+    float: left;
+}
+
+.menu ul {
+    width: 10%;
+    float: left;
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Database::indexer">
+        <observer name="Weline_Indexer::indexer" instance="Weline\Indexer\Observer\Reindex" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Database::indexer_listing">
+        <observer name="Weline_Indexer::indexer_listing" instance="Weline\Indexer\Observer\ReindexListing" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Indexer::module_upgrade" instance="Weline\Indexer\Observer\ReindexCollector" disabled="false" shared="true"/>
+    </event>
+</config>

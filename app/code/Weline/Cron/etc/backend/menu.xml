@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--缓存管理-->
+    <add source="Weline_Cron::system_cron" name="system_cron" title="计划任务管理" action="system/cron/listing"
+         parent="Weline_Backend::system_configuration" icon="ri-timer-flash-line" order="1"/>
+</menus>
