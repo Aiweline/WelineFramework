@@ -1,0 +1,26 @@
+{
+  "name": "weline/module-el-finder-file-manager",
+  "description": "WelineFramework 集成Elfinder文件管理器",
+  "minimum-stability": "stable",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1",
+    "studio-42/elfinder": "2.1.62",
+    "weline/module-file-manager": "*"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\ElFinderFileManager\\": ""
+    },
+    "psr-0": {
+      "Weline\\ElFinderFileManager\\": ""
+    }
+  },
+  "license": "MIT"
+}

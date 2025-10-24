@@ -1,0 +1,72 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="dropdown d-inline-block">
+    <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
+            data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="ri-notification-3-line"></i>
+        <span class="noti-dot"></span>
+    </button>
+    <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
+         aria-labelledby="page-header-notifications-dropdown">
+        <div class="p-3">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h6 class="m-0"> <?= __('通知') ?> </h6>
+                </div>
+                <div class="col-auto">
+                    <a href="#!" class="small"> <?= __('查看全部') ?></a>
+                </div>
+            </div>
+        </div>
+        <div data-simplebar style="max-height: 230px;">
+            <?php
+            /**@var \Weline\Admin\Block\System\Notification $block */
+            $block = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Admin\Block\System\Notification::class);
+            /**@var \Weline\Admin\Model\System\SystemNotification $notice */
+            foreach ($block->getNotices() as $notice) {
+                ?>
+                <a href="" class="text-reset notification-item">
+                    <div class="d-flex">
+                        <div class="flex-shrink-0 me-3">
+                            <?php
+                            if ($notice->getIsIcon()):
+                                ?>
+                                <div class="avatar-xs">
+                                                    <span class="avatar-title bg-primary rounded-circle font-size-16">
+                                                        <i class="<?= $notice->getAvatar() ?>"></i>
+                                                    </span>
+                                </div>
+                            <?php
+                            else:
+                                $avatar = $notice->getAvatar() ? $this->fetchTagSourceFile('static', 'Weline_Frontend::' . $notice->getAvatar()) : '';
+                                ?>
+                                <img src="<?= $avatar ?>" class="rounded-circle avatar-xs"
+                                     alt="user-pic">
+                            <?php
+                            endif;
+                            ?>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1"><?= $notice->getTitle() ?></h6>
+                            <div class="font-size-12 text-muted">
+                                <p class="mb-1"><?= $notice->getContent() ?></p>
+                                <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <?= $notice->getCreateTime() ?>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                <?php
+            }
+            ?>
+        </div>
+        <div class="p-2 border-top">
+            <div class="d-grid">
+                <a class="btn btn-sm btn-link font-size-14 text-center" href="javascript:void(0)">
+                    <i class="mdi mdi-arrow-right-circle me-1"></i> <?= __('查看更多') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

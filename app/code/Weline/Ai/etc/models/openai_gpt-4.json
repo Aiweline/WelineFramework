@@ -1,0 +1,26 @@
+{
+    "vendor": "openai",
+    "model_code": "gpt-4",
+    "model_name": "GPT-4",
+    "model_version": "1.0",
+    "token_price_input": 0.03,
+    "token_price_output": 0.06,
+    "is_active": 1,
+    "is_default": 0,
+    "config": {
+        "api_url": "https://api.openai.com/v1/chat/completions",
+        "max_tokens": 8192,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0,
+        "stream": true
+    },
+    "proxy_info": {
+        "enabled": false,
+        "host": "",
+        "port": 0,
+        "username": "",
+        "password": ""
+    }
+}

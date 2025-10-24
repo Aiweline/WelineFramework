@@ -1,0 +1,534 @@
+<?php
+/**
+ * AI模型编辑页面模板
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $model \Weline\Ai\Model\AiModel|null
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Ai\Model\AiModel;
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$model = $this->getData('model');
+$isEdit = $model && $model->getId();
+$isCopied = $isEdit && $model->isCopied();
+$isReadonly = $isEdit && !$isCopied; // 只有原始模型（非复制）才只读
+$pageTitle = $isEdit ? __('编辑模型: %{1}', $model->getModelName()) : __('新建模型');
+
+// 解析配置JSON
+$config = [];
+if ($isEdit && $model->getConfigJson()) {
+    $configJson = $model->getConfigJson();
+    $config = is_string($configJson) ? json_decode($configJson, true) : $configJson;
+    if (!is_array($config)) {
+        $config = [];
+    }
+}
+
+// 解析代理信息
+$proxyInfo = [];
+if ($isEdit && $model->getProxyInfo()) {
+    $proxyInfoData = $model->getProxyInfo();
+    $proxyInfo = is_string($proxyInfoData) ? json_decode($proxyInfoData, true) : $proxyInfoData;
+    if (!is_array($proxyInfo)) {
+        $proxyInfo = [];
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $pageTitle ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- 开始 主要内容 -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+<div class="model-edit-container">
+    <form action="<?= $this->getUrl('*/backend/model/save') ?>" method="post" id="model-form">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $model->getId() ?>">
+        <?php endif; ?>
+        
+        <!-- 基本信息卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-information-outline me-2"></i><?= __('基本信息') ?></h5>
+                <?php if ($isReadonly): ?>
+                    <small class="text-muted"><?= __('（原始模型基本信息不可修改）') ?></small>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="vendor" class="form-label">
+                                <?= __('供应商') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="vendor" 
+                                   name="vendor" 
+                                   value="<?= $isEdit ? $model->getVendor() : '' ?>" 
+                                   required
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: OpenAI, Google, Anthropic') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('AI模型供应商名称（不可修改）') : __('AI模型供应商名称') ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_code" class="form-label">
+                                <?= __('模型代码') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_code" 
+                                   name="model_code" 
+                                   value="<?= $isEdit ? $model->getModelCode() : '' ?>" 
+                                   required
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: gpt-4, claude-3') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('模型唯一标识代码（不可修改）') : __('模型唯一标识代码') ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_name" class="form-label">
+                                <?= __('模型名称') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_name" 
+                                   name="model_name" 
+                                   value="<?= $isEdit ? $model->getModelName() : '' ?>" 
+                                   required
+                                   placeholder="<?= __('例如: GPT-4 Turbo') ?>">
+                            <small class="form-text text-muted"><?= __('模型显示名称') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_version" class="form-label">
+                                <?= __('模型版本') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_version" 
+                                   name="model_version" 
+                                   value="<?= $isEdit ? $model->getModelVersion() : '1.0' ?>"
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: 1.0, 2.5') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('模型版本号（不可修改）') : __('模型版本号') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-api me-2"></i><?= __('API配置') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">
+                                <?= __('API密钥') ?>
+                            </label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="api_key" 
+                                   name="config[api_key]" 
+                                   value="<?= $config['api_key'] ?? '' ?>"
+                                   placeholder="<?= __('输入API密钥') ?>">
+                            <small class="form-text text-muted"><?= __('API访问密钥') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="api_url" class="form-label">
+                                <?= __('API地址') ?>
+                            </label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="api_url" 
+                                   name="config[api_url]" 
+                                   value="<?= $config['api_url'] ?? '' ?>"
+                                   placeholder="<?= __('例如: https://api.openai.com/v1') ?>">
+                            <small class="form-text text-muted"><?= __('API基础URL') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="temperature" class="form-label">
+                                <?= __('温度系数 (Temperature)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="temperature" 
+                                   name="config[temperature]" 
+                                   value="<?= $config['temperature'] ?? '0.7' ?>"
+                                   step="0.1"
+                                   min="0"
+                                   max="2"
+                                   placeholder="0.7">
+                            <small class="form-text text-muted"><?= __('控制输出随机性，0-2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="max_tokens" class="form-label">
+                                <?= __('最大Token数') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="max_tokens" 
+                                   name="config[max_tokens]" 
+                                   value="<?= $config['max_tokens'] ?? '4096' ?>"
+                                   min="1"
+                                   placeholder="4096">
+                            <small class="form-text text-muted"><?= __('最大生成token数量') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="top_p" class="form-label">
+                                <?= __('Top P') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="top_p" 
+                                   name="config[top_p]" 
+                                   value="<?= $config['top_p'] ?? '1' ?>"
+                                   step="0.1"
+                                   min="0"
+                                   max="1"
+                                   placeholder="1">
+                            <small class="form-text text-muted"><?= __('核采样参数，0-1之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="frequency_penalty" class="form-label">
+                                <?= __('频率惩罚 (Frequency Penalty)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="frequency_penalty" 
+                                   name="config[frequency_penalty]" 
+                                   value="<?= $config['frequency_penalty'] ?? '0' ?>"
+                                   step="0.1"
+                                   min="-2"
+                                   max="2"
+                                   placeholder="0">
+                            <small class="form-text text-muted"><?= __('降低重复词汇，-2到2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="presence_penalty" class="form-label">
+                                <?= __('存在惩罚 (Presence Penalty)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="presence_penalty" 
+                                   name="config[presence_penalty]" 
+                                   value="<?= $config['presence_penalty'] ?? '0' ?>"
+                                   step="0.1"
+                                   min="-2"
+                                   max="2"
+                                   placeholder="0">
+                            <small class="form-text text-muted"><?= __('鼓励新话题，-2到2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="stream" 
+                                       name="config[stream]" 
+                                       value="1"
+                                       <?= ($config['stream'] ?? true) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="stream">
+                                    <?= __('启用流式输出') ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted"><?= __('实时返回生成内容') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 定价信息卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-cash-multiple me-2"></i><?= __('定价信息') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="token_price_input" class="form-label">
+                                <?= __('输入Token价格') ?>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="token_price_input" 
+                                       name="token_price_input" 
+                                       value="<?= $isEdit ? $model->getTokenPriceInput() : '0.000000' ?>"
+                                       step="0.000001"
+                                       min="0"
+                                       placeholder="0.000000">
+                                <span class="input-group-text">/1K tokens</span>
+                            </div>
+                            <small class="form-text text-muted"><?= __('每1000个输入token的价格') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="token_price_output" class="form-label">
+                                <?= __('输出Token价格') ?>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="token_price_output" 
+                                       name="token_price_output" 
+                                       value="<?= $isEdit ? $model->getTokenPriceOutput() : '0.000000' ?>"
+                                       step="0.000001"
+                                       min="0"
+                                       placeholder="0.000000">
+                                <span class="input-group-text">/1K tokens</span>
+                            </div>
+                            <small class="form-text text-muted"><?= __('每1000个输出token的价格') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 代理配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-server-network me-2"></i><?= __('代理配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_host" class="form-label">
+                                <?= __('代理主机') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="proxy_host" 
+                                   name="proxy[host]" 
+                                   value="<?= $proxyInfo['host'] ?? '' ?>"
+                                   placeholder="<?= __('例如: proxy.example.com') ?>">
+                            <small class="form-text text-muted"><?= __('代理服务器地址') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_port" class="form-label">
+                                <?= __('代理端口') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="proxy_port" 
+                                   name="proxy[port]" 
+                                   value="<?= $proxyInfo['port'] ?? '' ?>"
+                                   min="1"
+                                   max="65535"
+                                   placeholder="<?= __('例如: 8080') ?>">
+                            <small class="form-text text-muted"><?= __('代理服务器端口') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_username" class="form-label">
+                                <?= __('代理用户名') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="proxy_username" 
+                                   name="proxy[username]" 
+                                   value="<?= $proxyInfo['username'] ?? '' ?>"
+                                   placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="form-text text-muted"><?= __('代理认证用户名（可选）') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_password" class="form-label">
+                                <?= __('代理密码') ?>
+                            </label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="proxy_password" 
+                                   name="proxy[password]" 
+                                   value="<?= $proxyInfo['password'] ?? '' ?>"
+                                   placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="form-text text-muted"><?= __('代理认证密码（可选）') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态设置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-toggle-switch me-2"></i><?= __('状态设置') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_active" 
+                                       name="is_active" 
+                                       value="1"
+                                       <?= ($isEdit && $model->getIsActive()) || !$isEdit ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_active">
+                                    <?= __('启用此模型') ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted"><?= __('只有启用的模型才能被使用') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_default" 
+                                       name="is_default" 
+                                       value="1"
+                                       <?= $isEdit && $model->getIsDefault() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_default">
+                                    <?= __('设为默认模型') ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted"><?= __('默认模型将在未指定模型时使用') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 提交按钮 -->
+        <div class="card">
+            <div class="card-body text-end">
+                <button type="button" class="btn btn-secondary" onclick="window.history.back()">
+                    <i class="mdi mdi-cancel"></i> <?= __('取消') ?>
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+// 表单验证
+document.getElementById('model-form').addEventListener('submit', function(e) {
+    // 基本验证
+    const vendor = document.getElementById('vendor').value.trim();
+    const modelCode = document.getElementById('model_code').value.trim();
+    const modelName = document.getElementById('model_name').value.trim();
+    
+    if (!vendor || !modelCode || !modelName) {
+        e.preventDefault();
+        alert('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
+        return false;
+    }
+    
+    return true;
+});
+</script>
+
+<style>
+.model-edit-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.model-edit-container .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.model-edit-container .card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.model-edit-container .form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.model-edit-container .form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.model-edit-container .form-text {
+    display: block;
+    margin-top: 0.25rem;
+}
+</style>
+
+            </div><!-- container-fluid -->
+        </div><!-- page-content -->
+    </div><!-- main-content -->
+</div><!-- layout-wrapper -->
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
