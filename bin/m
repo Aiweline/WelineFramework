@@ -1,0 +1,44 @@
+#!/usr/bin/php
+<?php
+if (PHP_SAPI !== 'cli') {
+    echo chr(27) . '[34m bin/m' . chr(27) . '[31m  ??? CLI ??????' . chr(27) . '[0m' . PHP_EOL;
+    exit(1);
+}
+try {
+    require __DIR__ . '/../app/bootstrap.php';
+} catch (Exception $e) {
+    $chr = chr(27);
+    echo <<<CLI_E
+{$chr}[34m [CLI 运行异常]
+{$chr}[31m文件：{$e->getFile()}
+行数：{$e->getLine()}
+消息：{$e->getMessage()} 
+{$chr}[0m
+CLI_E;
+    exit(1);
+}
+try {
+    (new Weline\Framework\Console\Cli('M?? CLI', $argv))->run();
+     if(PHP_CS){
+         (new Weline\Framework\Console\Cli('M?? CLI', ['bin/m','dev:tool:phpcsfixer','no-show','.']))->run();
+     }
+} catch (Exception $e) {
+    $chr = chr(27);
+    while ($e) {
+        $code = (in_array('getErrorCode', get_class_methods($e))) ? $e->getErrorCode() : '?????';
+        echo <<<CLI_E
+{$chr}[31mCLI 异常
+{$chr}[36m代码
+{$code}
+{$chr}[31m追踪: 
+{$e->getTraceAsString()}
+
+{$chr}[31m文件: {$e->getFile()}
+行数: {$e->getLine()}
+消息: {$e->getMessage()}
+CLI_E;
+        echo PHP_EOL."{$chr}[0m";
+        $e = $e->getPrevious();
+    }
+    exit(0);
+}

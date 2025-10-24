@@ -1,0 +1,26 @@
+{
+  "name": "weline/module-i18n",
+  "description": "WelineFramework 国际化i18n翻译支持",
+  "minimum-stability": "stable",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.0",
+    "symfony/intl": "^5.2",
+    "rinvex/countries": "^8"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\I18n\\": ""
+    },
+    "psr-0": {
+      "Weline\\I18n\\": ""
+    }
+  },
+  "license": "MIT"
+}

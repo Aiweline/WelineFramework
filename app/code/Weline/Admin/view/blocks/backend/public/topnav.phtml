@@ -1,0 +1,71 @@
+<?php
+/**@var \Weline\Admin\Block\Backend\Page\Topnav $this */
+?>
+<div class='topnav'>
+    <div class='container-fluid'>
+        <nav class='navbar navbar-light navbar-expand-lg topnav-menu'>
+
+            <div class='collapse navbar-collapse' id='topnav-menu-content'>
+                <ul class='navbar-nav'>
+                    <foreach name="menus" item="top_menu">
+                        <!--顶级菜单-->
+                        <li class='nav-item @if{top_menu.sub_menu=>"dropdown"}'>
+                            <php>
+                                $action = $top_menu['action'];
+                                $id = $top_menu['source'];
+                            </php>
+                            <if condition="top_menu.sub_menu">
+                                <php>
+                                    $href = '#';
+                                    $dropdown_addition = "id='{$id}' role='button'";
+                                    $dropdown_addition_class = 'arrow-none';
+                                </php>
+                                <else/>
+                                <php>
+                                    $href = $top_menu->getUrl();
+                                    $dropdown_addition ='';
+                                    $dropdown_addition_class = '';
+                                </php>
+                            </if>
+                            <a class='nav-link @var{$dropdown_addition_class}' href='@var{$href}'
+                               @var{$dropdown_addition}>
+                                <i class='@var{top_menu.icon}'></i>
+                                <var>top_menu.title</var>
+                                <if condition="top_menu.sub_menu">
+                                    <div class='arrow-down'></div>
+                                </if>
+                            </a>
+                            <if condition='top_menu.sub_menu'>
+                                <div class='dropdown-menu' aria-labelledby='@var($id)'>
+                                    <!--二级菜单-->
+                                    <foreach name="top_menu.sub_menu" item='sub_menu'>
+                                        <if condition='sub_menu.sub_menu'>
+                                            <div class='dropdown'>
+                                                <a class='dropdown-item arrow-none' href='#'
+                                                   id='@var{$id}'
+                                                   role='button'>
+                                                    <var>sub_menu.title</var>
+                                                    <div class='arrow-down'></div>
+                                                </a>
+                                                <div class='dropdown-menu' aria-labelledby='@var{sub_menu.source}'>
+                                                    <!--三级菜单-->
+                                                    <foreach name="sub_menu.sub_menu" item="third_menu">
+                                                        <a href="@var{third_menu->getUrl()}"
+                                                           class='dropdown-item'><var>third_menu.title</var></a>
+                                                    </foreach>
+                                                </div>
+                                            </div>
+                                            <else/>
+                                            <!--二级菜单如果没有子菜单则直接显示菜单-->
+                                            <a href="@var{sub_menu->getUrl()}" class='dropdown-item'><var>sub_menu.title</var></a>
+                                        </if>
+                                    </foreach>
+                                </div>
+                            </if>
+                        </li>
+                    </foreach>
+                </ul>
+            </div>
+        </nav>
+    </div>
+</div>

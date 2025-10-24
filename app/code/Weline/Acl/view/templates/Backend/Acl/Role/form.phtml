@@ -1,0 +1,183 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>权限编辑</lang></title>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>Acl权限管理</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'>
+                                        <a href='javascript: void(0);'>
+                                            <lang>系统配置</lang>
+                                        </a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/acl')"><lang>Acl权限管理</lang></a>
+                                    </li>
+                                    <li class='breadcrumb-item'>
+                                        <a href="@backend-url('*/backend/acl/role')"><lang>Acl角色管理</lang></a>
+                                    </li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>Acl角色添加</lang>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>Acl权限管理</lang>
+                                </h4>
+                                <p class='card-title-desc'>
+                                    <lang>支持角色权限管理</lang>
+                                </p>
+                                <form class='needs-validation' action="{{action}}" method="post"
+                                      novalidate>
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='role_name'><lang>角色名</lang></label>
+                                                <if condition="edit_role.role_id">
+                                                    <input type='hidden' name="role_id" value='{{edit_role.role_id}}'>
+                                                </if>
+                                                <input type='text' class='form-control' name="role_name" id='role_name'
+                                                       placeholder='@lang{请输入角色名}' value='{{edit_role.role_name}}'
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>角色名称验证成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入角色名称</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='role_description'><lang>角色描述</lang></label>
+                                                <textarea type='text' class='form-control' name="role_description" id='role_description'
+                                                       placeholder='@lang{请输入角色描述}'
+                                                          required>{{edit_role.role_description}}</textarea>
+                                                <div class='valid-feedback'>
+                                                    <lang>角色描述验证成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入角色描述</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type='submit' class='btn btn-primary'><lang>提交</lang></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- parsleyjs -->
+<script src='@static(Weline_Admin::assets/libs/parsleyjs/parsley.min.js)'></script>
+<!-- validation init -->
+<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

@@ -1,0 +1,320 @@
+<?php
+/**
+ * AI聊天界面模板
+ * 
+ * @var array $models
+ * @var array $adapters
+ */
+?>
+
+<div class="ai-chat-page">
+    <div class="chat-container">
+        <div class="chat-header">
+            <h3><i class="mdi mdi-robot"></i> <?= __('AI聊天助手') ?></h3>
+            <div class="chat-settings">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleSettings()">
+                    <i class="mdi mdi-cog"></i> <?= __('设置') ?>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearChat()">
+                    <i class="mdi mdi-delete"></i> <?= __('清空') ?>
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label><?= __('选择模型') ?></label>
+                        <select class="form-control" id="modelSelect">
+                            <option value=""><?= __('使用默认模型') ?></option>
+                            <?php foreach ($models as $model): ?>
+                                <option value="<?= $model->getModelCode() ?>">
+                                    <?= $model->getName() ?> (<?= $model->getVendor() ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label><?= __('场景适配器') ?></label>
+                        <select class="form-control" id="scenarioSelect">
+                            <option value=""><?= __('无') ?></option>
+                            <?php foreach ($adapters as $adapter): ?>
+                                <option value="<?= $adapter['code'] ?>">
+                                    <?= $adapter['name'] ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-message">
+                <i class="mdi mdi-robot mdi-48px"></i>
+                <h4><?= __('欢迎使用AI聊天助手！') ?></h4>
+                <p><?= __('请输入您的问题，我会尽力为您解答。') ?></p>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <form id="chatForm" onsubmit="sendMessage(); return false;">
+                <div class="input-group">
+                    <textarea class="form-control" 
+                              id="messageInput" 
+                              placeholder="<?= __('请输入您的消息...') ?>" 
+                              rows="1"
+                              onkeydown="handleKeyDown(event)"></textarea>
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="submit" id="sendButton">
+                            <i class="mdi mdi-send"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let isProcessing = false;
+
+function toggleSettings() {
+    const panel = document.getElementById('settingsPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function clearChat() {
+    if (!confirm('<?= __('确定要清空聊天记录吗？') ?>')) {
+        return;
+    }
+
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.innerHTML = `
+        <div class="welcome-message">
+            <i class="mdi mdi-robot mdi-48px"></i>
+            <h4><?= __('欢迎使用AI聊天助手！') ?></h4>
+            <p><?= __('请输入您的问题，我会尽力为您解答。') ?></p>
+        </div>
+    `;
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+async function sendMessage() {
+    if (isProcessing) {
+        return;
+    }
+
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+
+    if (!message) {
+        return;
+    }
+
+    isProcessing = true;
+    const sendButton = document.getElementById('sendButton');
+    sendButton.disabled = true;
+
+    // 显示用户消息
+    addMessage(message, 'user');
+    input.value = '';
+
+    // 创建AI消息容器
+    const aiMessageDiv = addMessage('', 'ai');
+    const aiContentDiv = aiMessageDiv.querySelector('.message-content');
+
+    try {
+        const modelCode = document.getElementById('modelSelect').value;
+        const scenarioCode = document.getElementById('scenarioSelect').value;
+
+        // 调用API
+        const response = await fetch('<?= $this->getFrontendUrl('*/frontend/chat/send') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `message=${encodeURIComponent(message)}&model_code=${modelCode}&scenario_code=${scenarioCode}`
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            aiContentDiv.textContent = data.data.response;
+        } else {
+            aiContentDiv.innerHTML = `<span class="text-danger"><?= __('错误：') ?>${data.message}</span>`;
+        }
+    } catch (error) {
+        aiContentDiv.innerHTML = `<span class="text-danger"><?= __('请求失败：') ?>${error.message}</span>`;
+    } finally {
+        isProcessing = false;
+        sendButton.disabled = false;
+    }
+
+    // 滚动到底部
+    scrollToBottom();
+}
+
+function addMessage(content, type) {
+    const messagesContainer = document.getElementById('chatMessages');
+
+    // 移除欢迎消息
+    const welcome = messagesContainer.querySelector('.welcome-message');
+    if (welcome) {
+        welcome.remove();
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message message-${type}`;
+    messageDiv.innerHTML = `
+        <div class="message-avatar">
+            <i class="mdi mdi-${type === 'user' ? 'account' : 'robot'}"></i>
+        </div>
+        <div class="message-content">${content}</div>
+    `;
+
+    messagesContainer.appendChild(messageDiv);
+    return messageDiv;
+}
+
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+</script>
+
+<style>
+.ai-chat-page {
+    height: calc(100vh - 60px);
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.chat-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chat-header h3 {
+    margin: 0;
+}
+
+.chat-settings {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-panel {
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.welcome-message {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+}
+
+.welcome-message i {
+    color: #667eea;
+    margin-bottom: 20px;
+}
+
+.message {
+    display: flex;
+    margin-bottom: 20px;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.message-user .message-avatar {
+    background-color: #667eea;
+    color: white;
+}
+
+.message-ai .message-avatar {
+    background-color: #f0f0f0;
+    color: #666;
+}
+
+.message-content {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 10px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.message-user .message-content {
+    background-color: #667eea;
+    color: white;
+    margin-left: auto;
+    max-width: 70%;
+}
+
+.message-ai .message-content {
+    background-color: #f0f0f0;
+    color: #333;
+    max-width: 80%;
+}
+
+.chat-input-container {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.chat-input-container textarea {
+    resize: none;
+    max-height: 150px;
+}
+
+#sendButton {
+    height: 100%;
+}
+</style>
+

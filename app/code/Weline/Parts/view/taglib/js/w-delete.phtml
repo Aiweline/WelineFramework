@@ -1,0 +1,289 @@
+<style>
+    .w-delete-confirm {
+        position: fixed;
+        z-index: 1050;
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        max-width: 90%;
+    }
+
+    .w-delete-message {
+        padding: 10px 15px;
+        border-radius: 4px;
+        position: fixed;
+        z-index: 1050;
+        max-width: 90%;
+    }
+
+    .w-delete-success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .w-delete-error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+</style>
+<script>
+    (function () {
+        // 显示消息提示
+        const showMessage = (element, message, type = 'success') => {
+            const rect = element.getBoundingClientRect();
+            const msg = document.createElement('div');
+            msg.className = `w-delete-message w-delete-${type}`;
+            msg.textContent = message;
+
+            // 先添加到DOM中获取实际尺寸
+            msg.style.visibility = 'hidden';
+            msg.style.position = 'absolute';
+            document.body.appendChild(msg);
+
+            // 获取实际尺寸
+            const msgWidth = msg.offsetWidth;
+            const msgHeight = msg.offsetHeight;
+            const viewportWidth = document.documentElement.clientWidth;
+            const viewportHeight = document.documentElement.clientHeight;
+
+            // 计算最佳位置
+            let left, top;
+            
+            // 水平方向自适应
+            const triggerRight = rect.right + window.scrollX;
+            const triggerLeft = rect.left + window.scrollX;
+            
+            if (triggerRight + msgWidth + 20 > viewportWidth) {
+                // 右边空间不够，尝试左边
+                if (triggerLeft - msgWidth - 20 > 10) {
+                    left = triggerLeft - msgWidth - 10;
+                } else {
+                    // 左右都不够，居中显示
+                    left = Math.max(10, (viewportWidth - msgWidth) / 2);
+                }
+            } else {
+                // 右边有足够空间
+                left = Math.min(viewportWidth - msgWidth - 10, triggerLeft + 10);
+            }
+            
+            // 垂直方向自适应
+            const triggerTop = rect.top + window.scrollY;
+            const triggerBottom = rect.bottom + window.scrollY;
+            
+            if (triggerBottom + msgHeight + 20 > viewportHeight + window.scrollY) {
+                // 下方空间不够，显示在上方
+                if (triggerTop - msgHeight - 20 > window.scrollY) {
+                    top = triggerTop - msgHeight - 10;
+                } else {
+                    // 上下都不够，显示在视口中央
+                    top = Math.max(window.scrollY + 20, (viewportHeight - msgHeight) / 2 + window.scrollY);
+                }
+            } else {
+                // 下方有足够空间
+                top = triggerBottom + 10;
+            }
+
+            // 应用位置并显示
+            Object.assign(msg.style, {
+                left: `${left}px`,
+                top: `${top}px`,
+                visibility: 'visible'
+            });
+
+            setTimeout(() => msg.remove(), 3000);
+        };
+
+        // 显示确认对话框
+        const showConfirm = (element, message) => {
+            return new Promise(resolve => {
+                const rect = element.getBoundingClientRect();
+                const confirmBox = document.createElement('div');
+                confirmBox.className = 'w-delete-confirm';
+                confirmBox.innerHTML = `
+                <div>${message}</div>
+                <div class="mt-2 text-end">
+                    <button class="btn btn-sm btn-danger me-2 confirm-btn">${__('确认')}</button>
+                    <button class="btn btn-sm btn-outline-secondary cancel-btn">${__('取消')}</button>
+                </div>
+            `;
+
+                // 先添加到DOM中获取实际尺寸
+                confirmBox.style.visibility = 'hidden';
+                confirmBox.style.position = 'absolute';
+                document.body.appendChild(confirmBox);
+
+                // 获取实际尺寸
+                const boxWidth = confirmBox.offsetWidth;
+                const boxHeight = confirmBox.offsetHeight;
+                const viewportWidth = document.documentElement.clientWidth;
+                const viewportHeight = document.documentElement.clientHeight;
+                
+                // 计算最佳位置
+                let left, top;
+                
+                // 水平方向自适应
+                const triggerRight = rect.right + window.scrollX;
+                const triggerLeft = rect.left + window.scrollX;
+                
+                if (triggerRight + boxWidth + 20 > viewportWidth) {
+                    // 右边空间不够，尝试左边
+                    if (triggerLeft - boxWidth - 20 > 10) {
+                        left = triggerLeft - boxWidth - 10;
+                    } else {
+                        // 左右都不够，居中显示
+                        left = Math.max(10, (viewportWidth - boxWidth) / 2);
+                    }
+                } else {
+                    // 右边有足够空间
+                    left = Math.min(viewportWidth - boxWidth - 10, triggerLeft + 10);
+                }
+                
+                // 垂直方向自适应
+                const triggerTop = rect.top + window.scrollY;
+                const triggerBottom = rect.bottom + window.scrollY;
+                
+                if (triggerBottom + boxHeight + 20 > viewportHeight + window.scrollY) {
+                    // 下方空间不够，显示在上方
+                    if (triggerTop - boxHeight - 20 > window.scrollY) {
+                        top = triggerTop - boxHeight - 10;
+                    } else {
+                        // 上下都不够，显示在视口中央
+                        top = Math.max(window.scrollY + 20, (viewportHeight - boxHeight) / 2 + window.scrollY);
+                    }
+                } else {
+                    // 下方有足够空间
+                    top = triggerBottom + 10;
+                }
+
+                // 应用位置并显示
+                Object.assign(confirmBox.style, {
+                    left: `${left}px`,
+                    top: `${top}px`,
+                    visibility: 'visible'
+                });
+
+                // 事件处理
+                const handleConfirm = () => {
+                    cleanup();
+                    resolve(true);
+                };
+
+                const handleCancel = () => {
+                    cleanup();
+                    resolve(false);
+                };
+
+                const handleClickOutside = (e) => {
+                    if (!confirmBox.contains(e.target) && !element.contains(e.target)) {
+                        cleanup();
+                        resolve(false);
+                    }
+                };
+
+                const cleanup = () => {
+                    confirmBox.remove();
+                    document.removeEventListener('click', handleClickOutside);
+                };
+
+                // 绑定事件
+                confirmBox.querySelector('.confirm-btn').addEventListener('click', handleConfirm);
+                confirmBox.querySelector('.cancel-btn').addEventListener('click', handleCancel);
+                document.addEventListener('click', handleClickOutside);
+
+                document.body.appendChild(confirmBox);
+            });
+        };
+
+        // 执行删除请求
+        const performDelete = async (element) => {
+            const form = element.closest('form');
+            const url = element.getAttribute('w-url') || element.getAttribute('w-ajax') || element.getAttribute('href');
+            const method = element.getAttribute('w-method') || 'DELETE';
+
+            // 提取所有 w-var-xxx 属性作为 POST 参数
+            const postData = {};
+            Array.from(element.attributes).forEach(attr => {
+                if (attr.name.startsWith('w-var-')) {
+                    const key = attr.name.replace('w-var-', '');
+                    postData[key] = attr.value;
+                }
+            });
+
+            try {
+                if (form) {
+                    form.submit();
+                    return;
+                }
+
+                const fetchOptions = { method };
+                if (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT' || method.toUpperCase() === 'PATCH') {
+                    fetchOptions.headers = { 'Content-Type': 'application/json' };
+                    fetchOptions.body = JSON.stringify(postData);
+                } else if (Object.keys(postData).length > 0) {
+                    // GET/DELETE等方式，将参数拼接到URL
+                    const urlObj = new URL(url, window.location.origin);
+                    Object.entries(postData).forEach(([k, v]) => urlObj.searchParams.append(k, v));
+                    fetchOptions.method = method;
+                    return performDeleteWithUrl(urlObj.toString(), fetchOptions, element);
+                }
+
+                const response = await fetch(url, fetchOptions);
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(element, __('删除成功'), 'success');
+                    if (element.closest('tr')) {
+                        element.closest('tr').remove();
+                    }
+                } else {
+                    showMessage(element, data.message || __('删除失败'), 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage(element, __('删除请求失败'), 'error');
+            }
+        };
+
+        // 辅助函数：GET/DELETE等方式带参数
+        const performDeleteWithUrl = async (url, fetchOptions, element) => {
+            try {
+                const response = await fetch(url, fetchOptions);
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(element, __('删除成功'), 'success');
+                    if (element.closest('tr')) {
+                        element.closest('tr').remove();
+                    }
+                } else {
+                    showMessage(element, data.message || __('删除失败'), 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage(element, __('删除请求失败'), 'error');
+            }
+        };
+
+        // 事件委托处理点击
+        document.addEventListener('click', async (event) => {
+            let deleteBtn = event.target.closest('[w-delete="true"]');
+            if (!deleteBtn) {
+                deleteBtn = event.target.closest('[w-delete="1"]');
+            }
+            if (!deleteBtn) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            // 确认删除
+            const confirmed = await showConfirm(
+                deleteBtn,
+                deleteBtn.getAttribute('w-msg') || __('确认删除吗？')
+            );
+
+            if (confirmed) {
+                await performDelete(deleteBtn);
+            }
+        }, true); // 使用捕获阶段，阻止冒泡提前触发
+    })();
+</script>

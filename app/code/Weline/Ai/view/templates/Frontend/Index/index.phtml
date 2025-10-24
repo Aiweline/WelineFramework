@@ -1,0 +1,286 @@
+<?php
+/**
+ * AI助手工具介绍首页模板
+ * 
+ * @var array $models
+ * @var array $adapters
+ * @var int $models_count
+ * @var int $adapters_count
+ */
+?>
+
+<div class="ai-index-page">
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="container">
+            <h1 class="display-4 text-center mb-4"><?= __('AI助手工具平台') ?></h1>
+            <p class="lead text-center mb-5">
+                <?= __('统一的AI模型管理和助手工具平台，支持多种主流AI模型，提供专业场景适配器，优化生成效果') ?>
+            </p>
+            <div class="text-center">
+                <?php if ($this->session->isLogin()): ?>
+                    <a href="<?= $this->getFrontendUrl('*/frontend/chat') ?>" class="btn btn-primary btn-lg mr-3">
+                        <i class="mdi mdi-robot"></i> <?= __('开始使用') ?>
+                    </a>
+                    <a href="<?= $this->getFrontendUrl('*/frontend/center') ?>" class="btn btn-outline-primary btn-lg">
+                        <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
+                    </a>
+                <?php else: ?>
+                    <a href="<?= $this->getFrontendUrl('login') ?>" class="btn btn-primary btn-lg mr-3">
+                        <i class="mdi mdi-login"></i> <?= __('登录使用') ?>
+                    </a>
+                    <a href="<?= $this->getFrontendUrl('register') ?>" class="btn btn-outline-primary btn-lg">
+                        <i class="mdi mdi-account-plus"></i> <?= __('注册账号') ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="stats-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="mdi mdi-robot"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3><?= $models_count ?></h3>
+                            <p><?= __('AI模型') ?></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="mdi mdi-palette"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3><?= $adapters_count ?></h3>
+                            <p><?= __('场景适配器') ?></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="mdi mdi-api"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3><?= __('RESTful') ?></h3>
+                            <p><?= __('API接口') ?></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="mdi mdi-earth"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3><?= __('多语言') ?></h3>
+                            <p><?= __('国际化支持') ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models Section -->
+    <div class="models-section">
+        <div class="container">
+            <h2 class="section-title"><?= __('可用的AI模型') ?></h2>
+            <div class="row">
+                <?php foreach (array_slice($models, 0, 6) as $model): ?>
+                    <div class="col-md-4 mb-4">
+                        <div class="model-card">
+                            <div class="model-header">
+                                <h4><?= $model->getName() ?></h4>
+                                <span class="badge badge-info"><?= $model->getVendor() ?></span>
+                            </div>
+                            <div class="model-body">
+                                <p class="model-code"><code><?= $model->getModelCode() ?></code></p>
+                                <div class="model-pricing">
+                                    <div class="price-item">
+                                        <span class="label"><?= __('输入：') ?></span>
+                                        <span class="value">$<?= number_format($model->getData('token_price_input'), 6) ?>/1K</span>
+                                    </div>
+                                    <div class="price-item">
+                                        <span class="label"><?= __('输出：') ?></span>
+                                        <span class="value">$<?= number_format($model->getData('token_price_output'), 6) ?>/1K</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="text-center mt-4">
+                <a href="<?= $this->getFrontendUrl('*/frontend/index/pricing') ?>" class="btn btn-outline-primary">
+                    <?= __('查看全部模型') ?> <i class="mdi mdi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Adapters Section -->
+    <div class="adapters-section">
+        <div class="container">
+            <h2 class="section-title"><?= __('场景适配器') ?></h2>
+            <div class="row">
+                <?php foreach (array_slice($adapters, 0, 6) as $adapter): ?>
+                    <div class="col-md-4 mb-4">
+                        <div class="adapter-card">
+                            <h4><?= $adapter['name'] ?></h4>
+                            <p class="text-muted"><?= $adapter['description'] ?></p>
+                            <span class="badge badge-secondary"><?= $adapter['code'] ?></span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="cta-section">
+        <div class="container text-center">
+            <h2><?= __('开始使用AI助手') ?></h2>
+            <p class="lead mb-4"><?= __('立即体验强大的AI功能，提升工作效率') ?></p>
+            <?php if (!$this->session->isLogin()): ?>
+                <a href="<?= $this->getFrontendUrl('register') ?>" class="btn btn-light btn-lg">
+                    <?= __('立即注册') ?> <i class="mdi mdi-arrow-right"></i>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.ai-index-page {
+    min-height: 100vh;
+}
+
+.hero-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 100px 0 80px;
+}
+
+.hero-section .btn-primary {
+    background-color: white;
+    color: #667eea;
+    border-color: white;
+}
+
+.hero-section .btn-outline-primary {
+    border-color: white;
+    color: white;
+}
+
+.stats-section {
+    padding: 60px 0;
+    background-color: #f8f9fa;
+}
+
+.stat-card {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-icon i {
+    font-size: 48px;
+    color: #667eea;
+}
+
+.stat-content h3 {
+    font-size: 32px;
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+
+.stat-content p {
+    color: #666;
+    margin: 0;
+}
+
+.models-section, .adapters-section {
+    padding: 60px 0;
+}
+
+.section-title {
+    text-align: center;
+    margin-bottom: 40px;
+    font-weight: bold;
+}
+
+.model-card, .adapter-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px;
+    height: 100%;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.model-card:hover, .adapter-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.model-header h4 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.model-code {
+    margin: 10px 0;
+}
+
+.model-pricing {
+    margin-top: 15px;
+}
+
+.price-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.price-item .label {
+    color: #666;
+}
+
+.price-item .value {
+    font-weight: bold;
+}
+
+.adapter-card h4 {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.cta-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 80px 0;
+}
+
+.cta-section h2 {
+    margin-bottom: 20px;
+}
+</style>
+

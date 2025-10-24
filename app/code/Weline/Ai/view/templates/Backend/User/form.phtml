@@ -1,0 +1,252 @@
+<?php
+/**
+ * 前端用户创建/编辑表单
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Frontend\Model\FrontendUser $user
+ */
+
+$user = $this->getData('user');
+$isEdit = $user && $user->getId();
+?>
+
+<style>
+.user-form-container {
+    padding: 20px;
+    background: #fff;
+}
+
+.form-section {
+    margin-bottom: 24px;
+}
+
+.form-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 6px;
+}
+
+.form-label .required {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-input:focus {
+    color: #495057;
+    background-color: #fff;
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.form-check-input {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.form-check-label {
+    font-size: 14px;
+    color: #495057;
+    cursor: pointer;
+    margin: 0;
+}
+
+.form-actions {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e9ecef;
+    text-align: right;
+}
+
+.btn-submit {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    background: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.btn-submit:hover {
+    background: #0056b3;
+}
+
+.btn-submit:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+</style>
+
+<div class="user-form-container">
+    <form id="userForm" method="post" action="<?= $this->getBackendUrl('*/backend/user/save') ?>">
+        <input type="hidden" name="id" value="<?= $isEdit ? $user->getId() : '' ?>">
+        
+        <!-- 基本信息 -->
+        <div class="form-section">
+            <div class="form-section-title"><?= __('基本信息') ?></div>
+            
+            <div class="form-group">
+                <label class="form-label">
+                    <?= __('用户名') ?><span class="required">*</span>
+                </label>
+                <input type="text" 
+                       class="form-input" 
+                       name="username" 
+                       value="<?= $isEdit ? $user->getData('username') : '' ?>"
+                       placeholder="<?= __('请输入用户名') ?>"
+                       required>
+                <span class="form-hint"><?= __('用户登录账号，不可重复') ?></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    <?= __('昵称') ?>
+                </label>
+                <input type="text" 
+                       class="form-input" 
+                       name="nickname" 
+                       value="<?= $isEdit ? $user->getData('nickname') : '' ?>"
+                       placeholder="<?= __('请输入昵称（可选）') ?>">
+                <span class="form-hint"><?= __('用户显示名称') ?></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    <?= __('邮箱') ?><span class="required">*</span>
+                </label>
+                <input type="email" 
+                       class="form-input" 
+                       name="email" 
+                       value="<?= $isEdit ? $user->getData('email') : '' ?>"
+                       placeholder="<?= __('请输入邮箱地址') ?>"
+                       required>
+                <span class="form-hint"><?= __('用户邮箱，不可重复') ?></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    <?= __('密码') ?><?= !$isEdit ? '<span class="required">*</span>' : '' ?>
+                </label>
+                <input type="password" 
+                       class="form-input" 
+                       name="password" 
+                       placeholder="<?= $isEdit ? __('留空则不修改密码') : __('请输入密码') ?>"
+                       <?= !$isEdit ? 'required' : '' ?>>
+                <span class="form-hint">
+                    <?= $isEdit ? __('如需修改密码请输入新密码，否则留空') : __('请设置用户登录密码') ?>
+                </span>
+            </div>
+
+            <div class="form-group">
+                <div class="form-check">
+                    <input type="checkbox" 
+                           class="form-check-input" 
+                           id="is_active" 
+                           name="is_active" 
+                           value="1"
+                           <?= (!$isEdit || $user->getData('is_active')) ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="is_active">
+                        <?= __('激活用户') ?>
+                    </label>
+                </div>
+                <span class="form-hint"><?= __('禁用后用户无法登录') ?></span>
+            </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <div class="form-actions">
+            <button type="submit" class="btn-submit" id="submitBtn">
+                <?= __('保存') ?>
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// 表单提交处理
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitBtn = document.getElementById('submitBtn');
+    const originalText = submitBtn.textContent;
+    
+    // 显示加载状态
+    submitBtn.disabled = true;
+    submitBtn.textContent = '<?= __("保存中...") ?>';
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // 刷新父页面
+            if (window.parent) {
+                window.parent.location.reload();
+            } else {
+                location.reload();
+            }
+        } else {
+            alert('<?= __("保存失败：") ?>' + data.message);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    });
+});
+</script>
+

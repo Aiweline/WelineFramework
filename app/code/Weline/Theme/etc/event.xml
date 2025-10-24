@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Register::register_installer">
+        <observer name="Weline_Theme::register_installer" instance="Weline\Theme\Observer\Register" disabled="false" shared="false"/>
+    </event>
+    <event name="Framework_View::fetch_file">
+        <observer name="Framework_Theme::fetch_file" instance="Weline\Theme\Observer\TemplateFetchFile" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Console::compile">
+        <observer name="Framework_Theme::compile" instance="Weline\Theme\Observer\CompileResource" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Frontend::compiler_upgrade" instance="Weline\Theme\Observer\UpgradeCompiler" disabled="false" shared="true"/>
+    </event>
+</config>

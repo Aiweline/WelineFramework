@@ -1,0 +1,254 @@
+<?php
+/**
+ * 前端用户管理列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $users
+ * @var int $total
+ * @var int $page
+ * @var int $pageSize
+ * @var int $totalPages
+ * @var string $keyword
+ * @var string $current_status
+ */
+
+$users = $this->getData('users') ?: [];
+$total = (int)$this->getData('total');
+$page = (int)$this->getData('page');
+$pageSize = (int)$this->getData('pageSize');
+$totalPages = (int)$this->getData('totalPages');
+$keyword = $this->getData('keyword') ?: '';
+$current_status = $this->getData('current_status');
+?>
+
+@template(Weline_Admin::common/head.phtml)
+@template(Weline_Admin::common/page/loading.phtml)
+
+<w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+<w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+@template(Weline_Admin::common/left-sidebar.phtml)
+
+<div class="content">
+    <div class="page-header">
+        <div class="page-title">
+            <h4><lang>前端用户管理</lang></h4>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('dashboard/index/index') ?>"><lang>首页</lang></a></li>
+                    <li class="breadcrumb-item"><lang>AI模块</lang></li>
+                    <li class="breadcrumb-item active" aria-current="page"><lang>用户管理</lang></li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <!-- 搜索和操作栏 -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class='card-title'>
+                    <lang>用户列表</lang>
+                    <span class="badge bg-primary"><?= $total ?></span>
+                </h4>
+                <div class="d-flex gap-2">
+                    <!-- 状态筛选 -->
+                    <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
+                        <option value=""><lang>全部状态</lang></option>
+                        <option value="1" <?= $current_status === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
+                        <option value="0" <?= $current_status === '0' ? 'selected' : '' ?>><lang>禁用</lang></option>
+                    </select>
+                    
+                    <!-- 搜索框 -->
+                    <div class="input-group" style="width: 300px;">
+                        <input type="text" class="form-control" id="searchInput" 
+                               placeholder="<?= __('搜索用户名/邮箱...') ?>" 
+                               value="<?= $keyword ?>">
+                        <button class="btn btn-outline-secondary" type="button" onclick="doSearch()">
+                            <i class="mdi mdi-magnify"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- 创建按钮 -->
+                    <block class='Weline\Component\Block\OffCanvas'
+                           template='Weline_Component::off-canvas.phtml'
+                           cache='0'
+                           id='create_user_offcanvas'
+                           action='*/backend/user/form'
+                           target-tag='button'
+                           icon='mdi mdi-plus'
+                           target-button-text='创建用户'
+                           target-button-class='btn btn-primary'
+                           title='创建前端用户'
+                           close-button-show='1'
+                           close-button-text='关闭'
+                           direction='right'
+                           class-names='w-50'
+                           flush='1'
+                           flush-button-text='刷新'
+                           save='0'
+                           off-canvas-body-style=''
+                    />
+                </div>
+            </div>
+
+            <!-- 用户列表表格 -->
+            <?php if (!empty($users)): ?>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th><lang>用户名</lang></th>
+                                <th><lang>昵称</lang></th>
+                                <th><lang>邮箱</lang></th>
+                                <th><lang>状态</lang></th>
+                                <th><lang>创建时间</lang></th>
+                                <th class="text-end"><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($users as $user): ?>
+                                <tr>
+                                    <td><?= $user->getId() ?></td>
+                                    <td><?= $user->getData('username') ?></td>
+                                    <td><?= $user->getData('nickname') ?: '-' ?></td>
+                                    <td><?= $user->getData('email') ?: '-' ?></td>
+                                    <td>
+                                        <?php if ($user->getData('is_active')): ?>
+                                            <span class="badge bg-success"><lang>激活</lang></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= $user->getData('created_time') ? date('Y-m-d H:i', strtotime($user->getData('created_time'))) : '-' ?></td>
+                                    <td class="text-end">
+                                        <!-- 编辑按钮 -->
+                                        <block class='Weline\Component\Block\OffCanvas'
+                                               template='Weline_Component::off-canvas.phtml'
+                                               cache='0'
+                                               id='edit_user_offcanvas_<?= $user->getId() ?>'
+                                               action='*/backend/user/form'
+                                               params='{"id":<?= $user->getId() ?>}'
+                                               target-tag='button'
+                                               icon='mdi mdi-pencil'
+                                               target-button-text=''
+                                               target-button-class='btn btn-sm btn-outline-primary'
+                                               title='编辑用户'
+                                               close-button-show='1'
+                                               close-button-text='关闭'
+                                               direction='right'
+                                               class-names='w-50'
+                                               flush='1'
+                                               flush-button-text='刷新'
+                                               save='0'
+                                               off-canvas-body-style=''
+                                        />
+                                        
+                                        <!-- 删除按钮 -->
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="deleteUser(<?= $user->getId() ?>, '<?= addslashes($user->getData('username')) ?>')">
+                                            <i class="mdi mdi-delete"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <?php if ($totalPages > 1): ?>
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            <?php if ($page > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?p=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
+                                        <lang>上一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                            
+                            <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="page-link" href="?p=<?= $i ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
+                                        <?= $i ?>
+                                    </a>
+                                </li>
+                            <?php endfor; ?>
+                            
+                            <?php if ($page < $totalPages): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?p=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
+                                        <lang>下一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
+            <?php else: ?>
+                <div class="alert alert-info text-center">
+                    <i class="mdi mdi-information-outline me-2"></i>
+                    <lang>暂无用户数据...</lang>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<script>
+// 搜索功能
+function doSearch() {
+    const keyword = document.getElementById('searchInput').value.trim();
+    const status = document.getElementById('statusFilter').value;
+    window.location.href = '?keyword=' + encodeURIComponent(keyword) + '&status=' + status;
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        doSearch();
+    }
+});
+
+// 状态筛选
+function filterByStatus(status) {
+    const keyword = document.getElementById('searchInput').value.trim();
+    window.location.href = '?keyword=' + encodeURIComponent(keyword) + '&status=' + status;
+}
+
+// 删除用户
+function deleteUser(id, username) {
+    if (!confirm('<?= __("确定要删除用户") ?> "' + username + '" <?= __("吗？") ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl("*/backend/user/delete") ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'id=' + id
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __("删除失败：") ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+    });
+}
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+

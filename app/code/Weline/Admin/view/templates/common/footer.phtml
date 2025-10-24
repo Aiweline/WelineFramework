@@ -1,0 +1,23 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <div class="span12">
+            <div class="footer-wapper">
+                @block(Weline\Backend\Block\Version)
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end Account pages -->
+
+<!-- JAVASCRIPT -->
+<!--<script src="@static(Weline_Admin::assets/libs/jquery/jquery.min.js)"></script>-->
+<script src="@static(Weline_Admin::assets/libs/bootstrap/js/bootstrap.bundle.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/metismenu/metisMenu.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/simplebar/simplebar.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/node-waves/waves.min.js)"></script>
+
+<script src="@static(Weline_Admin::assets/js/app.js)"></script>
+@template(Weline_Backend::public/footer.phtml)

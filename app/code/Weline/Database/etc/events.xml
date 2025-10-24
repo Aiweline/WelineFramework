@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:weline:framework:etc/events.xsd">
+    <!-- 模块升级事件监听 -->
+    <event name="module_upgrade_after">
+        <observer name="weline_database_module_upgrade" instance="Weline\Database\Observer\ModuleUpgradeObserver" />
+    </event>
+    
+    <!-- 系统升级事件监听 -->
+    <event name="setup_upgrade_after">
+        <observer name="weline_database_setup_upgrade" instance="Weline\Database\Observer\SetupUpgradeObserver" />
+    </event>
+    
+    <!-- 模块安装事件监听 -->
+    <event name="module_install_after">
+        <observer name="weline_database_module_install" instance="Weline\Database\Observer\ModuleUpgradeObserver" />
+    </event>
+    
+    <!-- 模块卸载事件监听 -->
+    <event name="module_uninstall_after">
+        <observer name="weline_database_module_uninstall" instance="Weline\Database\Observer\ModuleUpgradeObserver" />
+    </event>
+</config>

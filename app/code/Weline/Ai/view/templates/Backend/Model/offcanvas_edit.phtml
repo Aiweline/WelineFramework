@@ -1,0 +1,520 @@
+<?php
+/**
+ * AI 模型 Offcanvas 编辑模板
+ * 
+ * 用于新建和编辑 AI 模型（在 iframe 中加载）
+ * 
+ * @var \Weline\Ai\Model\AiModel $model
+ */
+
+$model = $this->getData('model');
+$isEdit = $model && $model->getId();
+$title = $isEdit ? __('编辑模型') : __('新建模型');
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $title ?></title>
+    <!-- Bootstrap CSS 本地文件 -->
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
+</head>
+<body>
+
+<!-- 模型编辑表单 -->
+<div class="model-edit-offcanvas">
+    <!-- 表单标题 -->
+    <div class="offcanvas-title-bar">
+        <h5 class="mb-0">
+            <i class="bi bi-cpu me-2"></i><?= $title ?>
+        </h5>
+    </div>
+    
+    <form id="modelEditForm" method="post" action="<?= $this->getUrl('*/backend/model/save') ?>">
+            
+            <!-- 隐藏字段 -->
+            <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $model->getId() ?>" />
+            <?php endif; ?>
+            
+            <?= $this->getFormKey($this->getUrl('*/backend/model/save')) ?>
+            
+            <!-- 使用网格布局 -->
+            <div class="row g-2">
+                
+                <!-- 基础信息卡片 -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-info-circle me-2"></i><?= __('基础信息') ?>
+                                <?php if ($isEdit && !$model->getData('is_copy')): ?>
+                                <span class="badge bg-warning text-dark ms-2"><?= __('原始模型基本信息不可修改') ?></span>
+                                <?php endif; ?>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                
+                                <!-- 供应商 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="supplier" class="form-label required">
+                                            <?= __('供应商') ?>
+                                        </label>
+                                        <?php $isReadonly = $isEdit && !$model->getData('is_copy'); ?>
+                                        <?php if ($isReadonly): ?>
+                                            <!-- 原始模型：只读显示 -->
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   value="<?= $model->getData('supplier') ?>" 
+                                                   readonly
+                                                   style="background-color: #e9ecef; cursor: not-allowed;">
+                                            <input type="hidden" name="supplier" value="<?= $model->getData('supplier') ?>">
+                                        <?php else: ?>
+                                            <!-- 复制模型/新建：可编辑 -->
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="supplier" 
+                                                   name="supplier" 
+                                                   value="<?= $model ? $model->getData('supplier') : '' ?>" 
+                                                   required
+                                                   placeholder="<?= __('例如：OpenAI') ?>">
+                                        <?php endif; ?>
+                                        <div class="form-text"><?= __('AI 模型的提供商') ?></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 模型代码 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="model_code" class="form-label required">
+                                            <?= __('模型代码') ?>
+                                        </label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="model_code" 
+                                               name="model_code" 
+                                               value="<?= $model ? $model->getData('model_code') : '' ?>" 
+                                               required
+                                               <?= $isEdit && !$model->getData('is_copy') ? 'readonly style="background-color: #e9ecef;"' : '' ?>
+                                               placeholder="<?= __('例如：gpt-3.5-turbo') ?>">
+                                        <div class="form-text"><?= __('模型的唯一标识符') ?></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 模型名称 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="name" class="form-label required">
+                                            <?= __('模型名称') ?>
+                                        </label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="name" 
+                                               name="name" 
+                                               value="<?= $model ? $model->getData('name') : '' ?>" 
+                                               required
+                                               placeholder="<?= __('例如：GPT-3.5 Turbo') ?>">
+                                        <div class="form-text"><?= __('模型的显示名称') ?></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 版本号 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="version" class="form-label required">
+                                            <?= __('版本号') ?>
+                                        </label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="version" 
+                                               name="version" 
+                                               value="<?= $model ? $model->getData('version') : '1.0' ?>" 
+                                               required
+                                               placeholder="<?= __('例如：1.0') ?>">
+                                        <div class="form-text"><?= __('模型的版本号') ?></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 是否拷贝模型 -->
+                                <?php if ($isEdit): ?>
+                                <div class="col-12">
+                                    <div class="mb-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="is_copy" 
+                                                   name="is_copy" 
+                                                   value="1"
+                                                   disabled
+                                                   <?= $model->getData('is_copy') ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="is_copy">
+                                                <?= __('拷贝模型') ?>
+                                            </label>
+                                        </div>
+                                        <?php if ($model->getData('is_copy')): ?>
+                                        <div class="form-text">
+                                            <?= __('原始模型ID: %{1}', [$model->getData('origin_model_id')]) ?>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+            <!-- 技术参数与定价卡片 -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-sliders me-2"></i><?= __('技术参数') ?>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- 最大令牌数 -->
+                            <div class="mb-2">
+                                <label for="max_tokens" class="form-label">
+                                    <?= __('最大令牌数') ?>
+                                </label>
+                                <?php 
+                                    // 智能推荐默认值：如果为空或0，使用4096作为推荐值
+                                    $maxTokens = $model ? $model->getData('max_tokens') : 4096;
+                                    $maxTokens = empty($maxTokens) || $maxTokens == 0 ? 4096 : $maxTokens;
+                                ?>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="max_tokens" 
+                                       name="max_tokens" 
+                                       value="<?= $maxTokens ?>" 
+                                       min="1"
+                                       max="128000"
+                                       placeholder="推荐: 4096 (适合大多数场景)">
+                                <div class="form-text">
+                                    <?= __('模型支持的最大令牌数') ?> 
+                                    <span class="text-muted">· 推荐值: 2048-8192</span>
+                                </div>
+                            </div>
+                            
+                            <!-- 每令牌成本 -->
+                            <div class="mb-2">
+                                <label for="cost_per_token" class="form-label">
+                                    <?= __('每令牌成本') ?>
+                                </label>
+                                <?php 
+                                    // 智能推荐默认值：如果为空或0，使用0.0015作为推荐值（GPT-3.5-turbo标准价格）
+                                    $costPerToken = $model ? $model->getData('cost_per_token') : 0.0015;
+                                    $costPerToken = empty($costPerToken) || $costPerToken == 0 ? 0.0015 : $costPerToken;
+                                ?>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="cost_per_token" 
+                                       name="cost_per_token" 
+                                       value="<?= $costPerToken ?>" 
+                                       step="0.000001"
+                                       min="0"
+                                       placeholder="推荐: 0.0015 (GPT-3.5标准价格)">
+                                <div class="form-text">
+                                    <?= __('每1000个令牌的成本（美元）') ?> 
+                                    <span class="text-muted">· GPT-3.5: $0.0015 | GPT-4: $0.03</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+            <!-- 配置参数卡片 -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-gear me-2"></i><?= __('配置参数') ?>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Temperature -->
+                            <div class="mb-2">
+                                <label for="config_temperature" class="form-label d-flex justify-content-between align-items-center">
+                                    <span><?= __('Temperature') ?></span>
+                                    <span class="badge bg-primary" id="tempValue">0.7</span>
+                                </label>
+                                <input type="range" 
+                                       class="form-range" 
+                                       id="config_temperature" 
+                                       name="config[temperature]" 
+                                       min="0" 
+                                       max="2" 
+                                       step="0.1"
+                                       value="0.7"
+                                       oninput="document.getElementById('tempValue').textContent = this.value">
+                                <div class="form-text">
+                                    <?= __('控制输出随机性 (0.0 - 2.0)') ?> 
+                                    <span class="text-muted">· 推荐: 0.7 (平衡模式) | 精确: 0.0-0.3 | 创造: 1.0-2.0</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Top P -->
+                            <div class="mb-2">
+                                <label for="config_top_p" class="form-label d-flex justify-content-between align-items-center">
+                                    <span><?= __('Top P') ?></span>
+                                    <span class="badge bg-primary" id="topPValue">1</span>
+                                </label>
+                                <input type="range" 
+                                       class="form-range" 
+                                       id="config_top_p" 
+                                       name="config[top_p]" 
+                                       min="0" 
+                                       max="1" 
+                                       step="0.05"
+                                       value="1"
+                                       oninput="document.getElementById('topPValue').textContent = this.value">
+                                <div class="form-text">
+                                    <?= __('核采样参数 (0.0 - 1.0)') ?> 
+                                    <span class="text-muted">· 推荐: 1.0 (标准设置)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+            <!-- 状态管理卡片 -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-toggle-on me-2"></i><?= __('状态管理') ?>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <!-- 状态 -->
+                                <div class="col-md-6">
+                                    <div class="mb-0">
+                                        <label for="status" class="form-label required">
+                                            <?= __('状态') ?>
+                                        </label>
+                                        <select class="form-select" id="status" name="status" required>
+                                            <option value="active" <?= $model && $model->getData('status') === 'active' ? 'selected' : '' ?>>
+                                                ✓ <?= __('激活') ?>
+                                            </option>
+                                            <option value="deprecated" <?= $model && $model->getData('status') === 'deprecated' ? 'selected' : '' ?>>
+                                                ⊘ <?= __('已弃用') ?>
+                                            </option>
+                                            <option value="maintenance" <?= $model && $model->getData('status') === 'maintenance' ? 'selected' : '' ?>>
+                                                ⚙ <?= __('维护中') ?>
+                                            </option>
+                                        </select>
+                                        <div class="form-text"><?= __('模型的当前状态') ?></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 操作按钮 -->
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <div class="d-flex gap-2 w-100">
+                                        <button type="submit" class="btn btn-primary flex-fill">
+                                            <i class="bi bi-check-lg me-1"></i>
+                                            <?= __('保存') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div><!-- 关闭 row -->
+            
+    </form>
+</div>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 表单验证
+    const form = document.getElementById('modelEditForm');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 显示加载状态
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
+        
+        // 提交表单
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            // 尝试获取响应文本
+            return response.text().then(text => {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('服务器返回非JSON响应:', text.substring(0, 200));
+                    throw new Error('服务器返回的不是有效的JSON格式');
+                }
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                // 显示成功消息
+                alert('<?= __("保存成功！") ?>');
+                
+                // 通知父窗口刷新页面（因为我们在 iframe 中）
+                if (window.parent) {
+                    window.parent.location.reload();
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                // 显示错误消息
+                let errorMsg = '<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>');
+                if (data.error) {
+                    errorMsg += '\n\n<?= __("详细错误：") ?>' + data.error;
+                }
+                console.error('Save failed:', data);
+                alert(errorMsg);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __("保存失败，请稍后重试") ?>\n\n<?= __("错误：") ?>' + error.message);
+        })
+        .finally(() => {
+            // 恢复按钮状态
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+    });
+});
+</script>
+
+<style>
+.model-edit-offcanvas {
+    background-color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 0.75rem;
+}
+
+.offcanvas-title-bar {
+    padding: 0.5rem 0.75rem;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    margin: -0.75rem -0.75rem 0.75rem -0.75rem;
+}
+
+.offcanvas-title-bar h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-label.required::after {
+    content: ' *';
+    color: red;
+}
+
+.card-header h6 {
+    color: #495057;
+    font-weight: 600;
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.card {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.card-body {
+    padding: 0.75rem;
+}
+
+.form-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.15rem;
+}
+
+.form-control, .form-select {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.5rem;
+}
+
+.form-label {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+/* 只读字段样式 */
+.form-control[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+.form-select[style*="pointer-events: none"] {
+    cursor: not-allowed;
+}
+
+/* 分组标题 */
+.card-header .badge {
+    font-size: 0.7rem;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+/* 紧凑间距 */
+.mb-2 {
+    margin-bottom: 0.5rem !important;
+}
+
+.row.g-2 {
+    --bs-gutter-x: 0.5rem;
+    --bs-gutter-y: 0.5rem;
+}
+
+/* 卡片等高 */
+.row.g-2 > [class*='col-'] > .card {
+    height: 100%;
+}
+
+/* 滑块样式 */
+.form-range {
+    height: 1.25rem;
+}
+
+/* 按钮组 */
+.d-grid button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* 减少卡片间的间距 */
+.card:last-child {
+    margin-bottom: 0;
+}
+</style>
+
+</body>
+</html>

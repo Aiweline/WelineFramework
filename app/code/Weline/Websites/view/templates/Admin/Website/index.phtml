@@ -1,0 +1,184 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <title><lang>Weline Admin 管理面板</lang></title>
+</head>
+
+<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+<!--加载中组件 开始-->
+<w:template>Weline_Admin::common/page/loading.phtml</w:template>
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='main-content'>
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <!--消息-->
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>面板</lang>
+                            </h4>
+
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                            <lang>后台</lang>
+                                        </a></li>
+                                    <li class='breadcrumb-item active'>
+                                        <lang>面板</lang>
+                                    </li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- end message -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <h4 class="card-title">网站列表</h4>
+                            <block class='Weline\Component\Block\OffCanvas'
+                                   cache='0'
+                                   id='add_result_modal'
+                                   action='*/admin/website/add'
+                                   title='添加网站'
+                                   close-button-show='1'
+                                   close-button-text='关闭'
+                                   direction='right'
+                                   class-names='w-75 h-100'
+                                   off-canvas-body-style=''
+                                   target-button-text='添加网站'
+                                   icon='mdi mdi-plus'
+                                   target-button-class='btn btn-primary'
+                                   target-tag='a'
+                                   save='1'
+                            />
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>名称</th>
+                                    <th>代码</th>
+                                    <th>URL</th>
+                                    <th>货币</th>
+                                    <th>语言</th>
+                                    <th>时区</th>
+                                    <th>操作</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($websites as $website): ?>
+                                    <tr>
+                                        <td><?= $website['website_id'] ?></td>
+                                        <td><?= $website['name'] ?></td>
+                                        <td><?= $website['code'] ?></td>
+                                        <td><?= $website['url'] ?></td>
+                                        <td><?= $website['default_currency'] ?></td>
+                                        <td><?= $website['default_language'] ?></td>
+                                        <td><?= $website['default_timezone'] ?></td>
+                                        <td>
+                                            <block class='Weline\Component\Block\OffCanvas'
+                                                   cache='0'
+                                                   id='add_result_modal'
+                                                   action='*/admin/website/edit'
+                                                   vars="website"
+                                                   action-params='{id:website.website_id}'
+                                                   title='编辑网站'
+                                                   close-button-show='1'
+                                                   close-button-text='关闭'
+                                                   direction='right'
+                                                   class-names='w-75 h-100'
+                                                   off-canvas-body-style=''
+                                                   target-button-text=''
+                                                   icon='mdi mdi-pencil'
+                                                   target-button-class='btn btn-sm btn-outline-info'
+                                                   target-tag='a'
+                                                   save='1'
+                                            />
+                                            <a href="@url('*/admin/website/delete')?id={{website.website_id}}"
+                                               w-delete="true"
+                                               w-msg="@lang(您确定要删除吗?)"
+                                               class="btn btn-sm btn-outline-danger"
+                                               title="删除">
+                                                <i class="mdi mdi-delete"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+
+                            <?= $pagination ?>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
+@template(Weline_Admin::common/footer.phtml)
+<js:part name="w-delete"/>
+</body>
+</html>

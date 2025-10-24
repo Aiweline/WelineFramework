@@ -1,0 +1,5 @@
+---
+description: tpl目录禁止任何操作
+globs:
+alwaysApply: true
+---
