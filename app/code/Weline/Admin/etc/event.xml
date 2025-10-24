@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Router::backend_whitelist_url">
+        <observer name="Weline_Admin::backend_whitelist_url" instance="Weline\Admin\Observer\BackendWhitelistUrl" disabled="false" shared="true"/>
+    </event>
+    <event name="Framework_Router::backend_no_login_redirect_url">
+        <observer name="Framework_Admin::backend_no_login_redirect_url" instance="Weline\Admin\Observer\BackendNoLoginRedirectUrl" disabled="false"
+                  shared="true"/>
+    </event>
+    <!--权限控制-->
+    <event name="Framework_Acl::dispatch">
+        <observer name="Weline_Acl::dispatch" instance="Weline\Admin\Observer\AclController" disabled="false" shared="true"/>
+    </event>
+    <!--角色检查-->
+    <event name="Weline_Acl::check_role">
+        <observer name="Weline_Admin::check_role" instance="Weline\Admin\Observer\RoleChecker" disabled="false" shared="true"/>
+    </event>
+    <!--更新白名单-->
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Admin::white_acl_sources" instance="Weline\Admin\Observer\BackendWhitelistUrl" disabled="false" shared="true"/>
+    </event>
+    <!--访问控制没有权限跳转前-->
+    <event name="Weline_Acl::no_access_redirect_before">
+        <observer name="Weline_Admin::no_access_redirect_before" instance="Weline\Admin\Observer\NoAccessRedirectBefore" disabled="false"
+                  shared="true"/>
+    </event>
+    <!--跳转前记录referer-->
+    <event name="Weline_Framework_Http::response_redirect_before">
+        <observer name="Weline_Admin::response_redirect_before" instance="Weline\Admin\Observer\ResponseRedirectBefore" disabled="false"
+                  shared="true"/>
+    </event>
+    <!--控制器初始化之前-->
+    <event name="Framework_App::backend_controller_init_after">
+        <observer name="Weline_Admin::backend_controller_init_after" instance="Weline\Admin\Observer\BackendControllerInitAfter" disabled="false"
+                  shared="true"/>
+    </event>
+</config>

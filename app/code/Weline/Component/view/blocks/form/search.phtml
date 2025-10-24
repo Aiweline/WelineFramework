@@ -1,0 +1,19 @@
+<form class='app-search' onkeydown='searchKeyDown(event)' method='{{method}}' action='{{action}}'>
+    <div class='position-relative'>
+        <input type='text' id='{{id}}' name='{{keyword}}' class='form-control' placeholder='{{placeholder}}' value='{{value}}'>
+        <span class='ri-search-line'></span>
+    </div>
+    <notempty name="params">
+        <foreach name="params" key="key">
+            <input type="hidden" name="{{key}}" value="{{v}}">
+        </foreach>
+    </notempty>
+</form>
+<script type='text/javascript'>
+    function searchKeyDown(ev) {
+        ev = ev || window.event;
+        if (ev.keyCode === 13) {
+            $('#{{id}}').submit()
+        }
+    }
+</script>

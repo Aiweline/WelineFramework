@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+    <plugin name="Weline_Frontend::start_page_plugin" class="Weline\Framework\Http\Request">
+        <interceptor name="Weline_Frontend::start_page_plugin" instance="Weline\Frontend\Plugin\StarPage" disabled="false" sort="2"/>
+    </plugin>
+</config>

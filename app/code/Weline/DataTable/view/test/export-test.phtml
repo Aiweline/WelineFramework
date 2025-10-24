@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导出功能测试</title>
+    <template>Weline_Backend::public\head.phtml</template>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 30px;
+        }
+        .test-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .btn-back {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .btn-back:hover {
+            color: white;
+            text-decoration: none;
+            transform: translateY(-2px);
+        }
+        .export-demo {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .export-btn {
+            margin: 5px;
+            min-width: 120px;
+        }
+        .export-status {
+            background: #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 标题区域 -->
+    <section class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-5 mb-3">
+                <i class="fas fa-download me-3"></i>导出功能测试
+            </h1>
+            <p class="lead mb-0">测试DataTable的导出功能</p>
+        </div>
+    </section>
+
+    <div class="container">
+        <a href="<?= $this->getUrl('datatable/backend/test/index//index') ?>" class="btn-back">
+            <i class="fas fa-arrow-left me-2"></i>返回测试中心
+        </a>
+
+        <!-- 基本导出测试 -->
+        <div class="test-container">
+            <h3 class="mb-4">
+                <i class="fas fa-download me-2"></i>基本导出功能
+            </h3>
+            <p class="text-muted mb-4">测试DataTable的基本导出功能，支持多种格式导出。</p>
+            
+            <div class="export-demo">
+                <h5>导出选项</h5>
+                <div class="row">
+                    <div class="col-md-3">
+                        <button class="btn btn-success export-btn" onclick="exportData('excel')">
+                            <i class="fas fa-file-excel me-2"></i>导出Excel
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-info export-btn" onclick="exportData('csv')">
+                            <i class="fas fa-file-csv me-2"></i>导出CSV
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-danger export-btn" onclick="exportData('pdf')">
+                            <i class="fas fa-file-pdf me-2"></i>导出PDF
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-warning export-btn" onclick="exportData('json')">
+                            <i class="fas fa-file-code me-2"></i>导出JSON
+                        </button>
+                    </div>
+                </div>
+                <div class="export-status" id="export-status">等待导出操作...</div>
+            </div>
+            
+            <w:d-table model="Weline\DataTable\Model\TestUser" scope="basic-export-test" 
+                       id="basic-export-table" 
+                       class="table table-striped table-bordered"
+                       searchable="true" 
+                       sortable="true" 
+                       show-pagination="true"
+                       page-size="10">
+                <w:t-filter>
+                    <w:d-field name="name" type="text" placeholder="搜索"></w:d-field>
+                </w:t-filter>
+                <w:t-header>
+                    <w:d-field name="id" content="ID" sortable="true"></w:d-field>
+                    <w:d-field name="name" content="名称" sortable="true"></w:d-field>
+                </w:t-header>
+                <w:t-body>
+                    <!-- 数据将通过JavaScript自动加载 -->
+                </w:t-body>
+            </w:d-table>
+        </div>
+
+        <!-- 自定义导出测试 -->
+        <div class="test-container">
+            <h3 class="mb-4">
+                <i class="fas fa-cogs me-2"></i>自定义导出设置
+            </h3>
+            <p class="text-muted mb-4">测试DataTable的自定义导出设置，包括字段选择和格式配置。</p>
+            
+            <div class="export-demo">
+                <h5>导出配置</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>选择导出字段</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="export-id" checked>
+                            <label class="form-check-label" for="export-id">ID</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="export-name" checked>
+                            <label class="form-check-label" for="export-name">姓名</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="export-email" checked>
+                            <label class="form-check-label" for="export-email">邮箱</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="export-status" checked>
+                            <label class="form-check-label" for="export-status">状态</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="export-created" checked>
+                            <label class="form-check-label" for="export-created">创建时间</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>导出选项</h6>
+                        <div class="mb-3">
+                            <label class="form-label">文件名</label>
+                            <input type="text" class="form-control" id="export-filename" value="用户数据">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">包含表头</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="export-header" checked>
+                                <label class="form-check-label" for="export-header">是</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">导出范围</label>
+                            <select class="form-select" id="export-range">
+                                <option value="all">全部数据</option>
+                                <option value="current">当前页</option>
+                                <option value="selected">选中行</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button class="btn btn-primary" onclick="exportWithCustomSettings()">
+                            <i class="fas fa-download me-2"></i>自定义导出
+                        </button>
+                    </div>
+                </div>
+                <div class="export-status" id="custom-export-status">等待自定义导出...</div>
+            </div>
+            
+            <w:d-table model="Weline\DataTable\Model\TestUser" scope="custom-export-test" 
+                       id="custom-export-table" 
+                       class="table table-striped table-bordered"
+                       searchable="true" 
+                       sortable="true" 
+                       show-pagination="true"
+                       page-size="10">
+                <w:t-filter>
+                    <w:d-field name="name" type="text" placeholder="搜索"></w:d-field>
+                </w:t-filter>
+                <w:t-header>
+                    <w:d-field name="id" content="ID" sortable="true"></w:d-field>
+                    <w:d-field name="name" content="名称" sortable="true"></w:d-field>
+                </w:t-header>
+                <w:t-body>
+                    <!-- 数据将通过JavaScript自动加载 -->
+                </w:t-body>
+            </w:d-table>
+        </div>
+
+        <!-- 批量导出测试 -->
+        <div class="test-container">
+            <h3 class="mb-4">
+                <i class="fas fa-layer-group me-2"></i>批量导出功能
+            </h3>
+            <p class="text-muted mb-4">测试DataTable的批量导出功能，支持同时导出多种格式。</p>
+            
+            <div class="export-demo">
+                <h5>批量导出设置</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">选择导出格式</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-excel" checked>
+                            <label class="form-check-label" for="batch-excel">Excel (.xlsx)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-csv" checked>
+                            <label class="form-check-label" for="batch-csv">CSV (.csv)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-pdf">
+                            <label class="form-check-label" for="batch-pdf">PDF (.pdf)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-json">
+                            <label class="form-check-label" for="batch-json">JSON (.json)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">压缩选项</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-zip" checked>
+                            <label class="form-check-label" for="batch-zip">打包为ZIP</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="batch-separate">
+                            <label class="form-check-label" for="batch-separate">分别下载</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-success w-100" onclick="batchExport()">
+                            <i class="fas fa-download me-2"></i>批量导出
+                        </button>
+                    </div>
+                </div>
+                <div class="export-status" id="batch-export-status">等待批量导出...</div>
+            </div>
+            
+            <w:d-table model="Weline\DataTable\Model\TestUser" scope="batch-export-test" 
+                       id="batch-export-table" 
+                       class="table table-striped table-bordered"
+                       searchable="true" 
+                       sortable="true" 
+                       show-pagination="true"
+                       page-size="10">
+                <w:t-filter>
+                    <w:d-field name="name" type="text" placeholder="搜索"></w:d-field>
+                </w:t-filter>
+                <w:t-header>
+                    <w:d-field name="id" content="ID" sortable="true"></w:d-field>
+                    <w:d-field name="name" content="名称" sortable="true"></w:d-field>
+                </w:t-header>
+                <w:t-body>
+                    <!-- 数据将通过JavaScript自动加载 -->
+                </w:t-body>
+            </w:d-table>
+        </div>
+
+        <!-- 导出历史记录 -->
+        <div class="test-container">
+            <h3 class="mb-4">
+                <i class="fas fa-history me-2"></i>导出历史记录
+            </h3>
+            <p class="text-muted mb-4">显示导出操作的历史记录。</p>
+            
+            <div class="export-demo">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>格式</th>
+                                <th>文件名</th>
+                                <th>记录数</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="export-history">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">暂无导出记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能说明 -->
+        <div class="test-container">
+            <h3 class="mb-4">
+                <i class="fas fa-info-circle me-2"></i>导出功能说明
+            </h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>支持格式</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>Excel (.xlsx)</li>
+                        <li><i class="fas fa-check text-success me-2"></i>CSV (.csv)</li>
+                        <li><i class="fas fa-check text-success me-2"></i>PDF (.pdf)</li>
+                        <li><i class="fas fa-check text-success me-2"></i>JSON (.json)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h5>高级功能</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>字段选择</li>
+                        <li><i class="fas fa-check text-success me-2"></i>批量导出</li>
+                        <li><i class="fas fa-check text-success me-2"></i>导出历史</li>
+                        <li><i class="fas fa-check text-success me-2"></i>进度显示</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h5>导出选项</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>全部数据</li>
+                        <li><i class="fas fa-check text-success me-2"></i>当前页</li>
+                        <li><i class="fas fa-check text-success me-2"></i>选中行</li>
+                        <li><i class="fas fa-check text-success me-2"></i>自定义范围</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h5>配置选项</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>文件名设置</li>
+                        <li><i class="fas fa-check text-success me-2"></i>表头控制</li>
+                        <li><i class="fas fa-check text-success me-2"></i>格式配置</li>
+                        <li><i class="fas fa-check text-success me-2"></i>压缩打包</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white text-center py-4 mt-5">
+        <div class="container">
+            <p class="mb-0">
+                <i class="fas fa-code me-2"></i>
+                DataTable 导出功能测试
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function exportData(format) {
+            const status = document.getElementById('export-status');
+            status.textContent = `正在导出${format.toUpperCase()}格式...`;
+            
+            // 模拟导出过程
+            setTimeout(() => {
+                status.textContent = `${format.toUpperCase()}导出完成！`;
+                addExportHistory(format, `用户数据.${format}`, 5, '成功');
+            }, 2000);
+        }
+
+        function exportWithCustomSettings() {
+            const status = document.getElementById('custom-export-status');
+            const filename = document.getElementById('export-filename').value;
+            const includeHeader = document.getElementById('export-header').checked;
+            const exportRange = document.getElementById('export-range').value;
+            
+            status.textContent = `正在导出: ${filename}, 包含表头: ${includeHeader}, 范围: ${exportRange}`;
+            
+            setTimeout(() => {
+                status.textContent = '自定义导出完成！';
+                addExportHistory('excel', `${filename}.xlsx`, 5, '成功');
+            }, 2000);
+        }
+
+        function batchExport() {
+            const status = document.getElementById('batch-export-status');
+            const formats = [];
+            
+            if (document.getElementById('batch-excel').checked) formats.push('excel');
+            if (document.getElementById('batch-csv').checked) formats.push('csv');
+            if (document.getElementById('batch-pdf').checked) formats.push('pdf');
+            if (document.getElementById('batch-json').checked) formats.push('json');
+            
+            const useZip = document.getElementById('batch-zip').checked;
+            
+            status.textContent = `正在批量导出: ${formats.join(', ')}, 打包: ${useZip}`;
+            
+            setTimeout(() => {
+                status.textContent = '批量导出完成！';
+                formats.forEach(format => {
+                    addExportHistory(format, `用户数据.${format}`, 5, '成功');
+                });
+            }, 3000);
+        }
+
+        function addExportHistory(format, filename, count, status) {
+            const history = document.getElementById('export-history');
+            const timestamp = new Date().toLocaleString();
+            
+            if (history.children.length === 1 && history.children[0].children.length === 1) {
+                history.innerHTML = '';
+            }
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${timestamp}</td>
+                <td>${format.toUpperCase()}</td>
+                <td>${filename}</td>
+                <td>${count}</td>
+                <td><span class="badge bg-success">${status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="downloadFile('${filename}')">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </td>
+            `;
+            history.appendChild(row);
+        }
+
+        function downloadFile(filename) {
+            // 模拟文件下载
+            console.log('下载文件:', filename);
+            alert(`开始下载: ${filename}`);
+        }
+    </script>
+</body>
+</html> 

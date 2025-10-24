@@ -1,0 +1,240 @@
+<?php
+/**
+ * 默认模型管理页面模板
+ * 
+ * @var array $models
+ * @var array $serviceTypes
+ * @var array $defaultModels
+ */
+?>
+
+<div class="page-header">
+    <h1><?= __('默认模型管理') ?></h1>
+    <div class="actions">
+        <button type="button" class="btn btn-primary" onclick="initDefaultModels()">
+            <i class="mdi mdi-refresh"></i> <?= __('初始化默认配置') ?>
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="mdi mdi-information"></i>
+    <?= __('默认模型用于当用户未指定模型时自动选择。每种服务类型只能设置一个默认模型。') ?>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form id="defaultModelForm">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th width="200"><?= __('服务类型') ?></th>
+                        <th><?= __('默认模型') ?></th>
+                        <th width="100"><?= __('优先级') ?></th>
+                        <th width="100"><?= __('状态') ?></th>
+                        <th width="150"><?= __('操作') ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $serviceTypes = [
+                        'text' => __('文本生成'),
+                        'image' => __('图像生成'),
+                        'audio' => __('音频生成'),
+                        'video' => __('视频生成'),
+                        'code' => __('代码生成'),
+                        'translation' => __('翻译'),
+                        'embedding' => __('向量嵌入'),
+                    ];
+                    
+                    foreach ($serviceTypes as $type => $label):
+                        $currentDefault = $defaultModels[$type] ?? null;
+                    ?>
+                    <tr>
+                        <td><strong><?= $label ?></strong><br><small class="text-muted"><?= $type ?></small></td>
+                        <td>
+                            <select class="form-control" name="model_<?= $type ?>" data-service-type="<?= $type ?>">
+                                <option value=""><?= __('-- 请选择模型 --') ?></option>
+                                <?php foreach ($models as $model): ?>
+                                    <option value="<?= $model->getModelCode() ?>" 
+                                            <?= ($currentDefault && $currentDefault['model_code'] == $model->getModelCode()) ? 'selected' : '' ?>>
+                                        <?= $model->getName() ?> (<?= $model->getVendor() ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="number" 
+                                   class="form-control" 
+                                   name="priority_<?= $type ?>" 
+                                   value="<?= $currentDefault['priority'] ?? 1 ?>" 
+                                   min="1" 
+                                   max="100">
+                        </td>
+                        <td>
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" 
+                                       class="custom-control-input" 
+                                       id="active_<?= $type ?>" 
+                                       name="active_<?= $type ?>" 
+                                       <?= ($currentDefault && $currentDefault['is_active']) ? 'checked' : '' ?>>
+                                <label class="custom-control-label" for="active_<?= $type ?>"></label>
+                            </div>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="saveDefaultModel('<?= $type ?>')">
+                                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </form>
+
+        <div class="mt-3">
+            <button type="button" class="btn btn-success" onclick="saveAllDefaultModels()">
+                <i class="mdi mdi-content-save-all"></i> <?= __('保存全部') ?>
+            </button>
+            <button type="button" class="btn btn-warning" onclick="clearCache()">
+                <i class="mdi mdi-cached"></i> <?= __('清除缓存') ?>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5><?= __('受保护的模型') ?></h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted"><?= __('以下模型被设置为默认模型，无法删除：') ?></p>
+        <div id="protectedModelsList"></div>
+    </div>
+</div>
+
+<script>
+function saveDefaultModel(serviceType) {
+    const form = document.getElementById('defaultModelForm');
+    const modelCode = form.querySelector(`select[name="model_${serviceType}"]`).value;
+    const priority = form.querySelector(`input[name="priority_${serviceType}"]`).value;
+    const isActive = form.querySelector(`input[name="active_${serviceType}"]`).checked ? 1 : 0;
+
+    if (!modelCode) {
+        alert('<?= __('请选择模型') ?>');
+        return;
+    }
+
+    const data = new FormData();
+    data.append('service_type', serviceType);
+    data.append('model_code', modelCode);
+    data.append('priority', priority);
+    data.append('is_active', isActive);
+
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/save') ?>', {
+        method: 'POST',
+        body: data
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('保存成功！') ?>');
+            updateProtectedModelsList();
+        } else {
+            alert('<?= __('保存失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+    });
+}
+
+function saveAllDefaultModels() {
+    if (!confirm('<?= __('确定要保存所有默认模型配置吗？') ?>')) {
+        return;
+    }
+
+    // 实现批量保存逻辑
+    alert('<?= __('功能开发中...') ?>');
+}
+
+function clearCache() {
+    if (!confirm('<?= __('确定要清除默认模型缓存吗？') ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/clearCache') ?>', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('缓存已清除！') ?>');
+        } else {
+            alert('<?= __('清除失败：') ?>' + data.message);
+        }
+    });
+}
+
+function initDefaultModels() {
+    if (!confirm('<?= __('这将初始化所有默认模型配置，确定继续吗？') ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/init') ?>', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('初始化成功！') ?>');
+            location.reload();
+        } else {
+            alert('<?= __('初始化失败：') ?>' + data.message);
+        }
+    });
+}
+
+function updateProtectedModelsList() {
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/getProtected') ?>')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('protectedModelsList');
+            if (data.success && data.data.length > 0) {
+                let html = '<ul class="list-group">';
+                data.data.forEach(model => {
+                    html += `<li class="list-group-item">
+                        <strong>${model.model_name}</strong> (${model.vendor}) 
+                        - <span class="badge badge-primary">${model.service_types.join(', ')}</span>
+                    </li>`;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-muted"><?= __('暂无受保护的模型') ?></p>';
+            }
+        });
+}
+
+// 页面加载时获取受保护的模型列表
+document.addEventListener('DOMContentLoaded', updateProtectedModelsList);
+</script>
+
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.custom-control-label {
+    cursor: pointer;
+}
+
+.table select,
+.table input[type="number"] {
+    width: 100%;
+}
+</style>
+
