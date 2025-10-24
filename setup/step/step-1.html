@@ -1,0 +1,18 @@
+<div class="container">
+    <div class="form-box">
+        <h2>Step 1: WEB 环境检测</h2>
+        <form id="check_form" style="text-align:center " onsubmit="return false;"
+              onclick="checkEnv('env','check_form','✖')">
+            <input type="hidden" name="type" value="check">
+            <button id="check_button" type="submit">
+                <span></span>
+                <span></span>
+                开始检测
+                <span></span>
+                <span></span>
+            </button>
+            <div class="console"></div>
+        </form>
+        <a id="next" class="next-button" href="/setup?step=step-2">下一步</a>
+    </div>
+</div>

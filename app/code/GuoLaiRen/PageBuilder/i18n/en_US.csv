@@ -1,0 +1,281 @@
+页面不存在！,"Page does not exist!"
+发布时间：,Published:
+提示：,提示：
+此页面不支持当前语言，以下内容显示为默认语言。,此页面不支持当前语言，以下内容显示为默认语言。
+此页面尚未翻译为当前语言，以下内容显示为默认语言。,此页面尚未翻译为当前语言，以下内容显示为默认语言。
+请求方法错误,请求方法错误
+邮箱和电话至少需要填写一项,邮箱和电话至少需要填写一项
+提交成功,提交成功
+提交失败，请稍后重试,提交失败，请稍后重试
+页面ID不能为空,页面ID不能为空
+页面不存在,页面不存在
+配置已自动保存,配置已自动保存
+表单提交管理,"Form Submissions"
+页面构建器,"Page Builder"
+表单提交,表单提交
+提交记录ID不能为空！,提交记录ID不能为空！
+提交记录不存在！,提交记录不存在！
+查看提交详情,查看提交详情
+提交详情,提交详情
+提交记录删除成功！,提交记录删除成功！
+提交记录删除失败！,提交记录删除失败！
+导出失败！,导出失败！
+内容管理,"Content Management"
+新建页面,"New Page"
+页面创建成功！,"Page created successfully!"
+页面创建失败！,"Failed to create page!"
+页面ID不能为空！,"Page ID cannot be empty!"
+编辑页面,"Edit Page"
+页面还有以下语言未翻译：%{1},"The following languages are not translated: %{1}"
+页面更新成功！,"Page updated successfully!"
+页面更新失败！,"Failed to update page!"
+该页面存在子页面，无法删除！请先删除或移动子页面。,"This page has child pages and cannot be deleted! Please delete or move child pages first."
+页面删除成功！,"Page deleted successfully!"
+页面删除失败！,"Failed to delete page!"
+参数错误！,"Invalid parameters!"
+翻译页面,"Translate Page"
+翻译保存成功！,"Translation saved successfully!"
+翻译保存失败！,"Failed to save translation!"
+样式列表获取成功,"Style list loaded successfully"
+样式代码不能为空,样式代码不能为空
+样式不存在,样式不存在
+首页,"Home Page"
+关于我们,"About Us"
+联系我们,"Contact Us"
+隐私政策,"Privacy Policy"
+服务条款,"Terms of Service"
+退款政策,"Refund Policy"
+配送政策,"Shipping Policy"
+自定义页面,"Custom Page"
+已发布,Published
+草稿,Draft
+头部配置,头部配置
+内容配置,内容配置
+页脚配置,页脚配置
+位置,位置
+颜色,颜色
+尺寸,尺寸
+样式,样式
+布局,布局
+排版,排版
+间距,间距
+边框,边框
+效果,效果
+SEO设置,"SEO Settings"
+统计代码,统计代码
+注意：,Notice:
+"此页面还没有 %{1} 的翻译版本，当前显示的是默认语言内容。","This page doesn't have a translation in %{1} yet. Displaying default language content."
+切换语言：,切换语言：
+未翻译,"Not Translated"
+"⚠️ 表示该语言版本尚未翻译","⚠️ 表示该语言版本尚未翻译"
+提交中...,提交中...
+提交成功！,提交成功！
+保留所有权利。,保留所有权利。
+页面管理,"Page Management"
+页面标题,"Page Title"
+页面路径,页面路径
+状态,Status
+创建时间,创建时间
+更新时间,更新时间
+操作,操作
+暂无页面，点击右上角新建页面开始使用,暂无页面，点击右上角新建页面开始使用
+搜索页面名称、句柄...,搜索页面名称、句柄...
+搜索,搜索
+编辑,编辑
+删除,删除
+退出,退出
+可视化配置,可视化配置
+桌面,桌面
+平板,平板
+手机,手机
+已保存,已保存
+刷新,刷新
+样式配置,样式配置
+Logo地址,Logo地址
+输入Logo图片URL,"Enter logo image URL"
+网站名称,网站名称
+输入网站名称,输入网站名称
+背景颜色,背景颜色
+文字颜色,文字颜色
+链接颜色,链接颜色
+标题颜色,标题颜色
+行高,行高
+字体家族,字体家族
+链接悬停颜色,链接悬停颜色
+关于我们文本,关于我们文本
+联系邮箱,联系邮箱
+联系电话,联系电话
+联系地址,联系地址
+公司地址,公司地址
+版权文本,版权文本
+版权所有,版权所有
+加载中...,加载中...
+刷新预览中...,刷新预览中...
+保存中...,保存中...
+保存失败,保存失败
+未保存,未保存
+页面表单,页面表单
+基本信息,"Basic Information"
+页面句柄,"Page Handle"
+"例如：about-us, contact","e.g., about-us, contact"
+页面的唯一标识符，用于URL，只能包含小写字母、数字和连字符,"Unique identifier for URL, can only contain lowercase letters, numbers and hyphens"
+请输入页面句柄,请输入页面句柄
+页面类型,"Page Type"
+请选择页面类型,"Please select page type"
+页面名称,"Page Name"
+输入页面名称,"Enter page name"
+请输入页面名称,"Please enter page name"
+输入页面标题,"Enter page title"
+显示在浏览器标签页的标题,"Title displayed in browser tab"
+请输入页面标题,"Please enter page title"
+样式与配置,样式与配置
+选择样式模板,"Select Style Template"
+正在加载样式模板...,"Loading style templates..."
+选择页面的样式模板并配置参数（Header、Content、Footer）,选择页面的样式模板并配置参数（Header、Content、Footer）
+请选择页面样式,请选择页面样式
+配置说明：,配置说明：
+配置从样式模板（header/footer/content.phtml）自动扫描生成,配置从样式模板（header/footer/content.phtml）自动扫描生成
+"每个配置项支持多语言翻译，点击""翻译""按钮可为不同语言设置不同的值","每个配置项支持多语言翻译，点击""翻译""按钮可为不同语言设置不同的值"
+切换样式时，之前的配置会被保留,切换样式时，之前的配置会被保留
+SEO标题,"SEO Title"
+输入SEO标题（留空则使用页面标题）,"Enter SEO title (leave empty to use page title)"
+搜索引擎显示的标题，建议50-60个字符,"Title displayed in search engines, recommended 50-60 characters"
+SEO描述,"SEO Description"
+输入SEO描述,"Enter SEO description"
+搜索引擎显示的描述，建议150-160个字符,"Description displayed in search engines, recommended 150-160 characters"
+SEO关键词,"SEO Keywords"
+输入关键词，用逗号分隔,"Enter keywords separated by commas"
+用逗号分隔多个关键词,"Separate multiple keywords with commas"
+跟踪代码,"Tracking Code"
+"Google Analytics 4 ID","Google Analytics 4 ID"
+例如：G-XXXXXXXXXX,"e.g., G-XXXXXXXXXX"
+"Google Tag Manager ID","Google Tag Manager ID"
+例如：GTM-XXXXXXX,"e.g., GTM-XXXXXXX"
+"Facebook Pixel ID","Facebook Pixel ID"
+例如：123456789012345,"e.g., 123456789012345"
+表单提交设置,表单提交设置
+表单提交成功后跳转URL,表单提交成功后跳转URL
+例如：https://www.example.com/thank-you,例如：https://www.example.com/thank-you
+"留空则不跳转。必须是完整的URL地址（包含 http:// 或 https://）","留空则不跳转。必须是完整的URL地址（包含 http:// 或 https://）"
+发布设置,"Publish Settings"
+更新页面,"Update Page"
+创建页面,"Create Page"
+返回列表,"Back to List"
+页面层级,"Page Hierarchy"
+父页面,"Parent Page"
+无（顶级页面）,"None (Top-level page)"
+选择该页面的父页面（用于政策页面等依赖主页的场景）,"Select parent page (for policy pages that depend on main page)"
+页面样式,"Page Style"
+选择页面的header/footer样式模板,"Select header/footer style template for the page"
+预览页面,"Preview Page"
+品牌资源,"Brand Assets"
+Logo图片,"Logo Image"
+网站图标,Favicon
+输入网站图标URL,"Enter favicon URL"
+多语言设置,"Multilingual Settings"
+默认语言,"Default Language"
+搜索语言...,搜索语言...
+选择,选择
+选择页面的主要语言版本,"Select the main language version of the page"
+支持的语言翻译,"Supported Translations"
+暂未选择支持的语言，请使用下方搜索框添加语言,暂未选择支持的语言，请使用下方搜索框添加语言
+搜索并选择语言...,搜索并选择语言...
+未找到匹配的语言,未找到匹配的语言
+选择后可点击字段旁边的翻译按钮进行翻译,选择后可点击字段旁边的翻译按钮进行翻译
+加载配置中...,加载配置中...
+该样式没有可配置项,该样式没有可配置项
+加载配置失败：,加载配置失败：
+翻译此配置项,翻译此配置项
+选择颜色,选择颜色
+输入图片URL,输入图片URL
+正在扫描样式模板...,"Scanning style templates..."
+请选择样式,请选择样式
+加载失败，请刷新重试,"Loading failed, please refresh and try again"
+网络错误，请刷新重试,"Network error, please refresh and try again"
+只有在编辑模式下才能翻译配置项,只有在编辑模式下才能翻译配置项
+翻译配置项,翻译配置项
+保存,保存
+关闭,关闭
+正在加载配置...,正在加载配置...
+请先选择样式模板,请先选择样式模板
+加载配置失败,加载配置失败
+配置数据格式错误,配置数据格式错误
+当前样式模板没有可配置项,当前样式模板没有可配置项
+"翻译到 %{1}","Translate to %{1}"
+原文内容,"Original Content"
+页面内容,"Page Content"
+SEO信息,SEO信息
+翻译内容（%{1}）,"Translation Content (%{1})"
+输入翻译后的页面名称,"Enter translated page name"
+请输入翻译后的页面名称,"Please enter translated page name"
+输入翻译后的页面标题,"Enter translated page title"
+请输入翻译后的页面标题,"Please enter translated page title"
+输入翻译后的页面内容,"Enter translated page content"
+使用所见即所得编辑器编辑翻译内容,"Use WYSIWYG editor to edit translation content"
+SEO信息翻译,"SEO Information Translation"
+输入翻译后的SEO标题,"Enter translated SEO title"
+留空则使用页面标题,"Leave empty to use page title"
+输入翻译后的SEO描述,"Enter translated SEO description"
+输入翻译后的关键词，用逗号分隔,"Enter translated keywords separated by commas"
+保存翻译,保存翻译
+返回编辑页面,"Back to Edit Page"
+搜索（邮箱/电话）,搜索（邮箱/电话）
+输入邮箱或电话,输入邮箱或电话
+页面,页面
+全部页面,全部页面
+开始日期,开始日期
+结束日期,结束日期
+额外字段,额外字段
+选择字段,选择字段
+字段值,字段值
+筛选,筛选
+重置,重置
+导出CSV,导出CSV
+提交记录列表,提交记录列表
+ID,ID
+邮箱,邮箱
+电话,电话
+IP地址,IP地址
+提交时间,提交时间
+无,无
+查看详情,查看详情
+确定要删除这条记录吗？,确定要删除这条记录吗？
+暂无提交记录,暂无提交记录
+提交ID,提交ID
+关联页面,关联页面
+未提供,未提供
+字段名,字段名
+请求信息,请求信息
+"User Agent","User Agent"
+来源页面,来源页面
+删除记录,删除记录
+开始扫描样式模板...,开始扫描样式模板...
+扫描样式：%{1},扫描样式：%{1}
+"  缺少必需文件：%{1}","  缺少必需文件：%{1}"
+"  ✓ 已更新","  ✓ 已更新"
+"  路径：%{1}","  路径：%{1}"
+"  描述：%{1}","  描述：%{1}"
+扫描完成！,扫描完成！
+"  扫描总数：%{1}","  扫描总数：%{1}"
+"  新建样式：%{1}","  新建样式：%{1}"
+"  更新样式：%{1}","  更新样式：%{1}"
+"  错误数量：%{1}","  错误数量：%{1}"
+删除页面,"Delete Page"
+保存页面,"Save Page"
+请选择默认语言,"Please select default language"
+"使用 Editor.js 所见即所得编辑器，数据以 JSON 格式存储，支持多语言翻译","Use Editor.js WYSIWYG editor, data stored in JSON format, supports multilingual translation"
+选择后需要在编辑页面完善对应语言的翻译内容,"After selection, complete the translation content in the edit page"
+默认样式,"Default Style"
+确定要删除这个页面吗？此操作不可恢复。,"Are you sure you want to delete this page? This action cannot be undone."
+翻译管理,"Translation Management"
+已翻译,Translated
+翻译,Translate
+"预览 (%{1})","Preview (%{1})"
+选择需要翻译的语言,"Select languages to translate"
+当前翻译,"Current Translation"
+选择后可点击字段下方的翻译文本进行翻译,"After selection, click the translation text below each field to translate"
+默认,Default
+输入%{1}的页面内容,"Enter page content for %{1}"
+这是默认语言的内容，其他语言未翻译时将显示此内容,"This is the default language content, which will be displayed when other languages are not translated"
+保存后可在下方选择语言并编辑多语言内容,"After saving, you can select languages below and edit multi-language content"
+请在下方选择需要翻译的语言，保存后刷新页面即可编辑多语言内容,"Please select the languages to translate below, save and refresh the page to edit multi-language content"

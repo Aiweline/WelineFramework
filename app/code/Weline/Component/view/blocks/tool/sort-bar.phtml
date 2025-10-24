@@ -1,0 +1,17 @@
+<div class='container-fluid'>
+    <nav class='navbar navbar-light navbar-expand-lg topnav-menu'>
+        <div class='collapse navbar-collapse' id='topnav-menu-content'>
+            <ul class='navbar-nav'>
+                <!--循环条件-->
+                <foreach name='sorts' item='sort'>
+                    <li class='nav-item @if{sort.target=>"active"}'>
+                        <a class="nav-link" href='{{sort.href}}'>{{sort.name}}{{sort.icon}}</a>
+                    </li>
+                </foreach>
+            </ul>
+            <a class='nav-link' href='{{action}}' data-tag='{{sort.tag.sort}}'>
+                <lang>清空条件</lang>
+            </a>
+        </div>
+    </nav>
+</div>

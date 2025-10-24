@@ -1,0 +1,455 @@
+<?php
+/**
+ * AI 助手 Offcanvas 编辑模板
+ * 
+ * 用于新建和编辑 AI 助手
+ * 
+ * @var \Weline\Ai\Model\AiAssistant $assistant
+ */
+
+$assistant = $this->getData('assistant');
+$isEdit = $assistant && $assistant->getId();
+$title = $isEdit ? __('编辑助手') : __('新建助手');
+$models = $this->getData('models') ?: [];
+?>
+
+<!-- Offcanvas 容器 -->
+<div class="offcanvas offcanvas-end" 
+     tabindex="-1" 
+     id="assistantEditOffcanvas"
+     data-bs-backdrop="static" 
+     data-bs-keyboard="false" 
+     aria-labelledby="assistantEditOffcanvasLabel">
+    
+    <!-- Offcanvas 头部 -->
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="assistantEditOffcanvasLabel">
+            <i class="bi bi-robot me-2"></i>
+            <?= $title ?>
+        </h5>
+        <button type="button" 
+                class="btn-close" 
+                data-bs-dismiss="offcanvas" 
+                aria-label="<?= __('关闭') ?>">
+        </button>
+    </div>
+    
+    <!-- Offcanvas 主体 -->
+    <div class="offcanvas-body">
+        <form id="assistantEditForm" method="post" action="<?= $this->getUrl('*/*/save') ?>">
+            
+            <!-- 隐藏字段 -->
+            <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $assistant->getId() ?>" />
+            <?php endif; ?>
+            
+            <input type="hidden" name="form_key" value="<?= $this->getFormKey() ?>" />
+            
+            <!-- 基础信息 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('基础信息') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 助手名称 -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label required">
+                            <?= __('助手名称') ?>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               value="<?= $assistant ? $assistant->getData('name') : '' ?>" 
+                               required
+                               placeholder="<?= __('例如：客服助手') ?>">
+                        <div class="form-text"><?= __('助手的显示名称') ?></div>
+                    </div>
+                    
+                    <!-- 助手描述 -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <?= __('描述') ?>
+                        </label>
+                        <textarea class="form-control" 
+                                  id="description" 
+                                  name="description" 
+                                  rows="3"
+                                  placeholder="<?= __('例如：专业的客服支持助手') ?>"><?= $assistant ? $assistant->getData('description') : '' ?></textarea>
+                        <div class="form-text"><?= __('助手的详细描述') ?></div>
+                    </div>
+                    
+                    <!-- 选择模型 -->
+                    <div class="mb-3">
+                        <label for="model_id" class="form-label required">
+                            <?= __('AI 模型') ?>
+                        </label>
+                        <select class="form-select" id="model_id" name="model_id" required>
+                            <option value=""><?= __('请选择模型') ?></option>
+                            <?php foreach ($models as $model): ?>
+                            <option value="<?= $model->getId() ?>" 
+                                    <?= $assistant && $assistant->getData('model_id') == $model->getId() ? 'selected' : '' ?>>
+                                <?= $model->getData('name') ?> (<?= $model->getData('model_code') ?>)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text"><?= __('选择助手使用的 AI 模型') ?></div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- 提示词设置 -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><?= __('提示词设置') ?></h6>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-secondary"
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#promptHelp">
+                        <i class="bi bi-question-circle"></i>
+                        <?= __('帮助') ?>
+                    </button>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 帮助信息 -->
+                    <div class="collapse mb-3" id="promptHelp">
+                        <div class="alert alert-info">
+                            <h6><?= __('提示词变量：') ?></h6>
+                            <ul class="mb-0">
+                                <li><code>{input}</code> - <?= __('用户输入') ?></li>
+                                <li><code>{context}</code> - <?= __('上下文信息') ?></li>
+                                <li><code>{user_name}</code> - <?= __('用户名称') ?></li>
+                                <li><code>{timestamp}</code> - <?= __('当前时间戳') ?></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- 提示词模板 -->
+                    <div class="mb-3">
+                        <label for="prompt_template" class="form-label required">
+                            <?= __('提示词模板') ?>
+                        </label>
+                        <textarea class="form-control font-monospace" 
+                                  id="prompt_template" 
+                                  name="prompt_template" 
+                                  rows="8"
+                                  required
+                                  placeholder="<?= __('例如：你是一个专业的客服人员。用户问题：{input}') ?>"><?= $assistant ? $assistant->getData('prompt_template') : '' ?></textarea>
+                        <div class="form-text"><?= __('定义助手的行为和响应方式') ?></div>
+                    </div>
+                    
+                    <!-- 快速模板 -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('快速模板：') ?></label>
+                        <div class="btn-group-vertical w-100">
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm text-start"
+                                    onclick="loadTemplate('customer_service')">
+                                <?= __('客服助手') ?>
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm text-start"
+                                    onclick="loadTemplate('tech_support')">
+                                <?= __('技术支持') ?>
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary btn-sm text-start"
+                                    onclick="loadTemplate('sales')">
+                                <?= __('销售顾问') ?>
+                            </button>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- 配置参数 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('配置参数') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Temperature -->
+                    <div class="mb-3">
+                        <label for="config_temperature" class="form-label">
+                            <?= __('Temperature') ?>
+                            <small class="text-muted">(0.0 - 2.0)</small>
+                        </label>
+                        <input type="range" 
+                               class="form-range" 
+                               id="config_temperature" 
+                               name="config[temperature]" 
+                               min="0" 
+                               max="2" 
+                               step="0.1"
+                               value="0.7"
+                               oninput="document.getElementById('tempValue').textContent = this.value">
+                        <div class="form-text">
+                            <?= __('当前值：') ?><span id="tempValue">0.7</span>
+                            - <?= __('控制输出随机性') ?>
+                        </div>
+                    </div>
+                    
+                    <!-- Max Tokens -->
+                    <div class="mb-3">
+                        <label for="config_max_tokens" class="form-label">
+                            <?= __('最大令牌数') ?>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="config_max_tokens" 
+                               name="config[max_tokens]" 
+                               value="2000" 
+                               min="1"
+                               max="8000">
+                        <div class="form-text"><?= __('生成响应的最大长度') ?></div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- 权限设置 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('权限设置') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 是否公开 -->
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="is_public" 
+                                   name="is_public" 
+                                   value="1"
+                                   <?= $assistant && $assistant->getData('is_public') ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="is_public">
+                                <?= __('公开助手') ?>
+                            </label>
+                        </div>
+                        <div class="form-text"><?= __('允许其他用户使用此助手') ?></div>
+                    </div>
+                    
+                    <!-- 状态 -->
+                    <div class="mb-3">
+                        <label for="status" class="form-label required">
+                            <?= __('状态') ?>
+                        </label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="active" <?= $assistant && $assistant->getData('status') === 'active' ? 'selected' : '' ?>>
+                                <?= __('激活') ?>
+                            </option>
+                            <option value="inactive" <?= $assistant && $assistant->getData('status') === 'inactive' ? 'selected' : '' ?>>
+                                <?= __('未激活') ?>
+                            </option>
+                            <option value="archived" <?= $assistant && $assistant->getData('status') === 'archived' ? 'selected' : '' ?>>
+                                <?= __('已归档') ?>
+                            </option>
+                        </select>
+                    </div>
+                    
+                    <?php if ($isEdit): ?>
+                    <!-- 使用次数 -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('使用次数') ?></label>
+                        <div class="form-control-plaintext">
+                            <?= $assistant->getData('usage_count') ?: 0 ?> <?= __('次') ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>
+                    <?= __('保存') ?>
+                </button>
+                <button type="button" 
+                        class="btn btn-secondary" 
+                        data-bs-dismiss="offcanvas">
+                    <i class="bi bi-x-lg me-1"></i>
+                    <?= __('取消') ?>
+                </button>
+                
+                <?php if ($isEdit): ?>
+                <button type="button" 
+                        class="btn btn-info mt-3" 
+                        onclick="testAssistant(<?= $assistant->getId() ?>)">
+                    <i class="bi bi-play-circle me-1"></i>
+                    <?= __('测试助手') ?>
+                </button>
+                <?php endif; ?>
+            </div>
+            
+        </form>
+    </div>
+    
+</div>
+
+<!-- JavaScript -->
+<script>
+// 提示词模板
+const templates = {
+    customer_service: `你是一个专业、友好的客服人员。你的任务是：
+1. 理解客户的问题和需求
+2. 提供准确、清晰的解答
+3. 保持礼貌和耐心
+4. 如果无法解决问题，引导客户联系人工客服
+
+客户问题：{input}`,
+    
+    tech_support: `你是一个技术支持专家。你需要：
+1. 诊断技术问题
+2. 提供详细的解决步骤
+3. 使用通俗易懂的语言解释技术概念
+4. 必要时提供代码示例
+
+问题描述：{input}
+产品版本：{context}`,
+    
+    sales: `你是一个产品销售顾问。你的职责是：
+1. 了解客户需求
+2. 推荐合适的产品或方案
+3. 解答产品相关问题
+4. 促进销售转化
+
+客户咨询：{input}`
+};
+
+// 加载模板
+function loadTemplate(type) {
+    if (templates[type]) {
+        document.getElementById('prompt_template').value = templates[type];
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 表单验证
+    const form = document.getElementById('assistantEditForm');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 显示加载状态
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
+        
+        // 提交表单
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 显示成功消息
+                alert('<?= __("保存成功！") ?>');
+                
+                // 关闭 Offcanvas
+                const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('assistantEditOffcanvas'));
+                offcanvas.hide();
+                
+                // 刷新列表
+                window.location.reload();
+            } else {
+                // 显示错误消息
+                alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __("保存失败，请稍后重试") ?>');
+        })
+        .finally(() => {
+            // 恢复按钮状态
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+    });
+    
+    // 自动打开 Offcanvas（如果是新建或编辑模式）
+    <?php if ($this->getData('auto_open')): ?>
+    const offcanvas = new bootstrap.Offcanvas(document.getElementById('assistantEditOffcanvas'));
+    offcanvas.show();
+    <?php endif; ?>
+});
+
+// 测试助手
+function testAssistant(id) {
+    const testInput = prompt('<?= __("请输入测试问题：") ?>');
+    if (!testInput) return;
+    
+    // 显示加载
+    const btn = event.target;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("测试中...") ?>';
+    
+    fetch('<?= $this->getUrl('*/*/test') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            id: id,
+            input: testInput,
+            form_key: '<?= $this->getFormKey() ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __("助手响应：\n\n") ?>' + data.data.response);
+        } else {
+            alert('<?= __("测试失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __("测试失败，请稍后重试") ?>');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
+</script>
+
+<style>
+.offcanvas {
+    width: 650px !important;
+    max-width: 90vw;
+}
+
+.form-label.required::after {
+    content: ' *';
+    color: red;
+}
+
+.card-header h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+.font-monospace {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9rem;
+}
+</style>
+

@@ -1,0 +1,86 @@
+<css>jquery-ui.min.css</css>
+<js>jquery-ui.min.js</js>
+<script defer>
+    $(function () {
+        let can_run = true
+        if (!window.debounce) {
+            console.error('@lang{w-check: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>}')
+            can_run = false;
+        }
+        if (!$) {
+            console.error('@lang{w-check: jQuery组件未引入，请自行引入jquery.min.js}')
+            can_run = false;
+        }
+        if (!can_run) {
+            console.error('@lang{w-check: 标签需要上面提到的依赖：请引入依赖！}')
+            return
+        }
+        $('[w-check="true"]').each(function () {
+            let checkInput = $(this)
+            let url = checkInput.attr('w-check-url') ?? checkInput.attr('w-url') ?? '';
+            let type = checkInput.attr('w-check-type') ?? '';
+            if (!type) {
+                confirm('@lang{w-check: w-check-type属性未设置，请设置！}')
+                return
+            }
+            let field = checkInput.attr('w-check-field') ?? 'name';
+            let id = checkInput.attr('w-check-id') ?? '';
+            let id_field = checkInput.attr('w-check-id-field') ?? '';
+            if (!id_field) {
+                console.info(checkInput)
+                confirm('@lang{w-check: w-check-id-field属性未设置，请设置！}')
+                return
+            }
+            let invalid_class = checkInput.attr('w-invalid-class') ?? 'is-invalid';
+            let valid_class = checkInput.attr('w-valid-class') ?? 'is-valid';
+            if (!url) {
+                console.log('w-check @lang{元素上w-url属性找不到！}')
+                return
+            }
+            // 查询店铺信息，
+            checkInput.change(debounce(function () {
+                let input = $(this)
+                if(!input.val() && input.attr('required')){
+                    input.removeClass(valid_class).addClass(invalid_class);
+                    return
+                }
+                $.ajax({
+                    url: url + "?q=" + input.val(),
+                    dataType: "json",
+                    success: function (data) {
+                        // 如果类型为唯一:不存在时则验证通过，存在时说明重复
+                        if (type === 'unique') {
+                            for (let i = 0; i < data.length; i++) {
+                                if (data[i][field] === input.val()) {
+                                    if(id != data[i][id_field]){
+                                        input.removeClass(valid_class).addClass(invalid_class);
+                                        return
+                                    }
+                                    input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                                    return
+                                }
+                            }
+                            input.removeClass(invalid_class).addClass(valid_class);
+                        } else {
+                            // 如果类型为包含: 包含则验证通过，不包含则验证不通过
+                            for (let i = 0; i < data.length; i++) {
+                                if (data[i][field].indexOf(input.val()) !== -1 ) {
+                                    if(id != data[i][id_field]){
+                                        input.removeClass(valid_class).addClass(invalid_class);
+                                        return
+                                    }
+                                    input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                                    return
+                                }
+                            }
+                            input.removeClass(id ? invalid_class : valid_class).addClass(id ? valid_class : invalid_class);
+                        }
+                    },
+                    error: function () {
+                        input.removeClass(valid_class).addClass(invalid_class);
+                    }
+                });
+            }, 500));
+        });
+    })
+</script>

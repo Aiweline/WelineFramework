@@ -1,0 +1,38 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/api-key",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-API-Version": "v1"
+    },
+    "body": {
+      "name": "My New API Key",
+      "user_id": 1
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "success": true,
+      "data": {
+        "id": 201,
+        "name": "My New API Key",
+        "token": "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "status": "approved",
+        "is_active": true
+      }
+    },
+    "assertions": {
+      "status_code": 200,
+      "body.success": true,
+      "body.data.id": "exists",
+      "body.data.name": "My New API Key",
+      "body.data.token": "exists",
+      "body.data.status": "approved"
+    }
+  }
+}

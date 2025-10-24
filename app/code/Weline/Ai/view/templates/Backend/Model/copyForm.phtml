@@ -1,0 +1,342 @@
+<?php
+/**
+ * AI模型复制表单模板
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $model \Weline\Ai\Model\AiModel
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Ai\Model\AiModel;
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$model = $this->getData('model');
+$isIframe = $this->request->getGet('isIframe');
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('复制模型: %{1}', $model->getModelName()) ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- 开始 主要内容 -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+<div class="model-copy-container">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="mdi mdi-content-copy me-2"></i>
+                <?= __('复制模型') ?>
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="mdi mdi-information me-2"></i>
+                <?= __('您正在复制模型: <strong>%{1}</strong>', $model->getName()) ?>
+                <br>
+                <?= __('复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。') ?>
+            </div>
+
+            <form id="copy-form">
+                <input type="hidden" name="id" value="<?= $model->getId() ?>">
+                
+                <!-- 原始模型信息 -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="mdi mdi-information-outline me-2"></i><?= __('原始模型信息') ?></h6>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm table-bordered mb-0">
+                            <tr>
+                                <th width="200"><?= __('供应商') ?></th>
+                                <td><span class="badge bg-info"><?= $model->getVendor() ?></span></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('模型代码') ?></th>
+                                <td><code><?= $model->getModelCode() ?></code></td>
+                            </tr>
+                            <tr>
+                                <th><?= __('模型版本') ?></th>
+                                <td><?= $model->getModelVersion() ?></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 新模型配置 -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="mdi mdi-cog-outline me-2"></i><?= __('新模型配置') ?></h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="model_name" class="form-label">
+                                        <?= __('模型名称') ?> <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="model_name" 
+                                           name="model_name" 
+                                           value="<?= $model->getModelName() ?> (<?= __('副本') ?>)" 
+                                           required
+                                           placeholder="<?= __('请输入新模型的名称') ?>"
+                                           autofocus>
+                                    <small class="form-text text-muted">
+                                        <?= __('自定义名称用于区分不同配置') ?>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="model_code" class="form-label">
+                                        <?= __('模型代码') ?> <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="model_code" 
+                                           name="model_code" 
+                                           value="<?= $model->getModelCode() ?>-copy" 
+                                           required
+                                           placeholder="<?= __('请输入新模型代码') ?>">
+                                    <small class="form-text text-muted">
+                                        <?= __('唯一标识符，建议添加后缀') ?>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <?php 
+                        // 解析配置JSON
+                        $config = [];
+                        if ($model->getConfigJson()) {
+                            $configJson = $model->getConfigJson();
+                            $config = is_string($configJson) ? json_decode($configJson, true) : $configJson;
+                            if (!is_array($config)) {
+                                $config = [];
+                            }
+                        }
+                        ?>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="api_key" class="form-label">
+                                        <?= __('API密钥') ?>
+                                    </label>
+                                    <input type="password" 
+                                           class="form-control" 
+                                           id="api_key" 
+                                           name="config[api_key]" 
+                                           value="<?= $config['api_key'] ?? '' ?>"
+                                           placeholder="<?= __('输入新的API密钥') ?>">
+                                    <small class="form-text text-muted">
+                                        <?= __('留空则使用原配置') ?>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="api_url" class="form-label">
+                                        <?= __('API地址') ?>
+                                    </label>
+                                    <input type="url" 
+                                           class="form-control" 
+                                           id="api_url" 
+                                           name="config[api_url]" 
+                                           value="<?= $config['api_url'] ?? '' ?>"
+                                           placeholder="<?= __('输入新的API地址') ?>">
+                                    <small class="form-text text-muted">
+                                        <?= __('留空则使用原配置') ?>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="temperature" class="form-label">
+                                        <?= __('温度参数') ?>
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="temperature" 
+                                           name="config[temperature]" 
+                                           value="<?= $config['temperature'] ?? '' ?>"
+                                           step="0.1"
+                                           min="0"
+                                           max="2"
+                                           placeholder="0.7">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="max_tokens" class="form-label">
+                                        <?= __('最大令牌数') ?>
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="max_tokens" 
+                                           name="config[max_tokens]" 
+                                           value="<?= $config['max_tokens'] ?? '' ?>"
+                                           min="1"
+                                           placeholder="2000">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="top_p" class="form-label">
+                                        <?= __('Top P') ?>
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="top_p" 
+                                           name="config[top_p]" 
+                                           value="<?= $config['top_p'] ?? '' ?>"
+                                           step="0.1"
+                                           min="0"
+                                           max="1"
+                                           placeholder="1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提示信息 -->
+                <div class="alert alert-warning">
+                    <i class="mdi mdi-alert-circle-outline me-2"></i>
+                    <strong><?= __('注意：') ?></strong>
+                    <ul class="mb-0 mt-2">
+                        <li><?= __('复制的模型将自动标记为"复制模型"状态') ?></li>
+                        <li><?= __('复制的模型不会被设置为默认模型') ?></li>
+                        <li><?= __('您可以在复制后修改其API配置、定价和代理设置') ?></li>
+                        <li><?= __('复制模型可以删除，但原始模型不能删除') ?></li>
+                    </ul>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide()">
+                        <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-content-copy"></i> <?= __('确认复制') ?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('copy-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // 验证必填字段
+    const modelName = document.getElementById('model_name').value.trim();
+    const modelCode = document.getElementById('model_code').value.trim();
+    
+    if (!modelName) {
+        alert('<?= __('请输入新模型名称') ?>');
+        document.getElementById('model_name').focus();
+        return false;
+    }
+    
+    if (!modelCode) {
+        alert('<?= __('请输入新模型代码') ?>');
+        document.getElementById('model_code').focus();
+        return false;
+    }
+    
+    // 验证模型代码格式（允许字母、数字、点号、下划线、中划线）
+    const codePattern = /^[a-zA-Z0-9._-]+$/;
+    if (!codePattern.test(modelCode)) {
+        alert('<?= __('模型代码只能包含字母、数字、点号(.)、下划线(_)和中划线(-)') ?>');
+        document.getElementById('model_code').focus();
+        return false;
+    }
+    
+    const btn = this.querySelector('button[type="submit"]');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('复制中...') ?>';
+    
+    const formData = new FormData(this);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/copy') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('复制成功！') ?>');
+            // 关闭 offcanvas
+            window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide();
+            // 刷新父页面
+            setTimeout(() => {
+                window.parent.location.reload();
+            }, 500);
+        } else {
+            alert('<?= __('复制失败：') ?>' + data.message);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+    
+    return false;
+});
+
+// 自动选中模型名称输入框内容
+document.getElementById('model_name').select();
+</script>
+
+<style>
+.model-copy-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.model-copy-container .table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.model-copy-container .form-control-lg {
+    font-size: 1.1rem;
+    padding: 0.75rem 1rem;
+}
+
+.model-copy-container .form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+</style>
+
+            </div><!-- container-fluid -->
+        </div><!-- page-content -->
+    </div><!-- main-content -->
+</div><!-- layout-wrapper -->
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+
