@@ -1,0 +1,69 @@
+services:
+  welineframework:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: welineframework
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "9981:9981"
+    volumes:
+      # 数据持久化
+      - ./app/etc/db.sqlite:/var/www/html/app/etc/db.sqlite
+      - ./var:/var/www/html/var
+      - ./generated:/var/www/html/generated
+      - ./pub/media:/var/www/html/pub/media
+      # 日志持久化
+      - ./var/log:/var/log/supervisor
+    environment:
+      - PHP_ENV=production
+      - COMPOSER_ALLOW_SUPERUSER=1
+      - COMPOSER_NO_INTERACTION=1
+    networks:
+      - welineframework-network
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # 可选：Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: welineframework-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - welineframework-network
+    command: redis-server --appendonly yes
+
+  # 可选：MySQL 数据库服务
+  mysql:
+    image: mysql:8.0
+    container_name: welineframework-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: welineframework
+      MYSQL_USER: weline
+      MYSQL_PASSWORD: welinepassword
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - welineframework-network
+    command: --default-authentication-plugin=mysql_native_password
+
+networks:
+  welineframework-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  mysql_data:

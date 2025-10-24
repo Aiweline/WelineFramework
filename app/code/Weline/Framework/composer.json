@@ -1,0 +1,49 @@
+{
+  "name": "weline/framework",
+  "description": "微蓝WelineFramework框架！",
+  "keywords": [
+    "weline",
+    "WelineFramework",
+    "framework",
+    "web",
+    "ORM",
+    "app",
+    "php",
+    "php8"
+  ],
+  "type": "project",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "秋枫雁飞",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Framework\\": ""
+    }
+  },
+  "require": {
+    "php": "^8.1",
+    "ext-iconv": "*",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "ext-exif": "*",
+    "ext-fileinfo": "*",
+    "phpunit/phpunit": "^9.5.6",
+    "ext-simplexml": "*",
+    "ext-dom": "*",
+    "ext-libxml": "*",
+    "ext-zip": "*",
+    "symfony/intl": "^5.2",
+    "symfony/polyfill-intl-icu": "^1.23",
+    "jdorn/sql-formatter": "^1.2",
+    "ext-gd": "*",
+    "wikimedia/less.php": "^3.1",
+    "mrclay/jsmin-php": "^2.4",
+    "guzzlehttp/guzzle": "^7.4",
+    "friendsofphp/php-cs-fixer": "^3.8"
+  }
+}

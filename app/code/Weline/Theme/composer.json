@@ -1,0 +1,20 @@
+{
+  "name": "weline/module-theme",
+  "description": "WelineFramework theme module",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.0"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Theme\\": ""
+    }
+  },
+  "license": "MIT"
+}

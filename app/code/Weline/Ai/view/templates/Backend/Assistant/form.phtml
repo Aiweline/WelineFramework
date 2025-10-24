@@ -1,0 +1,702 @@
+<?php
+/**
+ * AI助手 Offcanvas 表单
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Ai\Model\AiAssistant|null $assistant
+ * @var array $models
+ * @var bool $isEdit
+ */
+
+$assistant = $this->getData('assistant');
+$models = $this->getData('models') ?: [];
+$isEdit = $this->getData('isEdit');
+?>
+
+<style>
+.assistant-form-group {
+    margin-bottom: 1.5rem;
+}
+
+.assistant-form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #495057;
+}
+
+.assistant-form-group label .required {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.assistant-form-group input[type="text"],
+.assistant-form-group select,
+.assistant-form-group textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.assistant-form-group input[type="text"]:focus,
+.assistant-form-group select:focus,
+.assistant-form-group textarea:focus {
+    color: #495057;
+    background-color: #fff;
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.assistant-form-group .form-help {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.assistant-form-group .form-check {
+    display: flex;
+    align-items: center;
+    padding-left: 0;
+}
+
+.assistant-form-group .form-check input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.5rem;
+}
+
+.assistant-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #343a40;
+    margin: 1.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.assistant-section-title:first-child {
+    margin-top: 0;
+}
+
+.assistant-optional {
+    font-size: 0.875rem;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: 0.5rem;
+}
+
+.form-actions {
+    display: flex !important;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 0;
+    margin-top: 24px;
+    border-top: 2px solid #dee2e6;
+    position: relative;
+    z-index: 10;
+}
+
+.btn-submit {
+    display: inline-block !important;
+    padding: 12px 32px !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    background: #007bff !important;
+    border: none !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+    min-width: 120px;
+    text-align: center;
+}
+
+.btn-submit:hover {
+    background: #0056b3 !important;
+    box-shadow: 0 4px 8px rgba(0,123,255,0.4);
+    transform: translateY(-1px);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+.btn-submit:disabled {
+    background: #6c757d !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+}
+</style>
+
+<form id="assistantForm" method="post" action="<?= $this->getBackendUrl('*/backend/assistant/save') ?>">
+    <?php if ($isEdit && $assistant): ?>
+        <input type="hidden" name="id" value="<?= $assistant->getId() ?>">
+    <?php endif; ?>
+
+    <!-- 基本信息 -->
+    <h6 class="assistant-section-title"><lang>基本信息</lang></h6>
+    
+    <div class="assistant-form-group">
+        <label for="name">
+            <lang>助手名称</lang>
+            <span class="required">*</span>
+        </label>
+        <input type="text" 
+               id="name" 
+               name="name" 
+               value="<?= $isEdit && $assistant ? $assistant->getData('name') : '' ?>"
+               placeholder="<?= __('请输入助手名称') ?>"
+               required>
+        <small class="form-help"><lang>用于识别和显示的助手名称</lang></small>
+    </div>
+
+    <div class="assistant-form-group">
+        <label for="model_code">
+            <lang>AI模型</lang>
+            <span class="required">*</span>
+        </label>
+        <div style="position: relative;">
+            <input type="text" 
+                   id="model_search" 
+                   placeholder="<?= __('搜索模型...') ?>"
+                   autocomplete="off"
+                   style="margin-bottom: 8px;">
+            <div id="model_loading" style="display: none; color: #6c757d; font-size: 0.875rem; margin-bottom: 8px;">
+                <lang>搜索中...</lang>
+            </div>
+            <select id="model_code" name="model_code" required size="5" style="width: 100%; min-height: 120px;">
+                <!-- 模型选项将通过JavaScript动态加载 -->
+            </select>
+        </div>
+        <small class="form-help"><lang>搜索并选择助手使用的AI模型</lang></small>
+    </div>
+
+    <div class="assistant-form-group">
+        <label for="description"><lang>描述</lang></label>
+        <textarea id="description" 
+                  name="description" 
+                  rows="3"
+                  placeholder="<?= __('请输入助手描述...') ?>"><?= $isEdit && $assistant ? $assistant->getData('description') : '' ?></textarea>
+        <small class="form-help"><lang>助手的功能描述和用途说明</lang></small>
+    </div>
+
+    <!-- 模型配置 -->
+    <h6 class="assistant-section-title">
+        <lang>模型配置</lang>
+        <span class="assistant-optional">(<lang>可选，留空使用模型默认配置</lang>)</span>
+    </h6>
+    
+    <div class="assistant-form-group">
+        <button type="button" id="loadModelConfig" class="btn btn-sm btn-outline-primary" style="margin-bottom: 12px;">
+            <i class="mdi mdi-refresh"></i> <lang>加载选中模型的默认配置</lang>
+        </button>
+        <textarea id="model_config" 
+                  name="model_config" 
+                  rows="8"
+                  style="font-family: monospace; font-size: 13px;"
+                  placeholder="<?= __('留空使用模型默认配置，或输入JSON格式的配置覆盖...') ?>"><?php 
+            if ($isEdit && $assistant && $assistant->getData('model_config')) {
+                $config = $assistant->getData('model_config');
+                // 如果是JSON字符串，格式化显示
+                if (is_string($config)) {
+                    $decoded = json_decode($config, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    } else {
+                        echo $config;
+                    }
+                } else if (is_array($config)) {
+                    echo json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                } else {
+                    echo $config;
+                }
+            }
+        ?></textarea>
+        <small class="form-help">
+            <lang>JSON格式的模型配置覆盖。示例：</lang><br>
+            <code>{"max_tokens": 2048, "temperature": 0.7, "top_p": 0.9}</code>
+        </small>
+    </div>
+    
+    <!-- 提示词配置 -->
+    <h6 class="assistant-section-title"><lang>提示词配置</lang></h6>
+    
+    <div class="assistant-form-group">
+        <label for="prompt">
+            <lang>系统提示词</lang>
+            <span class="required">*</span>
+        </label>
+        <textarea id="prompt" 
+                  name="prompt" 
+                  rows="8"
+                  placeholder="<?= __('请输入系统提示词...') ?>"
+                  required><?= $isEdit && $assistant ? $assistant->getData('prompt') : '' ?></textarea>
+        <small class="form-help">
+            <lang>定义助手的角色、行为和响应风格。例如：</lang><br>
+            <code>You are a helpful AI assistant. Your role is to...</code>
+        </small>
+    </div>
+
+    <!-- MCP配置 -->
+    <h6 class="assistant-section-title">
+        <lang>MCP配置</lang>
+        <span class="assistant-optional">(<lang>可选</lang>)</span>
+    </h6>
+    
+    <div class="assistant-form-group">
+        <label for="mcp_config"><lang>MCP工具配置</lang></label>
+        <textarea id="mcp_config" 
+                  name="mcp_config" 
+                  rows="6"
+                  style="font-family: monospace;"
+                  placeholder="<?= __('请输入JSON格式的MCP配置...') ?>"><?= $isEdit && $assistant ? $assistant->getData('mcp_config') : '[]' ?></textarea>
+        <small class="form-help">
+            <lang>JSON格式的MCP工具配置。示例：</lang><br>
+            <code>{"tools": ["search", "calculator"], "settings": {}}</code>
+        </small>
+    </div>
+
+    <!-- 租赁设置 -->
+    <h6 class="assistant-section-title">
+        <lang>租赁设置</lang>
+        <span class="assistant-optional">(<lang>可选</lang>)</span>
+    </h6>
+    
+    <div class="assistant-form-group">
+        <div class="form-check">
+            <input type="checkbox" 
+                   id="is_rentable" 
+                   name="is_rentable" 
+                   value="1"
+                   <?= ($isEdit && $assistant && $assistant->getData('is_rentable')) ? 'checked' : '' ?>>
+            <label for="is_rentable">
+                <lang>允许其他用户租用此助手</lang>
+            </label>
+        </div>
+        <small class="form-help"><lang>启用后，此助手将在市场中展示，其他用户可以租用</lang></small>
+    </div>
+    
+    <div class="assistant-form-group" id="rentalSettings" style="<?= ($isEdit && $assistant && $assistant->getData('is_rentable')) ? '' : 'display:none;' ?>">
+        <label for="rental_type"><lang>租赁类型</lang></label>
+        <select id="rental_type" name="rental_type">
+            <option value="per_use" <?= ($isEdit && $assistant && $assistant->getData('rental_type') === 'per_use') ? 'selected' : '' ?>>
+                <lang>按次租用</lang> - <lang>每次使用收费</lang>
+            </option>
+            <option value="daily" <?= ($isEdit && $assistant && $assistant->getData('rental_type') === 'daily') ? 'selected' : '' ?>>
+                <lang>按天租用</lang> - <lang>24小时内无限使用</lang>
+            </option>
+            <option value="monthly" <?= ($isEdit && $assistant && $assistant->getData('rental_type') === 'monthly') ? 'selected' : 'selected' ?>>
+                <lang>按月租用</lang> - <lang>30天内无限使用</lang>
+            </option>
+            <option value="permanent" <?= ($isEdit && $assistant && $assistant->getData('rental_type') === 'permanent') ? 'selected' : '' ?>>
+                <lang>永久租用</lang> - <lang>一次性付费永久使用</lang>
+            </option>
+        </select>
+    </div>
+    
+    <div class="assistant-form-group" id="rentalPriceGroup" style="<?= ($isEdit && $assistant && $assistant->getData('is_rentable')) ? '' : 'display:none;' ?>">
+        <label for="rental_price">
+            <lang>租赁价格</lang>
+            <span class="required">*</span>
+        </label>
+        <div style="position: relative;">
+            <input type="number" 
+                   id="rental_price" 
+                   name="rental_price" 
+                   step="0.01" 
+                   min="0"
+                   value="<?= $isEdit && $assistant ? ($assistant->getData('rental_price') ?? '0.00') : '0.00' ?>"
+                   placeholder="<?= __('请输入租赁价格') ?>">
+            <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #6c757d;">
+                <?= $isEdit && $assistant ? ($assistant->getData('rental_currency') ?? 'CNY') : 'CNY' ?>
+            </span>
+        </div>
+        <small class="form-help"><lang>根据租赁类型设置相应的价格</lang></small>
+    </div>
+    
+    <div class="assistant-form-group" id="categoryGroup" style="<?= ($isEdit && $assistant && $assistant->getData('is_rentable')) ? '' : 'display:none;' ?>">
+        <label for="category"><lang>分类</lang></label>
+        <select id="category" name="category">
+            <option value=""><?= __('-- 请选择分类 --') ?></option>
+            <option value="productivity" <?= ($isEdit && $assistant && $assistant->getData('category') === 'productivity') ? 'selected' : '' ?>>
+                <lang>生产力工具</lang>
+            </option>
+            <option value="creative" <?= ($isEdit && $assistant && $assistant->getData('category') === 'creative') ? 'selected' : '' ?>>
+                <lang>创意写作</lang>
+            </option>
+            <option value="coding" <?= ($isEdit && $assistant && $assistant->getData('category') === 'coding') ? 'selected' : '' ?>>
+                <lang>编程开发</lang>
+            </option>
+            <option value="business" <?= ($isEdit && $assistant && $assistant->getData('category') === 'business') ? 'selected' : '' ?>>
+                <lang>商业分析</lang>
+            </option>
+            <option value="education" <?= ($isEdit && $assistant && $assistant->getData('category') === 'education') ? 'selected' : '' ?>>
+                <lang>教育培训</lang>
+            </option>
+            <option value="entertainment" <?= ($isEdit && $assistant && $assistant->getData('category') === 'entertainment') ? 'selected' : '' ?>>
+                <lang>娱乐休闲</lang>
+            </option>
+            <option value="other" <?= ($isEdit && $assistant && $assistant->getData('category') === 'other') ? 'selected' : '' ?>>
+                <lang>其他</lang>
+            </option>
+        </select>
+        <small class="form-help"><lang>帮助用户在市场中更容易找到您的助手</lang></small>
+    </div>
+    
+    <div class="assistant-form-group" id="tagsGroup" style="<?= ($isEdit && $assistant && $assistant->getData('is_rentable')) ? '' : 'display:none;' ?>">
+        <label for="tags"><lang>标签</lang></label>
+        <input type="text" 
+               id="tags" 
+               name="tags" 
+               value="<?= $isEdit && $assistant ? $assistant->getData('tags') : '' ?>"
+               placeholder="<?= __('多个标签用逗号分隔，例如：翻译,写作,效率') ?>">
+        <small class="form-help"><lang>标签可以帮助用户搜索和筛选助手</lang></small>
+    </div>
+
+    <!-- 状态设置 -->
+    <h6 class="assistant-section-title"><lang>状态设置</lang></h6>
+    
+    <div class="assistant-form-group">
+        <div class="form-check">
+            <input type="checkbox" 
+                   id="is_active" 
+                   name="is_active" 
+                   value="1"
+                   <?= (!$isEdit || ($assistant && $assistant->getData('is_active'))) ? 'checked' : '' ?>>
+            <label for="is_active">
+                <lang>启用此助手</lang>
+            </label>
+        </div>
+        <small class="form-help"><lang>只有启用的助手才能被使用</lang></small>
+    </div>
+
+    <!-- 提交按钮 -->
+    <div class="form-actions">
+        <button type="submit" class="btn-submit" id="submitBtn">
+            <?= __('保存') ?>
+        </button>
+    </div>
+</form>
+
+<script>
+(function() {
+    // 获取所有需要的DOM元素
+    let modelSearchTimeout;
+    const modelSearchInput = document.getElementById('model_search');
+    const modelSelect = document.getElementById('model_code');
+    const modelLoading = document.getElementById('model_loading');
+    const loadModelConfigBtn = document.getElementById('loadModelConfig');
+    const modelConfigField = document.getElementById('model_config');
+    
+    function searchModels(keyword) {
+        console.log('searchModels called with keyword:', keyword);
+        if (!modelLoading || !modelSelect) {
+            console.error('Required elements not found:', {modelLoading: !!modelLoading, modelSelect: !!modelSelect});
+            return;
+        }
+        
+        modelLoading.style.display = 'block';
+        
+        <?php if ($isEdit && $assistant && $assistant->getData('model_code')): ?>
+        const currentModelCode = '<?= $assistant->getData('model_code') ?>';
+        <?php else: ?>
+        const currentModelCode = null;
+        <?php endif; ?>
+        
+        const url = '<?= $this->getBackendUrl('*/backend/assistant/searchModels') ?>?keyword=' + encodeURIComponent(keyword);
+        console.log('Fetching models from:', url);
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Models received:', data);
+                modelLoading.style.display = 'none';
+                modelSelect.innerHTML = '';
+                
+                if (data.success && data.models && data.models.length > 0) {
+                    console.log('Processing', data.models.length, 'models');
+                    let currentModel = null;
+                    const otherModels = [];
+                    
+                    // 分离当前模型和其他模型
+                    data.models.forEach(model => {
+                        if (model.is_active == 1) {
+                            if (currentModelCode && model.code === currentModelCode) {
+                                currentModel = model;
+                            } else {
+                                otherModels.push(model);
+                            }
+                        }
+                    });
+                    
+                    // 先添加当前选择的模型（如果是编辑模式）
+                    if (currentModel) {
+                        const option = document.createElement('option');
+                        option.value = currentModel.code;
+                        option.textContent = currentModel.name + ' (' + currentModel.supplier + ') - <?= __("当前选择") ?>';
+                        option.selected = true;
+                        modelSelect.appendChild(option);
+                    }
+                    
+                    // 再添加其他模型
+                    otherModels.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.code;
+                        option.textContent = model.name + ' (' + model.supplier + ')';
+                        modelSelect.appendChild(option);
+                    });
+                } else {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = '<?= __("未找到匹配的模型") ?>';
+                    option.disabled = true;
+                    modelSelect.appendChild(option);
+                }
+            })
+            .catch(error => {
+                modelLoading.style.display = 'none';
+                console.error('<?= __("搜索失败：") ?>', error);
+            });
+    }
+    
+    // 页面加载时自动搜索（编辑模式会自动将当前模型放在第一位）
+    searchModels('');
+    
+    if (modelSearchInput) {
+        // 输入时触发搜索（带防抖）
+        modelSearchInput.addEventListener('input', function() {
+            clearTimeout(modelSearchTimeout);
+            modelSearchTimeout = setTimeout(() => {
+                searchModels(this.value);
+            }, 300);
+        });
+        
+        // 按Enter键选择第一个
+        modelSearchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (modelSelect.options.length > 0 && modelSelect.options[0].value) {
+                    modelSelect.selectedIndex = 0;
+                    modelSearchInput.focus();
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                modelSelect.focus();
+            }
+        });
+    }
+    
+    // 监听模型选择变化，自动提示加载配置
+    if (modelSelect && modelConfigField) {
+        modelSelect.addEventListener('change', function() {
+            if (this.value) {
+                // 询问是否加载新模型的配置
+                const confirmMessage = '<?= __("检测到模型已切换，是否加载新模型的默认配置？") ?>' + '\n' + '<?= __("（当前配置将被覆盖）") ?>';
+                if (confirm(confirmMessage)) {
+                    // 触发加载配置按钮
+                    if (loadModelConfigBtn) {
+                        loadModelConfigBtn.click();
+                    }
+                }
+            }
+        });
+    }
+    
+    // 加载模型配置
+    if (loadModelConfigBtn && modelSelect && modelConfigField) {
+        loadModelConfigBtn.addEventListener('click', function() {
+            const selectedModelCode = modelSelect.value;
+            
+            if (!selectedModelCode) {
+                alert('<?= __("请先选择一个AI模型") ?>');
+                return;
+            }
+            
+            // 显示加载状态
+            this.disabled = true;
+            this.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("加载中...") ?>';
+            
+            fetch('<?= $this->getBackendUrl('*/backend/assistant/getModelConfig') ?>?model_code=' + encodeURIComponent(selectedModelCode))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.config) {
+                        // 格式化JSON并填入textarea
+                        const formattedConfig = JSON.stringify(data.config, null, 2);
+                        modelConfigField.value = formattedConfig;
+                        
+                        // 视觉反馈：短暂显示绿色边框
+                        modelConfigField.style.borderColor = '#28a745';
+                        setTimeout(() => {
+                            modelConfigField.style.borderColor = '';
+                        }, 2000);
+                    } else {
+                        alert('<?= __("加载失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                    }
+                })
+                .catch(error => {
+                    alert('<?= __("请求失败：") ?>' + error.message);
+                })
+                .finally(() => {
+                    // 恢复按钮状态
+                    this.disabled = false;
+                    this.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __("加载选中模型的默认配置") ?>';
+                });
+        });
+    }
+    
+    // 模型配置JSON验证
+    if (modelConfigField) {
+        modelConfigField.addEventListener('blur', function() {
+            const value = this.value.trim();
+            if (value && value !== '{}') {
+                try {
+                    JSON.parse(value);
+                    this.style.borderColor = '#28a745';
+                } catch (e) {
+                    this.style.borderColor = '#dc3545';
+                    alert('<?= __("模型配置格式错误，请输入有效的JSON格式") ?>');
+                }
+            } else {
+                this.style.borderColor = '';
+            }
+        });
+    }
+    
+    // MCP配置JSON验证
+    const mcpConfigField = document.getElementById('mcp_config');
+    if (mcpConfigField) {
+        mcpConfigField.addEventListener('blur', function() {
+            const value = this.value.trim();
+            if (value && value !== '[]') {
+                try {
+                    JSON.parse(value);
+                    this.style.borderColor = '#28a745';
+                } catch (e) {
+                    this.style.borderColor = '#dc3545';
+                    alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                }
+            } else {
+                this.style.borderColor = '';
+            }
+        });
+    }
+    
+    // 租赁设置控制
+    const isRentableCheckbox = document.getElementById('is_rentable');
+    const rentalSettings = document.getElementById('rentalSettings');
+    const rentalPriceGroup = document.getElementById('rentalPriceGroup');
+    const categoryGroup = document.getElementById('categoryGroup');
+    const tagsGroup = document.getElementById('tagsGroup');
+    
+    if (isRentableCheckbox) {
+        isRentableCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            if (rentalSettings) rentalSettings.style.display = isChecked ? 'block' : 'none';
+            if (rentalPriceGroup) rentalPriceGroup.style.display = isChecked ? 'block' : 'none';
+            if (categoryGroup) categoryGroup.style.display = isChecked ? 'block' : 'none';
+            if (tagsGroup) tagsGroup.style.display = isChecked ? 'block' : 'none';
+            
+            // 如果未勾选，清空租赁相关字段
+            if (!isChecked) {
+                const rentalPriceInput = document.getElementById('rental_price');
+                if (rentalPriceInput) rentalPriceInput.value = '0.00';
+            }
+        });
+    }
+
+    // 表单提交处理
+    const form = document.getElementById('assistantForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // 验证必填字段
+            const name = document.getElementById('name').value.trim();
+            const modelCode = document.getElementById('model_code').value;
+            const prompt = document.getElementById('prompt').value.trim();
+
+            if (!name || !modelCode || !prompt) {
+                alert('<?= __("请填写所有必填字段") ?>');
+                return false;
+            }
+
+            // 验证 MCP 配置
+            const mcpConfig = document.getElementById('mcp_config').value.trim();
+            if (mcpConfig && mcpConfig !== '[]') {
+                try {
+                    JSON.parse(mcpConfig);
+                } catch (error) {
+                    alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    return false;
+                }
+            }
+
+            // 提交表单数据
+            const formData = new FormData(this);
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+            
+            // 显示加载状态
+            submitBtn.disabled = true;
+            submitBtn.textContent = '<?= __("保存中...") ?>';
+            
+            // 处理checkbox的is_active字段
+            const isActiveCheckbox = document.getElementById('is_active');
+            if (isActiveCheckbox && !isActiveCheckbox.checked) {
+                formData.set('is_active', '0');
+            }
+            
+            fetch('<?= $this->getBackendUrl('*/backend/assistant/save') ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 关闭Offcanvas弹窗
+                    if (window.parent && window.parent !== window) {
+                        // 如果在iframe中（Offcanvas），关闭弹窗并刷新父页面
+                        try {
+                            // 查找并点击关闭按钮
+                            const closeBtn = window.parent.document.querySelector('.offcanvas .btn-close, .offcanvas [data-bs-dismiss="offcanvas"]');
+                            if (closeBtn) {
+                                closeBtn.click();
+                            }
+                            // 刷新父页面
+                            setTimeout(() => {
+                                window.parent.location.reload();
+                            }, 300);
+                        } catch (e) {
+                            // 跨域或其他错误，直接刷新
+                            window.parent.location.reload();
+                        }
+                    } else {
+                        // 不在iframe中，直接刷新当前页面
+                        location.reload();
+                    }
+                } else {
+                    alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            })
+            .catch(error => {
+                alert('<?= __("请求失败：") ?>' + error.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            });
+        });
+    }
+})();
+</script>
+

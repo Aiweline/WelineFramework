@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <add source="Weline_ThemeFancy::system_frontend_template_fancy" name="system_frontend_template_fancy" title="Fancy" action="frontend/Template/Fancy"
+         parent="Weline_Frontend::system_frontend" icon="mdi mdi-file-document-multiple" order="20002" is_backend="0"/>
+</menus>

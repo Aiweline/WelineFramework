@@ -1,0 +1,395 @@
+<?php
+/**
+ * 我的评分列表
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $ratings array
+ * @var $total int
+ * @var $page int
+ * @var $totalPages int
+ */
+
+$ratings = $this->ratings ?? [];
+$total = $this->total ?? 0;
+$page = $this->page ?? 1;
+$totalPages = $this->totalPages ?? 1;
+?>
+
+<style>
+.rating-list-container {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 32px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+}
+
+.page-subtitle {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.ratings-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.rating-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 24px;
+    transition: box-shadow 0.2s;
+}
+
+.rating-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.rating-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 16px;
+}
+
+.assistant-info h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+}
+
+.assistant-info p {
+    font-size: 14px;
+    color: #6c757d;
+    line-height: 1.5;
+}
+
+.rating-date {
+    font-size: 13px;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.rating-stars-large {
+    color: #ffc107;
+    font-size: 24px;
+    margin-bottom: 12px;
+}
+
+.rating-dimensions {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.dimension-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.dimension-label {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.dimension-stars {
+    color: #ffc107;
+    font-size: 14px;
+}
+
+.rating-comment {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #495057;
+    margin-bottom: 16px;
+}
+
+.rating-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid #e9ecef;
+}
+
+.rating-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-approved {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-rejected {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.rating-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.btn-edit, .btn-delete {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-edit {
+    background: #007bff;
+    color: white;
+}
+
+.btn-edit:hover {
+    background: #0056b3;
+}
+
+.btn-delete {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #c82333;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #dee2e6;
+    margin-bottom: 16px;
+}
+
+.empty-state h3 {
+    font-size: 20px;
+    color: #6c757d;
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    font-size: 14px;
+    color: #adb5bd;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 32px;
+}
+
+.page-btn {
+    padding: 8px 16px;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.page-btn:hover:not(.active):not(:disabled) {
+    background: #f8f9fa;
+}
+
+.page-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+</style>
+
+<div class="rating-list-container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="mdi mdi-star"></i> <lang>我的评分</lang>
+        </h1>
+        <p class="page-subtitle">
+            <lang>共</lang> <?= $total ?> <lang>条评分记录</lang>
+        </p>
+    </div>
+
+    <?php if (empty($ratings)): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-star-outline"></i>
+            <h3><?= __('暂无评分记录') ?></h3>
+            <p><?= __('您还没有对任何助手进行评分') ?></p>
+        </div>
+    <?php else: ?>
+        <div class="ratings-grid">
+            <?php foreach ($ratings as $rating): 
+                $ratingScore = (int)$rating->getData('rating');
+                $status = $rating->getData('status');
+                $accuracyRating = (int)($rating->getData('accuracy_rating') ?? 0);
+                $speedRating = (int)($rating->getData('speed_rating') ?? 0);
+                $usefulnessRating = (int)($rating->getData('usefulness_rating') ?? 0);
+                
+                $statusClass = [
+                    'pending' => 'status-pending',
+                    'approved' => 'status-approved',
+                    'rejected' => 'status-rejected'
+                ];
+                
+                $statusLabel = [
+                    'pending' => __('待审核'),
+                    'approved' => __('已通过'),
+                    'rejected' => __('已拒绝')
+                ];
+            ?>
+                <div class="rating-card">
+                    <div class="rating-card-header">
+                        <div class="assistant-info">
+                            <h3><?= htmlspecialchars($rating->getData('assistant_name')) ?></h3>
+                            <p><?= htmlspecialchars($rating->getData('assistant_description') ?? '') ?></p>
+                        </div>
+                        <div class="rating-date">
+                            <?= date('Y-m-d H:i', $rating->getData('created_time')) ?>
+                        </div>
+                    </div>
+
+                    <div class="rating-stars-large">
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <i class="mdi mdi-star<?= $i <= $ratingScore ? '' : '-outline' ?>"></i>
+                        <?php endfor; ?>
+                    </div>
+
+                    <?php if ($accuracyRating || $speedRating || $usefulnessRating): ?>
+                        <div class="rating-dimensions">
+                            <?php if ($accuracyRating): ?>
+                                <div class="dimension-item">
+                                    <div class="dimension-label"><lang>准确性</lang></div>
+                                    <div class="dimension-stars">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="mdi mdi-star<?= $i <= $accuracyRating ? '' : '-outline' ?>"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if ($speedRating): ?>
+                                <div class="dimension-item">
+                                    <div class="dimension-label"><lang>响应速度</lang></div>
+                                    <div class="dimension-stars">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="mdi mdi-star<?= $i <= $speedRating ? '' : '-outline' ?>"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if ($usefulnessRating): ?>
+                                <div class="dimension-item">
+                                    <div class="dimension-label"><lang>实用性</lang></div>
+                                    <div class="dimension-stars">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="mdi mdi-star<?= $i <= $usefulnessRating ? '' : '-outline' ?>"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($rating->getData('comment')): ?>
+                        <div class="rating-comment">
+                            <?= nl2br(htmlspecialchars($rating->getData('comment'))) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="rating-footer">
+                        <span class="rating-status <?= $statusClass[$status] ?? '' ?>">
+                            <i class="mdi mdi-<?= $status === 'approved' ? 'check-circle' : ($status === 'rejected' ? 'close-circle' : 'clock') ?>"></i>
+                            <?= $statusLabel[$status] ?? $status ?>
+                        </span>
+                        
+                        <div class="rating-actions">
+                            <button class="btn-edit" onclick="editRating(<?= $rating->getId() ?>)">
+                                <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- 分页 -->
+        <?php if ($totalPages > 1): ?>
+            <div class="pagination">
+                <button class="page-btn" <?= $page <= 1 ? 'disabled' : '' ?> 
+                        onclick="changePage(<?= $page - 1 ?>)">
+                    <i class="mdi mdi-chevron-left"></i> <lang>上一页</lang>
+                </button>
+
+                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                    <button class="page-btn <?= $i === $page ? 'active' : '' ?>" 
+                            onclick="changePage(<?= $i ?>)">
+                        <?= $i ?>
+                    </button>
+                <?php endfor; ?>
+
+                <button class="page-btn" <?= $page >= $totalPages ? 'disabled' : '' ?> 
+                        onclick="changePage(<?= $page + 1 ?>)">
+                    <lang>下一页</lang> <i class="mdi mdi-chevron-right"></i>
+                </button>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<script>
+function changePage(page) {
+    window.location.href = '<?= $this->getBackendUrl('*/backend/rating/mylist') ?>?page=' + page;
+}
+
+function editRating(ratingId) {
+    // TODO: 实现编辑评分功能
+    alert('编辑评分功能待实现，评分ID：' + ratingId);
+}
+</script>
+

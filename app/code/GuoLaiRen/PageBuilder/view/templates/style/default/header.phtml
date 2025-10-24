@@ -1,0 +1,302 @@
+<?php
+/**
+ * 默认样式 - Header
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局
+ * layout.logo_position => Logo位置:select:left|left,center,right
+ * 
+ * group:style => 样式
+ * style.header_background_color => 页头背景色:color:transparent
+ * style.border_bottom => 底部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#eeeeee
+ * 
+ * group:size => 尺寸[MD]:📱响应式配置说明:支持移动端/平板/PC端三种配置格式\n• 单一值: 80 (所有端相同)\n• 双端值: 60/80 (移动端60, PC端80, 推荐)\n• 三端值: 60/70/80 (移动端60, 平板70, PC端80)\n\n断点定义:\nM (Mobile) 移动端: 375px\nT (Tablet) 平板: 768px\nD (Desktop) PC端: 1280px\n\n标记说明: [M]移动端 [MD]移动+PC [MTD]完整三端
+ * size.height => 头部高度:responsive:60/80|px[MD]
+ * size.max_width => 内容最大宽度:responsive:100/1200|%/px[移动端使用百分比，PC端使用像素]
+ * size.padding_h => 左右内边距:responsive:16/40|px[MD]
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+// 兼容两种变量名：style（前端页面）和 style_settings（后端编辑预览）
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$isPreview = $this->getData('is_preview');
+
+// 获取配置值的辅助函数
+function getConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+/**
+ * 解析响应式配置值
+ * 支持格式：
+ * - 单一值: "80" 或 "80px"
+ * - 双端值: "60/80" 表示 移动端60 / PC端80
+ * - 三端值: "60/70/80" 表示 移动端60 / 平板70 / PC端80
+ * 
+ * @param string $value 配置值
+ * @return array ['mobile' => 60, 'tablet' => 70, 'desktop' => 80, 'unit' => 'px']
+ */
+function parseResponsiveValue($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
+    }
+    
+    // 移除空格
+    $value = trim($value);
+    
+    // 提取单位（查找最后一个数字后的字符）
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    
+    // 按斜杠分割值
+    $parts = explode('/', $value);
+    $parts = array_map('trim', $parts);
+    
+    $result = [
+        'mobile' => '',
+        'tablet' => '',
+        'desktop' => '',
+        'unit' => $unit ?: 'px'
+    ];
+    
+    switch (count($parts)) {
+        case 1:
+            // 单一值：所有端都使用同一值
+            $result['mobile'] = $parts[0];
+            $result['tablet'] = $parts[0];
+            $result['desktop'] = $parts[0];
+            break;
+            
+        case 2:
+            // 双端值：移动端/PC端，平板自动计算
+            $result['mobile'] = $parts[0];
+            $result['tablet'] = ''; // 自动计算
+            $result['desktop'] = $parts[1];
+            break;
+            
+        case 3:
+            // 三端值：移动端/平板/PC端
+            $result['mobile'] = $parts[0];
+            $result['tablet'] = $parts[1];
+            $result['desktop'] = $parts[2];
+            break;
+    }
+    
+    return $result;
+}
+
+// 从页面配置中读取 Logo 信息
+$logoUrl = $page ? $page->getData('logo') : '';
+$pageTitle = $page ? $page->getData('title') : '';
+$logoLink = '/'; // 链接到首页
+
+// 从样式配置中读取 Logo 位置
+$logoPosition = getConfig($styleSettings, 'layout.logo_position', 'left');
+
+// 样式配置
+$bgColor = getConfig($styleSettings, 'style.header_background_color', 'transparent');
+$borderBottom = getConfig($styleSettings, 'style.border_bottom', 'yes');
+$borderColor = getConfig($styleSettings, 'style.border_color', '#eeeeee');
+
+// 尺寸配置 - 使用新的响应式格式解析
+$heightValue = getConfig($styleSettings, 'size.height', '60/80');
+$maxWidthValue = getConfig($styleSettings, 'size.max_width', '100/1200');
+$paddingHValue = getConfig($styleSettings, 'size.padding_h', '16/40');
+
+$height = parseResponsiveValue($heightValue . 'px');
+$maxWidth = parseResponsiveValue($maxWidthValue . 'px');
+$paddingH = parseResponsiveValue($paddingHValue . 'px');
+
+/**
+ * 生成响应式 CSS 值
+ * 支持 clamp() 自动计算中间值
+ * 
+ * @param array $parsed 解析后的响应式值数组
+ * @return string CSS值
+ */
+function generateResponsiveCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    
+    // 如果移动端和PC端值相同，直接返回固定值
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    
+    // 断点定义
+    $minVw = 375;  // 移动端最小宽度
+    $maxVw = 1280; // PC端最大宽度
+    $vwDiff = $maxVw - $minVw;
+    $diff = $desktop - $mobile;
+    
+    // 生成 clamp() 函数
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - {$minVw}px) / {$vwDiff})), {$desktop}{$unit})";
+}
+
+$heightResponsive = generateResponsiveCSS($height);
+$paddingHResponsive = generateResponsiveCSS($paddingH);
+$maxWidthResponsive = $maxWidth['desktop'] . $maxWidth['unit']; // 最大宽度使用PC端值
+
+// 从页面配置中读取跟踪代码 ID
+$ga4Id = $page ? $page->getData('ga4_id') : '';
+$gtmId = $page ? $page->getData('gtm_id') : '';
+$fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
+?>
+
+<!-- Head 跟踪代码（仅在非预览模式下执行） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Analytics 4 -->
+    <?php if ($ga4Id): ?>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($ga4Id) ?>"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '<?= htmlspecialchars($ga4Id) ?>');
+    </script>
+    <?php endif; ?>
+    
+    <!-- Google Tag Manager -->
+    <?php if ($gtmId): ?>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId) ?>');</script>
+    <?php endif; ?>
+<?php endif; ?>
+
+<style>
+.page-header {
+    background: <?= $bgColor ?>;
+    /* 响应式高度：从移动端 <?= $heightMobile ?>px 到 PC端 <?= $heightDesktop ?>px */
+    height: <?= $heightResponsive ?>;
+    display: flex;
+    align-items: center;
+    <?php if ($borderBottom === 'yes'): ?>
+    border-bottom: 1px solid <?= $borderColor ?>;
+    <?php endif; ?>
+}
+
+.header-container {
+    /* PC端固定最大宽度 */
+    max-width: <?= $maxWidthResponsive ?>;
+    width: 100%;
+    margin: 0 auto;
+    /* 响应式内边距：从移动端 <?= $paddingH['mobile'] ?>px 到 PC端 <?= $paddingH['desktop'] ?>px */
+    padding-left: <?= $paddingHResponsive ?>;
+    padding-right: <?= $paddingHResponsive ?>;
+    display: flex;
+    align-items: center;
+    <?php if ($logoPosition === 'center'): ?>
+    justify-content: center;
+    <?php elseif ($logoPosition === 'right'): ?>
+    justify-content: flex-end;
+    <?php else: ?>
+    justify-content: flex-start;
+    <?php endif; ?>
+}
+
+.header-logo {
+    display: flex;
+    align-items: center;
+}
+
+.header-logo img {
+    /* Logo 高度根据 Header 高度自适应，保留 30px 上下间距 */
+    max-height: calc(<?= $heightResponsive ?> - 30px);
+    width: auto;
+    /* 响应式Logo最大宽度：移动端 150px 到 PC端 300px */
+    max-width: clamp(150px, calc(150px + 150 * ((100vw - 375px) / 905)), 300px);
+    object-fit: contain;
+}
+
+.header-logo-text {
+    /* 响应式字体大小：移动端 18px 到 PC端 24px */
+    font-size: clamp(18px, calc(18px + 6 * ((100vw - 375px) / 905)), 24px);
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+}
+</style>
+
+<!-- Header 头部 -->
+<header class="page-header" 
+        data-bg-color="<?= htmlspecialchars($bgColor) ?>" 
+        data-height-mobile="<?= htmlspecialchars($height['mobile']) ?>"
+        data-height-desktop="<?= htmlspecialchars($height['desktop']) ?>">
+    <div class="header-container" 
+         data-logo-position="<?= htmlspecialchars($logoPosition) ?>"
+         data-max-width-mobile="<?= htmlspecialchars($maxWidth['mobile']) ?>"
+         data-max-width-desktop="<?= htmlspecialchars($maxWidth['desktop']) ?>"
+         data-padding-mobile="<?= htmlspecialchars($paddingH['mobile']) ?>"
+         data-padding-desktop="<?= htmlspecialchars($paddingH['desktop']) ?>">
+        <div class="header-logo" 
+             data-position="<?= htmlspecialchars($logoPosition) ?>"
+             style="<?php 
+                // 根据位置配置添加对齐样式
+                if ($logoPosition === 'center') {
+                    echo 'margin-left: auto; margin-right: auto;';
+                } elseif ($logoPosition === 'right') {
+                    echo 'margin-left: auto;';
+                } else {
+                    echo 'margin-right: auto;';
+                }
+             ?>">
+            <?php if ($logoUrl): ?>
+                <a href="<?= htmlspecialchars($logoLink) ?>" title="<?= htmlspecialchars($pageTitle) ?>">
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+                </a>
+            <?php else: ?>
+                <a href="<?= htmlspecialchars($logoLink) ?>" class="header-logo-text">
+                    <?= htmlspecialchars($pageTitle ?: 'Logo') ?>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</header>
+
+<!-- Body 跟踪代码（仅在非预览模式下执行） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if ($gtmId): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <?php endif; ?>
+    
+    <!-- Facebook Pixel -->
+    <?php if ($fbPixelId): ?>
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '<?= htmlspecialchars($fbPixelId) ?>');
+    fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbPixelId) ?>&ev=PageView&noscript=1"
+    /></noscript>
+    <?php endif; ?>
+<?php else: ?>
+    <!-- 预览模式：跟踪代码已禁用 -->
+    <script>
+        console.log('[预览模式] 跟踪代码已禁用');
+        <?php if ($ga4Id): ?>console.log('Google Analytics 4 ID: <?= htmlspecialchars($ga4Id) ?>');<?php endif; ?>
+        <?php if ($gtmId): ?>console.log('Google Tag Manager ID: <?= htmlspecialchars($gtmId) ?>');<?php endif; ?>
+        <?php if ($fbPixelId): ?>console.log('Facebook Pixel ID: <?= htmlspecialchars($fbPixelId) ?>');<?php endif; ?>
+    </script>
+<?php endif; ?>

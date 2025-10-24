@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：面板-->
+    <add source="Aiweline_BackendActivity:main" name="main" title="后台日志"
+         action="*/backend/activity/listing" parent="Weline_Backend::system_menu"
+         icon="fas fa-history" order="1"/>
+</menus>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--Smtp邮件服务-->
+    <add source="Weline_Smtp::system_smtp" name="system_smtp" title="Smtp邮件服务" action="" parent="Weline_Backend::system_configuration"
+         icon="mdi mdi-email-send-outline" order="1"/>
+    <add source="Weline_Smtp::system_smtp_config" name="system_smtp_config" title="Smtp配置" action="smtp/backend/config"
+         parent="Weline_Smtp::system_smtp" icon="mdi mdi-setting" order="1"/>
+    <add source="Weline_Smtp::system_smtp_log" name="system_smtp_log" title="发件记录" action="smtp/backend/log/listing"
+         parent="Weline_Smtp::system_smtp" icon="mdi mdi-log" order="2"/>
+</menus>

@@ -1,0 +1,295 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order"
+                                            name_field="title"></breadcrumb>
+                            </h4>
+                            <div class='page-title-right'>
+                                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order'
+                                            name_field='title'></breadcrumb>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div> <!-- end message -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <h4 class='card-title'>
+                                    <lang>管理员访问日志</lang>
+                                </h4>
+                                <h4 class='card-title-desc'>
+                                    <lang>
+                                        管理员访问日志，协助管理员了解用户访问情况，帮助管理员快速定位问题。
+                                    </lang>
+                                    当前请求ID：{{request_id}}
+                                </h4>
+                                <div class='table-rep-plugin'>
+                                    <!-- search form -->
+                                    <div class='row'>
+                                        <div class='col-8 d-flex gap-2'>
+                                            <div class="md-12">
+                                                <block class='Weline\Component\Block\Form\Search'
+                                                       id='log-search'
+                                                       action='*/backend/activity/listing' method='get'
+                                                       keyword='search'
+                                                       value=''
+                                                       var-params='{search:req.search}'
+                                                       placeholder='请输入关键词'>
+                                                </block>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- end search form -->
+                                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                                            <thead>
+                                            <tr>
+                                                <th data-priority='1'><?= __('记录ID') ?></th>
+                                                <th data-priority='1'><?= __('请求ID') ?></th>
+                                                <th data-priority='3'><?= __('操作人') ?></th>
+                                                <th data-priority='1'><?= __('操作名') ?></th>
+                                                <th data-priority='1'><?= __('主机') ?></th>
+                                                <th data-priority='1'><?= __('路径') ?></th>
+                                                <th data-priority='1'><?= __('模块') ?></th>
+                                                <th data-priority='1'><?= __('URL') ?></th>
+                                                <th data-priority='1'><?= __('请求方式') ?></th>
+                                                <th data-priority='1'><?= __('请求参数') ?></th>
+                                                <th data-priority='1'><?= __('请求数据') ?></th>
+                                                <th data-priority='3'><?= __('IP地址') ?></th>
+                                                <th data-priority='1'><?= __('用户代理') ?></th>
+                                                <th data-priority='1'><?= __('响应代码') ?></th>
+                                                <th data-priority='1'><?= __('响应时间') ?></th>
+                                                <th data-priority='3'><?= __('请求时间') ?></th>
+                                                <th data-priority='3'><?= __('操作') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <foreach name="logs" item="log" key="key">
+                                                <tr>
+                                                    <td @if{log.fail_total=>'class="text-danger"'}>{{log.backend_activity_log_id}}</td>
+                                                    <td class='co-name d-flex gap-1'>
+                                                        <!--点击自动复制request_id内容:复制好，弹出提示复制成功-->
+                                                        {{log.request_id}}
+                                                        <a href="javascript:;" onclick="function copyText(s) {
+                                                            let input = document.createElement('input');
+                                                            document.body.appendChild(input);
+                                                            input.value = '{{log.request_id}}';
+                                                            input.select();
+                                                            document.execCommand('copy');
+                                                            document.body.removeChild(input);
+                                                            // 提示复制成功
+                                                            alert('复制成功');
+                                                        }
+                                                        copyText('{{log.request_id}}')" class="copy">复制</a>
+                                                    </td>
+                                                    <td>{{log.username}}</td>
+                                                    <td>{{log.name}}</td>
+                                                    <td class='co-name @if{log.fail_total=>"text-danger"}'>{{log.host}}</td>
+                                                    <td class='co-name'>{{log.path}}</td>
+                                                    <td class='co-name'>{{log.module}}</td>
+                                                    <td class='co-name'>
+                                                        <block class='Weline\Component\Block\OffCanvas'
+                                                               template='Weline_Component::off-canvas.phtml'
+                                                               cache='0'
+                                                               id='off_canvas_queue_result'
+                                                               action='*/backend/activity/show?type=url'
+                                                               vars='log'
+                                                               action-params='{id:log.backend_activity_log_id}'
+                                                               title='查看完整URL'
+                                                               close-button-show='1'
+                                                               close-button-text='关闭'
+                                                               direction='right'
+                                                               class-names='w-75'
+                                                               off-canvas-body-style=''
+                                                               target-button-text='查看完整URL'
+                                                        />
+                                                    </td>
+                                                    <td class='co-name'>{{log.request_method}}</td>
+                                                    <td class='co-name'>
+                                                        <block class='Weline\Component\Block\OffCanvas'
+                                                               template='Weline_Component::off-canvas.phtml'
+                                                               cache='0'
+                                                               id='off_canvas_queue_result'
+                                                               action='*/backend/activity/show?type=request_params'
+                                                               vars='log'
+                                                               action-params='{id:log.backend_activity_log_id}'
+                                                               title='查看请求参数'
+                                                               close-button-show='1'
+                                                               close-button-text='关闭'
+                                                               direction='right'
+                                                               class-names='w-75'
+                                                               off-canvas-body-style=''
+                                                               target-button-text='查看请求参数'
+                                                        />
+                                                    </td>
+                                                    <td class='co-name'>
+                                                        <block class='Weline\Component\Block\OffCanvas'
+                                                               template='Weline_Component::off-canvas.phtml'
+                                                               cache='0'
+                                                               id='off_canvas_queue_result'
+                                                               action='*/backend/activity/show?type=request_data'
+                                                               vars='log'
+                                                               action-params='{id:log.backend_activity_log_id}'
+                                                               title='查看请求数据'
+                                                               close-button-show='1'
+                                                               close-button-text='关闭'
+                                                               direction='right'
+                                                               class-names='w-75'
+                                                               off-canvas-body-style=''
+                                                               target-button-text='查看请求数据'
+                                                        />
+                                                    </td>
+                                                    <td class='co-name'>{{log.ip}}</td>
+                                                    <td class='co-name'>
+                                                        <block class='Weline\Component\Block\OffCanvas'
+                                                               template='Weline_Component::off-canvas.phtml'
+                                                               cache='0'
+                                                               id='off_canvas_queue_result'
+                                                               action='*/backend/activity/show?type=user_agent'
+                                                               vars='log'
+                                                               action-params='{id:log.backend_activity_log_id}'
+                                                               title='查看用户代理'
+                                                               close-button-show='1'
+                                                               close-button-text='关闭'
+                                                               direction='right'
+                                                               class-names='w-75'
+                                                               off-canvas-body-style=''
+                                                               target-button-text='查看用户代理'
+                                                        />
+                                                    </td>
+                                                    <td class='co-name'>{{log.response_code}}</td>
+                                                    <td class='co-name'>
+                                                        <php>
+                                                            $htime = $log['response_time']*1000;//ms
+                                                            $htime = round($htime,2).'ms';
+                                                        </php>
+                                                        {{htime}}
+                                                    </td>
+                                                    <td class='co-name'>{{log.create_time}}</td>
+                                                    <td class='co-name'>
+                                                        <div class="d-flex gap-2">
+                                                            <acl source="Aiweline_BackendActivity::delete">
+                                                                <a class='btn btn-danger' href="@backend-url('*/backend/activity/delete')?id={{log
+                                                                .backend_activity_log_id}}">
+                                                                    <lang>删除</lang>
+                                                                </a>
+                                                            </acl>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </foreach>
+                                            </tbody>
+                                        </table>
+                                        {{pagination}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

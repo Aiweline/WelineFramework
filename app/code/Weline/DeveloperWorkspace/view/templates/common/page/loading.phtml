@@ -1,0 +1,23 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<!--Loading-->
+<section id="loading">
+    <div class='loader loader-1'>
+        <div class='loader-outter'></div>
+        <div class='loader-inner'></div>
+    </div>
+</section>
+<script>
+    function showLoading() {
+        $('#loading').show()
+    }
+
+    function hideLoading() {
+        $('#loading').hide()
+    }
+
+    $(function () {
+        $('#loading').hide()
+    })
+</script>
