@@ -212,7 +212,6 @@ class Upgrade extends CommandAbstract
                             $command_prefix = strtolower(implode(':', $file_array));
                             $commands[$command_prefix . '#' . $module_name][$command] = [
                                 'tip' => $command_class->tip(),
-                                'help' => $command_class->help(),
                                 'class' => $class,
                                 'type' => 'module',
                                 'module' => $module['name']
@@ -270,7 +269,6 @@ class Upgrade extends CommandAbstract
                         $command_prefix = strtolower(implode(':', $class_array));
                         $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$command] = [
                             'tip' => $command_class->tip(),
-                            'help' => $command_class->help(),
                             'class' => $class,
                             'type' => 'framework',
                             'module' => 'Weline_Framework'
