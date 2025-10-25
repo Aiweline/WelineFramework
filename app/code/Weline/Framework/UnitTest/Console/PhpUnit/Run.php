@@ -59,8 +59,10 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - 所有参数: %{1}', [json_encode($args)]));
         }
         
-        # 检查是否是后台运行
-        $isBackground = isset($args['b']) || isset($args['backend']);
+        # 检查是否是后台运行（默认后台运行，除非明确指定前台）
+        # 如果用户指定了 -f 或 --foreground，则前台运行；否则默认后台运行
+        $isForeground = isset($args['f']) || isset($args['foreground']);
+        $isBackground = !$isForeground; // 默认后台运行
         
         # 检查模块参数（只从用户明确指定的参数中获取）
         $moduleName = $args['--module'] ?? $args['module'] ?? null;
@@ -76,9 +78,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - data: %{1}', [json_encode($data)]));
         }
         
-        # 检查后台运行参数
+        # 检查后台运行参数（已默认后台运行）
         if ($isBackground) {
-            $this->printing->note(__('检测到后台运行参数'));
+            $this->printing->note(__('运行模式: 后台运行 (默认)'));
+        } else {
+            $this->printing->note(__('运行模式: 前台运行'));
         }
         
         # 显示运行模式
@@ -286,11 +290,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 判断是否为文件或方法测试模式（快速测试）
         $isQuickTest = !empty($fileName);
         
-        # 文件或方法测试时，如果没有指定后台运行，直接输出结果后返回
+        # 文件或方法测试时，如果指定了前台运行，直接输出结果后返回
         if ($isQuickTest && !$isBackground) {
             $this->printing->separator('─', 0, 'SUCCESS');
             $this->printing->success(__('✓ 测试完成！'));
-            $this->printing->note(__('提示：如需生成详细报告，请添加 -b 参数后台运行'));
+            $this->printing->note(__('提示：测试已完成，如需详细HTML报告请移除 -f 参数（默认后台运行并生成报告）'));
             return;
         }
         
@@ -1459,17 +1463,17 @@ class Run implements \Weline\Framework\Console\CommandInterface
 📖 描述：
     PHPUnit测试套件命令使用指南
     支持多种测试方式：套件测试、模块测试、文件测试、方法测试
-    提供智能文件名匹配和后台运行功能
+    提供智能文件名匹配，默认后台运行并启动报告服务器
     
-    ⚡ 快速测试模式：
-    文件或方法测试时，直接输出测试结果到命令行，无需打开浏览器
-    添加 -b 参数可生成详细HTML报告并启动服务器
+    ⚡ 重要变更：
+    现在默认后台运行并生成HTML报告！
+    如需前台运行，请使用 -f 或 --foreground 参数
 
 🎯 基本语法：
     php bin/w phpunit:run [选项] [套件名]
 
 🔧 常用选项：
-    -b, --backend           后台运行并生成报告（启动报告服务器）
+    -f, --foreground        前台运行（不启动报告服务器，直接输出结果）
     -p, --port=<端口>       指定报告服务器端口（默认：9980）
     --debug                 显示详细的调试信息
     --module=<模块名>       指定要测试的模块
@@ -1481,26 +1485,29 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
 📋 使用方式：
 
-1️⃣ 快速文件测试（直接输出结果）：
-    php bin/w phpunit:run --name=Eav                # 快速测试，直接看结果
-    php bin/w phpunit:run --name=Eav::testMethod   # 快速测试单个方法
+1️⃣ 默认测试（后台运行+HTML报告）：
+    php bin/w phpunit:run --name=Eav                # 默认后台运行
+    php bin/w phpunit:run --name=Eav::testMethod   # 测试单个方法
+    php bin/w phpunit:run --module=Weline_Ai       # 测试整个模块
+    php bin/w phpunit:run                          # 运行默认套件
 
-2️⃣ 生成报告的文件测试：
-    php bin/w phpunit:run -b --name=Eav            # 生成详细HTML报告
-    php bin/w phpunit:run -b --name=Eav::testMethod
+2️⃣ 快速测试（前台直接输出结果）：
+    php bin/w phpunit:run -f --name=Eav            # 前台运行，直接看结果
+    php bin/w phpunit:run -f --name=Eav::testMethod
 
-3️⃣ 指定套件测试（生成报告）：
-    php bin/w phpunit:run -b                       # 运行默认套件
-    php bin/w phpunit:run -b unit                  # 运行指定套件
+3️⃣ 指定套件测试：
+    php bin/w phpunit:run                          # 运行默认套件（后台）
+    php bin/w phpunit:run unit                     # 运行指定套件（后台）
+    php bin/w phpunit:run -f unit                  # 前台运行指定套件
 
-4️⃣ 指定模块测试（生成报告）：
-    php bin/w phpunit:run -b --module=Weline_Eav        # 运行整个模块
-    php bin/w phpunit:run -b --module=Weline_Database   # 运行指定模块
+4️⃣ 指定模块测试：
+    php bin/w phpunit:run --module=Weline_Eav        # 后台运行
+    php bin/w phpunit:run --module=Weline_Database   # 后台运行
+    php bin/w phpunit:run -f --module=Weline_Eav     # 前台运行
 
-5️⃣ 组合使用：
-    php bin/w phpunit:run --name=Eav --module=Weline_Eav              # 快速测试
-    php bin/w phpunit:run -b --name=Eav --module=Weline_Eav           # 详细报告
-    php bin/w phpunit:run -b --name=Eav::testMethod --module=Weline_Eav
+5️⃣ 自定义端口：
+    php bin/w phpunit:run --port=8080 --module=Weline_Ai
+    php bin/w phpunit:run -p 8080 --name=Eav
 
 🎨 智能文件名匹配规则：
     Eav         → EavTest.php
@@ -1509,14 +1516,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
     EavTest.php → EavTest.php
 
 🚀 最佳实践：
-    · 快速调试：直接使用 --name=文件名::方法名（不加-b）
-    · 详细报告：添加 -b 参数生成HTML报告
-    · 完整测试：使用 --module=模块名 或套件测试
+    · 日常测试：直接运行（默认后台），访问浏览器查看报告
+    · 快速调试：添加 -f 参数前台运行，直接查看结果
+    · CI/CD集成：使用 -f 参数，将结果输出到日志
     · 调试时添加 --debug 参数查看详细信息
 
 💡 提示：
-    文件或方法测试时，不加 -b 参数会直接输出结果，方便快速调试
-    套件或模块测试建议加 -b 参数，生成详细的HTML测试报告
+    现在默认后台运行，测试完成后会自动启动报告服务器
+    报告地址会在命令行显示（默认 http://localhost:9980）
+    如需前台运行直接看结果，添加 -f 或 --foreground 参数
 
 ════════════════════════════════════════════════════════════════════════════════
 ';
