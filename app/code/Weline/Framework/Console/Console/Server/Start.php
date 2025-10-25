@@ -28,8 +28,21 @@ class Start implements CommandInterface
     {
         $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
         $port = $args['port'] ?? $args['p'] ?? '9981';
-        $backend = $args['backend'] ?? $args['b'] ?? false;
-        $force = $args['force'] ?? $args['f'] ?? false;
+        
+        # 检查是否是前台运行（默认后台运行，除非明确指定前台）
+        # 如果用户指定了 -f 或 --foreground，则前台运行；否则默认后台运行
+        $isForeground = isset($args['f']) || isset($args['foreground']);
+        $backend = !$isForeground; // 默认后台运行
+        
+        # 强制重启参数改为 --force 或 -r
+        $force = $args['force'] ?? $args['r'] ?? false;
+        
+        # 显示运行模式
+        if ($backend) {
+            $this->printer->note(__('运行模式: 后台运行 (默认)'));
+        } else {
+            $this->printer->note(__('运行模式: 前台运行'));
+        }
         
         // 检查服务是否已经运行
         $runningInfo = $this->isServerRunning($host, $port);
@@ -102,14 +115,14 @@ class Start implements CommandInterface
                     // 如果是后台模式，显示后台运行信息
                     $this->printer->success(__('服务器已在后台运行'));
                     $this->printer->warning(__('如果需要停止服务器，请使用 "php bin/w server:stop" 命令'));
-                    $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -f" 命令'));
+                    $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
                     
                     return;
                 } else {
                     $this->printer->warning(__('检测到端口被占用，但无法获取进程信息'));
                     $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
                     $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
-                    $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -f" 命令'));
+                    $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
                     return;
                 }
             }
@@ -127,7 +140,7 @@ class Start implements CommandInterface
         $this->printer->note(__('局域网API地址：http://%{1}:%{2}/%{3}/rest', [$this->system->getLocalIp(), $port, Env::get('api_admin')]));
 
         # 调用静态文件部署
-        $force = $args['force'] ?? $args['f'] ?? false;
+        # 注意：这里的 force 参数已经在上面定义过了，不需要重复定义
         if (!$force && Env::get('deploy') !== 'dev') {
             $this->printer->setup(__('启用PHP内置服务器需要将部署模式\'设置为dev，当前部署模式为 %{1}，是否继续(y/n)?', Env::get('deploy') ?? 'default'));
             $input = $this->system->input();
@@ -391,20 +404,59 @@ class Start implements CommandInterface
      */
     public function tip(): string
     {
-        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认实时运行，使用 -b 或 -backend 参数后台运行，使用 -f 或 --force 参数强制重启。';
+        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认后台运行，使用 -f 或 --foreground 参数前台运行，使用 -r 或 --force 参数强制重启。';
     }
 
     public function help(): array|string
     {
-        // 基于tip的默认help实现
-        return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
-            $this->tip(),
-            [
-                '-h, --help' => '显示帮助信息',
-            ],
-            [],
-            []
-        );
+        return '
+════════════════════════════════════════════════════════════════════════════════
+命令名称: server:start
+════════════════════════════════════════════════════════════════════════════════
+
+📖 描述：
+    启用PHP内置本地WebServer服务
+    开发专用，请勿用于生产环境
+    默认后台运行，可指定前台运行模式
+    
+    ⚡ 重要变更：
+    现在默认后台运行！
+    如需前台运行，请使用 -f 或 --foreground 参数
+
+🎯 基本语法：
+    php bin/w server:start [选项]
+
+🔧 常用选项：
+    -f, --foreground        前台运行（实时查看日志输出）
+    -r, --force             强制重启（停止现有服务器后重新启动）
+    -h, --host=<主机>       指定主机地址（默认：127.0.0.1）
+    -p, --port=<端口>       指定端口（默认：9981）
+    --help                  显示此帮助信息
+
+📋 使用方式：
+
+1️⃣ 默认启动（后台运行）：
+    php bin/w server:start                # 默认后台运行
+    php bin/w server:start -p 8080        # 指定端口后台运行
+
+2️⃣ 前台运行（查看实时日志）：
+    php bin/w server:start -f             # 前台运行，实时查看日志
+    php bin/w server:start --foreground   # 前台运行（完整参数名）
+
+3️⃣ 强制重启：
+    php bin/w server:start -r             # 强制重启服务器
+    php bin/w server:start --force        # 强制重启（完整参数名）
+
+4️⃣ 自定义配置：
+    php bin/w server:start -h 0.0.0.0 -p 8080    # 监听所有网卡，端口8080
+
+💡 提示：
+    - 后台模式：适合日常开发，不阻塞终端
+    - 前台模式：适合调试，可以实时查看请求日志
+    - 使用 "php bin/w server:stop" 停止后台运行的服务器
+    - 使用 "php bin/w server:status" 查看服务器状态
+
+════════════════════════════════════════════════════════════════════════════════
+';
     }
 }
