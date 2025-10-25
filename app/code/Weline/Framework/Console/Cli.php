@@ -532,26 +532,27 @@ class Cli extends CliAbstract
      */
     private function showHelp(array $command_info): void
     {
-        if (!isset($command_info['data']['help'])) {
-            $this->printer->error(__('该命令没有帮助信息'));
-            return;
+        // 直接从命令类的help()方法获取帮助信息
+        try {
+            $commandInstance = ObjectManager::getInstance($command_info['class']);
+            $help = $commandInstance->help();
+            
+            // 如果help是数组，使用CommandHelper格式化
+            if (is_array($help)) {
+                $help = CommandHelper::parseHelpArray($help);
+            }
+            
+            // 显示命令名称和tip
+            $this->printer->note(__('命令') . ': ' . $command_info['command']);
+            if (method_exists($commandInstance, 'tip')) {
+                $this->printer->success(__('简述') . ': ' . $commandInstance->tip());
+            }
+            $this->printer->separator('═', 0, 'NOTE');
+            
+            // 显示help信息
+            $this->printer->printing($help);
+        } catch (\Exception $e) {
+            $this->printer->error(__('获取命令帮助信息失败') . ': ' . $e->getMessage());
         }
-
-        $help = $command_info['data']['help'];
-        
-        // 如果help是数组，使用CommandHelper格式化
-        if (is_array($help)) {
-            $help = CommandHelper::parseHelpArray($help);
-        }
-        
-        // 显示命令名称和tip
-        $this->printer->note(__('命令') . ': ' . $command_info['command']);
-        if (isset($command_info['data']['tip'])) {
-            $this->printer->success(__('简述') . ': ' . $command_info['data']['tip']);
-        }
-        $this->printer->separator('═', 0, 'NOTE');
-        
-        // 显示help信息
-        $this->printer->printing($help);
     }
 }
