@@ -53,7 +53,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         /**@var \Weline\Framework\Router\Core $route */
         $route = $event->getData('route');

@@ -32,7 +32,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $uri = ltrim($event->getData(), '/');
         $rewrite = $this->urlRewrite->load(UrlRewrite::fields_REWRITE, $uri);
