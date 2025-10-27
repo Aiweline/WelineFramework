@@ -13,9 +13,11 @@ use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locals;
+use Weline\UrlManager\Model\UrlRewrite;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
 class Page extends BackendController
@@ -83,11 +85,14 @@ class Page extends BackendController
         $this->assign('breadcrumb_current', __('新建页面'));
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/page/create'));
         
-        // 获取所有已激活的语言
-        $activeLocales = $this->localsModel->where(Locals::fields_IS_ACTIVE, 1)
+        // 获取所有已激活的语言（从 i18n_locals 表读取，已有 name 字段）
+        $localsQuery = clone $this->localsModel;
+        $activeLocales = $localsQuery->clear()
+            ->where(Locals::fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
+        
         $this->assign('active_locales', $activeLocales);
         
         // 新建页面时，selected_locales 为空数组
@@ -114,6 +119,26 @@ class Page extends BackendController
         // 回填父页面ID
         $parentId = $this->request->getGet('parent_id', 0);
         $this->assign('parent_id', $parentId);
+        
+        // 如果指定了父页面，获取父页面的配置用于继承
+        $parentPageData = null;
+        if ($parentId) {
+            $parentPageModel = clone $this->pageModel;
+            $parentPageModel->clear()->load($parentId);
+            if ($parentPageModel->getId()) {
+                $parentPageData = [
+                    'style' => $parentPageModel->getData('style'),
+                    'locales' => $parentPageModel->getData('locales'),
+                    'default_locale' => $parentPageModel->getData('default_locale'),
+                    'logo' => $parentPageModel->getData('logo'),
+                    'favicon' => $parentPageModel->getData('icon'), // icon 是 favicon
+                    'ga4_id' => $parentPageModel->getData('ga4_id'),
+                    'gtm_id' => $parentPageModel->getData('gtm_id'),
+                    'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
+                ];
+            }
+        }
+        $this->assign('parent_page_data', $parentPageData);
         
         return $this->fetch('form');
     }
@@ -148,6 +173,38 @@ class Page extends BackendController
                 $allStyleSettings[$currentStyleCode] = $currentStyleSettings;
             }
             
+            // 从POST或URL参数获取parent_id（用于创建子页面）
+            // 优先使用POST数据（表单隐藏字段），然后再尝试URL参数
+            $parentId = $data['parent_id'] ?? $this->request->getGet('parent_id', 0);
+            
+            // 确保parent_id是有效的数字
+            $parentId = (int)$parentId;
+            
+            // 如果有父页面，语言设置直接继承父页面（不使用表单提交的值）
+            if ($parentId > 0) {
+                $parentPageModel = clone $this->pageModel;
+                $parentPageModel->clear()->load($parentId);
+                if ($parentPageModel->getId()) {
+                    // 强制使用父页面的语言设置
+                    $selectedLocales = json_decode($parentPageModel->getData(PageModel::fields_LOCALES), true) ?: [];
+                    $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
+                    
+                    // 确保默认语言在列表中
+                    if ($defaultLocale && !in_array($defaultLocale, $selectedLocales)) {
+                        $selectedLocales[] = $defaultLocale;
+                    }
+                    
+                    // 显示继承信息
+                    $this->getMessageManager()->addSuccess(__('子页面已继承父页面配置'));
+                    if (DEV) {
+                        $this->getMessageManager()->addSuccess(__('父页面ID：%{1}', $parentId));
+                        $this->getMessageManager()->addSuccess(__('继承样式：%{1}', $data['style'] ?? '无'));
+                        $this->getMessageManager()->addSuccess(__('继承Logo：%{1}', $data['logo'] ?? '无'));
+                        $this->getMessageManager()->addSuccess(__('继承默认语言：%{1}', $defaultLocale));
+                    }
+                }
+            }
+            
             // 创建页面
             $page = clone $this->pageModel;
             $page->clearData()
@@ -156,7 +213,7 @@ class Page extends BackendController
                 ->setData(PageModel::fields_NAME, $data['name'])
                 ->setData(PageModel::fields_TITLE, $data['title'])
                 ->setData(PageModel::fields_CONTENT, $data['content'] ?? '')
-                ->setData(PageModel::fields_PARENT_ID, $data['parent_id'] ?? 0)
+                ->setData(PageModel::fields_PARENT_ID, $parentId)
                 ->setData(PageModel::fields_STYLE, $data['style'] ?? '')
                 ->setData(PageModel::fields_STYLE_SETTING, json_encode($allStyleSettings))
                 ->setData(PageModel::fields_GA4_ID, $data['ga4_id'] ?? '')
@@ -172,6 +229,9 @@ class Page extends BackendController
                 ->setData(PageModel::fields_REDIRECT_URL, $data['redirect_url'] ?? '')
                 ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
                 ->save(true);
+            
+            // 自动创建 URL 重写规则
+            $this->createOrUpdateUrlRewrite($page);
             
             $this->getMessageManager()->addSuccess(__('页面创建成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
@@ -212,11 +272,14 @@ class Page extends BackendController
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('*/backend/page/edit', ['id' => $pageId]));
         $this->assign('page', $page);
         
-        // 获取所有已激活的语言
-        $activeLocales = $this->localsModel->where(Locals::fields_IS_ACTIVE, 1)
+        // 获取所有已激活的语言（从 i18n_locals 表读取，已有 name 字段）
+        $localsQuery = clone $this->localsModel;
+        $activeLocales = $localsQuery->clear()
+            ->where(Locals::fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
+        
         $this->assign('active_locales', $activeLocales);
         
         // 获取选中的语言
@@ -235,6 +298,28 @@ class Page extends BackendController
             ->getItems();
         $this->assign('parent_pages', $parentPages);
         
+        // 如果当前页面有父页面，获取父页面的配置用于继承锁定
+        $currentParentId = $page->getData(PageModel::fields_PARENT_ID);
+        $parentPageData = null;
+        if ($currentParentId && $currentParentId > 0) {
+            $parentPageModel = clone $this->pageModel;
+            $parentPageModel->clear()->load($currentParentId);
+            if ($parentPageModel->getId()) {
+                $parentPageData = [
+                    'style' => $parentPageModel->getData('style'),
+                    'locales' => $parentPageModel->getData('locales'),
+                    'default_locale' => $parentPageModel->getData('default_locale'),
+                    'logo' => $parentPageModel->getData('logo'),
+                    'favicon' => $parentPageModel->getData('icon'),
+                    'ga4_id' => $parentPageModel->getData('ga4_id'),
+                    'gtm_id' => $parentPageModel->getData('gtm_id'),
+                    'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
+                ];
+            }
+        }
+        $this->assign('parent_page_data', $parentPageData);
+        $this->assign('parent_id', $currentParentId ?? 0);
+        
         // 获取已翻译的语言数据
         $localDescriptions = clone $this->localDescriptionModel;
         $translations = $localDescriptions->clear()
@@ -244,10 +329,22 @@ class Page extends BackendController
             ->getItems();
         
         $translationsData = [];
+        $localizedContents = [];
         foreach ($translations as $translation) {
-            $translationsData[$translation->getData('local_code')] = $translation;
+            $localeCode = $translation->getData('local_code');
+            $translationsData[$localeCode] = $translation;
+            
+            // 为多语言内容编辑 Tab 准备数据
+            $localizedContents[$localeCode] = [
+                'title' => $translation->getData(LocalDescription::fields_TITLE),
+                'content' => $translation->getData(LocalDescription::fields_CONTENT),
+                'meta_title' => $translation->getData(LocalDescription::fields_META_TITLE),
+                'meta_description' => $translation->getData(LocalDescription::fields_META_DESCRIPTION),
+                'meta_keywords' => $translation->getData(LocalDescription::fields_META_KEYWORDS),
+            ];
         }
         $this->assign('translations', $translationsData);
+        $this->assign('localized_contents', $localizedContents);
         
         // 检查未翻译的语言
         $missingTranslations = [];
@@ -276,6 +373,30 @@ class Page extends BackendController
         if ($currentStyle && isset($allStyleSettings[$currentStyle])) {
             $currentStyleSettings = $allStyleSettings[$currentStyle];
         }
+        
+        // 获取子页面或同级页面数据（用于树形结构显示）
+        $relatedPages = [];
+        $isChildPage = false;
+        if ($currentParentId && $currentParentId > 0) {
+            // 当前是子页面，获取同级子页面
+            $isChildPage = true;
+            $relatedPagesModel = clone $this->pageModel;
+            $relatedPages = $relatedPagesModel->clear()
+                ->where(PageModel::fields_PARENT_ID, $currentParentId)
+                ->select()
+                ->fetch()
+                ->getItems();
+        } else {
+            // 当前是父页面，获取其子页面
+            $relatedPagesModel = clone $this->pageModel;
+            $relatedPages = $relatedPagesModel->clear()
+                ->where(PageModel::fields_PARENT_ID, $pageId)
+                ->select()
+                ->fetch()
+                ->getItems();
+        }
+        $this->assign('related_pages', $relatedPages);
+        $this->assign('is_child_page', $isChildPage);
         
         // 如果页面选择了样式，加载该样式的配置定义
         $styleConfigs = [];
@@ -307,18 +428,40 @@ class Page extends BackendController
                 throw new \Exception(__('页面不存在！'));
             }
             
+            // 检查当前页面是否有父页面，如果有则强制继承父页面配置
+            $currentParentId = $page->getData(PageModel::fields_PARENT_ID);
+            
             // 处理选中的语言列表
             $selectedLocales = $this->request->getPost('locales', []);
             $defaultLocale = $this->request->getPost('default_locale', '');
             
-            // 如果没有设置默认语言，使用框架当前语言
-            if (empty($defaultLocale)) {
-                $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
-            }
-            
-            // 确保默认语言在支持的语言列表中
-            if (!in_array($defaultLocale, $selectedLocales)) {
-                $selectedLocales[] = $defaultLocale;
+            // 如果当前页面有父页面，强制使用父页面的语言设置（不使用表单提交的值）
+            if ($currentParentId && $currentParentId > 0) {
+                $parentPageModel = clone $this->pageModel;
+                $parentPageModel->clear()->load($currentParentId);
+                if ($parentPageModel->getId()) {
+                    // 强制使用父页面的语言设置
+                    $selectedLocales = json_decode($parentPageModel->getData(PageModel::fields_LOCALES), true) ?: [];
+                    $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
+                    
+                    // 确保默认语言在列表中
+                    if ($defaultLocale && !in_array($defaultLocale, $selectedLocales)) {
+                        $selectedLocales[] = $defaultLocale;
+                    }
+                    
+                    $this->getMessageManager()->addSuccess(__('子页面配置已从父页面继承'));
+                }
+            } else {
+                // 非子页面，正常处理语言设置
+                // 如果没有设置默认语言，使用框架当前语言
+                if (empty($defaultLocale)) {
+                    $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
+                }
+                
+                // 确保默认语言在支持的语言列表中
+                if (!in_array($defaultLocale, $selectedLocales)) {
+                    $selectedLocales[] = $defaultLocale;
+                }
             }
             
             // 处理样式配置信息 - 合并保存，保留其他style的配置
@@ -356,6 +499,9 @@ class Page extends BackendController
                 ->setData(PageModel::fields_STATUS, $data['status'] ?? PageModel::STATUS_DRAFT)
                 ->save();
             
+            // 自动创建或更新 URL 重写规则
+            $this->createOrUpdateUrlRewrite($page);
+            
             // 处理多语言内容翻译
             if (!empty($selectedLocales)) {
                 foreach ($selectedLocales as $locale) {
@@ -364,9 +510,18 @@ class Page extends BackendController
                         continue;
                     }
                     
-                    // 获取该语言的内容，如果没有则使用默认语言的内容
+                    // 从多语言 Tab 表单获取该语言的翻译内容
+                    $titleKey = 'title_' . $locale;
                     $contentKey = 'content_' . $locale;
-                    $translatedContent = $data[$contentKey] ?? $data['content'] ?? '';
+                    $metaTitleKey = 'meta_title_' . $locale;
+                    $metaDescKey = 'meta_description_' . $locale;
+                    $metaKeywordsKey = 'meta_keywords_' . $locale;
+                    
+                    $translatedTitle = $data[$titleKey] ?? '';
+                    $translatedContent = $data[$contentKey] ?? '';
+                    $translatedMetaTitle = $data[$metaTitleKey] ?? '';
+                    $translatedMetaDesc = $data[$metaDescKey] ?? '';
+                    $translatedMetaKeywords = $data[$metaKeywordsKey] ?? '';
                     
                     // 查找或创建翻译记录
                     $localDesc = clone $this->localDescriptionModel;
@@ -379,24 +534,24 @@ class Page extends BackendController
                     if ($existing && $existing->getId()) {
                         // 更新现有翻译
                         $existing->setData(LocalDescription::fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::fields_TITLE, $data['title'] ?? '')
+                            ->setData(LocalDescription::fields_TITLE, $translatedTitle)
                             ->setData(LocalDescription::fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::fields_META_TITLE, $data['meta_title'] ?? '')
-                            ->setData(LocalDescription::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                            ->setData(LocalDescription::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
+                            ->setData(LocalDescription::fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::fields_META_KEYWORDS, $translatedMetaKeywords)
                             ->save();
                     } else {
-                        // 创建新翻译，使用默认语言的值作为基础
+                        // 创建新翻译
                         $newTranslation = clone $this->localDescriptionModel;
                         $newTranslation->clearData()
                             ->setData(LocalDescription::fields_ID, $pageId)
                             ->setData('local_code', $locale)
                             ->setData(LocalDescription::fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::fields_TITLE, $data['title'] ?? '')
+                            ->setData(LocalDescription::fields_TITLE, $translatedTitle)
                             ->setData(LocalDescription::fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::fields_META_TITLE, $data['meta_title'] ?? '')
-                            ->setData(LocalDescription::fields_META_DESCRIPTION, $data['meta_description'] ?? '')
-                            ->setData(LocalDescription::fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
+                            ->setData(LocalDescription::fields_META_TITLE, $translatedMetaTitle)
+                            ->setData(LocalDescription::fields_META_DESCRIPTION, $translatedMetaDesc)
+                            ->setData(LocalDescription::fields_META_KEYWORDS, $translatedMetaKeywords)
                             ->save();
                     }
                 }
@@ -834,8 +989,8 @@ class Page extends BackendController
         
         // 获取前端预览URL（带语言参数和preview标记）
         $handle = $page->getData(PageModel::fields_HANDLE);
-        $frontendUrl = $this->request->getUrlBuilder()->getUrl(
-            'pagebuilder/page/view',
+        $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
+            'pagebuilder/frontend/page/view',
             ['handle' => $handle, 'locale' => $locale, 'preview' => '1']
         );
         
@@ -930,6 +1085,60 @@ class Page extends BackendController
             header('HTTP/1.1 500 Internal Server Error');
             echo 'Error: ' . $e->getMessage();
             exit;
+        }
+    }
+    
+    /**
+     * 自动创建或更新页面的 URL 重写规则
+     * @param PageModel $page 页面模型
+     * @return void
+     */
+    private function createOrUpdateUrlRewrite(PageModel $page): void
+    {
+        try {
+            $handle = $page->getData(PageModel::fields_HANDLE);
+            if (empty($handle)) {
+                return;
+            }
+            
+            // 原始路径
+            $originalPath = "pagebuilder/frontend/page/view?handle={$handle}";
+            
+            // 重写路径（使用 handle 作为友好 URL）
+            $rewritePath = "/{$handle}";
+            
+            // URL 指纹（用于唯一标识）
+            $urlIdentify = "pagebuilder_page_{$handle}";
+            
+            // 查找是否已存在重写规则
+            /**@var UrlRewrite $urlRewriteModel */
+            $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+            $existingRewrite = $urlRewriteModel->clear()
+                ->where(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
+                ->find()
+                ->fetch();
+            
+            if ($existingRewrite && $existingRewrite->getId()) {
+                // 更新现有规则
+                $existingRewrite->setData(UrlRewrite::fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::fields_REWRITE, $rewritePath)
+                    ->save();
+            } else {
+                // 创建新规则
+                $newRewrite = clone $urlRewriteModel;
+                $newRewrite->clearData()
+                    ->setData(UrlRewrite::fields_URL_ID, "pagebuilder_page_{$page->getId()}")
+                    ->setData(UrlRewrite::fields_URL_IDENTIFY, $urlIdentify)
+                    ->setData(UrlRewrite::fields_PATH, $originalPath)
+                    ->setData(UrlRewrite::fields_REWRITE, $rewritePath)
+                    ->save(true);
+            }
+            
+        } catch (\Exception $e) {
+            // 静默失败，不影响页面保存
+            if (DEV) {
+                error_log("Failed to create URL rewrite for page: " . $e->getMessage());
+            }
         }
     }
 }

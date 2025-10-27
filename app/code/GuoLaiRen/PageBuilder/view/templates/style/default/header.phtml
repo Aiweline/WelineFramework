@@ -18,6 +18,10 @@
  * size.max_width => 内容最大宽度:responsive:100/1200|%/px[移动端使用百分比，PC端使用像素]
  * size.padding_h => 左右内边距:responsive:16/40|px[MD]
  * 
+ * group:custom_css => 自定义CSS
+ * custom_css.enabled => 启用自定义CSS:select:no|yes,no
+ * custom_css.code => 自定义CSS代码:textarea:
+ * 
  * @fields_end
  */
 
@@ -147,13 +151,46 @@ $heightResponsive = generateResponsiveCSS($height);
 $paddingHResponsive = generateResponsiveCSS($paddingH);
 $maxWidthResponsive = $maxWidth['desktop'] . $maxWidth['unit']; // 最大宽度使用PC端值
 
+// 自定义CSS配置
+$customCssEnabled = getConfig($styleSettings, 'custom_css.enabled', 'no');
+$customCssCode = getConfig($styleSettings, 'custom_css.code', '');
+
 // 从页面配置中读取跟踪代码 ID
 $ga4Id = $page ? $page->getData('ga4_id') : '';
 $gtmId = $page ? $page->getData('gtm_id') : '';
 $fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
-?>
 
-<!-- Head 跟踪代码（仅在非预览模式下执行） -->
+// 检测是否为预览模式
+$pathInfo = $this->getRequest()->getPathInfo();
+$isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
+$isPreview = $isPreview || $isPreviewMode;
+
+// SEO信息
+$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : '');
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+?>
+<!DOCTYPE html>
+<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
+    
+    <?php if ($page && $page->getData('icon')): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    
+    <!-- Head 跟踪代码（仅在非预览模式下执行） -->
 <?php if (!$isPreview): ?>
     <!-- Google Analytics 4 -->
     <?php if ($ga4Id): ?>
@@ -175,63 +212,164 @@ $fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
     })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId) ?>');</script>
     <?php endif; ?>
 <?php endif; ?>
-
-<style>
-.page-header {
-    background: <?= $bgColor ?>;
-    /* 响应式高度：从移动端 <?= $heightMobile ?>px 到 PC端 <?= $heightDesktop ?>px */
-    height: <?= $heightResponsive ?>;
-    display: flex;
-    align-items: center;
-    <?php if ($borderBottom === 'yes'): ?>
-    border-bottom: 1px solid <?= $borderColor ?>;
+    
+    <!-- 预览模式调试信息 -->
+    <?php if ($isPreview): ?>
+    <script>
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c🔍 页面预览调试信息 (Page Preview Debug Info)', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        
+        // 页面数据
+        const pageData = <?= json_encode([
+            'page_id' => $page ? $page->getData('page_id') : null,
+            'title' => $page ? $page->getData('title') : '',
+            'name' => $page ? $page->getData('name') : '',
+            'handle' => $page ? $page->getData('handle') : '',
+            'style' => $page ? $page->getData('style') : '',
+            'status' => $page ? $page->getData('status') : '',
+            'logo' => $page ? $page->getData('logo') : '',
+            'icon' => $page ? $page->getData('icon') : '',
+            'ga4_id' => $page ? $page->getData('ga4_id') : '',
+            'gtm_id' => $page ? $page->getData('gtm_id') : '',
+            'fb_pixel_id' => $page ? $page->getData('fb_pixel_id') : '',
+            'meta_title' => $page ? $page->getData('meta_title') : '',
+            'meta_description' => $page ? $page->getData('meta_description') : '',
+            'meta_keywords' => $page ? $page->getData('meta_keywords') : '',
+            'default_locale' => $page ? $page->getData('default_locale') : '',
+            'locales' => $page ? $page->getData('locales') : '',
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
+        
+        console.log('%c📄 页面数据 (Page Data):', 'color: #ffcc00; font-weight: bold;');
+        console.log(pageData);
+        
+        // 样式配置
+        const styleSettings = <?= json_encode($styleSettings, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
+        
+        console.log('%c🎨 样式配置 (Style Settings):', 'color: #ffcc00; font-weight: bold;');
+        console.log(styleSettings);
+        
+        // Logo 配置
+        const logoConfig = {
+            url: '<?= htmlspecialchars($logoUrl) ?>',
+            position: '<?= htmlspecialchars($logoPosition) ?>'
+        };
+        
+        console.log('%c🖼️ Logo 配置 (Logo Config):', 'color: #ffcc00; font-weight: bold;');
+        console.log(logoConfig);
+        
+        // 头部样式配置
+        const headerStyle = {
+            background_color: '<?= htmlspecialchars($bgColor) ?>',
+            border_bottom: '<?= htmlspecialchars($borderBottom) ?>',
+            border_color: '<?= htmlspecialchars($borderColor) ?>',
+            height_mobile: '<?= htmlspecialchars($height['mobile']) ?>',
+            height_desktop: '<?= htmlspecialchars($height['desktop']) ?>',
+            max_width: '<?= htmlspecialchars($maxWidthResponsive) ?>',
+            padding_h_mobile: '<?= htmlspecialchars($paddingH['mobile']) ?>',
+            padding_h_desktop: '<?= htmlspecialchars($paddingH['desktop']) ?>'
+        };
+        
+        console.log('%c📐 头部样式 (Header Style):', 'color: #ffcc00; font-weight: bold;');
+        console.log(headerStyle);
+        
+        // 环境信息
+        const envInfo = {
+            is_preview: <?= $isPreview ? 'true' : 'false' ?>,
+            locale: '<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>',
+            current_url: window.location.href,
+            user_agent: navigator.userAgent
+        };
+        
+        console.log('%c⚙️ 环境信息 (Environment Info):', 'color: #ffcc00; font-weight: bold;');
+        console.log(envInfo);
+        
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c✅ 调试信息输出完成！', 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log('%c💡 提示：展开上面的对象可以查看详细配置信息', 'color: #999999; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+    </script>
     <?php endif; ?>
-}
 
-.header-container {
-    /* PC端固定最大宽度 */
-    max-width: <?= $maxWidthResponsive ?>;
-    width: 100%;
-    margin: 0 auto;
-    /* 响应式内边距：从移动端 <?= $paddingH['mobile'] ?>px 到 PC端 <?= $paddingH['desktop'] ?>px */
-    padding-left: <?= $paddingHResponsive ?>;
-    padding-right: <?= $paddingHResponsive ?>;
-    display: flex;
-    align-items: center;
-    <?php if ($logoPosition === 'center'): ?>
-    justify-content: center;
-    <?php elseif ($logoPosition === 'right'): ?>
-    justify-content: flex-end;
-    <?php else: ?>
-    justify-content: flex-start;
+    <style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        background: #ffffff;
+        color: #333333;
+        line-height: 1.6;
+    }
+    
+    .page-header {
+        background: <?= $bgColor ?>;
+        height: <?= $heightResponsive ?>;
+        display: flex;
+        align-items: center;
+        <?php if ($borderBottom === 'yes'): ?>
+        border-bottom: 2px solid <?= $borderColor ?>;
+        <?php endif; ?>
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+
+    .header-container {
+        max-width: <?= $maxWidthResponsive ?>;
+        width: 100%;
+        margin: 0 auto;
+        padding-left: <?= $paddingHResponsive ?>;
+        padding-right: <?= $paddingHResponsive ?>;
+        display: flex;
+        align-items: center;
+        <?php if ($logoPosition === 'center'): ?>
+        justify-content: center;
+        <?php elseif ($logoPosition === 'right'): ?>
+        justify-content: flex-end;
+        <?php else: ?>
+        justify-content: flex-start;
+        <?php endif; ?>
+    }
+
+    .header-logo {
+        display: flex;
+        align-items: center;
+    }
+
+    .header-logo img {
+        max-height: calc(<?= $heightResponsive ?> - 30px);
+        width: auto;
+        max-width: clamp(150px, calc(150px + 150 * ((100vw - 375px) / 905)), 300px);
+        object-fit: contain;
+    }
+
+    .header-logo-text {
+        font-size: clamp(18px, calc(18px + 6 * ((100vw - 375px) / 905)), 24px);
+        font-weight: bold;
+        color: #333;
+        text-decoration: none;
+    }
+    
+    <?php if ($customCssEnabled === 'yes' && $customCssCode): ?>
+    /* 自定义CSS */
+    <?= $customCssCode ?>
     <?php endif; ?>
-}
-
-.header-logo {
-    display: flex;
-    align-items: center;
-}
-
-.header-logo img {
-    /* Logo 高度根据 Header 高度自适应，保留 30px 上下间距 */
-    max-height: calc(<?= $heightResponsive ?> - 30px);
-    width: auto;
-    /* 响应式Logo最大宽度：移动端 150px 到 PC端 300px */
-    max-width: clamp(150px, calc(150px + 150 * ((100vw - 375px) / 905)), 300px);
-    object-fit: contain;
-}
-
-.header-logo-text {
-    /* 响应式字体大小：移动端 18px 到 PC端 24px */
-    font-size: clamp(18px, calc(18px + 6 * ((100vw - 375px) / 905)), 24px);
-    font-weight: bold;
-    color: #333;
-    text-decoration: none;
-}
-</style>
-
-<!-- Header 头部 -->
-<header class="page-header" 
+    </style>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if (!$isPreview && $gtmId): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <?php endif; ?>
+    
+    <!-- Header 头部 -->
+    <header class="page-header" 
         data-bg-color="<?= htmlspecialchars($bgColor) ?>" 
         data-height-mobile="<?= htmlspecialchars($height['mobile']) ?>"
         data-height-desktop="<?= htmlspecialchars($height['desktop']) ?>">
@@ -264,40 +402,4 @@ $fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
             <?php endif; ?>
         </div>
     </div>
-</header>
-
-<!-- Body 跟踪代码（仅在非预览模式下执行） -->
-<?php if (!$isPreview): ?>
-    <!-- Google Tag Manager (noscript) -->
-    <?php if ($gtmId): ?>
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <?php endif; ?>
-    
-    <!-- Facebook Pixel -->
-    <?php if ($fbPixelId): ?>
-    <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '<?= htmlspecialchars($fbPixelId) ?>');
-    fbq('track', 'PageView');
-    </script>
-    <noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbPixelId) ?>&ev=PageView&noscript=1"
-    /></noscript>
-    <?php endif; ?>
-<?php else: ?>
-    <!-- 预览模式：跟踪代码已禁用 -->
-    <script>
-        console.log('[预览模式] 跟踪代码已禁用');
-        <?php if ($ga4Id): ?>console.log('Google Analytics 4 ID: <?= htmlspecialchars($ga4Id) ?>');<?php endif; ?>
-        <?php if ($gtmId): ?>console.log('Google Tag Manager ID: <?= htmlspecialchars($gtmId) ?>');<?php endif; ?>
-        <?php if ($fbPixelId): ?>console.log('Facebook Pixel ID: <?= htmlspecialchars($fbPixelId) ?>');<?php endif; ?>
-    </script>
-<?php endif; ?>
+    </header>

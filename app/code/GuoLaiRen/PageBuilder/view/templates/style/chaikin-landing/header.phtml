@@ -1,0 +1,297 @@
+<?php
+/**
+ * Chaikin Analytics Landing Page - Header
+ * 金融营销落地页模板 - 头部
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:branding => 品牌标识
+ * branding.text => 品牌文字:text:PRESENTED BY CHAIKIN ANALYTICS
+ * branding.color => 品牌文字颜色:color:#999999
+ * branding.size => 品牌文字大小:responsive:12/14|px
+ * branding.margin_bottom => 品牌下边距:responsive:16/24|px
+ * 
+ * group:headline => 标题设置
+ * headline.pre_text => 标题前缀:text:50-year Wall Street Legend Names #1 Stock to Buy Now\:
+ * headline.pre_color => 前缀颜色:color:#333333
+ * headline.pre_size => 前缀大小:responsive:16/20|px
+ * headline.pre_weight => 前缀粗细:select:600|400,500,600,700,800
+ * headline.pre_margin => 前缀下边距:responsive:12/16|px
+ * 
+ * headline.main_text => 主标题文字:textarea:"If you have $1\,000 to invest today\, move it into this stock – now."
+ * headline.main_color => 主标题颜色:color:#2c3e50
+ * headline.main_size => 主标题大小:responsive:28/48|px
+ * headline.main_weight => 主标题粗细:select:700|400,500,600,700,800
+ * headline.main_line_height => 主标题行高:number:1.2
+ * headline.main_margin => 主标题下边距:responsive:20/32|px
+ * 
+ * headline.highlight_word => 高亮词汇:text:now
+ * headline.highlight_style => 高亮样式:select:italic|normal,italic,bold
+ * 
+ * group:description => 描述文字
+ * description.text1 => 描述段落1:textarea:It's not NVDA\, META\, or any member of the Mag 7. In fact\, this breakthrough company "hiding in plain sight" trades for less than half the price of NVDA.
+ * description.text2 => 描述段落2:text:Get the name and ticker below (100%. Free).
+ * description.color => 描述文字颜色:color:#333333
+ * description.size => 描述文字大小:responsive:15/18|px
+ * description.line_height => 描述行高:number:1.6
+ * description.margin => 描述下边距:responsive:24/40|px
+ * description.highlight_word => 高亮词汇:text:half
+ * description.highlight_style => 高亮样式:select:italic|normal,italic,bold
+ * 
+ * group:container => 容器设置
+ * container.max_width => 最大宽度:number:1000|px
+ * container.padding_h => 左右内边距:responsive:20/40|px
+ * container.padding_v => 上下内边距:responsive:30/60|px
+ * container.background => 背景颜色:color:#f5f5f5
+ * 
+ * group:body_background => 页面背景
+ * body_bg.image => 背景图片地址:textarea:
+ * body_bg.color => 背景颜色:color:#f5f5f5
+ * body_bg.position => 背景位置:select:center center|top left,top center,top right,center left,center center,center right,bottom left,bottom center,bottom right
+ * body_bg.size => 背景尺寸:select:cover|auto,cover,contain
+ * body_bg.repeat => 背景重复:select:no-repeat|no-repeat,repeat,repeat-x,repeat-y
+ * body_bg.attachment => 背景附着:select:scroll|scroll,fixed
+ * 
+ * group:custom_css => 自定义CSS
+ * custom_css.enabled => 启用自定义CSS:select:no|yes,no
+ * custom_css.code => 自定义CSS代码:textarea:
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// Helper function
+function getChaikinConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseChaikinResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genChaikinCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 品牌配置
+$brandingText = getChaikinConfig($styleSettings, 'branding.text', 'PRESENTED BY CHAIKIN ANALYTICS');
+$brandingColor = getChaikinConfig($styleSettings, 'branding.color', '#999999');
+$brandingSize = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'branding.size', '12/14') . 'px'));
+$brandingMargin = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'branding.margin_bottom', '16/24') . 'px'));
+
+// 标题配置
+$preText = getChaikinConfig($styleSettings, 'headline.pre_text', '50-year Wall Street Legend Names #1 Stock to Buy Now:');
+$preColor = getChaikinConfig($styleSettings, 'headline.pre_color', '#333333');
+$preSize = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'headline.pre_size', '16/20') . 'px'));
+$preWeight = getChaikinConfig($styleSettings, 'headline.pre_weight', '600');
+$preMargin = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'headline.pre_margin', '12/16') . 'px'));
+
+$mainText = getChaikinConfig($styleSettings, 'headline.main_text', '"If you have $1,000 to invest today, move it into this stock – now."');
+$mainColor = getChaikinConfig($styleSettings, 'headline.main_color', '#2c3e50');
+$mainSize = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'headline.main_size', '28/48') . 'px'));
+$mainWeight = getChaikinConfig($styleSettings, 'headline.main_weight', '700');
+$mainLineHeight = getChaikinConfig($styleSettings, 'headline.main_line_height', '1.2');
+$mainMargin = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'headline.main_margin', '20/32') . 'px'));
+
+$highlightWord = getChaikinConfig($styleSettings, 'headline.highlight_word', 'now');
+$highlightStyle = getChaikinConfig($styleSettings, 'headline.highlight_style', 'italic');
+
+// 描述配置
+$desc1 = getChaikinConfig($styleSettings, 'description.text1', 'It\'s not NVDA, META, or any member of the Mag 7. In fact, this breakthrough company "hiding in plain sight" trades for less than half the price of NVDA.');
+$desc2 = getChaikinConfig($styleSettings, 'description.text2', 'Get the name and ticker below (100%. Free).');
+$descColor = getChaikinConfig($styleSettings, 'description.color', '#333333');
+$descSize = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'description.size', '15/18') . 'px'));
+$descLineHeight = getChaikinConfig($styleSettings, 'description.line_height', '1.6');
+$descMargin = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'description.margin', '24/40') . 'px'));
+$descHighlight = getChaikinConfig($styleSettings, 'description.highlight_word', 'half');
+$descHighlightStyle = getChaikinConfig($styleSettings, 'description.highlight_style', 'italic');
+
+// 容器配置
+$containerMaxWidth = getChaikinConfig($styleSettings, 'container.max_width', '1000') . 'px';
+$containerPaddingH = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'container.padding_h', '20/40') . 'px'));
+$containerPaddingV = genChaikinCSS(parseChaikinResponsive(getChaikinConfig($styleSettings, 'container.padding_v', '30/60') . 'px'));
+$containerBg = getChaikinConfig($styleSettings, 'container.background', '#f5f5f5');
+
+// 背景图配置
+// 注意：URL中的冒号(:)会与配置格式冲突，因此在PHP中设置默认值
+$defaultBgImage = 'https://assets.chaikinanalytics.com/mkt/2025/cpgr/hidden-ai/bg-showcase-cpgr-hidden-ai-light.webp';
+$bodyBgImage = getChaikinConfig($styleSettings, 'body_bg.image', $defaultBgImage);
+$bodyBgColor = getChaikinConfig($styleSettings, 'body_bg.color', '#f5f5f5');
+$bodyBgPosition = getChaikinConfig($styleSettings, 'body_bg.position', 'center center');
+$bodyBgSize = getChaikinConfig($styleSettings, 'body_bg.size', 'cover');
+$bodyBgRepeat = getChaikinConfig($styleSettings, 'body_bg.repeat', 'no-repeat');
+$bodyBgAttachment = getChaikinConfig($styleSettings, 'body_bg.attachment', 'scroll');
+
+// 自定义CSS配置
+$customCssEnabled = getChaikinConfig($styleSettings, 'custom_css.enabled', 'no');
+$customCssCode = getChaikinConfig($styleSettings, 'custom_css.code', '');
+
+// SEO信息
+$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : '');
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+$pageTitle = $page ? $page->getData('title') : '';
+
+// 处理高亮词汇
+function highlightText($text, $word, $style) {
+    if (empty($word)) return $text;
+    $styleAttr = '';
+    if ($style === 'italic') $styleAttr = 'font-style: italic;';
+    elseif ($style === 'bold') $styleAttr = 'font-weight: bold;';
+    return str_replace($word, '<em style="' . $styleAttr . '">' . $word . '</em>', $text);
+}
+
+$mainTextHighlighted = highlightText(htmlspecialchars($mainText), htmlspecialchars($highlightWord), $highlightStyle);
+$desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($descHighlight), $descHighlightStyle);
+?>
+<!DOCTYPE html>
+<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'en_US') ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    
+    <style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: <?= htmlspecialchars($bodyBgColor) ?>;
+        <?php if ($bodyBgImage): ?>
+        background-image: url('<?= htmlspecialchars($bodyBgImage) ?>');
+        background-position: <?= htmlspecialchars($bodyBgPosition) ?>;
+        background-size: <?= htmlspecialchars($bodyBgSize) ?>;
+        background-repeat: <?= htmlspecialchars($bodyBgRepeat) ?>;
+        background-attachment: <?= htmlspecialchars($bodyBgAttachment) ?>;
+        <?php endif; ?>
+        color: #333;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+    }
+    
+    .chaikin-container {
+        max-width: <?= $containerMaxWidth ?>;
+        margin: 0 auto;
+        padding: <?= $containerPaddingV ?> <?= $containerPaddingH ?>;
+        background: #ffffff;
+    }
+    
+    .chaikin-branding {
+        text-align: center;
+        color: <?= htmlspecialchars($brandingColor) ?>;
+        font-size: <?= $brandingSize ?>;
+        font-weight: 500;
+        letter-spacing: 1.5px;
+        margin-bottom: <?= $brandingMargin ?>;
+        text-transform: uppercase;
+    }
+    
+    .chaikin-headline {
+        text-align: center;
+    }
+    
+    .chaikin-headline-pre {
+        color: <?= htmlspecialchars($preColor) ?>;
+        font-size: <?= $preSize ?>;
+        font-weight: <?= $preWeight ?>;
+        margin-bottom: <?= $preMargin ?>;
+        line-height: 1.4;
+    }
+    
+    .chaikin-headline-main {
+        color: <?= htmlspecialchars($mainColor) ?>;
+        font-size: <?= $mainSize ?>;
+        font-weight: <?= $mainWeight ?>;
+        line-height: <?= $mainLineHeight ?>;
+        margin-bottom: <?= $mainMargin ?>;
+    }
+    
+    .chaikin-headline-main em {
+        font-style: normal;
+    }
+    
+    .chaikin-description {
+        text-align: center;
+        color: <?= htmlspecialchars($descColor) ?>;
+        font-size: <?= $descSize ?>;
+        line-height: <?= $descLineHeight ?>;
+        margin-bottom: <?= $descMargin ?>;
+    }
+    
+    .chaikin-description p {
+        margin-bottom: 12px;
+    }
+    
+    .chaikin-description em {
+        font-style: normal;
+    }
+    
+    .chaikin-description strong {
+        font-weight: 600;
+    }
+    
+    <?php if ($customCssEnabled === 'yes' && $customCssCode): ?>
+    /* 自定义CSS */
+    <?= $customCssCode ?>
+    <?php endif; ?>
+    </style>
+</head>
+<body>
+    <div class="chaikin-container">
+        <!-- 品牌标识 -->
+        <div class="chaikin-branding">
+            <?= htmlspecialchars($brandingText) ?>
+        </div>
+        
+        <!-- 标题区域 -->
+        <div class="chaikin-headline">
+            <div class="chaikin-headline-pre">
+                <?= htmlspecialchars($preText) ?>
+            </div>
+            <h1 class="chaikin-headline-main">
+                <?= $mainTextHighlighted ?>
+            </h1>
+        </div>
+        
+        <!-- 描述文字 -->
+        <div class="chaikin-description">
+            <p><?= $desc1Highlighted ?></p>
+            <p><strong><?= htmlspecialchars($desc2) ?></strong></p>
+        </div>
+

@@ -439,15 +439,21 @@ class Style extends Model
                     $configStr = trim($itemMatch[2]);
                     
                     // 解析配置字符串: label:type:default|options
-                    $parts = explode(':', $configStr);
+                    // 支持转义冒号 \: 和转义逗号 \, 保持原样不分割
+                    $colonPlaceholder = '__ESCAPED_COLON__';
+                    $commaPlaceholder = '__ESCAPED_COMMA__';
+                    
+                    $configStrEscaped = str_replace(['\\:', '\\,'], [$colonPlaceholder, $commaPlaceholder], $configStr);
+                    $parts = explode(':', $configStrEscaped);
                     
                     if (count($parts) < 2) {
                         continue;
                     }
                     
-                    $label = trim($parts[0]);
-                    $type = trim($parts[1]);
-                    $defaultValue = isset($parts[2]) ? trim($parts[2]) : '';
+                    // 还原转义的冒号和逗号
+                    $label = trim(str_replace([$colonPlaceholder, $commaPlaceholder], [':', ','], $parts[0]));
+                    $type = trim(str_replace([$colonPlaceholder, $commaPlaceholder], [':', ','], $parts[1]));
+                    $defaultValue = isset($parts[2]) ? trim(str_replace([$colonPlaceholder, $commaPlaceholder], [':', ','], $parts[2])) : '';
                     
                     // 解析 default 和 options
                     $default = '';
@@ -457,6 +463,11 @@ class Style extends Model
                     $responsive = false;
                     
                     if (!empty($defaultValue)) {
+                        // 保护转义的斜杠和逗号（如URL中的 \/ 和文本中的 \, ）避免被误判
+                        $slashPlaceholder = '__ESCAPED_SLASH__';
+                        $commaPlaceholder2 = '__ESCAPED_COMMA2__';
+                        $defaultValue = str_replace(['\\/', '\\,'], [$slashPlaceholder, $commaPlaceholder2], $defaultValue);
+                        
                         // 提取描述信息（在方括号中，如 [MD] [MTD]）
                         if (preg_match('/^(.+?)\[(.+?)\]$/', $defaultValue, $matches)) {
                             $defaultValue = trim($matches[1]);
@@ -491,25 +502,31 @@ class Style extends Model
                                 // 这是选项列表
                                 $optionParts = explode(',', $secondPart);
                                 foreach ($optionParts as $opt) {
-                                    $options[] = trim($opt);
+                                    // 还原选项中的转义逗号和斜杠
+                                    $opt = str_replace([$slashPlaceholder, $commaPlaceholder2], ['/', ','], trim($opt));
+                                    $options[] = $opt;
                                 }
                                 // 单位为空
                                 $unit = '';
                             } else {
                                 // 这是单位（如 px, %, em）
-                                $unit = $secondPart;
+                                $unit = str_replace([$slashPlaceholder, $commaPlaceholder2], ['/', ','], $secondPart);
                             }
                         } else {
                             $default = $defaultValue;
                         }
-                    }
-                    
-                    // 检查默认值中是否包含斜杠（响应式格式）
-                    if (!$responsive && !empty($default) && strpos($default, '/') !== false) {
-                        $responsive = true;
-                        if (empty($description)) {
-                            $description = '支持响应式配置';
+                        
+                        // 检查默认值中是否包含斜杠（响应式格式）
+                        // 注意：此时转义的斜杠已被替换为占位符，不会误判URL
+                        if (!$responsive && !empty($default) && strpos($default, '/') !== false) {
+                            $responsive = true;
+                            if (empty($description)) {
+                                $description = '支持响应式配置';
+                            }
                         }
+                        
+                        // 还原转义的斜杠和逗号（在检测响应式之后）
+                        $default = str_replace([$slashPlaceholder, $commaPlaceholder2], ['/', ','], $default);
                     }
                     
                     // 确定字段所属的分组
