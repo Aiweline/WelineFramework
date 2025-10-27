@@ -221,18 +221,18 @@ class Core extends CommandAbstract
 
     private function copyCoreFiles(string $tmpDir): void
     {
-        // 更新整个项目，覆盖所有文件
+        // 更新整个项目，覆盖所有文件（但不删除任何现有文件）
         $copied = 0;
         $skipped = 0;
         
-        // 需要更新的所有目录（包括所有子目录）
-        $allPaths = ['app', 'bin', 'pub', 'generated'];
+        // 需要更新的所有目录（但不包括 vendor）
+        $allPaths = ['app', 'bin', 'pub'];
         
         foreach ($allPaths as $path) {
             $source = $tmpDir . DS . $path;
             $target = BP . $path;
             
-            if (!is_dir($source) && !is_file($source)) {
+            if (!is_dir($source)) {
                 $this->printer->warning(__('⚠ 源路径不存在: %{1}', [$path]));
                 $skipped++;
                 continue;
@@ -240,35 +240,23 @@ class Core extends CommandAbstract
             
             $this->printer->note(__('更新 %{1}...', [$path]));
             
-            if (is_dir($source)) {
-                // 改为增量更新，不删除目标目录，只拷贝新文件
-                if ($this->copyDirectoryIncremental($source, $target)) {
-                    $this->printer->success(__('✓ %{1}', [$path]));
-                    $copied++;
-                } else {
-                    $this->printer->warning(__('⚠ %{1} 拷贝失败', [$path]));
-                    $skipped++;
-                }
+            // 增量更新：覆盖已有文件，新增缺失文件，但不删除任何文件
+            if ($this->copyDirectoryIncremental($source, $target)) {
+                $this->printer->success(__('✓ %{1}', [$path]));
+                $copied++;
             } else {
-                if (file_exists($target)) {
-                    unlink($target);
-                }
-                
-                if ($this->copyFile($source, $target)) {
-                    $this->printer->success(__('✓ %{1}', [$path]));
-                    $copied++;
-                } else {
-                    $this->printer->warning(__('⚠ %{1} 拷贝失败', [$path]));
-                    $skipped++;
-                }
+                $this->printer->warning(__('⚠ %{1} 拷贝失败', [$path]));
+                $skipped++;
             }
         }
         
+        // 注意：不更新 vendor 目录，保留现有的依赖包
         $this->printer->note('');
         $this->printer->success(__('✓ 共更新 %{1} 个路径', [$copied]));
         if ($skipped > 0) {
             $this->printer->warning(__('⚠ 跳过 %{1} 个路径', [$skipped]));
         }
+        $this->printer->note(__('⚠ vendor 目录未更新，保留现有依赖包'));
     }
 
     private function copyDirectory(string $source, string $target): bool
@@ -338,13 +326,9 @@ class Core extends CommandAbstract
                 $sourcePath = $item->getPathname();
                 $fileName = basename($targetPath);
                 
-                // 保护用户配置文件（不在 Git 仓库中的文件）
-                if (in_array($fileName, $protectedFiles)) {
-                    // 如果目标文件已存在，跳过（保留用户配置）
-                    // 如果目标文件不存在，才拷贝
-                    if (!file_exists($targetPath)) {
-                        copy($sourcePath, $targetPath);
-                    }
+                // 保护用户配置文件：绝对不覆盖 env.php 和 .env
+                if (in_array($fileName, $protectedFiles) && file_exists($targetPath)) {
+                    // 目标文件已存在，绝对跳过（保护用户配置）
                     continue;
                 }
                 
