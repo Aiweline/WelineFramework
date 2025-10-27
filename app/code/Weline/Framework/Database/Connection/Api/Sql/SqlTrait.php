@@ -708,6 +708,7 @@ trait SqlTrait
      */
     protected static function formatSql(string $sql): string|array
     {
+        // formatSql is now simplified - logging moved to fetch() for actual values
         return $sql;
     }
 }
