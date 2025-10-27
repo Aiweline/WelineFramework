@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\TwoFactorAuth\Setup;
 
 use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\TwoFactorAuth\Model\UserTwoFactor;
 
 /**
@@ -26,10 +28,14 @@ class Install implements \Weline\Framework\Setup\InstallInterface
     /**
      * @inheritDoc
      */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function setup(Setup $setup, Context $context): void
     {
+        // 创建 ModelSetup 实例
+        $modelSetup = ObjectManager::make(ModelSetup::class);
+        $modelSetup->putModel($this->userTwoFactor);
+        
         // 创建用户2FA表
-        $this->userTwoFactor->install($setup, $context);
+        $this->userTwoFactor->install($modelSetup, $context);
         
         $context->getIo()->info('TwoFactorAuth module installed successfully!');
         $context->getIo()->info('Table created: ' . $this->userTwoFactor->getTableName());
