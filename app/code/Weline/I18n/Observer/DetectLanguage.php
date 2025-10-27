@@ -15,7 +15,7 @@ class DetectLanguage implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $data = $event->getData();
         /**@var DataObject $data */
