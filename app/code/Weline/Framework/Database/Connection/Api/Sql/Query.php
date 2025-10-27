@@ -576,12 +576,24 @@ abstract class Query implements QueryInterface
         if ($this->PDOStatement === null) {
             return false;
         }
-        if (DEBUG or Env::get('db_log.enabled')) {
-            $file = Env::get('db_log.file');
-            Env::log($file, $this->sql);
+        
+        // Development SQL logging - log SQL with actual values  
+        if (Env::get('log.dev_sql.enabled', false)) {
+            $log_file = Env::get('log.dev_sql.file', 'dev_sql');
+            // Get SQL with bound values replaced
+            $sqlWithValues = $this->getSqlWithBounds($this->sql);
+            Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
+        }
+        
+        // Database query logging - only if enabled
+        if (Env::get('log.db.enabled', false)) {
+            $file = Env::get('log.db.file', 'db');
+            // Use compact standard format: [timestamp] [QUERY] source - SQL
+            $sqlWithValues = $this->getSqlWithBounds($this->sql);
+            Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
         }
         # 调试环境信息
-        if (Debug::target('pre_fetch')) {
+        if (DEV && Debug::target('pre_fetch')) {
             $msg = __('即将执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
@@ -665,7 +677,7 @@ abstract class Query implements QueryInterface
         }
         $this->fetch_type = '';
         # 调试环境信息
-        if (Debug::target('fetch')) {
+        if (DEV && Debug::target('fetch')) {
             $msg = __('执行信息：') . PHP_EOL;
             $msg .= '$this->batch:' . ($this->batch ? 'true' : 'false') . PHP_EOL;
             $msg .= '$this->fetch_type:' . $this->fetch_type . PHP_EOL;
