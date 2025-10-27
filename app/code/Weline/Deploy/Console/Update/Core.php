@@ -306,8 +306,8 @@ class Core extends CommandAbstract
             mkdir($target, 0755, true);
         }
         
-        // 需要保护的配置文件列表（Git 仓库中没有的）
-        $protectedFiles = ['env.php', '.env'];
+        // 需要保护的完整文件路径（绝对不覆盖）
+        $protectedPaths = ['etc' . DS . 'env.php', '.env'];
         
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
@@ -315,19 +315,28 @@ class Core extends CommandAbstract
         );
         
         foreach ($iterator as $item) {
-            $targetPath = $target . DS . $iterator->getSubPathName();
+            $relativePath = $iterator->getSubPathName();
+            $targetPath = $target . DS . $relativePath;
             
             if ($item->isDir()) {
-                // 目录：不存在就创建，存在就保持
+                // 目录：不存在就创建，存在就保持（永远不删除）
                 if (!is_dir($targetPath)) {
                     mkdir($targetPath, 0755, true);
                 }
             } elseif ($item->isFile()) {
                 $sourcePath = $item->getPathname();
-                $fileName = basename($targetPath);
                 
-                // 保护用户配置文件：绝对不覆盖 env.php 和 .env
-                if (in_array($fileName, $protectedFiles) && file_exists($targetPath)) {
+                // 检查是否是受保护的文件路径（完整路径匹配）
+                $shouldProtect = false;
+                foreach ($protectedPaths as $protectedPath) {
+                    if ($relativePath === $protectedPath) {
+                        $shouldProtect = true;
+                        break;
+                    }
+                }
+                
+                // 保护配置文件：绝对不覆盖 app/etc/env.php 和 .env
+                if ($shouldProtect && file_exists($targetPath)) {
                     // 目标文件已存在，绝对跳过（保护用户配置）
                     continue;
                 }
