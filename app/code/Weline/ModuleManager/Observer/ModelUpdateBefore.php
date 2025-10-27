@@ -36,7 +36,10 @@ class ModelUpdateBefore implements ObserverInterface
             /**@var Table $modelTable */
             $modelTable = $this->table->where($this->table::fields_model, $model::class)->find()->fetch();
             if ($modelTable->getName()) {
-                throw new Exception(__('【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。', [$module->getName(), $modelTable->getModuleName(), $model->getTable(), $modelTable->getModel(), $modelTable->getName(), $model::class]));
+                // 如果是同一个模块，不认为是冲突（可能是模块重新安装）
+                if ($module->getName() !== $modelTable->getModuleName()) {
+                    throw new Exception(__('【冲突模组：%{1}和%{2}】：你当前安装的模型 %{3} 和模型 %{4} 的表名（%{5}）重复。请修改当前重复模型【%{6}】的表名(table)属性或者重命名模型名。', [$module->getName(), $modelTable->getModuleName(), $model->getTable(), $modelTable->getModel(), $modelTable->getName(), $model::class]));
+                }
             }
         }
     }

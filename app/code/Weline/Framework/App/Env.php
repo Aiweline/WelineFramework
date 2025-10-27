@@ -703,7 +703,7 @@ class Env extends DataObject
 
     public function saveDependencies(array $dependencies): bool
     {
-        return file_put_contents(self::path_MODULE_DEPENDENCIES_FILE, '<?php  return ' . w_var_export($dependencies, true));
+        return file_put_contents(self::path_MODULE_DEPENDENCIES_FILE, '<?php  return ' . w_var_export($dependencies, true) . ';');
     }
 
     public function getActiveModules(bool $reget = false): array

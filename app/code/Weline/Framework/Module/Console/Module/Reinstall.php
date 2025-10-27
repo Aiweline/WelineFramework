@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Console\Console\Server\TablePrinter;
 use Weline\Framework\Database\Model\ModelManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Config\ModuleFileReader;
@@ -23,6 +24,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Reinstall extends CommandAbstract
 {
+    use TablePrinter;
     /**
      * @var System
      */
@@ -32,6 +34,16 @@ class Reinstall extends CommandAbstract
      * @var ModuleFileReader
      */
     private ModuleFileReader $moduleFileReader;
+
+    /**
+     * @var array 记录所有创建的备份表
+     */
+    private array $backupTables = [];
+
+    /**
+     * @var string 统一的备份批次时间戳
+     */
+    private string $backupTimestamp = '';
 
     public function __construct(
         Printing         $printer,
@@ -103,11 +115,12 @@ class Reinstall extends CommandAbstract
         $this->printer->error('');
         $this->printer->warning(__('此操作将执行以下步骤：'));
         $this->printer->note(__('1. 备份模块的所有数据库表（备份到 var/backup/db/ 目录）'));
-        $this->printer->note(__('2. 复制数据库表并添加 _backup 后缀（如：demo → demo_backup）'));
+        $this->printer->note(__('2. 复制数据库表并添加时间戳（如：demo → demo_backup_2025_10_27_14_30_00）'));
         $this->printer->note(__('3. 删除模块的所有数据库表'));
         $this->printer->note(__('4. 从 app/etc/modules.php 中删除模块注册信息'));
         $this->printer->note(__('5. 从 app/etc/module_dependencies.php 中删除模块依赖信息'));
         $this->printer->note(__('6. 重新安装指定的模块'));
+        $this->printer->note(__('7. 询问是否清理历史备份表'));
         $this->printer->error('');
         $this->printer->error(__('⚠️  警告：此操作不可逆！所有模块数据将被永久删除！'));
         $this->printer->error(__('⚠️  警告：虽然会自动备份，但请确保您已手动备份重要数据！'));
@@ -123,7 +136,12 @@ class Reinstall extends CommandAbstract
             exit(0);
         }
 
-        // 6. 开始重新安装流程
+        // 6. 生成统一的备份批次时间戳
+        $this->backupTimestamp = date('Y_m_d_H_i_s');
+        $this->printer->note('');
+        $this->printer->setup(__('备份批次时间戳：%{1}', [$this->backupTimestamp]));
+        
+        // 7. 开始重新安装流程
         $this->printer->note('');
         $this->printer->note('═══════════════════════════════════════════════════════════════');
         $this->printer->setup(__('开始重新安装模块...'));
@@ -144,6 +162,9 @@ class Reinstall extends CommandAbstract
         $this->printer->success('═══════════════════════════════════════════════════════════════');
         $this->printer->success(__('模块重新安装完成！'));
         $this->printer->success('═══════════════════════════════════════════════════════════════');
+
+        // 8. 询问是否清理备份表
+        $this->handleBackupTableCleanup();
     }
 
     /**
@@ -249,23 +270,27 @@ class Reinstall extends CommandAbstract
                     $this->printer->warning(__('  将继续执行表复制...'));
                 }
 
-                // 复制表（添加 _backup 后缀）
-                $backupTableName = $originTableName . '_backup';
+                // 复制表（使用统一的批次时间戳）
+                $backupTableName = $originTableName . '_backup_' . $this->backupTimestamp;
                 $this->printer->note(__('  复制表：%{1} → %{2}...', [$originTableName, $backupTableName]));
                 
                 try {
                     $pdo = $model->getConnection()->getConnector()->getLink();
                     
-                    // 先删除旧的备份表（如果存在）
-                    $dropBackupSql = "DROP TABLE IF EXISTS `{$backupTableName}`";
-                    $pdo->exec($dropBackupSql);
-                    
-                    // 复制表结构和数据
+                    // 复制表结构和数据（不删除旧备份，支持多次备份）
                     $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$originTableName}`";
                     $pdo->exec($createBackupSql);
                     
                     $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$originTableName}`";
                     $pdo->exec($insertBackupSql);
+                    
+                    // 记录备份表信息
+                    $this->backupTables[] = [
+                        'original' => $originTableName,
+                        'backup' => $backupTableName,
+                        'module' => $moduleName,
+                        'pdo' => $pdo
+                    ];
                     
                     $this->printer->success(__('  ✓ 表已复制：%{1} (包含所有数据)', [$backupTableName]));
                 } catch (\Exception $copyException) {
@@ -307,7 +332,7 @@ class Reinstall extends CommandAbstract
             return;
         }
 
-        // 删除模块
+        // 从数组中删除模块
         unset($modules[$moduleName]);
 
         // 写回文件
@@ -338,14 +363,225 @@ class Reinstall extends CommandAbstract
             return;
         }
 
-        // 删除模块
+        // 从数组中删除模块
         unset($dependencies[$moduleName]);
 
         // 写回文件
-        $content = '<?php  return ' . var_export($dependencies, true) . ';';
+        $content = '<?php  return ' . w_var_export($dependencies, true) . ';';
         file_put_contents($dependenciesFile, $content);
         
         $this->printer->success(__('  ✓ 已从 module_dependencies.php 删除模块 %{1}', [$moduleName]));
+    }
+
+    /**
+     * 打印多列表格
+     * 
+     * @param array $headers 表头数组
+     * @param array $rows 数据行数组
+     */
+    private function printMultiColumnTable(array $headers, array $rows): void
+    {
+        if (empty($rows)) {
+            return;
+        }
+
+        // 计算每列的最大宽度
+        $columnWidths = [];
+        foreach ($headers as $index => $header) {
+            $columnWidths[$index] = $this->getDisplayWidth($header);
+        }
+
+        foreach ($rows as $row) {
+            foreach ($row as $index => $value) {
+                $width = $this->getDisplayWidth((string)$value);
+                if ($width > $columnWidths[$index]) {
+                    $columnWidths[$index] = $width;
+                }
+            }
+        }
+
+        // 添加左右padding（每列左右各1个空格）
+        foreach ($columnWidths as $index => $width) {
+            $columnWidths[$index] = $width + 2;
+        }
+
+        // 计算总宽度
+        $totalWidth = array_sum($columnWidths) + count($headers) + 1;
+
+        // 打印顶部边框
+        echo "┌";
+        foreach ($columnWidths as $index => $width) {
+            echo str_repeat("─", $width);
+            if ($index < count($columnWidths) - 1) {
+                echo "┬";
+            }
+        }
+        echo "┐\n";
+
+        // 打印表头
+        echo "│";
+        foreach ($headers as $index => $header) {
+            $headerWidth = $this->getDisplayWidth($header);
+            $padding = $columnWidths[$index] - $headerWidth - 2;
+            echo " " . $header . str_repeat(" ", $padding + 1);
+            echo "│";
+        }
+        echo "\n";
+
+        // 打印表头分隔线
+        echo "├";
+        foreach ($columnWidths as $index => $width) {
+            echo str_repeat("─", $width);
+            if ($index < count($columnWidths) - 1) {
+                echo "┼";
+            }
+        }
+        echo "┤\n";
+
+        // 打印数据行
+        foreach ($rows as $rowIndex => $row) {
+            echo "│";
+            foreach ($row as $colIndex => $value) {
+                $valueStr = (string)$value;
+                $valueWidth = $this->getDisplayWidth($valueStr);
+                $padding = $columnWidths[$colIndex] - $valueWidth - 2;
+                echo " " . $valueStr . str_repeat(" ", $padding + 1);
+                echo "│";
+            }
+            echo "\n";
+        }
+
+        // 打印底部边框
+        echo "└";
+        foreach ($columnWidths as $index => $width) {
+            echo str_repeat("─", $width);
+            if ($index < count($columnWidths) - 1) {
+                echo "┴";
+            }
+        }
+        echo "┘\n";
+    }
+
+    /**
+     * 处理备份表清理
+     */
+    private function handleBackupTableCleanup(): void
+    {
+        if (empty($this->backupTables)) {
+            return;
+        }
+
+        $this->printer->note('');
+        $this->printer->note('═══════════════════════════════════════════════════════════════');
+        $this->printer->setup(__('备份表管理'));
+        $this->printer->note('═══════════════════════════════════════════════════════════════');
+        $this->printer->note('');
+
+        // 收集所有相关的备份表（包括历史备份）
+        $allBackupTables = [];
+        $pdo = null;
+        
+        foreach ($this->backupTables as $backupInfo) {
+            $pdo = $backupInfo['pdo'];
+            $originalTable = $backupInfo['original'];
+            
+            // 查找该表的所有备份表
+            $pattern = $originalTable . '_backup_%';
+            $stmt = $pdo->query("SHOW TABLES LIKE '{$pattern}'");
+            
+            while ($row = $stmt->fetch(\PDO::FETCH_NUM)) {
+                $backupTable = $row[0];
+                
+                // 获取表的记录数和创建时间
+                $countStmt = $pdo->query("SELECT COUNT(*) as cnt FROM `{$backupTable}`");
+                $count = $countStmt->fetch(\PDO::FETCH_ASSOC)['cnt'];
+                
+                // 从表名提取时间戳
+                $timeStr = str_replace($originalTable . '_backup_', '', $backupTable);
+                $timeStr = str_replace('_', '-', substr($timeStr, 0, 10)) . ' ' . str_replace('_', ':', substr($timeStr, 11));
+                
+                $allBackupTables[] = [
+                    'original' => $originalTable,
+                    'backup' => $backupTable,
+                    'count' => $count,
+                    'time' => $timeStr,
+                    'module' => $backupInfo['module']
+                ];
+            }
+        }
+
+        if (empty($allBackupTables)) {
+            $this->printer->note(__('未发现备份表。'));
+            return;
+        }
+
+        // 显示备份表列表（使用专业表格）
+        $this->printer->setup(__('发现以下备份表：'));
+        $this->printer->note('');
+        
+        // 准备表头和数据
+        $headers = ['模块', '原表名', '备份表名', '创建时间', '记录数'];
+        $rows = [];
+        foreach ($allBackupTables as $table) {
+            $rows[] = [
+                $table['module'],
+                $table['original'],
+                $table['backup'],
+                $table['time'],
+                $table['count']
+            ];
+        }
+        
+        $this->printMultiColumnTable($headers, $rows);
+        
+        $this->printer->note('');
+        $this->printer->note(__('共 %{1} 个备份表，占用数据库空间。', [count($allBackupTables)]));
+        
+        // 统计批次
+        $batches = [];
+        foreach ($allBackupTables as $table) {
+            // 从表名提取时间戳作为批次标识
+            $timeStr = str_replace($table['original'] . '_backup_', '', $table['backup']);
+            $batches[$timeStr][] = $table;
+        }
+        
+        $this->printer->note(__('共 %{1} 个备份批次。', [count($batches)]));
+        $this->printer->note('');
+        
+        // 询问是否删除
+        $this->printer->warning(__('这些备份表是历史备份，可以安全删除以释放空间。'));
+        $this->printer->note(__('如果您需要恢复数据，请选择保留。'));
+        $this->printer->note(__('提示：备份表按时间戳分批次，相同时间戳的表属于同一批次。'));
+        $this->printer->note('');
+        $this->printer->setup(__('是否删除所有备份表？(yes/y=删除, no/n=保留)：'));
+        
+        $confirm = strtolower(trim($this->system->input()));
+        
+        if ($confirm === 'yes' || $confirm === 'y') {
+            // 删除备份表
+            $this->printer->note('');
+            $this->printer->setup(__('开始删除备份表...'));
+            
+            foreach ($allBackupTables as $table) {
+                try {
+                    $pdo->exec("DROP TABLE IF EXISTS `{$table['backup']}`");
+                    $this->printer->success(__('  ✓ 已删除：%{1}', [$table['backup']]));
+                } catch (\Exception $e) {
+                    $this->printer->error(__('  ✗ 删除失败：%{1} - %{2}', [$table['backup'], $e->getMessage()]));
+                }
+            }
+            
+            $this->printer->note('');
+            $this->printer->success(__('备份表清理完成！'));
+        } else {
+            $this->printer->note('');
+            $this->printer->setup(__('备份表已保留。'));
+            $this->printer->note(__('您可以稍后使用以下 SQL 手动删除：'));
+            $this->printer->note('');
+            foreach ($allBackupTables as $table) {
+                $this->printer->note("  DROP TABLE IF EXISTS `{$table['backup']}`;");
+            }
+        }
     }
 
     /**
@@ -369,8 +605,10 @@ class Reinstall extends CommandAbstract
                 '仅在开发模式下可用' => '此命令仅在 deploy=dev 时可用',
                 '数据将被删除' => '所有模块数据将被永久删除，虽然会自动备份但请手动备份重要数据',
                 '需要确认' => '执行前需要输入 "yes" 或 "y" 确认',
-                '双重备份保护' => '1) SQL文件备份到 var/backup/db/；2) 数据库中复制表为 {表名}_backup',
-                '备份表示例' => '如表 demo 会被复制为 demo_backup，包含所有数据',
+                '双重备份保护' => '1) SQL文件备份到 var/backup/db/；2) 数据库中复制表为 {表名}_backup_{时间戳}',
+                '备份表示例' => '如表 demo 会被复制为 demo_backup_2025_10_27_14_30_00，包含所有数据',
+                '批次管理' => '同一次重装的所有表使用相同时间戳，便于批量管理',
+                '智能清理' => '重装完成后可选择清理历史备份表，也可保留多个批次',
             ],
             [
                 '重新安装单个模块' => 'php bin/w module:reinstall -m Weline_Demo',

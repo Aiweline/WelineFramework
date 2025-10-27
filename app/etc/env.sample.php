@@ -15,12 +15,6 @@ return [
     // 环境类型：local, dev, test, prod
     'env' => 'local',
     
-    // 数据库日志配置
-    'db_log' => [
-        'enabled' => false,  // 是否启用数据库日志
-        'file' => 'var/log/db.log',  // 日志文件路径
-    ],
-    
     // 缓存配置
     'cache' => [
         'default' => 'file',  // 默认缓存驱动：file, redis
@@ -76,6 +70,14 @@ return [
         'notice' => 'var/log/notice.log',       // 通知日志
         'warning' => 'var/log/warning.log',     // 警告日志
         'debug' => 'var/log/debug.log',         // 调试日志
+        'db' => [
+            'enabled' => false,  // 是否启用数据库日志（默认禁用以提高性能）
+            'file' => 'db',      // 数据库日志文件名（自动添加 var/log/ 前缀和 .log 后缀）
+        ],
+        'dev_sql' => [
+            'enabled' => false,  // 是否启用开发SQL日志（所有SQL查询，文件会持续增长，影响性能，生产环境请禁用）
+            'file' => 'dev_sql',  // 开发SQL日志文件名 → var/log/dev_sql.log
+        ],
     ],
     
     // PHP代码规范检查

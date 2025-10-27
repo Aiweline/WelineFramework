@@ -17,6 +17,7 @@ use Weline\Framework\System\File\Compress;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
+use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Helper\HandleInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Helper\Data;
@@ -211,6 +212,13 @@ class Handle implements HandleInterface, RegisterInterface
         }
         if (empty($env)) {
             $env = $this->getEnv($module_name, $env);
+        }
+        // 检查 router 配置是否为正确的类型
+        if (isset($env['router']) && !is_string($env['router']) && !is_null($env['router'])) {
+            throw new ConsoleException(__('模块 %{1} 的 env.php 文件中 router 配置必须是字符串类型，当前类型：%{2}', [$module_name, gettype($env['router'])]));
+        }
+        if (isset($env['backend_router']) && !is_string($env['backend_router']) && !is_null($env['backend_router'])) {
+            throw new ConsoleException(__('模块 %{1} 的 env.php 文件中 backend_router 配置必须是字符串类型，当前类型：%{2}', [$module_name, gettype($env['backend_router'])]));
         }
         // 如果文件不存在则读取模块名字作为router
         $router = strtolower($env['router'] ?: '');

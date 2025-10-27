@@ -1,0 +1,338 @@
+<?php
+/**
+ * 模块配置页面模板
+ * 
+ * @var array $desensitization_adapter
+ * @var array $rewrite_adapter
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$desensitizationAdapter = $this->desensitization_adapter ?? null;
+$rewriteAdapter = $this->rewrite_adapter ?? null;
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>模块配置</title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-cog me-2"></i>
+                                <lang>模块配置</lang>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 脱敏适配器配置 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-shield-lock me-2"></i>
+                                    脱敏适配器配置
+                                </h3>
+                                <div class="card-actions">
+                                    <button type="button" class="btn btn-sm btn-warning" 
+                                            onclick="resetAdapter('desensitization')">
+                                        <i class="mdi mdi-refresh"></i> 重置为默认
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <h5><?= htmlspecialchars($desensitizationAdapter['name'] ?? '') ?></h5>
+                                    <p class="text-muted"><?= htmlspecialchars($desensitizationAdapter['description'] ?? '') ?></p>
+                                </div>
+
+                                <form id="desensitizationForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">工作模式</label>
+                                                <select class="form-select" name="mode" id="desens_mode">
+                                                    <option value="detect" <?= ($desensitizationAdapter['params']['mode'] ?? '') === 'detect' ? 'selected' : '' ?>>检测模式</option>
+                                                    <option value="desensitize" <?= ($desensitizationAdapter['params']['mode'] ?? '') === 'desensitize' ? 'selected' : '' ?>>脱敏模式</option>
+                                                    <option value="mark" <?= ($desensitizationAdapter['params']['mode'] ?? '') === 'mark' ? 'selected' : '' ?>>标记模式</option>
+                                                </select>
+                                                <small class="form-text text-muted">选择适配器的工作模式</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">脱敏级别</label>
+                                                <select class="form-select" name="level" id="desens_level">
+                                                    <option value="standard" <?= ($desensitizationAdapter['params']['level'] ?? '') === 'standard' ? 'selected' : '' ?>>标准级别</option>
+                                                    <option value="high" <?= ($desensitizationAdapter['params']['level'] ?? '') === 'high' ? 'selected' : '' ?>>高级别</option>
+                                                    <option value="low" <?= ($desensitizationAdapter['params']['level'] ?? '') === 'low' ? 'selected' : '' ?>>低级别</option>
+                                                </select>
+                                                <small class="form-text text-muted">脱敏的严格程度</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="enable_strict_check" 
+                                                   id="desens_strict_check"
+                                                   <?= ($desensitizationAdapter['params']['enable_strict_check'] ?? true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="desens_strict_check">
+                                                启用严格检查
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">是否启用更严格的敏感信息检查</small>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 重写适配器配置 -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-auto-fix me-2"></i>
+                                    重写适配器配置
+                                </h3>
+                                <div class="card-actions">
+                                    <button type="button" class="btn btn-sm btn-warning" 
+                                            onclick="resetAdapter('rewrite')">
+                                        <i class="mdi mdi-refresh"></i> 重置为默认
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <h5><?= htmlspecialchars($rewriteAdapter['name'] ?? '') ?></h5>
+                                    <p class="text-muted"><?= htmlspecialchars($rewriteAdapter['description'] ?? '') ?></p>
+                                </div>
+
+                                <form id="rewriteForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">润色风格</label>
+                                                <select class="form-select" name="style" id="rewrite_style">
+                                                    <option value="natural" <?= ($rewriteAdapter['params']['style'] ?? '') === 'natural' ? 'selected' : '' ?>>自然流畅</option>
+                                                    <option value="formal" <?= ($rewriteAdapter['params']['style'] ?? '') === 'formal' ? 'selected' : '' ?>>正式专业</option>
+                                                    <option value="casual" <?= ($rewriteAdapter['params']['style'] ?? '') === 'casual' ? 'selected' : '' ?>>轻松随意</option>
+                                                    <option value="professional" <?= ($rewriteAdapter['params']['style'] ?? '') === 'professional' ? 'selected' : '' ?>>专业严谨</option>
+                                                    <option value="concise" <?= ($rewriteAdapter['params']['style'] ?? '') === 'concise' ? 'selected' : '' ?>>简洁精炼</option>
+                                                </select>
+                                                <small class="form-text text-muted">选择润色的文字风格</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3 d-flex align-items-end" style="height: 58px;">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" 
+                                                           name="preserve_format" 
+                                                           id="rewrite_preserve"
+                                                           <?= ($rewriteAdapter['params']['preserve_format'] ?? true) ? 'checked' : '' ?>>
+                                                    <label class="form-check-label" for="rewrite_preserve">
+                                                        保持原有格式
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="enhance_readability" 
+                                                   id="rewrite_readability"
+                                                   <?= ($rewriteAdapter['params']['enhance_readability'] ?? true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="rewrite_readability">
+                                                增强可读性
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">是否对脱敏后的内容进行可读性增强</small>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 敏感词规则更新 -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-sync me-2"></i>
+                                    敏感词规则更新
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">定期更新最新的敏感词规则，确保检测标准的时效性。</p>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-info w-100" onclick="updateRules('meta')">
+                                            <i class="mdi mdi-facebook me-2"></i>
+                                            从Meta更新规则
+                                        </button>
+                                        <small class="text-muted d-block mt-1">来源：Meta社群守则</small>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-danger w-100" onclick="updateRules('google')">
+                                            <i class="mdi mdi-google me-2"></i>
+                                            从Google更新规则
+                                        </button>
+                                        <small class="text-muted d-block mt-1">来源：Google产品政策</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 保存按钮 -->
+                <div class="row mt-4">
+                    <div class="col-12 text-end">
+                        <button type="button" class="btn btn-primary btn-lg" onclick="saveConfig()">
+                            <i class="mdi mdi-content-save me-1"></i>
+                            <lang>保存配置</lang>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+function saveConfig() {
+    const desensitizationForm = document.getElementById('desensitizationForm');
+    const rewriteForm = document.getElementById('rewriteForm');
+    
+    const desensitizationFormData = new FormData(desensitizationForm);
+    const rewriteFormData = new FormData(rewriteForm);
+    
+    const data = {
+        desensitization_params: {
+            mode: desensitizationFormData.get('mode'),
+            level: desensitizationFormData.get('level'),
+            enable_strict_check: desensitizationFormData.get('enable_strict_check') === 'on' ? true : false
+        },
+        rewrite_params: {
+            style: rewriteFormData.get('style'),
+            preserve_format: rewriteFormData.get('preserve_format') === 'on' ? true : false,
+            enhance_readability: rewriteFormData.get('enhance_readability') === 'on' ? true : false
+        }
+    };
+
+    fetch('<?= $this->getBackendUrl('*/backend/config/save') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('配置保存成功');
+            location.reload();
+        } else {
+            alert('保存失败: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('保存失败: ' + error.message);
+    });
+}
+
+function resetAdapter(adapterType) {
+    if (!confirm('确定要重置' + (adapterType === 'desensitization' ? '脱敏适配器' : '重写适配器') + '的配置为默认值吗？')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/config/reset') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({adapter_type: adapterType})
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('配置已重置');
+            location.reload();
+        } else {
+            alert('重置失败: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('重置失败: ' + error.message);
+    });
+}
+
+function updateRules(platform) {
+    const platformName = platform === 'meta' ? 'Meta' : 'Google';
+    
+    if (!confirm(`确定要从${platformName}更新敏感词规则吗？这可能需要一些时间。`)) {
+        return;
+    }
+    
+    // 显示加载提示
+    const loadingAlert = document.createElement('div');
+    loadingAlert.className = 'alert alert-info';
+    loadingAlert.innerHTML = '<i class="mdi mdi-loading mdi-spin me-2"></i>正在从' + platformName + '更新规则，请稍候...';
+    document.querySelector('.page-content .container-fluid').insertBefore(loadingAlert, document.querySelector('.row'));
+    
+    fetch('<?= $this->getBackendUrl('*/backend/config/updateRules') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({platform: platform})
+    })
+    .then(response => response.json())
+    .then(result => {
+        loadingAlert.remove();
+        if (result.success) {
+            alert('规则更新成功！');
+            location.reload();
+        } else {
+            alert('更新失败: ' + result.message);
+        }
+    })
+    .catch(error => {
+        loadingAlert.remove();
+        alert('更新失败: ' + error.message);
+    });
+}
+</script>
+
+</body>
+</html>
+
