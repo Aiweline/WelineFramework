@@ -12,20 +12,20 @@
          icon="mdi mdi-shield-lock"
          order="20000"/>
     
-    <!-- 我的2FA设置 -->
-    <add source="Weline_TwoFactorAuth::my_2fa" 
-         name="my_2fa" 
-         title="我的2FA设置" 
-         action="TwoFactorAuth/Index" 
+    <!-- 2FA账户管理 -->
+    <add source="Weline_TwoFactorAuth::my_2fa"
+         name="my_2fa"
+         title="2FA账户管理"
+         action="*/backend"
          parent="Weline_TwoFactorAuth::2fa_main"
          icon="mdi mdi-shield-account"
          order="10"/>
-    
-    <!-- 验证器APP -->
-    <add source="Weline_TwoFactorAuth::2fa_app" 
-         name="2fa_app" 
-         title="验证器APP" 
-         action="TwoFactorAuth/App" 
+
+    <!-- 验证器APP（仅展示，跳转到前端） -->
+    <add source="Weline_TwoFactorAuth::2fa_app"
+         name="2fa_app"
+         title="打开验证器APP"
+         action="*/app"
          parent="Weline_TwoFactorAuth::2fa_main"
          icon="mdi mdi-cellphone-key"
          order="20"/>

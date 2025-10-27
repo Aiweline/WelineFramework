@@ -417,7 +417,8 @@ class Url implements UrlInterface
             }
             return self::$parserUrlCache[$url];
         }
-        self::$parserUrlCache[$url] = parse_url($url);
+        $parsed = parse_url($url);
+        self::$parserUrlCache[$url] = is_array($parsed) ? $parsed : [];
         if ($key) {
             return self::$parserUrlCache[$url][$key] ?? $default;
         }

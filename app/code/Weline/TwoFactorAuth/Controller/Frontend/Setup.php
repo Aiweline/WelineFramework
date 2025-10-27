@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Weline\TwoFactorAuth\Controller\Backend;
+namespace Weline\TwoFactorAuth\Controller\Frontend;
 
-use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\Controller\FrontendController;
 use Weline\TwoFactorAuth\Service\TwoFactorAuthService;
 
 /**
- * 2FA设置控制器
+ * 2FA前端设置控制器
  * 
- * @package Weline\TwoFactorAuth\Controller\Backend
+ * @package Weline\TwoFactorAuth\Controller\Frontend
  */
-class Setup extends BackendController
+class Setup extends FrontendController
 {
     private TwoFactorAuthService $twoFactorAuthService;
 
@@ -27,8 +27,10 @@ class Setup extends BackendController
      */
     public function index()
     {
-        $userId = $this->getSession()->getData('user_id') ?? 1;
-        $userEmail = $this->getSession()->getData('user_email') ?? 'user@example.com';
+        /**@var \Weline\Frontend\Session\FrontendSession $session */
+        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
+        $userId = $session->getLoginUserID() ?? 1;
+        $userEmail = 'user@example.com'; // TODO: Get from user model
 
         // 生成新的密钥和备份码
         $data = $this->twoFactorAuthService->initialize($userId);
@@ -59,7 +61,9 @@ class Setup extends BackendController
             return $this->json(['success' => false, 'message' => '无效的请求方法']);
         }
 
-        $userId = $this->getSession()->getData('user_id') ?? 1;
+        /**@var \Weline\Frontend\Session\FrontendSession $session */
+        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
+        $userId = $session->getLoginUserID() ?? 1;
         $secret = $this->request->getPost('secret');
         $code = $this->request->getPost('code');
         $backupCodes = $this->request->getPost('backup_codes');
@@ -97,7 +101,9 @@ class Setup extends BackendController
             return $this->json(['success' => false, 'message' => '无效的请求方法']);
         }
 
-        $userId = $this->getSession()->getData('user_id') ?? 1;
+        /**@var \Weline\Frontend\Session\FrontendSession $session */
+        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
+        $userId = $session->getLoginUserID() ?? 1;
         $code = $this->request->getPost('code');
 
         if (!$code) {
@@ -128,7 +134,9 @@ class Setup extends BackendController
             return $this->json(['success' => false, 'message' => '无效的请求方法']);
         }
 
-        $userId = $this->getSession()->getData('user_id') ?? 1;
+        /**@var \Weline\Frontend\Session\FrontendSession $session */
+        $session = \Weline\Framework\App\Env::getInstance(\Weline\Frontend\Session\FrontendSession::class);
+        $userId = $session->getLoginUserID() ?? 1;
         $code = $this->request->getPost('code');
 
         if (!$code) {

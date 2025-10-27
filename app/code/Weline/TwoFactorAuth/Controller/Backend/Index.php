@@ -8,7 +8,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\TwoFactorAuth\Service\TwoFactorAuthService;
 
 /**
- * 2FA后台管理主页
+ * 2FA后台账户管理
+ * 管理员查看和管理用户的2FA状态
  * 
  * @package Weline\TwoFactorAuth\Controller\Backend
  */
@@ -23,21 +24,13 @@ class Index extends BackendController
     }
 
     /**
-     * 显示2FA管理页面
+     * 显示所有用户的2FA状态（管理页面）
      */
     public function index()
     {
-        // 获取当前登录用户ID（需要根据您的框架实际情况调整）
-        $userId = $this->getSession()->getData('user_id') ?? 1;
-
-        $config = $this->twoFactorAuthService->getUserConfig($userId);
-        $isEnabled = $this->twoFactorAuthService->isEnabled($userId);
-
-        $this->assign('user_id', $userId);
-        $this->assign('is_enabled', $isEnabled);
-        $this->assign('config', $config);
-        $this->assign('remaining_seconds', $this->twoFactorAuthService->getRemainingSeconds());
-
+        // TODO: 获取所有用户列表和他们的2FA状态
+        $this->assign('page_title', '双因素认证账户管理');
+        
         return $this->fetch();
     }
 }
