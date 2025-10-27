@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:weline:framework:etc/events.xsd">
+    <!-- 模块升级后自动扫描场景适配器 -->
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Ai::module_upgrade" instance="Weline\Ai\Observer\ModuleUpgradeAdapterScanObserver" disabled="false"/>
+    </event>
+</config>
+

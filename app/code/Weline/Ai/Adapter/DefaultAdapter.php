@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Adapter;
 
-use Weline\Ai\Api\ScenarioAdapterInterface;
+use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
  * 默认通用适配器
@@ -122,6 +122,16 @@ class DefaultAdapter implements ScenarioAdapterInterface
     {
         // 无需验证，总是返回空数组表示验证通过
         return [];
+    }
+
+    /**
+     * 获取参数模板
+     * 
+     * @return array
+     */
+    public function getParamTemplate(): array
+    {
+        return []; // 默认适配器无需参数
     }
 
     /**

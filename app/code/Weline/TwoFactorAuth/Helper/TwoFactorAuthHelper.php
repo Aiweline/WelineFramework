@@ -124,9 +124,10 @@ class TwoFactorAuthHelper
      */
     public static function generateCode(
         string $secret,
-        ?int $timestamp = null,
+        string $algorithm = 'SHA1',
+        int $digits = self::DEFAULT_DIGITS,
         int $period = self::DEFAULT_PERIOD,
-        int $digits = self::DEFAULT_DIGITS
+        ?int $timestamp = null
     ): string {
         if ($timestamp === null) {
             $timestamp = time();
@@ -141,8 +142,8 @@ class TwoFactorAuthHelper
         // 将时间步数转换为8字节大端序
         $timeBytes = pack('N*', 0, $timeStep);
         
-        // 计算HMAC-SHA1
-        $hash = hash_hmac('sha1', $timeBytes, $key, true);
+        // 计算HMAC
+        $hash = hash_hmac(strtolower($algorithm), $timeBytes, $key, true);
         
         // 动态截断（RFC 4226）
         $offset = ord($hash[strlen($hash) - 1]) & 0x0F;
@@ -316,6 +317,17 @@ SVG;
         
         // 检查是否只包含Base32字符
         return preg_match('/^[A-Z2-7]+$/i', $secret) === 1;
+    }
+    
+    /**
+     * 验证Base32格式（别名）
+     * 
+     * @param string $secret 密钥
+     * @return bool 是否有效
+     */
+    public static function isValidBase32(string $secret): bool
+    {
+        return self::isValidSecret($secret);
     }
     
     /**

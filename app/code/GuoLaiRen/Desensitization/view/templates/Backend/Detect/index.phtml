@@ -1,0 +1,208 @@
+<?php
+/**
+ * 敏感内容检测页面模板
+ * 
+ * @var array $types
+ * @var array $models
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$types = $this->types ?? [];
+$models = $this->models ?? [];
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>敏感内容检测</title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-shield-search me-2"></i>
+                                <lang>敏感内容检测</lang>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 检测输入区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-file-search me-2"></i>
+                                    检测内容
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="detectForm">
+                                    <div class="mb-3">
+                                        <label class="form-label">输入要检测的内容 <span class="text-danger">*</span></label>
+                                        <textarea class="form-control" id="content" name="content" rows="5" 
+                                                  placeholder="请输入需要检测的内容..."></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">检测类型（可选）</label>
+                                        <div class="row">
+                                            <?php foreach ($types as $type): ?>
+                                                <div class="col-md-3 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               name="rule_types[]" value="<?= $type ?>" 
+                                                               id="type_<?= $type ?>" checked>
+                                                        <label class="form-check-label" for="type_<?= $type ?>">
+                                                            <?= $type ?>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">AI模型（可选）</label>
+                                        <select class="form-select" id="model_code" name="model_code">
+                                            <option value="">使用默认模型</option>
+                                            <?php foreach ($models as $model): ?>
+                                                <option value="<?= $model['code'] ?>">
+                                                    <?= $model['name'] ?> (<?= $model['supplier'] ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="text-end">
+                                        <button type="button" class="btn btn-primary" onclick="executeDetect()">
+                                            <i class="mdi mdi-magnify me-1"></i>
+                                            <lang>开始检测</lang>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 检测结果 -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="card" id="resultCard" style="display: none;">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-check-circle me-2"></i>
+                                    检测结果
+                                </h3>
+                            </div>
+                            <div class="card-body" id="resultContent">
+                                <!-- 结果将在这里显示 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+function executeDetect() {
+    const content = document.getElementById('content').value;
+    if (!content) {
+        alert('请输入检测内容');
+        return;
+    }
+
+    const form = document.getElementById('detectForm');
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        if (key === 'rule_types[]') {
+            if (!data.rule_types) data.rule_types = [];
+            data.rule_types.push(value);
+        } else {
+            data[key] = value;
+        }
+    });
+
+    const resultCard = document.getElementById('resultCard');
+    const resultContent = document.getElementById('resultContent');
+    
+    resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
+    resultCard.style.display = 'block';
+
+    fetch('<?= $this->getBackendUrl('*/backend/detect/execute') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const result = data.data;
+            let html = `
+                <div class="alert alert-info">
+                    <strong>检测完成</strong> - 执行时间: ${result.execution_time}
+                </div>
+            `;
+            
+            if (result.detection.has_sensitive) {
+                html += `
+                    <div class="alert alert-warning">
+                        <h5><i class="mdi mdi-alert me-2"></i>发现敏感内容</h5>
+                        <strong>敏感类型：</strong> ${result.detection.sensitive_types.join(', ')}<br>
+                        <strong>发现 ${result.detection.positions.length} 处敏感信息</strong>
+                    </div>
+                `;
+                
+                if (result.detection.positions && result.detection.positions.length > 0) {
+                    html += '<div class="table-responsive mt-3"><table class="table table-sm table-bordered"><thead><tr><th>类型</th><th>内容</th><th>位置</th></tr></thead><tbody>';
+                    result.detection.positions.forEach(pos => {
+                        html += `<tr><td><span class="badge bg-danger">${pos.type}</span></td><td><code>${pos.match}</code></td><td>${pos.start}-${pos.end}</td></tr>`;
+                    });
+                    html += '</tbody></table></div>';
+                }
+            } else {
+                html += '<div class="alert alert-success"><i class="mdi mdi-check me-2"></i>未发现敏感内容</div>';
+            }
+            
+            resultContent.innerHTML = html;
+        } else {
+            resultContent.innerHTML = `<div class="alert alert-danger">检测失败: ${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        resultContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
+    });
+}
+</script>
+
+</body>
+</html>

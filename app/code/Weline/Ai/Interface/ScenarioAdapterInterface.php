@@ -11,7 +11,7 @@ declare(strict_types=1);
 
  */
 
-namespace Weline\Ai\Api;
+namespace Weline\Ai\Interface;
 
 /**
  * 场景适配器接口
@@ -107,3 +107,4 @@ interface ScenarioAdapterInterface
      */
     public function supportsModel(string $modelCode): bool;
 }
+
