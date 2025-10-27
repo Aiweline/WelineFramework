@@ -31,7 +31,7 @@ class DevToolPanelObserver implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
         // 只在开发模式下显示
         if (!DEV) {
