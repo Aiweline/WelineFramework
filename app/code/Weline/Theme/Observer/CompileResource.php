@@ -20,7 +20,7 @@ class CompileResource implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         /**@var Compiler $statics */
         $statics = ObjectManager::getInstance(Compiler::class);

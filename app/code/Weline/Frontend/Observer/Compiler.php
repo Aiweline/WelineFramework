@@ -23,7 +23,7 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $eventData = $event->getEvenData();
         $area = $eventData->getArea();

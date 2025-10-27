@@ -18,7 +18,7 @@ class Footer implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         if (!$event->getData('is_backend')) {
             $event->setData('class', \Weline\Frontend\Model\Html\Footer::class);
