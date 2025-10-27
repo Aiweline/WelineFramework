@@ -1,0 +1,39 @@
+{
+  "accounts": [
+    {
+      "id": 1,
+      "name": "Alex Account",
+      "host": "mail.privateemail.com",
+      "port": 587,
+      "encryption": "tls",
+      "username": "alex@stockcircle.to",
+      "password": "NRUdq*$sf6XpeN%",
+      "from_email": "alex@stockcircle.to",
+      "from_name": "Stock Circle - Alex",
+      "enabled": true,
+      "daily_limit": 500,
+      "comment": "Primary business email account - Stock Circle Team"
+    },
+    {
+      "id": 2,
+      "name": "Team Account",
+      "host": "mail.privateemail.com",
+      "port": 587,
+      "encryption": "tls",
+      "username": "team@stockcircle.to",
+      "password": "NRUdq*$sf6XpeN%",
+      "from_email": "team@stockcircle.to",
+      "from_name": "Stock Circle - Team",
+      "enabled": true,
+      "daily_limit": 500,
+      "comment": "Team collaboration account - Stock Circle Team"
+    }
+  ],
+  "settings": {
+    "rotate_mode": "round_robin",
+    "retry_failed": true,
+    "max_retries": 3,
+    "delay_between_emails": 1000,
+    "notes": "rotate_mode options: round_robin (sequential), random (randomized), least_used (load-balanced)"
+  }
+}
