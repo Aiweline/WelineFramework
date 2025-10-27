@@ -26,6 +26,8 @@ class PageHelper
     /**
      * 获取当前语言下的页面内容
      * 
+     * 回退逻辑：当前语言翻译 → 页面默认语言翻译 → 主表默认数据
+     * 
      * @param Page $page 页面对象
      * @param string|null $locale 语言代码（不传则使用当前语言）
      * @return array 包含翻译后的所有字段
@@ -36,7 +38,10 @@ class PageHelper
             $locale = Cookie::getLang();
         }
 
-        // 获取主表数据作为默认值
+        // 获取页面指定的默认语言
+        $defaultLocale = $page->getData(Page::fields_DEFAULT_LOCALE);
+        
+        // 第一层：主表数据（最后的回退选项）
         $result = [
             'name' => $page->getData(Page::fields_NAME),
             'title' => $page->getData(Page::fields_TITLE),
@@ -46,7 +51,33 @@ class PageHelper
             'meta_keywords' => $page->getData(Page::fields_META_KEYWORDS),
         ];
 
-        // 尝试获取翻译数据
+        // 第二层：如果页面指定了默认语言，且当前语言不是默认语言，先尝试获取默认语言的翻译
+        if ($defaultLocale && $locale !== $defaultLocale) {
+            $defaultTranslation = clone $this->localDescription;
+            $defaultTranslation->clear()
+                ->where(LocalDescription::fields_ID, $page->getId())
+                ->where('local_code', $defaultLocale)
+                ->find()
+                ->fetch();
+
+            if ($defaultTranslation->getId()) {
+                // 用默认语言的翻译覆盖主表数据
+                $result['name'] = $defaultTranslation->getData(LocalDescription::fields_NAME) ?: $result['name'];
+                $result['title'] = $defaultTranslation->getData(LocalDescription::fields_TITLE) ?: $result['title'];
+                $result['content'] = $defaultTranslation->getData(LocalDescription::fields_CONTENT) ?: $result['content'];
+                $result['meta_title'] = $defaultTranslation->getData(LocalDescription::fields_META_TITLE) ?: $result['meta_title'];
+                $result['meta_description'] = $defaultTranslation->getData(LocalDescription::fields_META_DESCRIPTION) ?: $result['meta_description'];
+                $result['meta_keywords'] = $defaultTranslation->getData(LocalDescription::fields_META_KEYWORDS) ?: $result['meta_keywords'];
+                
+                // 默认语言的样式配置
+                $config = $defaultTranslation->getData('config');
+                if ($config) {
+                    $result['config'] = $config;
+                }
+            }
+        }
+
+        // 第三层：尝试获取当前语言的翻译数据（最高优先级）
         $translation = clone $this->localDescription;
         $translation->clear()
             ->where(LocalDescription::fields_ID, $page->getId())
@@ -54,7 +85,7 @@ class PageHelper
             ->find()
             ->fetch();
 
-        // 如果有翻译，使用翻译数据覆盖默认值
+        // 如果有当前语言的翻译，使用它覆盖之前的数据
         if ($translation->getId()) {
             $result['name'] = $translation->getData(LocalDescription::fields_NAME) ?: $result['name'];
             $result['title'] = $translation->getData(LocalDescription::fields_TITLE) ?: $result['title'];
@@ -63,7 +94,7 @@ class PageHelper
             $result['meta_description'] = $translation->getData(LocalDescription::fields_META_DESCRIPTION) ?: $result['meta_description'];
             $result['meta_keywords'] = $translation->getData(LocalDescription::fields_META_KEYWORDS) ?: $result['meta_keywords'];
             
-            // 添加config字段（包含样式配置覆盖）
+            // 当前语言的样式配置（最高优先级）
             $config = $translation->getData('config');
             if ($config) {
                 $result['config'] = $config;

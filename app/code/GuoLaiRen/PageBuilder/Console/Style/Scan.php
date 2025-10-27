@@ -16,7 +16,6 @@ use Weline\Framework\Output\Cli\Printing;
 class Scan implements CommandInterface
 {
     private Style $styleModel;
-    private Printing $printer;
 
     public function __construct(
         Style $styleModel,

@@ -167,11 +167,63 @@ $createTime = $page ? $page->getData('create_time') : '';
         </div>
     </main>
     
-    <footer style="background: <?= htmlspecialchars($bgColor) ?>; padding: <?= $paddingResponsive ?> 0; margin-top: 40px; <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor) . ';' : '' ?>">
-        <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 <?= $paddingResponsive ?>;">
-            <div style="text-align: center; color: <?= htmlspecialchars($textColor) ?>; font-size: <?= $fontSizeResponsive ?>; line-height: <?= floatval($lineHeight) ?>;">
+    <style>
+    .page-footer {
+        background: <?= htmlspecialchars($bgColor) ?>;
+        padding: <?= $paddingResponsive ?> 0;
+        margin-top: 0;
+        <?php if ($borderTop === 'yes'): ?>
+        border-top: 2px solid <?= htmlspecialchars($borderColor) ?>;
+        <?php endif; ?>
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .footer-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 <?= $paddingResponsive ?>;
+    }
+    
+    .footer-content {
+        text-align: center;
+        color: <?= htmlspecialchars($textColor) ?>;
+        font-size: <?= $fontSizeResponsive ?>;
+        line-height: <?= floatval($lineHeight) ?>;
+    }
+    
+    .footer-copyright {
+        margin: 0 0 12px 0;
+        font-weight: 500;
+    }
+    
+    .footer-info {
+        margin: 8px 0;
+        opacity: 0.8;
+    }
+    
+    .footer-links {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid <?= htmlspecialchars($borderColor) ?>;
+    }
+    
+    .footer-link {
+        color: <?= htmlspecialchars($linkColor) ?>;
+        text-decoration: none;
+        margin: 0 12px;
+        transition: color 0.3s ease;
+    }
+    
+    .footer-link:hover {
+        color: <?= htmlspecialchars($linkHoverColor) ?>;
+    }
+    </style>
+    
+    <footer class="page-footer">
+        <div class="footer-container">
+            <div class="footer-content">
                 <?php if ($showCopyright === 'yes'): ?>
-                    <p style="margin: 0;">
+                    <p class="footer-copyright">
                         <?php if ($copyrightText): ?>
                             <?= htmlspecialchars($copyrightText) ?>
                         <?php else: ?>
@@ -181,10 +233,16 @@ $createTime = $page ? $page->getData('create_time') : '';
                 <?php endif; ?>
                 
                 <?php if ($showPublishTime === 'yes' && $createTime): ?>
-                    <p style="margin: 10px 0 0 0;">
+                    <p class="footer-info">
                         <?= __('发布时间：') ?><?= htmlspecialchars($createTime) ?>
                     </p>
                 <?php endif; ?>
+                
+                <div class="footer-links">
+                    <a href="#" class="footer-link"><?= __('隐私政策') ?></a>
+                    <a href="#" class="footer-link"><?= __('服务条款') ?></a>
+                    <a href="#" class="footer-link"><?= __('联系我们') ?></a>
+                </div>
             </div>
         </div>
     </footer>
