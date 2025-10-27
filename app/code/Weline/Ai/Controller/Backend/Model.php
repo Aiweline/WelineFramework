@@ -35,40 +35,19 @@ use Weline\Framework\Acl\Acl;
 class Model extends BackendController
 {
     /**
-     * @var AiModel
-     */
-    private AiModel $aiModel;
-
-    /**
-     * @var ModelCollector
-     */
-    private ModelCollector $modelCollector;
-
-    /**
-     * 构造函数
-     * 
-     * @param AiModel $aiModel
-     * @param ModelCollector $modelCollector
-     */
-    public function __construct(
-        AiModel $aiModel,
-        ModelCollector $modelCollector
-    ) {
-        $this->aiModel = $aiModel;
-        $this->modelCollector = $modelCollector;
-    }
-
-    /**
-     * 确保AI模型对象有效
-     * 
-     * @return AiModel
+     * 获取AI模型（懒加载）
      */
     private function getAiModel(): AiModel
     {
-        if (!$this->aiModel || $this->aiModel === false) {
-            $this->aiModel = ObjectManager::getInstance(AiModel::class);
-        }
-        return $this->aiModel;
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiModel::class);
+    }
+
+    /**
+     * 获取模型收集器（懒加载）
+     */
+    private function getModelCollector(): ModelCollector
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(ModelCollector::class);
     }
 
     /**
@@ -86,30 +65,44 @@ class Model extends BackendController
             $page = (int)$this->request->getGet('page', 1);
             $pageSize = 20;
 
-            // 获取模型列表
-            $models = $this->getAiModel()->reset()
+            // 获取模型列表 - 使用fetchArray避免内存问题
+            $modelData = $this->getAiModel()->reset()
                 ->pagination($page, $pageSize)
                 ->order(AiModel::fields_CREATED_AT, 'DESC')
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
-            $pagination = $models->getPagination();
-            $total = is_object($pagination) && method_exists($pagination, 'getTotal') 
-                ? $pagination->getTotal() 
-                : count($models->getItems());
+            // 简化数据，只获取必要字段
+            $models = [];
+            foreach ($modelData as $data) {
+                $models[] = [
+                    'id' => $data['id'] ?? '',
+                    'vendor' => $data['vendor'] ?? '',
+                    'name' => $data['name'] ?? '',
+                    'model_code' => $data['model_code'] ?? '',
+                    'version' => $data['version'] ?? '',
+                    'status' => $data['status'] ?? '',
+                    'is_active' => $data['is_active'] ?? 0,
+                    'created_at' => $data['created_at'] ?? '',
+                    'is_copied' => $data['is_copied'] ?? 0,
+                ];
+            }
+
+            // 获取总数
+            $total = $this->getAiModel()->reset()->select()->count();
 
             // 获取所有供应商列表（用于筛选）
             $vendors = [];
-            foreach ($models->getItems() as $model) {
-                $vendor = $model->getVendor();
+            foreach ($models as $model) {
+                $vendor = $model['vendor'] ?? '';
                 if ($vendor && !in_array($vendor, $vendors)) {
                     $vendors[] = $vendor;
                 }
             }
             sort($vendors);
             
-            $this->assign('models', $models->getItems());
-            $this->assign('pagination', $pagination);
+            $this->assign('models', $models);
+            $this->assign('pagination', null); // 简化分页
             $this->assign('total', (string)$total);
             $this->assign('vendors', $vendors);
 
@@ -216,7 +209,7 @@ class Model extends BackendController
     public function collect(): string
     {
         try {
-            $collectedModels = $this->modelCollector->collectAllModels();
+            $collectedModels = $this->getModelCollector()->collectAllModels();
             
             return $this->jsonResponse([
                 'success' => true,
@@ -341,7 +334,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_template', '获取AI模型配置模板', 'mdi-file-document', '获取AI模型配置模板')]
     public function getConfigTemplate(): string
     {
-        $template = $this->modelCollector->getModelConfigTemplate();
+        $template = $this->getModelCollector()->getModelConfigTemplate();
         
         return $this->jsonResponse([
             'success' => true,
@@ -549,6 +542,21 @@ class Model extends BackendController
                 $model->setData(AiModel::fields_PROXY_INFO, $data['proxy_info'] ?? '');
             }
             
+            // 处理提供商配置JSON
+            if (isset($data['provider_config']) && is_array($data['provider_config'])) {
+                // 过滤空值
+                $providerConfig = array_filter($data['provider_config'], function($value) {
+                    return $value !== '' && $value !== null;
+                });
+                if (!empty($providerConfig)) {
+                    $model->setData(AiModel::fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                } else {
+                    $model->setData(AiModel::fields_PROVIDER_CONFIG, '');
+                }
+            } else {
+                $model->setData(AiModel::fields_PROVIDER_CONFIG, $data['provider_config_json'] ?? '');
+            }
+            
             // 处理其他字段
             if (isset($data['max_tokens'])) {
                 $model->setData(AiModel::fields_MAX_TOKENS, (int)$data['max_tokens']);
@@ -577,17 +585,11 @@ class Model extends BackendController
             return $this->redirect('*/backend/model/index');
             
         } catch (\Exception $e) {
-            // 记录错误详情到日志
-            error_log('模型保存失败: ' . $e->getMessage());
-            error_log('错误堆栈: ' . $e->getTraceAsString());
-            
             // AJAX 请求返回 JSON 错误
             if ($isAjax) {
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => __('模型保存失败: %{1}', [$e->getMessage()]),
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                    'message' => __('模型保存失败: %{1}', [$e->getMessage()])
                 ]);
             }
             
@@ -733,11 +735,8 @@ class Model extends BackendController
             
             // 验证保存是否成功
             if (!$copiedModel->getId()) {
-                error_log('[AI Model Copy] Save failed - no ID generated');
                 throw new \RuntimeException('保存失败：未生成模型ID');
             }
-            
-            error_log('[AI Model Copy] Success - New model ID: ' . $copiedModel->getId());
             
             return $this->jsonResponse([
                 'success' => true,
@@ -746,14 +745,9 @@ class Model extends BackendController
             ]);
             
         } catch (\Exception $e) {
-            error_log('[AI Model Copy] Exception: ' . $e->getMessage());
-            error_log('[AI Model Copy] Trace: ' . $e->getTraceAsString());
-            
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('模型复制失败: %{1}', $e->getMessage()),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'message' => __('模型复制失败: %{1}', $e->getMessage())
             ]);
         }
     }
@@ -863,6 +857,186 @@ class Model extends BackendController
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             return;
+        }
+    }
+
+    /**
+     * 批量激活模型
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_bulk_activate', '批量激活模型', 'mdi-check-all', '批量激活模型')]
+    public function bulkActivate(): string
+    {
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $ids = $jsonData['ids'] ?? [];
+        
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要激活的模型')
+            ]);
+        }
+        
+        try {
+            $count = 0;
+            foreach ($ids as $id) {
+                $model = $this->getAiModel()->reset()->load((int)$id);
+                if ($model->getId()) {
+                    $model->setData(AiModel::fields_IS_ACTIVE, 1);
+                    $model->save();
+                    $count++;
+                }
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功激活 %{1} 个模型', $count)
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量激活失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 批量禁用模型
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_bulk_deactivate', '批量禁用模型', 'mdi-cancel', '批量禁用模型')]
+    public function bulkDeactivate(): string
+    {
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $ids = $jsonData['ids'] ?? [];
+        
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要禁用的模型')
+            ]);
+        }
+        
+        try {
+            $count = 0;
+            foreach ($ids as $id) {
+                $model = $this->getAiModel()->reset()->load((int)$id);
+                if ($model->getId()) {
+                    $model->setData(AiModel::fields_IS_ACTIVE, 0);
+                    $model->save();
+                    $count++;
+                }
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功禁用 %{1} 个模型', $count)
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量禁用失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 批量删除模型
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'mdi-delete-sweep', '批量删除模型')]
+    public function bulkDelete(): string
+    {
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $ids = $jsonData['ids'] ?? [];
+        
+        if (empty($ids)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要删除的模型')
+            ]);
+        }
+        
+        try {
+            $successCount = 0;
+            $skipCount = 0;
+            $errors = [];
+            
+            foreach ($ids as $id) {
+                $model = $this->getAiModel()->reset()->load((int)$id);
+                if ($model->getId()) {
+                    // 只能删除复制的模型
+                    if ($model->isCopied()) {
+                        $model->delete();
+                        $successCount++;
+                    } else {
+                        $skipCount++;
+                    }
+                }
+            }
+            
+            $message = '';
+            if ($successCount > 0) {
+                $message .= __('成功删除 %{1} 个复制模型', $successCount);
+            }
+            if ($skipCount > 0) {
+                $message .= ($successCount > 0 ? '；' : '') . __('跳过 %{1} 个原始模型（原始模型不可删除）', $skipCount);
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => $message ?: __('没有模型被删除')
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('批量删除失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 清空模型表（危险操作）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_clear_all', '清空模型表', 'mdi-delete-forever', '清空所有模型数据')]
+    public function clearAll(): string
+    {
+        try {
+            // 获取所有模型
+            $models = $this->getAiModel()->reset()
+                ->select()
+                ->fetch()
+                ->getItems();
+            
+            $count = 0;
+            foreach ($models as $model) {
+                try {
+                    $model->delete();
+                    $count++;
+                } catch (\Exception $e) {
+                    // 继续删除其他模型
+                    continue;
+                }
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('成功清空模型表，共删除 %{1} 个模型', $count)
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('清空失败：%{1}', $e->getMessage())
+            ]);
         }
     }
 

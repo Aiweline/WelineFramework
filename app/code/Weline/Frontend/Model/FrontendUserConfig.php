@@ -2,35 +2,30 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Frontend\Model;
 
-use Weline\Backend\Model\Config;
-use Weline\Framework\Database\AbstractModel;
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
+use Weline\Framework\Database\Api\Db\TableInterface;
+use Weline\Framework\Database\Model;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
-class FrontendUserConfig extends \Weline\Framework\Database\Model
+/**
+ * 前端用户配置模型 - 存储用户的主题、语言等个性化配置
+ */
+class FrontendUserConfig extends Model
 {
-    public const fields_ID = 'user_id';
-    public const fields_SESSION = 'session';
-    public const fields_config = 'config';
-
+    public const fields_ID = 'config_id';
+    public const fields_USER_ID = 'user_id';
+    public const fields_CONFIG_KEY = 'config_key';
+    public const fields_CONFIG_VALUE = 'config_value';
+    public const fields_CREATED_AT = 'created_at';
+    public const fields_UPDATED_AT = 'updated_at';
+    
     /**
      * @inheritDoc
      */
     public function setup(ModelSetup $setup, Context $context): void
     {
-//        $setup->dropTable();
         $this->install($setup, $context);
     }
 
@@ -39,6 +34,7 @@ class FrontendUserConfig extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        // 可以在这里添加升级逻辑
     }
 
     /**
@@ -47,64 +43,116 @@ class FrontendUserConfig extends \Weline\Framework\Database\Model
     public function install(ModelSetup $setup, Context $context): void
     {
         if (!$setup->tableExist()) {
-            $setup->createTable()
-                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, null, 'primary key', '用户ID')
-                ->addColumn(self::fields_config, TableInterface::column_type_TEXT, null, '', '配置')
+            $setup->getPrinting()->setup('安装前端用户配置表...', $setup->getTable());
+            $setup->createTable('前端用户配置')
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', 'ID')
+                ->addColumn(self::fields_USER_ID, TableInterface::column_type_INTEGER, 0, 'not null', '用户ID')
+                ->addColumn(self::fields_CONFIG_KEY, TableInterface::column_type_VARCHAR, 100, 'not null', '配置键')
+                ->addColumn(self::fields_CONFIG_VALUE, TableInterface::column_type_TEXT, 0, '', '配置值')
+                ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_TIMESTAMP, 0, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_TIMESTAMP, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
+                ->addIndex(TableInterface::index_type_KEY, 'idx_user_config', [self::fields_USER_ID, self::fields_CONFIG_KEY])
                 ->create();
-            /**@var Config $config */
-            $config = ObjectManager::getInstance(Config::class);
-            $config->setConfig('frontend_default_avatar', 'Weline_Frontend::/img/logo.png', 'Weline_Frontend');
-            $setup->getPrinting()->printing('frontend_default_avatar', 'Weline_Frontend::/img/logo.png');
         }
     }
-
-    public function setUserId(int $frontend_user_id)
+    
+    /**
+     * 获取用户配置
+     * 
+     * @param int $userId 用户ID
+     * @param string $key 配置键
+     * @param mixed $default 默认值
+     * @return mixed
+     */
+    public function getUserConfig(int $userId, string $key, $default = null)
     {
-        return $this->setData(self::fields_ID, $frontend_user_id);
+        $config = $this->clear()
+            ->where(self::fields_USER_ID, $userId)
+            ->where(self::fields_CONFIG_KEY, $key)
+            ->fetchOne();
+        
+        if ($config && $config->getId()) {
+            return $config->getData(self::fields_CONFIG_VALUE);
+        }
+        
+        return $default;
     }
-
-    public function setSession(Session $session): static
-    {
-        $this->setUserId($session->getLoginUserID());
-        $this->setData(self::fields_SESSION, $session::class);
-        $this->addConfig($session->getData());
-        return $this;
-    }
-
-    public function addConfig(string|array $key, mixed $data = null): static
+    
+    /**
+     * 设置用户配置
+     * 
+     * @param int $userId 用户ID
+     * @param string $key 配置键
+     * @param mixed $value 配置值
+     * @return bool
+     */
+    public function setUserConfig(int $userId, string $key, $value): bool
     {
         try {
-            $config = $this->getOriginConfig() ? json_decode($this->getOriginConfig(), true) : [];
-        } catch (\Exception $exception) {
-            $config = [];
+            $config = $this->clear()
+                ->where(self::fields_USER_ID, $userId)
+                ->where(self::fields_CONFIG_KEY, $key)
+                ->fetchOne();
+            
+            if ($config && $config->getId()) {
+                // 更新现有配置
+                $config->setData(self::fields_CONFIG_VALUE, $value)
+                    ->save();
+            } else {
+                // 创建新配置
+                $newConfig = new self();
+                $newConfig->setData(self::fields_USER_ID, $userId)
+                    ->setData(self::fields_CONFIG_KEY, $key)
+                    ->setData(self::fields_CONFIG_VALUE, $value)
+                    ->save();
+            }
+            
+            return true;
+        } catch (\Exception $e) {
+            return false;
         }
-        if (is_array($key)) {
-            $config = array_merge($config, $key);
-        } else {
-            $config[$key] = $data;
-        }
-        $this->setData(self::fields_config, json_encode($config));
-        return $this;
     }
-
-    public function getOriginConfig()
-    {
-        return $this->getData(self::fields_config);
-    }
-
-    public function getConfig(string $key)
+    
+    /**
+     * 删除用户配置
+     * 
+     * @param int $userId 用户ID
+     * @param string $key 配置键
+     * @return bool
+     */
+    public function deleteUserConfig(int $userId, string $key): bool
     {
         try {
-            $config = $this->getOriginConfig() ? json_decode($this->getOriginConfig(), true) : [];
-            return $config[$key] ?? '';
-        } catch (\Exception $exception) {
-            return '';
+            $this->where(self::fields_USER_ID, $userId)
+                ->where(self::fields_CONFIG_KEY, $key)
+                ->delete();
+            return true;
+        } catch (\Exception $e) {
+            return false;
         }
     }
-
-    public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+    
+    /**
+     * 获取用户所有配置
+     * 
+     * @param int $userId 用户ID
+     * @return array
+     */
+    public function getAllUserConfigs(int $userId): array
     {
-        $this->forceCheck();
-        return parent::save($data, $sequence);
+        $configs = $this->clear()
+            ->where(self::fields_USER_ID, $userId)
+            ->select()
+            ->fetch()
+            ->getItems();
+        
+        $result = [];
+        foreach ($configs as $config) {
+            $key = $config->getData(self::fields_CONFIG_KEY);
+            $value = $config->getData(self::fields_CONFIG_VALUE);
+            $result[$key] = $value;
+        }
+        
+        return $result;
     }
 }

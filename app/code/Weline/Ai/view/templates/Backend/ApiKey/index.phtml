@@ -18,6 +18,119 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     @template(Weline_Admin::common/head.phtml)
     <!-- Responsive Table css -->
     <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
+    
+    <!-- Custom Styles -->
+    <style>
+        /* 工具栏美化 */
+        .icon-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.25);
+        }
+        
+        .icon-wrapper i {
+            color: white !important;
+        }
+        
+        /* 输入组美化 */
+        .input-group-text {
+            transition: all 0.3s ease;
+        }
+        
+        .input-group:focus-within .input-group-text {
+            background: #f0f4ff !important;
+            border-color: #667eea !important;
+        }
+        
+        .input-group:focus-within .form-control,
+        .input-group:focus-within .form-select {
+            border-color: #667eea !important;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        }
+        
+        /* 搜索框样式 */
+        #searchInput {
+            transition: all 0.3s ease;
+        }
+        
+        #searchInput:focus {
+            outline: none;
+        }
+        
+        /* 按钮悬停效果 */
+        .btn-outline-primary {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-outline-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary.btn-lg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0.6rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary.btn-lg:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* 卡片阴影 */
+        .card.shadow-sm {
+            border: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+        
+        .card.shadow-sm:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        }
+        
+        /* 表格优化 */
+        .table thead th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .table tbody tr {
+            transition: all 0.2s ease;
+        }
+        
+        .table tbody tr:hover {
+            background-color: #f8f9ff;
+            transform: scale(1.01);
+        }
+        
+        /* 徽章样式优化 */
+        .badge {
+            padding: 0.4rem 0.8rem;
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+        
+        /* 响应式优化 */
+        @media (max-width: 768px) {
+            .input-group {
+                width: 100% !important;
+            }
+            
+            .d-flex.flex-wrap.gap-2 {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
@@ -142,19 +255,57 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <!-- API密钥列表 -->
                 <div class='row'>
                     <div class='col-12'>
-                        <div class='card'>
+                        <div class='card shadow-sm'>
                             <div class='card-body'>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class='card-title'>
-                        <lang>API密钥列表</lang>
-                    </h4>
-                    <div class="d-flex gap-2">
-                        <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
-                            <option value=""><lang>全部状态</lang></option>
-                            <option value="pending" <?= ($current_status ?? '') === 'pending' ? 'selected' : '' ?>><lang>待审核</lang></option>
-                            <option value="approved" <?= ($current_status ?? '') === 'approved' ? 'selected' : '' ?>><lang>已批准</lang></option>
-                            <option value="rejected" <?= ($current_status ?? '') === 'rejected' ? 'selected' : '' ?>><lang>已拒绝</lang></option>
-                        </select>
+                <!-- 工具栏 -->
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
+                    <!-- 标题区 -->
+                    <div class="d-flex align-items-center">
+                        <div class="icon-wrapper me-2">
+                            <i class="mdi mdi-key-variant text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                        <div>
+                            <h4 class='mb-0 fw-bold'>
+                                <lang>API密钥列表</lang>
+                            </h4>
+                            <small class="text-muted">管理和监控您的API访问密钥</small>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作区 -->
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <!-- 搜索框 -->
+                        <div class="input-group" style="width: 220px;">
+                            <span class="input-group-text bg-white border-end-0">
+                                <i class="mdi mdi-magnify text-muted"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control border-start-0 ps-0" 
+                                   id="searchInput"
+                                   placeholder="搜索密钥..."
+                                   onkeyup="searchKeys(this.value)">
+                        </div>
+                        
+                        <!-- 状态筛选 -->
+                        <div class="input-group" style="width: 200px;">
+                            <span class="input-group-text bg-white border-end-0">
+                                <i class="mdi mdi-filter-variant text-muted"></i>
+                            </span>
+                            <select class="form-select border-start-0 ps-0" id="statusFilter" onchange="filterByStatus(this.value)">
+                                <option value=""><lang>全部状态</lang></option>
+                                <option value="pending" <?= ($current_status ?? '') === 'pending' ? 'selected' : '' ?>><lang>待审核</lang></option>
+                                <option value="approved" <?= ($current_status ?? '') === 'approved' ? 'selected' : '' ?>><lang>已批准</lang></option>
+                                <option value="rejected" <?= ($current_status ?? '') === 'rejected' ? 'selected' : '' ?>><lang>已拒绝</lang></option>
+                            </select>
+                        </div>
+                        
+                        <!-- 刷新按钮 -->
+                        <button type="button" 
+                                class="btn btn-outline-primary" 
+                                onclick="location.reload()"
+                                title="刷新列表">
+                            <i class="mdi mdi-refresh"></i>
+                        </button>
                         
                         <!-- 创建API密钥按钮 -->
                         <block class='Weline\Component\Block\OffCanvas'
@@ -163,9 +314,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                id='create_apikey_offcanvas'
                                action='*/backend/apikey/form'
                                target-tag='button'
-                               icon='mdi mdi-plus'
+                               icon='mdi mdi-plus-circle'
                                target-button-text='创建API密钥'
-                               target-button-class='btn btn-primary'
+                               target-button-class='btn btn-primary btn-lg shadow-sm'
                                title='创建API密钥'
                                close-button-show='1'
                                close-button-text='关闭'
@@ -178,6 +329,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         />
                     </div>
                 </div>
+                <!-- 工具栏结束 -->
 
                                 <div class='table-rep-plugin'>
                                     <?php if (empty($api_keys)): ?>
@@ -203,7 +355,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <?php foreach ($api_keys as $key): ?>
                                                         <tr>
                                                             <td><?= $key->getId() ?></td>
-                                                            <td><?= htmlspecialchars($key->getData('key_name') ?? '-') ?></td>
+                                                            <td><?= htmlspecialchars($key->getData('name') ?? '-') ?></td>
                                                             <td><?= $key->getData('user_id') ?? '-' ?></td>
                                                             <td>
                                                                 <?php
@@ -220,13 +372,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                 ][$status] ?? $status;
                                                                 ?>
                                                                 <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
-                                                                <?php if ($key->getData('is_active')): ?>
-                                                                    <span class="badge bg-success ms-1"><?= __('激活') ?></span>
-                                                                <?php endif; ?>
                                                             </td>
-                                                            <td><?= number_format($key->getData('quota_limit') ?? 0) ?></td>
-                                                            <td><?= number_format($key->getData('quota_used') ?? 0) ?></td>
-                                                            <td><?= $key->getData('created_time') ?></td>
+                                                            <td><?= number_format($key->getData('quota_monthly') ?? 0) ?></td>
+                                                            <td><?= number_format($key->getData('usage_monthly') ?? 0) ?></td>
+                                                            <td><?= htmlspecialchars($key->getData('created_at') ?? '-') ?></td>
                                                             <td>
                                                                 <div class="d-flex gap-2">
                                                                     <?php if ($status === 'pending'): ?>
@@ -239,7 +388,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                             <lang>拒绝</lang>
                                                                         </a>
                                                                     <?php endif; ?>
-                                                                    <a href="javascript:void(0)" class="text-info" onclick="setQuota(<?= $key->getId() ?>, <?= $key->getData('quota_limit') ?? 0 ?>)" title="<?= __('设置配额') ?>">
+                                                                    <a href="javascript:void(0)" class="text-info" onclick="setQuota(<?= $key->getId() ?>, <?= $key->getData('quota_monthly') ?? 0 ?>)" title="<?= __('设置配额') ?>">
                                                                         <i class="mdi mdi-counter"></i>
                                                                         <lang>配额</lang>
                                                                     </a>
@@ -302,6 +451,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
 
 <script>
+// 搜索功能
+function searchKeys(keyword) {
+    const table = document.querySelector('.table tbody');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tr');
+    const searchTerm = keyword.toLowerCase().trim();
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
 function filterByStatus(status) {
     const url = new URL(window.location.href);
     if (status) {

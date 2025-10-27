@@ -15,6 +15,6 @@ Register::register(
     Register::MODULE,
     'Weline_DeveloperWorkspace',
     __DIR__,
-    '1.0.2',
+    '1.1.0',
     '系统开发空间'
 );

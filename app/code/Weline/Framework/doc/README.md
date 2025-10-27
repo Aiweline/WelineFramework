@@ -1,122 +1,92 @@
-# Weline Framework 核心框架模块
+# Weline_Framework 模块文档中心
 
-## 模块概述
+## 📚 文档导航
 
-Weline Framework 是 Weline 系统的核心框架模块，提供了整个系统的基础架构和核心功能。
+### 🚀 快速开始
+- [模块开发完整指南](./模块开发完整指南.md) - 从入门到精通
+- [快速参考_常见错误和解决方案](./快速参考_常见错误和解决方案.md) - 问题速查
 
-## 主要功能
+### 👨‍💻 开发文档
 
-### 1. 模块注册系统
-- 提供模块注册机制
-- 管理模块依赖关系
-- 版本控制支持
+#### 核心开发
+- [模块开发完整指南](./模块开发完整指南.md) - 模块开发全流程
+- [文档更新日志](./文档更新日志.md) - 文档变更记录
+- [DOCUMENTATION-UPDATE-SUMMARY](./DOCUMENTATION-UPDATE-SUMMARY.md) - 文档更新总结
 
-### 2. 路由系统
-- MVC 架构支持
-- 路由解析和分发
-- 控制器自动加载
+#### 国际化开发
+- [国际化文档目录](./国际化/) - i18n 开发指南
+  - [语言标签自动变量示例](./国际化/语言标签自动变量示例.md)
+  - [占位符使用说明](./国际化/占位符使用说明.md)
+  - [更新日志](./国际化/更新日志.md)
 
-### 3. 数据库操作
-- ORM 支持
-- 数据库连接管理
-- 查询构建器
+#### Console 命令
+- [Console文档目录](./Console/) - 命令行工具开发
+  - [Server命令表格化升级](./Console/Server命令表格化升级.md)
+  - [Server命令地址显示优化](./Console/Server命令地址显示优化.md)
+  - [自动宽度示例](./Console/自动宽度示例.md)
+  - [多语言表格测试](./Console/多语言表格测试.md)
 
-### 4. 缓存系统
-- 多级缓存支持
-- 缓存策略管理
-- 性能优化
+### 🚀 部署文档
+- [服务器部署](./部署/服务器部署.md) - 生产环境部署指南
 
-### 5. 事件系统
-- 事件监听器
-- 事件分发机制
-- 插件扩展支持
+## 🎯 框架简介
 
-## 使用方法
+`Weline_Framework` 是 WelineFramework 的核心模块，提供：
 
-### 模块注册
-```php
-use Weline\Framework\Register\Register;
+### 核心功能
+1. **MVC架构** - 清晰的模型-视图-控制器分离
+2. **模块化设计** - 支持独立模块开发、部署和维护
+3. **ORM数据库** - 自定义ORM链式操作
+4. **事件系统** - 观察者模式和事件驱动
+5. **命令行工具** - 丰富的CLI命令支持
+6. **国际化支持** - 完整的多语言系统
+7. **缓存系统** - 多层次缓存支持
 
-Register::register(
-    Register::MODULE,
-    'Your_Module',
-    __DIR__,
-    '1.0.0',
-    '模块描述',
-    ['依赖模块1', '依赖模块2']
-);
-```
+### 架构特点
+- **依赖注入** - 自动依赖解析和注入
+- **观察者模式** - 灵活的事件监听机制
+- **插件系统** - 支持功能扩展
+- **模板引擎** - 强大的视图渲染能力
 
-### 控制器创建
-```php
-namespace Your\Module\Controller;
+## 📖 推荐阅读顺序
 
-use Weline\Framework\Controller\AbstractController;
+### 新手入门
+1. [模块开发完整指南](./模块开发完整指南.md)
+2. [快速参考_常见错误和解决方案](./快速参考_常见错误和解决方案.md)
+3. [国际化开发](./国际化/)
 
-class YourController extends AbstractController
-{
-    public function index()
-    {
-        // 控制器逻辑
-    }
-}
-```
+### 进阶开发
+1. [Console 命令开发](./Console/)
+2. [事件系统](../../../docs/事件调试功能使用指南.md)
+3. [ORM开发](../../../docs/WelineFramework模型开发最佳实践.md)
 
-### 模型创建
-```php
-namespace Your\Module\Model;
+### 生产部署
+1. [服务器部署](./部署/服务器部署.md)
+2. [部署文档](../../../docs/部署文档.md)
 
-use Weline\Framework\Database\Model;
+## 📝 文档贡献
 
-class YourModel extends Model
-{
-    protected $table = 'your_table';
-    
-    // 模型逻辑
-}
-```
+如需添加或更新文档，请遵循：
 
-## 配置说明
+1. **文档分类**: 按功能模块分类存放
+2. **命名规范**: 使用描述性名称
+3. **格式标准**: Markdown 格式，包含目录
+4. **代码示例**: 提供完整可运行的示例
 
-### 数据库配置
-在 `app/etc/config.php` 中配置数据库连接信息：
+## 🔗 相关链接
 
-```php
-'database' => [
-    'host' => 'localhost',
-    'dbname' => 'your_database',
-    'username' => 'your_username',
-    'password' => 'your_password',
-    'charset' => 'utf8mb4'
-]
-```
+- [框架开发文档](../../../docs/开发文档.md)
+- [模型开发最佳实践](../../../docs/WelineFramework模型开发最佳实践.md)
+- [事件调试功能](../../../docs/事件调试功能使用指南.md)
+- [常见问题修复](../../../docs/常见问题修复指南.md)
 
-### 缓存配置
-```php
-'cache' => [
-    'default' => 'file',
-    'stores' => [
-        'file' => [
-            'driver' => 'file',
-            'path' => 'var/cache'
-        ]
-    ]
-]
-```
+## 📅 更新记录
 
-## 依赖关系
+- **2025-10-26**: 创建文档中心，规范化文档结构
+- **2025-01**: 完善国际化文档
+- **2025-01**: 更新Console命令文档
 
-- 无依赖模块（核心模块）
+---
 
-## 版本信息
-
-- 当前版本：1.0.0
-- 作者：秋枫雁飞
-- 邮箱：aiweline@qq.com
-- 网址：aiweline.com
-
-## 注意事项
-
-1. 此模块为系统核心，不建议修改
-2. 所有其他模块都依赖此模块
-3. 升级时需谨慎，可能影响整个系统 
+**维护者**: WelineFramework Core Team  
+**最后更新**: 2025-10-26

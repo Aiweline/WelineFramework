@@ -1,52 +1,66 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \GuoLaiRen\PageBuilder\Model\Page $page */
+/**
+ * 默认页面模板 - 当页面未指定样式时使用
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
 $page = $this->getData('page');
 $content = $this->getData('content');
 $seo = $this->getData('seo');
+$currentLocale = $this->getData('current_locale');
 ?>
 <!DOCTYPE html>
-<html lang="<?= \Weline\Framework\Http\Cookie::getLang() ?>">
+<html lang="<?= htmlspecialchars($currentLocale ?: 'zh_Hans_CN') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- SEO Meta with local translation -->
-    <title><local model="GuoLaiRen\PageBuilder\Model\Page\LocalDescription" field="meta_title" id="<?= $page->getId() ?>" name="seo-title-<?= $page->getId() ?>"><?= htmlspecialchars($seo['title']) ?></local></title>
-    <meta name="description" content="<local model='GuoLaiRen\PageBuilder\Model\Page\LocalDescription' field='meta_description' id='<?= $page->getId() ?>' name='seo-desc-<?= $page->getId() ?>'><?= htmlspecialchars($seo['description']) ?></local>">
-    <meta name="keywords" content="<local model='GuoLaiRen\PageBuilder\Model\Page\LocalDescription' field='meta_keywords' id='<?= $page->getId() ?>' name='seo-keywords-<?= $page->getId() ?>'><?= htmlspecialchars($seo['keywords']) ?></local>">
+    <!-- SEO Meta -->
+    <title><?= htmlspecialchars($seo['title'] ?? $content['title'] ?? '') ?></title>
+    <?php if (!empty($seo['description'])): ?>
+    <meta name="description" content="<?= htmlspecialchars($seo['description']) ?>">
+    <?php endif; ?>
+    <?php if (!empty($seo['keywords'])): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($seo['keywords']) ?>">
+    <?php endif; ?>
     
-    <!-- Open Graph with translation -->
-    <meta property="og:title" content="<local model='GuoLaiRen\PageBuilder\Model\Page\LocalDescription' field='meta_title' id='<?= $page->getId() ?>' name='og-title-<?= $page->getId() ?>'><?= htmlspecialchars($seo['og_title']) ?></local>">
-    <meta property="og:description" content="<local model='GuoLaiRen\PageBuilder\Model\Page\LocalDescription' field='meta_description' id='<?= $page->getId() ?>' name='og-desc-<?= $page->getId() ?>'><?= htmlspecialchars($seo['og_description']) ?></local>">
+    <!-- Open Graph -->
+    <?php if (!empty($seo['og_title'])): ?>
+    <meta property="og:title" content="<?= htmlspecialchars($seo['og_title']) ?>">
+    <?php endif; ?>
+    <?php if (!empty($seo['og_description'])): ?>
+    <meta property="og:description" content="<?= htmlspecialchars($seo['og_description']) ?>">
+    <?php endif; ?>
     
     <!-- Hreflang for multilingual SEO -->
-    <?php foreach ($seo['hreflangs'] as $hreflang): ?>
-        <link rel="alternate" hreflang="<?= $hreflang['locale'] ?>" href="<?= $hreflang['url'] ?>" />
-    <?php endforeach; ?>
-    
-    <!-- Google Analytics 4 -->
-    <?php if ($page->getData('ga4_id')): ?>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=<?= $page->getData('ga4_id') ?>"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '<?= $page->getData('ga4_id') ?>');
-        </script>
+    <?php if (!empty($seo['hreflangs'])): ?>
+        <?php foreach ($seo['hreflangs'] as $hreflang): ?>
+            <link rel="alternate" hreflang="<?= htmlspecialchars($hreflang['locale']) ?>" href="<?= htmlspecialchars($hreflang['url']) ?>" />
+        <?php endforeach; ?>
     <?php endif; ?>
     
     <!-- Google Tag Manager -->
-    <?php if ($page->getData('gtm_id')): ?>
+    <?php if ($page && $page->getData('gtm_id')): ?>
         <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
         j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-        })(window,document,'script','dataLayer','<?= $page->getData('gtm_id') ?>');</script>
+        })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
+    <?php endif; ?>
+    
+    <!-- Google Analytics 4 -->
+    <?php if ($page && $page->getData('ga4_id')): ?>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($page->getData('ga4_id')) ?>"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '<?= htmlspecialchars($page->getData('ga4_id')) ?>');
+        </script>
     <?php endif; ?>
     
     <!-- Facebook Pixel -->
-    <?php if ($page->getData('fb_pixel_id')): ?>
+    <?php if ($page && $page->getData('fb_pixel_id')): ?>
         <script>
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -56,205 +70,223 @@ $seo = $this->getData('seo');
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
-        fbq('init', '<?= $page->getData('fb_pixel_id') ?>');
+        fbq('init', '<?= htmlspecialchars($page->getData('fb_pixel_id')) ?>');
         fbq('track', 'PageView');
         </script>
         <noscript><img height="1" width="1" style="display:none"
-        src="https://www.facebook.com/tr?id=<?= $page->getData('fb_pixel_id') ?>&ev=PageView&noscript=1"
+        src="https://www.facebook.com/tr?id=<?= htmlspecialchars($page->getData('fb_pixel_id')) ?>&ev=PageView&noscript=1"
         /></noscript>
     <?php endif; ?>
     
     <!-- Favicon -->
-    <?php if ($page->getData('icon')): ?>
-        <link rel="icon" href="<?= $page->getData('icon') ?>">
+    <?php if ($page && $page->getData('icon')): ?>
+        <link rel="icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
     <?php endif; ?>
     
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             line-height: 1.6;
             color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .default-page-container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px 20px;
+            background-color: #ffffff;
+            min-height: 100vh;
         }
+        
+        .page-logo {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .page-logo img {
+            max-width: 200px;
+            height: auto;
+        }
+        
         .page-header {
             border-bottom: 2px solid #eee;
             padding-bottom: 20px;
             margin-bottom: 30px;
         }
+        
         .page-header h1 {
-            margin: 0 0 10px 0;
+            font-size: 2.5rem;
             color: #2c3e50;
+            margin-bottom: 10px;
         }
-        .page-header .meta {
+        
+        .page-meta {
             color: #7f8c8d;
             font-size: 14px;
         }
+        
+        .translation-notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+        }
+        
         .page-content {
             font-size: 16px;
             line-height: 1.8;
+            margin-bottom: 40px;
         }
+        
         .page-content img {
             max-width: 100%;
             height: auto;
         }
-        .logo {
-            max-width: 200px;
-            margin-bottom: 20px;
+        
+        .page-content p {
+            margin-bottom: 1em;
+        }
+        
+        .language-switcher {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .language-options {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .language-option {
+            padding: 8px 16px;
+            border: 1px solid #dee2e6;
+            background-color: #fff;
+            color: #333;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .language-option:hover {
+            background-color: #f8f9fa;
+            border-color: #adb5bd;
+        }
+        
+        .language-option.active {
+            border-color: #007bff;
+            background-color: #007bff;
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        .untranslated-badge {
+            font-size: 0.9em;
+        }
+        
+        .language-help {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        @media (max-width: 768px) {
+            .default-page-container {
+                padding: 20px 15px;
+            }
+            
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            
+            .language-options {
+                flex-direction: column;
+            }
+            
+            .language-option {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
     <!-- Google Tag Manager (noscript) -->
-    <?php if ($page->getData('gtm_id')): ?>
-        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= $page->getData('gtm_id') ?>"
+    <?php if ($page && $page->getData('gtm_id')): ?>
+        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($page->getData('gtm_id')) ?>"
         height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <?php endif; ?>
     
-    <?php if ($page->getData('logo')): ?>
-        <img src="<?= $page->getData('logo') ?>" alt="Logo" class="logo">
-    <?php endif; ?>
-    
-    <div class="page-header">
-        <h1>
-            <!-- 使用 local 标签翻译页面标题 -->
-            <local model="GuoLaiRen\PageBuilder\Model\Page\LocalDescription" 
-                   field="title" 
-                   id="<?= $page->getId() ?>" 
-                   name="page-title-<?= $page->getId() ?>">
-                <?= htmlspecialchars($content['title']) ?>
-            </local>
-        </h1>
-        <div class="meta">
-            <span><?= __('发布时间：') ?><?= $page->getData('create_time') ?></span>
-        </div>
-    </div>
-    
-    <!-- 翻译状态提示 -->
-    <?php if (!$this->getData('has_translation') && $this->getData('is_locale_supported')): ?>
-        <div class="translation-notice" style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 20px; margin-bottom: 20px;">
-            <strong>⚠️ <?= __('注意：') ?></strong>
-            <?= __('此页面还没有 %{1} 的翻译版本，当前显示的是默认语言内容。', $this->getData('current_locale')) ?>
-        </div>
-    <?php endif; ?>
-    
-    <div class="page-content">
-        <!-- 页面内容 (TinyMCE 生成的 HTML) -->
-        <?= $content['content'] ?>
-    </div>
-    
-    <!-- 语言切换器 -->
-    <?php 
-    $availableLocales = $this->getData('available_locales');
-    $currentLocale = $this->getData('current_locale');
-    ?>
-    <?php if (!empty($availableLocales) && count($availableLocales) > 1): ?>
-        <div class="language-switcher" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
-            <strong><?= __('切换语言：') ?></strong>
-            <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <?php foreach ($availableLocales as $locale): ?>
-                    <?php 
-                    $isCurrent = $locale['code'] === $currentLocale;
-                    $hasTranslation = $locale['has_translation'];
-                    ?>
-                    <a href="<?= $locale['url'] ?>" 
-                       style="padding: 8px 16px; 
-                              border: 1px solid <?= $isCurrent ? '#007bff' : '#dee2e6' ?>; 
-                              background-color: <?= $isCurrent ? '#007bff' : '#fff' ?>; 
-                              color: <?= $isCurrent ? '#fff' : '#333' ?>; 
-                              border-radius: 4px; 
-                              text-decoration: none; 
-                              display: inline-flex; 
-                              align-items: center; 
-                              gap: 5px;
-                              <?= $isCurrent ? 'font-weight: bold;' : '' ?>">
-                        <?= htmlspecialchars($locale['name']) ?>
-                        <?php if (!$hasTranslation): ?>
-                            <span style="color: <?= $isCurrent ? '#ffc107' : '#6c757d' ?>;" title="<?= __('未翻译') ?>">⚠️</span>
-                        <?php endif; ?>
-                        <?php if ($isCurrent): ?>
-                            <span>✓</span>
-                        <?php endif; ?>
-                    </a>
-                <?php endforeach; ?>
+    <div class="default-page-container">
+        <?php if ($page && $page->getData('logo')): ?>
+            <div class="page-logo">
+                <img src="<?= htmlspecialchars($page->getData('logo')) ?>" alt="Logo">
             </div>
-            <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
-                <?= __('⚠️ 表示该语言版本尚未翻译') ?>
-            </div>
+        <?php endif; ?>
+        
+        <div class="page-header">
+            <h1><?= htmlspecialchars($content['title'] ?? '') ?></h1>
+            <?php if ($page && $page->getData('create_time')): ?>
+                <div class="page-meta">
+                    <span><?= __('发布时间：') ?><?= htmlspecialchars($page->getData('create_time')) ?></span>
+                </div>
+            <?php endif; ?>
         </div>
-    <?php endif; ?>
-    
-    <!-- 表单提交处理脚本 -->
-    <script>
-    (function() {
-        // 监听页面中所有表单的提交事件
-        document.addEventListener('DOMContentLoaded', function() {
-            // 查找所有带有 data-page-builder-form 属性的表单
-            const forms = document.querySelectorAll('form[data-page-builder-form]');
-            
-            forms.forEach(function(form) {
-                form.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    // 获取表单数据
-                    const formData = new FormData(form);
-                    
-                    // 添加页面ID
-                    formData.append('page_id', <?= $page->getId() ?>);
-                    
-                    // 显示加载状态
-                    const submitButton = form.querySelector('[type="submit"]');
-                    const originalText = submitButton ? submitButton.textContent : '';
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                        submitButton.textContent = '<?= __('提交中...') ?>';
-                    }
-                    
-                    // 发送AJAX请求
-                    fetch('<?= $this->getUrl('pagebuilder/form/submit') ?>', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // 提交成功
-                            alert(data.message || '<?= __('提交成功！') ?>');
-                            
-                            // 如果有跳转URL，则跳转
-                            if (data.redirect_url) {
-                                window.location.href = data.redirect_url;
-                            } else {
-                                // 没有跳转URL，则重置表单
-                                form.reset();
-                                if (submitButton) {
-                                    submitButton.disabled = false;
-                                    submitButton.textContent = originalText;
-                                }
-                            }
-                        } else {
-                            // 提交失败
-                            alert(data.message || '<?= __('提交失败，请稍后重试') ?>');
-                            if (submitButton) {
-                                submitButton.disabled = false;
-                                submitButton.textContent = originalText;
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Form submission error:', error);
-                        alert('<?= __('提交失败，请稍后重试') ?>');
-                        if (submitButton) {
-                            submitButton.disabled = false;
-                            submitButton.textContent = originalText;
-                        }
-                    });
-                });
-            });
-        });
-    })();
-    </script>
+        
+        <?php if (!$this->getData('has_translation') && $this->getData('is_locale_supported')): ?>
+            <div class="translation-notice">
+                <strong>⚠️ <?= __('注意：') ?></strong>
+                <?= __('此页面还没有当前语言的翻译版本，显示的是默认语言内容。') ?>
+            </div>
+        <?php endif; ?>
+        
+        <div class="page-content">
+            <?= $content['content'] ?? '' ?>
+        </div>
+        
+        <?php 
+        $availableLocales = $this->getData('available_locales');
+        $currentLocale = $this->getData('current_locale');
+        ?>
+        <?php if (!empty($availableLocales) && count($availableLocales) > 1): ?>
+            <div class="language-switcher">
+                <strong><?= __('切换语言：') ?></strong>
+                <div class="language-options">
+                    <?php foreach ($availableLocales as $locale): ?>
+                        <?php 
+                        $isCurrent = ($locale['code'] ?? '') === $currentLocale;
+                        $hasTranslation = $locale['has_translation'] ?? false;
+                        ?>
+                        <a href="<?= htmlspecialchars($locale['url'] ?? '#') ?>" 
+                           class="language-option <?= $isCurrent ? 'active' : '' ?>">
+                            <?= htmlspecialchars($locale['name'] ?? '') ?>
+                            <?php if (!$hasTranslation): ?>
+                                <span class="untranslated-badge" title="<?= __('未翻译') ?>">⚠️</span>
+                            <?php endif; ?>
+                            <?php if ($isCurrent): ?>
+                                <span class="current-badge">✓</span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <div class="language-help">
+                    <?= __('⚠️ 表示该语言版本尚未翻译') ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
 </body>
 </html>
-

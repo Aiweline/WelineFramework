@@ -81,36 +81,36 @@ class AiAssistantRental extends \Weline\Framework\Database\Model
             $setup->createTable('助手租赁记录表')
                 ->addColumn(
                     self::fields_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'primary key auto_increment',
                     '主键'
                 )
                 ->addColumn(
                     self::fields_ASSISTANT_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'not null',
                     '助手ID'
                 )
                 ->addColumn(
                     self::fields_OWNER_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'not null',
                     '所有者用户ID'
                 )
                 ->addColumn(
                     self::fields_RENTER_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'not null',
                     '租用者用户ID'
                 )
                 ->addColumn(
                     self::fields_TENANT_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'null',
                     '租用者租户ID'
                 )
@@ -158,15 +158,15 @@ class AiAssistantRental extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_USAGE_COUNT,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'default 0',
                     '使用次数'
                 )
                 ->addColumn(
                     self::fields_USAGE_LIMIT,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'null',
                     '使用次数限制'
                 )
@@ -227,22 +227,22 @@ class AiAssistantRental extends \Weline\Framework\Database\Model
                     '更新时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_assistant',
                     self::fields_ASSISTANT_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_owner',
                     self::fields_OWNER_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_renter',
                     self::fields_RENTER_ID
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_status',
                     self::fields_STATUS
                 )

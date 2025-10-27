@@ -97,6 +97,14 @@ class Style extends Model
             $readmeContent = file_get_contents($readmeFile);
             $description = self::extractDescriptionFromReadmeStatic($readmeContent);
             
+            // 检测预览图（优先webp，其次png）
+            $previewImage = '';
+            if (file_exists($styleDir . '/preview.webp')) {
+                $previewImage = 'style/' . $styleName . '/preview.webp';
+            } elseif (file_exists($styleDir . '/preview.png')) {
+                $previewImage = 'style/' . $styleName . '/preview.png';
+            }
+            
             if ($existing->getId()) {
                 // 检查文件是否有更新（比较修改时间）
                 $dbUpdateTime = strtotime($existing->getData(self::fields_UPDATE_TIME));
@@ -111,6 +119,7 @@ class Style extends Model
                     $existing->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
                         ->setData(self::fields_DESCRIPTION, $description)
                         ->setData(self::fields_PATH, 'style/' . $styleName)
+                        ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
                         ->save();
                 }
             } else {
@@ -121,6 +130,7 @@ class Style extends Model
                     ->setData(self::fields_NAME, self::formatStyleNameStatic($styleName))
                     ->setData(self::fields_DESCRIPTION, $description)
                     ->setData(self::fields_PATH, 'style/' . $styleName)
+                    ->setData(self::fields_PREVIEW_IMAGE, $previewImage)
                     ->setData(self::fields_IS_ACTIVE, 1)
                     ->setData(self::fields_SORT_ORDER, 10)
                     ->save(true);
@@ -233,6 +243,15 @@ class Style extends Model
     {
         $path = $this->getData(self::fields_PATH);
         return $path . '/footer.phtml';
+    }
+    
+    /**
+     * 获取content.phtml路径
+     */
+    public function getContentPath(): string
+    {
+        $path = $this->getData(self::fields_PATH);
+        return $path . '/content.phtml';
     }
     
     /**

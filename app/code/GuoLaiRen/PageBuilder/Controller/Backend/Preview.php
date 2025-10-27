@@ -198,19 +198,13 @@ class Preview extends BackendController
     }
 
     /**
-     * 提取样式配置（支持多语言）
-     * 优先级：翻译配置 > 页面配置 > 模板默认值
+     * 获取模板默认配置
      * 
-     * @param Page $page 页面对象
      * @param string $styleCode 样式代码
-     * @param string|null $locale 语言代码
-     * @return array 配置数组
+     * @return array 默认配置数组
      */
-    private function extractStyleSettings($page, string $styleCode, ?string $locale = null): array
+    private function getTemplateDefaults(string $styleCode): array
     {
-        $defaultLocale = $page->getData('default_locale') ?: '';
-        
-        // 1. 获取模板默认值
         $templateDefaults = [];
         try {
             $styleModel = clone $this->styleModel;
@@ -233,8 +227,26 @@ class Preview extends BackendController
                 }
             }
         } catch (\Exception $e) {
-            // 如果获取模板默认值失败，继续执行
+            // 如果获取模板默认值失败，返回空数组
         }
+        return $templateDefaults;
+    }
+
+    /**
+     * 提取样式配置（支持多语言）
+     * 优先级：翻译配置 > 页面配置 > 模板默认值
+     * 
+     * @param Page $page 页面对象
+     * @param string $styleCode 样式代码
+     * @param string|null $locale 语言代码
+     * @return array 配置数组
+     */
+    private function extractStyleSettings($page, string $styleCode, ?string $locale = null): array
+    {
+        $defaultLocale = $page->getData('default_locale') ?: '';
+        
+        // 1. 获取模板默认值
+        $templateDefaults = $this->getTemplateDefaults($styleCode);
         
         // 2. 获取页面保存的配置（主表配置）
         $allSettings = $page->getStyleSetting();
@@ -279,12 +291,14 @@ class Preview extends BackendController
     /**
      * 完整预览（头部+内容+页脚）
      * 组合 style/{styleCode}/header.phtml、content.phtml、footer.phtml 三个模板
+     * 支持临时切换样式（用于样式选择器预览）
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '页面预览', '', '页面预览')]
     public function full()
     {
         $pageId = (int)$this->request->getGet('page_id');
         $locale = $this->request->getGet('locale');
+        $tempStyleCode = $this->request->getGet('style_code'); // 临时样式代码（用于预览）
         
         if (!$pageId) {
             echo '<div style="padding: 20px; color: red;">页面ID不能为空</div>';
@@ -300,9 +314,17 @@ class Preview extends BackendController
             return;
         }
 
-        // 获取样式代码和配置
-        $styleCode = $page->getData('style') ?: 'default';
-        $currentStyleSettings = $this->extractStyleSettings($page, $styleCode, $locale);
+        // 获取样式代码：优先使用临时样式代码，否则使用页面配置的样式
+        $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
+        
+        // 如果使用临时样式，获取该样式的默认配置
+        if ($tempStyleCode && $tempStyleCode !== $page->getData('style')) {
+            // 临时样式：使用模板默认值
+            $currentStyleSettings = $this->getTemplateDefaults($tempStyleCode);
+        } else {
+            // 当前样式：使用页面配置
+            $currentStyleSettings = $this->extractStyleSettings($page, $styleCode, $locale);
+        }
 
         // 设置模板变量
         $this->assign('page', $page);

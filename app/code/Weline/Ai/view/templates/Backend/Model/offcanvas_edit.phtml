@@ -169,6 +169,36 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                         </div>
                     </div>
                 </div>
+
+                <!-- 提供商配置卡片 -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-gear me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label for="provider_config_json" class="form-label">
+                                    <?= __('配置JSON') ?>
+                                </label>
+                                <textarea class="form-control" 
+                                          id="provider_config_json" 
+                                          name="provider_config_json" 
+                                          rows="4"
+                                          style="font-family: 'Courier New', monospace; font-size: 0.85rem;"
+                                          placeholder='{"api_key": "your-api-key", "base_url": "https://api.example.com", "timeout": 30, "max_retries": 3}'><?= $model ? $model->getData('provider_config') : '' ?></textarea>
+                                <div class="form-text">
+                                    <?= __('JSON格式的提供商特定配置') ?>
+                                    <br><small>• <code>api_key</code>: API密钥</small>
+                                    <br><small>• <code>base_url</code>: API基础URL</small>
+                                    <br><small>• <code>timeout</code>: 超时时间（秒）</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             
             <!-- 技术参数与定价卡片 -->
                 <div class="col-md-6">
@@ -280,6 +310,24 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                                     <span class="text-muted">· 推荐: 1.0 (标准设置)</span>
                                 </div>
                             </div>
+                            
+                            <!-- Stream -->
+                            <div class="mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="config_stream" 
+                                           name="config[stream]" 
+                                           value="1"
+                                           <?= $model && $model->getConfig()['stream'] ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="config_stream">
+                                        <?= __('流式输出') ?>
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    <?= __('启用流式输出，实时返回生成的内容') ?>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -337,6 +385,19 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
 <!-- JavaScript -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化配置值
+    const modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
+    
+    // 设置配置参数的值
+    if (modelConfig.temperature !== undefined) {
+        document.getElementById('config_temperature').value = modelConfig.temperature;
+        document.getElementById('tempValue').textContent = modelConfig.temperature;
+    }
+    if (modelConfig.top_p !== undefined) {
+        document.getElementById('config_top_p').value = modelConfig.top_p;
+        document.getElementById('topPValue').textContent = modelConfig.top_p;
+    }
+    
     // 表单验证
     const form = document.getElementById('modelEditForm');
     
@@ -348,6 +409,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
+        
+        // 验证提供商配置JSON
+        const providerConfigTextarea = document.getElementById('provider_config_json');
+        if (providerConfigTextarea.value.trim()) {
+            try {
+                JSON.parse(providerConfigTextarea.value);
+            } catch (e) {
+                alert('<?= __("提供商配置JSON格式错误，请检查语法") ?>');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                return;
+            }
+        }
         
         // 提交表单
         const formData = new FormData(form);

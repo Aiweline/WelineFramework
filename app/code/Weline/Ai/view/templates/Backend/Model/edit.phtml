@@ -36,6 +36,16 @@ if ($isEdit && $model->getProxyInfo()) {
         $proxyInfo = [];
     }
 }
+
+// 解析提供商配置
+$providerConfig = [];
+if ($isEdit && $model->getData('provider_config')) {
+    $providerConfigData = $model->getData('provider_config');
+    $providerConfig = is_string($providerConfigData) ? json_decode($providerConfigData, true) : $providerConfigData;
+    if (!is_array($providerConfig)) {
+        $providerConfig = [];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
@@ -45,17 +55,58 @@ if ($isEdit && $model->getProxyInfo()) {
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
 <!-- 开始 页面 -->
 <div id="layout-wrapper">
-    <!-- ============================================================== -->
-    <!-- 开始 主要内容 -->
-    <!-- ============================================================== -->
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+                
+                <!-- 面包屑导航 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <i class="mdi mdi-robot text-primary"></i> <?= $pageTitle ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
+                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-<div class="model-edit-container">
-    <form action="<?= $this->getUrl('*/backend/model/save') ?>" method="post" id="model-form">
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <div class="model-edit-container">
+                    <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
         <?php if ($isEdit): ?>
             <input type="hidden" name="id" value="<?= $model->getId() ?>">
         <?php endif; ?>
@@ -342,6 +393,36 @@ if ($isEdit && $model->getProxyInfo()) {
             </div>
         </div>
         
+        <!-- 提供商配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-cog me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label for="provider_config_json" class="form-label">
+                                <?= __('配置JSON') ?>
+                            </label>
+                            <textarea class="form-control" 
+                                      id="provider_config_json" 
+                                      name="provider_config_json" 
+                                      rows="6"
+                                      placeholder='{"api_key": "your-api-key", "base_url": "https://api.example.com", "timeout": 30, "max_retries": 3}'><?= $isEdit ? $model->getData('provider_config') : '' ?></textarea>
+                            <small class="form-text text-muted">
+                                <?= __('JSON格式的提供商特定配置。常用字段：') ?>
+                                <br>• <code>api_key</code>: API密钥
+                                <br>• <code>base_url</code>: API基础URL
+                                <br>• <code>timeout</code>: 请求超时时间（秒）
+                                <br>• <code>max_retries</code>: 最大重试次数
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- 代理配置卡片 -->
         <div class="card mb-3">
             <div class="card-header">
@@ -461,9 +542,9 @@ if ($isEdit && $model->getProxyInfo()) {
         <!-- 提交按钮 -->
         <div class="card">
             <div class="card-body text-end">
-                <button type="button" class="btn btn-secondary" onclick="window.history.back()">
-                    <i class="mdi mdi-cancel"></i> <?= __('取消') ?>
-                </button>
+                <a href="<?= $this->getBackendUrl('*/backend/model') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                </a>
                 <button type="submit" class="btn btn-primary">
                     <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                 </button>
@@ -471,6 +552,17 @@ if ($isEdit && $model->getProxyInfo()) {
         </div>
     </form>
 </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
 
 <script>
 // 表单验证
@@ -484,6 +576,19 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
         e.preventDefault();
         alert('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
         return false;
+    }
+    
+    // 验证提供商配置JSON
+    const providerConfigTextarea = document.getElementById('provider_config_json');
+    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+        try {
+            JSON.parse(providerConfigTextarea.value);
+        } catch (e) {
+            e.preventDefault();
+            alert('<?= __("提供商配置JSON格式错误，请检查语法") ?>');
+            providerConfigTextarea.focus();
+            return false;
+        }
     }
     
     return true;
@@ -522,13 +627,11 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
     display: block;
     margin-top: 0.25rem;
 }
+
+.model-edit-container .card {
+    margin-bottom: 1.5rem;
+}
 </style>
 
-            </div><!-- container-fluid -->
-        </div><!-- page-content -->
-    </div><!-- main-content -->
-</div><!-- layout-wrapper -->
-
-@template(Weline_Admin::common/footer.phtml)
 </body>
 </html>

@@ -537,7 +537,7 @@ trait SqlTrait
                 }
                 $updates = rtrim($updates, ',');
 
-                $sql = "UPDATE {$this->table} {$alias} SET {$updates} {$wheres} {$this->additional_sql} ";
+                $sql = "UPDATE {$this->table} SET {$updates} {$wheres} {$this->additional_sql} ";
                 break;
             case 'find':
             case 'select':
@@ -681,9 +681,6 @@ trait SqlTrait
      */
     protected function exceptionHandle($words)
     {
-        if (DEV && DEBUG) {
-            d(debug_backtrace());
-        }
         throw new DbException($words);
     }
 

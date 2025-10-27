@@ -1,0 +1,179 @@
+<?php
+/**
+ * 营销落地页模板 - Header (仅Logo)
+ * Marketing Landing Page Template - Header (Logo Only)
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:no|yes,no
+ * logo.url => Logo地址:textarea:
+ * logo.position => Logo位置:select:center|left,center,right
+ * logo.width => Logo宽度:responsive:120/200|px[移动端120px，PC端200px]
+ * 
+ * group:header_style => 头部样式设置
+ * header_style.background_color => 背景颜色:color:transparent
+ * header_style.padding_v => 上下内边距:responsive:20/40|px[移动端20px，PC端40px]
+ * 
+ * group:header_container => 容器设置
+ * header_container.max_width => 最大宽度:responsive:100/1280|%/px[移动端100%，PC端1280px]
+ * header_container.padding_h => 左右内边距:responsive:16/20|px[移动端16px，PC端20px]
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// Helper function
+function getHeaderConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['tablet'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+        case 3: $result['mobile'] = trim($parts[0]); $result['tablet'] = trim($parts[1]); $result['desktop'] = trim($parts[2]); break;
+    }
+    return $result;
+}
+
+function genResponsiveCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// Logo配置
+$logoDisplay = getHeaderConfig($styleSettings, 'logo.display', 'no');
+// Logo URL - 如果配置为空，使用默认值
+$logoUrl = getHeaderConfig($styleSettings, 'logo.url', '');
+if (empty($logoUrl)) {
+    $logoUrl = 'https://lp.streetsensedaily.com/strike-report/images/DSA_white.svg';
+}
+$logoPosition = getHeaderConfig($styleSettings, 'logo.position', 'center');
+$logoWidth = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'logo.width', '120/200') . 'px'));
+
+// 样式配置
+$bgColor = getHeaderConfig($styleSettings, 'header_style.background_color', 'transparent');
+$paddingV = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'header_style.padding_v', '20/40') . 'px'));
+
+// 容器配置
+$containerMaxWidth = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'header_container.max_width', '100/1280')));
+$containerPaddingH = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'header_container.padding_h', '16/40') . 'px'));
+
+$pageTitle = $page ? $page->getData('title') : '';
+
+// 检测是否为预览模式
+$pathInfo = $this->getRequest()->getPathInfo();
+$isPreview = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
+
+// SEO信息
+$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : '');
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+?>
+<!DOCTYPE html>
+<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    
+    <!-- Google Tag Manager -->
+    <?php if (!$isPreview && $page && $page->getData('gtm_id')): ?>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
+    <?php endif; ?>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(180deg, #020818 0%, #0a1929 100%);
+            color: #ffffff;
+        }
+        
+        .marketing-header {
+            width: 100%;
+            padding: <?= $paddingV ?> 0;
+            background-color: <?= htmlspecialchars($bgColor) ?>;
+        }
+        
+        .marketing-header-container {
+            max-width: <?= $containerMaxWidth ?>;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: <?= $containerPaddingH ?>;
+            padding-right: <?= $containerPaddingH ?>;
+        }
+        
+        .marketing-logo {
+            display: <?= $logoDisplay === 'yes' ? 'block' : 'none' ?>;
+            text-align: <?= htmlspecialchars($logoPosition) ?>;
+            max-width: <?= $logoWidth ?>;
+            margin: 0 <?= $logoPosition === 'left' ? 'auto 0 0' : ($logoPosition === 'right' ? '0 0 auto' : 'auto') ?>;
+        }
+        
+        .marketing-logo img {
+            width: 100%;
+            height: auto;
+        }
+        
+        /* 移动端优化 */
+        @media (max-width: 767px) {
+            .marketing-header-container {
+                max-width: 100%;
+            }
+        }
+</style>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if (!$isPreview && $page && $page->getData('gtm_id')): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($page->getData('gtm_id')) ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <?php endif; ?>
+    
+    <header class="marketing-header">
+        <div class="marketing-header-container">
+            <?php if ($logoDisplay === 'yes' && $logoUrl): ?>
+            <div class="marketing-logo">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+            </div>
+            <?php endif; ?>
+        </div>
+    </header>
+
+

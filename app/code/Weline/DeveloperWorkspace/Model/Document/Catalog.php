@@ -52,15 +52,20 @@ class Catalog extends \Weline\Framework\Database\Model
         // 确保ModelSetup关联当前模型
         $setup->putModel($this);
 
-        // 如果数据库中缺少 is_system 字段，则通过 alterTable 添加（兼容 sqlite/mysql）
+        // 先检查表是否存在，如果不存在则先创建（install方法会创建包含所有字段的完整表结构）
+        if (!$setup->tableExist()) {
+            $setup->getPrinting()->note(__('表不存在，正在创建...'));
+            $this->install($setup, $context);
+            return;
+        }
+        
+        // 确保 is_system 字段存在（兼容旧版本数据库）
         if (!$setup->hasField(self::fields_is_system)) {
-            $setup->getPrinting()->note(__('检测到缺失字段：%{1}，正在添加...', [self::fields_is_system]));
+            $setup->getPrinting()->note(__('添加 is_system 字段...'));
             $alter = $setup->alterTable();
-            // SQLite 不支持 COMMENT / AFTER，所以传入最兼容的参数（空的 after_column 与 comment）
-            // 对 sqlite 传入合法的 length（integer 类型使用 1）以避免类型错误
             $alter->addColumn(self::fields_is_system, '', 'integer', 1, 'default 0', '系统创建');
             $alter->alter();
-            $setup->getPrinting()->success(__('字段 %{1} 已添加', [self::fields_is_system]));
+            $setup->getPrinting()->success(__('is_system 字段已添加'));
         }
     }
 

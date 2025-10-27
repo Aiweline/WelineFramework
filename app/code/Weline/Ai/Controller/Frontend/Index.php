@@ -61,7 +61,7 @@ class Index extends FrontendController
         // 获取激活的AI模型列表
         $models = $this->aiModel->reset()
             ->where(AiModel::fields_IS_ACTIVE, 1)
-            ->order(AiModel::fields_CREATED_TIME, 'DESC')
+            ->order(AiModel::fields_CREATED_AT, 'DESC')
             ->limit(10)
             ->select()
             ->fetch();

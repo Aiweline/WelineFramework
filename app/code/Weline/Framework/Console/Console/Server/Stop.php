@@ -10,6 +10,8 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Stop implements CommandInterface
 {
+    use TablePrinter;
+    
     private array $stoppedPids = [];
 
     function __construct(
@@ -90,6 +92,18 @@ class Stop implements CommandInterface
         
         // 清理配置
         $this->clearServerConfig();
+        
+        // 显示停止信息
+        if (!empty($this->stoppedPids)) {
+            echo "\n";
+            $stopInfo = [];
+            foreach ($this->stoppedPids as $stoppedPid) {
+                $stopInfo[] = ['进程ID', $stoppedPid];
+            }
+            $this->printTable('已停止的服务', $stopInfo);
+            echo "\n";
+        }
+        
         $this->printer->success(__('服务器停止操作完成！'));
     }
 

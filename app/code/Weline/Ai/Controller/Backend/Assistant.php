@@ -14,9 +14,12 @@ namespace Weline\Ai\Controller\Backend;
 
 use Weline\Ai\Model\AiAssistant;
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Service\BillingService;
+use Weline\Frontend\Model\FrontendUser;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\Message;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * AI助手管理后台控制器
@@ -46,12 +49,20 @@ class Assistant extends BackendController
      * @param AiAssistant $aiAssistant
      * @param AiModel $aiModel
      */
-    public function __construct(
-        AiAssistant $aiAssistant,
-        AiModel $aiModel
-    ) {
-        $this->aiAssistant = $aiAssistant;
-        $this->aiModel = $aiModel;
+    /**
+     * 获取助手模型（懒加载）
+     */
+    private function getAiAssistant(): AiAssistant
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiAssistant::class);
+    }
+
+    /**
+     * 获取AI模型（懒加载）
+     */
+    private function getAiModel(): AiModel
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiModel::class);
     }
 
     /**
@@ -68,14 +79,14 @@ class Assistant extends BackendController
             $status = $this->request->getGet('status', '');
 
             // 构建查询
-            $query = $this->aiAssistant->reset();
+            $query = $this->getAiAssistant()->reset();
             
             if ($status !== '') {
                 $query->where('is_active', (int)$status);
             }
 
             $assistants = $query->pagination($page, $pageSize)
-                ->order('created_time', 'DESC')
+                ->order('assistant_id', 'DESC')
                 ->select()
                 ->fetch();
 
@@ -92,8 +103,8 @@ class Assistant extends BackendController
             // 统计
             $stats = [
                 'total' => $total,
-                'active' => $this->aiAssistant->reset()->where('is_active', 1)->select()->fetch()->count(),
-                'inactive' => $this->aiAssistant->reset()->where('is_active', 0)->select()->fetch()->count(),
+                'active' => $this->getAiAssistant()->reset()->where('is_active', 1)->select()->fetch()->count(),
+                'inactive' => $this->getAiAssistant()->reset()->where('is_active', 0)->select()->fetch()->count(),
             ];
             $this->assign('stats', $stats);
 
@@ -124,7 +135,7 @@ class Assistant extends BackendController
             $assistant = null;
             
             if ($id > 0) {
-                $assistant = $this->aiAssistant->reset()->load($id);
+                $assistant = $this->getAiAssistant()->reset()->load($id);
                 if (!$assistant->getId()) {
                     Message::error(__('助手不存在'));
                     return $this->jsonResponse([
@@ -135,14 +146,22 @@ class Assistant extends BackendController
             }
             
             // 获取可用的AI模型
-            $models = $this->aiModel->reset()
+            $models = $this->getAiModel()->reset()
                 ->where('is_active', 1)
                 ->select()
                 ->fetch();
+            
+            // 获取当前用户余额
+            // TODO: 从后台登录session获取用户ID
+            $userId = 1; // 暂时使用默认用户ID
+            $user = ObjectManager::getInstance(FrontendUser::class)->load($userId);
+            $userBalance = (float)($user->getData('balance') ?? 0.0);
 
             $this->assign('assistant', $assistant);
             $this->assign('models', $models->getItems());
             $this->assign('isEdit', $id > 0);
+            $this->assign('user_balance', $userBalance);
+            $this->assign('user_id', $userId);
 
             return $this->fetch();
 
@@ -165,7 +184,7 @@ class Assistant extends BackendController
     {
         try {
             // 获取可用的AI模型
-            $models = $this->aiModel->reset()
+            $models = $this->getAiModel()->reset()
                 ->where('is_active', 1)
                 ->select()
                 ->fetch();
@@ -192,7 +211,7 @@ class Assistant extends BackendController
         $id = (int)$this->request->getGet('id');
 
         try {
-            $assistant = $this->aiAssistant->reset()->load($id);
+            $assistant = $this->getAiAssistant()->reset()->load($id);
             
             if (!$assistant->getId()) {
                 Message::error(__('助手不存在'));
@@ -200,7 +219,7 @@ class Assistant extends BackendController
             }
 
             // 获取可用的AI模型
-            $models = $this->aiModel->reset()
+            $models = $this->getAiModel()->reset()
                 ->where('is_active', 1)
                 ->select()
                 ->fetch();
@@ -237,7 +256,7 @@ class Assistant extends BackendController
             // 通过model_code查找模型
             // 由于数据库中code字段可能为空，我们需要同时匹配code和name
             // 前端传来的model_code可能是生成的code（如"gpt-3_5_turbo"）
-            $modelObj = $this->aiModel->reset();
+            $modelObj = $this->getAiModel()->reset();
             $models = $modelObj->where('is_active', 1)->select()->fetch();
             
             $model = null;
@@ -298,6 +317,119 @@ class Assistant extends BackendController
     }
 
     /**
+     * 搜索适配器（AJAX）
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_assistant_search_adapters', '搜索适配器', '', '搜索适配器')]
+    public function searchAdapters(): string
+    {
+        $keyword = $this->request->getGet('keyword', '');
+        
+        try {
+            $adapterModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Ai\Model\AiScenarioAdapter::class);
+            
+            $query = $adapterModel->reset()->where('is_active', 1);
+            
+            if (!empty($keyword)) {
+                $query->where('name', 'like', "%{$keyword}%")
+                      ->orWhere('code', 'like', "%{$keyword}%")
+                      ->orWhere('description', 'like', "%{$keyword}%");
+            }
+            
+            $adapters = $query->select()->fetch();
+            
+            $result = [];
+            foreach ($adapters->getItems() as $adapter) {
+                $result[] = [
+                    'code' => $adapter->getData('code'),
+                    'name' => $adapter->getData('name'),
+                    'description' => $adapter->getData('description'),
+                    'version' => $adapter->getData('version'),
+                    'is_active' => $adapter->getData('is_active'),
+                ];
+            }
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'adapters' => $result
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('搜索适配器失败：%{1}', $e->getMessage()),
+                'adapters' => []
+            ]);
+        }
+    }
+
+    /**
+     * 获取适配器参数模板
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_assistant_adapter_params', '获取适配器参数模板', '', '获取适配器参数模板')]
+    public function getAdapterParams(): string
+    {
+        $adapterCode = $this->request->getGet('code', '');
+        
+        if (empty($adapterCode)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('适配器代码不能为空')
+            ]);
+        }
+        
+        try {
+            // 获取适配器记录
+            $adapterModel = ObjectManager::getInstance(\Weline\Ai\Model\AiScenarioAdapter::class);
+            $adapter = $adapterModel->reset()
+                ->where('code', $adapterCode)
+                ->where('is_active', 1)
+                ->fetchOne();
+            
+            if (!$adapter || !$adapter->getId()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('适配器不存在')
+                ]);
+            }
+            
+            // 实例化适配器类
+            $className = $adapter->getData('class_name');
+            if (!class_exists($className)) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('适配器类不存在：%{1}', $className)
+                ]);
+            }
+            
+            $adapterInstance = ObjectManager::getInstance($className);
+            
+            // 获取参数模板
+            $paramTemplate = $adapterInstance->getParamTemplate();
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'data' => [
+                    'code' => $adapterCode,
+                    'name' => $adapter->getData('name'),
+                    'param_template' => $paramTemplate,
+                    'description' => $adapter->getData('description'),
+                    'examples' => $adapterInstance->getExamples()
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('获取失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+    
+    /**
      * 搜索AI模型（AJAX）
      * 
      * @return string
@@ -308,7 +440,7 @@ class Assistant extends BackendController
         $keyword = $this->request->getGet('keyword', '');
         
         try {
-            $modelObj = $this->aiModel->reset();
+            $modelObj = $this->getAiModel()->reset();
             
             if (!empty($keyword)) {
                 $modelObj->where('name', 'LIKE', "%{$keyword}%")
@@ -362,11 +494,19 @@ class Assistant extends BackendController
         $id = (int)($this->request->getPost('id', 0) ?: $this->request->getGet('id', 0));
         $name = $this->request->getPost('name', '') ?: $this->request->getGet('name', '');
         $prompt = $this->request->getPost('prompt', '') ?: $this->request->getGet('prompt', '');
+        $adapterCode = $this->request->getPost('adapter_code', 'default') ?: $this->request->getGet('adapter_code', 'default');
         $modelCode = $this->request->getPost('model_code', '') ?: $this->request->getGet('model_code', '');
         $description = $this->request->getPost('description', '') ?: $this->request->getGet('description', '');
         $modelConfig = $this->request->getPost('model_config', '{}') ?: $this->request->getGet('model_config', '{}');
         $mcpConfig = $this->request->getPost('mcp_config', '[]') ?: $this->request->getGet('mcp_config', '[]');
         $isActive = (int)($this->request->getPost('is_active', 1) ?: $this->request->getGet('is_active', 1));
+        
+        // API配置字段
+        $apiKey = $this->request->getPost('api_key', '') ?: $this->request->getGet('api_key', '');
+        $proxyConfig = $this->request->getPost('proxy_config', '') ?: $this->request->getGet('proxy_config', '');
+        
+        // 适配器参数
+        $adapterParams = $this->request->getPost('adapter_params', []) ?: $this->request->getGet('adapter_params', []);
         
         // 租赁相关字段
         $isRentable = (int)($this->request->getPost('is_rentable', 0) ?: $this->request->getGet('is_rentable', 0));
@@ -376,8 +516,37 @@ class Assistant extends BackendController
         $tags = $this->request->getPost('tags', '') ?: $this->request->getGet('tags', '');
 
         try {
+            // 如果用户没有配置自定义API密钥，需要检查余额
+            if (empty($apiKey)) {
+                // 获取当前用户ID（从session或默认为1）
+                // TODO: 从后台登录session获取用户ID
+                $userId = 1; // 暂时使用默认用户ID
+                
+                // 检查用户余额
+                $billingService = ObjectManager::getInstance(BillingService::class);
+                $minBalance = 1.0; // 最低余额要求：1元
+                
+                if (!$billingService->checkBalance($userId, $minBalance)) {
+                    // 获取当前余额
+                    $user = ObjectManager::getInstance(FrontendUser::class)->load($userId);
+                    $currentBalance = (float)($user->getData('balance') ?? 0.0);
+                    
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'message' => __('账户余额不足，无法创建助手。当前余额：¥%{1}，最低要求：¥%{2}。请先充值！', 
+                            number_format($currentBalance, 2), 
+                            number_format($minBalance, 2)
+                        ),
+                        'error_code' => 'INSUFFICIENT_BALANCE',
+                        'current_balance' => $currentBalance,
+                        'required_balance' => $minBalance,
+                        'recharge_url' => $this->getBackendUrl('ai/backend/recharge')
+                    ]);
+                }
+            }
+            
             if ($id > 0) {
-                $assistant = $this->aiAssistant->reset()->load($id);
+                $assistant = $this->getAiAssistant()->reset()->load($id);
                 if (!$assistant->getId()) {
                     return $this->jsonResponse([
                         'success' => false,
@@ -385,7 +554,7 @@ class Assistant extends BackendController
                     ]);
                 }
             } else {
-                $assistant = $this->aiAssistant->reset();
+                $assistant = $this->getAiAssistant()->reset();
                 // 确保表名被正确设置
                 $assistant->setTableName('ai_assistant');
             }
@@ -395,11 +564,16 @@ class Assistant extends BackendController
             $data = [
                 'name' => $name,
                 'prompt' => $prompt,
+                'adapter_code' => $adapterCode,
+                'adapter_params' => $adapterParams, // 适配器参数
                 'model_code' => $modelCode,
                 'description' => $description,
                 'model_config' => $modelConfig,
                 'mcp_config' => $mcpConfig,
                 'is_active' => $isActive,
+                // API配置字段
+                'api_key' => $apiKey,
+                'proxy_config' => $proxyConfig,
                 // 租赁相关字段
                 'is_rentable' => $isRentable,
                 'rental_type' => $rentalType,
@@ -467,7 +641,7 @@ class Assistant extends BackendController
         $id = (int)$this->request->getPost('id');
 
         try {
-            $assistant = $this->aiAssistant->reset()->load($id);
+            $assistant = $this->getAiAssistant()->reset()->load($id);
             
             if (!$assistant->getId()) {
                 return $this->jsonResponse([
@@ -509,7 +683,7 @@ class Assistant extends BackendController
         $id = (int)$this->request->getPost('id');
 
         try {
-            $assistant = $this->aiAssistant->reset()->load($id);
+            $assistant = $this->getAiAssistant()->reset()->load($id);
             
             if (!$assistant->getId()) {
                 return $this->jsonResponse([

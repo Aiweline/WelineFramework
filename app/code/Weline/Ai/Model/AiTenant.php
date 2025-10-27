@@ -15,24 +15,57 @@ use Weline\Framework\Setup\Data\Context;
  */
 class AiTenant extends Model
 {
+    // 字段常量
+    public const fields_ID = 'id';
+    public const fields_NAME = 'name';
+    public const fields_DOMAIN = 'domain';
+    public const fields_CONFIG = 'config';
+    public const fields_QUOTA_MONTHLY = 'quota_monthly';
+    public const fields_USAGE_MONTHLY = 'usage_monthly';
+    public const fields_BILLING_PLAN = 'billing_plan';
+    public const fields_STATUS = 'status';
+    public const fields_CREATED_AT = 'created_at';
+    public const fields_UPDATED_AT = 'updated_at';
+    
+    // 计费计划常量
     public const PLAN_FREE = 'free';
     public const PLAN_BASIC = 'basic';
     public const PLAN_PREMIUM = 'premium';
     public const PLAN_ENTERPRISE = 'enterprise';
 
+    // 状态常量
     public const STATUS_ACTIVE = 'active';
     public const STATUS_SUSPENDED = 'suspended';
     public const STATUS_CANCELLED = 'cancelled';
 
     public function _init(): void
     {
-        $this->_table = 'ai_tenant';
-        $this->_id_field_name = 'id';
+        $this->useMainDbMaster();
+        // 表名由框架自动推导：AiTenant -> ai_tenant
     }
 
     public function setup(ModelSetup $setup, Context $context): void {}
     public function upgrade(ModelSetup $setup, Context $context): void {}
-    public function install(ModelSetup $setup, Context $context): void {}
+    
+    public function install(ModelSetup $setup, Context $context): void
+    {
+        if (!$setup->tableExist()) {
+            $setup->createTable('AI租户表')
+                ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
+                ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '租户名称')
+                ->addColumn('domain', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, '', '域名')
+                ->addColumn('config', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '配置JSON')
+                ->addColumn('quota_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '月度配额')
+                ->addColumn('usage_monthly', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '月度使用量')
+                ->addColumn('billing_plan', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'free\'', '计费计划')
+                ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
+                ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
+                ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
+                ->addIndex('domain', '', '', 'idx_domain')
+                ->addIndex('status', '', '', 'idx_status')
+                ->create();
+        }
+    }
 
     public function isActive(): bool
     {

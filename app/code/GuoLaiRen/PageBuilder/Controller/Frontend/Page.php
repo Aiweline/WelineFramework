@@ -161,11 +161,14 @@ class Page extends FrontendController
                 $headerTemplate = $style->getHeaderPath();
                 $footerTemplate = $style->getFooterPath();
                 
+                // 获取 content.phtml 模板路径
+                $contentTemplate = $style->getContentPath();
+                
                 // 渲染header
                 echo $this->render($headerTemplate);
                 
-                // 渲染主要内容
-                echo $this->renderContent($localizedContent, $hasTranslation, $isLocaleSupported);
+                // 渲染主要内容（使用样式模板的 content.phtml）
+                echo $this->render($contentTemplate);
                 
                 // 渲染footer
                 echo $this->render($footerTemplate);

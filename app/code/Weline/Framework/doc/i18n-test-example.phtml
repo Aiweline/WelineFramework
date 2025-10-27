@@ -1,0 +1,237 @@
+<?php
+/**
+ * i18n 占位符功能测试示例
+ * 本文件演示增强后的 __() 函数和 <lang> 标签的使用
+ */
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>i18n 占位符测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h2 { margin-top: 0; color: #333; }
+        .example { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; }
+        .label { font-weight: bold; color: #666; }
+        .result { color: #0066cc; }
+        .code { background: #272822; color: #f8f8f2; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1><?= __('i18n 占位符功能测试') ?></h1>
+
+    <!-- PHP 测试部分 -->
+    <div class="section">
+        <h2>PHP __() 函数测试</h2>
+        
+        <div class="example">
+            <div class="label">1. 通用占位符 %{}</div>
+            <div class="result"><?= __('Hello %{}', 'World') ?></div>
+            <div class="result"><?= __('Welcome %{}!', 'John') ?></div>
+        </div>
+        
+        <div class="example">
+            <div class="label">2. 数字占位符 %{"{1}"}, %{"{2}"}</div>
+            <div class="result"><?= __('User %{1} has %{2} messages', ['John', 5]) ?></div>
+            <div class="result"><?= __('%{1} + %{2} = %{3}', [10, 20, 30]) ?></div>
+        </div>
+        
+        <div class="example">
+            <div class="label">3. 命名占位符 %{"{name}"}, %{"{count}"}</div>
+            <div class="result"><?= __('User %{name} has %{count} messages', ['name' => 'Alice', 'count' => 10]) ?></div>
+            <div class="result"><?= __('%{name}，你好！我 %{age} 岁了', ['name' => '杨大大', 'age' => 23]) ?></div>
+        </div>
+    </div>
+
+    <!-- lang 标签测试部分 -->
+    <div class="section">
+        <h2>lang 标签测试</h2>
+        
+        <div class="example">
+            <div class="label">1. 无参数翻译</div>
+            <div class="result"><lang>User Management</lang></div>
+            <div class="result"><lang>Create New User</lang></div>
+        </div>
+        
+        <div class="example">
+            <div class="label">2. 字符串参数</div>
+            <div class="result"><lang args="'Bob'">Welcome %{}!</lang></div>
+            <div class="result"><lang args="'World'">Hello %{1}</lang></div>
+        </div>
+        
+        <div class="example">
+            <div class="label">3. 数组参数</div>
+            <div class="result"><lang args="['Charlie', 15]">User %{1} has %{2} messages</lang></div>
+            <div class="result"><lang args="[5, 3, 15]">%{1} × %{3} = %{3}</lang></div>
+        </div>
+        
+        <div class="example">
+            <div class="label">4. 命名参数</div>
+            <div class="result"><lang args="['name' => 'David', 'count' => 20]">User %{name} has %{count} messages</lang></div>
+            <div class="result"><lang args="['title' => '用户列表', 'total' => 100]">%{title} (共 %{total} 个)</lang></div>
+        </div>
+    </div>
+
+    <!-- JavaScript 测试部分 -->
+    <div class="section">
+        <h2>JavaScript __() 函数测试</h2>
+        <div id="js-results"></div>
+    </div>
+
+    <script>
+        // JavaScript 测试
+        const results = document.getElementById('js-results');
+        
+        function addResult(label, result) {
+            const example = document.createElement('div');
+            example.className = 'example';
+            example.innerHTML = `
+                <div class="label">${label}</div>
+                <div class="result">${result}</div>
+            `;
+            results.appendChild(example);
+        }
+
+        // 1. 通用占位符测试
+        addResult('1. 通用占位符 %{}', 
+            __('Hello %{}', 'World')
+        );
+        addResult('   字符串参数', 
+            __('Welcome %{}!', 'Emma')
+        );
+        addResult('   数字参数', 
+            __('You have %{} messages', 25)
+        );
+
+        // 2. 数字占位符测试
+        addResult('2. 数字占位符 %{1}, %{2}', 
+            __('User %{1} has %{2} messages', ['Frank', 8])
+        );
+        addResult('   多个参数', 
+            __('%{1} + %{2} = %{3}', [100, 200, 300])
+        );
+
+        // 3. 命名占位符测试（推荐）
+        addResult('3. 命名占位符 %{name}, %{count}', 
+            __('User %{name} has %{count} messages', {
+                name: 'Grace',
+                count: 12
+            })
+        );
+        addResult('   中文参数', 
+            __('%{name}，你好！我 %{age} 岁了', {
+                name: '李明',
+                age: 25
+            })
+        );
+
+        // 4. 实际场景测试
+        addResult('4. 表单验证场景', 
+            __('Field %{field} must be at least %{min} characters', {
+                field: 'Password',
+                min: 8
+            })
+        );
+        addResult('   分页信息场景', 
+            __('Showing page %{current} of %{total} (%{per_page} per page)', {
+                current: 1,
+                total: 10,
+                per_page: 20
+            })
+        );
+
+        // 5. %{1} 自动转换为 %{} 测试
+        addResult('5. %{1} 自动转换', 
+            __('Hello %{1}', 'Auto-Converted')
+        );
+
+        // 6. 空值处理测试
+        addResult('6. 空值处理', 
+            __('Name: %{name}, Value: %{value}', {
+                name: 'Test',
+                value: null
+            })
+        );
+
+        // 7. 动态函数测试
+        function getUserMessage(userName, messageCount) {
+            return __('User %{name} has %{count} messages', {
+                name: userName,
+                count: messageCount
+            });
+        }
+        addResult('7. 动态函数', getUserMessage('Helen', 30));
+    </script>
+
+    <!-- 使用说明 -->
+    <div class="section">
+        <h2>✨ 新增功能总结</h2>
+        <ul>
+            <li><strong>JavaScript 的 __() 函数</strong>现在完全支持 PHP 的所有占位符格式</li>
+            <li>支持通用占位符 <code>%{}</code></li>
+            <li>支持数字占位符 <code>%{1}</code>, <code>%{2}</code>, ...</li>
+            <li>支持命名占位符 <code>%{name}</code>, <code>%{count}</code>, ...（推荐）</li>
+            <li><strong>lang 标签</strong>支持 <code>args</code> 属性传递参数</li>
+            <li>向后兼容所有现有代码</li>
+        </ul>
+    </div>
+
+    <!-- 代码示例 -->
+    <div class="section">
+        <h2>📝 快速参考</h2>
+        
+        <h3>PHP 使用</h3>
+        <pre class="code">// 通用占位符
+echo __('Hello %{}', 'World');
+
+// 数组参数
+echo __('User %{1} has %{2} messages', ['John', 5]);
+
+// 命名参数（推荐）
+echo __('User %{name} has %{count} messages', [
+    'name' => 'John',
+    'count' => 5
+]);</pre>
+
+        <h3>JavaScript 使用</h3>
+        <pre class="code">// 通用占位符
+console.log(__('Hello %{}', 'World'));
+
+// 数组参数
+console.log(__('User %{1} has %{2} messages', ['John', 5]));
+
+// 对象参数（推荐）
+console.log(__('User %{name} has %{count} messages', {
+    name: 'John',
+    count: 5
+}));</pre>
+
+        <h3>Lang 标签使用</h3>
+        <pre class="code">&lt;!-- 无参数 --&gt;
+&lt;lang&gt;User Management&lt;/lang&gt;
+
+&lt;!-- 字符串参数 --&gt;
+&lt;lang args="'John'"&gt;Welcome %{}!&lt;/lang&gt;
+
+&lt;!-- 数组参数 --&gt;
+&lt;lang args="['John', 5]"&gt;User %{1} has %{2} messages&lt;/lang&gt;
+
+&lt;!-- 命名参数（推荐） --&gt;
+&lt;lang args="['name' => 'John', 'count' => 5]"&gt;
+    User %{name} has %{count} messages
+&lt;/lang&gt;
+
+&lt;!-- 使用变量 --&gt;
+&lt;lang args="$username"&gt;Welcome %{}!&lt;/lang&gt;</pre>
+    </div>
+
+    <div class="section" style="background: #e8f5e9; border-color: #4caf50;">
+        <h2 style="color: #2e7d32;">✅ 测试完成</h2>
+        <p>如果你看到以上所有示例都正确显示，说明占位符功能已经成功增强！</p>
+        <p>现在 JavaScript 的 <code>__()</code> 函数和模板的 <code>&lt;lang&gt;</code> 标签都完全支持 PHP 的占位符语法了。</p>
+    </div>
+</body>
+</html>
+

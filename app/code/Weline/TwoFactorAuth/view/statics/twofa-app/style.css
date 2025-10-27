@@ -1,0 +1,693 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #007bff;
+    --primary-dark: #0056b3;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-color: #333;
+    --text-muted: #6c757d;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+    max-width: 600px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 80px;
+}
+
+/* 头部 */
+.app-header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.app-header h1 {
+    color: var(--text-color);
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.app-header .subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.install-btn {
+    margin-top: 10px;
+    padding: 8px 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.install-btn:hover {
+    background: var(--primary-dark);
+}
+
+/* 主内容区 */
+.accounts-container {
+    flex: 1;
+    padding: 20px;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: white;
+}
+
+.empty-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.empty-state h2 {
+    margin-bottom: 10px;
+    font-size: 24px;
+}
+
+.empty-state p {
+    opacity: 0.9;
+    margin-bottom: 30px;
+}
+
+.features {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.feature-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+}
+
+/* 账户卡片 */
+.account-card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.account-card:hover {
+    transform: translateY(-2px);
+}
+
+.account-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.account-info {
+    flex: 1;
+}
+
+.account-issuer {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--text-color);
+    margin-bottom: 3px;
+}
+
+.account-name {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.delete-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.delete-btn:hover {
+    background: #c82333;
+}
+
+.code-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--light-bg);
+    padding: 15px;
+    border-radius: 10px;
+}
+
+.code {
+    font-size: 36px;
+    font-weight: bold;
+    color: var(--primary-color);
+    letter-spacing: 8px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    user-select: all;
+    transition: color 0.2s;
+}
+
+.code:hover {
+    color: var(--primary-dark);
+}
+
+.code:active {
+    transform: scale(0.98);
+}
+
+/* 复制图标按钮 */
+.copy-icon-btn {
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.copy-icon-btn:hover {
+    opacity: 1;
+    transform: scale(1.2);
+    color: var(--primary-color) !important;
+}
+
+.copy-icon-btn:active {
+    transform: scale(0.9);
+}
+
+.timer {
+    width: 50px;
+    height: 50px;
+    position: relative;
+}
+
+.timer-circle {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.timer-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+/* FAB按钮 */
+.fab {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 32px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+    transition: all 0.3s;
+    z-index: 999;
+}
+
+.fab:hover {
+    background: var(--primary-dark);
+    transform: scale(1.1);
+}
+
+.fab:active {
+    transform: scale(0.95);
+}
+
+/* 次要FAB按钮（导出） */
+.fab-secondary {
+    position: fixed;
+    bottom: 90px;
+    right: 90px;
+    width: 50px;
+    height: 50px;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    transition: all 0.3s;
+    z-index: 999;
+}
+
+.fab-secondary:hover {
+    background: #218838;
+    transform: scale(1.1);
+}
+
+.fab-secondary:active {
+    transform: scale(0.95);
+}
+
+/* 底部 */
+.app-footer {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+/* 模态框 */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    position: relative;
+    background: white;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: var(--text-color);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.3s;
+}
+
+.close-btn:hover {
+    background: var(--light-bg);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* 标签页 */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+    margin-bottom: -2px;
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* 表单 */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* 按钮 */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+.btn-secondary {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.scan-info {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+/* 扫描方法容器 */
+.scan-methods {
+    padding: 10px;
+}
+
+.scan-method {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.scan-method h4 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* 二维码预览 */
+#qrImagePreview {
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#qrPreviewImg {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+#qrScanStatus {
+    font-weight: 500;
+    padding: 10px;
+    border-radius: 5px;
+    background: white;
+}
+
+/* 摄像头预览 */
+#cameraPreview {
+    text-align: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    animation: fadeIn 0.3s;
+}
+
+#qrVideo {
+    background: #000;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Toast提示 */
+.toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 2000;
+    max-width: 90%;
+    text-align: center;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* 导出格式选择 */
+.export-formats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.export-format-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: white;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.export-format-item:hover {
+    border-color: var(--primary-color);
+    background: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.export-format-item:active {
+    transform: translateX(5px) scale(0.98);
+}
+
+.format-icon {
+    font-size: 32px;
+    margin-right: 15px;
+    width: 50px;
+    text-align: center;
+}
+
+.format-info {
+    flex: 1;
+}
+
+.format-info strong {
+    display: block;
+    color: var(--text-color);
+    font-size: 16px;
+    margin-bottom: 3px;
+}
+
+.format-info small {
+    display: block;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.format-badge {
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.export-format-item:nth-child(5) .format-badge {
+    background: var(--success-color);
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+    .app-header h1 {
+        font-size: 20px;
+    }
+
+    .code {
+        font-size: 28px;
+        letter-spacing: 5px;
+    }
+
+    .modal-content {
+        width: 95%;
+    }
+
+    .format-icon {
+        font-size: 24px;
+        width: 40px;
+        margin-right: 10px;
+    }
+
+    .format-info strong {
+        font-size: 14px;
+    }
+
+    .format-info small {
+        font-size: 12px;
+    }
+}

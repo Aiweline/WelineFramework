@@ -225,6 +225,407 @@ class LanguageController
 </div>
 ```
 
+## ✨ 增强占位符功能（2025年新增）
+
+### PHP 翻译函数占位符
+
+框架的 `__()` 函数支持多种占位符格式，方便灵活地进行参数替换。
+
+#### 1. 通用占位符 `%{}`
+
+```php
+// 单个字符串参数
+echo __('Hello %{}', 'World');
+// 输出：Hello World
+
+// 单个数字参数
+echo __('You have %{} messages', 5);
+// 输出：You have 5 messages
+
+// 用户欢迎消息
+echo __('Welcome %{}!', 'John');
+// 输出：Welcome John!
+```
+
+#### 2. 数字占位符 `%{1}`, `%{2}`, ...
+
+```php
+// 单个参数（%{1} 自动转换为 %{}）
+echo __('Hello %{1}', 'World');
+// 输出：Hello World
+
+// 多个参数
+echo __('User %{1} has %{2} messages', ['John', 5]);
+// 输出：User John has 5 messages
+
+// 日期时间格式化
+echo __('Today is %{1}/%{2}/%{3}', [2025, 10, 26]);
+// 输出：Today is 2025/10/26
+
+// 订单信息
+echo __('订单 %{1} 已发货，预计 %{2} 天内到达', ['ORD20250001', 3]);
+// 输出：订单 ORD20250001 已发货，预计 3 天内到达
+```
+
+#### 3. 命名占位符 `%{name}`, `%{count}`, ...（推荐）
+
+```php
+// 基本用法
+echo __('User %{name} has %{count} messages', [
+    'name' => 'John',
+    'count' => 5
+]);
+// 输出：User John has 5 messages
+
+// 中文示例
+echo __('%{name}，你好！我 %{age} 岁了', [
+    'name' => '杨大大',
+    'age' => 23
+]);
+// 输出：杨大大，你好！我 23 岁了
+
+// 复杂场景
+echo __('订单 %{order_id} 已发货，预计 %{days} 天内到达，收货人：%{receiver}', [
+    'order_id' => 'ORD202501001',
+    'days' => 3,
+    'receiver' => '张三'
+]);
+// 输出：订单 ORD202501001 已发货，预计 3 天内到达，收货人：张三
+
+// 用户信息展示
+echo __('欢迎 %{username}，账户余额为 %{balance} 元，最后登录：%{last_login}', [
+    'username' => 'admin',
+    'balance' => 1250.50,
+    'last_login' => '2024-01-15 14:30:25'
+]);
+// 输出：欢迎 admin，账户余额为 1250.5 元，最后登录：2024-01-15 14:30:25
+```
+
+#### 4. 混合使用（数字索引 + 命名参数）
+
+```php
+echo __('用户 %{1} 的 %{type} 操作 %{status}', [
+    'admin',            // %{1}
+    'type' => '登录',    // %{type}
+    'status' => '成功'   // %{status}
+]);
+// 输出：用户 admin 的 登录 操作 成功
+```
+
+### JavaScript 翻译函数占位符
+
+**✨ 新特性**：JavaScript 的 `__()` 函数现在完全支持 PHP 的所有占位符格式！
+
+#### 1. 通用占位符 `%{}`
+
+```javascript
+// 字符串参数
+console.log(__('Hello %{}', 'World'));
+// 输出：Hello World
+
+// 数字参数
+console.log(__('You have %{} messages', 5));
+// 输出：You have 5 messages
+
+// DOM 操作
+document.getElementById('welcome').innerText = __('Welcome %{}!', userName);
+```
+
+#### 2. 数字占位符 `%{1}`, `%{2}`, ...
+
+```javascript
+// 单个参数（自动转换）
+console.log(__('Hello %{1}', 'World'));
+// 输出：Hello World
+
+// 数组参数
+console.log(__('User %{1} has %{2} messages', ['John', 5]));
+// 输出：User John has 5 messages
+
+console.log(__('%{1} + %{2} = %{3}', [1, 2, 3]));
+// 输出：1 + 2 = 3
+```
+
+#### 3. 命名占位符 `%{name}`, `%{count}`, ...（推荐）
+
+```javascript
+// 对象参数
+console.log(__('User %{name} has %{count} messages', {
+    name: 'John',
+    count: 5
+}));
+// 输出：User John has 5 messages
+
+// 中文示例
+console.log(__('%{name}，你好！我 %{age} 岁了', {
+    name: '杨大大',
+    age: 23
+}));
+// 输出：杨大大，你好！我 23 岁了
+
+// 在事件处理中使用
+button.addEventListener('click', function() {
+    alert(__('Are you sure to delete %{count} items?', {
+        count: selectedItems.length
+    }));
+});
+
+// AJAX 回调中使用
+$.ajax({
+    url: '/api/users',
+    success: function(data) {
+        showMessage(__('Successfully loaded %{count} users', {
+            count: data.length
+        }));
+    }
+});
+```
+
+### 模板中的 lang 标签占位符
+
+**✨ 新特性**：`<lang>` 标签现在支持 `args` 属性来传递占位符参数！
+
+#### 1. 无参数翻译
+
+```html
+<!-- 简单文本翻译 -->
+<h1><lang>Welcome</lang></h1>
+<p><lang>User Management</lang></p>
+```
+
+#### 2. 字符串参数
+
+```html
+<!-- 单个字符串参数 -->
+<p><lang args="'John'">Welcome %{}!</lang></p>
+<!-- 输出：Welcome John! -->
+
+<p><lang args="'World'">Hello %{1}</lang></p>
+<!-- 输出：Hello World -->
+```
+
+#### 3. 数组参数
+
+```html
+<!-- 数字索引参数 -->
+<p><lang args="['John', 5]">User %{1} has %{2} messages</lang></p>
+<!-- 输出：User John has 5 messages -->
+
+<p><lang args="[1, 2, 3]">%{1} + %{2} = %{3}</lang></p>
+<!-- 输出：1 + 2 = 3 -->
+```
+
+#### 4. 命名参数（推荐）
+
+```html
+<!-- 命名参数 -->
+<p><lang args="['name' => 'John', 'count' => 5]">
+    User %{name} has %{count} messages
+</lang></p>
+<!-- 输出：User John has 5 messages -->
+
+<h2><lang args="['title' => '用户管理', 'total' => 100]">
+    %{title} (共 %{total} 个)
+</lang></h2>
+<!-- 输出：用户管理 (共 100 个) -->
+```
+
+#### 5. 使用模板变量
+
+```html
+<!-- 使用单个变量 -->
+<p><lang args="$username">Welcome %{}!</lang></p>
+
+<!-- 使用数组变量 -->
+<p><lang args="[$user->getName(), $user->getMessageCount()]">
+    User %{1} has %{2} messages
+</lang></p>
+
+<!-- 使用命名参数变量（推荐） -->
+<p><lang args="['name' => $user->getName(), 'count' => $messageCount]">
+    User %{name} has %{count} messages
+</lang></p>
+```
+
+#### 6. 自动变量识别（智能特性）⭐
+
+**✨ 智能特性**：无需 `args` 参数，框架自动识别占位符并映射到同名 PHP 变量！
+
+```html
+<!-- 自动使用 PHP 变量 -->
+<?php $min = 8; $max = 20; ?>
+<lang>Password length must be between %{min} and %{max} characters</lang>
+<!-- 输出：Password length must be between 8 and 20 characters -->
+
+<?php $username = 'John'; ?>
+<p><lang>Welcome %{username}!</lang></p>
+<!-- 输出：Welcome John! -->
+
+<?php $name = 'Alice'; $count = 5; ?>
+<p><lang>User %{name} has %{count} messages</lang></p>
+<!-- 输出：User Alice has 5 messages -->
+```
+
+**智能规则**：
+- ✅ 有 `args` 参数：严格使用 `args` 提供的参数
+- ✅ 无 `args` 参数：自动使用同名 PHP 变量
+- ✅ 部分占位符不在 `args` 中：`args` 中的优先，其他自动使用变量
+
+```html
+<!-- 示例：混合使用 -->
+<?php $min = 8; $max = 20; ?>
+<lang args="['min' => 6]">Length: %{min}-%{max}</lang>
+<!-- min 使用 args 中的 6，max 自动使用变量 $max 的 20 -->
+<!-- 输出：Length: 6-20 -->
+```
+
+### 占位符格式对照表
+
+| 占位符格式 | 参数类型 | PHP 示例 | JavaScript 示例 | Lang 标签示例 |
+|----------|---------|---------|----------------|--------------|
+| `%{}` | 字符串/数字 | `__('Hello %{}', 'World')` | `__('Hello %{}', 'World')` | `<lang args="'World'">Hello %{}</lang>` |
+| `%{1}` | 字符串/数字 | `__('Hello %{1}', 'World')` | `__('Hello %{1}', 'World')` | `<lang args="'World'">Hello %{1}</lang>` |
+| `%{1}`, `%{2}` | 数组 | `__('User %{1} has %{2}', ['John', 5])` | `__('User %{1} has %{2}', ['John', 5])` | `<lang args="['John', 5]">User %{1} has %{2}</lang>` |
+| `%{name}`, `%{count}` | 关联数组/对象 | `__('User %{name}', ['name' => 'John'])` | `__('User %{name}', {name: 'John'})` | `<lang args="['name' => 'John']">User %{name}</lang>` |
+
+### 最佳实践
+
+#### 1. 选择合适的占位符格式
+
+```php
+// ✅ 推荐：使用命名占位符（语义清晰）
+__('User %{name} has %{count} messages', ['name' => $name, 'count' => $count])
+
+// ✅ 可以：使用数字占位符（参数较多时）
+__('Date: %{1}-%{2}-%{3}', [$year, $month, $day])
+
+// ✅ 可以：单个参数使用通用占位符
+__('Welcome %{}!', $username)
+
+// ❌ 不推荐：数字占位符太多时难以维护
+__('%{1} %{2} %{3} %{4} %{5}', [$a, $b, $c, $d, $e])
+```
+
+#### 2. 保持翻译文本的完整性
+
+```php
+// ✅ 好的做法：完整的句子
+__('User %{name} has %{count} new messages')
+
+// ❌ 不好的做法：拆分句子
+__('User') . ' ' . $name . ' ' . __('has') . ' ' . $count . ' ' . __('messages')
+```
+
+#### 3. 在 JavaScript 中使用对象参数
+
+```javascript
+// ✅ 推荐：使用对象（可读性强）
+__('User %{name} has %{count} messages', {
+    name: userName,
+    count: messageCount
+})
+
+// ✅ 可以：使用数组（参数位置固定）
+__('User %{1} has %{2} messages', [userName, messageCount])
+
+// ❌ 避免：字符串拼接
+'User ' + userName + ' has ' + messageCount + ' messages'
+```
+
+### 完整示例
+
+#### Controller (PHP)
+
+```php
+<?php
+namespace Weline\Example\Controller;
+
+class Index
+{
+    public function execute()
+    {
+        $username = 'John';
+        $messageCount = 5;
+        
+        // PHP 翻译
+        $welcomeMsg = __('Welcome %{}!', $username);
+        $userMsg = __('User %{name} has %{count} messages', [
+            'name' => $username,
+            'count' => $messageCount
+        ]);
+        
+        return [
+            'username' => $username,
+            'message_count' => $messageCount
+        ];
+    }
+}
+```
+
+#### Template (PHTML)
+
+```php
+<?php /** @var \Weline\Framework\View\Template $this */ ?>
+
+<!-- 使用 PHP -->
+<h1><?= __('User Management') ?></h1>
+<p><?= __('Welcome %{}!', $username) ?></p>
+<p><?= __('User %{name} has %{count} messages', [
+    'name' => $username,
+    'count' => $message_count
+]) ?></p>
+
+<!-- 使用 lang 标签（新增功能） -->
+<h2><lang>User Management</lang></h2>
+<p><lang args="$username">Welcome %{}!</lang></p>
+<p><lang args="['name' => $username, 'count' => $message_count]">
+    User %{name} has %{count} messages
+</lang></p>
+
+<!-- JavaScript 中使用（增强功能） -->
+<script>
+    // 通用占位符
+    console.log(__('Welcome %{}!', '<?= $username ?>'));
+    
+    // 数组参数
+    console.log(__('User %{1} has %{2} messages', 
+        ['<?= $username ?>', <?= $message_count ?>]
+    ));
+    
+    // 对象参数（推荐）
+    console.log(__('User %{name} has %{count} messages', {
+        name: '<?= $username ?>',
+        count: <?= $message_count ?>
+    }));
+    
+    // 动态使用
+    function showUserInfo(name, count) {
+        return __('User %{name} has %{count} messages', {
+            name: name,
+            count: count
+        });
+    }
+</script>
+```
+
+### 注意事项
+
+1. **占位符编号从 1 开始**：数组索引从 0 开始，但占位符 `%{1}` 对应数组的第一个元素（索引 0）
+
+2. **空值处理**：如果参数为 `null` 或 `undefined`，将替换为空字符串
+
+3. **特殊字符**：占位符文本中的特殊字符会被正确转义
+
+4. **兼容性**：所有旧代码都能正常工作，新功能向后兼容
+
+5. **性能考虑**：命名参数比数字参数性能略低，但在大多数场景下可以忽略
+
+### 相关文档
+
+- 📖 [完整占位符使用指南](../../Framework/doc/i18n-placeholder-usage.md)
+- 🧪 [测试示例页面](../../Framework/doc/i18n-test-example.phtml)
+- 📝 [变更日志](../../Framework/doc/CHANGELOG-i18n-enhancement.md)
+
 ## 配置说明
 
 ### I18n 配置

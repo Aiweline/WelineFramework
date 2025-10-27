@@ -17,10 +17,6 @@ if (!defined('BP')) {
     define('BP', dirname(dirname(dirname(dirname(__DIR__)))));
 }
 
-if (!defined('DEV')) {
-    define('DEV', true);
-}
-
 if (!defined('CLI')) {
     define('CLI', PHP_SAPI === 'cli');
 }

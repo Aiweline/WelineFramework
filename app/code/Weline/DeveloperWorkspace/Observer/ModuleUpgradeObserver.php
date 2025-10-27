@@ -23,13 +23,23 @@ class ModuleUpgradeObserver implements ObserverInterface
         $catalogModel = ObjectManager::make(CatalogModel::class);
         $documentModel = ObjectManager::make(DocumentModel::class);
 
-        // 1. 确保只有一个系统分类“模块文档”，删除多余的系统创建的同名分类（及其文档）
+        // 检查表是否存在
+        try {
+            $tableExists = $catalogModel->getConnection()->getConnector()->tableExist($catalogModel->getTable());
+            if (!$tableExists) {
+                return; // 表还不存在，跳过处理
+            }
+
+        // 1. 确保只有一个系统分类"模块文档"，删除多余的系统创建的同名分类（及其文档）
         $existing = $catalogModel->reset()
-            ->where(CatalogModel::fields_is_system, 1)
             ->where(CatalogModel::fields_NAME, '模块文档')
             ->select()
             ->fetch()
             ->getItems();
+        } catch (\Exception $e) {
+            // 如果查询失败，可能是因为表结构问题，跳过处理
+            return;
+        }
 
         $rootId = 0;
         if (empty($existing)) {
@@ -47,6 +57,15 @@ class ModuleUpgradeObserver implements ObserverInterface
             // 如果有多个取第一个为保留，其它删除（包括文档）
             $keep = $existing[0];
             $rootId = $keep['id'];
+            
+            // 确保保留的记录 is_system = 1
+            if (!isset($keep['is_system']) || $keep['is_system'] != 1) {
+                $updateRoot = ObjectManager::make(CatalogModel::class);
+                $updateRoot->load($rootId);
+                if ($updateRoot->getId()) {
+                    $updateRoot->setData(CatalogModel::fields_is_system, 1)->save();
+                }
+            }
 
             if (count($existing) > 1) {
                 foreach ($existing as $rec) {
@@ -166,15 +185,32 @@ class ModuleUpgradeObserver implements ObserverInterface
                     $found = $tmp->reset()->where(CatalogModel::fields_NAME, $seg)->where(CatalogModel::fields_PID, $parentId)->find()->fetch();
                     $foundId = $found->getId() ?: 0;
                     if (!$foundId) {
-                        $tmp = ObjectManager::make(CatalogModel::class);
-                        $tmp->setData(CatalogModel::fields_NAME, $seg)
-                            ->setData(CatalogModel::fields_DESCRIPTION, "模块文档: {$moduleName}/{$path}")
-                            ->setData(CatalogModel::fields_PID, $parentId)
-                            ->setData('level', $level)
-                            ->setData(CatalogModel::fields_is_system, 1)
-                            ->setData(CatalogModel::fields_is_active, 1)
-                            ->save();
-                        $foundId = $tmp->getId();
+                        try {
+                            $tmp = ObjectManager::make(CatalogModel::class);
+                            $tmp->setData(CatalogModel::fields_NAME, $seg)
+                                ->setData(CatalogModel::fields_DESCRIPTION, "模块文档: {$moduleName}/{$path}")
+                                ->setData(CatalogModel::fields_PID, $parentId)
+                                ->setData('level', $level)
+                                ->setData(CatalogModel::fields_is_system, 1)
+                                ->setData(CatalogModel::fields_is_active, 1)
+                                ->save();
+                            $foundId = $tmp->getId();
+                        } catch (\Exception $e) {
+                            // 如果保存失败（可能是唯一索引冲突），尝试再次查找该记录
+                            // 这次不限制 pid，只用 name 查找第一个匹配的记录
+                            $retry = ObjectManager::make(CatalogModel::class);
+                            $retryFound = $retry->reset()
+                                ->where(CatalogModel::fields_NAME, $seg)
+                                ->where(CatalogModel::fields_PID, $parentId)
+                                ->find()
+                                ->fetch();
+                            $foundId = $retryFound->getId() ?: 0;
+                            
+                            // 如果还是找不到，就忽略这个错误，使用父级 ID 作为 fallback
+                            if (!$foundId) {
+                                $foundId = $parentId;
+                            }
+                        }
                     }
                     // 存储映射
                     $mapping[$moduleName][$acc] = $foundId;
