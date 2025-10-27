@@ -34,7 +34,7 @@ class BackendControllerRouteAfter implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         if ($this->request->isBackend()) {
             $request_id = $this->request->getId();

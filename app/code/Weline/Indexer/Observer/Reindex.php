@@ -34,7 +34,7 @@ class Reindex implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $data = $event->getData('data');
         $args = $data->getData('args');

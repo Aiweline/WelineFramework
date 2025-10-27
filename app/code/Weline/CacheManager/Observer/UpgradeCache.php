@@ -33,7 +33,7 @@ class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         # 更新缓存到数据库
         $model = $this->getModel();

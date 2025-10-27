@@ -22,7 +22,7 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         /**@var Request $req */
         $req = ObjectManager::getInstance(Request::class);

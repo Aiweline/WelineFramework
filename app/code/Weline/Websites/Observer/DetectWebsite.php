@@ -15,7 +15,7 @@ class DetectWebsite implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $get_sites = $event->getData('get_sites');
         if ($get_sites) {
