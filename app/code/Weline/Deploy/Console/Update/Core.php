@@ -24,13 +24,7 @@ class Core extends CommandAbstract
     private bool $isWindows;
     private string $defaultRepo = 'https://gitee.com/aiweline/WelineFramework.git';
     
-    private array $corePaths = [
-        'app/code/Weline/Framework',
-        'vendor',
-        'app/etc',
-        'bin',
-        'pub',
-    ];
+    private bool $updateAll = false;  // 是否更新整个项目
 
     public function __construct(
         Printing $printer,
@@ -94,10 +88,7 @@ class Core extends CommandAbstract
             $this->printer->note(__('标签：%{1}', [$tag]));
         }
         $this->printer->note('');
-        $this->printer->note(__('将更新以下核心路径：'));
-        foreach ($this->corePaths as $path) {
-            $this->printer->note(__('  - %{1}', [$path]));
-        }
+        $this->printer->note(__('将更新整个项目（覆盖已有文件，新增缺失文件）'));
 
         // 3. 创建临时目录
         $this->printer->setup(__('步骤 3/6：准备临时目录...'));
@@ -230,10 +221,14 @@ class Core extends CommandAbstract
 
     private function copyCoreFiles(string $tmpDir): void
     {
+        // 更新整个项目，覆盖所有文件
         $copied = 0;
         $skipped = 0;
         
-        foreach ($this->corePaths as $path) {
+        // 需要更新的所有目录（包括所有子目录）
+        $allPaths = ['app', 'bin', 'pub', 'generated'];
+        
+        foreach ($allPaths as $path) {
             $source = $tmpDir . DS . $path;
             $target = BP . $path;
             
