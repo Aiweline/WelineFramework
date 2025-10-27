@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Ai\Api\ScenarioAdapterInterface;
+use Weline\Ai\Interface\ScenarioAdapterInterface;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\System\File\Scan;

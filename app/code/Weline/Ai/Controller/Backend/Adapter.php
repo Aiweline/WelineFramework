@@ -119,14 +119,14 @@ class Adapter extends BackendController
         
         if (!$id) {
             Message::error(__('适配器ID不能为空'));
-            return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
+            return $this->redirect('*/backend/adapter/index');
         }
 
         $adapter = $this->getScenarioAdapter()->reset()->load($id);
         
         if (!$adapter->getId()) {
             Message::error(__('适配器不存在'));
-            return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
+            return $this->redirect('*/backend/adapter/index');
         }
 
         // 获取适配器实例信息
@@ -177,7 +177,7 @@ class Adapter extends BackendController
             Message::error(__('适配器扫描失败: %{error}', ['error' => $e->getMessage()]));
         }
 
-        return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
+        return $this->redirect('*/backend/adapter/index');
     }
 
     /**
@@ -282,7 +282,7 @@ class Adapter extends BackendController
             Message::error('清理失败: ' . $e->getMessage());
         }
 
-        return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
+        return $this->redirect('*/backend/adapter/index');
     }
 
     /**
