@@ -218,27 +218,40 @@ class Reinstall extends CommandAbstract
                 }
 
                 $tableName = $model->getTable();
+                $originTableName = $model->getOriginTableName();
                 
                 if (empty($tableName)) {
                     continue;
                 }
 
                 // 检查表是否存在
-                if (!$model->getConnection()->getConnector()->tableExist($tableName)) {
-                    $this->printer->warning(__('  表 %{1} 不存在，跳过。', [$tableName]));
+                if (!$model->getConnection()->getConnector()->tableExist($originTableName)) {
+                    $this->printer->warning(__('  表 %{1} 不存在，跳过。', [$originTableName]));
                     continue;
                 }
 
-                // 备份表到文件
-                $this->printer->note(__('  备份表到文件：%{1}...', [$tableName]));
-                $query = $model->getConnection()->getQuery();
-                $query->backup('', $tableName);
-                $backupFile = $query->backup_file;
-                $this->printer->success(__('  ✓ 备份文件：%{1}', [$backupFile]));
+                // 备份表到文件（使用原始表名，不带数据库前缀）
+                $this->printer->note(__('  备份表到文件：%{1}...', [$originTableName]));
+                
+                try {
+                    // 确保备份目录存在
+                    $backupDir = Env::backup_dir . 'db' . DS;
+                    if (!is_dir($backupDir)) {
+                        mkdir($backupDir, 0777, true);
+                    }
+                    
+                    // 使用模型的查询对象进行备份
+                    $model->clearQuery()->backup('', $originTableName);
+                    $backupFile = $model->getQuery()->backup_file ?? 'var/backup/db/' . $originTableName;
+                    $this->printer->success(__('  ✓ 备份文件：%{1}', [$backupFile]));
+                } catch (\Exception $backupException) {
+                    $this->printer->warning(__('  备份失败：%{1}', [$backupException->getMessage()]));
+                    $this->printer->warning(__('  将继续执行表复制...'));
+                }
 
                 // 复制表（添加 _backup 后缀）
-                $backupTableName = $tableName . '_backup';
-                $this->printer->note(__('  复制表：%{1} → %{2}...', [$tableName, $backupTableName]));
+                $backupTableName = $originTableName . '_backup';
+                $this->printer->note(__('  复制表：%{1} → %{2}...', [$originTableName, $backupTableName]));
                 
                 try {
                     $pdo = $model->getConnection()->getConnector()->getLink();
@@ -248,10 +261,10 @@ class Reinstall extends CommandAbstract
                     $pdo->exec($dropBackupSql);
                     
                     // 复制表结构和数据
-                    $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$tableName}`";
+                    $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$originTableName}`";
                     $pdo->exec($createBackupSql);
                     
-                    $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$tableName}`";
+                    $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$originTableName}`";
                     $pdo->exec($insertBackupSql);
                     
                     $this->printer->success(__('  ✓ 表已复制：%{1} (包含所有数据)', [$backupTableName]));
@@ -260,11 +273,11 @@ class Reinstall extends CommandAbstract
                 }
 
                 // 删除原表
-                $this->printer->note(__('  删除原表：%{1}...', [$tableName]));
+                $this->printer->note(__('  删除原表：%{1}...', [$originTableName]));
                 $modelSetup = ObjectManager::make(ModelSetup::class);
                 $modelSetup->putModel($model);
-                $modelSetup->dropTable($tableName);
-                $this->printer->success(__('  ✓ 原表已删除：%{1}', [$tableName]));
+                $modelSetup->dropTable($originTableName);
+                $this->printer->success(__('  ✓ 原表已删除：%{1}', [$originTableName]));
 
             } catch (\Exception $e) {
                 $this->printer->error(__('  错误：处理 %{1} 时发生异常：%{2}', [$modelClass, $e->getMessage()]));

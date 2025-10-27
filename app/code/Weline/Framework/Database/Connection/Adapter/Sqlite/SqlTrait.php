@@ -26,36 +26,7 @@ trait SqlTrait
     {
 
         $sql = self::convertMySQLToSQLite($sql);
-        # 开发环境记录sql日志文件，方便调试查看执行结果
-        if (DEV) {
-            $dev_log_base_dir = FileHelper::joinPath(BP, 'var', 'log', 'dev', 'sql');
-            
-            try {
-                // 确保日志目录存在
-                if (!FileHelper::createDirectory($dev_log_base_dir)) {
-                    error_log("无法创建SQL日志目录: {$dev_log_base_dir}");
-                    return $sql;
-                }
-                
-                // 检查目录是否可写
-                if (!FileHelper::isWritable($dev_log_base_dir)) {
-                    error_log("SQL日志目录不可写: {$dev_log_base_dir}");
-                    return $sql;
-                }
-                
-                // 写入最新SQL语句
-                $sqlLastFile = FileHelper::joinPath($dev_log_base_dir, 'sql_last.sql');
-                FileHelper::safeWriteFile($sqlLastFile, $sql);
-                
-                // 追加到所有SQL语句日志
-                $sqlAllFile = FileHelper::joinPath($dev_log_base_dir, 'sql_all.sql');
-                $existingContent = FileHelper::safeReadFile($sqlAllFile) ?: '';
-                FileHelper::safeWriteFile($sqlAllFile, $existingContent . $sql . PHP_EOL);
-                
-            } catch (\Exception $e) {
-                error_log("SQL日志写入失败: " . $e->getMessage());
-            }
-        }
+        // Logging moved to fetch() to capture actual bound values
         return $sql;
     }
 

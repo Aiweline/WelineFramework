@@ -48,9 +48,28 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
-        if (DEBUG or Env::get('db_log.enabled')) {
-            $file = Env::get('db_log.file');
-            Env::log($file, $this->getSqlWithBounds($this->sql));
+        // Development SQL logging - log SQL with actual values
+        try {
+            if (Env::get('log.dev_sql.enabled', false)) {
+                $log_file = Env::get('log.dev_sql.file', 'dev_sql');
+                // Get SQL with bound values replaced
+                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore errors during bootstrap
+        }
+        
+        // Database query logging - only if enabled
+        try {
+            if (Env::get('log.db.enabled', false)) {
+                $file = Env::get('log.db.file', 'db');
+                // Use compact standard format: [timestamp] [QUERY] source - SQL
+                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore errors during bootstrap
         }
         if (Debug::target('custom')) {
             // 自定义调试类型信息
@@ -174,9 +193,29 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 throw new Exception(__('错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。'));
         }
         $this->fetch_type = '';
-        if (Env::get('db_log.enabled') or DEBUG) {
-            $file = Env::get('db_log.file');
-            Env::log($file, $this->sql);
+        
+        // Development SQL logging - log SQL with actual values
+        try {
+            if (Env::get('log.dev_sql.enabled', false)) {
+                $log_file = Env::get('log.dev_sql.file', 'dev_sql');
+                // Get SQL with bound values replaced
+                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                Env::log($log_file, $sqlWithValues, 'QUERY', true, true, 0);
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore errors during bootstrap
+        }
+        
+        // Database query logging - only if enabled
+        try {
+            if (Env::get('log.db.enabled', false)) {
+                $file = Env::get('log.db.file', 'db');
+                // Use compact standard format: [timestamp] [QUERY] source - SQL
+                $sqlWithValues = $this->getSqlWithBounds($this->sql);
+                Env::log($file, $sqlWithValues, 'QUERY', true, true, 0);
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore errors during bootstrap
         }
         # 调试环境信息
         if (Debug::target('fetch')) {
