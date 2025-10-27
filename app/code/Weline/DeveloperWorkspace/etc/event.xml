@@ -5,6 +5,11 @@
     <event name="Framework_Module::module_upgrade">
         <observer name="Weline_DeveloperWorkspace::module_upgrade_documents" instance="Weline\DeveloperWorkspace\Observer\ModuleUpgradeObserver" disabled="false" sort="10"/>
     </event>
+    
+    <!-- 开发工具面板：在应用运行完成后注入 -->
+    <event name="App::run_after">
+        <observer name="Weline_DeveloperWorkspace::dev_tool_panel" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true"/>
+    </event>
 </config>
 
 

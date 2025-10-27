@@ -1,386 +1,236 @@
 <?php
 /**
- * 我的评分列表
+ * 我的评分列表页面模板
  * 
- * @var $this \Weline\Framework\View\Template
- * @var $ratings array
- * @var $total int
- * @var $page int
- * @var $totalPages int
+ * @var array $ratings
+ * @var int $total
  */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $ratings = $this->ratings ?? [];
 $total = $this->total ?? 0;
 $page = $this->page ?? 1;
+$pageSize = $this->pageSize ?? 20;
 $totalPages = $this->totalPages ?? 1;
 ?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>我的评分</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-<style>
-.rating-list-container {
-    padding: 24px;
-    max-width: 1200px;
-    margin: 0 auto;
-}
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
 
-.page-header {
-    margin-bottom: 32px;
-}
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
 
-.page-title {
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    margin-bottom: 8px;
-}
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
 
-.page-subtitle {
-    font-size: 14px;
-    color: #6c757d;
-}
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
 
-.ratings-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
 
-.rating-card {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    padding: 24px;
-    transition: box-shadow 0.2s;
-}
-
-.rating-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.rating-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: 16px;
-}
-
-.assistant-info h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: #1a1a1a;
-    margin-bottom: 6px;
-}
-
-.assistant-info p {
-    font-size: 14px;
-    color: #6c757d;
-    line-height: 1.5;
-}
-
-.rating-date {
-    font-size: 13px;
-    color: #6c757d;
-    white-space: nowrap;
-}
-
-.rating-stars-large {
-    color: #ffc107;
-    font-size: 24px;
-    margin-bottom: 12px;
-}
-
-.rating-dimensions {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 16px;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 8px;
-}
-
-.dimension-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.dimension-label {
-    font-size: 12px;
-    color: #6c757d;
-    margin-bottom: 4px;
-}
-
-.dimension-stars {
-    color: #ffc107;
-    font-size: 14px;
-}
-
-.rating-comment {
-    font-size: 15px;
-    line-height: 1.8;
-    color: #495057;
-    margin-bottom: 16px;
-}
-
-.rating-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 16px;
-    border-top: 1px solid #e9ecef;
-}
-
-.rating-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 16px;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.status-pending {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.status-approved {
-    background: #d4edda;
-    color: #155724;
-}
-
-.status-rejected {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.rating-actions {
-    display: flex;
-    gap: 12px;
-}
-
-.btn-edit, .btn-delete {
-    padding: 6px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.btn-edit {
-    background: #007bff;
-    color: white;
-}
-
-.btn-edit:hover {
-    background: #0056b3;
-}
-
-.btn-delete {
-    background: #dc3545;
-    color: white;
-}
-
-.btn-delete:hover {
-    background: #c82333;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 80px 20px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.empty-state i {
-    font-size: 64px;
-    color: #dee2e6;
-    margin-bottom: 16px;
-}
-
-.empty-state h3 {
-    font-size: 20px;
-    color: #6c757d;
-    margin-bottom: 8px;
-}
-
-.empty-state p {
-    font-size: 14px;
-    color: #adb5bd;
-}
-
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 32px;
-}
-
-.page-btn {
-    padding: 8px 16px;
-    border: 1px solid #dee2e6;
-    background: white;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.page-btn:hover:not(.active):not(:disabled) {
-    background: #f8f9fa;
-}
-
-.page-btn.active {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
-}
-
-.page-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-</style>
-
-<div class="rating-list-container">
-    <div class="page-header">
-        <h1 class="page-title">
-            <i class="mdi mdi-star"></i> <lang>我的评分</lang>
-        </h1>
-        <p class="page-subtitle">
-            <lang>共</lang> <?= $total ?> <lang>条评分记录</lang>
-        </p>
-    </div>
-
-    <?php if (empty($ratings)): ?>
-        <div class="empty-state">
-            <i class="mdi mdi-star-outline"></i>
-            <h3><?= __('暂无评分记录') ?></h3>
-            <p><?= __('您还没有对任何助手进行评分') ?></p>
-        </div>
-    <?php else: ?>
-        <div class="ratings-grid">
-            <?php foreach ($ratings as $rating): 
-                $ratingScore = (int)$rating->getData('rating');
-                $status = $rating->getData('status');
-                $accuracyRating = (int)($rating->getData('accuracy_rating') ?? 0);
-                $speedRating = (int)($rating->getData('speed_rating') ?? 0);
-                $usefulnessRating = (int)($rating->getData('usefulness_rating') ?? 0);
-                
-                $statusClass = [
-                    'pending' => 'status-pending',
-                    'approved' => 'status-approved',
-                    'rejected' => 'status-rejected'
-                ];
-                
-                $statusLabel = [
-                    'pending' => __('待审核'),
-                    'approved' => __('已通过'),
-                    'rejected' => __('已拒绝')
-                ];
-            ?>
-                <div class="rating-card">
-                    <div class="rating-card-header">
-                        <div class="assistant-info">
-                            <h3><?= htmlspecialchars($rating->getData('assistant_name')) ?></h3>
-                            <p><?= htmlspecialchars($rating->getData('assistant_description') ?? '') ?></p>
-                        </div>
-                        <div class="rating-date">
-                            <?= date('Y-m-d H:i', $rating->getData('created_time')) ?>
-                        </div>
-                    </div>
-
-                    <div class="rating-stars-large">
-                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                            <i class="mdi mdi-star<?= $i <= $ratingScore ? '' : '-outline' ?>"></i>
-                        <?php endfor; ?>
-                    </div>
-
-                    <?php if ($accuracyRating || $speedRating || $usefulnessRating): ?>
-                        <div class="rating-dimensions">
-                            <?php if ($accuracyRating): ?>
-                                <div class="dimension-item">
-                                    <div class="dimension-label"><lang>准确性</lang></div>
-                                    <div class="dimension-stars">
-                                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                                            <i class="mdi mdi-star<?= $i <= $accuracyRating ? '' : '-outline' ?>"></i>
-                                        <?php endfor; ?>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if ($speedRating): ?>
-                                <div class="dimension-item">
-                                    <div class="dimension-label"><lang>响应速度</lang></div>
-                                    <div class="dimension-stars">
-                                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                                            <i class="mdi mdi-star<?= $i <= $speedRating ? '' : '-outline' ?>"></i>
-                                        <?php endfor; ?>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if ($usefulnessRating): ?>
-                                <div class="dimension-item">
-                                    <div class="dimension-label"><lang>实用性</lang></div>
-                                    <div class="dimension-stars">
-                                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                                            <i class="mdi mdi-star<?= $i <= $usefulnessRating ? '' : '-outline' ?>"></i>
-                                        <?php endfor; ?>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <?php if ($rating->getData('comment')): ?>
-                        <div class="rating-comment">
-                            <?= nl2br(htmlspecialchars($rating->getData('comment'))) ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="rating-footer">
-                        <span class="rating-status <?= $statusClass[$status] ?? '' ?>">
-                            <i class="mdi mdi-<?= $status === 'approved' ? 'check-circle' : ($status === 'rejected' ? 'close-circle' : 'clock') ?>"></i>
-                            <?= $statusLabel[$status] ?? $status ?>
-                        </span>
-                        
-                        <div class="rating-actions">
-                            <button class="btn-edit" onclick="editRating(<?= $rating->getId() ?>)">
-                                <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
-                            </button>
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 面包屑导航 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box">
+                            <h4 class="page-title">
+                                <i class="mdi mdi-star"></i> <lang>我的评分</lang>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>AI助手</lang></a></li>
+                                    <li class="breadcrumb-item active"><lang>我的评分</lang></li>
+                                </ol>
+                            </div>
                         </div>
                     </div>
                 </div>
-            <?php endforeach; ?>
-        </div>
 
-        <!-- 分页 -->
-        <?php if ($totalPages > 1): ?>
-            <div class="pagination">
-                <button class="page-btn" <?= $page <= 1 ? 'disabled' : '' ?> 
-                        onclick="changePage(<?= $page - 1 ?>)">
-                    <i class="mdi mdi-chevron-left"></i> <lang>上一页</lang>
-                </button>
+                <!-- 页面统计卡片 -->
+                <div class="row mb-3">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="text-muted mb-0">
+                                    <i class="mdi mdi-information-outline"></i> 
+                                    <lang>共</lang> <strong><?= $total ?></strong> <lang>条评分记录</lang>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                    <button class="page-btn <?= $i === $page ? 'active' : '' ?>" 
-                            onclick="changePage(<?= $i ?>)">
-                        <?= $i ?>
-                    </button>
-                <?php endfor; ?>
+                <!-- 评分列表卡片 -->
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4">
+                                    <i class="mdi mdi-format-list-bulleted"></i> <lang>评分列表</lang>
+                                    <span class="badge bg-info"><?= $total ?></span>
+                                </h4>
+                                
+                                <?php if (empty($ratings)): ?>
+                                    <div class="text-center py-5">
+                                        <i class="mdi mdi-star-outline" style="font-size: 64px; color: #ccc;"></i>
+                                        <h4 class="mt-3 text-muted"><?= __('暂无评分记录') ?></h4>
+                                        <p class="text-muted"><?= __('您还没有对任何助手进行评分') ?></p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="list-group">
+                                        <?php foreach ($ratings as $rating): 
+                                            $ratingScore = (int)$rating->getData('rating');
+                                            $status = $rating->getData('status');
+                                            $accuracyRating = (int)($rating->getData('accuracy_rating') ?? 0);
+                                            $speedRating = (int)($rating->getData('speed_rating') ?? 0);
+                                            $usefulnessRating = (int)($rating->getData('usefulness_rating') ?? 0);
+                                            
+                                            $statusClass = [
+                                                'pending' => 'warning',
+                                                'approved' => 'success',
+                                                'rejected' => 'danger'
+                                            ];
+                                            
+                                            $statusLabel = [
+                                                'pending' => __('待审核'),
+                                                'approved' => __('已通过'),
+                                                'rejected' => __('已拒绝')
+                                            ];
+                                        ?>
+                                            <div class="list-group-item mb-3">
+                                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                                    <div>
+                                                        <h5 class="mb-1"><?= htmlspecialchars($rating->getData('assistant_name')) ?></h5>
+                                                        <p class="text-muted small mb-0"><?= htmlspecialchars(mb_substr($rating->getData('assistant_description') ?? '', 0, 100)) ?></p>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <small class="text-muted"><?= date('Y-m-d H:i', strtotime($rating->getData('created_time'))) ?></small>
+                                                        <span class="badge bg-<?= $statusClass[$status] ?? 'secondary' ?> ms-2">
+                                                            <?= $statusLabel[$status] ?? $status ?>
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                <button class="page-btn" <?= $page >= $totalPages ? 'disabled' : '' ?> 
-                        onclick="changePage(<?= $page + 1 ?>)">
-                    <lang>下一页</lang> <i class="mdi mdi-chevron-right"></i>
-                </button>
+                                                <div class="mb-2">
+                                                    <span class="text-warning">
+                                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                            <i class="mdi mdi-star<?= $i <= $ratingScore ? '' : '-outline' ?>"></i>
+                                                        <?php endfor; ?>
+                                                    </span>
+                                                </div>
+
+                                                <?php if ($accuracyRating || $speedRating || $usefulnessRating): ?>
+                                                    <div class="row mb-2">
+                                                        <?php if ($accuracyRating): ?>
+                                                            <div class="col-md-4">
+                                                                <small class="text-muted"><lang>准确性</lang>:</small>
+                                                                <span class="text-warning ms-1">
+                                                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                        <i class="mdi mdi-star<?= $i <= $accuracyRating ? '' : '-outline' ?> small"></i>
+                                                                    <?php endfor; ?>
+                                                                </span>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if ($speedRating): ?>
+                                                            <div class="col-md-4">
+                                                                <small class="text-muted"><lang>速度</lang>:</small>
+                                                                <span class="text-warning ms-1">
+                                                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                        <i class="mdi mdi-star<?= $i <= $speedRating ? '' : '-outline' ?> small"></i>
+                                                                    <?php endfor; ?>
+                                                                </span>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if ($usefulnessRating): ?>
+                                                            <div class="col-md-4">
+                                                                <small class="text-muted"><lang>实用性</lang>:</small>
+                                                                <span class="text-warning ms-1">
+                                                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                        <i class="mdi mdi-star<?= $i <= $usefulnessRating ? '' : '-outline' ?> small"></i>
+                                                                    <?php endfor; ?>
+                                                                </span>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                <?php endif; ?>
+
+                                                <?php if ($rating->getData('comment')): ?>
+                                                    <div class="alert alert-light mb-2">
+                                                        <?= nl2br(htmlspecialchars($rating->getData('comment'))) ?>
+                                                    </div>
+                                                <?php endif; ?>
+
+                                                <div class="d-flex justify-content-end gap-2">
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="editRating(<?= $rating->getId() ?>)">
+                                                        <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+
+                                    <!-- 分页 -->
+                                    <?php if ($totalPages > 1): ?>
+                                        <nav class="mt-4">
+                                            <ul class="pagination justify-content-center mb-0">
+                                                <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                                    <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page - 1 ?>)">
+                                                        <i class="mdi mdi-chevron-left"></i> <lang>上一页</lang>
+                                                    </a>
+                                                </li>
+
+                                                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                                    <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                        <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $i ?>)"><?= $i ?></a>
+                                                    </li>
+                                                <?php endfor; ?>
+
+                                                <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                                    <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page + 1 ?>)">
+                                                        <lang>下一页</lang> <i class="mdi mdi-chevron-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 评分列表卡片结束 -->
+
             </div>
-        <?php endif; ?>
-    <?php endif; ?>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
 </div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
 
 <script>
 function changePage(page) {
@@ -393,3 +243,5 @@ function editRating(ratingId) {
 }
 </script>
 
+</body>
+</html>

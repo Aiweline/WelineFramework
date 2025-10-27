@@ -33,27 +33,19 @@ use Weline\Framework\Acl\Acl;
 class Adapter extends BackendController
 {
     /**
-     * @var AiScenarioAdapter
+     * 获取场景适配器模型（懒加载）
      */
-    private AiScenarioAdapter $scenarioAdapter;
+    private function getScenarioAdapter(): AiScenarioAdapter
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiScenarioAdapter::class);
+    }
 
     /**
-     * @var AdapterScanner
+     * 获取适配器扫描器（懒加载）
      */
-    private AdapterScanner $adapterScanner;
-
-    /**
-     * 构造函数
-     * 
-     * @param AiScenarioAdapter $scenarioAdapter
-     * @param AdapterScanner $adapterScanner
-     */
-    public function __construct(
-        AiScenarioAdapter $scenarioAdapter,
-        AdapterScanner $adapterScanner
-    ) {
-        $this->scenarioAdapter = $scenarioAdapter;
-        $this->adapterScanner = $adapterScanner;
+    private function getAdapterScanner(): AdapterScanner
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AdapterScanner::class);
     }
 
     /**
@@ -68,7 +60,7 @@ class Adapter extends BackendController
         $pageSize = 20;
 
         // 获取适配器列表
-        $adapters = $this->scenarioAdapter->reset()
+        $adapters = $this->getScenarioAdapter()->reset()
             ->pagination($page, $pageSize)
             ->order(AiScenarioAdapter::fields_CREATED_TIME, 'DESC')
             ->select()
@@ -97,7 +89,7 @@ class Adapter extends BackendController
             ]);
         }
 
-        $adapter = $this->scenarioAdapter->reset()->load($id);
+        $adapter = $this->getScenarioAdapter()->reset()->load($id);
         
         if (!$adapter->getId()) {
             return $this->jsonResponse([
@@ -107,7 +99,7 @@ class Adapter extends BackendController
         }
 
         // 获取适配器实例信息
-        $adapterInstance = $this->adapterScanner->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
+        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
         
         $this->assign('adapter', $adapter);
         $this->assign('adapterInstance', $adapterInstance);
@@ -130,7 +122,7 @@ class Adapter extends BackendController
             return $this->redirect($this->_url->getBackendUrl('*/backend/adapter'));
         }
 
-        $adapter = $this->scenarioAdapter->reset()->load($id);
+        $adapter = $this->getScenarioAdapter()->reset()->load($id);
         
         if (!$adapter->getId()) {
             Message::error(__('适配器不存在'));
@@ -138,7 +130,7 @@ class Adapter extends BackendController
         }
 
         // 获取适配器实例信息
-        $adapterInstance = $this->adapterScanner->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
+        $adapterInstance = $this->getAdapterScanner()->getAdapter($adapter->getData(AiScenarioAdapter::fields_CODE));
         
         $this->assign('adapter', $adapter);
         $this->assign('adapterInstance', $adapterInstance);
@@ -150,7 +142,8 @@ class Adapter extends BackendController
     }
 
     /**
-     * 扫描适配器
+     * 扫描适配器（同时支持GET和POST请求）
+     * GET请求返回重定向，POST/AJAX请求返回JSON
      * 
      * @return string
      */
@@ -158,12 +151,29 @@ class Adapter extends BackendController
     public function scan(): string
     {
         try {
-            $scannedAdapters = $this->adapterScanner->scanAllAdapters();
+            $scannedAdapters = $this->getAdapterScanner()->scanAllAdapters();
+            
+            // 检查是否是AJAX请求
+            if ($this->request->isAjax() || $this->request->isPost()) {
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => sprintf('成功扫描 %d 个适配器', count($scannedAdapters)),
+                    'count' => count($scannedAdapters)
+                ]);
+            }
             
             Message::success(
                 __('成功扫描 %{count} 个适配器', ['count' => count($scannedAdapters)])
             );
         } catch (\Exception $e) {
+            // AJAX请求返回JSON错误
+            if ($this->request->isAjax() || $this->request->isPost()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => '适配器扫描失败: ' . $e->getMessage()
+                ]);
+            }
+            
             Message::error(__('适配器扫描失败: %{error}', ['error' => $e->getMessage()]));
         }
 
@@ -187,7 +197,7 @@ class Adapter extends BackendController
             ]);
         }
 
-        $adapter = $this->scenarioAdapter->reset()->load($id);
+        $adapter = $this->getScenarioAdapter()->reset()->load($id);
         
         if (!$adapter->getId()) {
             return $this->jsonResponse([
@@ -231,7 +241,7 @@ class Adapter extends BackendController
             ]);
         }
 
-        $adapterInstance = $this->adapterScanner->getAdapter($code);
+        $adapterInstance = $this->getAdapterScanner()->getAdapter($code);
         
         if (!$adapterInstance) {
             return $this->jsonResponse([
@@ -263,7 +273,7 @@ class Adapter extends BackendController
     public function cleanup(): string
     {
         try {
-            $cleanedCount = $this->adapterScanner->cleanupInvalidAdapters();
+            $cleanedCount = $this->getAdapterScanner()->cleanupInvalidAdapters();
             
             Message::success(
                 sprintf('成功清理 %d 个无效适配器', $cleanedCount)
@@ -284,7 +294,7 @@ class Adapter extends BackendController
     public function getStats(): string
     {
         try {
-            $stats = $this->adapterScanner->getAdapterStats();
+            $stats = $this->getAdapterScanner()->getAdapterStats();
             
             return $this->jsonResponse([
                 'success' => true,
@@ -306,7 +316,7 @@ class Adapter extends BackendController
      */
     private function jsonResponse(array $data): string
     {
-        $this->response->setHeader('Content-Type', 'application/json');
-        return json_encode($data);
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }

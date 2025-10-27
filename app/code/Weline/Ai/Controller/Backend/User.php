@@ -13,12 +13,12 @@ use Weline\Framework\Manager\Message;
  */
 class User extends BackendController
 {
-    private \Weline\Frontend\Model\FrontendUser $frontendUser;
-
-    public function __construct(
-        \Weline\Frontend\Model\FrontendUser $frontendUser
-    ) {
-        $this->frontendUser = $frontendUser;
+    /**
+     * 获取前端用户模型（懒加载）
+     */
+    private function getFrontendUser(): \Weline\Frontend\Model\FrontendUser
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Model\FrontendUser::class);
     }
 
     /**
@@ -37,7 +37,7 @@ class User extends BackendController
             $status = $this->request->getGet('status', '');
             
             // 构建查询
-            $query = $this->frontendUser->reset()->select();
+            $query = $this->getFrontendUser()->reset()->select();
             
             // 搜索过滤
             if (!empty($keyword)) {
@@ -96,15 +96,16 @@ class User extends BackendController
         $id = (int)$this->request->getGet('id');
         
         if ($id) {
-            $user = $this->frontendUser->reset()->load($id);
+            $user = $this->getFrontendUser()->reset()->load($id);
             
-            if (!$user->getId()) {
+            // FrontendUser的主键是user_id
+            if (!$user->getData('user_id')) {
                 return '<div class="alert alert-danger">' . __('用户不存在') . '</div>';
             }
             
             $this->assign('user', $user);
         } else {
-            $this->assign('user', $this->frontendUser->reset());
+            $this->assign('user', $this->getFrontendUser()->reset());
         }
         
         return $this->fetch();
@@ -127,12 +128,13 @@ class User extends BackendController
         $data = $this->request->getPost();
 
         try {
-            $user = $this->frontendUser->reset();
+            $user = $this->getFrontendUser()->reset();
             
             if ($id) {
                 $user->load($id);
                 
-                if (!$user->getId()) {
+                // FrontendUser的主键是user_id，需要特殊处理
+                if (!$user->getData('user_id')) {
                     return $this->jsonResponse([
                         'success' => false,
                         'message' => __('用户不存在')
@@ -157,11 +159,10 @@ class User extends BackendController
             
             // 检查用户名重复
             if (!$id || $data['username'] !== $user->getData('username')) {
-                $existUser = $this->frontendUser->reset()
+                $existUser = $this->getFrontendUser()->reset()
                     ->where('username', '=', $data['username'])
-                    ->find()
-                    ->fetch();
-                if ($existUser->getId()) {
+                    ->fetchOne();
+                if ($existUser && $existUser->getData('user_id')) {
                     return $this->jsonResponse([
                         'success' => false,
                         'message' => __('用户名已存在')
@@ -170,12 +171,11 @@ class User extends BackendController
             }
             
             // 检查邮箱重复
-            if (!$id || $data['email'] !== $user->getData('email')) {
-                $existUser = $this->frontendUser->reset()
+            if (!empty($data['email']) && (!$id || $data['email'] !== $user->getData('email'))) {
+                $existUser = $this->getFrontendUser()->reset()
                     ->where('email', '=', $data['email'])
-                    ->find()
-                    ->fetch();
-                if ($existUser->getId()) {
+                    ->fetchOne();
+                if ($existUser && $existUser->getData('user_id')) {
                     return $this->jsonResponse([
                         'success' => false,
                         'message' => __('邮箱已存在')
@@ -204,7 +204,7 @@ class User extends BackendController
             return $this->jsonResponse([
                 'success' => true,
                 'message' => __('保存成功'),
-                'data' => ['id' => $user->getId()]
+                'data' => ['id' => $user->getData('user_id')]
             ]);
             
         } catch (\Exception $e) {
@@ -216,12 +216,22 @@ class User extends BackendController
     }
 
     /**
-     * 删除用户
+     * 切换用户状态
      */
-    #[AclAttribute('Weline_Ai::ai_user_delete', '删除用户', 'mdi-delete', '删除前端用户')]
-    public function delete(): string
+    #[AclAttribute('Weline_Ai::ai_user_toggle_status', '切换用户状态', 'mdi-toggle-switch', '切换用户激活状态')]
+    public function toggleStatus(): string
     {
-        $id = (int)$this->request->getPost('id');
+        if (!$this->request->isPost()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('无效的请求方法')
+            ]);
+        }
+
+        // 支持两种格式的请求
+        $postData = $this->request->getPost();
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($postData['id'] ?? $jsonData['id'] ?? 0);
         
         if (!$id) {
             return $this->jsonResponse([
@@ -231,9 +241,65 @@ class User extends BackendController
         }
         
         try {
-            $user = $this->frontendUser->reset()->load($id);
+            $user = $this->getFrontendUser()->reset()->load($id);
             
-            if (!$user->getId()) {
+            // FrontendUser的主键是user_id
+            if (!$user->getData('user_id')) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('用户不存在')
+                ]);
+            }
+            
+            // 切换状态
+            $currentStatus = (int)$user->getData('is_active');
+            $newStatus = $currentStatus ? 0 : 1;
+            $user->setData('is_active', $newStatus);
+            $user->save();
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __($newStatus ? '用户已激活' : '用户已禁用')
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('操作失败：%{1}', $e->getMessage())
+            ]);
+        }
+    }
+
+    /**
+     * 删除用户
+     */
+    #[AclAttribute('Weline_Ai::ai_user_delete', '删除用户', 'mdi-delete', '删除前端用户')]
+    public function delete(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('无效的请求方法')
+            ]);
+        }
+
+        // 支持两种格式的请求
+        $postData = $this->request->getPost();
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($postData['id'] ?? $jsonData['id'] ?? 0);
+        
+        if (!$id) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('用户ID不能为空')
+            ]);
+        }
+        
+        try {
+            $user = $this->getFrontendUser()->reset()->load($id);
+            
+            // FrontendUser的主键是user_id
+            if (!$user->getData('user_id')) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('用户不存在')

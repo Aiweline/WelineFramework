@@ -33,9 +33,12 @@ class File extends DataObject implements SessionDriverHandlerInterface
         if (!is_dir($this->sessionPath)) {
             mkdir($this->sessionPath, 0700);
         }
-        session_save_path($this->sessionPath);
-        ini_set('session.save_handler', 'files');
-        ini_set('session.auto_start', '0');
+        // 只在未发送 headers 时才设置 session 配置
+        if (!headers_sent()) {
+            session_save_path($this->sessionPath);
+            ini_set('session.save_handler', 'files');
+            ini_set('session.auto_start', '0');
+        }
     }
 
     public function set($name, $value): bool

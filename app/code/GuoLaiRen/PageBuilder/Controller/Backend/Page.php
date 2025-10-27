@@ -75,6 +75,9 @@ class Page extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_create', '新建页面', 'mdi mdi-plus', '新建页面')]
     public function getCreate()
     {
+        // 强制扫描样式模板，确保配置是最新的
+        Style::forceScan();
+        
         $this->assign('page_title', __('新建页面'));
         $this->assign('breadcrumb_parent', __('页面构建器'));
         $this->assign('breadcrumb_current', __('新建页面'));
@@ -125,6 +128,16 @@ class Page extends BackendController
             $selectedLocales = $this->request->getPost('locales', []);
             $defaultLocale = $this->request->getPost('default_locale', '');
             
+            // 如果没有设置默认语言，使用框架当前语言
+            if (empty($defaultLocale)) {
+                $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
+            }
+            
+            // 确保默认语言在支持的语言列表中
+            if (!in_array($defaultLocale, $selectedLocales)) {
+                $selectedLocales[] = $defaultLocale;
+            }
+            
             // 处理样式配置信息 - 保存当前style的配置，不影响其他style的配置
             $currentStyleSettings = $this->request->getPost('style_settings', []);
             $currentStyleCode = $data['style'] ?? '';
@@ -174,6 +187,9 @@ class Page extends BackendController
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', '编辑页面', 'mdi mdi-pencil', '编辑页面')]
     public function getEdit()
     {
+        // 强制扫描样式模板，确保配置是最新的
+        Style::forceScan();
+        
         $pageId = $this->request->getGet('id');
         if (!$pageId) {
             $this->getMessageManager()->addError(__('页面ID不能为空！'));
@@ -295,6 +311,16 @@ class Page extends BackendController
             $selectedLocales = $this->request->getPost('locales', []);
             $defaultLocale = $this->request->getPost('default_locale', '');
             
+            // 如果没有设置默认语言，使用框架当前语言
+            if (empty($defaultLocale)) {
+                $defaultLocale = \Weline\Framework\Http\Cookie::getLang();
+            }
+            
+            // 确保默认语言在支持的语言列表中
+            if (!in_array($defaultLocale, $selectedLocales)) {
+                $selectedLocales[] = $defaultLocale;
+            }
+            
             // 处理样式配置信息 - 合并保存，保留其他style的配置
             $currentStyleSettings = $this->request->getPost('style_settings', []);
             $currentStyleCode = $data['style'] ?? '';
@@ -377,12 +403,32 @@ class Page extends BackendController
             }
             
             $this->getMessageManager()->addSuccess(__('页面更新成功！'));
+            
+            // 检查是否为AJAX请求
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('页面更新成功！'),
+                    'page_id' => $pageId,
+                    'style' => $data['style'] ?? ''
+                ]);
+            }
+            
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
             $this->getMessageManager()->addWarning(__('页面更新失败！'));
             if (DEV) {
                 $this->getMessageManager()->addException($exception);
             }
+            
+            // 检查是否为AJAX请求
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面更新失败：') . $exception->getMessage()
+                ]);
+            }
+            
             $this->redirect('*/backend/page/edit', ['id' => $this->request->getGet('id')]);
         }
     }
@@ -688,6 +734,80 @@ class Page extends BackendController
     }
     
     /**
+     * 检查 handle 是否已存在（AJAX接口）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_check_handle', '检查句柄', '', '检查页面句柄是否重复')]
+    public function getCheckHandle()
+    {
+        try {
+            $handle = trim($this->request->getGet('handle', ''));
+            $pageId = (int)$this->request->getGet('page_id', 0);
+            
+            if (empty($handle)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'available' => false,
+                    'message' => __('页面句柄不能为空')
+                ]);
+            }
+            
+            // 检查 handle 格式（只允许小写字母、数字和连字符）
+            if (!preg_match('/^[a-z0-9\-]+$/', $handle)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'available' => false,
+                    'message' => __('页面句柄只能包含小写字母、数字和连字符')
+                ]);
+            }
+            
+            // 查询数据库检查是否已存在
+            $existingPage = clone $this->pageModel;
+            $existingPage->clear()
+                ->where(PageModel::fields_HANDLE, $handle)
+                ->find()
+                ->fetch();
+            
+            // 如果存在，检查是否是当前编辑的页面
+            if ($existingPage->getId()) {
+                if ($pageId > 0 && $existingPage->getId() == $pageId) {
+                    // 是当前编辑的页面，可用
+                    return $this->fetchJson([
+                        'success' => true,
+                        'available' => true,
+                        'message' => __('当前页面的句柄')
+                    ]);
+                } else {
+                    // 被其他页面占用
+                    return $this->fetchJson([
+                        'success' => true,
+                        'available' => false,
+                        'message' => __('页面句柄已被使用，请使用其他句柄'),
+                        'existing_page' => [
+                            'id' => $existingPage->getId(),
+                            'name' => $existingPage->getData(PageModel::fields_NAME),
+                            'title' => $existingPage->getData(PageModel::fields_TITLE)
+                        ]
+                    ]);
+                }
+            }
+            
+            // handle 可用
+            return $this->fetchJson([
+                'success' => true,
+                'available' => true,
+                'message' => __('页面句柄可用')
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'available' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
      * 预览页面（支持指定语言）
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '预览页面', 'mdi mdi-eye', '预览页面')]
@@ -722,6 +842,95 @@ class Page extends BackendController
         // 直接重定向到前端页面
         header('Location: ' . $frontendUrl);
         exit;
+    }
+    
+    /**
+     * 获取样式预览图片
+     * 
+     * @return void 直接输出图片内容
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::style_preview_image', '样式预览图', 'mdi mdi-image', '获取样式预览图片')]
+    public function stylePreviewImage()
+    {
+        $styleCode = $this->request->getGet('code');
+        
+        if (!$styleCode) {
+            header('HTTP/1.1 400 Bad Request');
+            echo 'Missing style code parameter';
+            exit;
+        }
+        
+        try {
+            // 查找样式
+            $style = clone $this->styleModel;
+            $style->clear()->where('code', $styleCode)->find()->fetch();
+            
+            if (!$style->getId()) {
+                header('HTTP/1.1 404 Not Found');
+                echo 'Style not found';
+                exit;
+            }
+            
+            // 获取预览图路径
+            $previewImage = $style->getData(Style::fields_PREVIEW_IMAGE);
+            
+            if (!$previewImage) {
+                header('HTTP/1.1 404 Not Found');
+                echo 'Preview image not found for this style';
+                exit;
+            }
+            
+            // 构建完整的文件路径
+            $baseDir = BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/';
+            $filePath = $baseDir . $previewImage;
+            
+            if (!file_exists($filePath) || !is_file($filePath)) {
+                header('HTTP/1.1 404 Not Found');
+                echo 'Preview image file does not exist: ' . $previewImage;
+                exit;
+            }
+            
+            // 检测文件MIME类型
+            $fileExtension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $mimeTypes = [
+                'webp' => 'image/webp',
+                'png' => 'image/png',
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'gif' => 'image/gif',
+            ];
+            
+            $contentType = $mimeTypes[$fileExtension] ?? 'application/octet-stream';
+            
+            // 设置缓存头（7天）
+            $lastModified = filemtime($filePath);
+            $etag = md5_file($filePath);
+            
+            header('Content-Type: ' . $contentType);
+            header('Content-Length: ' . filesize($filePath));
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+            header('ETag: "' . $etag . '"');
+            header('Cache-Control: public, max-age=604800'); // 7天
+            
+            // 检查客户端缓存
+            $ifModifiedSince = $this->request->getHeader('If-Modified-Since');
+            $ifNoneMatch = $this->request->getHeader('If-None-Match');
+            
+            if (($ifModifiedSince && strtotime($ifModifiedSince) >= $lastModified) ||
+                ($ifNoneMatch && trim($ifNoneMatch, '"') === $etag)) {
+                header('HTTP/1.1 304 Not Modified');
+                exit;
+            }
+            
+            // 输出图片内容
+            readfile($filePath);
+            exit;
+            
+        } catch (\Exception $e) {
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'Error: ' . $e->getMessage();
+            exit;
+        }
     }
 }
 

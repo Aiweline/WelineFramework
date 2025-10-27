@@ -1,0 +1,140 @@
+[
+    {
+        "route": "ai\/backend\/apikey\/index",
+        "description": "API密钥管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/recharge\/index",
+        "description": "充值管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/market\/index",
+        "description": "助手市场",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/assistant\/index",
+        "description": "助手管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/model\/index",
+        "description": "AI模型管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/defaultmodel\/index",
+        "description": "默认模型管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/tenant\/index",
+        "description": "租户管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/user\/index",
+        "description": "用户管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/adapter\/index",
+        "description": "场景适配器",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/rating\/index",
+        "description": "评分管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/insights\/index",
+        "description": "数据洞察",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/abtesting\/index",
+        "description": "A\/B测试管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/contentsafety\/index",
+        "description": "内容安全管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/customersupport\/index",
+        "description": "客户支持管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/developertools\/index",
+        "description": "开发者工具",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/marketingtools\/index",
+        "description": "营销工具",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/modelbenchmark\/index",
+        "description": "模型基准测试",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/modeldeployment\/index",
+        "description": "模型部署管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/modelversioning\/index",
+        "description": "模型版本控制",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/securityscan\/index",
+        "description": "安全扫描",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/thirdpartyintegration\/index",
+        "description": "第三方集成",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/trainingdata\/index",
+        "description": "训练数据管理",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    },
+    {
+        "route": "ai\/backend\/test\/index",
+        "description": "测试控制器",
+        "status": "UNKNOWN",
+        "message": "未知响应"
+    }
+]

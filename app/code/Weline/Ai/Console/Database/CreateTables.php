@@ -18,7 +18,7 @@ class CreateTables implements CommandInterface
 {
     public function execute(array $args = [], array $data = [])
     {
-        $this->output->writeln('=== Creating AI Module Tables ===');
+        echo "\n=== Creating AI Module Tables ===\n\n";
         
         try {
             // Get connection
@@ -33,28 +33,27 @@ class CreateTables implements CommandInterface
             $install = new Install();
             $install->setup($setup, $context);
             
-            $this->output->success('✅ AI module tables created successfully!');
+            echo "✅ AI module tables created successfully!\n\n";
             
             // List created tables
-            $this->output->writeln('\n=== Verifying Tables ===');
+            echo "=== Verifying Tables ===\n";
             $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ai_%' ORDER BY name";
             $stmt = $conn->query($sql);
-            $tables = $stmt->fetch(\PDO::FETCH_ASSOC);
+            $tables = $stmt->fetchAll(\PDO::FETCH_ASSOC);
             
             if ($tables) {
                 foreach ($tables as $table) {
-                    $tableName = is_array($table) ? $table['name'] : $table;
-                    $this->output->writeln("  ✓ {$tableName}");
+                    $tableName = $table['name'] ?? '';
+                    echo "  ✓ {$tableName}\n";
                 }
+            } else {
+                echo "  No AI tables found.\n";
             }
             
         } catch (\Exception $e) {
-            $this->output->error('Error creating tables: ' . $e->getMessage());
-            $this->output->writeln($e->getTraceAsString());
-            return self::FAIL;
+            echo "❌ Error creating tables: " . $e->getMessage() . "\n";
+            echo $e->getTraceAsString() . "\n";
         }
-        
-        return self::SUCCESS;
     }
 
     public function tip(): string

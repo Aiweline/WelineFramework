@@ -8,6 +8,8 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Cleanup implements CommandInterface
 {
+    use TablePrinter;
+    
     function __construct(
         private Printing $printer
     )
@@ -27,6 +29,20 @@ class Cleanup implements CommandInterface
         $pid = $serverConfig['pid'] ?? null;
         
         $this->printer->note(__('开始清理服务器进程...'));
+        echo "\n";
+        
+        // 显示当前配置
+        if (!empty($serverConfig)) {
+            $configData = [];
+            if ($host) $configData[] = ['主机', $host];
+            if ($port) $configData[] = ['端口', $port];
+            if ($pid) $configData[] = ['进程ID', $pid];
+            
+            if (!empty($configData)) {
+                $this->printTable('当前服务器配置', $configData);
+                echo "\n";
+            }
+        }
         
         // 检查配置中的进程
         if ($pid && $this->isProcessRunning($pid)) {
@@ -58,7 +74,9 @@ class Cleanup implements CommandInterface
         $this->clearServerConfig();
         $this->printer->success(__('已清理服务器配置信息。'));
         
-        $this->printer->note(__('服务器清理完成！'));
+        echo "\n";
+        $this->printBox('清理完成', '服务器进程和配置已清理完毕', 'success');
+        echo "\n";
     }
 
     /**

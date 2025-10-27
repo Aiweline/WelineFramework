@@ -627,6 +627,8 @@ class Url implements UrlInterface
             default:
                 self::$parserServer['WELINE_AREA'] = 'frontend';
                 self::$parserServer['WELINE_AREA_ROUTE'] = '';
+                # frontend 分支也需要重建 $uri，避免包含查询字符串
+                $uri = '/' . implode('/', $splits);
         }
         $data['has_area'] = $has_area;
         $data['area'] = self::$parserServer['WELINE_AREA'];
@@ -765,15 +767,24 @@ class Url implements UrlInterface
 
     public static function decode_url(string $url): string
     {
+        if (isset(self::$decode_urls[$url])) {
+            return self::$decode_urls[$url];
+        }
         # decode seo url
         if (Env::get('seo')) {
-            if (isset(self::$decode_urls[$url])) {
-                return self::$decode_urls[$url];
-            }
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
+            $origin_url = $url;
             $event->dispatch('Framework_Url::seo_decode', $url);
-            self::$decode_urls[$url] = $url;
+            
+            // 缓存原始URL到解码后URL的映射
+            self::$decode_urls[$origin_url] = $url;
+            
+            // 关键：如果URL发生了变化，也缓存解码后的URL指向自己，避免二次解码
+            if ($url !== $origin_url) {
+                self::$decode_urls[$url] = $url;
+            }
+            return $url;
         }
         return $url;
     }

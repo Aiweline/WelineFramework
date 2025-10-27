@@ -159,23 +159,26 @@
                                     <td><?= htmlspecialchars($submission->getData('ip_address') ?: '-') ?></td>
                                     <td><?= htmlspecialchars($submission->getData('submitted_at')) ?></td>
                                     <td>
-                                        <acl source="GuoLaiRen_PageBuilder::form_submissions_view">
-                                            <a href="<?= $this->getBackendUrl('*/backend/submission/view', ['id' => $submission->getId()]) ?>" 
-                                               class="btn btn-sm btn-soft-info" title="<?= __('查看详情') ?>">
-                                                <i class="mdi mdi-eye"></i>
-                                            </a>
-                                        </acl>
-                                        <acl source="GuoLaiRen_PageBuilder::form_submissions_delete">
-                                            <form action="<?= $this->getBackendUrl('*/backend/submission/delete') ?>" 
-                                                  method="post" style="display: inline-block;"
-                                                  onsubmit="return confirm('<?= __('确定要删除这条记录吗？') ?>');">
-                                                <input type="hidden" name="form_key" value="<?= $this->getFormKey() ?>">
-                                                <input type="hidden" name="id" value="<?= $submission->getId() ?>">
-                                                <button type="submit" class="btn btn-sm btn-soft-danger" title="<?= __('删除') ?>">
-                                                    <i class="mdi mdi-delete"></i>
-                                                </button>
-                                            </form>
-                                        </acl>
+                                        <div class="btn-group" role="group">
+                                            <acl source="GuoLaiRen_PageBuilder::form_submissions_view">
+                                                <a href="<?= $this->getBackendUrl('*/backend/submission/view', ['id' => $submission->getId()]) ?>" 
+                                                   class="btn btn-sm btn-soft-info" title="<?= __('查看详情') ?>">
+                                                    <i class="mdi mdi-eye"></i>
+                                                </a>
+                                            </acl>
+                                            <acl source="GuoLaiRen_PageBuilder::form_submissions_delete">
+                                                <?php $deleteUrl = $this->getBackendUrl('*/backend/submission/delete'); ?>
+                                                <form action="<?= $deleteUrl ?>" 
+                                                      method="post" style="display: inline-block; margin: 0;"
+                                                      onsubmit="return confirm('<?= __('确定要删除这条记录吗？') ?>');">
+                                                    <input type="hidden" name="form_key" value="<?= $this->getFormKey($deleteUrl) ?>">
+                                                    <input type="hidden" name="id" value="<?= $submission->getId() ?>">
+                                                    <button type="submit" class="btn btn-sm btn-soft-danger" title="<?= __('删除') ?>">
+                                                        <i class="mdi mdi-delete"></i>
+                                                    </button>
+                                                </form>
+                                            </acl>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

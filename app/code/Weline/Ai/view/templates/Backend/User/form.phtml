@@ -126,7 +126,7 @@ $isEdit = $user && $user->getId();
 
 <div class="user-form-container">
     <form id="userForm" method="post" action="<?= $this->getBackendUrl('*/backend/user/save') ?>">
-        <input type="hidden" name="id" value="<?= $isEdit ? $user->getId() : '' ?>">
+        <input type="hidden" name="id" value="<?= $isEdit ? $user->getData('user_id') : '' ?>">
         
         <!-- 基本信息 -->
         <div class="form-section">

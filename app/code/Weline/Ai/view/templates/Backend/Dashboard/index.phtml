@@ -1,0 +1,599 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+/**
+ * 变量：
+ * @var array $stats 统计数据
+ * @var array $trends 趋势数据
+ * @var array $top_models 热门模型
+ * @var array $top_assistants 热门助手
+ * @var array $recent_errors 最近错误
+ */
+
+$stats = $this->getData('stats') ?: [];
+$trends = $this->getData('trends') ?: [];
+$topModels = $this->getData('top_models') ?: [];
+$topAssistants = $this->getData('top_assistants') ?: [];
+$recentErrors = $this->getData('recent_errors') ?: [];
+$error = $this->getData('error');
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>AI运营概览</lang></title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .dashboard-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        .dashboard-card:hover {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        
+        .stat-card.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3rem;
+            opacity: 0.2;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: #f8f9ff;
+            cursor: pointer;
+        }
+        
+        .badge-model {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .progress-bar-animated {
+            animation: progress-bar-stripes 1s linear infinite;
+        }
+        
+        @keyframes progress-bar-stripes {
+            0% { background-position: 1rem 0; }
+            100% { background-position: 0 0; }
+        }
+        
+        .metric-trend {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-left: 8px;
+        }
+        
+        .metric-trend.up {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .metric-trend.down {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-view-dashboard me-2"></i>
+                                <lang>AI运营概览</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><lang>AI助手</lang></li>
+                                    <li class='breadcrumb-item active'><lang>运营概览</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <?php if ($error): ?>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                            <i class="mdi mdi-alert me-2"></i>
+                            <strong><lang>数据加载出现问题</lang>:</strong> <?= htmlspecialchars($error) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Info Message for missing tables -->
+                <?php if (empty($stats['today_calls']) && empty($stats['week_calls']) && empty($stats['month_calls'])): ?>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong> <lang>系统检测到部分数据表尚未创建，统计数据将显示为0。当有API调用记录后，数据将自动显示。</lang>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- Stats Cards -->
+                <div class="row">
+                    <!-- 今日调用 -->
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card primary">
+                            <i class="mdi mdi-api stat-icon"></i>
+                            <div class="stat-label"><lang>今日调用</lang></div>
+                            <div class="stat-number"><?= number_format($stats['today_calls'] ?? 0) ?></div>
+                            <small><lang>本周</lang>: <?= number_format($stats['week_calls'] ?? 0) ?> | <lang>本月</lang>: <?= number_format($stats['month_calls'] ?? 0) ?></small>
+                        </div>
+                    </div>
+
+                    <!-- 今日费用 -->
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card success">
+                            <i class="mdi mdi-cash-multiple stat-icon"></i>
+                            <div class="stat-label"><lang>今日费用</lang></div>
+                            <div class="stat-number">¥<?= number_format($stats['today_cost'] ?? 0, 2) ?></div>
+                            <small><lang>本周</lang>: ¥<?= number_format($stats['week_cost'] ?? 0, 2) ?> | <lang>本月</lang>: ¥<?= number_format($stats['month_cost'] ?? 0, 2) ?></small>
+                        </div>
+                    </div>
+
+                    <!-- 活跃用户 -->
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card warning">
+                            <i class="mdi mdi-account-multiple stat-icon"></i>
+                            <div class="stat-label"><lang>今日活跃用户</lang></div>
+                            <div class="stat-number"><?= number_format($stats['today_active_users'] ?? 0) ?></div>
+                            <small><lang>活跃API密钥</lang>: <?= number_format($stats['total_api_keys'] ?? 0) ?></small>
+                        </div>
+                    </div>
+
+                    <!-- 成功率 -->
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card info">
+                            <i class="mdi mdi-check-circle stat-icon"></i>
+                            <div class="stat-label"><lang>今日成功率</lang></div>
+                            <div class="stat-number"><?= number_format($stats['success_rate'] ?? 0, 1) ?>%</div>
+                            <small><lang>总模型</lang>: <?= $stats['total_models'] ?? 0 ?> | <lang>总助手</lang>: <?= $stats['total_assistants'] ?? 0 ?></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trends Chart -->
+                <div class="row">
+                    <div class="col-xl-8 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-chart-line text-primary me-2"></i>
+                                    <lang>调用趋势（最近7天）</lang>
+                                </h5>
+                                <div class="chart-container">
+                                    <canvas id="trendsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="col-xl-4 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-speedometer text-success me-2"></i>
+                                    <lang>系统状态</lang>
+                                </h5>
+                                
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><lang>成功率</lang></span>
+                                        <span class="text-success fw-bold"><?= number_format($stats['success_rate'] ?? 0, 1) ?>%</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: <?= $stats['success_rate'] ?? 0 ?>%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><lang>活跃模型</lang></span>
+                                        <span class="text-primary fw-bold"><?= $stats['total_models'] ?? 0 ?></span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-primary" style="width: 100%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><lang>活跃助手</lang></span>
+                                        <span class="text-info fw-bold"><?= $stats['total_assistants'] ?? 0 ?></span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-info" style="width: 100%"></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><lang>API密钥</lang></span>
+                                        <span class="text-warning fw-bold"><?= $stats['total_api_keys'] ?? 0 ?></span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-warning" style="width: 100%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Models & Assistants -->
+                <div class="row">
+                    <!-- Top Models -->
+                    <div class="col-xl-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-fire text-danger me-2"></i>
+                                    <lang>热门模型 TOP5</lang>
+                                </h5>
+                                
+                                <?php if (empty($topModels)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th><lang>模型</lang></th>
+                                                    <th class="text-center"><lang>调用次数</lang></th>
+                                                    <th class="text-end"><lang>费用</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($topModels as $index => $model): ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <span class="badge bg-primary me-2"><?= $index + 1 ?></span>
+                                                            <div>
+                                                                <div class="fw-bold"><?= htmlspecialchars($model['model_name'] ?? $model['model_code']) ?></div>
+                                                                <small class="text-muted"><?= htmlspecialchars($model['supplier'] ?? 'Unknown') ?></small>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-model bg-info"><?= number_format($model['calls']) ?></span>
+                                                    </td>
+                                                    <td class="text-end text-success fw-bold">¥<?= number_format($model['cost'], 2) ?></td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Assistants -->
+                    <div class="col-xl-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-star text-warning me-2"></i>
+                                    <lang>热门助手 TOP5</lang>
+                                </h5>
+                                
+                                <?php if (empty($topAssistants)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th><lang>助手</lang></th>
+                                                    <th class="text-center"><lang>使用次数</lang></th>
+                                                    <th class="text-center"><lang>状态</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($topAssistants as $index => $asst): ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <span class="badge bg-warning me-2"><?= $index + 1 ?></span>
+                                                            <div>
+                                                                <div class="fw-bold"><?= htmlspecialchars($asst['name']) ?></div>
+                                                                <small class="text-muted"><?= __($asst['category'] ?? 'other') ?></small>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-model bg-success"><?= number_format($asst['usage_count']) ?></span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <?php if ($asst['is_rentable']): ?>
+                                                            <span class="badge bg-info"><lang>可租用</lang></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary"><lang>私有</lang></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Errors -->
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-alert-circle text-danger me-2"></i>
+                                    <lang>最近错误日志</lang>
+                                </h5>
+                                
+                                <?php if (empty($recentErrors)): ?>
+                                    <div class="alert alert-success">
+                                        <i class="mdi mdi-check-circle me-2"></i>
+                                        <lang>太棒了！暂无错误记录</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th><lang>时间</lang></th>
+                                                    <th><lang>模型</lang></th>
+                                                    <th><lang>错误信息</lang></th>
+                                                    <th><lang>用户ID</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($recentErrors as $error): ?>
+                                                <tr>
+                                                    <td>
+                                                        <small><?= date('Y-m-d H:i:s', $error['created_at']) ?></small>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-secondary"><?= htmlspecialchars($error['model_code']) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <small class="text-danger"><?= htmlspecialchars(mb_substr($error['error_message'], 0, 50)) ?><?= mb_strlen($error['error_message']) > 50 ? '...' : '' ?></small>
+                                                    </td>
+                                                    <td><?= $error['user_id'] ?></td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 趋势图表
+const trendsData = <?= json_encode($trends) ?>;
+
+if (trendsData && trendsData.length > 0) {
+    const ctx = document.getElementById('trendsChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trendsData.map(d => d.label),
+                datasets: [
+                    {
+                        label: '<?= __("调用次数") ?>',
+                        data: trendsData.map(d => d.calls),
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '<?= __("费用 (¥)") ?>',
+                        data: trendsData.map(d => d.cost),
+                        borderColor: 'rgb(56, 239, 125)',
+                        backgroundColor: 'rgba(56, 239, 125, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    if (context.datasetIndex === 1) {
+                                        label += '¥' + context.parsed.y.toFixed(2);
+                                    } else {
+                                        label += context.parsed.y;
+                                    }
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: '<?= __("调用次数") ?>'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: '<?= __("费用 (¥)") ?>'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        },
+                    }
+                }
+            }
+        });
+    }
+}
+
+// 自动刷新（每5分钟）
+setTimeout(function() {
+    location.reload();
+}, 5 * 60 * 1000);
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

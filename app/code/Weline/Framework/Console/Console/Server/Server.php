@@ -13,87 +13,68 @@ class Server {
         $command = PHP_BINARY . ' -S ' . $host . ':' . $port . ' -t ' . PUB.' ' .PUB. 'index.php';
         
         if ($backend) {
-            // 后台运行模式 - 使用proc_open处理
-            if (function_exists('proc_open')) {
-                // 使用proc_open启动后台进程
-                $descriptorspec = [
-                    0 => ['pipe', 'r'],  // stdin
-                    1 => ['pipe', 'w'],  // stdout
-                    2 => ['pipe', 'w'],  // stderr
-                ];
+            // 后台运行模式
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                // Windows 系统：使用 VBS 脚本后台启动（最可靠的方式）
+                // VBS 的 WScript.Shell.Run 可以真正后台启动，不阻塞
                 
-                $process = proc_open($command, $descriptorspec, $pipes);
+                // 创建临时 VBS 脚本文件
+                $tempDir = sys_get_temp_dir();
+                $vbsFile = $tempDir . DS . 'start_server_' . uniqid() . '.vbs';
                 
-                if (is_resource($process)) {
-                    // 获取进程状态
-                    $status = proc_get_status($process);
-                    $pid = $status['pid'];
-                    
-                    // 关闭管道，让进程在后台运行
-                    foreach ($pipes as $pipe) {
-                        if (is_resource($pipe)) {
-                            fclose($pipe);
-                        }
-                    }
-                    
-                    // 等待一下确保进程启动
-                    sleep(1);
-                    
-                    // 验证进程是否真的启动
-                    if ($pid) {
-                        if (function_exists('posix_kill')) {
-                            $isRunning = posix_kill($pid, 0);
-                            if (!$isRunning) {
-                                // 进程没有启动，尝试通过端口获取PID
-                                $pid = self::getProcessIdByPort($port);
-                            }
-                        } else {
-                            // Windows系统检查
-                            $output = [];
-                            exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-                            if (empty($output) || count($output) <= 1) {
-                                // 进程没有启动，尝试通过端口获取PID
-                                $pid = self::getProcessIdByPort($port);
-                            }
-                        }
-                    }
-                    
-                    return $pid;
-                } else {
-                    throw new \Exception('proc_open函数执行失败，无法启动后台进程');
+                // 构造命令参数
+                $phpBinary = str_replace('/', '\\', PHP_BINARY);
+                $pubPath = rtrim(str_replace('/', '\\', PUB), '\\'); // 移除末尾反斜杠
+                $indexPath = $pubPath . '\\index.php';
+                // 使用 rtrim 确保路径不以反斜杠结尾，避免转义引号
+                $cmdLine = sprintf('"%s" -S %s:%d -t "%s" "%s"', $phpBinary, $host, $port, $pubPath, $indexPath);
+                
+                // VBS 脚本内容：使用 Run 方法，第二个参数 0 表示隐藏窗口，第三个参数 false 表示不等待
+                // 注意：VBS 中字符串用双引号包裹，命令行中的引号需要转义
+                $cmdLineEscaped = str_replace('"', '""', $cmdLine); // VBS 中双引号转义为两个双引号
+                $vbsContent = 'Set WshShell = CreateObject("WScript.Shell")' . "\n";
+                $vbsContent .= 'WshShell.Run "' . $cmdLineEscaped . '", 0, False' . "\n";
+                
+                // 写入 VBS 文件
+                file_put_contents($vbsFile, $vbsContent);
+                
+                // 执行 VBS 脚本（cscript //nologo 不显示logo，立即返回）
+                $output = [];
+                $returnVar = 0;
+                exec('cscript //nologo "' . $vbsFile . '"', $output, $returnVar);
+                
+                // 等待进程启动
+                sleep(3); // 增加等待时间到3秒
+                
+                // 调试：不立即删除 VBS 文件，方便排查问题
+                // @unlink($vbsFile);
+                
+                // 通过端口获取进程ID
+                $pid = self::getProcessIdByPort($port);
+                
+                // 如果获取到PID，删除 VBS 文件
+                if ($pid) {
+                    @unlink($vbsFile);
                 }
+                
+                return $pid;
             } else {
-                // 如果proc_open不可用，使用传统方式
-                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                    // Windows系统后台运行 - 使用更可靠的方式
-                    $command = 'start /B ' . $command . ' > NUL 2>&1';
-                    exec($command);
-                    
-                    // 等待一下确保进程启动
-                    sleep(2);
-                    
-                    // 通过端口获取进程ID
+                // Unix/Linux 系统：使用后台执行
+                $command .= ' > /dev/null 2>&1 & echo $!';
+                $output = [];
+                exec($command, $output);
+                $pid = isset($output[0]) ? (int)$output[0] : null;
+                
+                // 等待一下确保进程启动
+                sleep(1);
+                
+                // 验证进程是否真的启动
+                if ($pid && function_exists('posix_kill') && !posix_kill($pid, 0)) {
+                    // 进程没有启动，尝试通过端口获取PID
                     $pid = self::getProcessIdByPort($port);
-                    
-                    return $pid;
-                } else {
-                    // Unix/Linux系统后台运行
-                    $command .= ' > /dev/null 2>&1 & echo $!';
-                    $output = [];
-                    exec($command, $output);
-                    $pid = isset($output[0]) ? (int)$output[0] : null;
-                    
-                    // 等待一下确保进程启动
-                    sleep(1);
-                    
-                    // 验证进程是否真的启动
-                    if ($pid && !posix_kill($pid, 0)) {
-                        // 进程没有启动，尝试通过端口获取PID
-                        $pid = self::getProcessIdByPort($port);
-                    }
-                    
-                    return $pid;
                 }
+                
+                return $pid;
             }
         } else {
             // 实时运行模式 - 真正的实时模式，关闭终端时子进程也会终止

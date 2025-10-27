@@ -12,22 +12,130 @@
          icon="mdi mdi-robot"
          order="15000"/>
     
+    <!-- ==================== 概览与分析 ==================== -->
+    <add source="Weline_Ai::ai_overview" 
+         name="ai_overview" 
+         title="概览与分析" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-monitor-dashboard"
+         order="10"/>
+    
+    <!-- 运营概览 -->
+    <add source="Weline_Ai::ai_dashboard" 
+         name="ai_dashboard" 
+         title="运营概览" 
+         action="ai/backend/dashboard" 
+         parent="Weline_Ai::ai_overview"
+         icon="mdi mdi-view-dashboard"
+         order="10"/>
+    
+    <!-- 商业洞察报表 -->
+    <add source="Weline_Ai::ai_business_insights" 
+         name="ai_business_insights" 
+         title="商业洞察报表" 
+         action="ai/backend/insights" 
+         parent="Weline_Ai::ai_overview"
+         icon="mdi mdi-chart-line"
+         order="20"/>
+    
+    <!-- ==================== 模型管理 ==================== -->
+    <add source="Weline_Ai::ai_model_center" 
+         name="ai_model_center" 
+         title="模型管理" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-cube-outline"
+         order="20"/>
+    
     <!-- AI模型管理 -->
     <add source="Weline_Ai::ai_model_manager" 
          name="ai_model_manager" 
-         title="AI模型管理" 
+         title="AI模型列表" 
          action="ai/backend/model" 
-         parent="Weline_Ai::ai"
+         parent="Weline_Ai::ai_model_center"
          icon="mdi mdi-robot"
          order="10"/>
     
-    <!-- 场景适配器管理 -->
+    <!-- 场景适配器 -->
     <add source="Weline_Ai::ai_adapter_manager" 
          name="ai_adapter_manager" 
          title="场景适配器" 
          action="ai/backend/adapter" 
-         parent="Weline_Ai::ai"
+         parent="Weline_Ai::ai_model_center"
          icon="mdi mdi-puzzle"
+         order="20"/>
+    
+    <!-- 默认模型配置 -->
+    <add source="Weline_Ai::ai_default_model" 
+         name="ai_default_model" 
+         title="默认模型配置" 
+         action="ai/backend/defaultmodel" 
+         parent="Weline_Ai::ai_model_center"
+         icon="mdi mdi-star-settings"
+         order="30"/>
+    
+    <!-- ==================== 助手中心 ==================== -->
+    <add source="Weline_Ai::ai_assistant_center" 
+         name="ai_assistant_center" 
+         title="助手中心" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-account-supervisor-circle"
+         order="30"/>
+    
+    <!-- 助手管理 -->
+    <add source="Weline_Ai::ai_assistant_manager" 
+         name="ai_assistant_manager" 
+         title="助手管理" 
+         action="ai/backend/assistant" 
+         parent="Weline_Ai::ai_assistant_center"
+         icon="mdi mdi-account-supervisor"
+         order="10"/>
+    
+    <!-- 助手市场 -->
+    <add source="Weline_Ai::ai_market" 
+         name="ai_market" 
+         title="助手市场" 
+         action="ai/backend/market" 
+         parent="Weline_Ai::ai_assistant_center"
+         icon="mdi mdi-store"
+         order="20"/>
+    
+    <!-- 我的评分 -->
+    <add source="Weline_Ai::ai_rating_mylist" 
+         name="ai_rating_mylist" 
+         title="我的评分" 
+         action="ai/backend/rating/mylist" 
+         parent="Weline_Ai::ai_assistant_center"
+         icon="mdi mdi-star"
+         order="30"/>
+    
+    <!-- ==================== 系统管理 ==================== -->
+    <add source="Weline_Ai::ai_system_manager" 
+         name="ai_system_manager" 
+         title="系统管理" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-cog-outline"
+         order="40"/>
+    
+    <!-- 用户管理 -->
+    <add source="Weline_Ai::ai_user_manager" 
+         name="ai_user_manager" 
+         title="用户管理" 
+         action="ai/backend/user" 
+         parent="Weline_Ai::ai_system_manager"
+         icon="mdi mdi-account-multiple"
+         order="10"/>
+    
+    <!-- 租户管理 -->
+    <add source="Weline_Ai::ai_tenant_manager" 
+         name="ai_tenant_manager" 
+         title="租户管理" 
+         action="ai/backend/tenant" 
+         parent="Weline_Ai::ai_system_manager"
+         icon="mdi mdi-office-building"
          order="20"/>
     
     <!-- API密钥管理 -->
@@ -35,7 +143,7 @@
          name="ai_apikey_manager" 
          title="API密钥管理" 
          action="ai/backend/apikey" 
-         parent="Weline_Ai::ai"
+         parent="Weline_Ai::ai_system_manager"
          icon="mdi mdi-key"
          order="30"/>
     
@@ -44,71 +152,8 @@
          name="ai_recharge" 
          title="账户充值" 
          action="ai/backend/recharge" 
-         parent="Weline_Ai::ai"
+         parent="Weline_Ai::ai_system_manager"
          icon="mdi mdi-cash-multiple"
-         order="35"/>
-    
-    <!-- 助手市场 -->
-    <add source="Weline_Ai::ai_market" 
-         name="ai_market" 
-         title="助手市场" 
-         action="ai/backend/market" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-store"
-         order="38"/>
-    
-    <!-- 我的评分 -->
-    <add source="Weline_Ai::ai_rating_mylist" 
-         name="ai_rating_mylist" 
-         title="我的评分" 
-         action="ai/backend/rating/mylist" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-star"
-         order="39"/>
-    
-    <!-- 助手管理 -->
-    <add source="Weline_Ai::ai_assistant_manager" 
-         name="ai_assistant_manager" 
-         title="助手管理" 
-         action="ai/backend/assistant" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-account-supervisor"
          order="40"/>
-    
-    <!-- 用户管理 -->
-    <add source="Weline_Ai::ai_user_manager" 
-         name="ai_user_manager" 
-         title="用户管理" 
-         action="ai/backend/user" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-account-multiple"
-         order="45"/>
-    
-    <!-- 租户管理 -->
-    <add source="Weline_Ai::ai_tenant_manager" 
-         name="ai_tenant_manager" 
-         title="租户管理" 
-         action="ai/backend/tenant" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-office-building"
-         order="46"/>
-    
-    <!-- 默认模型配置 -->
-    <add source="Weline_Ai::ai_default_model" 
-         name="ai_default_model" 
-         title="默认模型配置" 
-         action="ai/backend/defaultmodel" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-star-settings"
-         order="50"/>
-    
-    <!-- 商业洞察报表 -->
-    <add source="Weline_Ai::ai_business_insights" 
-         name="ai_business_insights" 
-         title="商业洞察报表" 
-         action="ai/backend/insights" 
-         parent="Weline_Ai::ai"
-         icon="mdi mdi-chart-line"
-         order="60"/>
          
 </menus>

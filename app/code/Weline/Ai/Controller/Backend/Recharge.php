@@ -16,14 +16,12 @@ use Weline\Framework\Acl\Acl;
  */
 class Recharge extends BackendController
 {
-    private RechargeService $rechargeService;
-    
-    public function __construct(
-        Request $request,
-        RechargeService $rechargeService
-    ) {
-        parent::__construct($request);
-        $this->rechargeService = $rechargeService;
+    /**
+     * 获取充值服务（懒加载）
+     */
+    private function getRechargeService(): RechargeService
+    {
+        return ObjectManager::getInstance(RechargeService::class);
     }
     
     /**
@@ -37,11 +35,11 @@ class Recharge extends BackendController
             $userId = 1; // TODO: 从session获取当前登录用户ID
             
             // 获取用户账户信息
-            $accountInfo = $this->rechargeService->getUserAccountInfo($userId);
+            $accountInfo = $this->getRechargeService()->getUserAccountInfo($userId);
             
             // 获取充值记录
             $page = (int)($this->request->getGet('page') ?? 1);
-            $rechargeHistory = $this->rechargeService->getRechargeHistory($userId, $page, 20);
+            $rechargeHistory = $this->getRechargeService()->getRechargeHistory($userId, $page, 20);
             
             $this->assign('accountInfo', $accountInfo);
             $this->assign('rechargeHistory', $rechargeHistory['items']);
@@ -94,7 +92,7 @@ class Recharge extends BackendController
             }
             
             // 创建充值订单
-            $recharge = $this->rechargeService->createRechargeOrder(
+            $recharge = $this->getRechargeService()->createRechargeOrder(
                 $userId,
                 $amount,
                 $paymentMethod
@@ -125,7 +123,7 @@ class Recharge extends BackendController
             // ...
             
             // 处理支付成功
-            $this->rechargeService->handlePaymentSuccess($rechargeId, $transactionId);
+            $this->getRechargeService()->handlePaymentSuccess($rechargeId, $transactionId);
             
             return 'success';
         } catch (\Exception $e) {
@@ -148,7 +146,7 @@ class Recharge extends BackendController
             // ...
             
             // 处理支付成功
-            $this->rechargeService->handlePaymentSuccess($rechargeId, $transactionId);
+            $this->getRechargeService()->handlePaymentSuccess($rechargeId, $transactionId);
             
             return 'success';
         } catch (\Exception $e) {

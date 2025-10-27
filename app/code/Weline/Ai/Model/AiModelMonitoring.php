@@ -17,13 +17,35 @@ class AiModelMonitoring extends Model
 {
     public function _init(): void
     {
-        $this->_table = 'ai_model_monitoring';
-        $this->_id_field_name = 'id';
+        $this->useMainDbMaster();
+        // 表名由框架自动推导：AiModelMonitoring -> ai_model_monitoring
     }
 
     public function setup(ModelSetup $setup, Context $context): void {}
     public function upgrade(ModelSetup $setup, Context $context): void {}
-    public function install(ModelSetup $setup, Context $context): void {}
+    
+    public function install(ModelSetup $setup, Context $context): void
+    {
+        if (!$setup->tableExist()) {
+            $setup->createTable('AI模型监控表')
+                ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
+                ->addColumn('model_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '模型ID')
+                ->addColumn('tenant_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '租户ID')
+                ->addColumn('request_count', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '请求数')
+                ->addColumn('success_count', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '成功数')
+                ->addColumn('error_count', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '错误数')
+                ->addColumn('avg_response_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, '', '平均响应时间')
+                ->addColumn('p95_response_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, '', 'P95响应时间')
+                ->addColumn('p99_response_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, '', 'P99响应时间')
+                ->addColumn('total_cost', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default 0', '总成本')
+                ->addColumn('date', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'not null', '日期')
+                ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '创建时间')
+                ->addIndex('model_id', '', '', 'idx_model_id')
+                ->addIndex('tenant_id', '', '', 'idx_tenant_id')
+                ->addIndex('date', '', '', 'idx_date')
+                ->create();
+        }
+    }
 
     public function getSuccessRate(): float
     {

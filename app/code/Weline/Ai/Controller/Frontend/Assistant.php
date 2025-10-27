@@ -17,6 +17,8 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
+use Weline\Framework\Session\Session;
+use Weline\Framework\Http\Url;
 
 /**
  * AI助手使用控制器
@@ -45,20 +47,36 @@ class Assistant extends FrontendController
     private AdapterScanner $adapterScanner;
 
     /**
+     * @var Session|null
+     */
+    protected ?Session $session;
+
+    /**
+     * @var Url|null
+     */
+    protected ?Url $_url;
+
+    /**
      * 构造函数
      * 
      * @param AiAssistant $aiAssistant
      * @param AiModel $aiModel
      * @param AdapterScanner $adapterScanner
+     * @param Session $session
+     * @param Url $url
      */
     public function __construct(
         AiAssistant $aiAssistant,
         AiModel $aiModel,
-        AdapterScanner $adapterScanner
+        AdapterScanner $adapterScanner,
+        Session $session,
+        Url $url
     ) {
         $this->aiAssistant = $aiAssistant;
         $this->aiModel = $aiModel;
         $this->adapterScanner = $adapterScanner;
+        $this->session = $session;
+        $this->_url = $url;
     }
 
     /**
@@ -68,22 +86,25 @@ class Assistant extends FrontendController
      */
     public function index(): string
     {
-        if (!$this->session->isLogin()) {
-            Message::warning(__('请先登录'));
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        $isLoggedIn = $this->session && $this->session->isLogin();
+        
+        if ($isLoggedIn) {
+            $userId = $this->session->getLoginUserData('entity_id');
+
+            // 获取用户的助手列表
+            $assistants = $this->aiAssistant->reset()
+                ->where('user_id', $userId)
+                ->order('assistant_id', 'DESC')
+                ->select()
+                ->fetch();
+
+            $this->assign('assistants', $assistants->getItems());
+        } else {
+            $this->assign('assistants', []);
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
-
-        // 获取用户的助手列表
-        $assistants = $this->aiAssistant->reset()
-            ->where('user_id', $userId)
-            ->order('created_time', 'DESC')
-            ->select()
-            ->fetch();
-
         $this->assign('page_title', __('我的助手'));
-        $this->assign('assistants', $assistants->getItems());
+        $this->assign('is_logged_in', $isLoggedIn);
 
         return $this->fetch();
     }
@@ -124,14 +145,14 @@ class Assistant extends FrontendController
     public function save(): string
     {
         if (!$this->session->isLogin()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
         }
 
         if (!$this->request->isPost()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('无效的请求方法')
             ]);
@@ -146,7 +167,7 @@ class Assistant extends FrontendController
 
         // 验证必填字段
         if (empty($name) || empty($prompt) || empty($modelCode)) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请填写所有必填字段')
             ]);
@@ -167,7 +188,7 @@ class Assistant extends FrontendController
             ]);
             $assistant->save();
 
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('助手创建成功'),
                 'data' => [
@@ -175,7 +196,7 @@ class Assistant extends FrontendController
                 ]
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('创建失败：%{1}', $e->getMessage())
             ]);
@@ -230,7 +251,7 @@ class Assistant extends FrontendController
     public function delete(): string
     {
         if (!$this->session->isLogin()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
@@ -244,7 +265,7 @@ class Assistant extends FrontendController
 
             // 验证助手所有权
             if ($assistant->getData('user_id') != $userId) {
-                return $this->jsonResponse([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('无权操作此助手')
                 ]);
@@ -252,12 +273,12 @@ class Assistant extends FrontendController
 
             $assistant->delete();
 
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('助手已删除')
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('删除失败：%{1}', $e->getMessage())
             ]);
@@ -293,16 +314,5 @@ class Assistant extends FrontendController
         return $this->fetch();
     }
 
-    /**
-     * JSON响应
-     * 
-     * @param array $data
-     * @return string
-     */
-    private function jsonResponse(array $data): string
-    {
-        $this->response->setHeader('Content-Type', 'application/json');
-        return json_encode($data);
-    }
 }
 

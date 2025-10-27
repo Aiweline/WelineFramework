@@ -1,0 +1,3 @@
+"验证器应用未部署，请运行: php bin/w deploy:upgrade","Authenticator app not deployed, please run: php bin/w deploy:upgrade"
+"用户头像","User Avatar"
+

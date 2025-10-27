@@ -53,13 +53,67 @@ class Upgrade extends CommandAbstract
                     mkdir($pub_view_dir, 0775, true);
                 }
 
-                $out = $this->system->exec("cp -rf $origin_view_dir $pub_view_dir");
-                if ($out) {
-                    $this->printer->warning(implode('', $out['output']));
+                // 使用跨平台的文件复制方法
+                if (IS_WIN) {
+                    // Windows系统：使用PHP递归复制
+                    $this->recursiveCopy($origin_view_dir, $pub_view_dir);
+                } else {
+                    // Linux/Unix系统：使用系统命令
+                    $out = $this->system->exec("cp -rf $origin_view_dir $pub_view_dir");
+                    if ($out) {
+                        $this->printer->warning(implode('', $out['output']));
+                    }
                 }
             }
         }
         $this->printer->success('静态文件部署完毕！');
+    }
+
+    /**
+     * 递归复制目录（跨平台兼容）
+     *
+     * @param string $source 源目录
+     * @param string $dest 目标目录
+     * @return void
+     */
+    private function recursiveCopy(string $source, string $dest): void
+    {
+        // 确保源目录存在
+        if (!is_dir($source)) {
+            return;
+        }
+
+        // 创建目标目录的父目录
+        $parent_dest = dirname($dest);
+        if (!is_dir($parent_dest)) {
+            mkdir($parent_dest, 0775, true);
+        }
+
+        // 遍历源目录
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            // 计算相对路径
+            $relativePath = substr($item->getPathname(), strlen($source));
+            $destPath = $dest . $relativePath;
+
+            if ($item->isDir()) {
+                // 创建目录
+                if (!is_dir($destPath)) {
+                    mkdir($destPath, 0775, true);
+                }
+            } else {
+                // 复制文件
+                $destDir = dirname($destPath);
+                if (!is_dir($destDir)) {
+                    mkdir($destDir, 0775, true);
+                }
+                copy($item->getPathname(), $destPath);
+            }
+        }
     }
 
     public function tip(): string

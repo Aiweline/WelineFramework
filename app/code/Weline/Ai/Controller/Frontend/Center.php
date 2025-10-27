@@ -17,6 +17,8 @@ use Weline\Ai\Model\AiAssistant;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Session\Session;
+use Weline\Framework\Http\Url;
 
 /**
  * 用户个人中心控制器
@@ -40,17 +42,33 @@ class Center extends FrontendController
     private AiAssistant $aiAssistant;
 
     /**
+     * @var Session|null
+     */
+    protected ?Session $session;
+
+    /**
+     * @var Url|null
+     */
+    protected ?Url $_url;
+
+    /**
      * 构造函数
      * 
      * @param AiApiKey $aiApiKey
      * @param AiAssistant $aiAssistant
+     * @param Session $session
+     * @param Url $url
      */
     public function __construct(
         AiApiKey $aiApiKey,
-        AiAssistant $aiAssistant
+        AiAssistant $aiAssistant,
+        Session $session,
+        Url $url
     ) {
         $this->aiApiKey = $aiApiKey;
         $this->aiAssistant = $aiAssistant;
+        $this->session = $session;
+        $this->_url = $url;
     }
 
     /**
@@ -60,11 +78,7 @@ class Center extends FrontendController
      */
     private function checkLogin(): bool
     {
-        if (!$this->session->isLogin()) {
-            Message::warning(__('请先登录'));
-            return false;
-        }
-        return true;
+        return $this->session && $this->session->isLogin();
     }
 
     /**
@@ -74,30 +88,36 @@ class Center extends FrontendController
      */
     public function index(): string
     {
-        if (!$this->checkLogin()) {
-            return $this->redirect($this->_url->getFrontendUrl('*/frontend/index'));
+        $isLoggedIn = $this->checkLogin();
+        
+        if ($isLoggedIn) {
+            $userId = $this->session->getLoginUserData('entity_id');
+
+            // 获取用户的API密钥数量
+            $apiKeyCount = $this->aiApiKey->reset()
+                ->where('user_id', $userId)
+                ->select()
+                ->fetch()
+                ->count();
+
+            // 获取用户的助手数量
+            $assistantCount = $this->aiAssistant->reset()
+                ->where('user_id', $userId)
+                ->select()
+                ->fetch()
+                ->count();
+
+            $this->assign('api_key_count', $apiKeyCount);
+            $this->assign('assistant_count', $assistantCount);
+            $this->assign('user', $this->session->getLoginUserData());
+        } else {
+            $this->assign('api_key_count', 0);
+            $this->assign('assistant_count', 0);
+            $this->assign('user', []);
         }
 
-        $userId = $this->session->getLoginUserData('entity_id');
-
-        // 获取用户的API密钥数量
-        $apiKeyCount = $this->aiApiKey->reset()
-            ->where('user_id', $userId)
-            ->select()
-            ->fetch()
-            ->count();
-
-        // 获取用户的助手数量
-        $assistantCount = $this->aiAssistant->reset()
-            ->where('user_id', $userId)
-            ->select()
-            ->fetch()
-            ->count();
-
         $this->assign('page_title', __('个人中心'));
-        $this->assign('api_key_count', $apiKeyCount);
-        $this->assign('assistant_count', $assistantCount);
-        $this->assign('user', $this->session->getLoginUserData());
+        $this->assign('is_logged_in', $isLoggedIn);
 
         return $this->fetch();
     }
@@ -136,14 +156,14 @@ class Center extends FrontendController
     public function createApiKey(): string
     {
         if (!$this->checkLogin()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
         }
 
         if (!$this->request->isPost()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('无效的请求方法')
             ]);
@@ -153,7 +173,7 @@ class Center extends FrontendController
         $name = $this->request->getPost('name', '');
 
         if (empty($name)) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('密钥名称不能为空')
             ]);
@@ -177,7 +197,7 @@ class Center extends FrontendController
             ]);
             $apiKey->save();
 
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('API密钥创建成功，等待管理员审核'),
                 'data' => [
@@ -188,7 +208,7 @@ class Center extends FrontendController
                 ]
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('创建失败：%{1}', $e->getMessage())
             ]);
@@ -203,7 +223,7 @@ class Center extends FrontendController
     public function deleteApiKey(): string
     {
         if (!$this->checkLogin()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('请先登录')
             ]);
@@ -217,7 +237,7 @@ class Center extends FrontendController
             
             // 验证密钥所有权
             if ($apiKey->getData('user_id') != $userId) {
-                return $this->jsonResponse([
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('无权操作此密钥')
                 ]);
@@ -225,12 +245,12 @@ class Center extends FrontendController
 
             $apiKey->delete();
 
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('API密钥已删除')
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('删除失败：%{1}', $e->getMessage())
             ]);
@@ -309,16 +329,6 @@ class Center extends FrontendController
         return $this->fetch();
     }
 
-    /**
-     * JSON响应
-     * 
-     * @param array $data
-     * @return string
-     */
-    private function jsonResponse(array $data): string
-    {
-        $this->response->setHeader('Content-Type', 'application/json');
-        return json_encode($data);
-    }
 }
+
 

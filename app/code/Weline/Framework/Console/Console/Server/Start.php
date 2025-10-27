@@ -12,6 +12,8 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Start implements CommandInterface
 {
+    use TablePrinter;
+    
     function __construct(
         private Set      $set,
         private System   $system,
@@ -109,8 +111,14 @@ class Start implements CommandInterface
                     }
                     
                     // 显示服务器信息
-                    $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
-                    $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
+                    echo "\n";
+                    $this->printTable('服务访问地址', [
+                        ['前端首页', "http://{$host}:{$port}/"],
+                        ['前端API', "http://{$host}:{$port}/api/rest"],
+                        ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
+                        ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+                    ]);
+                    echo "\n";
                     
                     // 如果是后台模式，显示后台运行信息
                     $this->printer->success(__('服务器已在后台运行'));
@@ -120,8 +128,14 @@ class Start implements CommandInterface
                     return;
                 } else {
                     $this->printer->warning(__('检测到端口被占用，但无法获取进程信息'));
-                    $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
-                    $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
+                    echo "\n";
+                    $this->printTable('服务访问地址', [
+                        ['前端首页', "http://{$host}:{$port}/"],
+                        ['前端API', "http://{$host}:{$port}/api/rest"],
+                        ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
+                        ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+                    ]);
+                    echo "\n";
                     $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
                     return;
                 }
@@ -131,30 +145,47 @@ class Start implements CommandInterface
         # 咨询，WEB服务器会将部署模式设置为DEV
         $this->printer->warning(__('开发专用，请勿用于生产环境。'));
         $this->printer->note(__('启用PHP内置本地WebServer服务...'));
-        $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
-        $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
-        # 局域网
-        # 获取本机局域网IP
-        $this->printer->note(__('局域网访问：'));
-        $this->printer->note(__('局域网地址：http://%{1}:%{2}/%{3}/admin/login', [$this->system->getLocalIp(), $port, Env::get('admin')]));
-        $this->printer->note(__('局域网API地址：http://%{1}:%{2}/%{3}/rest', [$this->system->getLocalIp(), $port, Env::get('api_admin')]));
+        echo "\n";
+        
+        // 本地访问地址
+        $this->printTable('本地访问地址', [
+            ['前端首页', "http://{$host}:{$port}/"],
+            ['前端API', "http://{$host}:{$port}/api/rest"],
+            ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
+            ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+        ]);
+        
+        echo "\n";
+        
+        // 局域网访问地址
+        $localIp = $this->system->getLocalIp();
+        $this->printTable('局域网访问地址', [
+            ['前端首页', "http://{$localIp}:{$port}/"],
+            ['前端API', "http://{$localIp}:{$port}/api/rest"],
+            ['后端管理', "http://{$localIp}:{$port}/" . Env::get('admin') . "/admin/login"],
+            ['后端API', "http://{$localIp}:{$port}/" . Env::get('api_admin') . "/rest"],
+        ]);
+        
+        echo "\n";
 
-        # 调用静态文件部署
-        # 注意：这里的 force 参数已经在上面定义过了，不需要重复定义
-        if (!$force && Env::get('deploy') !== 'dev') {
-            $this->printer->setup(__('启用PHP内置服务器需要将部署模式\'设置为dev，当前部署模式为 %{1}，是否继续(y/n)?', Env::get('deploy') ?? 'default'));
+        # 检查部署模式，如果是生产环境给出强烈警告
+        $currentMode = Env::get('deploy');
+        if ($currentMode === 'prod' || $currentMode === 'production') {
+            $this->printer->error(__('⚠️  警告：当前处于生产环境模式（%{1}）！', [$currentMode]));
+            $this->printer->error(__('⚠️  PHP内置服务器仅供开发和测试使用，不适合生产环境！'));
+            $this->printer->error(__('⚠️  生产环境请使用Nginx或Apache等专业Web服务器！'));
+            $this->printer->error(__('⚠️  继续使用PHP内置服务器可能导致性能问题和安全风险！'));
+            
+            // 使用echo直接输出提示，不换行，然后等待输入
+            echo $this->printer->colorize(__('是否仍要在生产模式下启动PHP内置服务器？(输入 y/yes 继续，其他任意键取消):'), 'Red');
             $input = $this->system->input();
-            if (strtolower(chop($input)) !== 'y' && strtolower(chop($input)) !== 'yes') {
-                $this->printer->setup('已为您取消操作！');
+            
+            $inputLower = strtolower(trim($input));
+            if ($inputLower !== 'yes' && $inputLower !== 'y') {
+                $this->printer->setup('已为您取消操作！建议使用 php bin/w deploy:mode:set dev 切换到开发模式。');
                 return;
             }
-            $this->set->deploy('dev');
-        }
-        if (Env::get('deploy') !== 'dev') {
-            # 清理缓存
-            ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class)->execute();
-            # 强制部署开发环境
-            $this->set->deploy('prod');
+            $this->printer->error(__('⚠️  您已选择在生产模式下使用PHP内置服务器，请自行承担风险！'));
         }
         
         // 启动服务器并记录进程ID

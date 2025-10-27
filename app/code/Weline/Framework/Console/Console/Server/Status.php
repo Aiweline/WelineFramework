@@ -8,6 +8,8 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Status implements CommandInterface
 {
+    use TablePrinter;
+    
     function __construct(
         private Printing $printer
     )
@@ -75,21 +77,39 @@ class Status implements CommandInterface
     {
         if ($isRunning) {
             $this->printer->success(__('服务器正在运行'));
-            $this->printer->note(__('进程ID：%{1}', [$pid]));
-            $this->printer->note(__('监听地址：%{1}:%{2}', [$host, $port]));
+            echo "\n";
             
+            // 准备数据
+            $runningTimeStr = '-';
             if ($startTime) {
                 $runningTime = time() - $startTime;
                 $hours = floor($runningTime / 3600);
                 $minutes = floor(($runningTime % 3600) / 60);
                 $seconds = $runningTime % 60;
-                $this->printer->note(__('运行时间：%{1}小时%{2}分钟%{3}秒', [$hours, $minutes, $seconds]));
+                $runningTimeStr = sprintf('%d小时%d分钟%d秒', $hours, $minutes, $seconds);
             }
             
-            $this->printer->note(__('后端地址：http://%{1}:%{2}/%{3}/admin/login', [$host, $port, Env::get('admin')]));
-            $this->printer->note(__('后端API地址：http://%{1}:%{2}/%{3}/rest', [$host, $port, Env::get('api_admin')]));
+            // 服务器基本信息表格
+            $this->printTable('服务器信息', [
+                ['进程ID', $pid],
+                ['监听地址', "{$host}:{$port}"],
+                ['运行时间', $runningTimeStr],
+            ]);
+            
+            echo "\n";
+            
+            // 访问地址表格
+            $this->printTable('访问地址', [
+                ['前端首页', "http://{$host}:{$port}/"],
+                ['前端API', "http://{$host}:{$port}/api/rest"],
+                ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
+                ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
+            ]);
+            
+            echo "\n";
         }
     }
+    
 
     /**
      * 检查进程是否正在运行

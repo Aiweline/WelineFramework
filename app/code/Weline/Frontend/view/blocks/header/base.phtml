@@ -296,24 +296,34 @@ endif;
         } else {
             window.site.i18n[phrase] = phrase
         }
-        if (arguments) {
+        if (arguments !== null && arguments !== undefined) {
             switch (arguments.constructor) {
                 case String:
-                    phrase = phrase.replace(/%\{1\}/g, arguments)
+                case Number:
+                    // 支持 %{} 通用占位符（与PHP一致）
+                    // 如果存在 %{1}，先转换为 %{}
+                    if (phrase.includes('%{1}')) {
+                        phrase = phrase.replace(/%\{1\}/g, '%{}');
+                    }
+                    // 替换 %{} 占位符
+                    phrase = phrase.replace(/%\{\}/g, arguments);
                     break;
                 case Object:
+                    // 支持命名参数，如 %{name}, %{count}
                     for (let argument_key in arguments) {
-                        let arg = arguments[argument_key]
-                        let regExp = new RegExp(eval('/%\\{' + argument_key + '\\}/g'));
-                        phrase = phrase.replace(regExp, arg)
+                        let arg = arguments[argument_key];
+                        let regExp = new RegExp('%\\{' + argument_key + '\\}', 'g');
+                        phrase = phrase.replace(regExp, arg ?? '');
                     }
                     break;
                 case Array:
+                    // 支持数组参数，如 %{1}, %{2}
                     for (let argument_key in arguments) {
-                        let arg = arguments[argument_key]
-                        argument_key = 1 + parseInt(argument_key)
-                        let regExp = new RegExp(eval('/%' + argument_key + '/g'));
-                        phrase = phrase.replace(regExp, arg)
+                        let arg = arguments[argument_key];
+                        // 数组索引从0开始，占位符从1开始
+                        let placeholderKey = 1 + parseInt(argument_key);
+                        let regExp = new RegExp('%\\{' + placeholderKey + '\\}', 'g');
+                        phrase = phrase.replace(regExp, arg ?? '');
                     }
                     break;
             }
