@@ -8,9 +8,9 @@
  * @fields_start
  * 
  * group:logo => Logo设置
- * logo.display => 显示Logo:select:no|yes,no
+ * logo.display => 显示Logo:select:yes|yes,no
  * logo.url => Logo地址:textarea:
- * logo.position => Logo位置:select:center|left,center,right
+ * logo.position => Logo位置:select:left|left,center,right
  * logo.width => Logo宽度:responsive:120/200|px[移动端120px，PC端200px]
  * 
  * group:header_style => 头部样式设置
@@ -20,6 +20,10 @@
  * group:header_container => 容器设置
  * header_container.max_width => 最大宽度:responsive:100/1280|%/px[移动端100%，PC端1280px]
  * header_container.padding_h => 左右内边距:responsive:16/20|px[移动端16px，PC端20px]
+ * 
+ * group:custom_css => 自定义CSS
+ * custom_css.enabled => 启用自定义CSS:select:no|yes,no
+ * custom_css.code => 自定义CSS代码:textarea:
  * 
  * @fields_end
  */
@@ -77,6 +81,10 @@ $paddingV = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'he
 $containerMaxWidth = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'header_container.max_width', '100/1280')));
 $containerPaddingH = genResponsiveCSS(parseResponsive(getHeaderConfig($styleSettings, 'header_container.padding_h', '16/40') . 'px'));
 
+// 自定义CSS配置
+$customCssEnabled = getHeaderConfig($styleSettings, 'custom_css.enabled', 'no');
+$customCssCode = getHeaderConfig($styleSettings, 'custom_css.code', '');
+
 $pageTitle = $page ? $page->getData('title') : '';
 
 // 检测是否为预览模式
@@ -95,6 +103,11 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
     
+    <?php if ($page && $page->getData('icon')): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <?php endif; ?>
+    
     <?php if ($metaDescription): ?>
     <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
     <?php endif; ?>
@@ -110,6 +123,82 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
+    <?php endif; ?>
+    
+    <!-- 预览模式调试信息 -->
+    <?php if ($isPreview): ?>
+    <script>
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c🔍 页面预览调试信息 (Page Preview Debug Info)', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        
+        // 页面数据
+        const pageData = <?= json_encode([
+            'page_id' => $page ? $page->getData('page_id') : null,
+            'title' => $page ? $page->getData('title') : '',
+            'name' => $page ? $page->getData('name') : '',
+            'handle' => $page ? $page->getData('handle') : '',
+            'style' => $page ? $page->getData('style') : '',
+            'status' => $page ? $page->getData('status') : '',
+            'logo' => $page ? $page->getData('logo') : '',
+            'icon' => $page ? $page->getData('icon') : '',
+            'ga4_id' => $page ? $page->getData('ga4_id') : '',
+            'gtm_id' => $page ? $page->getData('gtm_id') : '',
+            'fb_pixel_id' => $page ? $page->getData('fb_pixel_id') : '',
+            'meta_title' => $page ? $page->getData('meta_title') : '',
+            'meta_description' => $page ? $page->getData('meta_description') : '',
+            'meta_keywords' => $page ? $page->getData('meta_keywords') : '',
+            'default_locale' => $page ? $page->getData('default_locale') : '',
+            'locales' => $page ? $page->getData('locales') : '',
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
+        
+        console.log('%c📄 页面数据 (Page Data):', 'color: #ffcc00; font-weight: bold;');
+        console.log(pageData);
+        
+        // 样式配置
+        const styleSettings = <?= json_encode($styleSettings, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
+        
+        console.log('%c🎨 样式配置 (Style Settings):', 'color: #ffcc00; font-weight: bold;');
+        console.log(styleSettings);
+        
+        // Logo 配置
+        const logoConfig = {
+            display: '<?= htmlspecialchars($logoDisplay) ?>',
+            url: '<?= htmlspecialchars($logoUrl) ?>',
+            position: '<?= htmlspecialchars($logoPosition) ?>',
+            width: '<?= $logoWidth ?>'
+        };
+        
+        console.log('%c🖼️ Logo 配置 (Logo Config):', 'color: #ffcc00; font-weight: bold;');
+        console.log(logoConfig);
+        
+        // 头部样式配置
+        const headerStyle = {
+            background_color: '<?= htmlspecialchars($bgColor) ?>',
+            padding_v: '<?= $paddingV ?>',
+            container_max_width: '<?= $containerMaxWidth ?>',
+            container_padding_h: '<?= $containerPaddingH ?>'
+        };
+        
+        console.log('%c📐 头部样式 (Header Style):', 'color: #ffcc00; font-weight: bold;');
+        console.log(headerStyle);
+        
+        // 环境信息
+        const envInfo = {
+            is_preview: <?= $isPreview ? 'true' : 'false' ?>,
+            locale: '<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>',
+            current_url: window.location.href,
+            user_agent: navigator.userAgent
+        };
+        
+        console.log('%c⚙️ 环境信息 (Environment Info):', 'color: #ffcc00; font-weight: bold;');
+        console.log(envInfo);
+        
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c✅ 调试信息输出完成！', 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log('%c💡 提示：展开上面的对象可以查看详细配置信息', 'color: #999999; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+    </script>
     <?php endif; ?>
     
     <style>
@@ -157,6 +246,11 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
                 max-width: 100%;
             }
         }
+        
+        <?php if ($customCssEnabled === 'yes' && $customCssCode): ?>
+        /* 自定义CSS */
+        <?= $customCssCode ?>
+        <?php endif; ?>
 </style>
 </head>
 <body>

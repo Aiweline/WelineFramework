@@ -1,0 +1,554 @@
+<?php
+/**
+ * Algorithmic Trading Landing Page - Content
+ * 算法交易落地页模板 - 内容
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:intro => 介绍部分
+ * intro.text1 => 段落1:textarea:You're about to discover how our proprietary algorithm has alerted to SIXTEEN 50%+ gainers in just one month alone.
+ * intro.text2 => 段落2:textarea:Not only that… it finds these winners in any market condition… good or bad… bull or bear.
+ * intro.text3 => 段落3:textarea:Over the course of this short letter\, you'll witness how this algorithm crushes it for people just like you (in a matter of minutes)\, and why now is the perfect time to access it completely FREE.
+ * intro.margin => 下边距:responsive:40/60|px
+ * 
+ * group:stats => 算法统计
+ * stats.title => 统计标题:textarea:HERE'S WHAT OUR ALGORITHM HAS ALERTED TO IN THE LAST 30 DAYS…
+ * stats.text1 => 文字1:text:The above results may not be typical.
+ * stats.text2 => 文字2:textarea:Now\, you're probably wondering why retail traders like you lose 90% of the time… Yet hedge funds and institutions make billions year after year?
+ * stats.text3 => 文字3:textarea:It has nothing to do with education\, experience\, or anything else.
+ * stats.text4 => 文字4:textarea:It's simply because they've leveraged computer technology to do their dirty work.
+ * stats.highlight => 高亮文字:textarea:This is why now is the time to officially level the playing field and gain access to the same powerful tools institutional traders use.
+ * stats.text5 => 文字5:textarea:We've recently cracked the code to Wall Street's success with our new proprietary Oracle Algorithm that not only took us $3 million to build…
+ * stats.text6 => 文字6:textarea:But one that's already alerted sixteen 50%+ gainers within the last month alone.
+ * stats.text7 => 文字7:text:The best part?
+ * stats.text8 => 文字8:textarea:We're sharing it with you today completely free of charge.
+ * stats.margin => 下边距:responsive:40/60|px
+ * 
+ * group:cta_middle => 中间CTA
+ * cta_middle.enabled => 显示中间CTA:select:yes|yes,no
+ * cta_middle.text => 按钮文字:text:CLICK HERE TO ACCESS THE ORACLE ALGORITHM FOR FREE
+ * cta_middle.url => 按钮链接:textarea:#
+ * cta_middle.margin => 下边距:responsive:40/60|px
+ * 
+ * group:why => 为什么有效
+ * why.title => 标题:text:WHY ALGORITHMIC TRADING WORKS AND HOW YOU CAN BENEFIT
+ * why.intro => 介绍文字:textarea:So what exactly is algorithmic trading\, and how will it help you make more money?
+ * why.benefit_text => 优势说明:text:Here are the three BIGGEST benefits of algorithmic trading:
+ * 
+ * why.point1_title => 要点1标题:text:Accuracy and Fewer Mistakes:
+ * why.point1_text => 要点1内容:textarea:There is minimum human intervention in algorithmic trading\, so there is a lower chance of making dangerous trading mistakes.
+ * why.point1_detail => 要点1详情:textarea:Using the algorithm\, we sift through 15\,000 stocks every second. Our algorithm searches for a 5 to 1 risk ratio\, meaning $1 of risk to make $5 on each trade. It generates 15 trading opportunities a day and we alert one of them.
+ * 
+ * why.point2_title => 要点2标题:text:The Algorithm is Working Hard 24\/7:
+ * why.point2_text => 要点2内容:textarea:A computer doesn't need sleep\, so our trading algorithms can always find trades when the market is open.
+ * why.point2_detail => 要点2详情:textarea:There is no missing any qualified trade setup with algorithmic trading because our algo scans the markets even while you sleep.
+ * why.point2_extra => 要点2补充:textarea:Then it alerts a watchlist of stocks before the market opens so you're ready to trade.
+ * 
+ * why.point3_title => 要点3标题:text:Emotionless Trade Decisions:
+ * why.point3_text => 要点3内容:textarea:Your emotions in trading expose you to unnecessary risk. When you lose capital because of emotional trading\, you tend to revenge trade or overtrade…
+ * why.point3_detail => 要点3详情:textarea:There's an intense feeling to overcome the loss as quickly as possible. And to do so\, you start taking random trades that can cause more harm than good.
+ * why.point3_extra => 要点3补充:textarea:By using "Algorithmic Trading" you remove decisions based on emotion and can make trade decisions based on statistics.
+ * why.margin => 下边距:responsive:40/60|px
+ * 
+ * group:cta_why => Why区域后CTA
+ * cta_why.enabled => 显示Why后CTA:select:yes|yes,no
+ * cta_why.text => 按钮文字:text:YES! I WANT FREE ACCESS TO THE ORACLE ALGORITHM NOW!
+ * cta_why.url => 按钮链接:textarea:#
+ * cta_why.margin => 下边距:responsive:40/60|px
+ * 
+ * group:testimonials => 推荐评价
+ * testimonials.enabled => 显示推荐:select:yes|yes,no
+ * testimonials.title => 标题:textarea:MEET THE TEAM OF EXPERT TRADERS & EDUCATORS BEHIND THE ORACLE ALGORITHM
+ * 
+ * testimonials.person1_name => 推荐人1姓名:text:Tim Bohen
+ * testimonials.person1_title => 推荐人1头衔:textarea:Lead Trainer With Trader Career Earnings of Over $2.3 Million
+ * testimonials.person1_avatar => 推荐人1头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/tbohen-profile.png
+ * 
+ * testimonials.person2_name => 推荐人2姓名:text:Matt Monaco
+ * testimonials.person2_title => 推荐人2头衔:textarea:Trading Coach & Former Poker Pro
+ * testimonials.person2_avatar => 推荐人2头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/monaco-profile.png
+ * 
+ * testimonials.person3_name => 推荐人3姓名:text:Bryce Tuohey
+ * testimonials.person3_title => 推荐人3头衔:textarea:Lead Trainer With Over 20 Years Of Trading Experience
+ * testimonials.person3_avatar => 推荐人3头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/bryce-profile.png
+ * 
+ * testimonials.person4_name => 推荐人4姓名:text:Caleb Smith
+ * testimonials.person4_title => 推荐人4头衔:textarea:Active Trader & Community Leader
+ * testimonials.person4_avatar => 推荐人4头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/caleb-profile.png
+ * 
+ * testimonials.person5_name => 推荐人5姓名:text:Erik Fisher
+ * testimonials.person5_title => 推荐人5头衔:textarea:Short Selling Expert & Trading Coach
+ * testimonials.person5_avatar => 推荐人5头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/erik-profile.png
+ * 
+ * testimonials.person6_name => 推荐人6姓名:text:Danny Phee
+ * testimonials.person6_title => 推荐人6头衔:textarea:Penny Stock Specialist & Options Trader
+ * testimonials.person6_avatar => 推荐人6头像:textarea:https\:\/\/lp.stockstotrade.com\/algo-trader\/images\/danny-profile.png
+ * 
+ * group:final_cta => 最终CTA
+ * final_cta.enabled => 显示最终CTA:select:yes|yes,no
+ * final_cta.text => 按钮文字:text:CLICK HERE TO GET FREE ACCESS TO THE ORACLE ALGORITHM
+ * final_cta.url => 按钮链接:textarea:#
+ * final_cta.target => 打开方式:select:_self|_self,_blank
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getAlgoContentConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseAlgoContentResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genAlgoContentCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 介绍部分配置
+$introText1 = getAlgoContentConfig($styleSettings, 'intro.text1', 'It\'s no secret that Wall Street has rigged the stock market in their favor…');
+$introText2 = getAlgoContentConfig($styleSettings, 'intro.text2', 'It\'s why they rake in billions of dollars any given day while retail traders like you are left picking up the scraps.');
+$introText3 = getAlgoContentConfig($styleSettings, 'intro.text3', 'However, the main reason Wall Street institutions crush the markets day in and day out simply has to do with the fact that…');
+$introMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'intro.margin', '40/60') . 'px'));
+
+// 统计部分配置
+$statsTitle = getAlgoContentConfig($styleSettings, 'stats.title', 'Computer Algorithms Do Up To 75% Of All Stock Trades');
+$statsMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'stats.margin', '40/60') . 'px'));
+
+// 中间CTA配置
+$ctaMiddleEnabled = getAlgoContentConfig($styleSettings, 'cta_middle.enabled', 'yes');
+$ctaMiddleText = getAlgoContentConfig($styleSettings, 'cta_middle.text', 'Send Me ALGO Trade Alerts »');
+$ctaMiddleUrl = getAlgoContentConfig($styleSettings, 'cta_middle.url', '#');
+$ctaMiddleMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'cta_middle.margin', '40/60') . 'px'));
+
+// 为什么有效部分配置
+$whyTitle = getAlgoContentConfig($styleSettings, 'why.title', 'Why Do Our Algorithm\'s Trade Alerts Work So Well?');
+$whyIntro = getAlgoContentConfig($styleSettings, 'why.intro', 'The Oracle Algorithm is our system that uses computer-generated algorithms to transform complicated stocks into simple yet effective trade alerts...');
+$whyBenefitText = getAlgoContentConfig($styleSettings, 'why.benefit_text', 'Algorithmic alerts offer three benefits:');
+$whyMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'why.margin', '40/60') . 'px'));
+
+// Why后CTA配置
+$ctaWhyEnabled = getAlgoContentConfig($styleSettings, 'cta_why.enabled', 'yes');
+$ctaWhyText = getAlgoContentConfig($styleSettings, 'cta_why.text', 'Send Me ALGO Trade Alerts »');
+$ctaWhyUrl = getAlgoContentConfig($styleSettings, 'cta_why.url', '#');
+$ctaWhyMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'cta_why.margin', '40/60') . 'px'));
+
+// 推荐评价配置
+$testimonialsEnabled = getAlgoContentConfig($styleSettings, 'testimonials.enabled', 'yes');
+$testimonialsTitle = getAlgoContentConfig($styleSettings, 'testimonials.title', 'Millionaire Traders and Senior Trade Analysts who use algorithmic trade alerts:');
+
+// 最终CTA配置
+$finalCtaEnabled = getAlgoContentConfig($styleSettings, 'final_cta.enabled', 'yes');
+$finalCtaText = getAlgoContentConfig($styleSettings, 'final_cta.text', 'Send Me ALGO Trade Alerts »');
+$finalCtaUrl = getAlgoContentConfig($styleSettings, 'final_cta.url', '#');
+$finalCtaTarget = getAlgoContentConfig($styleSettings, 'final_cta.target', '_self');
+
+// 推荐人数据
+$testimonials = [
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person1_name', 'Tim Bohen'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person1_title', 'StocksToTrade\'s Lead Trainer and 15-year trading veteran.'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person1_avatar', 'https://lp.stockstotrade.com/algo-trader/images/tbohen-profile.png'),
+    ],
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person2_name', 'Matt Monaco'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person2_title', 'Turned $2,000 into nearly $2 million in lifetime trading profits by the age of 26!'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person2_avatar', 'https://lp.stockstotrade.com/algo-trader/images/monaco-profile.png'),
+    ],
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person3_name', 'Bryce Tuohey'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person3_title', 'A college dropout who pursued day trading and has made over $1 million in trading profits.'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person3_avatar', 'https://lp.stockstotrade.com/algo-trader/images/bryce-profile.png'),
+    ],
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person4_name', 'Caleb Horst'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person4_title', 'Globetrotting musician-turned-successful day trader with a passion for teaching...'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person4_avatar', 'https://lp.stockstotrade.com/algo-trader/images/caleb-profile.png'),
+    ],
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person5_name', 'Erik Slaikeu'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person5_title', 'Decorated marine & combat veteran, successful serial entrepreneur, and investor.'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person5_avatar', 'https://lp.stockstotrade.com/algo-trader/images/erik-profile.png'),
+    ],
+    [
+        'name' => getAlgoContentConfig($styleSettings, 'testimonials.person6_name', 'Danny Phee'),
+        'title' => getAlgoContentConfig($styleSettings, 'testimonials.person6_title', 'An avid trader & real estate coach who\'s helped clients realize over 8-figures in profits!'),
+        'avatar' => getAlgoContentConfig($styleSettings, 'testimonials.person6_avatar', 'https://lp.stockstotrade.com/algo-trader/images/danny-profile.png'),
+    ],
+];
+?>
+
+<style>
+/* 介绍部分 */
+.algo-intro-section {
+    margin-bottom: <?= $introMargin ?>;
+    text-align: left;
+    max-width: 100%;
+}
+
+.algo-intro-text {
+    font-size: 21px;
+    line-height: 1.6;
+    color: #333333;
+    margin-bottom: 15px;
+}
+
+p, p * {
+    font-size: 21px;
+}
+
+/* 统计部分 */
+.algo-stats-section {
+    margin-bottom: <?= $statsMargin ?>;
+}
+
+.algo-stats-title {
+    font-size: clamp(22px, calc(22px + 8 * ((100vw - 375px) / 905)), 30px);
+    font-weight: 700;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    text-align: center;
+    color: #000000;
+}
+
+.algo-stats-text {
+    font-size: 21px;
+    line-height: 1.6;
+    color: #333333;
+    margin-bottom: 15px;
+}
+
+/* 中间CTA */
+.algo-cta-middle {
+    text-align: center;
+    margin-bottom: <?= $ctaMiddleMargin ?>;
+    padding: 30px 0;
+}
+
+/* 为什么有效部分 */
+.algo-why-section {
+    margin-bottom: <?= $whyMargin ?>;
+    max-width: 100%;
+}
+
+.algo-why-title {
+    font-size: clamp(22px, calc(22px + 10 * ((100vw - 375px) / 905)), 32px);
+    font-weight: 700;
+    margin-bottom: 25px;
+    margin-top: 30px;
+    text-align: center;
+    color: #000000;
+}
+
+.algo-why-intro {
+    font-size: 21px;
+    line-height: 1.6;
+    color: #333333;
+    margin-bottom: 15px;
+}
+
+.algo-why-benefit {
+    font-size: 21px;
+    line-height: 1.6;
+    color: #333333;
+    margin-bottom: 30px;
+}
+
+.algo-why-points {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.algo-why-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.algo-why-number {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    background-color: #1c1596;
+    color: #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-weight: 700;
+    margin-right: 10px;
+}
+
+.algo-why-content {
+    flex: 1;
+}
+
+.algo-why-point-title {
+    font-size: 21px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: #000000;
+    display: inline;
+}
+
+.algo-why-point-text {
+    font-size: 21px;
+    line-height: 1.6;
+    color: #333333;
+    margin-bottom: 15px;
+}
+
+/* Why后CTA */
+.algo-cta-why {
+    text-align: center;
+    margin-bottom: <?= $ctaWhyMargin ?>;
+    padding: 30px 0;
+}
+
+/* 推荐评价部分 */
+.algo-testimonials-section {
+    margin-bottom: 50px;
+    margin-top: 50px;
+}
+
+.algo-testimonials-title {
+    font-size: clamp(18px, calc(18px + 4 * ((100vw - 375px) / 905)), 22px);
+    font-weight: 700;
+    margin-bottom: 30px;
+    text-align: center;
+    color: #000000;
+    font-style: italic;
+}
+
+.algo-testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.algo-testimonial-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    height: 100%;
+}
+
+.algo-testimonial-avatar {
+    flex-shrink: 0;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background-color: #dbeafe;
+    color: #1e3a8a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-right: 10px;
+}
+
+.algo-testimonial-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.algo-testimonial-info {
+    flex: 1;
+}
+
+.algo-testimonial-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: #000000;
+}
+
+.algo-testimonial-title {
+    font-size: 13px;
+    color: #333333;
+    line-height: 1.4;
+}
+
+/* 最终CTA */
+.algo-final-cta {
+    text-align: center;
+    padding: 40px 0;
+}
+
+@media (max-width: 768px) {
+    .algo-why-point {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .algo-testimonials-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    p, p * {
+        font-size: 18px;
+    }
+    
+    .algo-intro-text,
+    .algo-stats-text,
+    .algo-why-intro,
+    .algo-why-benefit,
+    .algo-why-point-title,
+    .algo-why-point-text {
+        font-size: 18px;
+    }
+}
+</style>
+
+<!-- 介绍部分 -->
+<div class="algo-intro-section">
+    <p class="algo-intro-text"><?= htmlspecialchars($introText1) ?></p>
+    <p class="algo-intro-text"><?= htmlspecialchars($introText2) ?></p>
+    <p class="algo-intro-text"><?= htmlspecialchars($introText3) ?></p>
+</div>
+
+<!-- 统计部分 -->
+<h2 class="algo-stats-title"><?= htmlspecialchars($statsTitle) ?></h2>
+
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text1', 'That\'s right.')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text2', 'It\'s not because they have superior strategies than you…')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text3', 'Or even more experience…')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text4', 'It\'s simply because they\'ve leveraged computer technology to do their dirty work.')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.highlight', 'This is why now is the time to officially level the playing field and gain access to the same powerful tools institutional traders use.')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text5', 'We\'ve recently cracked the code to Wall Street\'s success with our new proprietary Oracle Algorithm that not only took us $3 million to build…')) ?></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text6', 'But one that\'s already alerted sixteen 50%+ gainers within the last month alone.')) ?></p>
+<p><strong><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text7', 'The best part?')) ?></strong></p>
+<p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text8', 'We\'re sharing it with you today completely free of charge.')) ?></p>
+
+<!-- 中间CTA -->
+<?php if ($ctaMiddleEnabled === 'yes'): ?>
+<div class="algo-cta-middle">
+    <a href="<?= htmlspecialchars($ctaMiddleUrl) ?>" 
+       target="_self"
+       class="algo-cta-button">
+        <?= htmlspecialchars($ctaMiddleText) ?>
+    </a>
+</div>
+<?php endif; ?>
+
+<!-- 为什么有效部分 -->
+<div class="algo-why-section">
+    <h2 class="algo-why-title"><?= htmlspecialchars($whyTitle) ?></h2>
+    <p class="algo-why-intro"><?= htmlspecialchars($whyIntro) ?></p>
+    <p class="algo-why-benefit"><?= htmlspecialchars($whyBenefitText) ?></p>
+    
+    <div class="algo-why-points">
+        <!-- 要点1 -->
+        <div class="algo-why-point">
+            <div class="algo-why-number">1</div>
+            <div class="algo-why-content">
+                <p><strong><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point1_title', 'Accuracy and Fewer Mistakes:')) ?></strong> <?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point1_text', 'There is minimum human intervention in algorithmic trading, so there is a lower chance of making dangerous trading mistakes.')) ?></p>
+            </div>
+        </div>
+        <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point1_detail', 'Using the algorithm, we sift through 15,000 stocks every second. Our algorithm searches for a 5 to 1 risk ratio, meaning $1 of risk to make $5 on each trade. It generates 15 trading opportunities a day and we alert one of them.')) ?></p>
+        
+        <!-- 要点2 -->
+        <div class="algo-why-point">
+            <div class="algo-why-number">2</div>
+            <div class="algo-why-content">
+                <p><strong><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point2_title', 'The Algorithm is Working Hard 24/7:')) ?></strong> <?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point2_text', 'A computer doesn\'t need sleep, so our trading algorithms can always find trades when the market is open.')) ?></p>
+            </div>
+        </div>
+        <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point2_detail', 'There is no missing any qualified trade setup with algorithmic trading because our algo scans the markets even while you sleep.')) ?></p>
+        <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point2_extra', 'Then it alerts a watchlist of stocks before the market opens so you\'re ready to trade.')) ?></p>
+        
+        <!-- 要点3 -->
+        <div class="algo-why-point">
+            <div class="algo-why-number">3</div>
+            <div class="algo-why-content">
+                <p><strong><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point3_title', 'Emotionless Trade Decisions:')) ?></strong> <?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point3_text', 'Your emotions in trading expose you to unnecessary risk. When you lose capital because of emotional trading, you tend to revenge trade or overtrade…')) ?></p>
+            </div>
+        </div>
+        <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point3_detail', 'There\'s an intense feeling to overcome the loss as quickly as possible. And to do so, you start taking random trades that can cause more harm than good.')) ?></p>
+        <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point3_extra', 'By using "Algorithmic Trading" you remove decisions based on emotion and can make trade decisions based on statistics.')) ?></p>
+    </div>
+</div>
+
+<!-- Why后CTA -->
+<?php if ($ctaWhyEnabled === 'yes'): ?>
+<div class="algo-cta-why">
+    <a href="<?= htmlspecialchars($ctaWhyUrl) ?>" 
+       target="_self"
+       class="algo-cta-button">
+        <?= htmlspecialchars($ctaWhyText) ?>
+    </a>
+</div>
+<?php endif; ?>
+
+<!-- 推荐评价 -->
+<?php if ($testimonialsEnabled === 'yes'): ?>
+<div class="algo-testimonials-section">
+    <p class="algo-testimonials-title"><?= htmlspecialchars($testimonialsTitle) ?></p>
+    <div class="algo-testimonials-grid">
+        <?php foreach ($testimonials as $person): ?>
+            <?php if ($person['name']): ?>
+            <div class="algo-testimonial-card">
+                <div class="algo-testimonial-avatar">
+                    <?php if ($person['avatar']): ?>
+                        <img src="<?= htmlspecialchars($person['avatar']) ?>" alt="<?= htmlspecialchars($person['name']) ?>">
+                    <?php else: ?>
+                        <?= strtoupper(substr($person['name'], 0, 1)) ?>
+                    <?php endif; ?>
+                </div>
+                <div class="algo-testimonial-info">
+                    <div class="algo-testimonial-name"><?= htmlspecialchars($person['name']) ?></div>
+                    <div class="algo-testimonial-title"><?= htmlspecialchars($person['title']) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- 最终CTA -->
+<?php if ($finalCtaEnabled === 'yes'): ?>
+<div class="algo-final-cta">
+    <a href="<?= htmlspecialchars($finalCtaUrl) ?>" 
+       target="<?= htmlspecialchars($finalCtaTarget) ?>"
+       class="algo-cta-button">
+        <?= htmlspecialchars($finalCtaText) ?>
+    </a>
+</div>
+<?php endif; ?>
+
+
