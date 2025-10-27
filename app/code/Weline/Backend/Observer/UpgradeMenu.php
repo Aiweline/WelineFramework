@@ -36,10 +36,10 @@ class UpgradeMenu implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         list($menus, $menu, $modules_info) = $this->collectMenus();
-        return array($menus, $menu, $modules_info);
+        // 注意：Observer 的 execute 方法应该返回 void，返回值被忽略
     }
 
     /**
