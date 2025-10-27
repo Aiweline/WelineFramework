@@ -41,7 +41,7 @@ class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         if ($this->request->isBackend()) {
             $this->cache->set(self::BACKEND_WORDS_CACHE_KEY, array_merge($this->getBackendWords(), Parser::getWords()));

@@ -33,7 +33,7 @@ class I18nLocalsUpgrade implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $locals = $this->i18n->getLocalesWithFlags(0, 22);
         foreach ($locals as $local_code => $local) {

@@ -16,7 +16,7 @@ use Weline\I18n\Register\Installer;
 
 class Register implements ObserverInterface
 {
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $data = $event->getData('data');
         $func_arguments = $data->getData('register_arguments');
