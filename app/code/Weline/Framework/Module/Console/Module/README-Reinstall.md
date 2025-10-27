@@ -15,10 +15,12 @@
 - **用途**：可以在任何时候导入恢复
 
 ### 2. 数据库表复制
-- **命名规则**：`{原表名}_backup`
-- **示例**：`demo` → `demo_backup`
+- **命名规则**：`{原表名}_backup_{时间戳}`
+- **示例**：`demo` → `demo_backup_2025_10_27_14_30_00`
+- **批次管理**：同一次重装的所有表使用相同时间戳
 - **内容**：完整的表结构和数据
 - **用途**：快速恢复，无需导入 SQL
+- **优势**：支持多次备份，不会覆盖历史备份
 
 ## 使用说明
 
@@ -67,10 +69,10 @@ php bin/w module:reinstall --help
 ✓ 备份文件：var/backup/db/demo_table_20251027_140530.sql
 ```
 
-#### 2.2 复制表到数据库
+#### 2.2 复制表到数据库（带批次时间戳）
 ```
-复制表：demo_table → demo_table_backup...
-✓ 表已复制：demo_table_backup (包含所有数据)
+复制表：demo_table → demo_table_backup_2025_10_27_14_30_00...
+✓ 表已复制：demo_table_backup_2025_10_27_14_30_00 (包含所有数据)
 ```
 
 #### 2.3 删除原表
@@ -95,17 +97,50 @@ php bin/w module:reinstall --help
 - 更新路由
 - 更新配置
 
+### 步骤 4：备份表管理（新增）
+重装完成后，会显示所有备份表并询问是否删除：
+
+```
+═══════════════════════════════════════════════════════════════
+备份表管理
+═══════════════════════════════════════════════════════════════
+
+发现以下备份表：
+
+模块        原表名                          备份表名                               创建时间              记录数
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+Weline_TwoFactorAuth  user_two_factor  user_two_factor_backup_2025_10_27_14_30_00  2025-10-27 14:30:00  15
+Weline_TwoFactorAuth  user_two_factor  user_two_factor_backup_2025_10_26_10_15_30  2025-10-26 10:15:30  10
+
+共 2 个备份表，占用数据库空间。
+共 2 个备份批次。
+
+这些备份表是历史备份，可以安全删除以释放空间。
+如果您需要恢复数据，请选择保留。
+提示：备份表按时间戳分批次，相同时间戳的表属于同一批次。
+
+是否删除所有备份表？(yes/y=删除, no/n=保留)：
+```
+
+选择删除或保留：
+- **删除 (yes/y)**：清理所有备份表，释放空间
+- **保留 (no/n)**：保留备份表，并显示手动删除的 SQL 语句
+
 ## 数据恢复
 
 ### 方法 1：从备份表恢复（推荐，最快）
 
 ```sql
 -- 如果需要恢复数据
--- 1. 删除重新安装的表
+
+-- 1. 查看可用的备份批次
+SHOW TABLES LIKE 'demo_table_backup_%';
+
+-- 2. 删除重新安装的表
 DROP TABLE IF EXISTS `demo_table`;
 
--- 2. 将备份表改回原名
-RENAME TABLE `demo_table_backup` TO `demo_table`;
+-- 3. 将指定批次的备份表改回原名
+RENAME TABLE `demo_table_backup_2025_10_27_14_30_00` TO `demo_table`;
 ```
 
 ### 方法 2：从 SQL 文件恢复
@@ -120,9 +155,53 @@ mysql -h 127.0.0.1 -u weline -p weline < var/backup/db/demo_table_20251027_14053
 
 ### 方法 3：清理备份表
 
+#### 按批次清理（推荐）
 ```sql
--- 重新安装成功后，可以删除备份表
-DROP TABLE IF EXISTS `demo_table_backup`;
+-- 查看所有备份批次
+SHOW TABLES LIKE 'demo_table_backup_%';
+
+-- 删除指定批次的备份表
+DROP TABLE IF EXISTS `demo_table_backup_2025_10_27_14_30_00`;
+DROP TABLE IF EXISTS `demo_table_backup_2025_10_26_10_15_30`;
+
+-- 或使用模式匹配删除所有备份表（慎用！）
+-- 需要逐个执行，MySQL 不支持 DROP TABLE LIKE 语法
+```
+
+#### 使用存储过程批量清理
+```sql
+-- 创建临时存储过程
+DELIMITER //
+CREATE PROCEDURE drop_backup_tables()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE tbl_name VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = DATABASE() 
+        AND table_name LIKE '%_backup_%';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO tbl_name;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        SET @drop_sql = CONCAT('DROP TABLE IF EXISTS `', tbl_name, '`');
+        PREPARE stmt FROM @drop_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+    CLOSE cur;
+END//
+DELIMITER ;
+
+-- 执行清理
+CALL drop_backup_tables();
+
+-- 删除存储过程
+DROP PROCEDURE drop_backup_tables;
 ```
 
 ## 完整示例
@@ -136,6 +215,8 @@ $ php bin/w deploy:mode:show
 
 # 2. 执行重新安装
 $ php bin/w module:reinstall -m GuoLaiRen_PageBuilder
+
+备份批次时间戳：2025_10_27_14_30_00
 
 ╔════════════════════════════════════════════════════════════════╗
 ║                      ⚠️  危险操作警告 ⚠️                        ║
@@ -171,15 +252,15 @@ $ php bin/w module:reinstall -m GuoLaiRen_PageBuilder
 
   备份表到文件：guolairen_page_builder_style...
   ✓ 备份文件：var/backup/db/guolairen_page_builder_style_20251027_140530.sql
-  复制表：guolairen_page_builder_style → guolairen_page_builder_style_backup...
-  ✓ 表已复制：guolairen_page_builder_style_backup (包含所有数据)
+  复制表：guolairen_page_builder_style → guolairen_page_builder_style_backup_2025_10_27_14_30_00...
+  ✓ 表已复制：guolairen_page_builder_style_backup_2025_10_27_14_30_00 (包含所有数据)
   删除原表：guolairen_page_builder_style...
   ✓ 原表已删除：guolairen_page_builder_style
 
   备份表到文件：guolairen_page_builder_page...
-  ✓ 备份文件：var/backup/db/guolairen_page_builder_page_20251027_140531.sql
-  复制表：guolairen_page_builder_page → guolairen_page_builder_page_backup...
-  ✓ 表已复制：guolairen_page_builder_page_backup (包含所有数据)
+  ✓ 备份文件：var/backup/db/guolairen_page_builder_page_20251027_140530.sql
+  复制表：guolairen_page_builder_page → guolairen_page_builder_page_backup_2025_10_27_14_30_00...
+  ✓ 表已复制：guolairen_page_builder_page_backup_2025_10_27_14_30_00 (包含所有数据)
   删除原表：guolairen_page_builder_page...
   ✓ 原表已删除：guolairen_page_builder_page
 
@@ -220,23 +301,28 @@ ls -lh var/backup/db/
 
 ```sql
 -- 查看所有备份表
-SHOW TABLES LIKE '%_backup';
+SHOW TABLES LIKE '%_backup_%';
 
 -- 示例输出：
--- guolairen_page_builder_style_backup
--- guolairen_page_builder_page_backup
--- guolairen_page_builder_page_local_description_backup
--- guolairen_page_builder_form_submission_backup
+-- guolairen_page_builder_style_backup_2025_10_27_14_30_00
+-- guolairen_page_builder_page_backup_2025_10_27_14_30_00
+-- guolairen_page_builder_page_local_description_backup_2025_10_27_14_30_00
+-- guolairen_page_builder_form_submission_backup_2025_10_27_14_30_00
 ```
+
+**批次标识**：所有表名中的 `2025_10_27_14_30_00` 相同，表示属于同一批次
 
 ### 验证备份表数据
 
 ```sql
--- 查看备份表的数据
-SELECT COUNT(*) FROM guolairen_page_builder_page_backup;
+-- 查看指定批次的备份表数据
+SELECT COUNT(*) FROM guolairen_page_builder_page_backup_2025_10_27_14_30_00;
 
 -- 对比原表重装后的数据
 SELECT COUNT(*) FROM guolairen_page_builder_page;
+
+-- 查看某个表的所有备份批次
+SHOW TABLES LIKE 'guolairen_page_builder_page_backup_%';
 ```
 
 ## 安全特性
@@ -253,8 +339,17 @@ SELECT COUNT(*) FROM guolairen_page_builder_page;
 ### 3. 双重备份
 - ✅ SQL 文件备份（可永久保存）
 - ✅ 数据库表复制（快速恢复）
+- ✅ 统一批次时间戳（便于批量管理）
+- ✅ 支持多次备份（不会覆盖历史备份）
 
-### 4. 错误处理
+### 4. 智能备份表管理
+- ✅ 自动检测所有历史备份表
+- ✅ 显示详细的备份表信息（模块、原表名、备份表名、创建时间、记录数）
+- ✅ 按批次统计备份表
+- ✅ 可选择删除或保留备份表
+- ✅ 提供手动删除的 SQL 语句
+
+### 5. 错误处理
 - ✅ 单个表失败不影响其他表
 - ✅ 详细的错误信息提示
 - ✅ 继续处理其他表
@@ -403,21 +498,39 @@ while ($row = $stmt->fetch()) {
 ```bash
 # 定期清理旧备份（保留最近30天）
 find var/backup/db/ -name "*.sql" -mtime +30 -delete
-
-# 清理所有备份表
-# （SQL示例）
-DROP TABLE IF EXISTS guolairen_page_builder_style_backup;
-DROP TABLE IF EXISTS guolairen_page_builder_page_backup;
 ```
+
+```sql
+-- 查看所有备份批次
+SHOW TABLES LIKE '%_backup_%';
+
+-- 清理指定批次的备份表（推荐）
+DROP TABLE IF EXISTS guolairen_page_builder_style_backup_2025_10_26_10_15_30;
+DROP TABLE IF EXISTS guolairen_page_builder_page_backup_2025_10_26_10_15_30;
+
+-- 保留最新批次
+-- 2025_10_27_14_30_00 - 保留
+-- 2025_10_26_10_15_30 - 可删除
+```
+
+### 4. 批次管理建议
+
+- **保留策略**：建议保留最近 1-2 个批次的备份
+- **删除旧批次**：超过 1 周的备份可以定期清理
+- **重要数据**：生产数据的备份建议长期保留
+- **批次识别**：通过时间戳识别批次（格式：YYYY_MM_DD_HH_ii_ss）
 
 ## 总结
 
 `module:reinstall` 命令提供了安全、可靠的模块重装功能：
 
 ✅ **双重保护**：SQL文件 + 数据库表复制  
-✅ **快速恢复**：_backup 表可快速恢复数据  
+✅ **快速恢复**：_backup_时间戳 表可快速恢复数据  
+✅ **批次管理**：统一时间戳，便于批量操作  
+✅ **多版本备份**：支持多次备份，不会覆盖历史  
+✅ **智能清理**：自动检测备份表，可选择删除  
 ✅ **安全机制**：开发模式限制 + 用户确认  
-✅ **完整流程**：备份 → 复制 → 删除 → 重装  
+✅ **完整流程**：备份 → 复制 → 删除 → 重装 → 清理  
 ✅ **详细日志**：每个步骤都有清晰的输出  
 
 开发过程中需要反复测试模块安装脚本时，这个命令可以大大提高效率！🚀

@@ -36,9 +36,6 @@ class Install implements \Weline\Framework\Setup\InstallInterface
         
         // 创建用户2FA表
         $this->userTwoFactor->install($modelSetup, $context);
-        
-        $context->getIo()->info('TwoFactorAuth module installed successfully!');
-        $context->getIo()->info('Table created: ' . $this->userTwoFactor->getTableName());
     }
 }
 

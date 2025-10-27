@@ -1,0 +1,1292 @@
+<?php
+/**
+ * TOTP账户管理页面
+ * 
+ * @var array $accounts
+ * @var int $user_id
+ */
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的验证器账户</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .header h1 {
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .accounts-grid {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .account-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        
+        .account-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        }
+        
+        .account-info {
+            flex: 1;
+        }
+        
+        .account-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .account-issuer {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .account-code-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-right: 20px;
+        }
+        
+        .countdown-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #f9f9f9;
+        }
+        
+        .countdown-circle svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        
+        .countdown-circle .progress {
+            fill: none;
+            stroke-width: 3;
+        }
+        
+        .countdown-circle .progress-bg {
+            stroke: #e0e0e0;
+        }
+        
+        .countdown-circle .progress-bar {
+            stroke: #007bff;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+        
+        .countdown-number {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .account-code {
+            font-size: 32px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #007bff;
+            letter-spacing: 4px;
+        }
+        
+        .account-actions {
+            display: flex;
+            gap: 10px;
+            position: relative;
+        }
+        
+        .more-actions-btn {
+            background: white;
+            border: 2px solid #ddd;
+            color: #666;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .more-actions-btn:hover {
+            border-color: #007bff;
+            color: #007bff;
+            transform: scale(1.05);
+        }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 8px 0;
+            min-width: 150px;
+            z-index: 1000;
+            display: none;
+            margin-top: 5px;
+        }
+        
+        .dropdown-menu.show {
+            display: block;
+        }
+        
+        .dropdown-item {
+            padding: 10px 20px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .dropdown-item:hover {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .dropdown-item.delete {
+            color: #dc3545;
+        }
+        
+        .dropdown-item.delete:hover {
+            background: #fee;
+            color: #c82333;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        
+        .empty-state-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state h2 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            color: #999;
+            margin-bottom: 30px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            color: #333;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+        
+        .upload-area:hover {
+            border-color: #007bff;
+            background: #f0f8ff;
+        }
+        
+        .upload-area p {
+            color: #666;
+            margin: 0;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .import-tab-content {
+            display: none;
+        }
+        
+        .import-tab-content.active {
+            display: block;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 我的验证器账户</h1>
+            <p>管理您的双因素身份验证账户</p>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" onclick="showAddModal()">➕ 添加账户</button>
+            <button class="btn btn-success" onclick="showImportModal()">📥 导入账户</button>
+            <button class="btn btn-secondary" onclick="exportAccounts()">💾 导出账户</button>
+        </div>
+
+        <div class="accounts-grid" id="accountsGrid">
+            <?php if (empty($accounts)): ?>
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔐</div>
+                    <h2>还没有添加账户</h2>
+                    <p>点击上方按钮添加您的第一个验证器账户</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($accounts as $account): ?>
+                    <div class="account-card" data-account-id="<?= $account['account_id'] ?>">
+                        <div class="account-info">
+                            <div class="account-name"><?= htmlspecialchars($account['name']) ?></div>
+                            <div class="account-issuer"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></div>
+                        </div>
+                        <div class="account-code-wrapper">
+                            <div class="countdown-circle" id="circle-<?= $account['account_id'] ?>">
+                                <svg viewBox="0 0 36 36">
+                                    <circle class="progress progress-bg" cx="18" cy="18" r="15"></circle>
+                                    <circle class="progress progress-bar" cx="18" cy="18" r="15" id="progress-<?= $account['account_id'] ?>" 
+                                            stroke-dasharray="94.24" stroke-dashoffset="94.24"></circle>
+                                </svg>
+                                <span class="countdown-number" id="countdown-<?= $account['account_id'] ?>">30</span>
+                            </div>
+                            <div class="account-code" id="code-<?= $account['account_id'] ?>" 
+                                 data-secret="<?= htmlspecialchars($account['secret']) ?>"
+                                 data-algorithm="<?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?>"
+                                 data-digits="<?= (int)($account['digits'] ?? 6) ?>"
+                                 data-period="<?= (int)($account['period'] ?? 30) ?>">---- --</div>
+                        </div>
+                        <div class="account-actions">
+                            <button class="more-actions-btn" onclick="toggleDropdown(<?= $account['account_id'] ?>)">⋮</button>
+                            <div class="dropdown-menu" id="dropdown-<?= $account['account_id'] ?>">
+                                <div class="dropdown-item delete" onclick="confirmDelete(<?= $account['account_id'] ?>)">
+                                    🗑️ 删除账户
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- 添加账户模态框 -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>添加验证器账户</h2>
+                <button class="close-btn" onclick="closeModal('addModal')">×</button>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="switchTabWithEvent('qr')">扫描二维码</button>
+                <button class="tab" onclick="switchTabWithEvent('manual')">手动添加</button>
+                <button class="tab" onclick="switchTabWithEvent('uri')">URI导入</button>
+            </div>
+            
+            <div id="qrTab" class="tab-content active">
+                <div class="qr-scanner-container">
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('qrFileInput').click()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity:0.3;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p style="margin-top:15px; color:#666;">点击上传或拖拽二维码图片</p>
+                        <input type="file" id="qrFileInput" accept="image/*" style="display:none;" onchange="handleFileUpload(event)">
+                    </div>
+                    <div class="camera-section" style="margin-top:20px; text-align:center;">
+                        <video id="cameraVideo" autoplay playsinline style="display:none; width:100%; border-radius:8px;"></video>
+                        <button class="btn btn-secondary" id="startCameraBtn" onclick="startCamera()">📷 打开摄像头扫描</button>
+                    </div>
+                    <div class="preview-section" id="previewSection" style="display:none; text-align:center;">
+                        <img id="previewImage" style="max-width:100%; border-radius:8px; margin-bottom:10px;">
+                        <p id="previewText"></p>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">取消</button>
+                </div>
+            </div>
+            
+            <div id="manualTab" class="tab-content">
+                <form id="addForm" onsubmit="addAccount(event)">
+                    <div class="form-group">
+                        <label>账户名称 *</label>
+                        <input type="text" name="name" required placeholder="例如：Gmail">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>发行者（可选）</label>
+                        <input type="text" name="issuer" placeholder="例如：Google">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>密钥（Base32） *</label>
+                        <input type="text" name="secret" required placeholder="例如：JBSWY3DPEHPK3PXP">
+                        <small style="color: #666; font-size: 12px;">输入Base32格式的密钥，去掉空格</small>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">取消</button>
+                        <button type="submit" class="btn btn-primary">添加</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div id="uriTab" class="tab-content">
+                <div class="form-group">
+                    <label>选择导入方式</label>
+                    <div class="tabs" style="margin-bottom: 15px;">
+                        <button type="button" class="tab active" onclick="switchImportTab('file')">从文件导入</button>
+                        <button type="button" class="tab" onclick="switchImportTab('uri')">手动URI导入</button>
+                    </div>
+                </div>
+                
+                <!-- 文件导入 -->
+                <div id="fileImportTab" class="import-tab-content active">
+                    <div class="upload-area" id="importUploadArea" onclick="triggerFileUpload()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity:0.3;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p style="margin-top:15px; color:#666;">点击上传或拖拽导入文件</p>
+                        <input type="file" id="importFileInput" accept=".json,.csv,.txt" style="display:none;" onchange="handleImportFile(event)">
+                        <small style="color: #999; font-size: 12px;">支持格式：JSON、CSV、TXT（Google/Microsoft/Authy/双因素身份验证导出）</small>
+                    </div>
+                    <div id="importFilePreview" class="preview-section" style="display:none; text-align:center; margin-top:15px;">
+                        <p id="importFileText"></p>
+                    </div>
+                </div>
+                
+                <!-- URI导入 -->
+                <div id="uriImportTab" class="import-tab-content">
+                    <form id="importForm" onsubmit="importAccount(event)">
+                        <div class="form-group">
+                            <label>otpauth:// URI</label>
+                            <textarea name="uri" rows="4" required placeholder="例如：otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"></textarea>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')">取消</button>
+                            <button type="submit" class="btn btn-primary">导入</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // TOTP算法实现
+        function base32Decode(str) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+            let bits = '';
+            
+            for (let i = 0; i < str.length; i++) {
+                const val = chars.indexOf(str[i]);
+                if (val === -1) continue;
+                bits += val.toString(2).padStart(5, '0');
+            }
+            
+            const bytes = [];
+            for (let i = 0; i < bits.length; i += 8) {
+                const byte = bits.substr(i, 8);
+                if (byte.length === 8) {
+                    bytes.push(parseInt(byte, 2));
+                }
+            }
+            
+            return new Uint8Array(bytes);
+        }
+        
+        function generateTOTP(secret, algorithm = 'SHA1', digits = 6, period = 30) {
+            let timeStep = Math.floor(Date.now() / 1000 / period);
+            
+            // 将时间步数转换为8字节大端序
+            const timeBytes = new Uint8Array(8);
+            let currentStep = timeStep;
+            for (let i = 7; i >= 0; i--) {
+                timeBytes[i] = currentStep & 0xff;
+                currentStep >>= 8;
+            }
+            
+            // HMAC计算
+            const secretBytes = base32Decode(secret);
+            
+            // 使用Web Crypto API计算HMAC
+            return crypto.subtle.importKey(
+                'raw',
+                secretBytes,
+                { name: 'HMAC', hash: { name: algorithm === 'SHA256' ? 'SHA-256' : 'SHA-1' } },
+                false,
+                ['sign']
+            ).then(key => {
+                return crypto.subtle.sign('HMAC', key, timeBytes);
+            }).then(signature => {
+                // 动态截断（RFC 4226）
+                const hash = new Uint8Array(signature);
+                const offset = hash[hash.length - 1] & 0x0F;
+                const truncated = ((hash[offset] & 0x7F) << 24) |
+                                 ((hash[offset + 1] & 0xFF) << 16) |
+                                 ((hash[offset + 2] & 0xFF) << 8) |
+                                 (hash[offset + 3] & 0xFF);
+                
+                const code = truncated % Math.pow(10, digits);
+                return code.toString().padStart(digits, '0');
+            });
+        }
+
+        // 自动刷新验证码
+        function refreshCodes() {
+            const codeElements = document.querySelectorAll('[id^="code-"]');
+            codeElements.forEach(element => {
+                const secret = element.dataset.secret;
+                const algorithm = element.dataset.algorithm || 'SHA1';
+                const digits = parseInt(element.dataset.digits || '6');
+                const period = parseInt(element.dataset.period || '30');
+                
+                if (!secret) return;
+                
+                generateTOTP(secret, algorithm, digits, period).then(code => {
+                    element.textContent = code;
+                    
+                    // 显示剩余时间进度条
+                    updateProgressBar(element, period);
+                });
+            });
+        }
+        
+        // 更新倒计时圆圈和数字
+        function updateCountdownCircle(accountId, period) {
+            const remaining = period - (Math.floor(Date.now() / 1000) % period);
+            const progressBar = document.getElementById(`progress-${accountId}`);
+            const countdownNumber = document.getElementById(`countdown-${accountId}`);
+            const circumference = 94.24; // 2 * π * 15
+            
+            if (progressBar && countdownNumber) {
+                // 更新数字
+                countdownNumber.textContent = remaining;
+                
+                // 更新圆圈进度
+                const offset = circumference - (remaining / period) * circumference;
+                progressBar.style.strokeDashoffset = offset;
+            }
+            
+            // 返回下次刷新时间（毫秒）
+            return remaining * 1000;
+        }
+        
+        // 刷新单个账户并安排下次刷新
+        function refreshCodeWithSchedule(element) {
+            const secret = element.dataset.secret;
+            const algorithm = element.dataset.algorithm || 'SHA1';
+            const digits = parseInt(element.dataset.digits || '6');
+            const period = parseInt(element.dataset.period || '30');
+            const accountId = element.id.replace('code-', '');
+            
+            if (!secret) return;
+            
+            generateTOTP(secret, algorithm, digits, period).then(code => {
+                element.textContent = code;
+                
+                // 更新倒计时圆圈
+                const nextRefresh = updateCountdownCircle(accountId, period);
+                
+                // 安排下次倒计时更新（每秒）
+                let countdownTimer;
+                function startCountdown() {
+                    clearInterval(countdownTimer);
+                    countdownTimer = setInterval(() => {
+                        const newRemaining = period - (Math.floor(Date.now() / 1000) % period);
+                        const progressBar = document.getElementById(`progress-${accountId}`);
+                        const countdownNumber = document.getElementById(`countdown-${accountId}`);
+                        const circumference = 94.24;
+                        
+                        if (progressBar && countdownNumber) {
+                            countdownNumber.textContent = newRemaining;
+                            const offset = circumference - (newRemaining / period) * circumference;
+                            progressBar.style.strokeDashoffset = offset;
+                            
+                            // 倒计时结束，刷新验证码
+                            if (newRemaining <= 1) {
+                                clearInterval(countdownTimer);
+                                refreshCodeWithSchedule(element);
+                            }
+                        }
+                    }, 100);
+                }
+                
+                startCountdown();
+                
+                // 安排在验证码到期时刷新
+                setTimeout(() => {
+                    clearInterval(countdownTimer);
+                    refreshCodeWithSchedule(element);
+                }, nextRefresh + 100);
+            });
+        }
+
+        // 立即刷新所有验证码
+        const codeElements = document.querySelectorAll('[id^="code-"]');
+        codeElements.forEach(element => {
+            refreshCodeWithSchedule(element);
+        });
+
+        // 显示添加模态框
+        function showAddModal() {
+            document.getElementById('addModal').classList.add('active');
+        }
+
+        // 关闭模态框
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            document.getElementById('addForm').reset();
+            document.getElementById('importForm').reset();
+            stopCamera();
+            switchTab('qr');
+        }
+
+        // 切换标签页
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'qr') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('qrTab').classList.add('active');
+            } else if (tab === 'manual') {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('manualTab').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab')[2].classList.add('active');
+                document.getElementById('uriTab').classList.add('active');
+            }
+        }
+        
+        // 切换标签页（事件处理）
+        function switchTabWithEvent(tab) {
+            switchTab(tab);
+        }
+        
+        // 处理文件上传
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    document.getElementById('previewImage').src = e.target.result;
+                    document.getElementById('previewSection').style.display = 'block';
+                    parseQRCode(img);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 解析二维码
+        function parseQRCode(img) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            
+            if (code) {
+                document.getElementById('previewText').innerHTML = '<span style="color:green;">✓ 二维码解析成功！</span>';
+                setTimeout(() => {
+                    handleQRCodeURI(code.data);
+                }, 500);
+            } else {
+                document.getElementById('previewText').innerHTML = '<span style="color:red;">✗ 无法识别二维码，请重试</span>';
+            }
+        }
+        
+        // 启动摄像头
+        let cameraStream = null;
+        let scanningInterval = null;
+        
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    cameraStream = stream;
+                    const video = document.getElementById('cameraVideo');
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    document.getElementById('startCameraBtn').style.display = 'none';
+                    
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    scanningInterval = setInterval(() => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0);
+                        
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+                        
+                        if (code) {
+                            stopCamera();
+                            handleQRCodeURI(code.data);
+                        }
+                    }, 100);
+                })
+                .catch(err => {
+                    alert('无法访问摄像头：' + err.message);
+                });
+        }
+        
+        // 停止摄像头
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            if (scanningInterval) {
+                clearInterval(scanningInterval);
+                scanningInterval = null;
+            }
+            document.getElementById('cameraVideo').style.display = 'none';
+            document.getElementById('startCameraBtn').style.display = 'block';
+        }
+        
+        // 处理解析的URI
+        function handleQRCodeURI(uri) {
+            if (!uri.startsWith('otpauth://')) {
+                alert('无效的二维码格式');
+                return;
+            }
+            
+            // 解析URI
+            const url = new URL(uri);
+            const params = new URLSearchParams(url.search);
+            
+            const data = {
+                name: url.pathname.split(':').pop() || '',
+                issuer: params.get('issuer') || '',
+                secret: params.get('secret') || '',
+                algorithm: params.get('algorithm') || 'SHA1',
+                digits: params.get('digits') || '6',
+                period: params.get('period') || '30'
+            };
+            
+            // 通过导入接口添加账户
+            fetch('/two-factor-auth/frontend/accounts/import', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `uri=${encodeURIComponent(uri)}`
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('账户添加成功！');
+                    closeModal('addModal');
+                    location.reload();
+                } else {
+                    alert(result.message || '添加失败，请重试');
+                }
+            })
+            .catch(error => {
+                alert('添加失败，请重试');
+            });
+        }
+
+        // 添加账户
+        async function addAccount(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('/two-factor-auth/frontend/accounts/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('账户添加成功！');
+                    closeModal('addModal');
+                    location.reload();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('添加失败，请重试');
+            }
+        }
+
+        // 导入账户
+        async function importAccount(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            try {
+                const response = await fetch('/two-factor-auth/frontend/accounts/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('账户导入成功！');
+                    closeModal('addModal');
+                    location.reload();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('导入失败，请重试');
+            }
+        }
+
+        // 切换下拉菜单
+        function toggleDropdown(accountId) {
+            // 关闭所有下拉菜单
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.classList.remove('show');
+            });
+            
+            // 切换当前菜单
+            const dropdown = document.getElementById(`dropdown-${accountId}`);
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+        }
+        
+        // 点击页面其他地方时关闭下拉菜单
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.account-actions')) {
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                });
+            }
+        });
+        
+        // 确认删除账户（二次确认）
+        function confirmDelete(accountId) {
+            const confirmed = confirm('⚠️ 警告：此操作不可撤销！\n\n确定要删除这个验证器账户吗？');
+            
+            if (confirmed) {
+                deleteAccount(accountId);
+            }
+        }
+        
+        // 删除账户（实际执行）
+        async function deleteAccount(accountId) {
+            try {
+                const response = await fetch('/two-factor-auth/frontend/accounts/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `account_id=${accountId}`
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('账户已删除');
+                    location.reload();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('删除失败，请重试');
+            }
+        }
+
+        // 显示导入模态框
+        function showImportModal() {
+            showAddModal();
+            switchTab('uri');
+            // 默认显示文件导入
+            switchImportTab('file');
+        }
+        
+        // 触发文件上传
+        function triggerFileUpload() {
+            const input = document.getElementById('importFileInput');
+            if (input) {
+                input.click();
+            }
+        }
+        
+        // 切换导入方式标签页
+        function switchImportTab(mode) {
+            document.querySelectorAll('#uriTab .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#uriTab .import-tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (mode === 'file') {
+                document.querySelectorAll('#uriTab .tab')[0].classList.add('active');
+                document.getElementById('fileImportTab').classList.add('active');
+            } else {
+                document.querySelectorAll('#uriTab .tab')[1].classList.add('active');
+                document.getElementById('uriImportTab').classList.add('active');
+            }
+        }
+        
+        // 处理文件导入
+        function handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const fileName = file.name.toLowerCase();
+                
+                try {
+                    let accounts = [];
+                    console.log('开始解析文件:', file.name, '大小:', file.size, '字节');
+                    
+                    // 根据文件扩展名判断格式
+                    if (fileName.endsWith('.json')) {
+                        accounts = parseJsonImport(text);
+                    } else if (fileName.endsWith('.csv')) {
+                        accounts = parseCsvImport(text);
+                    } else if (fileName.endsWith('.txt')) {
+                        accounts = parseTxtImport(text);
+                    } else {
+                        throw new Error('不支持的文件格式');
+                    }
+                    
+                    console.log('解析结果:', accounts);
+                    
+                    if (accounts.length === 0) {
+                        document.getElementById('importFileText').innerHTML = 
+                            `<span style="color:orange;">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
+                            <small style="color:#999;">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
+                        document.getElementById('importFilePreview').style.display = 'block';
+                        return;
+                    }
+                    
+                    document.getElementById('importFileText').innerHTML = 
+                        `<span style="color:green;">✓ 解析成功，找到 ${accounts.length} 个账户</span>`;
+                    document.getElementById('importFilePreview').style.display = 'block';
+                    
+                    // 批量导入账户
+                    importAccounts(accounts);
+                    
+                } catch (error) {
+                    console.error('解析错误:', error);
+                    document.getElementById('importFileText').innerHTML = 
+                        `<span style="color:red;">✗ 解析失败：${error.message}</span><br>
+                        <small style="asilkan:#999;">请检查文件格式是否正确</small>`;
+                    document.getElementById('importFilePreview').style.display = 'block';
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        // 解析JSON格式（Google Authenticator、Microsoft Authenticator导出）
+        function parseJsonImport(text) {
+            const data = JSON.parse(text);
+            const accounts = [];
+            
+            console.log('JSON数据:', data);
+            
+            // 如果是数组，直接处理
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    if (item.uri && item.uri.startsWith('otpauth://')) {
+                        accounts.push({ uri: item.uri });
+                    } else if (item.url && item.url.startsWith('otpauth://')) {
+                        accounts.push({ uri: item.url });
+                    }
+                });
+            }
+            // Google Authenticator 格式
+            else if (data.exportFormat === 'uri' && data.uris) {
+                data.uris.forEach(uriObj => {
+                    if (uriObj.uri && uriObj.uri.startsWith('otpauth://')) {
+                        accounts.push({ uri: uriObj.uri });
+                    }
+                });
+            }
+            // Microsoft Authenticator 格式
+            else if (data.rows && Array.isArray(data.rows)) {
+                data.rows.forEach(row => {
+                    if (row.url && row.url.startsWith('otpauth://')) {
+                        accounts.push({ uri: row.url });
+                    }
+                });
+            }
+            // 2FAS (2-Factor Authenticator Secrets) 格式
+            else if (data.schema_version && data.services) {
+                data.services.forEach(service => {
+                    if (service.secret && service.name) {
+                        const issuer = service.otp || service.issuer || '';
+                        const uri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(service.name)}?secret=${service.secret}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
+                        accounts.push({ uri: uri });
+                    }
+                });
+            }
+            // Authy 格式
+            else if (data.authy && Array.isArray(data.authy)) {
+                data.authy.forEach(item => {
+                    if (item.uri && item.uri.startsWith('otpauth://')) {
+                        accounts.push({ uri: item.uri });
+                    }
+                });
+            }
+            // 双因素身份验证 格式
+            else if (data.db && data.db.entries && Array.isArray(data.db.entries)) {
+                data.db.entries.forEach(entry => {
+                    if (entry.type === 'totp' && entry.info && entry.info.secret) {
+                        const name = entry.name || '';
+                        const issuer = entry.issuer || '';
+                        const algo = entry.info.algo || 'SHA1';
+                        const digits = entry.info.digits || 6;
+                        const period = entry.info.period || 30;
+                        const secret = entry.info.secret;
+                        
+                        const uri = `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${secret}&algorithm=${algo}&digits=${digits}&period=${period}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
+                        accounts.push({ uri: uri });
+                    }
+                });
+            }
+            // 其他格式，尝试直接使用
+            else {
+                Object.entries(data).forEach(([key, value]) => {
+                    if (typeof value === 'object' && value.secret) {
+                        const uri = buildOtpAuthUri(value);
+                        if (uri) {
+                            accounts.push({ uri: uri });
+                        }
+                    } else if (typeof value === 'string' && value.startsWith('otpauth://')) {
+                        accounts.push({ uri: value });
+                    }
+                });
+            }
+            
+            console.log('解析后的账户:', accounts);
+            return accounts;
+        }
+        
+        // 解析CSV格式
+        function parseCsvImport(text) {
+            const lines = text.split('\n');
+            const accounts = [];
+            
+            // 跳过标题行
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const parts = line.split(',');
+                if (parts.length >= 2) {
+                    const name = parts[0].trim();
+                    const secret = parts[1].trim();
+                    const issuer = parts[2] ? parts[2].trim() : '';
+                    
+                    if (secret) {
+                        const uri = `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${secret}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
+                        accounts.push({ uri: uri });
+                    }
+                }
+            }
+            
+            return accounts;
+        }
+        
+        // 解析TXT格式（每行一个URI）
+        function parseTxtImport(text) {
+            const lines = text.split('\n');
+            const accounts = [];
+            
+            lines.forEach(line => {
+                line = line.trim();
+                if (line && line.startsWith('otpauth://')) {
+                    accounts.push({ uri: line });
+                }
+            });
+            
+            return accounts;
+        }
+        
+        // 构建otpauth URI
+        function buildOtpAuthUri(data) {
+            if (!data.secret) return null;
+            
+            const name = data.name || data.label || 'Account';
+            const issuer = data.issuer || '';
+            const algorithm = data.algorithm || 'SHA1';
+            const digits = data.digits || 6;
+            const period = data.period || 30;
+            
+            return `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${data.secret}&algorithm=${algorithm}&digits=${digits}&period=${period}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
+        }
+        
+        // 导出账户
+        function exportAccounts() {
+            const format = confirm('选择导出格式：\n\n确定 = JSON格式\n取消 = CSV格式') ? 'json' : 'csv';
+            window.location.href = `/two-factor-auth/frontend/accounts/export?format=${format}`;
+        }
+        
+        // 批量导入账户
+        async function importAccounts(accounts) {
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const account of accounts) {
+                try {
+                    const response = await fetch('/two-factor-auth/frontend/accounts/import', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `uri=${encodeURIComponent(account.uri)}`
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    failCount++;
+                }
+            }
+            
+            let message = `导入完成！成功：${successCount} 个`;
+            if (failCount > 0) {
+                message += `，失败：${failCount} 个`;
+            }
+            
+            alert(message);
+            
+            if (successCount > 0) {
+                closeModal('addModal');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
+

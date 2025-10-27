@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Adapter;
 
-use Weline\Ai\Api\ScenarioAdapterInterface;
+use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
  * 翻译场景适配器
