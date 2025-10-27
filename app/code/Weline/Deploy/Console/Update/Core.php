@@ -308,7 +308,10 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 增量更新目录，保护用户配置文件
+     * 增量更新目录：
+     * 1. 已存在的框架文件 → 覆盖
+     * 2. 不存在的框架文件 → 拷贝
+     * 3. Git 仓库中不存在的用户文件 → 保留不动
      */
     private function copyDirectoryIncremental(string $source, string $target): bool
     {
@@ -320,7 +323,7 @@ class Core extends CommandAbstract
             mkdir($target, 0755, true);
         }
         
-        // 需要保护的配置文件列表
+        // 需要保护的配置文件列表（Git 仓库中没有的）
         $protectedFiles = ['env.php', '.env'];
         
         $iterator = new \RecursiveIteratorIterator(
@@ -332,6 +335,7 @@ class Core extends CommandAbstract
             $targetPath = $target . DS . $iterator->getSubPathName();
             
             if ($item->isDir()) {
+                // 目录：不存在就创建，存在就保持
                 if (!is_dir($targetPath)) {
                     mkdir($targetPath, 0755, true);
                 }
@@ -339,11 +343,17 @@ class Core extends CommandAbstract
                 $sourcePath = $item->getPathname();
                 $fileName = basename($targetPath);
                 
-                // 保护用户配置文件，不覆盖
-                if (in_array($fileName, $protectedFiles) && file_exists($targetPath)) {
+                // 保护用户配置文件（不在 Git 仓库中的文件）
+                if (in_array($fileName, $protectedFiles)) {
+                    // 如果目标文件已存在，跳过（保留用户配置）
+                    // 如果目标文件不存在，才拷贝
+                    if (!file_exists($targetPath)) {
+                        copy($sourcePath, $targetPath);
+                    }
                     continue;
                 }
                 
+                // 其他文件：已存在就覆盖，不存在就拷贝
                 copy($sourcePath, $targetPath);
             }
         }
