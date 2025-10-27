@@ -35,7 +35,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $type = $event->getData('type');
         /**@var \Weline\Framework\DataObject\DataObject $data */

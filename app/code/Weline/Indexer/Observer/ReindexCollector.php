@@ -41,7 +41,7 @@ class ReindexCollector implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $modules = Env::getInstance()->getActiveModules();
         foreach ($modules as $module) {
