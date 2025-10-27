@@ -137,10 +137,6 @@ class Env extends DataObject
         'event'=>[
             'debug' => false,
         ],
-        'db_log' => [
-            'enabled' => false,
-            'file' => 'var' . DS . 'log' . DS . 'db.log',
-        ],
         'cache' => self::default_CACHE,
         'session' => self::default_SESSION,
         'log' => self::default_LOG,
@@ -184,6 +180,14 @@ class Env extends DataObject
         'notice' => 'var' . DS . 'log' . DS . 'notice.log',
         'warning' => 'var' . DS . 'log' . DS . 'warning.log',
         'debug' => 'var' . DS . 'log' . DS . 'debug.log',
+        'db' => [
+            'enabled' => false,
+            'file' => 'db',
+        ],
+        'dev_sql' => [
+            'enabled' => false,
+            'file' => 'dev_sql',
+        ],
     ];
 
     // 缓存
@@ -359,12 +363,27 @@ class Env extends DataObject
         return self::$instance;
     }
 
-    public static function get(string $name = '', string $module = ''): mixed
+    public static function get(string $name = '', mixed $defaultOrModule = '', string $module = ''): mixed
     {
+        // 如果第三个参数存在，说明第二个参数是默认值，第三个是模块名
         if ($module) {
-            return self::module_env($module, $name);
+            $result = self::module_env($module, $name);
+            return $result ?? $defaultOrModule;
         }
-        return self::getInstance()->getConfig($name);
+        
+        // 判断第二个参数是模块名还是默认值
+        // 如果是字符串且首字母大写或包含反斜杠命名空间，认为是模块名
+        if (is_string($defaultOrModule) && $defaultOrModule !== '' && (
+            ctype_upper($defaultOrModule[0]) || 
+            str_contains($defaultOrModule, '\\') ||
+            str_contains($defaultOrModule, '/')
+        )) {
+            // 当作模块名处理
+            return self::module_env($defaultOrModule, $name);
+        }
+        
+        // 否则当作默认值处理
+        return self::getInstance()->getConfig($name, $defaultOrModule);
     }
 
     public static function module_env(string $module, string $name = ''): mixed
@@ -395,41 +414,125 @@ class Env extends DataObject
         return self::getInstance()->setConfig($name, $value);
     }
 
-    public static function log(string $filename, string $content, bool $append = true, bool $need_file_info = true, int $debug_level = 0): bool
-    {
+    /**
+     * Universal logging method with support for standard log formats
+     * 
+     * @param string $filename Log filename (without path, with or without .log extension)
+     * @param string $content Log message content
+     * @param string $level Log level: INFO, ERROR, WARNING, NOTICE, DEBUG, QUERY, etc.
+     * @param bool $compact Use compact single-line format (true) or verbose multi-line format (false)
+     * @param bool $append Append to file (true) or overwrite (false)
+     * @param int $debug_level Backtrace depth for file info (0 = immediate caller)
+     * @return bool Success status
+     */
+    public static function log(
+        string $filename, 
+        string $content, 
+        string $level = 'INFO',
+        bool $compact = true,
+        bool $append = true,
+        int $debug_level = 0
+    ): bool {
+        // Normalize line endings
         $content = str_replace("\r\n", "\n", $content);
         $content = str_replace("\r", "\n", $content);
-        $header_line = '-------------------------' . date('Y-m-d H:i:s') . ' ' . __('开始') . '------------------' . "\n";
-        $end_line = '-------------------------' . date('Y-m-d H:i:s') . ' ' . __('结束') . '------------------' . "\n";
-        if ($need_file_info) {
-            # 读取上级调用位置
+        
+        $timestamp = date('Y-m-d H:i:s');
+        
+        if ($compact) {
+            // Standard compact format: [timestamp] [LEVEL] source - message
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $debug_level + 2);
+            $caller = $backtrace[$debug_level + 1] ?? $backtrace[0];
+            $sourceFile = basename($caller['file'] ?? 'unknown');
+            $sourceLine = $caller['line'] ?? 0;
+            
+            // For multi-line content, make it single line or format as JSON
+            if (str_contains($content, "\n")) {
+                // Multi-line content: compress whitespace
+                $content = preg_replace('/\s+/', ' ', trim($content));
+            }
+            
+            $logEntry = "[{$timestamp}] [{$level}] {$sourceFile}:{$sourceLine} - {$content}\n";
+        } else {
+            // Verbose format for backward compatibility
+            $header_line = '-------------------------' . $timestamp . ' ' . __('开始') . '------------------' . "\n";
+            $end_line = '-------------------------' . $timestamp . ' ' . __('结束') . '------------------' . "\n";
+            
             $backtrace = debug_backtrace();
-            $backtrace = $backtrace[$debug_level];
-            $file = $backtrace['file'];
-            $line = $backtrace['line'];
+            $caller = $backtrace[$debug_level];
+            $file = $caller['file'] ?? 'unknown';
+            $line = $caller['line'] ?? 0;
             $header_line .= '-------------------' . $file . ' line ' . $line . '------------------------' . "\n" . $header_line;
             $end_line .= '-------------------' . $file . ' line ' . $line . '------------------------' . "\n" . $end_line;
+            
+            $logEntry = $header_line . "\n" . $content . "\n" . $end_line . "\n\n";
         }
-        $content = $header_line . "\n" . $content . "\n" . $end_line . "\n\n";
+        
+        // Ensure proper file path
         if (!str_contains($filename, BP)) {
-            $filename = Env::VAR_DIR . 'log' . DS . $filename.'.log';
+            // Remove .log extension if present (will be added below)
+            $filename = preg_replace('/\.log$/', '', $filename);
+            $filename = Env::VAR_DIR . 'log' . DS . $filename . '.log';
         }
+        
+        // Create directory if needed
         if (!is_file($filename)) {
             if (!is_dir(dirname($filename))) {
                 mkdir(dirname($filename), 0777, true);
             }
         }
+        
+        // Write to file
         if ($append) {
-            return file_put_contents($filename, $content, FILE_APPEND);
+            return file_put_contents($filename, $logEntry, FILE_APPEND) !== false;
         } else {
-            return file_put_contents($filename, $content);
+            return file_put_contents($filename, $logEntry) !== false;
         }
     }
 
-    public static function sql_log(string $filename, string $sql, bool $append = true, bool $need_file_info = true): bool
+    /**
+     * SQL query logging with formatted output
+     * 
+     * @param string $filename Log filename
+     * @param string $sql SQL query to log
+     * @param bool $compact Use compact format (default: true for standard format)
+     * @return bool Success status
+     */
+    public static function sql_log(string $filename, string $sql, bool $compact = true): bool
     {
-        $sql = \SqlFormatter::format($sql);
-        return self::log($filename, $sql, $append, $need_file_info, 1);
+        // Format SQL for readability if verbose mode
+        if (!$compact) {
+            $sql = \SqlFormatter::format($sql);
+        }
+        return self::log($filename, $sql, 'QUERY', $compact, true, 1);
+    }
+
+    /**
+     * Convenience methods for different log levels (PSR-3 inspired)
+     */
+    public static function log_error(string $filename, string $message): bool
+    {
+        return self::log($filename, $message, 'ERROR', true, true, 0);
+    }
+
+    public static function log_warning(string $filename, string $message): bool
+    {
+        return self::log($filename, $message, 'WARNING', true, true, 0);
+    }
+
+    public static function log_info(string $filename, string $message): bool
+    {
+        return self::log($filename, $message, 'INFO', true, true, 0);
+    }
+
+    public static function log_debug(string $filename, string $message): bool
+    {
+        return self::log($filename, $message, 'DEBUG', true, true, 0);
+    }
+
+    public static function log_notice(string $filename, string $message): bool
+    {
+        return self::log($filename, $message, 'NOTICE', true, true, 0);
     }
 
     /**
