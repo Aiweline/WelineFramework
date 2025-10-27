@@ -246,11 +246,8 @@ class Core extends CommandAbstract
             $this->printer->note(__('更新 %{1}...', [$path]));
             
             if (is_dir($source)) {
-                if (is_dir($target)) {
-                    $this->removeDirectory($target);
-                }
-                
-                if ($this->copyDirectory($source, $target)) {
+                // 改为增量更新，不删除目标目录，只拷贝新文件
+                if ($this->copyDirectoryIncremental($source, $target)) {
                     $this->printer->success(__('✓ %{1}', [$path]));
                     $copied++;
                 } else {
@@ -303,6 +300,50 @@ class Core extends CommandAbstract
                 }
             } else {
                 $sourcePath = $item->getPathname();
+                copy($sourcePath, $targetPath);
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+     * 增量更新目录，保护用户配置文件
+     */
+    private function copyDirectoryIncremental(string $source, string $target): bool
+    {
+        if (!is_dir($source)) {
+            return false;
+        }
+        
+        if (!is_dir($target)) {
+            mkdir($target, 0755, true);
+        }
+        
+        // 需要保护的配置文件列表
+        $protectedFiles = ['env.php', '.env'];
+        
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+        
+        foreach ($iterator as $item) {
+            $targetPath = $target . DS . $iterator->getSubPathName();
+            
+            if ($item->isDir()) {
+                if (!is_dir($targetPath)) {
+                    mkdir($targetPath, 0755, true);
+                }
+            } elseif ($item->isFile()) {
+                $sourcePath = $item->getPathname();
+                $fileName = basename($targetPath);
+                
+                // 保护用户配置文件，不覆盖
+                if (in_array($fileName, $protectedFiles) && file_exists($targetPath)) {
+                    continue;
+                }
+                
                 copy($sourcePath, $targetPath);
             }
         }
