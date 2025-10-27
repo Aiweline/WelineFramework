@@ -44,7 +44,7 @@ class BackendWhitelistUrl implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         $white_acl_sources = self::white_urls;
         $this->whiteAclSource->insert($white_acl_sources, 'path')->fetch();
