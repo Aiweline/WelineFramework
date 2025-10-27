@@ -14,7 +14,7 @@ class DetectCurrency implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         # 第一个url获取url协议和域名部分
         $uri = $event->getData('uri');

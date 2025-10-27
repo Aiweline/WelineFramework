@@ -19,7 +19,7 @@ class ApiControllerInitBefore implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         // 只处理API请求
         if (!$this->request->isApi() && !$this->request->isApiBackend()) {
