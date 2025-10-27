@@ -207,6 +207,13 @@ class Page extends BackendController
             
             // 创建页面
             $page = clone $this->pageModel;
+            
+            // CTA 事件名称：如果为空则自动生成为 handle_form_submit
+            $ctaEventName = $data['cta_event_name'] ?? '';
+            if (empty($ctaEventName) && !empty($data['handle'])) {
+                $ctaEventName = $data['handle'] . '_form_submit';
+            }
+            
             $page->clearData()
                 ->setData(PageModel::fields_HANDLE, $data['handle'])
                 ->setData(PageModel::fields_TYPE, $data['type'])
@@ -219,6 +226,7 @@ class Page extends BackendController
                 ->setData(PageModel::fields_GA4_ID, $data['ga4_id'] ?? '')
                 ->setData(PageModel::fields_GTM_ID, $data['gtm_id'] ?? '')
                 ->setData(PageModel::fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
+                ->setData(PageModel::fields_CTA_EVENT_NAME, $ctaEventName)
                 ->setData(PageModel::fields_LOGO, $data['logo'] ?? '')
                 ->setData(PageModel::fields_ICON, $data['icon'] ?? '')
                 ->setData(PageModel::fields_LOCALES, json_encode($selectedLocales))
@@ -476,6 +484,12 @@ class Page extends BackendController
                 $existingSettings[$currentStyleCode] = $currentStyleSettings;
             }
             
+            // CTA 事件名称：如果为空则自动生成为 handle_form_submit
+            $ctaEventName = $data['cta_event_name'] ?? '';
+            if (empty($ctaEventName) && !empty($data['handle'])) {
+                $ctaEventName = $data['handle'] . '_form_submit';
+            }
+            
             // 更新页面
             $page->setData(PageModel::fields_HANDLE, $data['handle'])
                 ->setData(PageModel::fields_TYPE, $data['type'])
@@ -488,6 +502,7 @@ class Page extends BackendController
                 ->setData(PageModel::fields_GA4_ID, $data['ga4_id'] ?? '')
                 ->setData(PageModel::fields_GTM_ID, $data['gtm_id'] ?? '')
                 ->setData(PageModel::fields_FB_PIXEL_ID, $data['fb_pixel_id'] ?? '')
+                ->setData(PageModel::fields_CTA_EVENT_NAME, $ctaEventName)
                 ->setData(PageModel::fields_LOGO, $data['logo'] ?? '')
                 ->setData(PageModel::fields_ICON, $data['icon'] ?? '')
                 ->setData(PageModel::fields_LOCALES, json_encode($selectedLocales))

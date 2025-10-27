@@ -6,6 +6,19 @@ $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
 $parentId = $this->getData('parent_id') ?? 0;
 
+// 生成默认的 CTA 事件名称
+$ctaEventName = '';
+if ($page && $page->getId()) {
+    $ctaEventName = $page->getData('cta_event_name');
+    // 如果为空，自动生成
+    if (empty($ctaEventName)) {
+        $handle = $page->getData('handle');
+        if (!empty($handle)) {
+            $ctaEventName = $handle . '_form_submit';
+        }
+    }
+}
+
 // 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
 if ($isEdit && $page && $page->getId()) {
     $visualPageId = $page->getId();
@@ -811,7 +824,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="cta_event_name" 
                                name="cta_event_name" 
-                               value="<?= htmlspecialchars($page ? ($page->getData('cta_event_name') ?? '') : '') ?>"
+                               value="<?= htmlspecialchars($ctaEventName) ?>"
                                placeholder="<?= __('例如：money_calendar_signup (留空自动生成)') ?>">
                         <small class="form-text text-muted">
                             <?= __('用于 Google Analytics 和 Facebook Pixel 事件跟踪。留空时将自动生成为：<页面句柄>_form_submit') ?>
