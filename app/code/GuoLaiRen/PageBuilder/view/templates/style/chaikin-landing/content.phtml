@@ -1,0 +1,555 @@
+<?php
+/**
+ * Chaikin Analytics Landing Page - Content (Video Player)
+ * 金融营销落地页模板 - 内容（视频播放器）
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:video => 视频播放器
+ * video.url => 视频地址:textarea:https\:\/\/www.youtube.com\/embed\/dQw4w9WgXcQ
+ * video.poster => 视频封面图:textarea:
+ * video.play_text => 播放提示文字:text:Press Play
+ * video.play_text_color => 提示文字颜色:color:#ffffff
+ * video.play_text_size => 提示文字大小:responsive:24/36|px
+ * video.play_button_color => 播放按钮颜色:color:#ff0000
+ * video.play_button_size => 播放按钮大小:responsive:80/100|px
+ * video.container_bg => 容器背景色:color:#001f3f
+ * video.aspect_ratio => 宽高比:select:16/9|16/9,4/3,1/1
+ * video.max_width => 最大宽度:number:800|px
+ * video.margin_bottom => 下边距:responsive:30/50|px
+ * video.border_radius => 圆角:number:8|px
+ * 
+ * group:popup => 弹窗配置
+ * popup.enabled => 启用弹窗:select:yes|yes,no
+ * popup.delay => 弹出延迟(秒):number:5
+ * popup.title => 弹窗标题:text:Write Down this Stock Ticker Before You Go
+ * popup.title_color => 标题颜色:color:#ff0000
+ * popup.title_size => 标题大小:responsive:24/32|px
+ * popup.content => 弹窗内容:textarea:Marc is giving away the name and ticker of the hidden AI stock Wall Street is currently buying hand-over-fist – will it be the NEW Nvidia?\n\nClick "Continue Video" to make sure you get its name and ticker.\n\nOr\, if you're in a rush\, we've prepared a transcript for you instead – simply click "Read Transcript" to access it.
+ * popup.content_color => 内容颜色:color:#333333
+ * popup.content_size => 内容大小:responsive:14/16|px
+ * popup.button1_text => 主按钮文字:text:CONTINUE VIDEO
+ * popup.button1_url => 主按钮链接:textarea:
+ * popup.button1_target => 主按钮打开方式:select:_self|_self,_blank
+ * popup.button1_color => 主按钮颜色:color:#ff0000
+ * popup.button1_text_color => 主按钮文字颜色:color:#ffffff
+ * popup.button2_text => 次按钮文字:text:Read Transcript
+ * popup.button2_url => 次按钮链接:textarea:
+ * popup.button2_target => 次按钮打开方式:select:_self|_self,_blank
+ * popup.button2_color => 次按钮颜色:color:#2c5aa0
+ * popup.button2_text_color => 次按钮文字颜色:color:#ffffff
+ * popup.close_text => 关闭链接文字:text:Close this message please
+ * popup.close_color => 关闭链接颜色:color:#0099cc
+ * popup.max_width => 弹窗最大宽度:number:600|px
+ * popup.padding => 弹窗内边距:responsive:20/32/48|px
+ * popup.border_width => 边框宽度:number:6|px
+ * popup.border_color => 边框颜色:color:#ff0000
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getVideoConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseVideoResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genVideoCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 视频配置
+$videoUrl = getVideoConfig($styleSettings, 'video.url', '');
+$videoPoster = getVideoConfig($styleSettings, 'video.poster', '');
+$playText = getVideoConfig($styleSettings, 'video.play_text', 'Press Play');
+$playTextColor = getVideoConfig($styleSettings, 'video.play_text_color', '#ffffff');
+$playTextSize = genVideoCSS(parseVideoResponsive(getVideoConfig($styleSettings, 'video.play_text_size', '24/36') . 'px'));
+$playButtonColor = getVideoConfig($styleSettings, 'video.play_button_color', '#ff0000');
+$playButtonSize = genVideoCSS(parseVideoResponsive(getVideoConfig($styleSettings, 'video.play_button_size', '80/100') . 'px'));
+$containerBg = getVideoConfig($styleSettings, 'video.container_bg', '#001f3f');
+$aspectRatio = getVideoConfig($styleSettings, 'video.aspect_ratio', '16/9');
+$maxWidth = getVideoConfig($styleSettings, 'video.max_width', '800') . 'px';
+$marginBottom = genVideoCSS(parseVideoResponsive(getVideoConfig($styleSettings, 'video.margin_bottom', '30/50') . 'px'));
+$borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px';
+?>
+
+<style>
+.chaikin-video-container {
+    max-width: <?= $maxWidth ?>;
+    margin: 0 auto <?= $marginBottom ?>;
+    position: relative;
+    background-color: <?= htmlspecialchars($containerBg) ?>;
+    border-radius: <?= $borderRadius ?>;
+    overflow: hidden;
+}
+
+.chaikin-video-wrapper {
+    position: relative;
+    width: 100%;
+    padding-bottom: <?= $aspectRatio === '16/9' ? '56.25%' : ($aspectRatio === '4/3' ? '75%' : '100%') ?>;
+    background: linear-gradient(135deg, <?= htmlspecialchars($containerBg) ?> 0%, #003366 100%);
+}
+
+.chaikin-video-wrapper video,
+.chaikin-video-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.chaikin-video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.chaikin-video-overlay:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.chaikin-video-overlay.hidden {
+    display: none;
+}
+
+.chaikin-play-text {
+    color: <?= htmlspecialchars($playTextColor) ?>;
+    font-size: <?= $playTextSize ?>;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    transform: rotate(-5deg);
+}
+
+.chaikin-play-text::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    width: 40px;
+    height: 3px;
+    background: <?= htmlspecialchars($playTextColor) ?>;
+    transform: translateX(-50%) rotate(-10deg);
+}
+
+.chaikin-play-button {
+    width: <?= $playButtonSize ?>;
+    height: <?= $playButtonSize ?>;
+    background-color: <?= htmlspecialchars($playButtonColor) ?>;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(255, 0, 0, 0.4);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.chaikin-play-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 30px rgba(255, 0, 0, 0.6);
+}
+
+.chaikin-play-button::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 15px 0 15px 25px;
+    border-color: transparent transparent transparent #ffffff;
+    margin-left: 5px;
+}
+
+@media (max-width: 767px) {
+    .chaikin-play-button::before {
+        border-width: 12px 0 12px 20px;
+    }
+}
+</style>
+
+<!-- 视频播放器 -->
+<div class="chaikin-video-container">
+    <div class="chaikin-video-wrapper">
+        <?php if ($videoUrl): ?>
+            <?php if (strpos($videoUrl, 'youtube.com') !== false || strpos($videoUrl, 'youtu.be') !== false): ?>
+                <!-- YouTube视频 -->
+                <iframe 
+                    id="chaikin-video"
+                    src="" 
+                    data-src="<?= htmlspecialchars($videoUrl) ?>"
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+                </iframe>
+            <?php else: ?>
+                <!-- HTML5视频 -->
+                <video 
+                    id="chaikin-video"
+                    <?php if ($videoPoster): ?>poster="<?= htmlspecialchars($videoPoster) ?>"<?php endif; ?>
+                    controls 
+                    style="display: none;">
+                    <source src="<?= htmlspecialchars($videoUrl) ?>" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            <?php endif; ?>
+        <?php endif; ?>
+        
+        <!-- 播放覆盖层 -->
+        <div class="chaikin-video-overlay" id="chaikin-play-overlay">
+            <div class="chaikin-play-text" style="position: relative;">
+                <?= htmlspecialchars($playText) ?>
+            </div>
+            <div class="chaikin-play-button"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const overlay = document.getElementById('chaikin-play-overlay');
+    const video = document.getElementById('chaikin-video');
+    
+    if (overlay && video) {
+        overlay.addEventListener('click', function() {
+            overlay.classList.add('hidden');
+            
+            if (video.tagName === 'VIDEO') {
+                video.style.display = 'block';
+                video.play();
+            } else if (video.tagName === 'IFRAME') {
+                const src = video.getAttribute('data-src');
+                if (src) {
+                    // 添加 autoplay 参数
+                    const separator = src.includes('?') ? '&' : '?';
+                    video.src = src + separator + 'autoplay=1';
+                }
+            }
+        });
+    }
+})();
+</script>
+
+<?php
+// 弹窗三端响应式解析函数
+function parsePopupResponsive($value) {
+    if (empty($value)) return ['mobile' => '20px', 'tablet' => '32px', 'desktop' => '48px'];
+    $value = trim($value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '20px', 'tablet' => '32px', 'desktop' => '48px'];
+    switch (count($parts)) {
+        case 1: 
+            $val = trim($parts[0]);
+            $result['mobile'] = $val . $unit;
+            $result['tablet'] = $val . $unit;
+            $result['desktop'] = $val . $unit;
+            break;
+        case 2:
+            $result['mobile'] = trim($parts[0]) . $unit;
+            $result['tablet'] = trim($parts[1]) . $unit;
+            $result['desktop'] = trim($parts[1]) . $unit;
+            break;
+        case 3:
+            $result['mobile'] = trim($parts[0]) . $unit;
+            $result['tablet'] = trim($parts[1]) . $unit;
+            $result['desktop'] = trim($parts[2]) . $unit;
+            break;
+    }
+    return $result;
+}
+
+// 弹窗配置
+$popupEnabled = $styleSettings['popup.enabled'] ?? 'yes';
+$popupDelay = (int)($styleSettings['popup.delay'] ?? 5);
+$popupTitle = $styleSettings['popup.title'] ?? 'Write Down this Stock Ticker Before You Go';
+$popupContent = $styleSettings['popup.content'] ?? "Marc is giving away the name and ticker of the hidden AI stock Wall Street is currently buying hand-over-fist – will it be the NEW Nvidia?\n\nClick \"Continue Video\" to make sure you get its name and ticker.\n\nOr, if you're in a rush, we've prepared a transcript for you instead – simply click \"Read Transcript\" to access it.";
+$popupTitleColor = $styleSettings['popup.title_color'] ?? '#ff0000';
+$popupTitleSize = $this->responsiveValue($styleSettings['popup.title_size'] ?? '24/32');
+$popupContentColor = $styleSettings['popup.content_color'] ?? '#333333';
+$popupContentSize = $this->responsiveValue($styleSettings['popup.content_size'] ?? '14/16');
+$popupButton1Text = $styleSettings['popup.button1_text'] ?? 'CONTINUE VIDEO';
+$popupButton1Url = $styleSettings['popup.button1_url'] ?? '';
+$popupButton1Target = $styleSettings['popup.button1_target'] ?? '_self';
+$popupButton1Color = $styleSettings['popup.button1_color'] ?? '#ff0000';
+$popupButton1TextColor = $styleSettings['popup.button1_text_color'] ?? '#ffffff';
+$popupButton2Text = $styleSettings['popup.button2_text'] ?? 'Read Transcript';
+$popupButton2Url = $styleSettings['popup.button2_url'] ?? '';
+$popupButton2Target = $styleSettings['popup.button2_target'] ?? '_self';
+$popupButton2Color = $styleSettings['popup.button2_color'] ?? '#2c5aa0';
+$popupButton2TextColor = $styleSettings['popup.button2_text_color'] ?? '#ffffff';
+$popupCloseText = $styleSettings['popup.close_text'] ?? 'Close this message please';
+$popupCloseColor = $styleSettings['popup.close_color'] ?? '#0099cc';
+$popupMaxWidth = (int)($styleSettings['popup.max_width'] ?? 600);
+$popupPadding = parsePopupResponsive($styleSettings['popup.padding'] ?? '20/32/48');
+$popupBorderWidth = (int)($styleSettings['popup.border_width'] ?? 6);
+$popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
+?>
+
+<?php if ($popupEnabled === 'yes'): ?>
+<!-- 引导弹窗 -->
+<div id="chaikin-popup-overlay" class="chaikin-popup-overlay" style="display: none;">
+    <div class="chaikin-popup-box">
+        <div class="chaikin-popup-content">
+            <h2 class="chaikin-popup-title"><?= nl2br(htmlspecialchars($popupTitle)) ?></h2>
+            <div class="chaikin-popup-text"><?= nl2br(htmlspecialchars($popupContent)) ?></div>
+            <div class="chaikin-popup-buttons">
+                <?php if ($popupButton1Url): ?>
+                    <a href="<?= htmlspecialchars($popupButton1Url) ?>" 
+                       target="<?= htmlspecialchars($popupButton1Target) ?>"
+                       class="chaikin-popup-btn chaikin-popup-btn-primary" 
+                       onclick="closeChaikinPopup()">
+                        <?= htmlspecialchars($popupButton1Text) ?>
+                    </a>
+                <?php else: ?>
+                    <button class="chaikin-popup-btn chaikin-popup-btn-primary" onclick="closeChaikinPopup()">
+                        <?= htmlspecialchars($popupButton1Text) ?>
+                    </button>
+                <?php endif; ?>
+                
+                <?php if ($popupButton2Url): ?>
+                    <a href="<?= htmlspecialchars($popupButton2Url) ?>" 
+                       target="<?= htmlspecialchars($popupButton2Target) ?>"
+                       class="chaikin-popup-btn chaikin-popup-btn-secondary" 
+                       onclick="closeChaikinPopup()">
+                        <?= htmlspecialchars($popupButton2Text) ?>
+                    </a>
+                <?php else: ?>
+                    <button class="chaikin-popup-btn chaikin-popup-btn-secondary" onclick="closeChaikinPopup()">
+                        <?= htmlspecialchars($popupButton2Text) ?>
+                    </button>
+                <?php endif; ?>
+            </div>
+            <a href="#" class="chaikin-popup-close-link" onclick="closeChaikinPopup(); return false;">
+                <?= htmlspecialchars($popupCloseText) ?>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.chaikin-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.chaikin-popup-box {
+    background: white;
+    border: <?= $popupBorderWidth ?>px solid <?= htmlspecialchars($popupBorderColor) ?>;
+    max-width: <?= $popupMaxWidth ?>px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: chaikinPopupSlideIn 0.3s ease-out;
+}
+
+@keyframes chaikinPopupSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.chaikin-popup-content {
+    padding: <?= $popupPadding['mobile'] ?>;
+    text-align: center;
+}
+
+@media (min-width: 768px) {
+    .chaikin-popup-content {
+        padding: <?= $popupPadding['tablet'] ?>;
+    }
+}
+
+.chaikin-popup-title {
+    color: <?= htmlspecialchars($popupTitleColor) ?>;
+    font-size: <?= $popupTitleSize['mobile'] ?>;
+    font-weight: 700;
+    margin: 0 0 20px 0;
+    line-height: 1.2;
+}
+
+.chaikin-popup-text {
+    color: <?= htmlspecialchars($popupContentColor) ?>;
+    font-size: <?= $popupContentSize['mobile'] ?>;
+    line-height: 1.6;
+    margin: 0 0 24px 0;
+    white-space: pre-line;
+}
+
+.chaikin-popup-text strong {
+    font-weight: 700;
+}
+
+.chaikin-popup-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.chaikin-popup-btn {
+    display: block;
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.chaikin-popup-btn-primary {
+    background-color: <?= htmlspecialchars($popupButton1Color) ?>;
+    color: <?= htmlspecialchars($popupButton1TextColor) ?>;
+}
+
+.chaikin-popup-btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.chaikin-popup-btn-secondary {
+    background-color: <?= htmlspecialchars($popupButton2Color) ?>;
+    color: <?= htmlspecialchars($popupButton2TextColor) ?>;
+}
+
+.chaikin-popup-btn-secondary:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.chaikin-popup-close-link {
+    color: <?= htmlspecialchars($popupCloseColor) ?>;
+    text-decoration: underline;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.chaikin-popup-close-link:hover {
+    opacity: 0.8;
+}
+
+/* 桌面端响应式 */
+@media (min-width: 1280px) {
+    .chaikin-popup-content {
+        padding: <?= $popupPadding['desktop'] ?>;
+    }
+    
+    .chaikin-popup-title {
+        font-size: <?= $popupTitleSize['desktop'] ?>;
+    }
+    
+    .chaikin-popup-text {
+        font-size: <?= $popupContentSize['desktop'] ?>;
+    }
+}
+
+/* 平板及以上：按钮横向排列 */
+@media (min-width: 768px) {
+    .chaikin-popup-buttons {
+        flex-direction: row;
+    }
+    
+    .chaikin-popup-btn {
+        flex: 1;
+    }
+}
+</style>
+
+<script>
+function closeChaikinPopup() {
+    const popup = document.getElementById('chaikin-popup-overlay');
+    if (popup) {
+        popup.style.display = 'none';
+    }
+}
+
+// 延迟显示弹窗
+(function() {
+    const delay = <?= $popupDelay ?> * 1000; // 转换为毫秒
+    
+    setTimeout(function() {
+        const popup = document.getElementById('chaikin-popup-overlay');
+        if (popup) {
+            popup.style.display = 'flex';
+        }
+    }, delay);
+    
+    // 点击背景关闭
+    document.getElementById('chaikin-popup-overlay')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeChaikinPopup();
+        }
+    });
+    
+    // ESC键关闭
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeChaikinPopup();
+        }
+    });
+})();
+</script>
+<?php endif; ?>
+

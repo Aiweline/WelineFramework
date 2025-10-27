@@ -29,6 +29,7 @@ class Page extends Model
     public const fields_GA4_ID = 'ga4_id';
     public const fields_GTM_ID = 'gtm_id';
     public const fields_FB_PIXEL_ID = 'fb_pixel_id';
+    public const fields_CTA_EVENT_NAME = 'cta_event_name';
     public const fields_LOGO = 'logo';
     public const fields_ICON = 'icon';
     public const fields_LOCALES = 'locales';
@@ -365,6 +366,18 @@ class Page extends Model
                 10,
                 '',
                 '默认语言代码'
+            );
+        }
+        
+        // 添加 cta_event_name 字段（如果不存在）
+        if ($setup->tableExist() && !$setup->getConnection()->fetchOne("SHOW COLUMNS FROM `{$setup->getTable()}` LIKE 'cta_event_name'")) {
+            $setup->getConnection()->addColumn(
+                $setup->getTable(),
+                self::fields_CTA_EVENT_NAME,
+                TableInterface::column_type_VARCHAR,
+                100,
+                '',
+                'CTA转化事件名称'
             );
         }
     }

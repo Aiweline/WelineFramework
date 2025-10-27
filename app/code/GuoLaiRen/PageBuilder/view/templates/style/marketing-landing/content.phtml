@@ -42,7 +42,7 @@
  * form.title_size => 标题字号:responsive:18/24|px[MD]
  * form.title_weight => 标题字重:select:600|400,500,600,700,800
  * form.title_margin => 标题下边距:responsive:16/24|px[MD]
- * form.background_color => 表单背景色:color:rgba(255, 255, 255, 0.05)
+ * form.background_color => 表单背景色:color:rgb(244, 245, 247)
  * form.border_radius => 圆角大小:number:8|px
  * form.padding => 表单内边距:responsive:20/30|px[MD]
  * 
@@ -52,7 +52,8 @@
  * messages.phone_required => 电话必填提示:text:请输入电话号码
  * messages.phone_invalid => 电话格式错误提示:text:电话号码格式不正确
  * messages.submitting => 提交中提示:text:Submitting your information...
- * messages.success => 提交成功提示:text:Success! Redirecting...
+ * messages.success => 提交成功提示（无跳转）:text:Thank you! Your submission has been received.
+ * messages.success_redirect => 提交成功提示（有跳转）:text:Success! Redirecting...
  * messages.error => 提交失败提示:text:Submission failed. Please try again.
  * 
  * group:input => 输入框设置
@@ -158,6 +159,9 @@ function genRespCSS($parsed) {
 }
 
 function processContentText($text) {
+    // 先将字面的 \n 转换为真正的换行符
+    $text = str_replace('\\n', "\n", $text);
+    
     $text = htmlspecialchars($text);
     // 先处理粗体标记
     $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
@@ -193,7 +197,7 @@ $formTitleColor = getContentConfig($styleSettings, 'form.title_color', '#333333'
 $formTitleSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.title_size', '18/24') . 'px'));
 $formTitleWeight = getContentConfig($styleSettings, 'form.title_weight', '600');
 $formTitleMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.title_margin', '16/24') . 'px'));
-$formBg = getContentConfig($styleSettings, 'form.background_color', '#f5f5f5');
+$formBg = getContentConfig($styleSettings, 'form.background_color', 'rgb(244, 245, 247)');
 $formRadius = getContentConfig($styleSettings, 'form.border_radius', '8');
 $formPadding = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.padding', '20/30') . 'px'));
 
@@ -254,10 +258,18 @@ $pageContent = $page ? $page->getData('content') : '';
 // 表单提交地址 - 使用 getFrontendUrl 避免加密前缀
 $formAction = $this->getFrontendUrl('pagebuilder/frontend/form/submit', ['page_id' => $page ? $page->getId() : 0]);
 
-// 提交成功后的跳转地址
+// 提交成功后的跳转地址（如果为空则不跳转）
 $redirectUrl = $page ? $page->getData('redirect_url') : '';
-if (empty($redirectUrl)) {
-    $redirectUrl = '/'; // 默认跳转到首页
+
+// 跟踪代码配置
+$ga4Id = $page ? $page->getData('ga4_id') : '';
+$fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
+
+// CTA 事件名称（如果未设置，使用默认：handle_form_submit）
+$ctaEventName = $page ? $page->getData('cta_event_name') : '';
+if (empty($ctaEventName) && $page) {
+    $handle = $page->getData('handle') ?: 'page';
+    $ctaEventName = $handle . '_form_submit';
 }
 
 // 表单提示信息配置
@@ -267,7 +279,8 @@ $formMessages = [
     'phone_required' => getContentConfig($styleSettings, 'messages.phone_required', '请输入电话号码'),
     'phone_invalid' => getContentConfig($styleSettings, 'messages.phone_invalid', '电话号码格式不正确'),
     'submitting' => getContentConfig($styleSettings, 'messages.submitting', 'Submitting your information...'),
-    'success' => getContentConfig($styleSettings, 'messages.success', 'Success! Redirecting...'),
+    'success' => getContentConfig($styleSettings, 'messages.success', 'Thank you! Your submission has been received.'),
+    'success_redirect' => getContentConfig($styleSettings, 'messages.success_redirect', 'Success! Redirecting...'),
     'error' => getContentConfig($styleSettings, 'messages.error', 'Submission failed. Please try again.')
 ];
 ?>
@@ -867,6 +880,11 @@ $formMessages = [
     const redirectUrl = <?= json_encode($redirectUrl) ?>;
     const messages = <?= json_encode($formMessages) ?>;
     
+    // 跟踪代码配置
+    const ga4Id = <?= json_encode($ga4Id) ?>;
+    const fbPixelId = <?= json_encode($fbPixelId) ?>;
+    const ctaEventName = <?= json_encode($ctaEventName) ?>;
+    
     if (!form) return;
     
     // 保存原始按钮文本
@@ -947,12 +965,42 @@ $formMessages = [
             setButtonLoading(false);
             
             if (data.success || data.status === 'success') {
-                showMessage(messages.success, 'success');
+                // 根据是否有跳转地址显示不同的成功消息
+                const successMsg = (redirectUrl && redirectUrl.trim() !== '') 
+                    ? messages.success_redirect 
+                    : messages.success;
+                showMessage(successMsg, 'success');
                 
-                // 1秒后跳转
-                setTimeout(function() {
-                    window.location.href = redirectUrl;
-                }, 1000);
+                // 触发转化事件跟踪
+                try {
+                    // Google Analytics 4 事件跟踪
+                    if (ga4Id && typeof gtag !== 'undefined') {
+                        gtag('event', ctaEventName, {
+                            'event_category': 'Lead Generation',
+                            'event_label': 'Form Submission',
+                            'value': 1
+                        });
+                        console.log('✅ GA4 事件已触发:', ctaEventName);
+                    }
+                    
+                    // Facebook Pixel 事件跟踪
+                    if (fbPixelId && typeof fbq !== 'undefined') {
+                        fbq('track', 'Lead', {
+                            content_name: ctaEventName,
+                            status: 'completed'
+                        });
+                        console.log('✅ Facebook Pixel 事件已触发:', ctaEventName);
+                    }
+                } catch (trackingError) {
+                    console.error('事件跟踪失败:', trackingError);
+                }
+                
+                // 如果配置了跳转地址，1秒后跳转；否则不跳转
+                if (redirectUrl && redirectUrl.trim() !== '') {
+                    setTimeout(function() {
+                        window.location.href = redirectUrl;
+                    }, 1000);
+                }
             } else {
                 // 使用服务器返回的错误消息，如果没有则使用配置的默认消息
                 const errorMsg = data.message || data.error || messages.error;
