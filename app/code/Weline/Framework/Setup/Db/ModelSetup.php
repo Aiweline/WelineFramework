@@ -26,9 +26,9 @@ use Weline\Framework\Output\Cli\Printing;
  */
 class ModelSetup
 {
-    protected AbstractModel $model;
+    protected ?AbstractModel $model = null;
 
-    private Table $ddl_table;
+    private ?Table $ddl_table = null;
     private Printing $printing;
 
     /**
@@ -76,6 +76,9 @@ class ModelSetup
      */
     public function createTable(string $comment = '', string $table = ''): CreateInterface
     {
+        if ($this->model === null) {
+            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
+        }
         return $this->model->getConnection()->getConnector()
             ->createTable()
             ->createTable($table ?: $this->model->getTable(), $comment);
@@ -93,6 +96,9 @@ class ModelSetup
      */
     public function alterTable(string $comment = '', string $new_table_name = ''): AlterInterface
     {
+        if ($this->model === null) {
+            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
+        }
         if (!$this->model->getConnection()->getConnector()->tableExist($this->model->getTable())) {
             throw new \Weline\Framework\App\Exception(__('表不存在: %{1}', $this->model->getTable()));
         }
@@ -110,6 +116,9 @@ class ModelSetup
      */
     public function getTablePrefix(): string
     {
+        if ($this->model === null) {
+            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
+        }
         $prefix = $this->model->getConnection()->getConfigProvider()->getPrefix();
         return $prefix ?? '';
     }
@@ -125,6 +134,9 @@ class ModelSetup
      */
     public function tableExist(string $table_name = ''): bool
     {
+        if ($this->model === null) {
+            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
+        }
         return $this->model->getConnection()->getConnector()->tableExist($table_name ?: $this->model->getTable());
     }
 
