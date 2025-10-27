@@ -20,7 +20,7 @@ class AclController implements \Weline\Framework\Event\ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(Event &$event)
+    public function execute(Event &$event): void
     {
         // TODO: Implement execute() method.
     }
