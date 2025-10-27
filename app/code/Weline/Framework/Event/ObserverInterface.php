@@ -16,8 +16,8 @@ interface ObserverInterface
      *
      * 参数区：
      *
-     * @param Event $event
+     * @param Event &$event
      *
      */
-    public function execute(Event $event): void;
+    public function execute(Event &$event): void;
 }

@@ -13,7 +13,7 @@ use Weline\DeveloperWorkspace\Model\Document as DocumentModel;
 
 class ModuleUpgradeObserver implements ObserverInterface
 {
-    public function execute(Event $event): void
+    public function execute(Event &$event): void
     {
 
             // 获取模块列表
