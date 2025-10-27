@@ -10,7 +10,7 @@ use Weline\Framework\Router\Core;
 
 class RouterRunBefore implements ObserverInterface
 {
-    public function execute(Event &$event)
+    public function execute(Event $event): void
     {
         $request_uri = $_SERVER['REQUEST_URI']??'';
         # 移除查询字符串
