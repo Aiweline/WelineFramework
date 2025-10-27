@@ -339,7 +339,15 @@ class Preview extends BackendController
         $headerHtml = $this->fetch("{$stylePath}/header.phtml");
         
         // 渲染 content
-        $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+        // 如果页面有自定义内容，使用自定义内容替代 content.phtml
+        $customContent = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_CONTENT);
+        if (!empty($customContent)) {
+            // 使用自定义内容
+            $contentHtml = $customContent;
+        } else {
+            // 使用样式模板的 content.phtml
+            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+        }
         
         // 渲染 footer
         $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
@@ -349,9 +357,83 @@ class Preview extends BackendController
     }
 
     /**
+     * 预览样式模板默认效果（无需页面ID）
+     * 仅使用模板的默认配置渲染，用于在选择样式时快速预览模板效果
+     * 路由：pagebuilder/backend_preview/stylePreview?style_code=marketing-landing
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '样式模板预览', '', '样式模板预览')]
+    public function stylePreview()
+    {
+        $styleCode = $this->request->getGet('style_code');
+        $locale = $this->request->getGet('locale', 'zh_Hans_CN'); // 默认语言
+        
+        if (!$styleCode) {
+            echo '<div style="padding: 20px; color: red;">样式代码不能为空</div>';
+            echo '<p style="padding: 0 20px;">请使用 ?style_code=样式代码 参数访问</p>';
+            echo '<p style="padding: 0 20px;">例如: ?style_code=marketing-landing</p>';
+            return;
+        }
+
+        // 验证样式是否存在
+        $styleModel = clone $this->styleModel;
+        $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)->find()->fetch();
+        
+        if (!$styleModel->getId()) {
+            echo '<div style="padding: 20px; color: red;">样式模板不存在：' . htmlspecialchars($styleCode) . '</div>';
+            return;
+        }
+
+        // 获取模板的默认配置
+        $templateDefaults = $this->getTemplateDefaults($styleCode);
+        
+        // 创建一个空的页面对象，用于模板渲染
+        $dummyPage = clone $this->pageModel;
+        $dummyPage->setData([
+            'id' => 0,
+            'title' => '样式模板预览 - ' . $styleModel->getData('name'),
+            'handle' => 'template-preview-' . $styleCode,
+            'style' => $styleCode,
+            'status' => 1,
+            'content' => '这是样式模板的默认预览',
+            'description' => '预览模式：使用模板默认配置'
+        ]);
+
+        // 设置模板变量
+        $this->assign('page', $dummyPage);
+        $this->assign('style_settings', $templateDefaults);
+        $this->assign('is_preview', true);
+        $this->assign('is_template_preview', true); // 标记为模板预览模式
+        $this->assign('locale', $locale);
+        
+        // 组合渲染 header、content、footer 三个模板
+        $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
+        
+        try {
+            // 渲染 header
+            $headerHtml = $this->fetch("{$stylePath}/header.phtml");
+            
+            // 渲染 content
+            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+            
+            // 渲染 footer
+            $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
+            
+            // 输出组合后的完整页面
+            echo $headerHtml . $contentHtml . $footerHtml;
+        } catch (\Exception $e) {
+            echo '<div style="padding: 20px; color: red;">';
+            echo '<h3>模板渲染错误</h3>';
+            echo '<p>样式代码：' . htmlspecialchars($styleCode) . '</p>';
+            echo '<p>错误信息：' . htmlspecialchars($e->getMessage()) . '</p>';
+            echo '<p>模板路径：' . htmlspecialchars($stylePath) . '</p>';
+            echo '</div>';
+        }
+    }
+
+    /**
      * 自动保存配置
      */
-    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_auto_save', '自动保存配置', '', '自动保存配置')]
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_auto_save', '自动保存配置', '', '自动保存配置', 'GuoLaiRen_PageBuilder::page_builder')]
     public function autoSave()
     {
         try {
@@ -501,6 +583,158 @@ class Preview extends BackendController
                 ]);
             }
         } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 批量重置字段为默认值
+     * 删除指定字段的自定义配置，使其回退到模板默认值
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_reset_fields', '重置字段为默认值', '', '批量重置配置字段为模板默认值', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function resetFieldsToDefault()
+    {
+        try {
+            // 调试日志
+            error_log('🔵 resetFieldsToDefault 接口被调用');
+            
+            // 获取 JSON 请求体
+            $rawBody = file_get_contents('php://input');
+            error_log('🔵 请求体: ' . $rawBody);
+            
+            $data = json_decode($rawBody, true);
+            error_log('🔵 解析后数据: ' . json_encode($data));
+            
+            // 如果 JSON 解析失败，尝试从 POST 获取
+            if (!$data) {
+                $data = [
+                    'page_id' => $this->request->getPost('page_id'),
+                    'config_keys' => $this->request->getPost('config_keys', []),
+                    'locale' => $this->request->getPost('locale', ''),
+                    'style_code' => $this->request->getPost('style_code', '')
+                ];
+            }
+            
+            $pageId = (int)($data['page_id'] ?? 0);
+            $configKeys = $data['config_keys'] ?? [];
+            $locale = $data['locale'] ?? '';
+            $styleCode = $data['style_code'] ?? '';
+            
+            error_log('🔵 pageId: ' . $pageId);
+            error_log('🔵 configKeys: ' . json_encode($configKeys));
+            error_log('🔵 locale: ' . $locale);
+            
+            if (!$pageId) {
+                error_log('❌ 页面ID不能为空');
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面ID不能为空')
+                ]);
+            }
+            
+            if (empty($configKeys) || !is_array($configKeys)) {
+                error_log('❌ 配置键列表不能为空');
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('配置键列表不能为空')
+                ]);
+            }
+
+            error_log('🔵 验证通过，开始加载页面...');
+            
+            // 加载页面
+            $page = clone $this->pageModel;
+            $page->load($pageId);
+            
+            error_log('🔵 页面加载完成，ID: ' . $page->getId());
+            
+            if (!$page->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面不存在')
+                ]);
+            }
+
+            // 如果没有指定样式代码，使用页面当前的样式
+            if (!$styleCode) {
+                $styleCode = $page->getData('style') ?: 'default';
+            }
+            
+            // 获取页面的默认语言
+            $defaultLocale = $page->getData('default_locale') ?: '';
+            
+            // 判断是否从LocalDescription中删除（语言特定配置）
+            $resetInLocaleDescription = !empty($locale) && $locale !== $defaultLocale;
+            
+            if ($resetInLocaleDescription) {
+                // 从LocalDescription.config.style_config中删除指定的配置键
+                $localDesc = clone $this->localDescriptionModel;
+                $localDesc->clear()
+                    ->where(LocalDescription::fields_ID, $pageId)
+                    ->where('local_code', $locale)
+                    ->find()
+                    ->fetch();
+                
+                if ($localDesc->getId()) {
+                    // 获取现有的config
+                    $configJson = $localDesc->getData('config');
+                    $config = [];
+                    if ($configJson) {
+                        $config = json_decode($configJson, true) ?: [];
+                    }
+                    
+                    // 从style_config中删除指定的键
+                    if (isset($config['style_config']) && is_array($config['style_config'])) {
+                        foreach ($configKeys as $key) {
+                            unset($config['style_config'][$key]);
+                        }
+                        
+                        // 保存更新后的配置
+                        $localDesc->setData('config', json_encode($config))->save();
+                    }
+                }
+                
+                error_log('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('已重置 %{1} 个字段为默认值（语言：%{2}）', count($configKeys), $locale),
+                    'locale' => $locale,
+                    'storage' => 'LocalDescription',
+                    'reset_count' => count($configKeys)
+                ]);
+            } else {
+                // 从Page.style_setting中删除指定的配置键
+                $currentSettings = $page->getStyleSetting();
+                if (!is_array($currentSettings)) {
+                    $currentSettings = [];
+                }
+                
+                // 从指定样式的配置中删除键
+                if (isset($currentSettings[$styleCode]) && is_array($currentSettings[$styleCode])) {
+                    foreach ($configKeys as $key) {
+                        unset($currentSettings[$styleCode][$key]);
+                    }
+                    
+                    // 保存配置
+                    $page->setData('style_setting', json_encode($currentSettings));
+                    $page->save();
+                }
+                
+                error_log('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('已重置 %{1} 个字段为默认值', count($configKeys)),
+                    'locale' => $locale ?: 'default',
+                    'storage' => 'Page.style_setting',
+                    'reset_count' => count($configKeys)
+                ]);
+            }
+        } catch (\Exception $e) {
+            error_log('❌ 异常: ' . $e->getMessage());
+            error_log('❌ 异常跟踪: ' . $e->getTraceAsString());
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage()
