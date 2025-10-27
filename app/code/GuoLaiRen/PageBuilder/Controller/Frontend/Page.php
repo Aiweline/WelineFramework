@@ -59,11 +59,15 @@ class Page extends FrontendController
 
         // 加载页面
         $page = clone $this->pageModel;
-        $page->clear()
-            ->where(PageModel::fields_HANDLE, $handle)
-            ->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED)
-            ->find()
-            ->fetch();
+        $page->clear()->where(PageModel::fields_HANDLE, $handle);
+        
+        // 如果不是预览模式，只显示已发布的页面
+        if (!$isPreview) {
+            $page->where(PageModel::fields_STATUS, PageModel::STATUS_PUBLISHED);
+        }
+        
+        $page->find()->fetch();
+
 
         if (!$page->getId()) {
             $this->getMessageManager()->addError(__('页面不存在！'));
@@ -105,7 +109,15 @@ class Page extends FrontendController
         // 获取当前样式的配置值（从所有样式配置中提取）
         $pageStyleSettings = [];
         if ($styleCode && isset($allStyleSettings[$styleCode])) {
-            $pageStyleSettings = $allStyleSettings[$styleCode];
+            $rawSettings = $allStyleSettings[$styleCode];
+            
+            // 清理可能存在的三层结构（旧数据可能包含语言代码作为key）
+            // 只保留标量值（配置项），过滤掉数组值（语言代码节点）
+            foreach ($rawSettings as $key => $value) {
+                if (!is_array($value)) {
+                    $pageStyleSettings[$key] = $value;
+                }
+            }
         }
         
         if ($styleCode) {
@@ -119,7 +131,8 @@ class Page extends FrontendController
             
             if ($style->getId()) {
                 // 获取样式的默认配置（最低优先级）
-                $styleConfigs = $style->parseStyleConfig();
+                $parsed = $style->parseStyleConfig();
+                $styleConfigs = $parsed['configs'] ?? [];  // ← 修复：提取 configs 部分
                 $finalSettings = [];
                 
                 // 第一步：使用默认配置值
@@ -154,24 +167,46 @@ class Page extends FrontendController
                     }
                 }
                 
-                // 将最终配置传递给模板
+                // 将最终配置传递给模板（传递两个变量名以兼容不同模板）
+                $this->assign('style_settings', $finalSettings);
                 $this->assign('style', $finalSettings);
                 
-                // 使用样式模板
-                $headerTemplate = $style->getHeaderPath();
-                $footerTemplate = $style->getFooterPath();
+                // 使用模块路径格式渲染样式模板
+                $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
                 
-                // 获取 content.phtml 模板路径
-                $contentTemplate = $style->getContentPath();
+                // 渲染 header
+                $headerHtml = $this->fetch("{$stylePath}/header.phtml");
                 
-                // 渲染header
-                echo $this->render($headerTemplate);
+                // 渲染 content
+                // 如果页面有自定义内容，使用自定义内容替代 content.phtml
+                // 优先使用翻译后的内容，如果没有则使用默认内容
+                $customContent = '';
+                if ($localizedContent && !empty($localizedContent['content'])) {
+                    // 使用翻译后的自定义内容
+                    $customContent = $localizedContent['content'];
+                } else {
+                    // 使用默认语言的自定义内容
+                    $customContent = $page->getData(PageModel::fields_CONTENT);
+                }
                 
-                // 渲染主要内容（使用样式模板的 content.phtml）
-                echo $this->render($contentTemplate);
+                if (!empty($customContent)) {
+                    // 使用自定义内容（已翻译或默认）
+                    $contentHtml = $customContent;
+                } else {
+                    // 使用样式模板的 content.phtml
+                    $contentHtml = $this->fetch("{$stylePath}/content.phtml");
+                }
                 
-                // 渲染footer
-                echo $this->render($footerTemplate);
+                // 渲染 footer
+                $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
+                
+                // 输出组合后的完整页面
+                echo $headerHtml . $contentHtml . $footerHtml;
+                
+                // 如果是预览模式，添加语言切换悬浮按钮
+                if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {
+                    echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
+                }
                 
                 return;
             }
@@ -277,5 +312,226 @@ class Page extends FrontendController
         echo $template->fetchFile($templatePath);
         
         return ob_get_clean();
+    }
+    
+    /**
+     * 渲染语言切换悬浮按钮（仅预览模式）
+     */
+    private function renderLanguageSwitcher(PageModel $page, array $availableLocales, string $currentLocale): string
+    {
+        $handle = $page->getData(PageModel::fields_HANDLE);
+        // 使用友好的重写 URL 格式
+        $baseUrl = '/' . $handle;
+        
+        $html = '<style>
+            .preview-language-switcher {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 99999;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            
+            .preview-lang-button {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 56px;
+                height: 56px;
+                font-size: 24px;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .preview-lang-button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            }
+            
+            .preview-lang-menu {
+                display: none;
+                position: absolute;
+                bottom: 70px;
+                right: 0;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                min-width: 200px;
+                overflow: hidden;
+                animation: slideUp 0.3s ease;
+            }
+            
+            @keyframes slideUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            .preview-lang-menu.active {
+                display: block;
+            }
+            
+            .preview-lang-menu-header {
+                padding: 12px 16px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            
+            .preview-lang-menu-header .preview-mode-badge {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            
+            .preview-lang-item {
+                display: block;
+                padding: 12px 16px;
+                color: #333;
+                text-decoration: none;
+                transition: background 0.2s;
+                border-bottom: 1px solid #f0f0f0;
+                font-size: 14px;
+            }
+            
+            .preview-lang-item:last-child {
+                border-bottom: none;
+            }
+            
+            .preview-lang-item:hover {
+                background: #f5f5f5;
+            }
+            
+            .preview-lang-item.active {
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+                color: #667eea;
+                font-weight: 600;
+                position: relative;
+            }
+            
+            .preview-lang-item.active::before {
+                content: "✓";
+                position: absolute;
+                right: 16px;
+                color: #667eea;
+                font-weight: bold;
+            }
+            
+            @media (max-width: 768px) {
+                .preview-language-switcher {
+                    bottom: 16px;
+                    right: 16px;
+                }
+                
+                .preview-lang-button {
+                    width: 48px;
+                    height: 48px;
+                    font-size: 20px;
+                }
+                
+                .preview-lang-menu {
+                    bottom: 60px;
+                    min-width: 180px;
+                }
+            }
+        </style>
+        
+        <div class="preview-language-switcher">
+            <button class="preview-lang-button" onclick="togglePreviewLangMenu()" title="切换语言">
+                🌐
+            </button>
+            <div class="preview-lang-menu" id="previewLangMenu">
+                <div class="preview-lang-menu-header">
+                    <span>选择语言</span>
+                    <span class="preview-mode-badge">预览模式</span>
+                </div>';
+        
+        foreach ($availableLocales as $localeData) {
+            // 支持两种格式：数组格式和字符串格式
+            if (is_array($localeData)) {
+                $localeCode = $localeData['code'] ?? '';
+                $localeName = $localeData['name'] ?? $localeCode;
+            } else {
+                $localeCode = $localeData;
+                $localeName = $localeData;
+            }
+            
+            $isActive = ($localeCode === $currentLocale) ? ' active' : '';
+            
+            // 构建新的URL，替换或添加 locale 参数
+            $newUrl = $this->buildUrlWithLocale($baseUrl, $localeCode);
+            
+            $html .= sprintf(
+                '<a href="%s" class="preview-lang-item%s">%s</a>',
+                htmlspecialchars($newUrl),
+                $isActive,
+                htmlspecialchars($localeName)
+            );
+        }
+        
+        $html .= '    </div>
+        </div>
+        
+        <script>
+            function togglePreviewLangMenu() {
+                const menu = document.getElementById("previewLangMenu");
+                menu.classList.toggle("active");
+            }
+            
+            // 点击外部关闭菜单
+            document.addEventListener("click", function(event) {
+                const switcher = document.querySelector(".preview-language-switcher");
+                const menu = document.getElementById("previewLangMenu");
+                
+                if (switcher && !switcher.contains(event.target)) {
+                    menu.classList.remove("active");
+                }
+            });
+        </script>';
+        
+        return $html;
+    }
+    
+    /**
+     * 构建带有语言参数的URL
+     */
+    private function buildUrlWithLocale(string $url, string $locale): string
+    {
+        // 解析URL
+        $parts = parse_url($url);
+        $path = $parts['path'] ?? '';
+        $query = $parts['query'] ?? '';
+        
+        // 解析查询字符串
+        parse_str($query, $params);
+        
+        // 更新或添加 locale 参数
+        $params['locale'] = $locale;
+        
+        // 如果当前请求是预览模式，保留 preview 参数
+        if (isset($_GET['preview']) && $_GET['preview'] == '1') {
+            $params['preview'] = '1';
+        }
+        
+        // 重新构建URL
+        $newQuery = http_build_query($params);
+        
+        return $path . ($newQuery ? '?' . $newQuery : '');
     }
 }
