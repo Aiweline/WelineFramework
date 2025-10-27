@@ -136,7 +136,7 @@ class Core extends CommandAbstract
         $branch = $args['branch'] ?? $args['b'] ?? null;
         if (empty($branch)) {
             $this->printer->error(__('错误：必须指定分支'));
-            $blast->printer->note(__('php bin/w update:core -b <分支名>'));
+            $this->printer->note(__('php bin/w update:core -b <分支名>'));
             exit(1);
         }
         return $branch;
@@ -147,7 +147,7 @@ class Core extends CommandAbstract
         $tmpDir = Env::backup_dir . 'tmp' . DS . 'core-update';
         
         if (is_dir($tmpDir)) {
-            $this->printer->notevisible(__('删除旧临时目录...'));
+            $this->printer->note(__('删除旧临时目录...'));
             $this->removeDirectory($tmpDir);
         }
         
@@ -302,7 +302,8 @@ class Core extends CommandAbstract
                     mkdir($targetPath, 0755, true);
                 }
             } else {
-                copy($item, $targetPath);
+                $sourcePath = $item->getPathname();
+                copy($sourcePath, $targetPath);
             }
         }
         
