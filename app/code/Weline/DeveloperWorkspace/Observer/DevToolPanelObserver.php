@@ -1,0 +1,151 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\DeveloperWorkspace\Observer;
+
+use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Request;
+
+/**
+ * 开发工具面板 Observer
+ * 监听 App::run_after 事件，在页面输出前注入开发工具面板
+ */
+class DevToolPanelObserver implements ObserverInterface
+{
+    private Request $request;
+
+    public function __construct(Request $request)
+    {
+        $this->request = $request;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function execute(Event &$event)
+    {
+        // 只在开发模式下显示
+        if (!DEV) {
+            return;
+        }
+
+        try {
+            // 获取页面输出结果
+            $result = $event->getData('result');
+            
+            if (empty($result) || !is_string($result)) {
+                return;
+            }
+            
+            // 检查是否是 HTML 响应
+            if (!$this->isHtmlResponse($result)) {
+                return;
+            }
+            
+            // 渲染开发工具面板
+            $panelHtml = $this->renderPanel();
+            
+            if (empty($panelHtml)) {
+                return;
+            }
+            
+            // 在最后一个 </body> 前注入面板（避免注入到 JavaScript 字符串中的 body）
+            $bodyClosePos = strripos($result, '</body>');
+            
+            if ($bodyClosePos !== false) {
+                // 找到最后一个 </body>，在其前面注入
+                $before = substr($result, 0, $bodyClosePos);
+                $after = substr($result, $bodyClosePos);
+                $result = $before . $panelHtml . $after;
+            } else {
+                // 没找到 </body>，直接追加到末尾
+                $result = $result . $panelHtml;
+            }
+            
+            // 更新 result
+            $event->setData('result', $result);
+            
+        } catch (\Exception $e) {
+            $this->logToConsole('error', 'DevToolPanel Error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+        }
+    }
+
+    /**
+     * 渲染开发工具面板
+     */
+    private function renderPanel(): string
+    {
+        try {
+            // 获取模板文件路径
+            $templatePath = dirname(__DIR__) . '/view/hooks/dev-tool-panel.phtml';
+            
+            if (!is_file($templatePath)) {
+                $this->logToConsole('error', 'DevToolPanel: Template file not found: ' . $templatePath);
+                return '';
+            }
+            
+            // 检测是否是后端请求（使用Request对象的isBackend方法）
+            $isBackend = $this->request->isBackend();
+            
+            // 调试：输出检测信息（生产环境可删除）
+            // $this->logToConsole('info', 'DevToolPanel Detection: URI=' . $uri . ', isBackend=' . ($isBackend ? 'TRUE' : 'FALSE'));
+            
+            // 使用输出缓冲捕获模板输出
+            ob_start();
+            $panelType = $isBackend ? 'backend' : 'frontend';
+            include $templatePath;
+            $html = ob_get_clean();
+            
+            return is_string($html) ? $html : '';
+        } catch (\Exception $e) {
+            $this->logToConsole('error', 'DevToolPanel Render Error: ' . $e->getMessage());
+            return '';
+        }
+    }
+
+    /**
+     * 检查输出是否是 HTML 响应
+     */
+    private function isHtmlResponse(string $output): bool
+    {
+        // 简单检查：是否包含 HTML 标签
+        return (stripos($output, '<html') !== false || 
+                stripos($output, '<!doctype') !== false ||
+                stripos($output, '<body') !== false);
+    }
+
+    /**
+     * 输出日志到浏览器控制台
+     * 
+     * @param string $level 日志级别：error, warn, info, log
+     * @param string $message 消息内容
+     * @param array $data 额外数据
+     */
+    private function logToConsole(string $level, string $message, array $data = []): void
+    {
+        $level = in_array($level, ['error', 'warn', 'info', 'log']) ? $level : 'log';
+        
+        $output = '<script>';
+        $output .= "console.{$level}('[DevToolPanel] " . addslashes($message) . "');";
+        
+        if (!empty($data)) {
+            $output .= "console.{$level}('[DevToolPanel] 详细信息:', " . json_encode($data, JSON_UNESCAPED_UNICODE) . ");";
+        }
+        
+        $output .= '</script>';
+        
+        echo $output;
+    }
+}

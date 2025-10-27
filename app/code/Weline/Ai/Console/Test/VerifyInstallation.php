@@ -5,41 +5,34 @@ declare(strict_types=1);
 namespace Weline\Ai\Console\Test;
 
 use Weline\Framework\Console\CommandInterface;
-use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Verify Weline_Ai installation
  */
 class VerifyInstallation implements CommandInterface
 {
-    public function __construct(
-        private readonly ConnectionFactory $connectionFactory
-    ) {
-    }
-
     public function execute(array $args = [], array $data = [])
     {
         echo "\n=== Weline_Ai 安装验证 ===\n\n";
 
-        $connection = $this->connectionFactory->getConnection();
-
-        // 检查数据库表
-        $tables = [
-            'ai_model',
-            'ai_api_key',
-            'ai_assistant',
-            'ai_tenant',
-            'ai_model_monitoring'
+        // 检查数据库表（使用模型）
+        $models = [
+            'ai_model' => \Weline\Ai\Model\AiModel::class,
+            'ai_api_key' => \Weline\Ai\Model\AiApiKey::class,
+            'ai_assistant' => \Weline\Ai\Model\AiAssistant::class,
+            'ai_tenant' => \Weline\Ai\Model\AiTenant::class,
+            'ai_model_monitoring' => \Weline\Ai\Model\AiModelMonitoring::class,
         ];
 
         echo "📊 数据库表检查:\n";
-        foreach ($tables as $table) {
+        foreach ($models as $table => $modelClass) {
             try {
-                $result = $connection->fetchOne("SELECT COUNT(*) as count FROM {$table}");
-                $count = $result['count'] ?? 0;
+                $model = ObjectManager::getInstance($modelClass);
+                $count = $model->total();
                 echo "  ✅ {$table}: {$count} 条记录\n";
             } catch (\Exception $e) {
-                echo "  ❌ {$table}: 表不存在或查询失败 - {$e->getMessage()}\n";
+                echo "  ❌ {$table}: 表可能不存在 - " . $e->getMessage() . "\n";
             }
         }
 

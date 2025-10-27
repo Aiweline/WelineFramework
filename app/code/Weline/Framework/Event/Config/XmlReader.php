@@ -57,16 +57,16 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         foreach ($configs as $module_and_file => $config) {
             $module_event_observers = [];
             if (
-                !isset($event_xml_data['config']['_attribute']['noNamespaceSchemaLocation']) &&
+                !isset($config['config']['_attribute']['noNamespaceSchemaLocation']) ||
                 'urn:Weline_Framework::Event/etc/xsd/event.xsd' !== $config['config']['_attribute']['noNamespaceSchemaLocation']
             ) {
-                throw new Core(__($module_and_file . '事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"'));
+                die(__('%{1} 事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"', [$module_and_file]));
             }
             // 多个值
             if (is_integer(array_key_first($config['config']['_value']['event']))) {
                 foreach ($config['config']['_value']['event'] as $event) {
                     if (!isset($event['_attribute']['name'])) {
-                        throw new Core(__($module_and_file . '事件Event未指定name属性：<event name="eventName">...</event>'));
+                        throw new Core(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
                     }
                     // 多个值
                     if (is_integer(array_key_first($event['_value']))) {
@@ -75,13 +75,13 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                         }
                     } else {
                         if (!isset($event['_value']['observer']['_attribute'])) {
-                            throw new Core(__($module_and_file . '观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                            throw new Core(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                         }
                         if (!isset($event['_value']['observer']['_attribute']['name'])) {
-                            throw new Core(__($module_and_file . '观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                            throw new Core(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                         }
                         if (!isset($event['_value']['observer']['_attribute']['instance'])) {
-                            throw new Core(__($module_and_file . '观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                            throw new Core(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                         }
                         $event['_value']['observer']['_attribute']['sort']      = $event['_value']['observer']['_attribute']['sort'] ?? 10000;
                         $module_event_observers[$event['_attribute']['name']][] = $event['_value']['observer']['_attribute'];
@@ -89,16 +89,16 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 }
             } else {
                 if (!isset($config['config']['_value']['event']['_attribute']['name'])) {
-                    throw new Core(__($module_and_file . '事件Event未指定name属性：<event name="eventName">...</event>'));
+                    throw new Core(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
                 }
                 if (!isset($config['config']['_value']['event']['_value']['observer']['_attribute'])) {
-                    throw new Core(__($module_and_file . '观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                    throw new Core(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                 }
                 if (!isset($config['config']['_value']['event']['_value']['observer']['_attribute']['name'])) {
-                    throw new Core(__($module_and_file . '观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                    throw new Core(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                 }
                 if (!isset($config['config']['_value']['event']['_value']['observer']['_attribute']['instance'])) {
-                    throw new Core(__($module_and_file . '观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>'));
+                    throw new Core(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true"/>', [$module_and_file]));
                 }
                 $config['config']['_value']['event']['_value']['observer']['_attribute']['sort'] = $config['config']['_value']['event']['_value']['observer']['_attribute']['sort']?? 10000;
                 $module_event_observers[$config['config']['_value']['event']['_attribute']['name']][] = $config['config']['_value']['event']['_value']['observer']['_attribute'];

@@ -1,286 +1,543 @@
 <?php
 /**
- * AI助手工具介绍首页模板
- * 
- * @var array $models
- * @var array $adapters
- * @var int $models_count
- * @var int $adapters_count
+ * AI助手平台首页
  */
-?>
+/**@var \Weline\Framework\View\Template $this */
 
-<div class="ai-index-page">
-    <!-- Hero Section -->
-    <div class="hero-section">
+$totalModels = $this->getData('total_models') ?? 0;
+$models = $this->getData('models') ?? [];
+$adapterCount = $this->getData('adapter_count') ?? 0;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI助手平台 - 科技赋能未来</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #ffffff;
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 动态背景粒子效果 */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 50%;
+            animation: float 20s infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translate(100px, -1000px); opacity: 0; }
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background: rgba(15, 15, 35, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
+        }
+
+        .nav-link {
+            color: #a8b2d1 !important;
+            transition: all 0.3s;
+            position: relative;
+            padding: 0.5rem 1rem !important;
+        }
+
+        .nav-link:hover {
+            color: #667eea !important;
+            transform: translateY(-2px);
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: all 0.3s;
+            transform: translateX(-50%);
+        }
+
+        .nav-link:hover::after {
+            width: 80%;
+        }
+
+        /* 英雄区域 */
+        .hero-section {
+            padding: 80px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 10px rgba(102, 126, 234, 0.5)); }
+            to { filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.8)); }
+        }
+
+        .hero-subtitle {
+            font-size: 1.5rem;
+            color: #a8b2d1;
+            margin-bottom: 2.5rem;
+        }
+
+        /* 科技感按钮 */
+        .btn-tech {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 14px 40px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-tech::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-tech:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 40px rgba(102, 126, 234, 0.8), 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-tech:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* 统计卡片 */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 60px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(102, 126, 234, 0.8);
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-card:hover::before {
+            left: 100%;
+        }
+
+        .stat-icon {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #00f2fe;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #a8b2d1;
+            font-size: 1rem;
+        }
+
+        /* AI模型卡片 */
+        .models-section {
+            padding: 60px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 3rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .model-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .model-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .model-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(102, 126, 234, 0.6);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .model-card:hover::after {
+            left: 100%;
+        }
+
+        .model-vendor {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+
+        .model-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+        }
+
+        .model-code {
+            color: #00f2fe;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .model-description {
+            color: #a8b2d1;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        .model-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+            border-radius: 20px;
+            color: #00f2fe;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00f2fe;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px #00f2fe; }
+            50% { opacity: 0.5; box-shadow: 0 0 5px #00f2fe; }
+        }
+
+        /* 页脚 */
+        .footer {
+            background: rgba(15, 15, 35, 0.9);
+            border-top: 1px solid rgba(102, 126, 234, 0.2);
+            padding: 2rem 0;
+            text-align: center;
+            color: #a8b2d1;
+            margin-top: 80px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.2rem;
+            }
+
+            .models-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 滚动动画 */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles" id="particles"></div>
+
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
-            <h1 class="display-4 text-center mb-4"><?= __('AI助手工具平台') ?></h1>
-            <p class="lead text-center mb-5">
-                <?= __('统一的AI模型管理和助手工具平台，支持多种主流AI模型，提供专业场景适配器，优化生成效果') ?>
-            </p>
-            <div class="text-center">
-                <?php if ($this->session->isLogin()): ?>
-                    <a href="<?= $this->getFrontendUrl('*/frontend/chat') ?>" class="btn btn-primary btn-lg mr-3">
-                        <i class="mdi mdi-robot"></i> <?= __('开始使用') ?>
-                    </a>
-                    <a href="<?= $this->getFrontendUrl('*/frontend/center') ?>" class="btn btn-outline-primary btn-lg">
-                        <i class="mdi mdi-account"></i> <?= __('个人中心') ?>
-                    </a>
+            <a class="navbar-brand" href="<?= $this->getUrl('*/frontend/index') ?>">
+                <i class="mdi mdi-robot-excited"></i> AI助手平台
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="<?= $this->getUrl('*/frontend/index') ?>">
+                            <i class="mdi mdi-home"></i> 首页
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('*/frontend/chat') ?>">
+                            <i class="mdi mdi-message-processing"></i> AI聊天
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('*/frontend/assistant') ?>">
+                            <i class="mdi mdi-robot"></i> 我的助手
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?= $this->getUrl('*/frontend/center') ?>">
+                            <i class="mdi mdi-account-circle"></i> 个人中心
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 英雄区域 -->
+    <div class="hero-section">
+        <div class="container text-center">
+            <h1 class="hero-title fade-in">AI助手工具平台</h1>
+            <p class="hero-subtitle fade-in">智能对话 · 场景适配 · 多模型支持</p>
+            <a href="<?= $this->getUrl('*/frontend/chat') ?>" class="btn btn-tech fade-in">
+                <i class="mdi mdi-rocket-launch"></i> 立即开始
+            </a>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="container">
+        <div class="stats-container">
+            <div class="stat-card fade-in">
+                <div class="stat-icon">
+                    <i class="mdi mdi-robot-excited"></i>
+                </div>
+                <div class="stat-number"><?= $totalModels ?></div>
+                <div class="stat-label">AI模型</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-icon">
+                    <i class="mdi mdi-puzzle"></i>
+                </div>
+                <div class="stat-number"><?= $adapterCount ?></div>
+                <div class="stat-label">场景适配器</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-icon">
+                    <i class="mdi mdi-flash"></i>
+                </div>
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">在线服务</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI模型展示 -->
+    <div class="models-section">
+        <div class="container">
+            <h2 class="section-title fade-in">🤖 可用AI模型</h2>
+            <div class="models-grid">
+                <?php if (empty($models)): ?>
+                    <div class="col-12 text-center" style="color: #a8b2d1;">
+                        <i class="mdi mdi-robot-dead" style="font-size: 4rem; opacity: 0.3;"></i>
+                        <p>暂无可用模型</p>
+                    </div>
                 <?php else: ?>
-                    <a href="<?= $this->getFrontendUrl('login') ?>" class="btn btn-primary btn-lg mr-3">
-                        <i class="mdi mdi-login"></i> <?= __('登录使用') ?>
-                    </a>
-                    <a href="<?= $this->getFrontendUrl('register') ?>" class="btn btn-outline-primary btn-lg">
-                        <i class="mdi mdi-account-plus"></i> <?= __('注册账号') ?>
-                    </a>
+                    <?php foreach ($models as $model): ?>
+                        <div class="model-card fade-in">
+                            <span class="model-vendor"><?= htmlspecialchars($model['vendor'] ?? 'Unknown') ?></span>
+                            <div class="model-name"><?= htmlspecialchars($model['name'] ?? 'Unknown Model') ?></div>
+                            <div class="model-code"><?= htmlspecialchars($model['model_code'] ?? 'N/A') ?></div>
+                            <p class="model-description">
+                                <?= htmlspecialchars(mb_substr($model['description'] ?? '暂无描述', 0, 80)) ?>...
+                            </p>
+                            <div class="model-status">
+                                <span class="status-dot"></span>
+                                在线运行
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <!-- Stats Section -->
-    <div class="stats-section">
+    <!-- 页脚 -->
+    <div class="footer">
         <div class="container">
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="mdi mdi-robot"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3><?= $models_count ?></h3>
-                            <p><?= __('AI模型') ?></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="mdi mdi-palette"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3><?= $adapters_count ?></h3>
-                            <p><?= __('场景适配器') ?></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="mdi mdi-api"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3><?= __('RESTful') ?></h3>
-                            <p><?= __('API接口') ?></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="mdi mdi-earth"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3><?= __('多语言') ?></h3>
-                            <p><?= __('国际化支持') ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <p>&copy; 2025 AI助手平台. All rights reserved.</p>
+            <p>由 <span style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">WelineFramework</span> 驱动</p>
         </div>
     </div>
 
-    <!-- Models Section -->
-    <div class="models-section">
-        <div class="container">
-            <h2 class="section-title"><?= __('可用的AI模型') ?></h2>
-            <div class="row">
-                <?php foreach (array_slice($models, 0, 6) as $model): ?>
-                    <div class="col-md-4 mb-4">
-                        <div class="model-card">
-                            <div class="model-header">
-                                <h4><?= $model->getName() ?></h4>
-                                <span class="badge badge-info"><?= $model->getVendor() ?></span>
-                            </div>
-                            <div class="model-body">
-                                <p class="model-code"><code><?= $model->getModelCode() ?></code></p>
-                                <div class="model-pricing">
-                                    <div class="price-item">
-                                        <span class="label"><?= __('输入：') ?></span>
-                                        <span class="value">$<?= number_format($model->getData('token_price_input'), 6) ?>/1K</span>
-                                    </div>
-                                    <div class="price-item">
-                                        <span class="label"><?= __('输出：') ?></span>
-                                        <span class="value">$<?= number_format($model->getData('token_price_output'), 6) ?>/1K</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-            <div class="text-center mt-4">
-                <a href="<?= $this->getFrontendUrl('*/frontend/index/pricing') ?>" class="btn btn-outline-primary">
-                    <?= __('查看全部模型') ?> <i class="mdi mdi-arrow-right"></i>
-                </a>
-            </div>
-        </div>
-    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 创建粒子背景
+        function createParticles() {
+            const particles = document.getElementById('particles');
+            const particleCount = 50;
 
-    <!-- Adapters Section -->
-    <div class="adapters-section">
-        <div class="container">
-            <h2 class="section-title"><?= __('场景适配器') ?></h2>
-            <div class="row">
-                <?php foreach (array_slice($adapters, 0, 6) as $adapter): ?>
-                    <div class="col-md-4 mb-4">
-                        <div class="adapter-card">
-                            <h4><?= $adapter['name'] ?></h4>
-                            <p class="text-muted"><?= $adapter['description'] ?></p>
-                            <span class="badge badge-secondary"><?= $adapter['code'] ?></span>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
+                particles.appendChild(particle);
+            }
+        }
 
-    <!-- CTA Section -->
-    <div class="cta-section">
-        <div class="container text-center">
-            <h2><?= __('开始使用AI助手') ?></h2>
-            <p class="lead mb-4"><?= __('立即体验强大的AI功能，提升工作效率') ?></p>
-            <?php if (!$this->session->isLogin()): ?>
-                <a href="<?= $this->getFrontendUrl('register') ?>" class="btn btn-light btn-lg">
-                    <?= __('立即注册') ?> <i class="mdi mdi-arrow-right"></i>
-                </a>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
+        // 滚动动画
+        function handleScroll() {
+            const elements = document.querySelectorAll('.fade-in');
+            elements.forEach(el => {
+                const rect = el.getBoundingClientRect();
+                const isVisible = rect.top < window.innerHeight - 100;
+                if (isVisible) {
+                    el.classList.add('visible');
+                }
+            });
+        }
 
-<style>
-.ai-index-page {
-    min-height: 100vh;
-}
-
-.hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 100px 0 80px;
-}
-
-.hero-section .btn-primary {
-    background-color: white;
-    color: #667eea;
-    border-color: white;
-}
-
-.hero-section .btn-outline-primary {
-    border-color: white;
-    color: white;
-}
-
-.stats-section {
-    padding: 60px 0;
-    background-color: #f8f9fa;
-}
-
-.stat-card {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    text-align: center;
-}
-
-.stat-icon i {
-    font-size: 48px;
-    color: #667eea;
-}
-
-.stat-content h3 {
-    font-size: 32px;
-    font-weight: bold;
-    margin-top: 15px;
-    margin-bottom: 5px;
-}
-
-.stat-content p {
-    color: #666;
-    margin: 0;
-}
-
-.models-section, .adapters-section {
-    padding: 60px 0;
-}
-
-.section-title {
-    text-align: center;
-    margin-bottom: 40px;
-    font-weight: bold;
-}
-
-.model-card, .adapter-card {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 20px;
-    height: 100%;
-    transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.model-card:hover, .adapter-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-}
-
-.model-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.model-header h4 {
-    margin: 0;
-    font-size: 18px;
-}
-
-.model-code {
-    margin: 10px 0;
-}
-
-.model-pricing {
-    margin-top: 15px;
-}
-
-.price-item {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.price-item .label {
-    color: #666;
-}
-
-.price-item .value {
-    font-weight: bold;
-}
-
-.adapter-card h4 {
-    font-size: 18px;
-    margin-bottom: 10px;
-}
-
-.cta-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 80px 0;
-}
-
-.cta-section h2 {
-    margin-bottom: 20px;
-}
-</style>
-
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            createParticles();
+            handleScroll();
+            window.addEventListener('scroll', handleScroll);
+        });
+    </script>
+</body>
+</html>

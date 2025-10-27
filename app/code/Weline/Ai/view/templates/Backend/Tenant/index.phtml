@@ -5,230 +5,406 @@
  * @var \Weline\Framework\View\Template $this
  * @var array $tenants
  */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 $tenants = $this->getData('tenants') ?: [];
 $total = (int)$this->getData('total');
 $page = (int)$this->getData('page');
+$pageSize = 20;
 $totalPages = (int)$this->getData('totalPages');
 $keyword = $this->getData('keyword') ?: '';
 $current_status = $this->getData('current_status');
 ?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>租户管理</lang></title>
+    <style>
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .stats-card h3 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .filter-card {
+            background: white;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .tenant-table-card {
+            background: white;
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .btn-gradient-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            transition: all 0.3s;
+        }
+        .btn-gradient-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        .table thead th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #495057;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .badge-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .empty-state i {
+            font-size: 72px;
+            color: #dee2e6;
+            margin-bottom: 20px;
+        }
+        .tenant-card {
+            border-radius: 8px;
+            transition: all 0.3s;
+            border: 1px solid #e9ecef;
+        }
+        .tenant-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
-@template(Weline_Admin::common/head.phtml)
+<!--页头工具条 开始-->
 @template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
 
-<w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-<w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-@template(Weline_Admin::common/left-sidebar.phtml)
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
 
-<div class="content">
-    <div class="page-header">
-        <div class="page-title">
-            <h4><lang>租户管理</lang></h4>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('dashboard/index/index') ?>"><lang>首页</lang></a></li>
-                    <li class="breadcrumb-item"><lang>AI模块</lang></li>
-                    <li class="breadcrumb-item active" aria-current="page"><lang>租户管理</lang></li>
-                </ol>
-            </nav>
-        </div>
-    </div>
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
 
-    <div class='row'>
-        <template>Weline_Component::message.phtml</template>
-    </div>
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
 
-    <div class="card">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class='card-title'>
-                    <lang>租户列表</lang>
-                    <span class="badge bg-primary"><?= $total ?></span>
-                </h4>
-                <div class="d-flex gap-2">
-                    <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
-                        <option value=""><lang>全部状态</lang></option>
-                        <option value="1" <?= $current_status === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
-                        <option value="0" <?= $current_status === '0' ? 'selected' : '' ?>><lang>禁用</lang></option>
-                    </select>
-                    
-                    <div class="input-group" style="width: 300px;">
-                        <input type="text" class="form-control" id="searchInput" 
-                               placeholder="<?= __('搜索租户名称...') ?>" 
-                               value="<?= $keyword ?>">
-                        <button class="btn btn-outline-secondary" type="button" onclick="doSearch()">
-                            <i class="mdi mdi-magnify"></i>
-                        </button>
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 面包屑导航 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <i class="mdi mdi-office-building text-primary"></i> <lang>租户管理</lang>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>AI助手</lang></a></li>
+                                    <li class="breadcrumb-item active"><lang>租户管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <block class='Weline\Component\Block\OffCanvas'
-                           template='Weline_Component::off-canvas.phtml'
-                           cache='0'
-                           id='create_tenant_offcanvas'
-                           action='*/backend/tenant/form'
-                           target-tag='button'
-                           icon='mdi mdi-plus'
-                           target-button-text='创建租户'
-                           target-button-class='btn btn-primary'
-                           title='创建租户'
-                           close-button-show='1'
-                           close-button-text='关闭'
-                           direction='right'
-                           class-names='w-50'
-                           flush='1'
-                           flush-button-text='刷新'
-                           save='0'
-                    />
                 </div>
+
+                <!-- 统计卡片 -->
+                <div class="row mb-4">
+                    <div class="col-xl-12">
+                        <div class="card stats-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0 me-3">
+                                        <div class="avatar-sm">
+                                            <span class="avatar-title rounded-circle bg-white bg-soft text-white font-size-24">
+                                                <i class="mdi mdi-domain"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h3 class="mb-0"><?= number_format($total) ?></h3>
+                                        <p class="mb-0"><lang>总租户数</lang></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 筛选和操作卡片 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card filter-card">
+                            <div class="card-body">
+                                <form method="get" class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="form-label"><lang>状态</lang></label>
+                                        <select name="status" class="form-select">
+                                            <option value="" <?= $current_status === '' ? 'selected' : '' ?>><lang>全部状态</lang></option>
+                                            <option value="1" <?= $current_status === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
+                                            <option value="0" <?= $current_status === '0' ? 'selected' : '' ?>><lang>禁用</lang></option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label"><lang>搜索</lang></label>
+                                        <div class="input-group">
+                                            <input type="text" 
+                                                   name="keyword" 
+                                                   class="form-control" 
+                                                   placeholder="<?= __('搜索租户名称...') ?>" 
+                                                   value="<?= htmlspecialchars($keyword) ?>">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        <a href="<?= $this->getBackendUrl('*/backend/tenant/form') ?>" 
+                                           class="btn btn-gradient-primary">
+                                            <i class="mdi mdi-plus-circle me-1"></i> <lang>创建租户</lang>
+                                        </a>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 租户列表卡片 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card tenant-table-card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4">
+                                    <i class="mdi mdi-format-list-bulleted text-primary"></i> <lang>租户列表</lang>
+                                    <span class="badge bg-primary ms-2"><?= $total ?></span>
+                                </h4>
+
+                                <?php if (empty($tenants)): ?>
+                                    <div class="empty-state">
+                                        <i class="mdi mdi-domain-off"></i>
+                                        <h4><lang>暂无租户数据</lang></h4>
+                                        <p><lang>还没有租户记录，点击上方按钮创建第一个租户</lang></p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover table-nowrap align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th width="80"><lang>ID</lang></th>
+                                                    <th><lang>租户名称</lang></th>
+                                                    <th><lang>租户代码</lang></th>
+                                                    <th width="100"><lang>状态</lang></th>
+                                                    <th width="180"><lang>创建时间</lang></th>
+                                                    <th width="150" class="text-end"><lang>操作</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($tenants as $tenant): ?>
+                                                    <?php
+                                                    $tenantId = is_array($tenant) ? ($tenant['tenant_id'] ?? '') : $tenant->getData('tenant_id');
+                                                    $tenantName = is_array($tenant) ? ($tenant['name'] ?? '-') : $tenant->getData('name') ?? '-';
+                                                    $tenantCode = is_array($tenant) ? ($tenant['code'] ?? '-') : $tenant->getData('code') ?? '-';
+                                                    $isActive = is_array($tenant) ? ($tenant['is_active'] ?? 0) : $tenant->getData('is_active') ?? 0;
+                                                    $createdAt = is_array($tenant) ? ($tenant['created_at'] ?? '') : $tenant->getData('created_at') ?? '';
+                                                    ?>
+                                                    <tr>
+                                                        <td><span class="badge bg-light text-dark"><?= $tenantId ?></span></td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="avatar-xs me-2">
+                                                                    <span class="avatar-title rounded-circle bg-primary-subtle text-primary">
+                                                                        <?= mb_substr($tenantName, 0, 1) ?>
+                                                                    </span>
+                                                                </div>
+                                                                <strong><?= htmlspecialchars($tenantName) ?></strong>
+                                                            </div>
+                                                        </td>
+                                                        <td><code><?= htmlspecialchars($tenantCode) ?></code></td>
+                                                        <td>
+                                                            <?php if ($isActive): ?>
+                                                                <span class="badge-status bg-success-subtle text-success">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>激活</lang>
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <span class="badge-status bg-danger-subtle text-danger">
+                                                                    <i class="mdi mdi-close-circle"></i> <lang>禁用</lang>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <small class="text-muted">
+                                                                <?= $createdAt ? date('Y-m-d H:i', strtotime($createdAt)) : '-' ?>
+                                                            </small>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <div class="btn-group btn-group-sm" role="group">
+                                                                <a href="<?= $this->getBackendUrl('*/backend/tenant/form', ['id' => $tenantId]) ?>" 
+                                                                   class="btn btn-outline-primary" 
+                                                                   title="<?= __('编辑') ?>">
+                                                                    <i class="mdi mdi-pencil"></i>
+                                                                </a>
+                                                                <button onclick="toggleTenantStatus(<?= $tenantId ?>)" 
+                                                                        class="btn btn-outline-<?= $isActive ? 'warning' : 'success' ?>" 
+                                                                        title="<?= $isActive ? __('禁用') : __('激活') ?>">
+                                                                    <i class="mdi mdi-<?= $isActive ? 'pause' : 'play' ?>"></i>
+                                                                </button>
+                                                                <button onclick="deleteTenant(<?= $tenantId ?>)" 
+                                                                        class="btn btn-outline-danger" 
+                                                                        title="<?= __('删除') ?>">
+                                                                    <i class="mdi mdi-delete"></i>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- 分页 -->
+                                    <?php if ($totalPages > 1): ?>
+                                        <div class="row mt-4">
+                                            <div class="col-sm-12 col-md-5">
+                                                <div class="dataTables_info">
+                                                    <lang>显示</lang> <?= ($page - 1) * $pageSize + 1 ?> <lang>到</lang> 
+                                                    <?= min($page * $pageSize, $total) ?> <lang>条，共</lang> <?= $total ?> <lang>条</lang>
+                                                </div>
+                                            </div>
+                                            <div class="col-sm-12 col-md-7">
+                                                <div class="dataTables_paginate paging_simple_numbers">
+                                                    <ul class="pagination pagination-rounded justify-content-end mb-0">
+                                                        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                                            <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page - 1 ?>)">
+                                                                <i class="mdi mdi-chevron-left"></i>
+                                                            </a>
+                                                        </li>
+
+                                                        <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                                            <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                                <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $i ?>)"><?= $i ?></a>
+                                                            </li>
+                                                        <?php endfor; ?>
+
+                                                        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                                            <a class="page-link" href="javascript:void(0)" onclick="changePage(<?= $page + 1 ?>)">
+                                                                <i class="mdi mdi-chevron-right"></i>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 租户列表卡片结束 -->
+
             </div>
-
-            <?php if (!empty($tenants)): ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th><lang>租户名称</lang></th>
-                                <th><lang>域名</lang></th>
-                                <th><lang>最大用户数</lang></th>
-                                <th><lang>每日API调用限制</lang></th>
-                                <th><lang>状态</lang></th>
-                                <th><lang>创建时间</lang></th>
-                                <th class="text-end"><lang>操作</lang></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($tenants as $tenant): ?>
-                                <tr>
-                                    <td><?= $tenant->getId() ?></td>
-                                    <td><strong><?= $tenant->getData('name') ?></strong></td>
-                                    <td><?= $tenant->getData('domain') ?: '-' ?></td>
-                                    <td><?= $tenant->getData('max_users') ?: '<lang>无限</lang>' ?></td>
-                                    <td><?= $tenant->getData('max_api_calls_per_day') ?: '<lang>无限</lang>' ?></td>
-                                    <td>
-                                        <?php if ($tenant->getData('is_active')): ?>
-                                            <span class="badge bg-success"><lang>激活</lang></span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary"><lang>禁用</lang></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= $tenant->getData('created_at') ? date('Y-m-d H:i', strtotime($tenant->getData('created_at'))) : '-' ?></td>
-                                    <td class="text-end">
-                                        <block class='Weline\Component\Block\OffCanvas'
-                                               template='Weline_Component::off-canvas.phtml'
-                                               cache='0'
-                                               id='edit_tenant_offcanvas_<?= $tenant->getId() ?>'
-                                               action='*/backend/tenant/form'
-                                               params='{"id":<?= $tenant->getId() ?>}'
-                                               target-tag='button'
-                                               icon='mdi mdi-pencil'
-                                               target-button-text=''
-                                               target-button-class='btn btn-sm btn-outline-primary'
-                                               title='编辑租户'
-                                               close-button-show='1'
-                                               close-button-text='关闭'
-                                               direction='right'
-                                               class-names='w-50'
-                                               flush='1'
-                                               flush-button-text='刷新'
-                                               save='0'
-                                        />
-                                        
-                                        <button class="btn btn-sm btn-outline-danger" 
-                                                onclick="deleteTenant(<?= $tenant->getId() ?>, '<?= addslashes($tenant->getData('name')) ?>')">
-                                            <i class="mdi mdi-delete"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <?php if ($totalPages > 1): ?>
-                    <nav aria-label="Page navigation">
-                        <ul class="pagination justify-content-center">
-                            <?php if ($page > 1): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?p=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
-                                        <lang>上一页</lang>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-                            
-                            <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                    <a class="page-link" href="?p=<?= $i ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
-                                        <?= $i ?>
-                                    </a>
-                                </li>
-                            <?php endfor; ?>
-                            
-                            <?php if ($page < $totalPages): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?p=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>&status=<?= $current_status ?>">
-                                        <lang>下一页</lang>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-                        </ul>
-                    </nav>
-                <?php endif; ?>
-            <?php else: ?>
-                <div class="alert alert-info text-center">
-                    <i class="mdi mdi-information-outline me-2"></i>
-                    <lang>暂无租户数据...</lang>
-                </div>
-            <?php endif; ?>
         </div>
     </div>
+    <!-- 主要内容结束 -->
+
 </div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
 
 <script>
-function doSearch() {
-    const keyword = document.getElementById('searchInput').value.trim();
-    const status = document.getElementById('statusFilter').value;
-    window.location.href = '?keyword=' + encodeURIComponent(keyword) + '&status=' + status;
+function changePage(page) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('p', page);
+    window.location.href = url.toString();
 }
 
-document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        doSearch();
-    }
-});
-
-function filterByStatus(status) {
-    const keyword = document.getElementById('searchInput').value.trim();
-    window.location.href = '?keyword=' + encodeURIComponent(keyword) + '&status=' + status;
-}
-
-function deleteTenant(id, name) {
-    if (!confirm('<?= __("确定要删除租户") ?> "' + name + '" <?= __("吗？") ?>')) {
+function toggleTenantStatus(tenantId) {
+    if (!confirm('<?= __('确定要切换租户状态吗？') ?>')) {
         return;
     }
-    
-    fetch('<?= $this->getBackendUrl("*/backend/tenant/delete") ?>', {
+
+    fetch('<?= $this->getBackendUrl('*/backend/tenant/toggleStatus') ?>', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
         },
-        body: 'id=' + id
+        body: JSON.stringify({ id: tenantId })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
             location.reload();
         } else {
-            alert('<?= __("删除失败：") ?>' + data.message);
+            alert('<?= __('操作失败：') ?>' + data.message);
         }
     })
     .catch(error => {
-        alert('<?= __("请求失败：") ?>' + error);
+        alert('<?= __('操作失败') ?>');
+    });
+}
+
+function deleteTenant(tenantId) {
+    if (!confirm('<?= __('确定要删除这个租户吗？此操作不可恢复！') ?>')) {
+        return;
+    }
+
+    fetch('<?= $this->getBackendUrl('*/backend/tenant/delete') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: tenantId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('<?= __('删除失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('操作失败') ?>');
     });
 }
 </script>
 
-@template(Weline_Admin::common/footer.phtml)
-
+</body>
+</html>

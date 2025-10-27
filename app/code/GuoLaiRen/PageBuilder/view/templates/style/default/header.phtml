@@ -13,7 +13,7 @@
  * style.border_bottom => 底部边框:select:yes|yes,no
  * style.border_color => 边框颜色:color:#eeeeee
  * 
- * group:size => 尺寸[MD]:📱响应式配置说明:支持移动端/平板/PC端三种配置格式\n• 单一值: 80 (所有端相同)\n• 双端值: 60/80 (移动端60, PC端80, 推荐)\n• 三端值: 60/70/80 (移动端60, 平板70, PC端80)\n\n断点定义:\nM (Mobile) 移动端: 375px\nT (Tablet) 平板: 768px\nD (Desktop) PC端: 1280px\n\n标记说明: [M]移动端 [MD]移动+PC [MTD]完整三端
+ * group:size => 尺寸[MTD]:📱响应式配置说明:支持移动端/平板/PC端三种配置格式\n• 单一值: 80 (所有端相同)\n• 双端值: 60/80 (移动端60, PC端80, 推荐)\n• 三端值: 60/70/80 (移动端60, 平板70, PC端80)\n\n断点定义:\nM (Mobile) 移动端: 375px\nT (Tablet) 平板: 768px\nD (Desktop) PC端: 1280px\n\n标记说明: [M]移动端 [MD]移动+PC [MTD]完整三端
  * size.height => 头部高度:responsive:60/80|px[MD]
  * size.max_width => 内容最大宽度:responsive:100/1200|%/px[移动端使用百分比，PC端使用像素]
  * size.padding_h => 左右内边距:responsive:16/40|px[MD]
@@ -95,6 +95,7 @@ function parseResponsiveValue($value) {
 
 // 从页面配置中读取 Logo 信息
 $logoUrl = $page ? $page->getData('logo') : '';
+// 注意：如果页面没有设置 logo，$logoUrl 为空，模板会显示纯文字标题
 $pageTitle = $page ? $page->getData('title') : '';
 $logoLink = '/'; // 链接到首页
 

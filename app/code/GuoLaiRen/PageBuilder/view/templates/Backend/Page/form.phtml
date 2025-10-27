@@ -10,15 +10,26 @@ $parentId = $this->getData('parent_id') ?? 0;
 if ($isEdit && $page && $page->getId()) {
     $visualPageId = $page->getId();
     $visualStyleSettings = $page->getStyleSetting(); // 注意：方法名是单数形式
-    $pageDefaultLocale = $page->getData('default_locale') ?: '';
+    $pageDefaultLocale = $page->getData('default_locale') ?: \Weline\Framework\Http\Cookie::getLang();
     $pageLocales = json_decode($page->getData('locales'), true) ?: [];
 } else {
     $visualPageId = null;
     $visualStyleSettings = [];
-    $pageDefaultLocale = '';
+    // 新建页面时，默认语言使用框架当前语言
+    $pageDefaultLocale = \Weline\Framework\Http\Cookie::getLang();
     $pageLocales = [];
 }
 if (!is_array($pageLocales)) $pageLocales = [];
+
+// 确保默认语言在支持的语言列表中
+if ($pageDefaultLocale && !in_array($pageDefaultLocale, $pageLocales)) {
+    $pageLocales[] = $pageDefaultLocale;
+}
+
+// 确保 selectedLocales 包含默认语言
+if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
+    $selectedLocales[] = $pageDefaultLocale;
+}
 ?>
 <w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
@@ -69,14 +80,23 @@ if (!is_array($pageLocales)) $pageLocales = [];
                         <label for="handle" class="form-label">
                             <?= __('页面句柄') ?> <span class="text-danger">*</span>
                         </label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="handle" 
-                               name="handle" 
-                               value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>"
-                               placeholder="<?= __('例如：about-us, contact') ?>"
-                               required>
+                        <div class="position-relative">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="handle" 
+                                   name="handle" 
+                                   value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>"
+                                   placeholder="<?= __('例如：about-us, contact') ?>"
+                                   required
+                                   data-original-value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>">
+                            <div id="handle-validation-icon" class="position-absolute top-50 end-0 translate-middle-y pe-3" style="display: none;">
+                                <span class="handle-checking"><i class="mdi mdi-loading mdi-spin text-primary"></i></span>
+                                <span class="handle-available"><i class="mdi mdi-check-circle text-success"></i></span>
+                                <span class="handle-unavailable"><i class="mdi mdi-close-circle text-danger"></i></span>
+                            </div>
+                        </div>
                         <div class="form-text"><?= __('页面的唯一标识符，用于URL，只能包含小写字母、数字和连字符') ?></div>
+                        <div id="handle-validation-message" class="small mt-1" style="display: none;"></div>
                         <div class="invalid-feedback"><?= __('请输入页面句柄') ?></div>
                     </div>
 
@@ -155,15 +175,14 @@ if (!is_array($pageLocales)) $pageLocales = [];
                     </h4>
 
                     <!-- 样式选择 -->
-                    <div class="mb-3">
-                        <label for="style" class="form-label"><?= __('选择样式模板') ?> <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <select class="form-select" id="style" name="style" required disabled>
-                                <option value=""><?= __('正在加载样式模板...') ?></option>
-                            </select>
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <label class="form-label mb-0">
+                                <?= __('选择样式模板') ?> <span class="text-danger">*</span>
+                            </label>
                             <?php if ($isEdit && $page && $page->getId()): ?>
                             <button type="button" 
-                                    class="btn btn-primary" 
+                                    class="btn btn-sm btn-primary" 
                                     onclick="openVisualConfig()"
                                     id="openVisualConfigBtn"
                                     disabled>
@@ -171,14 +190,54 @@ if (!is_array($pageLocales)) $pageLocales = [];
                             </button>
                             <?php endif; ?>
                         </div>
-                        <div class="form-text"><?= __('选择页面的样式模板并配置参数（Header、Content、Footer）') ?></div>
-                        <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
+                        
+                        <!-- 隐藏的select用于表单提交 -->
+                        <select class="d-none" id="style" name="style" required>
+                            <option value=""><?= __('正在加载样式模板...') ?></option>
+                        </select>
+                        
+                        <!-- 搜索框 -->
+                        <div class="input-group mb-3">
+                            <span class="input-group-text">
+                                <i class="mdi mdi-magnify"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="styleSearchInput" 
+                                   placeholder="<?= __('搜索样式模板...') ?>"
+                                   autocomplete="off">
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    id="refreshStyleBtn" 
+                                    title="<?= __('刷新样式列表') ?>">
+                                <i class="mdi mdi-refresh"></i>
+                            </button>
                     </div>
 
-                    <!-- 样式描述显示区域 -->
-                    <div id="style-description-container" class="alert alert-info" style="display: none;">
-                        <i class="mdi mdi-information"></i>
-                        <span id="style-description-text"></span>
+                        <!-- 加载状态 -->
+                        <div id="styleCardsLoading" class="text-center py-5" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden"><?= __('加载中...') ?></span>
+                            </div>
+                            <div class="mt-2 text-muted"><?= __('正在加载样式模板...') ?></div>
+                        </div>
+                        
+                        <!-- 无结果提示 -->
+                        <div id="styleCardsEmpty" class="alert alert-warning" style="display: none;">
+                            <i class="mdi mdi-alert"></i>
+                            <?= __('没有找到匹配的样式模板') ?>
+                        </div>
+                        
+                        <!-- 样式卡片网格 -->
+                        <div id="styleCardsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                            <!-- 样式卡片将动态加载到这里 -->
+                        </div>
+                        
+                        <div class="form-text mt-2">
+                            <i class="mdi mdi-information-outline"></i>
+                            <?= __('选择页面的样式模板（Header、Content、Footer）') ?>
+                        </div>
+                        <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
                     </div>
 
                     <!-- 样式配置区域 -->
@@ -410,51 +469,6 @@ if (!is_array($pageLocales)) $pageLocales = [];
                 </div>
             </div>
 
-            <!-- 页面样式 -->
-            <div class="card">
-                <div class="card-body">
-                    <h4 class="card-title mb-4">
-                        <i class="mdi mdi-palette"></i> <?= __('页面样式') ?>
-                    </h4>
-
-                    <div class="mb-3">
-                        <label for="style" class="form-label"><?= __('选择样式模板') ?></label>
-                        <div class="d-flex gap-2">
-                            <select class="form-select" id="style" name="style" disabled style="flex: 1;">
-                                <option value=""><?= __('正在加载样式模板...') ?></option>
-                            </select>
-                            <button type="button" class="btn btn-soft-secondary" id="refreshStyleBtn" title="<?= __('刷新样式配置') ?>">
-                                <i class="mdi mdi-refresh"></i>
-                            </button>
-                        </div>
-                        <div class="form-text"><?= __('选择页面的header/footer样式模板') ?></div>
-                    </div>
-
-                    <!-- 预览按钮 -->
-                    <?php if ($isEdit): ?>
-                        <div class="d-flex gap-2">
-                            <?php foreach ($this->getData('selected_locales') ?? [] as $locale): ?>
-                                <?php 
-                                $localeName = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class)->getLocaleName($locale);
-                                ?>
-                                <a href="<?= $this->getBackendUrl('*/backend/page/preview', ['id' => $page->getId(), 'locale' => $locale]) ?>" 
-                                   class="btn btn-soft-primary btn-sm" 
-                                   target="_blank">
-                                    <i class="mdi mdi-eye"></i> <?= __('预览 (%{1})', $localeName) ?>
-                                </a>
-                            <?php endforeach; ?>
-                            <?php if (empty($this->getData('selected_locales'))): ?>
-                                <a href="<?= $this->getBackendUrl('*/backend/page/preview', ['id' => $page->getId()]) ?>" 
-                                   class="btn btn-soft-primary btn-sm" 
-                                   target="_blank">
-                                    <i class="mdi mdi-eye"></i> <?= __('预览页面') ?>
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
             <!-- 品牌资源 -->
             <div class="card">
                 <div class="card-body">
@@ -500,11 +514,8 @@ if (!is_array($pageLocales)) $pageLocales = [];
                         </label>
                         
                         <?php 
-                        $currentDefaultLocale = $page ? $page->getData('default_locale') : '';
-                        if (!$currentDefaultLocale && count($this->getData('active_locales')) > 0) {
-                            $firstLocale = $this->getData('active_locales')[0];
-                            $currentDefaultLocale = $firstLocale->getData('code');
-                        }
+                        // 获取默认语言：优先使用页面设置的语言，如果没有则使用框架当前语言
+                        $currentDefaultLocale = $pageDefaultLocale;
                         
                         // 获取当前默认语言的名称
                         $currentDefaultLocaleName = '';
@@ -645,6 +656,24 @@ if (!is_array($pageLocales)) $pageLocales = [];
         </div>
     </div>
 </form>
+
+<!-- 样式预览模态框 -->
+<div id="stylePreviewModal" class="style-preview-modal">
+    <div class="style-preview-modal-content">
+        <div class="style-preview-modal-header">
+            <div class="style-preview-modal-title">
+                <i class="mdi mdi-eye" id="previewModalIcon"></i>
+                <span id="previewModalTitle">样式预览</span>
+            </div>
+            <div class="style-preview-modal-close" onclick="closeStylePreviewModal()">
+                <i class="mdi mdi-close"></i>
+            </div>
+        </div>
+        <div class="style-preview-modal-body" id="previewModalBody">
+            <!-- 预览内容将动态加载到这里 -->
+        </div>
+    </div>
+</div>
 
 <!-- 悬浮操作按钮 -->
 <?php if ($isEdit): ?>
@@ -802,7 +831,301 @@ if (!is_array($pageLocales)) $pageLocales = [];
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/translations/zh-cn.js"></script>
 
+<!-- html2canvas for screenshot功能 -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
 <style>
+/* ==================== 样式卡片选择器 ==================== */
+.style-card {
+    height: 100%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.style-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    transform: translateY(-2px);
+}
+
+.style-card.selected {
+    border-color: #667eea;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+    background-color: #f8f9ff;
+}
+
+.style-card-preview {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    background: #f5f5f5;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 预览操作按钮容器 */
+.style-card-preview-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.style-card:hover .style-card-preview-actions {
+    opacity: 1;
+}
+
+.style-card-preview-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.style-card-preview-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.style-card-preview-btn i {
+    font-size: 16px;
+}
+
+.style-card-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.style-card-preview canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+}
+
+.style-card-preview iframe {
+    /* iframe用于截图，隐藏显示 */
+    position: absolute !important;
+    left: -9999px !important;
+    visibility: hidden !important;
+}
+
+.style-card-preview-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.style-card-preview-placeholder {
+    text-align: center;
+    color: #999;
+}
+
+.style-card-preview-placeholder i {
+    font-size: 48px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.style-card-body {
+    padding: 16px;
+}
+
+.style-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.style-card-selected-badge {
+    display: none;
+    background: #667eea;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.style-card.selected .style-card-selected-badge {
+    display: inline-block;
+}
+
+.style-card-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.style-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #999;
+}
+
+.style-card-code {
+    font-family: 'Courier New', monospace;
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* ==================== 样式预览模态框 ==================== */
+.style-preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.style-preview-modal.active {
+    display: flex;
+}
+
+.style-preview-modal-content {
+    position: relative;
+    width: 90%;
+    max-width: 1400px;
+    height: 90%;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.style-preview-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border-radius: 12px 12px 0 0;
+}
+
+.style-preview-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.style-preview-modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.style-preview-modal-close:hover {
+    background: #f5f5f5;
+    transform: rotate(90deg);
+}
+
+.style-preview-modal-body {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.style-preview-modal-body img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.style-preview-modal-body iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 4px;
+    background: white;
+}
+
+.style-preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
 /* 自定义下拉选择器样式优化 */
 #localeDropdown .locale-option {
     transition: background-color 0.2s ease;
@@ -819,6 +1142,12 @@ if (!is_array($pageLocales)) $pageLocales = [];
 /* 语言标签样式优化 */
 .selected-locale-tag {
     transition: all 0.2s ease;
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
 }
 
 .selected-locale-tag:hover {
@@ -935,6 +1264,149 @@ document.addEventListener('DOMContentLoaded', function() {
     'use strict';
     var forms = document.querySelectorAll('.needs-validation');
     Array.prototype.slice.call(forms).forEach(function(form) {
+        // Handle 唯一性检查相关变量
+        let handleCheckTimeout = null;
+        let lastCheckedHandle = '';
+        let isHandleValid = false;
+        const handleInput = document.getElementById('handle');
+        const handleValidationIcon = document.getElementById('handle-validation-icon');
+        const handleValidationMessage = document.getElementById('handle-validation-message');
+        const currentPageId = <?= $isEdit && $page ? $page->getId() : 0 ?>;
+        
+        // Debounce 函数
+        function debounce(func, delay) {
+            return function(...args) {
+                clearTimeout(handleCheckTimeout);
+                handleCheckTimeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+        
+        // 检查 handle 唯一性
+        async function checkHandleUniqueness(handle) {
+            if (!handle || handle.trim() === '') {
+                hideHandleValidation();
+                return;
+            }
+            
+            // 编辑模式下，如果 handle 等于原始值，直接标记为可用（无需请求）
+            const originalValue = handleInput.getAttribute('data-original-value') || '';
+            if (currentPageId > 0 && handle === originalValue) {
+                console.log('✅ Handle 未改变，保持原值:', handle);
+                lastCheckedHandle = handle;
+                isHandleValid = true;
+                showHandleAvailable('<?= __('当前页面的句柄') ?>');
+                handleInput.classList.remove('is-invalid');
+                handleInput.classList.add('is-valid');
+                return;
+            }
+            
+            // 显示检查中状态
+            showHandleChecking();
+            
+            try {
+                const checkUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/checkHandle') ?>' +
+                    '?handle=' + encodeURIComponent(handle) +
+                    '&page_id=' + currentPageId;
+                
+                console.log('🔍 检查 handle 唯一性:', handle, '(页面ID:', currentPageId, ')');
+                
+                const response = await fetch(checkUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                const result = await response.json();
+                console.log('✅ 检查结果:', result);
+                
+                lastCheckedHandle = handle;
+                isHandleValid = result.available === true;
+                
+                if (result.available) {
+                    showHandleAvailable(result.message);
+                    handleInput.classList.remove('is-invalid');
+                    handleInput.classList.add('is-valid');
+                } else {
+                    showHandleUnavailable(result.message, result.existing_page);
+                    handleInput.classList.remove('is-valid');
+                    handleInput.classList.add('is-invalid');
+                }
+                
+            } catch (error) {
+                console.error('❌ 检查 handle 失败:', error);
+                showHandleUnavailable('<?= __('检查失败，请稍后重试') ?>');
+                isHandleValid = false;
+                handleInput.classList.remove('is-valid');
+                handleInput.classList.add('is-invalid');
+            }
+        }
+        
+        // 显示检查中状态
+        function showHandleChecking() {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-checking').style.display = 'inline';
+            handleValidationMessage.style.display = 'none';
+        }
+        
+        // 显示可用状态
+        function showHandleAvailable(message) {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-available').style.display = 'inline';
+            
+            handleValidationMessage.style.display = 'block';
+            handleValidationMessage.className = 'small mt-1 text-success';
+            handleValidationMessage.innerHTML = '<i class="mdi mdi-check me-1"></i>' + message;
+        }
+        
+        // 显示不可用状态
+        function showHandleUnavailable(message, existingPage) {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-unavailable').style.display = 'inline';
+            
+            handleValidationMessage.style.display = 'block';
+            handleValidationMessage.className = 'small mt-1 text-danger';
+            
+            let messageHtml = '<i class="mdi mdi-alert me-1"></i>' + message;
+            if (existingPage) {
+                messageHtml += '<br><span class="text-muted">已被页面使用：' + 
+                    (existingPage.name || existingPage.title || 'ID:' + existingPage.id) + 
+                    '</span>';
+            }
+            handleValidationMessage.innerHTML = messageHtml;
+        }
+        
+        // 隐藏验证状态
+        function hideHandleValidation() {
+            handleValidationIcon.style.display = 'none';
+            handleValidationMessage.style.display = 'none';
+            handleInput.classList.remove('is-valid', 'is-invalid');
+            isHandleValid = false;
+        }
+        
+        // 监听 handle 输入（带 debounce）
+        const debouncedCheck = debounce(function(event) {
+            const handle = event.target.value.trim();
+            checkHandleUniqueness(handle);
+        }, 500); // 500ms 延迟
+        
+        handleInput.addEventListener('input', debouncedCheck);
+        
+        // 监听 handle 输入（实时格式化为小写）
+        handleInput.addEventListener('input', function(event) {
+            // 自动转换为小写并移除非法字符
+            let value = event.target.value.toLowerCase();
+            value = value.replace(/[^a-z0-9\-]/g, '');
+            if (value !== event.target.value) {
+                event.target.value = value;
+            }
+        });
+        
         form.addEventListener('submit', function(event) {
             // 同步所有 CKEditor 编辑器的内容到 textarea
             if (window.pageEditors) {
@@ -945,6 +1417,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         textarea.value = editor.getData();
                     }
                 }
+            }
+            
+            // 检查 handle 唯一性
+            const currentHandle = handleInput.value.trim();
+            if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
+                event.preventDefault();
+                event.stopPropagation();
+                alert('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
+                handleInput.focus();
+                handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
             }
             
             if (!form.checkValidity()) {
@@ -1000,13 +1483,16 @@ function selectDefaultLocale(localeCode, localeName) {
         }
     });
     
-    // 自动勾选对应的翻译语言
+    // 自动将默认语言添加到支持的语言列表
     const localeCheckbox = document.getElementById('locale_' + localeCode);
     if (localeCheckbox && !localeCheckbox.checked) {
         localeCheckbox.checked = true;
         // 添加标签
         addLocaleTag(localeCode, localeName);
     }
+    
+    // 更新所有语言标签的删除按钮状态（默认语言不能删除）
+    updateLocaleTagsDeleteButton();
     
     // 关闭下拉列表
     const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
@@ -1115,6 +1601,9 @@ function addLocaleTag(localeCode, localeName) {
     // 隐藏提示信息（如果存在）
     updateLocalesHint();
     
+    // 更新删除按钮状态（如果是默认语言则禁用删除按钮）
+    updateLocaleTagsDeleteButton();
+    
     // 保持下拉列表打开并聚焦搜索框，方便继续选择
     const dropdown = document.getElementById('localeDropdown');
     if (dropdown.style.display === 'block') {
@@ -1126,6 +1615,13 @@ function addLocaleTag(localeCode, localeName) {
  * 移除语言标签
  */
 function removeLocaleTag(localeCode) {
+    // 检查是否是默认语言，默认语言不能删除
+    const defaultLocale = document.getElementById('default_locale').value;
+    if (localeCode === defaultLocale) {
+        alert('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        return false;
+    }
+    
     // 移除标签
     const tag = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
     if (tag) {
@@ -1175,6 +1671,39 @@ function updateLocalesHint() {
             existingHint.remove();
         }
     }
+}
+
+/**
+ * 更新语言标签的删除按钮状态
+ * 默认语言的删除按钮应该被禁用
+ */
+function updateLocaleTagsDeleteButton() {
+    const defaultLocale = document.getElementById('default_locale').value;
+    const allTags = document.querySelectorAll('.selected-locale-tag');
+    
+    allTags.forEach(tag => {
+        const localeCode = tag.getAttribute('data-locale-code');
+        const closeIcon = tag.querySelector('.mdi-close');
+        
+        if (localeCode === defaultLocale) {
+            // 默认语言：禁用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '0.3';
+                closeIcon.style.cursor = 'not-allowed';
+                closeIcon.title = '<?= __('默认语言不能删除') ?>';
+            }
+            // 添加一个标识符
+            tag.style.borderLeft = '3px solid #ffc107';
+        } else {
+            // 非默认语言：启用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '1';
+                closeIcon.style.cursor = 'pointer';
+                closeIcon.title = '<?= __('移除此语言') ?>';
+            }
+            tag.style.borderLeft = 'none';
+        }
+    });
 }
 
 /**
@@ -1319,6 +1848,8 @@ function resetLocaleDropdown() {
 // 页面加载时初始化下拉列表
 document.addEventListener('DOMContentLoaded', function() {
     resetLocaleDropdown();
+    // 初始化语言标签的删除按钮状态
+    updateLocaleTagsDeleteButton();
 });
 
 /**
@@ -1349,27 +1880,35 @@ function loadStyleConfig(styleCode) {
     
     if (!styleCode) {
         console.log('⚠️ styleCode 为空，隐藏配置区域');
-        styleConfigContainer.style.display = 'none';
-        styleDescContainer.style.display = 'none';
+        if (styleConfigContainer) {
+            styleConfigContainer.style.display = 'none';
+        }
+        if (styleDescContainer) {
+            styleDescContainer.style.display = 'none';
+        }
         return;
     }
     
     // 显示样式描述
-    const selectedOption = styleSelect.options[styleSelect.selectedIndex];
-    const description = selectedOption.getAttribute('data-description');
-    if (description) {
+    const selectedOption = styleSelect ? styleSelect.options[styleSelect.selectedIndex] : null;
+    const description = selectedOption ? selectedOption.getAttribute('data-description') : null;
+    if (description && styleDescText && styleDescContainer) {
         styleDescText.textContent = description;
         styleDescContainer.style.display = 'block';
-    } else {
+    } else if (styleDescContainer) {
         styleDescContainer.style.display = 'none';
     }
     
     // 显示加载中
-    styleConfigFields.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> <?= __('加载配置中...') ?></div>';
-    styleConfigContainer.style.display = 'block';
+    if (styleConfigFields) {
+        styleConfigFields.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> <?= __('加载配置中...') ?></div>';
+    }
+    if (styleConfigContainer) {
+        styleConfigContainer.style.display = 'block';
+    }
     
     // 构建请求 URL，包含 page_id 和 locale 参数
-    let configUrl = '<?= $this->getBackendUrl('*/backend/page/styleConfig') ?>?style_code=' + encodeURIComponent(styleCode);
+    let configUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyleConfig') ?>?style_code=' + encodeURIComponent(styleCode);
     
     <?php if ($isEdit && $page && $page->getId()): ?>
     // 如果是编辑页面，添加 page_id 参数
@@ -1402,12 +1941,16 @@ function loadStyleConfig(styleCode) {
                 renderStyleConfig(data.data);
             } else {
                 console.warn('⚠️ 该样式没有可配置项');
-                styleConfigFields.innerHTML = '<div class="alert alert-warning"><?= __('该样式没有可配置项') ?></div>';
+                if (styleConfigFields) {
+                    styleConfigFields.innerHTML = '<div class="alert alert-warning"><?= __('该样式没有可配置项') ?></div>';
+                }
             }
         })
         .catch(error => {
             console.error('❌ 加载配置失败:', error);
-            styleConfigFields.innerHTML = '<div class="alert alert-danger"><?= __('加载配置失败：') ?>' + error.message + '</div>';
+            if (styleConfigFields) {
+                styleConfigFields.innerHTML = '<div class="alert alert-danger"><?= __('加载配置失败：') ?>' + error.message + '</div>';
+            }
         });
 }
 
@@ -1418,6 +1961,11 @@ function renderStyleConfig(configGroups) {
     console.log('🔨 开始渲染样式配置表单');
     console.log('📋 配置组:', configGroups);
     console.log('💾 当前保存的配置值:', currentStyleSettings);
+    
+    if (!styleConfigFields) {
+        console.error('❌ styleConfigFields 元素不存在');
+        return;
+    }
     
     if (!configGroups || Object.keys(configGroups).length === 0) {
         styleConfigFields.innerHTML = '<div class="alert alert-info"><?= __('该样式没有可配置项') ?></div>';
@@ -1480,9 +2028,9 @@ function renderStyleConfig(configGroups) {
             // 如果分组有标记（如 MD, MTD），显示响应式徽章
             if (group.tag) {
                 let tagIcons = '';
-                if (group.tag.includes('M')) tagIcons += '<i class="fas fa-mobile-alt" style="font-size: 0.75rem;"></i> ';
-                if (group.tag.includes('T')) tagIcons += '<i class="fas fa-tablet-alt" style="font-size: 0.75rem;"></i> ';
-                if (group.tag.includes('D')) tagIcons += '<i class="fas fa-desktop" style="font-size: 0.75rem;"></i> ';
+                if (group.tag.includes('M')) tagIcons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
+                if (group.tag.includes('T')) tagIcons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
+                if (group.tag.includes('D')) tagIcons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
                 
                 html += ` <span class="badge bg-info ms-2" style="font-size: 0.65rem; vertical-align: middle;">
                             ${tagIcons}
@@ -1495,18 +2043,17 @@ function renderStyleConfig(configGroups) {
                         </div>
                         <div class="card-body config-section-body">`;
             
-            // 如果有说明信息，显示可折叠的说明区域
+            // 如果有说明信息，直接显示（不折叠）
             if (group.help_title || group.help_content) {
+                const escapedContent = escapeHtml(group.help_content || '');
+                
                 html += `
-                    <div class="alert alert-info alert-dismissible mb-3" role="alert" style="position: relative;">
-                        <div class="d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleGroupHelp('help_visual_${fileKey}_${groupKey}')">
-                            <h6 class="alert-heading mb-0">
-                                <i class="fas fa-info-circle"></i> ${escapeHtml(group.help_title || '说明')}
-                            </h6>
-                            <i class="fas fa-chevron-down" id="help_icon_visual_${fileKey}_${groupKey}"></i>
-                        </div>
-                        <div id="help_visual_${fileKey}_${groupKey}" style="display: none; margin-top: 10px; white-space: pre-line; line-height: 1.6;">
-                            ${escapeHtml(group.help_content || '')}
+                    <div class="alert alert-info mb-3" role="alert">
+                        <h6 class="alert-heading mb-2">
+                            <i class="mdi mdi-information-outline"></i> ${escapeHtml(group.help_title || '说明')}
+                        </h6>
+                        <div class="help-content-static">
+                            ${escapedContent}
                         </div>
                     </div>`;
             }
@@ -1529,7 +2076,7 @@ function renderStyleConfig(configGroups) {
             html += `<div class="col-md-6 mb-3">`;
             html += `<label for="style_config_${configKey.replace(/\./g, '_')}" class="form-label">${escapeHtml(config.label || '')}`;
             
-            // 添加响应式标记图标（使用 Font Awesome）
+            // 添加响应式标记图标（使用 Material Design Icons）
             if (config.responsive) {
                 // 解析描述信息，提取支持的设备类型
                 let devices = '';
@@ -1539,19 +2086,19 @@ function renderStyleConfig(configGroups) {
                 if (config.description) {
                     const desc = config.description;
                     if (desc.includes('移动端')) {
-                        icons += '<i class="fas fa-mobile-alt" style="font-size: 0.85rem;"></i> ';
+                        icons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
                     }
                     if (desc.includes('平板')) {
-                        icons += '<i class="fas fa-tablet-alt" style="font-size: 0.85rem;"></i> ';
+                        icons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
                     }
                     if (desc.includes('PC端')) {
-                        icons += '<i class="fas fa-desktop" style="font-size: 0.85rem;"></i> ';
+                        icons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
                     }
                 }
                 
                 // 如果没有解析到设备类型，默认显示移动端和PC端
                 if (!icons) {
-                    icons = '<i class="fas fa-mobile-alt" style="font-size: 0.85rem;"></i> <i class="fas fa-desktop" style="font-size: 0.85rem;"></i>';
+                    icons = '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> <i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i>';
                 }
                 
                 html += ` <span class="badge bg-info ms-1" title="${escapeHtml(config.description || '支持响应式配置')}" style="font-size: 0.75rem; vertical-align: middle;">
@@ -1731,50 +2278,40 @@ function toggleFormSection(sectionId) {
 }
 
 /**
- * 切换分组说明的显示/隐藏
- */
-window.toggleGroupHelp = function(helpId) {
-    const helpContent = document.getElementById(helpId);
-    const icon = document.getElementById('help_icon_' + helpId.replace('help_', ''));
-    
-    if (helpContent) {
-        const isHidden = helpContent.style.display === 'none';
-        helpContent.style.display = isHidden ? 'block' : 'none';
-        
-        // 切换图标方向
-        if (icon) {
-            icon.className = isHidden ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-        }
-    }
-};
-
-/**
  * 通过AJAX加载样式列表
- * 实时扫描样式目录并获取最新数据
+ * 实时扫描样式目录并渲染为卡片
  */
+let allStyles = []; // 存储所有样式数据用于搜索
+
 async function loadStyleList() {
     console.log('🚀 开始加载样式列表...');
     
     const styleSelect = document.getElementById('style');
-    if (!styleSelect) {
-        console.error('❌ 未找到样式选择器元素 #style');
+    const styleCardsContainer = document.getElementById('styleCardsContainer');
+    const styleCardsLoading = document.getElementById('styleCardsLoading');
+    const styleCardsEmpty = document.getElementById('styleCardsEmpty');
+    
+    if (!styleSelect || !styleCardsContainer) {
+        console.error('❌ 未找到必要的DOM元素');
         return;
     }
     
     const currentStyle = '<?= $page ? htmlspecialchars($page->getData('style')) : '' ?>';
+    const currentPageId = '<?= $page ? $page->getId() : '' ?>';
     console.log('🎯 当前选择的样式:', currentStyle || '(无)');
+    console.log('📄 当前页面ID:', currentPageId || '(新建)');
     
     try {
         // 显示加载状态
-        styleSelect.disabled = true;
-        styleSelect.innerHTML = '<option value=""><?= __('正在扫描样式模板...') ?></option>';
+        styleCardsLoading.style.display = 'block';
+        styleCardsEmpty.style.display = 'none';
+        styleCardsContainer.innerHTML = '';
         
         // 构建请求 URL
-        const apiUrl = '<?= $this->getBackendUrl('*/backend/page/styles') ?>';
+        const apiUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyles') ?>';
         console.log('📡 请求 URL:', apiUrl);
         
         // 发送AJAX请求
-        console.log('⏳ 正在发送请求...');
         const response = await fetch(apiUrl, {
             method: 'GET',
             headers: {
@@ -1786,32 +2323,34 @@ async function loadStyleList() {
         
         console.log('📥 收到响应:', response.status, response.statusText);
         
+        // 检查响应状态
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ HTTP错误响应:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // 解析JSON
         const result = await response.json();
         console.log('📦 解析响应数据:', result);
         
         if (result.success && result.data) {
-            // 清空选项
-            styleSelect.innerHTML = '<option value=""><?= __('请选择样式') ?></option>';
+            allStyles = result.data; // 保存到全局变量
             
-            // 添加样式选项
+            // 更新隐藏的select（用于表单提交）
+            styleSelect.innerHTML = '<option value=""><?= __('请选择样式') ?></option>';
             result.data.forEach(style => {
                 const option = document.createElement('option');
                 option.value = style.code;
                 option.textContent = style.name;
-                option.dataset.description = style.description || '';
-                
-                // 设置当前选中的样式
                 if (currentStyle && style.code === currentStyle) {
                     option.selected = true;
-                    console.log(`✓ 已选中样式: ${style.name} (${style.code})`);
                 }
-                
                 styleSelect.appendChild(option);
             });
             
-            // 启用选择框
-            styleSelect.disabled = false;
-            console.log('✅ 样式选择器已启用');
+            // 渲染样式卡片
+            renderStyleCards(result.data, currentStyle, currentPageId);
             
             // 启用可视化配置按钮
             const visualBtn = document.getElementById('openVisualConfigBtn');
@@ -1820,44 +2359,455 @@ async function loadStyleList() {
                 console.log('✅ 可视化配置按钮已启用');
             }
             
-            // 显示样式描述并加载配置（如果有选中的样式）
+            // 加载样式配置（如果有选中的样式）
             if (currentStyle) {
-                console.log(`🎨 当前页面已选择样式: ${currentStyle}`);
-                console.log(`📝 当前样式配置值:`, currentStyleSettings);
-                
-                const selectedOption = styleSelect.options[styleSelect.selectedIndex];
-                if (selectedOption && selectedOption.dataset.description) {
-                    const descContainer = document.getElementById('style-description-container');
-                    const descText = document.getElementById('style-description-text');
-                    if (descContainer && descText) {
-                        descText.textContent = selectedOption.dataset.description;
-                        descContainer.style.display = 'block';
-                    }
-                }
-                
-                // 加载样式配置
                 console.log(`🔧 开始加载样式配置: ${currentStyle}`);
                 loadStyleConfig(currentStyle);
-            } else {
-                console.log('⚠️ 当前页面未选择样式');
             }
             
             console.log(`✅ 样式列表加载成功，共 ${result.count} 个样式`);
         } else {
-            // 加载失败
             console.error('❌ 加载样式列表失败:', result);
-            styleSelect.innerHTML = '<option value=""><?= __('加载失败，请刷新重试') ?></option>';
-            styleSelect.disabled = false;
-            alert('加载样式列表失败: ' + (result.message || '未知错误'));
+            styleCardsEmpty.innerHTML = '<i class="mdi mdi-alert"></i> ' + (result.message || '加载失败，请刷新重试');
+            styleCardsEmpty.style.display = 'block';
         }
     } catch (error) {
-        // 网络错误
         console.error('❌ 加载样式列表异常:', error);
         console.error('错误堆栈:', error.stack);
-        styleSelect.innerHTML = '<option value=""><?= __('网络错误，请刷新重试') ?></option>';
-        styleSelect.disabled = false;
-        alert('网络错误，无法加载样式列表:\n' + error.message);
+        
+        // 显示详细的错误信息
+        const errorMessage = error.message || '未知错误';
+        styleCardsEmpty.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle"></i>
+                <strong>加载失败</strong><br>
+                <small>${errorMessage}</small><br>
+                <button class="btn btn-sm btn-outline-danger mt-2" onclick="loadStyleList()">
+                    <i class="mdi mdi-refresh"></i> 重试
+                </button>
+            </div>
+        `;
+        styleCardsEmpty.style.display = 'block';
+    } finally {
+        styleCardsLoading.style.display = 'none';
     }
+}
+
+/**
+ * 渲染样式卡片
+ */
+function renderStyleCards(styles, currentStyle, currentPageId) {
+    const styleCardsContainer = document.getElementById('styleCardsContainer');
+    const styleCardsEmpty = document.getElementById('styleCardsEmpty');
+    
+    styleCardsContainer.innerHTML = '';
+    
+    if (!styles || styles.length === 0) {
+        styleCardsEmpty.style.display = 'block';
+        return;
+    }
+    
+    styleCardsEmpty.style.display = 'none';
+    
+    const previewImageUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/stylePreviewImage') ?>';
+    const previewFullUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/full') ?>';
+    
+    styles.forEach(style => {
+        const col = document.createElement('div');
+        col.className = 'col';
+        
+        const isSelected = currentStyle && style.code === currentStyle;
+        const hasPreviewImage = style.preview_image && style.preview_image.trim() !== '';
+        
+        const card = document.createElement('div');
+        card.className = 'card style-card' + (isSelected ? ' selected' : '');
+        card.dataset.styleCode = style.code;
+        card.dataset.styleName = style.name;
+        card.dataset.styleDescription = style.description || '';
+        
+        // 预览区域
+        let previewHtml = '';
+        let previewActionsHtml = '';
+        
+        if (hasPreviewImage) {
+            // 有预览图，通过控制器获取图片
+            const imageUrl = `${previewImageUrl}?code=${encodeURIComponent(style.code)}`;
+            
+            // 预览操作按钮：放大预览 + 真实预览
+            previewActionsHtml = currentPageId ? `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openImagePreview('${imageUrl}', '${style.name}')" 
+                         title="放大预览图">
+                        <i class="mdi mdi-magnify-plus"></i>
+                    </div>
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openRealPreview('${style.code}', '${style.name}', ${currentPageId})" 
+                         title="真实页面预览">
+                        <i class="mdi mdi-monitor"></i>
+                    </div>
+                </div>
+            ` : `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openImagePreview('${imageUrl}', '${style.name}')" 
+                         title="放大预览图">
+                        <i class="mdi mdi-magnify-plus"></i>
+                    </div>
+                </div>
+            `;
+            
+            previewHtml = `
+                <div class="style-card-preview">
+                    ${previewActionsHtml}
+                    <img src="${imageUrl}" 
+                         alt="${style.name}" 
+                         onerror="this.parentElement.innerHTML='<div class=\\'style-card-preview-placeholder\\'><i class=\\'mdi mdi-image-broken\\'></i><div>图片加载失败</div></div>'">
+                </div>
+            `;
+        } else if (currentPageId) {
+            // 没有预览图但有页面ID，使用iframe实时预览并转换为canvas
+            const iframeUrl = `${previewFullUrl}?page_id=${currentPageId}&style_code=${encodeURIComponent(style.code)}`;
+            const canvasId = `style-preview-canvas-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const iframeId = `style-preview-iframe-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            
+            // 预览操作按钮：真实预览
+            previewActionsHtml = `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openRealPreview('${style.code}', '${style.name}', ${currentPageId})" 
+                         title="真实页面预览">
+                        <i class="mdi mdi-monitor"></i>
+                    </div>
+                </div>
+            `;
+            
+            previewHtml = `
+                <div class="style-card-preview" id="preview-${style.code}">
+                    ${previewActionsHtml}
+                    <div class="style-card-preview-loading">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <div style="margin-top: 10px; font-size: 12px;">正在生成预览...</div>
+                    </div>
+                    <canvas id="${canvasId}" style="display: none; width: 100%; height: 100%;"></canvas>
+                    <iframe id="${iframeId}" 
+                            src="${iframeUrl}" 
+                            style="position: absolute; left: -9999px; width: 1200px; height: 800px; border: none;"
+                            onload="captureIframePreview('${iframeId}', '${canvasId}', 'preview-${style.code}')">
+                    </iframe>
+                </div>
+            `;
+        } else {
+            // 没有预览图也没有页面ID，显示占位符
+            previewHtml = `
+                <div class="style-card-preview">
+                    <div class="style-card-preview-placeholder">
+                        <i class="mdi mdi-palette"></i>
+                        <div>无预览</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 卡片内容
+        card.innerHTML = `
+            ${previewHtml}
+            <div class="style-card-body">
+                <div class="style-card-title">
+                    <span>${style.name}</span>
+                    <span class="style-card-selected-badge">
+                        <i class="mdi mdi-check"></i> 已选择
+                    </span>
+                </div>
+                ${style.description ? `<div class="style-card-description">${style.description}</div>` : ''}
+                <div class="style-card-meta">
+                    <span class="style-card-code">${style.code}</span>
+                    ${hasPreviewImage ? '<i class="mdi mdi-image text-success" title="有预览图"></i>' : '<i class="mdi mdi-monitor text-muted" title="实时预览"></i>'}
+                </div>
+            </div>
+        `;
+        
+        // 点击卡片选择样式
+        card.addEventListener('click', () => selectStyle(style.code));
+        
+        col.appendChild(card);
+        styleCardsContainer.appendChild(col);
+    });
+}
+
+/**
+ * 选择样式
+ */
+async function selectStyle(styleCode) {
+    console.log('🎯 选择样式:', styleCode);
+    
+    const styleSelect = document.getElementById('style');
+    const oldStyle = styleSelect.value;
+    
+    // 更新隐藏的select
+    styleSelect.value = styleCode;
+    
+    // 更新卡片选中状态
+    document.querySelectorAll('.style-card').forEach(card => {
+        if (card.dataset.styleCode === styleCode) {
+            card.classList.add('selected');
+        } else {
+            card.classList.remove('selected');
+        }
+    });
+    
+    // 启用可视化配置按钮
+    const visualBtn = document.getElementById('openVisualConfigBtn');
+    if (visualBtn) {
+        visualBtn.disabled = false;
+    }
+    
+    // 加载样式配置
+    loadStyleConfig(styleCode);
+    
+    // 如果是编辑模式，自动保存样式切换
+    const pageId = '<?= $isEdit && $page ? $page->getId() : '' ?>';
+    if (pageId && styleCode !== oldStyle) {
+        await autoSaveStyleChange(styleCode);
+    }
+}
+
+/**
+ * 打开图片放大预览
+ * @param {string} imageUrl - 图片URL
+ * @param {string} styleName - 样式名称
+ */
+function openImagePreview(imageUrl, styleName) {
+    console.log('🖼️ 打开图片预览:', styleName);
+    
+    const modal = document.getElementById('stylePreviewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalIcon = document.getElementById('previewModalIcon');
+    const modalBody = document.getElementById('previewModalBody');
+    
+    // 设置标题和图标
+    modalTitle.textContent = `${styleName} - 预览图`;
+    modalIcon.className = 'mdi mdi-magnify-plus';
+    
+    // 显示图片
+    modalBody.innerHTML = `<img src="${imageUrl}" alt="${styleName}">`;
+    
+    // 显示模态框
+    modal.classList.add('active');
+    
+    // 禁止body滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 打开真实页面预览
+ * @param {string} styleCode - 样式代码
+ * @param {string} styleName - 样式名称
+ * @param {number} pageId - 页面ID
+ */
+function openRealPreview(styleCode, styleName, pageId) {
+    console.log('🖥️ 打开真实预览:', styleName, styleCode);
+    
+    const modal = document.getElementById('stylePreviewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalIcon = document.getElementById('previewModalIcon');
+    const modalBody = document.getElementById('previewModalBody');
+    
+    // 设置标题和图标
+    modalTitle.textContent = `${styleName} - 真实预览`;
+    modalIcon.className = 'mdi mdi-monitor';
+    
+    // 构建iframe URL
+    const previewUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/full') ?>?page_id=' + pageId + '&style_code=' + encodeURIComponent(styleCode);
+    
+    // 显示加载状态和iframe
+    modalBody.innerHTML = `
+        <div class="style-preview-loading">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">正在加载预览...</div>
+        </div>
+        <iframe src="${previewUrl}" onload="this.previousElementSibling.style.display='none'"></iframe>
+    `;
+    
+    // 显示模态框
+    modal.classList.add('active');
+    
+    // 禁止body滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 关闭样式预览模态框
+ */
+function closeStylePreviewModal() {
+    const modal = document.getElementById('stylePreviewModal');
+    modal.classList.remove('active');
+    
+    // 恢复body滚动
+    document.body.style.overflow = '';
+    
+    // 清空内容（移除iframe）
+    setTimeout(() => {
+        const modalBody = document.getElementById('previewModalBody');
+        modalBody.innerHTML = '';
+    }, 300);
+}
+
+// 点击模态框背景关闭
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('stylePreviewModal');
+    if (e.target === modal) {
+        closeStylePreviewModal();
+    }
+});
+
+// ESC键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('stylePreviewModal');
+        if (modal && modal.classList.contains('active')) {
+            closeStylePreviewModal();
+        }
+    }
+});
+
+/**
+ * 截取iframe内容并转换为canvas预览
+ * 
+ * @param {string} iframeId - iframe元素ID
+ * @param {string} canvasId - canvas元素ID
+ * @param {string} previewId - 预览容器ID
+ */
+async function captureIframePreview(iframeId, canvasId, previewId) {
+    console.log('🎬 开始截取预览:', iframeId);
+    
+    const iframe = document.getElementById(iframeId);
+    const canvas = document.getElementById(canvasId);
+    const previewContainer = document.getElementById(previewId);
+    const loadingEl = previewContainer ? previewContainer.querySelector('.style-card-preview-loading') : null;
+    
+    if (!iframe || !canvas || !previewContainer) {
+        console.error('❌ 截图失败：找不到必要的DOM元素');
+        if (loadingEl) {
+            loadingEl.innerHTML = '<div class="text-danger small">预览生成失败</div>';
+        }
+        return;
+    }
+    
+    try {
+        // 等待iframe完全加载
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const iframeBody = iframeDoc.body;
+        
+        if (!iframeBody) {
+            throw new Error('无法访问iframe内容');
+        }
+        
+        console.log('📸 开始使用html2canvas截图...');
+        
+        // 使用html2canvas截取iframe内容
+        const screenshotCanvas = await html2canvas(iframeBody, {
+            allowTaint: true,
+            useCORS: true,
+            scale: 0.25, // 降低分辨率以提高性能
+            width: 1200,
+            height: 800,
+            logging: false,
+            removeContainer: false
+        });
+        
+        // 将截图绘制到目标canvas（调整尺寸以适应卡片）
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400; // 卡片宽度
+        canvas.height = 200; // 卡片高度
+        
+        // 计算缩放比例（保持宽高比）
+        const scale = Math.min(canvas.width / screenshotCanvas.width, canvas.height / screenshotCanvas.height);
+        const x = (canvas.width / 2) - (screenshotCanvas.width / 2) * scale;
+        const y = (canvas.height / 2) - (screenshotCanvas.height / 2) * scale;
+        
+        ctx.drawImage(screenshotCanvas, x, y, screenshotCanvas.width * scale, screenshotCanvas.height * scale);
+        
+        // 显示canvas，隐藏加载状态
+        canvas.style.display = 'block';
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
+        // 移除iframe（已经不需要了）
+        setTimeout(() => {
+            if (iframe.parentElement) {
+                iframe.remove();
+            }
+        }, 100);
+        
+        console.log('✅ 预览截图成功');
+        
+    } catch (error) {
+        console.error('❌ 截图失败:', error);
+        
+        // 显示错误提示
+        if (loadingEl) {
+            loadingEl.innerHTML = `
+                <div class="style-card-preview-placeholder">
+                    <i class="mdi mdi-alert-circle"></i>
+                    <div style="font-size: 12px; margin-top: 5px;">预览生成失败</div>
+                    <div style="font-size: 11px; color: #999; margin-top: 3px;">点击卡片可选择此样式</div>
+                </div>
+            `;
+        }
+        
+        // 移除iframe
+        if (iframe.parentElement) {
+            iframe.remove();
+        }
+    }
+}
+
+/**
+ * 搜索过滤样式
+ */
+function filterStyles(searchTerm) {
+    const term = searchTerm.toLowerCase().trim();
+    
+    if (!term) {
+        // 如果搜索框为空，显示所有样式
+        renderStyleCards(allStyles, document.getElementById('style').value, '<?= $page ? $page->getId() : '' ?>');
+        return;
+    }
+    
+    // 过滤样式：匹配名称、描述或代码
+    const filtered = allStyles.filter(style => {
+        const name = (style.name || '').toLowerCase();
+        const description = (style.description || '').toLowerCase();
+        const code = (style.code || '').toLowerCase();
+        return name.includes(term) || description.includes(term) || code.includes(term);
+    });
+    
+    // 渲染过滤后的结果
+    renderStyleCards(filtered, document.getElementById('style').value, '<?= $page ? $page->getId() : '' ?>');
+}
+
+// 搜索框事件
+const styleSearchInput = document.getElementById('styleSearchInput');
+if (styleSearchInput) {
+    // 实时搜索（防抖）
+    let searchTimeout;
+    styleSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            filterStyles(this.value);
+        }, 300); // 300ms 防抖
+    });
+    
+    // 清空搜索框时重置
+    styleSearchInput.addEventListener('search', function() {
+        if (this.value === '') {
+            filterStyles('');
+        }
+    });
 }
 
 // 刷新按钮点击事件
@@ -1909,9 +2859,13 @@ if (refreshStyleBtn) {
 
 // 监听样式选择变化
 if (styleSelect) {
-    styleSelect.addEventListener('change', function() {
-        // 显示样式描述
+    styleSelect.addEventListener('change', async function() {
+        const selectedStyle = this.value;
         const selectedOption = this.options[this.selectedIndex];
+        
+        console.log('🎨 样式切换:', selectedStyle);
+        
+        // 显示样式描述
         const descContainer = document.getElementById('style-description-container');
         const descText = document.getElementById('style-description-text');
         
@@ -1922,9 +2876,181 @@ if (styleSelect) {
             descContainer.style.display = 'none';
         }
         
+        // 显示样式预览图
+        const previewContainer = document.getElementById('style-preview-container');
+        const previewImage = document.getElementById('style-preview-image');
+        
+        if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
+            const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
+            previewImage.src = baseUrl + selectedOption.dataset.previewImage;
+            previewContainer.style.display = 'block';
+            console.log('📷 显示预览图:', selectedOption.dataset.previewImage);
+        } else if (previewContainer) {
+            previewContainer.style.display = 'none';
+            console.log('ℹ️ 该样式没有预览图');
+        }
+        
         // 加载样式配置
-        loadStyleConfig(this.value);
+        loadStyleConfig(selectedStyle);
+        
+        // 🔄 编辑模式下：自动保存样式切换
+        <?php if ($isEdit && $page && $page->getId()): ?>
+        if (selectedStyle) {
+            await autoSaveStyleChange(selectedStyle);
+        }
+        <?php endif; ?>
     });
+}
+
+/**
+ * 显示通知消息
+ * @param {string} type - 消息类型: 'success', 'error', 'warning', 'info'
+ * @param {string} message - 消息内容
+ */
+function showMessage(type, message) {
+    // 类型到 Bootstrap 类的映射
+    const typeClassMap = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    };
+    
+    // 类型到图标的映射
+    const typeIconMap = {
+        'success': 'mdi-check-circle',
+        'error': 'mdi-alert-circle',
+        'warning': 'mdi-alert',
+        'info': 'mdi-information'
+    };
+    
+    const alertClass = typeClassMap[type] || 'alert-info';
+    const iconClass = typeIconMap[type] || 'mdi-information';
+    
+    // 创建 toast 通知
+    const toast = document.createElement('div');
+    toast.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    toast.style.zIndex = '9999';
+    toast.style.minWidth = '300px';
+    toast.innerHTML = `
+        <i class="mdi ${iconClass} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 3000);
+}
+
+/**
+ * 显示全局加载提示
+ */
+function showLoading() {
+    // 检查是否已经存在加载层
+    let loadingOverlay = document.getElementById('global-loading-overlay');
+    
+    if (!loadingOverlay) {
+        // 创建加载层
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'global-loading-overlay';
+        loadingOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        loadingOverlay.innerHTML = `
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden"><?= __('加载中...') ?></span>
+            </div>
+        `;
+        
+        document.body.appendChild(loadingOverlay);
+    }
+    
+    loadingOverlay.style.display = 'flex';
+}
+
+/**
+ * 隐藏全局加载提示
+ */
+function hideLoading() {
+    const loadingOverlay = document.getElementById('global-loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
+    }
+}
+
+/**
+ * 自动保存样式切换
+ * 当用户切换样式时，自动保存到后端，并刷新可视化编辑器
+ */
+async function autoSaveStyleChange(newStyle) {
+    console.log('💾 自动保存样式切换:', newStyle);
+    
+    // 显示保存提示
+    showLoading();
+    
+    try {
+        // 准备表单数据
+        const form = document.getElementById('page-form');
+        const formData = new FormData(form);
+        
+        // 更新样式字段
+        formData.set('style', newStyle);
+        
+        // 发送AJAX请求
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData,
+            credentials: 'same-origin'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ 样式保存成功');
+            
+            // 显示成功提示
+            showMessage('success', '<?= __('样式已保存，正在刷新页面...') ?>');
+            
+            // 延迟500ms后刷新页面，让用户看到成功提示
+            setTimeout(() => {
+                console.log('🔄 刷新页面以应用新样式');
+                window.location.reload();
+            }, 500);
+            
+        } else {
+            console.error('❌ 样式保存失败:', result.message);
+            showMessage('error', '<?= __('样式保存失败：') ?>' + (result.message || '<?= __('未知错误') ?>'));
+            
+            // 恢复原来的样式选择
+            if (result.old_style) {
+                styleSelect.value = result.old_style;
+            }
+        }
+    } catch (error) {
+        console.error('❌ 保存样式时发生错误:', error);
+        showMessage('error', '<?= __('网络错误，样式保存失败') ?>');
+    } finally {
+        hideLoading();
+    }
 }
 
 // 页面加载时立即通过AJAX获取样式列表
@@ -2194,6 +3320,9 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     flex-direction: column;
     overflow: hidden;
     transition: transform 0.3s ease;
+    position: relative;
+    z-index: 10;
+    pointer-events: auto;
 }
 
 .config-panel-header {
@@ -2207,6 +3336,45 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     flex: 1;
     overflow-y: auto;
     padding: 0;
+    pointer-events: auto;
+}
+
+.config-panel-body * {
+    pointer-events: auto;
+}
+
+.config-panel-body .alert-info {
+    pointer-events: auto;
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+}
+
+/* 静态展示的帮助内容样式 */
+.config-panel-body .help-content-static {
+    white-space: pre-line;
+    line-height: 1.6;
+    font-size: 0.9rem;
+    color: #555;
+    margin: 0;
+    padding: 0;
+}
+
+.config-panel-body .alert-info {
+    background-color: #e8f4f8;
+    border-color: #b8dce8;
+    color: #31708f;
+}
+
+.config-panel-body .alert-info .alert-heading {
+    color: #1a5a75;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.config-panel-body .alert-info .mdi-information-outline {
+    color: #17a2b8;
+    margin-right: 5px;
 }
 
 /* 全屏模式 */
@@ -2230,6 +3398,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     bottom: 0;
     z-index: 100;
     box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    pointer-events: auto;
 }
 
 /* 全屏模式下配置面板收起状态 */
@@ -2245,6 +3414,8 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
 /* 全屏模式下的预览面板占满空间 */
 .visual-config-wrapper.fullscreen-mode .preview-panel {
     width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
 /* 全屏按钮样式 */
@@ -2347,6 +3518,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     justify-content: center;
     position: relative;
     overflow: auto;
+    z-index: 1;
 }
 
 .preview-container {
@@ -2560,6 +3732,104 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     window.closeVisualConfig = function() {
         document.getElementById('visualConfigWrapper').classList.remove('active');
         document.body.style.overflow = '';
+    };
+
+    // 打开可视化配置项翻译
+    window.openVisualConfigTranslation = function(configKey, configLabel, currentValue) {
+        if (!visualPageId || visualPageId === 'null') {
+            alert('<?= __('只有在编辑模式下才能翻译配置项') ?>');
+            return;
+        }
+        
+        // 转义特殊字符
+        currentValue = (currentValue || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        
+        // 生成唯一ID
+        const translationId = `visual-config-translation-${configKey.replace(/\./g, '-')}`;
+        
+        // 检查是否已存在翻译界面
+        let existingOffcanvas = document.getElementById(translationId);
+        if (!existingOffcanvas) {
+            // 构建翻译界面的 URL
+            const translationUrl = '<?= $this->getBackendUrl('i18n/backend/taglib/local') ?>' +
+                '?model=<?= urlencode('GuoLaiRen\\PageBuilder\\Model\\Page\\LocalDescription') ?>' +
+                '&field=' + encodeURIComponent('config.' + configKey) +
+                '&id=' + visualPageId +
+                '&value=' + encodeURIComponent(currentValue);
+            
+            console.log('🌐 打开可视化配置翻译界面:', translationUrl);
+            
+            // 创建 Offcanvas HTML
+            const offcanvasHtml = `
+                <div class="offcanvas offcanvas-end w-75 h-100" tabindex="-1" id="${translationId}" 
+                     aria-labelledby="${translationId}Label">
+                    <div class="offcanvas-header">
+                        <h5 id="${translationId}Label">
+                            <?= __('翻译配置项') ?>: ${configLabel}
+                        </h5>
+                        <div class="d-flex gap-2 ms-auto">
+                            <button id="${translationId}SubmitBtn" type="button" class="btn btn-primary btn-sm">
+                                <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
+                            </button>
+                            <a id="${translationId}RefreshBtn" class="btn btn-info btn-sm" href="javascript:void(0)">
+                                <i class="mdi mdi-refresh me-1"></i><?= __('刷新') ?>
+                            </a>
+                            <button type="button" class="btn-close btn-sm" data-bs-dismiss="offcanvas"
+                                    aria-label="<?= __('关闭') ?>"></button>
+                        </div>
+                    </div>
+                    <div class="offcanvas-body">
+                        <div class="position-relative w-100 h-100">
+                            <iframe id="${translationId}Iframe" class="w-100 h-100"
+                                    data-src="${translationUrl}"
+                                    frameborder="0"></iframe>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 添加到页面
+            document.body.insertAdjacentHTML('beforeend', offcanvasHtml);
+            existingOffcanvas = document.getElementById(translationId);
+            
+            // 绑定事件
+            const iframe = document.getElementById(`${translationId}Iframe`);
+            const submitBtn = document.getElementById(`${translationId}SubmitBtn`);
+            const refreshBtn = document.getElementById(`${translationId}RefreshBtn`);
+            
+            // 显示时加载 iframe
+            existingOffcanvas.addEventListener('show.bs.offcanvas', function() {
+                if (!iframe.src) {
+                    iframe.src = iframe.getAttribute('data-src');
+                }
+            });
+            
+            // 刷新按钮
+            refreshBtn.addEventListener('click', function() {
+                iframe.src = iframe.getAttribute('data-src');
+            });
+            
+            // 提交按钮
+            submitBtn.addEventListener('click', function() {
+                const iframeDoc = iframe.contentWindow?.document;
+                if (!iframeDoc) {
+                    console.error('❌ 无法访问 iframe 文档');
+                    return;
+                }
+                
+                const form = iframeDoc.querySelector('form');
+                if (form) {
+                    form.submit();
+                    console.log('✅ 翻译表单已提交');
+                } else {
+                    console.error('❌ 未找到翻译表单');
+                }
+            });
+        }
+        
+        // 显示 Offcanvas
+        const offcanvas = new bootstrap.Offcanvas(existingOffcanvas);
+        offcanvas.show();
     };
 
     // 切换配置区域
@@ -2823,7 +4093,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
             }
             
             // 构建URL，包含 page_id 和 locale 参数
-            let url = '<?= $this->getBackendUrl('pagebuilder/backend/page/styleConfig') ?>?style_code=' + styleCode;
+            let url = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyleConfig') ?>?style_code=' + styleCode;
             if (visualPageId) {
                 url += '&page_id=' + visualPageId;
             }
@@ -2935,11 +4205,42 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                 html += `
                     <div class="config-section collapsed ms-3" id="visual_${fileKey}_${groupKey}_config">
                         <div class="config-section-header bg-light" onclick="toggleSection('visual_${fileKey}_${groupKey}_config')">
-                            <span><i class="mdi ${icon}"></i> ${group.label || groupKey}</span>
+                            <span><i class="mdi ${icon}"></i> ${group.label || groupKey}`;
+                
+                // 如果分组有标记（如 MD, MTD），显示响应式徽章
+                if (group.tag) {
+                    let tagIcons = '';
+                    if (group.tag.includes('M')) tagIcons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
+                    if (group.tag.includes('T')) tagIcons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
+                    if (group.tag.includes('D')) tagIcons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
+                    
+                    html += ` <span class="badge bg-info ms-2" style="font-size: 0.65rem; vertical-align: middle;">
+                                ${tagIcons}
+                             </span>`;
+                }
+                
+                html += `</span>
                             <i class="mdi mdi-chevron-down"></i>
                         </div>
                         <div class="config-section-body">
                 `;
+                
+                // 如果有说明信息，直接显示（不折叠）
+                if (group.help_title || group.help_content) {
+                    // 处理帮助内容：保留换行符并转义HTML
+                    let helpContentText = group.help_content || '';
+                    helpContentText = escapeHtml(helpContentText);
+                    
+                    html += `
+                        <div class="alert alert-info mb-3" role="alert">
+                            <h6 class="alert-heading mb-2">
+                                <i class="mdi mdi-information-outline"></i> ${escapeHtml(group.help_title || '说明')}
+                            </h6>
+                            <div class="help-content-static">
+                                ${helpContentText}
+                            </div>
+                        </div>`;
+                }
                 
                 for (const configKey in group.configs) {
                     const config = group.configs[configKey];
@@ -2958,7 +4259,41 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                 }
                 
                 html += `<div class="mb-3">`;
-                html += `<label for="${fieldId}" class="form-label">${escapeHtml(config.label)}</label>`;
+                
+                // 渲染标签和响应式徽章
+                html += `<label for="${fieldId}" class="form-label">${escapeHtml(config.label)}`;
+                
+                // 添加响应式标记图标
+                if (config.responsive) {
+                    html += ` <span class="badge bg-info ms-1" 
+                                    title="支持响应式配置（移动端/平板/PC端）" 
+                                    style="font-size: 0.75rem; vertical-align: middle;">
+                                <i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i>
+                                <i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i>
+                                <i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i>
+                             </span>`;
+                }
+                
+                // 添加翻译按钮（仅在编辑模式下且不是颜色选择器）
+                if (visualPageId && visualPageId !== 'null' && config.type !== 'color' && config.type !== 'select') {
+                    html += ` <a href="javascript:void(0)" 
+                                 class="link-info ms-1" 
+                                 onclick="openVisualConfigTranslation('${configKey}', '${escapeHtml(config.label)}', '${escapeHtml(rawValue)}')"
+                                 title="<?= __('翻译此配置项') ?>">
+                                <i class="mdi mdi-translate"></i>
+                             </a>`;
+                }
+                
+                html += `</label>`;
+                
+                // 添加描述信息
+                if (config.description) {
+                    html += `<div class="form-text text-muted mb-2" 
+                                  style="margin-top: -8px; font-size: 0.85rem;">
+                                <i class="mdi mdi-information-outline"></i> 
+                                ${escapeHtml(config.description)}
+                             </div>`;
+                }
                 
                 switch (config.type) {
                     case 'color':
@@ -3005,6 +4340,22 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                         html += `</select>`;
                         break;
                         
+                    case 'responsive':
+                        // 响应式配置：支持 60/80 或 60/70/80 格式，使用 text 输入框
+                        html += `
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control auto-save-field" 
+                                       id="${fieldId}"
+                                       data-config-key="${configKey}"
+                                       value="${currentValue}"
+                                       placeholder="${escapeHtml(config.default || '')}"
+                                       title="<?= __('支持单一值(如: 80)或多端值(如: 60/80 或 60/70/80)') ?>">
+                                ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit)}</span>` : ''}
+                            </div>
+                        `;
+                        break;
+                        
                     case 'number':
                         html += `
                             <div class="input-group">
@@ -3028,14 +4379,19 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                         `;
                         break;
                         
-                    default: // text
+                    case 'text':
+                    default:
+                        // text 类型和其他类型，如果有单位则显示
                         html += `
-                            <input type="text" 
-                                   class="form-control auto-save-field" 
-                                   id="${fieldId}"
-                                   data-config-key="${configKey}"
-                                   value="${currentValue}"
-                                   placeholder="${escapeHtml(config.default || '')}">
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control auto-save-field" 
+                                       id="${fieldId}"
+                                       data-config-key="${configKey}"
+                                       value="${currentValue}"
+                                       placeholder="${escapeHtml(config.default || '')}">
+                                ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit)}</span>` : ''}
+                            </div>
                         `;
                 }
                 
@@ -3110,6 +4466,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
                 autoSaveVisualConfig();
             });
         });
+        
     }
 
     // 键盘快捷键
@@ -3123,6 +4480,86 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
         }
     });
 })();
+
+/**
+ * 打开预览图模态框（查看大图）
+ */
+function openPreviewImageModal(imageSrc) {
+    // 创建模态框HTML
+    const modalHtml = `
+        <div id="previewImageModal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: zoom-out;
+        " onclick="closePreviewImageModal()">
+            <div style="
+                max-width: 95%;
+                max-height: 95%;
+                position: relative;
+            ">
+                <img src="${imageSrc}" 
+                     alt="<?= __('预览图') ?>" 
+                     style="
+                         max-width: 100%;
+                         max-height: 95vh;
+                         object-fit: contain;
+                         border-radius: 8px;
+                         box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+                     ">
+                <button onclick="closePreviewImageModal()" 
+                        style="
+                            position: absolute;
+                            top: -40px;
+                            right: 0;
+                            background: rgba(255, 255, 255, 0.9);
+                            border: none;
+                            border-radius: 50%;
+                            width: 36px;
+                            height: 36px;
+                            font-size: 20px;
+                            cursor: pointer;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        ">
+                    ×
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 禁止页面滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 关闭预览图模态框
+ */
+function closePreviewImageModal() {
+    const modal = document.getElementById('previewImageModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // 恢复页面滚动
+    document.body.style.overflow = '';
+}
+
+// 添加ESC键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePreviewImageModal();
+    }
+});
 </script>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

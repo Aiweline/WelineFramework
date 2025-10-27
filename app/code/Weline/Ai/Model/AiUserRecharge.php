@@ -72,26 +72,26 @@ class AiUserRecharge extends \Weline\Framework\Database\Model
             [self::fields_CREATED_TIME],
         ];
         
-        if (!$setup->tableExist($setup->getTableName())) {
+        if (!$setup->tableExist()) {
             $setup->createTable('用户充值记录表')
                 ->addColumn(
                     self::fields_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'primary key auto_increment',
                     '主键'
                 )
                 ->addColumn(
                     self::fields_USER_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'not null',
                     '用户ID'
                 )
                 ->addColumn(
                     self::fields_TENANT_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'null',
                     '租户ID'
                 )
@@ -160,8 +160,8 @@ class AiUserRecharge extends \Weline\Framework\Database\Model
                 )
                 ->addColumn(
                     self::fields_PROMOTION_ID,
-                    TableInterface::column_type_INT,
-                    11,
+                    TableInterface::column_type_INTEGER,
+                    null,
                     'null',
                     '优惠活动ID'
                 )
@@ -187,19 +187,22 @@ class AiUserRecharge extends \Weline\Framework\Database\Model
                     '更新时间'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_user',
-                    self::fields_USER_ID
+                    self::fields_USER_ID,
+                    '用户索引'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_status',
-                    self::fields_PAYMENT_STATUS
+                    self::fields_PAYMENT_STATUS,
+                    '支付状态索引'
                 )
                 ->addIndex(
-                    TableInterface::index_type_NORMAL,
+                    TableInterface::index_type_KEY,
                     'idx_time',
-                    self::fields_CREATED_TIME
+                    self::fields_CREATED_TIME,
+                    '创建时间索引'
                 )
                 ->create();
         }

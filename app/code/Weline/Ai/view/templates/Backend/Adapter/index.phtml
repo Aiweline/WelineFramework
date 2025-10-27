@@ -60,6 +60,13 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     </div>
                 </div>
                 <!-- 页面标题结束 -->
+
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- end message -->
+    
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -161,30 +168,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <script>
 function scanAdapters() {
     if (confirm('<?= __('确定要扫描场景适配器吗？') ?>')) {
-        fetch('<?= $this->getBackendUrl('*/backend/adapter/scan') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('<?= __('适配器扫描成功！') ?>');
-                location.reload();
-            } else {
-                alert('<?= __('适配器扫描失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
-            }
-        })
-        .catch(error => {
-            alert('<?= __('请求失败：') ?>' + error.message);
-        });
+        showLoading();
+        // 使用GET请求，让Message消息能正常显示
+        window.location.href = '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>';
     }
 }
 
 function toggleStatus(adapterId) {
     if (confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+        showLoading();
         fetch('<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
             method: 'POST',
             headers: {
@@ -195,14 +187,16 @@ function toggleStatus(adapterId) {
         })
         .then(response => response.json())
         .then(data => {
+            hideLoading();
             if (data.success) {
-                alert('<?= __('状态切换成功！') ?>');
+                // 刷新页面以显示更新后的状态
                 location.reload();
             } else {
                 alert('<?= __('状态切换失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
             }
         })
         .catch(error => {
+            hideLoading();
             alert('<?= __('请求失败：') ?>' + error.message);
         });
     }

@@ -158,14 +158,23 @@ trait TraitTemplate
                     break;
                 }
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
-                # 第三方模组
+                # 第三方模组或当前模组
                 if ($module_name) {
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
                         $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
                         $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
                         $t_f = str_replace($module_name . '::', '', $t_f);
+                    }
+                } else {
+                    // 没有指定模块时，使用当前请求模块的静态资源目录
+                    $current_module_name = $this->getRequest()->getModuleName();
+                    $modules = Env::getInstance()->getModuleList();
+                    if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
+                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $current_module_name);
+                    } else {
+                        $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
                     }
                 }
                 $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
@@ -203,7 +212,7 @@ trait TraitTemplate
         switch ($type) {
             case DataInterface::dir_type_STATICS:
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                # 第三方模组
+                # 第三方模组或当前模组
                 if ($module_name) {
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
@@ -214,7 +223,15 @@ trait TraitTemplate
                         throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
                     }
                 } else {
-                    $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
+                    // 没有指定模块时，使用当前请求模块的静态资源目录
+                    $current_module_name = $this->getRequest()->getModuleName();
+                    $modules = Env::getInstance()->getModuleList();
+                    if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
+                        $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+                        $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $current_module_name);
+                    } else {
+                        $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS);
+                    }
                 }
                 $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
                 break;

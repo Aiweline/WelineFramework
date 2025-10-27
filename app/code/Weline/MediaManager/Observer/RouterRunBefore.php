@@ -12,7 +12,9 @@ class RouterRunBefore implements ObserverInterface
 {
     public function execute(Event &$event)
     {
-        $path = strtolower($_SERVER['REQUEST_URI']??'');
+        $request_uri = $_SERVER['REQUEST_URI']??'';
+        # 移除查询字符串
+        $path = strtolower(parse_url($request_uri, PHP_URL_PATH));
         # 匹配静态资源/static/
         if (str_starts_with($path, '/static/')) {
             $file_path = BP .'/pub' . $path;
@@ -25,7 +27,9 @@ class RouterRunBefore implements ObserverInterface
             if (is_file($file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile( $path, true);
+                // 传递包含pub目录的完整路径
+                $full_path = '/pub' . $path;
+                $core->StaticFile($full_path, true);
                 exit;
             }
         }

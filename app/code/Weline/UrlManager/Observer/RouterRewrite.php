@@ -36,6 +36,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     {
         $uri = ltrim($event->getData(), '/');
         $rewrite = $this->urlRewrite->load(UrlRewrite::fields_REWRITE, $uri);
+        if(!$rewrite->getId()){
+            $rewrite = $this->urlRewrite->reset()->load(UrlRewrite::fields_REWRITE, '/' . $uri);
+        }
         if ($rewrite->getId()) {
             # 读取原地址
             $query = Url::parse_url($uri, 'query');
@@ -54,6 +57,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             # 找不到尝试使用path匹配
             $path = Url::parse_url($uri, 'path');
             $rewrite = $this->urlRewrite->reset()->load(UrlRewrite::fields_REWRITE, $path);
+            if(!$rewrite->getId()){
+                $rewrite = $this->urlRewrite->reset()->load(UrlRewrite::fields_REWRITE, '/' . $path);
+            }
             if ($rewrite->getId()) {
                 # 读取原地址
                 $query = Url::parse_url($uri, 'query');

@@ -48,6 +48,7 @@ class AiModel extends Model
     public const fields_TOKEN_PRICE_INPUT = 'token_price_input';  // 输入价格
     public const fields_TOKEN_PRICE_OUTPUT = 'token_price_output';  // 输出价格
     public const fields_PROXY_INFO = 'proxy_info';  // 代理信息
+    public const fields_PROVIDER_CONFIG = 'provider_config';  // 提供商配置
     public const fields_STATUS = 'status';
     public const fields_IS_ACTIVE = 'is_active';
     public const fields_IS_DEFAULT = 'is_default';
@@ -110,6 +111,14 @@ class AiModel extends Model
                 ADD " . self::fields_IS_DEFAULT . " INT(1) DEFAULT 0 NULL COMMENT '是否默认' AFTER is_active;
             ");
         }
+
+        // 添加 provider_config 字段
+        if (!$setup->hasField(self::fields_PROVIDER_CONFIG)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_PROVIDER_CONFIG . " TEXT NULL COMMENT '提供商配置JSON' AFTER proxy_info;
+            ");
+        }
     }
 
     /**
@@ -139,11 +148,12 @@ class AiModel extends Model
                 ->addColumn(self::fields_TOKEN_PRICE_INPUT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL, '10,6', 'default 0', '输入令牌价格（每1000个令牌）')
                 ->addColumn(self::fields_TOKEN_PRICE_OUTPUT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL, '10,6', 'default 0', '输出令牌价格（每1000个令牌）')
                 ->addColumn(self::fields_PROXY_INFO, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '代理配置信息JSON')
+                ->addColumn(self::fields_PROVIDER_CONFIG, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '提供商配置JSON')
                 ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
                 ->addColumn(self::fields_IS_ACTIVE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否激活')
                 ->addColumn(self::fields_IS_DEFAULT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否默认')
-                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '创建时间')
-                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '更新时间')
+                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
+                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
                 ->addIndex(self::fields_SUPPLIER . ',' . self::fields_MODEL_CODE, '', 'UNIQUE', 'idx_supplier_model_code')
                 ->create();
         }
@@ -289,11 +299,15 @@ class AiModel extends Model
         
         // Ensure JSON fields are properly encoded
         if (is_array($this->getData(self::fields_CONFIG))) {
-            $this->setData(self::fields_CONFIG, json_encode($this->getData(self::fields_CONFIG)));
+            $this->setData(self::fields_CONFIG, json_encode($this->getData(self::fields_CONFIG), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         if (is_array($this->getData(self::fields_CAPABILITIES))) {
-            $this->setData(self::fields_CAPABILITIES, json_encode($this->getData(self::fields_CAPABILITIES)));
+            $this->setData(self::fields_CAPABILITIES, json_encode($this->getData(self::fields_CAPABILITIES), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+
+        if (is_array($this->getData(self::fields_PROVIDER_CONFIG))) {
+            $this->setData(self::fields_PROVIDER_CONFIG, json_encode($this->getData(self::fields_PROVIDER_CONFIG), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         return parent::beforeSave();

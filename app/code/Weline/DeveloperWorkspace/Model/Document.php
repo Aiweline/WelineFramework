@@ -29,6 +29,11 @@ class Document extends \Weline\Framework\Database\Model
     public const fields_CATEGORY_ID = 'category_id';
 //    public const fields_TAG_ID      = 'tag_id';
     public const fields_CONTEND = 'content';
+    public const fields_MODULE_NAME = 'module_name';
+    public const fields_FILE_PATH = 'file_path';
+    public const fields_FILE_NAME = 'file_name';
+    public const fields_IS_AUTO_IMPORTED = 'is_auto_imported';
+    public const fields_SORT_ORDER = 'sort_order';
 
     /**
      * @inheritDoc
@@ -43,6 +48,46 @@ class Document extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        // 升级字段长度
+        if ($setup->tableExist()) {
+            $setup->getPrinting()->setup('升级数据表字段长度...', $setup->getTable());
+            
+            // 使用 alterTable() 方法返回 Alter 对象
+            $alter = $setup->alterTable('开发文章');
+            
+            // 修改 title 字段长度为 500
+            $alter->alterColumn(self::fields_TITLE, self::fields_TITLE, '', TableInterface::column_type_VARCHAR, 500, 'not null', '标题');
+            
+            // 修改 summary 字段长度为 1000
+            $alter->alterColumn(self::fields_summary, self::fields_summary, '', TableInterface::column_type_VARCHAR, 1000, 'not null', '摘要');
+            
+            // 修改 content 字段为 LONGTEXT 类型（LONGTEXT 不需要长度参数）
+            $alter->alterColumn(self::fields_CONTEND, self::fields_CONTEND, '', TableInterface::column_type_LONG_TEXT, 0, 'not null', '内容');
+            
+            // 添加新字段
+            if (!$setup->hasField(self::fields_MODULE_NAME)) {
+                $alter->addColumn(self::fields_MODULE_NAME, '', TableInterface::column_type_VARCHAR, 100, '', '所属模块');
+            }
+            
+            if (!$setup->hasField(self::fields_FILE_PATH)) {
+                $alter->addColumn(self::fields_FILE_PATH, '', TableInterface::column_type_VARCHAR, 500, '', '文件路径');
+            }
+            
+            if (!$setup->hasField(self::fields_FILE_NAME)) {
+                $alter->addColumn(self::fields_FILE_NAME, '', TableInterface::column_type_VARCHAR, 200, '', '文件名');
+            }
+            
+            if (!$setup->hasField(self::fields_IS_AUTO_IMPORTED)) {
+                $alter->addColumn(self::fields_IS_AUTO_IMPORTED, '', TableInterface::column_type_INTEGER, 1, 'default 0', '是否自动导入');
+            }
+            
+            if (!$setup->hasField(self::fields_SORT_ORDER)) {
+                $alter->addColumn(self::fields_SORT_ORDER, '', TableInterface::column_type_INTEGER, 11, 'default 0', '排序');
+            }
+            
+            // 执行修改
+            $alter->alter();
+        }
     }
 
     /**
@@ -55,10 +100,15 @@ class Document extends \Weline\Framework\Database\Model
             $setup->createTable('开发文章')
                 ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'primary key auto_increment ', 'ID')
                 ->addColumn(self::fields_CATEGORY_ID, TableInterface::column_type_INTEGER, 0, 'not null ', '分类ID')
-                ->addColumn(self::fields_TITLE, TableInterface::column_type_VARCHAR, 120, 'not null', '标题')
-                ->addColumn(self::fields_summary, TableInterface::column_type_VARCHAR, 250, 'not null', '摘要')
+                ->addColumn(self::fields_TITLE, TableInterface::column_type_VARCHAR, 500, 'not null', '标题')
+                ->addColumn(self::fields_summary, TableInterface::column_type_VARCHAR, 1000, 'not null', '摘要')
                 ->addColumn(self::fields_AUTHOR_ID, TableInterface::column_type_INTEGER, 0, 'default 0', '作者ID')
-                ->addColumn(self::fields_CONTEND, TableInterface::column_type_TEXT, 0, 'not null', '内容')
+                ->addColumn(self::fields_CONTEND, TableInterface::column_type_LONG_TEXT, 0, 'not null', '内容')
+                ->addColumn(self::fields_MODULE_NAME, TableInterface::column_type_VARCHAR, 100, '', '所属模块')
+                ->addColumn(self::fields_FILE_PATH, TableInterface::column_type_VARCHAR, 500, '', '文件路径')
+                ->addColumn(self::fields_FILE_NAME, TableInterface::column_type_VARCHAR, 200, '', '文件名')
+                ->addColumn(self::fields_IS_AUTO_IMPORTED, TableInterface::column_type_INTEGER, 1, 'default 0', '是否自动导入')
+                ->addColumn(self::fields_SORT_ORDER, TableInterface::column_type_INTEGER, 0, 'default 0', '排序')
                 ->create();
         }
     }
@@ -140,5 +190,55 @@ class Document extends \Weline\Framework\Database\Model
     public function loadByCatalogId(int $id): array
     {
         return $this->where(self::fields_CATEGORY_ID, $id)->select()->fetch()->getItems();
+    }
+    
+    public function getModuleName(): string
+    {
+        return $this->getData(self::fields_MODULE_NAME) ?? '';
+    }
+    
+    public function setModuleName(string $moduleName): static
+    {
+        return $this->setData(self::fields_MODULE_NAME, $moduleName);
+    }
+    
+    public function getFilePath(): string
+    {
+        return $this->getData(self::fields_FILE_PATH) ?? '';
+    }
+    
+    public function setFilePath(string $filePath): static
+    {
+        return $this->setData(self::fields_FILE_PATH, $filePath);
+    }
+    
+    public function getFileName(): string
+    {
+        return $this->getData(self::fields_FILE_NAME) ?? '';
+    }
+    
+    public function setFileName(string $fileName): static
+    {
+        return $this->setData(self::fields_FILE_NAME, $fileName);
+    }
+    
+    public function isAutoImported(): bool
+    {
+        return (bool)$this->getData(self::fields_IS_AUTO_IMPORTED);
+    }
+    
+    public function setIsAutoImported(bool $isAutoImported): static
+    {
+        return $this->setData(self::fields_IS_AUTO_IMPORTED, $isAutoImported ? 1 : 0);
+    }
+    
+    public function getSortOrder(): int
+    {
+        return (int)($this->getData(self::fields_SORT_ORDER) ?? 0);
+    }
+    
+    public function setSortOrder(int $sortOrder): static
+    {
+        return $this->setData(self::fields_SORT_ORDER, $sortOrder);
     }
 }

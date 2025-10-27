@@ -1,0 +1,2213 @@
+<?php
+/**
+ * 开发工具面板
+ * 变量说明：
+ * $isBackend - 是否后端页面
+ * $panelType - 面板类型 (frontend/backend)
+ * 
+ * 移动端适配说明：
+ * - 本组件已支持响应式设计，可在手机、平板等设备上正常使用
+ * - 请确保页面包含viewport meta标签：
+ *   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+ * - 手机端（≤480px）：面板全屏显示，触发器居中，优化触摸交互
+ * - 平板端（≤768px）：面板占屏幕90%宽度，高度70vh
+ * - 支持触摸拖动、横竖屏切换
+ */
+// 这些变量在Observer 中已经设置好了
+// 但为了防止报错，提供默认值
+$isBackend = $isBackend ?? false;
+$panelType = $panelType ?? 'frontend';
+?>
+
+<!-- 开发工具面板样式 -->
+<style>
+    #dev-tool-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 999999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        pointer-events: none; /* 防止遮挡页面内容 */
+    }
+    
+    /* 只有实际内容（container和trigger）才可交互 */
+    #dev-tool-panel .dev-tool-container,
+    #dev-tool-panel .dev-tool-trigger {
+        pointer-events: auto;
+    }
+
+    #dev-tool-panel.dragging {
+        cursor: move;
+        user-select: none;
+    }
+
+    #dev-tool-panel.collapsed .dev-tool-container {
+        display: none;
+    }
+
+    .dev-tool-trigger {
+        position: absolute;
+        width: 10px;
+        height: 80px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0;
+        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        overflow: hidden;
+        z-index: 1;
+    }
+    
+    /* 默认/向右展开：触发器在右边 */
+    #dev-tool-panel .dev-tool-trigger,
+    #dev-tool-panel.expand-right .dev-tool-trigger {
+        right: -10px;
+        top: 100px;
+        border-radius: 0 6px 6px 0;
+    }
+    
+    /* 向左展开：触发器在左边 */
+    #dev-tool-panel.expand-left .dev-tool-trigger {
+        left: -10px;
+        right: auto;
+        top: 100px;
+        border-radius: 6px 0 0 6px;
+    }
+    
+    .dev-tool-trigger:active {
+        cursor: grabbing;
+    }
+    
+    /* 按住时的视觉反馈 */
+    .dev-tool-trigger.pressing {
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        transform: scale(1.05);
+        box-shadow: 4px 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    
+    /* 拖动模式指示器 */
+    .dev-tool-trigger.drag-ready {
+        background: linear-gradient(135deg, #4cd964 0%, #2ecc71 100%);
+        cursor: grabbing !important;
+        width: 16px;
+        transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(76, 217, 100, 0.5);
+    }
+    
+    /* 向右展开时的拖动状态 */
+    #dev-tool-panel.expand-right .dev-tool-trigger.drag-ready {
+        right: -16px;
+    }
+    
+    /* 向左展开时的拖动状态 */
+    #dev-tool-panel.expand-left .dev-tool-trigger.drag-ready {
+        left: -16px;
+        right: auto;
+    }
+    
+    .dev-tool-trigger.drag-ready::after {
+        content: '⋮⋮';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        color: white;
+        line-height: 1;
+        letter-spacing: -2px;
+    }
+
+    /* 展开状态的触发器 - 向右展开（默认） */
+    #dev-tool-panel:not(.collapsed).expand-right .dev-tool-trigger,
+    #dev-tool-panel:not(.collapsed):not(.expand-left) .dev-tool-trigger {
+        right: -40px;
+        left: auto;
+        width: 40px;
+        font-size: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-left: none;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    /* 展开状态的触发器 - 向左展开 */
+    #dev-tool-panel:not(.collapsed).expand-left .dev-tool-trigger {
+        left: -40px;
+        right: auto;
+        width: 40px;
+        font-size: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-right: none;
+        border-radius: 8px 0 0 8px;
+    }
+
+    /* Hover效果 - 向右展开 */
+    #dev-tool-panel.expand-right .dev-tool-trigger:hover,
+    #dev-tool-panel:not(.expand-left) .dev-tool-trigger:hover {
+        right: -14px;
+        left: auto;
+        width: 14px;
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Hover效果 - 向左展开 */
+    #dev-tool-panel.expand-left .dev-tool-trigger:hover {
+        left: -14px;
+        right: auto;
+        width: 14px;
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    #dev-tool-panel:not(.collapsed).expand-right .dev-tool-trigger:hover,
+    #dev-tool-panel:not(.collapsed):not(.expand-left) .dev-tool-trigger:hover {
+        right: -42px;
+        left: auto;
+        width: 40px;
+    }
+    
+    #dev-tool-panel:not(.collapsed).expand-left .dev-tool-trigger:hover {
+        left: -42px;
+        right: auto;
+        width: 40px;
+    }
+
+    .dev-tool-trigger i {
+        transition: transform 0.3s ease;
+        opacity: 0;
+    }
+
+    /* 展开状态下隐藏触发器（使用header双击收起） */
+    #dev-tool-panel:not(.collapsed) .dev-tool-trigger {
+        display: none !important;
+    }
+
+    #dev-tool-panel.collapsed .dev-tool-trigger i {
+        transform: rotate(180deg);
+        opacity: 0;
+    }
+
+    .dev-tool-container {
+        width: 420px;
+        height: 600px;
+        max-height: 80vh;
+        background: white;
+        border: 2px solid #e0e0e0;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: fixed; /* 改为fixed定位，直接相对于视口 */
+        border-left: none;
+        border-radius: 0 12px 12px 0;
+    }
+
+    .dev-tool-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        cursor: move;
+        user-select: none;
+        position: relative;
+    }
+
+    .dev-tool-header h3 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .dev-tool-header-hint {
+        font-size: 11px;
+        font-weight: 400;
+        color: rgba(255, 255, 255, 0.9);
+        background: rgba(0, 0, 0, 0.2);
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-left: auto;
+        font-style: normal;
+    }
+
+    .dev-tool-quick-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .dev-tool-quick-btn {
+        padding: 4px 12px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dev-tool-quick-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-1px);
+    }
+
+    .dev-tool-tabs {
+        display: flex;
+        background: #f5f5f5;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .dev-tool-tab {
+        flex: 1;
+        padding: 10px 8px;
+        text-align: center;
+        cursor: pointer;
+        background: #f5f5f5;
+        border: none;
+        font-size: 13px;
+        font-weight: 500;
+        color: #666;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .dev-tool-tab:hover {
+        background: #e8e8e8;
+        color: #333;
+    }
+
+    .dev-tool-tab.active {
+        background: white;
+        color: #667eea;
+        font-weight: 600;
+    }
+
+    .dev-tool-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #667eea;
+    }
+
+    .dev-tool-search-area {
+        padding: 12px;
+        border-bottom: 1px solid #e0e0e0;
+        background: #fafafa;
+    }
+
+    .dev-tool-search-mode {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .search-mode-btn {
+        flex: 1;
+        padding: 6px 10px;
+        font-size: 12px;
+        border: 1px solid #d0d0d0;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .search-mode-btn.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .dev-tool-module-select {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 8px;
+        border: 1px solid #d0d0d0;
+        border-radius: 4px;
+        font-size: 13px;
+        display: none;
+    }
+
+    .dev-tool-module-select.show {
+        display: block;
+    }
+
+    .dev-tool-search-area input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #d0d0d0;
+        border-radius: 4px;
+        font-size: 13px;
+        transition: all 0.3s ease;
+    }
+
+    .dev-tool-search-area input[type="text"]:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .dev-tool-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+    }
+
+    .dev-tool-content::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .dev-tool-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .dev-tool-content::-webkit-scrollbar-thumb {
+        background: #c0c0c0;
+        border-radius: 4px;
+    }
+
+    .dev-tool-content::-webkit-scrollbar-thumb:hover {
+        background: #a0a0a0;
+    }
+
+    /* 文档列表样式 */
+    .doc-list-item {
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .doc-list-item:hover {
+        background: #f8f9ff;
+        border-color: #667eea;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .doc-list-item.active {
+        background: #f0f4ff;
+        border-color: #667eea;
+        border-width: 2px;
+        padding: 9px 11px;
+    }
+
+    .doc-title {
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .doc-meta {
+        font-size: 11px;
+        color: #999;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .doc-module-tag {
+        background: #e8f5e9;
+        color: #4caf50;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+    }
+
+    /* 文档内容样式 */
+    .doc-content-view {
+        display: none;
+    }
+
+    .doc-content-view.show {
+        display: block;
+    }
+
+    .doc-content-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #667eea;
+    }
+
+    .doc-back-btn {
+        padding: 4px 12px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.3s ease;
+    }
+
+    .doc-back-btn:hover {
+        background: #5568d3;
+    }
+
+    .doc-content-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .doc-content-body {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #555;
+    }
+
+    .doc-content-body h1,
+    .doc-content-body h2,
+    .doc-content-body h3 {
+        color: #333;
+        margin-top: 16px;
+        margin-bottom: 8px;
+    }
+
+    .doc-content-body h1 {
+        font-size: 20px;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 6px;
+    }
+
+    .doc-content-body h2 {
+        font-size: 18px;
+    }
+
+    .doc-content-body h3 {
+        font-size: 16px;
+    }
+
+    .doc-content-body code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+    }
+
+    .doc-content-body pre {
+        background: #f5f5f5;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        border: 1px solid #e0e0e0;
+    }
+
+    .doc-content-body pre code {
+        background: none;
+        padding: 0;
+    }
+
+    .doc-content-body a {
+        color: #667eea;
+        text-decoration: none;
+    }
+
+    .doc-content-body a:hover {
+        text-decoration: underline;
+    }
+
+    /* 路由模块样式 */
+    .module-group {
+        margin-bottom: 12px;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        overflow: hidden;
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .module-group:hover {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .module-header {
+        padding: 10px 12px;
+        background: linear-gradient(to right, #f8f9fa, #ffffff);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #e8e8e8;
+        transition: background 0.3s ease;
+    }
+
+    .module-header:hover {
+        background: linear-gradient(to right, #e8eaf6, #f5f5f5);
+    }
+
+    .module-header.collapsed {
+        border-bottom: none;
+    }
+
+    .module-name {
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .module-toggle {
+        transition: transform 0.3s ease;
+        color: #667eea;
+        font-size: 12px;
+    }
+
+    .module-header.collapsed .module-toggle {
+        transform: rotate(-90deg);
+    }
+
+    .module-routes {
+        max-height: 300px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .module-routes.collapsed {
+        max-height: 0;
+    }
+
+    .route-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.2s ease;
+        cursor: pointer;
+    }
+
+    .route-item:last-child {
+        border-bottom: none;
+    }
+
+    .route-item:hover {
+        background: #f8f9ff;
+    }
+
+    .route-path {
+        color: #667eea;
+        font-size: 12px;
+        font-weight: 500;
+        word-break: break-all;
+        text-decoration: none;
+        display: block;
+    }
+
+    .route-path:hover {
+        text-decoration: underline;
+    }
+
+    .route-info {
+        color: #999;
+        font-size: 10px;
+        margin-top: 4px;
+    }
+
+    .dev-tool-loading {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999;
+    }
+
+    .dev-tool-empty {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999;
+        font-size: 13px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 500;
+        border-radius: 10px;
+        margin-left: 6px;
+    }
+
+    .badge-primary {
+        background: #e8eaf6;
+        color: #667eea;
+    }
+
+    .badge-success {
+        background: #e8f5e9;
+        color: #4caf50;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .spinning {
+        animation: spin 1s linear infinite;
+    }
+
+    /* ==================== 移动端响应式设计 ==================== */
+    
+    /* 平板设备 (768px 及以下) */
+    @media screen and (max-width: 768px) {
+        .dev-tool-container {
+            width: 90vw;
+            max-width: 380px;
+            height: 70vh;
+            max-height: 500px;
+        }
+        
+        .dev-tool-header h3 {
+            font-size: 14px;
+        }
+        
+        .dev-tool-quick-btn {
+            padding: 3px 8px;
+            font-size: 11px;
+        }
+        
+        .dev-tool-tab {
+            padding: 10px 12px;
+            font-size: 12px;
+        }
+        
+        .dev-tool-search input {
+            font-size: 13px;
+            padding: 8px 12px;
+        }
+        
+        .route-item,
+        .doc-item {
+            padding: 10px 12px;
+        }
+        
+        .route-item h4,
+        .doc-item h4 {
+            font-size: 13px;
+        }
+        
+        .route-item small,
+        .doc-item .doc-meta {
+            font-size: 11px;
+        }
+    }
+    
+    /* 手机设备 (480px 及以下) */
+    @media screen and (max-width: 480px) {
+        .dev-tool-container {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        /* 强制全屏显示，移除所有展开方向的定位 */
+        #dev-tool-panel .dev-tool-container,
+        #dev-tool-panel.expand-left .dev-tool-container,
+        #dev-tool-panel.expand-right .dev-tool-container,
+        #dev-tool-panel.expand-up .dev-tool-container,
+        #dev-tool-panel.expand-down .dev-tool-container {
+            left: 0 !important;
+            right: 0 !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            border-radius: 0 !important;
+        }
+        
+        /* 调整触发器大小和位置 */
+        .dev-tool-trigger {
+            width: 12px !important;
+            height: 60px !important;
+            font-size: 0 !important;
+        }
+        
+        /* 手机端触发器居中但不超出屏幕 */
+        #dev-tool-panel .dev-tool-trigger,
+        #dev-tool-panel.expand-right .dev-tool-trigger,
+        #dev-tool-panel.expand-left .dev-tool-trigger {
+            top: calc(50vh - 30px) !important; /* 居中但向下偏移半高（60/2=30），确保不超出 */
+            transform: none; /* 移除transform，直接用calc计算 */
+        }
+        
+        #dev-tool-panel.expand-right .dev-tool-trigger,
+        #dev-tool-panel:not(.expand-left) .dev-tool-trigger {
+            right: 0 !important; /* 改为0，确保不超出屏幕 */
+            left: auto !important;
+        }
+        
+        #dev-tool-panel.expand-left .dev-tool-trigger {
+            left: 0 !important; /* 改为0，确保不超出屏幕 */
+            right: auto !important;
+        }
+        
+        /* 隐藏展开状态下的触发器（移动端全屏无需显示） */
+        #dev-tool-panel:not(.collapsed) .dev-tool-trigger {
+            display: none !important;
+        }
+        
+        .dev-tool-header {
+            padding: 10px 15px;
+            cursor: default; /* 移动端不支持拖动 header */
+        }
+        
+        .dev-tool-header h3 {
+            font-size: 15px;
+            margin: 0 0 6px 0;
+        }
+        
+        .dev-tool-header-hint {
+            font-size: 10px;
+        }
+        
+        .dev-tool-quick-actions {
+            gap: 6px;
+        }
+        
+        .dev-tool-quick-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            /* 增加触摸目标大小 */
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .dev-tool-tabs {
+            padding: 0 10px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+        }
+        
+        .dev-tool-tabs::-webkit-scrollbar {
+            display: none; /* Chrome, Safari */
+        }
+        
+        .dev-tool-tab {
+            padding: 12px 15px;
+            font-size: 13px;
+            white-space: nowrap;
+            /* 增加触摸目标 */
+            min-height: 44px;
+        }
+        
+        .dev-tool-content {
+            padding: 10px;
+        }
+        
+        .dev-tool-search {
+            padding: 10px;
+        }
+        
+        .dev-tool-search input,
+        .dev-tool-search select {
+            font-size: 14px;
+            padding: 10px 12px;
+            /* 增加触摸目标 */
+            min-height: 44px;
+        }
+        
+        .dev-tool-search button {
+            padding: 10px 16px;
+            font-size: 13px;
+            min-height: 44px;
+        }
+        
+        .route-item,
+        .doc-item {
+            padding: 12px 15px;
+            /* 增加触摸目标之间的间距 */
+            margin-bottom: 2px;
+        }
+        
+        .route-item h4,
+        .doc-item h4 {
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        
+        .route-item small,
+        .doc-item .doc-meta {
+            font-size: 12px;
+        }
+        
+        .route-item code,
+        .doc-item code {
+            font-size: 11px;
+            padding: 3px 6px;
+        }
+        
+        /* 优化加载状态 */
+        .dev-tool-loading {
+            padding: 40px 20px;
+        }
+        
+        .dev-tool-loading i {
+            font-size: 32px;
+        }
+        
+        /* 文档详情优化 */
+        .doc-detail-title {
+            font-size: 18px;
+            padding: 12px 15px;
+        }
+        
+        .doc-detail-meta {
+            padding: 8px 15px;
+            font-size: 12px;
+        }
+        
+        .doc-detail-content {
+            padding: 15px;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        
+        /* 优化滚动 */
+        .dev-tool-list {
+            -webkit-overflow-scrolling: touch;
+        }
+    }
+    
+    /* 超小屏幕 (360px 及以下) */
+    @media screen and (max-width: 360px) {
+        .dev-tool-header h3 {
+            font-size: 14px;
+        }
+        
+        .dev-tool-quick-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            min-height: 30px;
+        }
+        
+        .dev-tool-tab {
+            padding: 10px 12px;
+            font-size: 12px;
+            min-height: 40px;
+        }
+        
+        .route-item h4,
+        .doc-item h4 {
+            font-size: 13px;
+        }
+    }
+    
+    /* 触摸设备优化 */
+    @media (hover: none) and (pointer: coarse) {
+        /* 移除 hover 效果，使用 active 代替 */
+        .dev-tool-trigger:hover {
+            right: -10px;
+            width: 10px;
+        }
+        
+        #dev-tool-panel.expand-left .dev-tool-trigger:hover {
+            left: -10px;
+            right: auto;
+            width: 10px;
+        }
+        
+        /* 增加按钮点击区域 */
+        .dev-tool-quick-btn,
+        .dev-tool-tab,
+        .route-item,
+        .doc-item {
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .dev-tool-quick-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.98);
+        }
+        
+        .dev-tool-tab:active {
+            background: rgba(102, 126, 234, 0.15);
+        }
+        
+        .route-item:active,
+        .doc-item:active {
+            background: #f8f9fa;
+        }
+        
+        /* 禁用移动端的 header 拖动 */
+        .dev-tool-header {
+            cursor: default;
+        }
+    }
+    
+    /* 横屏模式优化 */
+    @media screen and (max-width: 768px) and (orientation: landscape) {
+        .dev-tool-container {
+            height: 90vh;
+            max-height: 90vh;
+        }
+        
+        .dev-tool-header {
+            padding: 8px 15px;
+        }
+        
+        .dev-tool-header h3 {
+            font-size: 13px;
+            margin: 0;
+        }
+        
+        .dev-tool-quick-actions {
+            display: none; /* 横屏模式隐藏快捷按钮以节省空间 */
+        }
+        
+        .dev-tool-tab {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+    }
+</style>
+
+<!-- 开发工具面板HTML -->
+<div id="dev-tool-panel" class="collapsed">
+    <div class="dev-tool-trigger" id="dev-tool-trigger">
+        <i class="fa fa-chevron-right"></i>
+    </div>
+    <div class="dev-tool-container">
+        <!-- 头部区域 -->
+        <div class="dev-tool-header" title="双击此处收起面板">
+            <h3>
+                <i class="fa fa-code"></i>
+                开发工具
+                <span class="badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
+                    <?php echo $isBackend ? 'Backend' : 'Frontend'; ?>
+                </span>
+                <span class="dev-tool-header-hint">双击收起</span>
+            </h3>
+            <div class="dev-tool-quick-actions">
+                <a href="/dev/docs" target="_blank" class="dev-tool-quick-btn">
+                    <i class="fa fa-book"></i> 完整文档
+                </a>
+                <a href="/dev/docs?catalog=api" target="_blank" class="dev-tool-quick-btn">
+                    <i class="fa fa-code"></i> API文档
+                </a>
+            </div>
+        </div>
+        
+        <!-- 标签页 -->
+        <div class="dev-tool-tabs">
+            <button class="dev-tool-tab" data-tab="routes" onclick="DevToolPanel.switchMainTab(this, 'routes')">
+                <i class="fa fa-exchange"></i> 路由
+            </button>
+            <button class="dev-tool-tab active" data-tab="docs" onclick="DevToolPanel.switchMainTab(this, 'docs')">
+                <i class="fa fa-file-text"></i> 文档
+            </button>
+        </div>
+        
+        <!-- 搜索区域 -->
+        <div class="dev-tool-search-area">
+            <!-- 路由搜索 (routes tab) -->
+            <div id="route-search-area" style="display: none;">
+                <div class="dev-tool-search-mode">
+                    <button class="search-mode-btn active" data-type="<?php echo $panelType; ?>" onclick="DevToolPanel.switchRouteTab(this, '<?php echo $panelType; ?>')">
+                        当前模式
+                    </button>
+                    <button class="search-mode-btn" data-type="<?php echo $isBackend ? 'frontend' : 'backend'; ?>" onclick="DevToolPanel.switchRouteTab(this, '<?php echo $isBackend ? 'frontend' : 'backend'; ?>')">
+                        <?php echo $isBackend ? 'Frontend' : 'Backend'; ?>
+                    </button>
+                </div>
+                <input type="text" id="route-search-input" placeholder="🔍 搜索路由..." onkeyup="DevToolPanel.searchRoutes(event)">
+            </div>
+            
+            <!-- 文档搜索 (docs tab) -->
+            <div id="doc-search-area">
+                <div class="dev-tool-search-mode">
+                    <button class="search-mode-btn active" data-mode="all" onclick="DevToolPanel.switchDocSearchMode(this, 'all')">
+                        全部搜索
+                    </button>
+                    <button class="search-mode-btn" data-mode="module" onclick="DevToolPanel.switchDocSearchMode(this, 'module')">
+                        按模块搜索
+                    </button>
+                </div>
+                <select id="doc-module-select" class="dev-tool-module-select" onchange="DevToolPanel.onModuleChange()">
+                    <option value="">加载中...</option>
+                </select>
+                <input type="text" id="doc-search-input" placeholder="🔍 搜索文档标题或内容..." onkeyup="DevToolPanel.searchDocs(event)">
+            </div>
+        </div>
+        
+        <!-- 内容区域 -->
+        <div class="dev-tool-content" id="dev-tool-content">
+            <div class="dev-tool-loading">
+                <i class="fa fa-spinner spinning"></i>
+                <div>加载中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 开发工具面板脚本 -->
+<script>
+const DevToolPanel = (function() {
+    // ========== 状态管理 ==========
+    const state = {
+        // 面板状态
+        collapsed: true,
+        activeMainTab: 'docs', // 'routes' or 'docs'
+        
+        // 路由相关
+        currentRouteType: '<?php echo $panelType; ?>',
+        routeSearchKeyword: '',
+        allRouteModules: [],
+        
+        // 文档相关
+        docSearchMode: 'all', // 'all' or 'module'
+        docSearchKeyword: '',
+        selectedModule: '',
+        allModules: [],
+        docList: [],
+        currentDocId: null,
+        currentDocScrollPos: 0,
+        
+        // 拖拽相关
+        panelX: 0,
+        panelY: 0,
+        isDragging: false,
+        dragStartX: 0,
+        dragStartY: 0,
+        panelStartX: 0,
+        panelStartY: 0,
+    };
+
+    // ========== LocalStorage 管理 ==========
+    function saveState() {
+        const dataToSave = {
+            collapsed: state.collapsed,
+            activeMainTab: state.activeMainTab,
+            currentRouteType: state.currentRouteType,
+            routeSearchKeyword: state.routeSearchKeyword,
+            docSearchMode: state.docSearchMode,
+            docSearchKeyword: state.docSearchKeyword,
+            selectedModule: state.selectedModule,
+            currentDocId: state.currentDocId,
+            currentDocScrollPos: state.currentDocScrollPos,
+            panelX: state.panelX,
+            panelY: state.panelY,
+        };
+        localStorage.setItem('dev-panel-state', JSON.stringify(dataToSave));
+    }
+
+    function loadState() {
+        const saved = localStorage.getItem('dev-panel-state');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                Object.assign(state, data);
+            } catch (e) {
+                console.error('[DevToolPanel] Failed to load state:', e);
+            }
+        }
+    }
+
+    // ========== 初始化 ==========
+    function init() {
+        loadState();
+        
+        // 恢复面板状态
+        const panel = document.getElementById('dev-tool-panel');
+        if (!state.collapsed) {
+            panel.classList.remove('collapsed');
+        }
+        
+        // 恢复主标签
+        switchMainTab(
+            document.querySelector('.dev-tool-tab[data-tab="' + state.activeMainTab + '"]'),
+            state.activeMainTab,
+            false
+        );
+        
+        // 加载模块列表
+        const modulePromise = loadModules() || Promise.resolve();
+        modulePromise.then(() => {
+            // 恢复文档搜索状态
+            if (state.activeMainTab === 'docs') {
+                restoreDocSearchState();
+            }
+        }).catch(error => {
+            console.warn('[DevToolPanel] Module loading error:', error);
+            // 即使加载失败也要恢复搜索状态
+            if (state.activeMainTab === 'docs') {
+                restoreDocSearchState();
+            }
+        });
+        
+        // 如果是路由标签，加载路由
+        if (state.activeMainTab === 'routes') {
+            loadRoutes(state.currentRouteType);
+        }
+        
+        // 恢复面板位置（包括第一次加载，默认位置0,0也要设置）
+        panel.style.left = (state.panelX || 0) + 'px';
+        panel.style.top = (state.panelY || 0) + 'px';
+        
+        // 同步container位置
+        updateContainerPosition();
+        
+        // 检查并纠正超出屏幕的位置
+        // 需要在下一帧执行，确保面板已经渲染完成
+        requestAnimationFrame(() => {
+            correctPanelPosition(panel);
+            // 纠正位置后更新展开方向和container位置
+            updateExpandDirection();
+            updateContainerPosition();
+        });
+        
+        // 初始化拖拽
+        initDrag();
+        
+        // 监听窗口大小变化，自动调整位置
+        window.addEventListener('resize', function() {
+            const panel = document.getElementById('dev-tool-panel');
+            if (panel) {
+                correctPanelPosition(panel);
+                updateExpandDirection();
+                updateContainerPosition();
+                
+                console.log('屏幕尺寸变化，已重新调整面板位置:', {
+                    viewport: {
+                        width: window.innerWidth,
+                        height: window.innerHeight
+                    },
+                    panelPosition: {
+                        x: parseInt(panel.style.left),
+                        y: parseInt(panel.style.top)
+                    }
+                });
+            }
+        });
+    }
+    
+    // ========== 更新container位置（container是fixed定位，需要手动同步panel位置） ==========
+    function updateContainerPosition() {
+        const panel = document.getElementById('dev-tool-panel');
+        const container = document.querySelector('.dev-tool-container');
+        if (!panel || !container) return;
+        
+        const panelX = parseInt(panel.style.left) || 0;
+        const panelY = parseInt(panel.style.top) || 0;
+        
+        // container直接使用panel的位置
+        container.style.left = panelX + 'px';
+        container.style.top = panelY + 'px';
+    }
+    
+    // ========== 纠正面板位置（防止超出屏幕） ==========
+    function correctPanelPosition(panelEl) {
+        // 临时移除collapsed类以获取正确的尺寸
+        const wasCollapsed = panelEl.classList.contains('collapsed');
+        if (wasCollapsed) {
+            panelEl.classList.remove('collapsed');
+        }
+        
+        // 获取container的实际尺寸（不是panel的尺寸，因为panel尺寸为0）
+        const container = panelEl.querySelector('.dev-tool-container');
+        const trigger = panelEl.querySelector('.dev-tool-trigger');
+        const containerRect = container.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        let currentX = parseInt(panelEl.style.left) || 0;
+        let currentY = parseInt(panelEl.style.top) || 0;
+        
+        // 使用container的实际尺寸
+        const width = containerRect.width || 420;
+        const height = containerRect.height || 600;
+        
+        // 计算触发器超出container的宽度
+        const triggerExtraWidth = Math.max(0, triggerRect.right - containerRect.right);
+        
+        // 计算实际占用的总宽度（container + 触发器超出部分）
+        const totalWidth = width + triggerExtraWidth;
+        
+        // 计算可见区域
+        const visibleLeft = Math.max(0, currentX);
+        const visibleRight = Math.min(windowWidth, currentX + totalWidth);
+        const visibleWidth = visibleRight - visibleLeft;
+        
+        // 如果面板大部分隐藏（可见宽度小于100px），需要贴边
+        const needSnap = visibleWidth < 100;
+        
+        // 恢复collapsed状态
+        if (wasCollapsed) {
+            panelEl.classList.add('collapsed');
+        }
+        
+        if (needSnap) {
+            console.log('开发工具面板大部分不可见，自动贴边:', {
+                currentPosition: { x: currentX, y: currentY },
+                visibleWidth: visibleWidth,
+                windowSize: { width: windowWidth, height: windowHeight },
+                containerSize: { width: width, height: height }
+            });
+            
+            // 调用贴边函数自动贴到最近的边
+            snapToNearestEdge(panelEl);
+        } else {
+            // 边界约束：根据收起/展开状态使用不同的尺寸
+            let minX, minY, maxX, maxY;
+            
+            if (wasCollapsed) {
+                // 收起状态：使用触发器的实际屏幕位置计算边界
+                // 确保触发器的bounding box完全在屏幕内
+                const triggerOffsetLeft = currentX - triggerRect.left;   // panel到trigger左边的距离
+                const triggerOffsetTop = currentY - triggerRect.top;      // panel到trigger顶部的距离
+                const triggerOffsetRight = triggerRect.right - currentX;  // trigger右边到panel的距离
+                const triggerOffsetBottom = triggerRect.bottom - currentY; // trigger底部到panel的距离
+                
+                // minX: 确保trigger.left >= 0 => panel.left >= triggerOffsetLeft
+                minX = triggerOffsetLeft;
+                // minY: 确保trigger.top >= 0 => panel.top >= triggerOffsetTop
+                minY = triggerOffsetTop;
+                // maxX: 确保trigger.right <= windowWidth => panel.left <= windowWidth - triggerOffsetRight
+                maxX = windowWidth - triggerOffsetRight;
+                // maxY: 确保trigger.bottom <= windowHeight => panel.top <= windowHeight - triggerOffsetBottom
+                maxY = windowHeight - triggerOffsetBottom;
+            } else {
+                // 展开状态：使用container + 触发器的总尺寸
+                minX = 0;
+                minY = 0;
+                maxX = windowWidth - totalWidth;
+                maxY = windowHeight - height;
+            }
+            
+            let correctedX = currentX;
+            let correctedY = currentY;
+            let needCorrection = false;
+            
+            // 检查并纠正X坐标
+            if (currentX < minX) {
+                correctedX = minX;
+                needCorrection = true;
+            } else if (currentX > maxX) {
+                correctedX = maxX;
+                needCorrection = true;
+            }
+            
+            // 检查并纠正Y坐标
+            if (currentY < minY) {
+                correctedY = minY;
+                needCorrection = true;
+            } else if (currentY > maxY) {
+                correctedY = maxY;
+                needCorrection = true;
+            }
+            
+            // 如果需要纠正，应用新位置并保存
+            if (needCorrection) {
+                panelEl.style.left = correctedX + 'px';
+                panelEl.style.top = correctedY + 'px';
+                state.panelX = correctedX;
+                state.panelY = correctedY;
+                saveState();
+                
+                // 同步container位置
+                updateContainerPosition();
+                
+                console.log('开发工具面板位置已自动纠正:', {
+                    original: { x: currentX, y: currentY },
+                    corrected: { x: correctedX, y: correctedY },
+                    windowSize: { width: windowWidth, height: windowHeight },
+                    containerSize: { width: width, height: height }
+                });
+            }
+        }
+    }
+    
+    // ========== 拖拽功能 ==========
+    function initDrag() {
+        const header = document.querySelector('.dev-tool-header');
+        const trigger = document.querySelector('.dev-tool-trigger');
+        const panelEl = document.getElementById('dev-tool-panel');
+        if (!panelEl) return;
+        
+        // Trigger拖动状态（外层定义，方便全局访问）
+        let triggerMouseDownX = 0;
+        let triggerMouseDownY = 0;
+        let hasMoved = false;
+        let isMouseDown = false;
+        const moveThreshold = 5; // 移动5px以上才算拖动
+        
+        // Header拖拽处理（展开状态下拖动整个面板）
+        if (header) {
+            let headerClickCount = 0;
+            let headerClickTimer = null;
+            
+            // 检测是否为移动设备
+            const isMobileDevice = window.innerWidth <= 480 || ('ontouchstart' in window);
+            
+            header.addEventListener('mousedown', function(e) {
+                // 移动设备禁用header拖动（移动端全屏无需拖动）
+                if (isMobileDevice) return;
+                
+                // 只在展开状态下允许拖动Header
+                if (!state.collapsed) {
+                    startHeaderDrag(e);
+                }
+            });
+            
+            // Header双击收起
+            header.addEventListener('click', function(e) {
+                headerClickCount++;
+                
+                if (headerClickCount === 1) {
+                    // 第一次点击，等待第二次点击
+                    headerClickTimer = setTimeout(() => {
+                        headerClickCount = 0;
+                    }, 300); // 300ms内的第二次点击才算双击
+                } else if (headerClickCount === 2) {
+                    // 双击
+                    clearTimeout(headerClickTimer);
+                    headerClickCount = 0;
+                    
+                    // 只在展开状态下才收起
+                    if (!state.collapsed) {
+                        DevToolPanel.toggle();
+                        console.log('Header双击收起面板');
+                    }
+                }
+            });
+            
+            // 触摸事件支持（仅用于双击收起，不支持拖动）
+            if (!isMobileDevice) {
+                header.addEventListener('touchstart', function(e) {
+                    if (!state.collapsed) {
+                        const touch = e.touches[0];
+                        const mouseEvent = new MouseEvent('mousedown', {
+                            clientX: touch.clientX,
+                            clientY: touch.clientY
+                        });
+                        header.dispatchEvent(mouseEvent);
+                    }
+                });
+                
+                header.addEventListener('touchend', function(e) {
+                    const mouseEvent = new MouseEvent('mouseup');
+                    header.dispatchEvent(mouseEvent);
+                });
+            }
+        }
+        
+        // Trigger拖拽处理（简化版：有位移=拖动，无位移=点击）
+        if (trigger) {
+            trigger.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                
+                // 记录按下位置
+                triggerMouseDownX = e.clientX;
+                triggerMouseDownY = e.clientY;
+                hasMoved = false;
+                isMouseDown = true;
+                
+                // 添加按住状态的视觉反馈
+                trigger.classList.add('pressing');
+                trigger.style.cursor = 'grab';
+            });
+            
+            // 监听全局鼠标移动，检测是否开始拖动
+            document.addEventListener('mousemove', function(e) {
+                if (!isMouseDown) return;
+                
+                // 计算位移
+                const deltaX = Math.abs(e.clientX - triggerMouseDownX);
+                const deltaY = Math.abs(e.clientY - triggerMouseDownY);
+                
+                // 如果位移超过阈值，开始拖动
+                if (!hasMoved && (deltaX > moveThreshold || deltaY > moveThreshold)) {
+                    hasMoved = true;
+                    trigger.classList.remove('pressing');
+                    trigger.classList.add('drag-ready');
+                    trigger.style.cursor = 'grabbing';
+                    
+                    // 启动触发器拖动
+                    startTriggerDrag({
+                        clientX: triggerMouseDownX,
+                        clientY: triggerMouseDownY
+                    });
+                    
+                    console.log('检测到位移，开始拖动触发器');
+                }
+            });
+            
+            trigger.addEventListener('mouseup', function(e) {
+                // 移除视觉反馈
+                trigger.classList.remove('pressing', 'drag-ready');
+                trigger.style.cursor = '';
+                
+                // 如果没有移动过且没有正在拖动，认为是点击
+                if (!hasMoved && !state.isDragging && state.collapsed) {
+                    e.stopPropagation();
+                    DevToolPanel.toggle();
+                    console.log('触发器点击展开面板（无位移）');
+                }
+                
+                // 重置状态
+                isMouseDown = false;
+                hasMoved = false;
+            });
+            
+            trigger.addEventListener('mouseleave', function(e) {
+                // 如果鼠标离开但还在按下状态，保持拖动
+                if (!isMouseDown) {
+                    trigger.classList.remove('pressing', 'drag-ready');
+                    trigger.style.cursor = '';
+                }
+            });
+            
+            // 添加触摸事件支持
+            trigger.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousedown', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                trigger.dispatchEvent(mouseEvent);
+            });
+            
+            // 同步触摸移动为鼠标移动，保证拖拽连续性
+            document.addEventListener('touchmove', function(e) {
+                if (!state.isDragging) return;
+                const touch = e.touches[0];
+                const moveEvent = new MouseEvent('mousemove', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                document.dispatchEvent(moveEvent);
+            }, { passive: false });
+
+            // 触摸取消/结束映射为鼠标抬起
+            trigger.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                const mouseEvent = new MouseEvent('mouseup');
+                trigger.dispatchEvent(mouseEvent);
+            });
+            trigger.addEventListener('touchcancel', function(e) {
+                e.preventDefault();
+                const mouseEvent = new MouseEvent('mouseup');
+                trigger.dispatchEvent(mouseEvent);
+            });
+        }
+        
+        // 启动触发器拖动（拖动触发器小块，面板位置跟随）
+        function startTriggerDrag(e) {
+            state.isDragging = true;
+            state.dragStartX = e.clientX;
+            state.dragStartY = e.clientY;
+            state.panelStartX = parseInt(panelEl.style.left) || 0;
+            state.panelStartY = parseInt(panelEl.style.top) || 0;
+            
+            panelEl.classList.add('dragging');
+            
+            console.log('开始拖动触发器小块');
+        }
+        
+        // 启动Header拖动（展开状态下拖动整个面板）
+        function startHeaderDrag(e) {
+            state.isDragging = true;
+            state.dragStartX = e.clientX;
+            state.dragStartY = e.clientY;
+            state.panelStartX = parseInt(panelEl.style.left) || 0;
+            state.panelStartY = parseInt(panelEl.style.top) || 0;
+            
+            panelEl.classList.add('dragging');
+            
+            console.log('开始拖动面板Header');
+        }
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!state.isDragging) return;
+            e.preventDefault();
+            
+            const deltaX = e.clientX - state.dragStartX;
+            const deltaY = e.clientY - state.dragStartY;
+            
+            let newX = state.panelStartX + deltaX;
+            let newY = state.panelStartY + deltaY;
+            
+            // 边界约束和贴边检测
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const snapThreshold = 30; // 靠近边缘30px自动吸附
+            
+            // 自动贴边检测
+            const isCollapsed = panelEl.classList.contains('collapsed');
+            
+            let panelWidth, panelHeight, triggerWidth;
+            
+            if (isCollapsed) {
+                // 收起状态：只考虑触发器小块的尺寸
+                const tRect = trigger.getBoundingClientRect();
+                triggerWidth = tRect.width || 12; // 触发器宽度
+                panelWidth = 0; // container不显示，宽度为0
+                panelHeight = tRect.height || 80; // 触发器高度
+            } else {
+                // 展开状态：使用container的实际尺寸（不是panel，panel尺寸为0）
+                const container = panelEl.querySelector('.dev-tool-container');
+                const containerRect = container.getBoundingClientRect();
+                const tRect = trigger.getBoundingClientRect();
+                panelWidth = containerRect.width || 420;
+                panelHeight = containerRect.height || 600;
+                triggerWidth = Math.max(0, tRect.right - containerRect.right); // 触发器超出container的部分
+            }
+            
+            // 计算实际占用的总宽度（container + 触发器）
+            const totalWidth = panelWidth + triggerWidth;
+            
+            // 贴边检测 - 靠近边缘自动吸附
+            if (newX < snapThreshold) {
+                newX = 0; // 贴左边
+            } else if (newX + totalWidth > windowWidth - snapThreshold) {
+                newX = windowWidth - totalWidth; // 贴右边，确保触发器在屏幕内
+            }
+            
+            if (newY < snapThreshold) {
+                newY = 0; // 贴顶部
+            } else if (newY + panelHeight > windowHeight - snapThreshold) {
+                newY = windowHeight - panelHeight; // 贴底部
+            }
+            
+            // 确保不超出边界（留出触发器空间）
+            const maxX = windowWidth - totalWidth;
+            const maxY = windowHeight - panelHeight;
+            newX = Math.max(0, Math.min(maxX, newX));
+            newY = Math.max(0, Math.min(maxY, newY));
+            
+            panelEl.style.left = newX + 'px';
+            panelEl.style.top = newY + 'px';
+            
+            // 同步container位置
+            updateContainerPosition();
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            // 重置触发器状态（无论是否在拖动）
+            if (isMouseDown) {
+                isMouseDown = false;
+                if (trigger) {
+                    trigger.classList.remove('pressing', 'drag-ready');
+                    trigger.style.cursor = '';
+                }
+            }
+            
+            if (!state.isDragging) return;
+            
+            panelEl.classList.remove('dragging');
+            state.isDragging = false;
+            
+            // 立即保存最终位置
+            const finalX = parseInt(panelEl.style.left) || 0;
+            const finalY = parseInt(panelEl.style.top) || 0;
+            
+            state.panelX = finalX;
+            state.panelY = finalY;
+            saveState();
+            
+            // 如果是展开状态，更新展开方向
+            if (!state.collapsed) {
+                updateExpandDirection();
+            }
+            
+            console.log('拖动结束，位置已保存:', {
+                x: finalX, 
+                y: finalY,
+                collapsed: state.collapsed
+            });
+        });
+    }
+    
+    // ========== 吸附到最近的边 ==========
+    function snapToNearestEdge(panelEl) {
+        // 若为收起状态，临时展开以便获取正确尺寸
+        const wasCollapsed = panelEl.classList.contains('collapsed');
+        if (wasCollapsed) {
+            panelEl.classList.remove('collapsed');
+        }
+
+        // 获取container和trigger的实际尺寸
+        const container = panelEl.querySelector('.dev-tool-container');
+        const trigger = panelEl.querySelector('.dev-tool-trigger');
+        const containerRect = container.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        // 使用container的实际尺寸
+        const width = containerRect.width || 420;
+        const height = containerRect.height || Math.min(600, windowHeight * 0.8);
+        
+        // 获取panel当前位置
+        const currentX = parseInt(panelEl.style.left) || 0;
+        const currentY = parseInt(panelEl.style.top) || 0;
+
+        const centerX = currentX + width / 2;
+        const centerY = currentY + height / 2;
+
+        // 计算到各个边的距离
+        const distToLeft = centerX;
+        const distToRight = windowWidth - centerX;
+        const distToTop = centerY;
+        const distToBottom = windowHeight - centerY;
+
+        // 找出最小距离
+        const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+        // 触发器超出container的宽度
+        const triggerExtraWidth = Math.max(0, triggerRect.right - containerRect.right);
+        const totalWidth = width + triggerExtraWidth;
+
+        let newX, newY;
+
+        if (minDist === distToLeft) {
+            // 吸附到左边：panel左边缘=0（container也在左边）
+            newX = 0;
+            newY = Math.max(0, Math.min(windowHeight - height, currentY));
+        } else if (minDist === distToRight) {
+            // 吸附到右边：确保触发器在屏幕内
+            newX = windowWidth - totalWidth;
+            newY = Math.max(0, Math.min(windowHeight - height, currentY));
+        } else if (minDist === distToTop) {
+            // 吸附到顶部：panel top=0（container top也=0）
+            newY = 0;
+            newX = Math.max(0, Math.min(windowWidth - totalWidth, currentX));
+        } else {
+            // 吸附到底部：panel top = windowHeight - container高度
+            newY = windowHeight - height;
+            newX = Math.max(0, Math.min(windowWidth - totalWidth, currentX));
+        }
+
+        // 还原收起状态（如果之前是收起）
+        if (wasCollapsed) {
+            panelEl.classList.add('collapsed');
+        }
+
+        // 应用吸附位置（带动画效果）
+        panelEl.style.transition = 'left 0.3s ease, top 0.3s ease';
+        container.style.transition = 'left 0.3s ease, top 0.3s ease';
+        
+        panelEl.style.left = newX + 'px';
+        panelEl.style.top = newY + 'px';
+        
+        // 同步container位置
+        container.style.left = newX + 'px';
+        container.style.top = newY + 'px';
+
+        // 动画结束后移除transition
+        setTimeout(() => {
+            panelEl.style.transition = '';
+            container.style.transition = '';
+            state.panelX = newX;
+            state.panelY = newY;
+            saveState();
+            
+            console.log('面板已贴边:', {
+                position: { x: newX, y: newY },
+                edge: minDist === distToLeft ? '左' : minDist === distToRight ? '右' : minDist === distToTop ? '上' : '下',
+                collapsed: wasCollapsed
+            });
+        }, 300);
+    }
+
+    // ========== 检测并设置展开方向 ==========
+    function updateExpandDirection() {
+        const panel = document.getElementById('dev-tool-panel');
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        const x = parseInt(panel.style.left) || 0;
+        const y = parseInt(panel.style.top) || 0;
+        
+        // 计算到各边的距离
+        const distToLeft = x;
+        const distToRight = windowWidth - x - 420; // 面板宽度420
+        const distToTop = y;
+        const distToBottom = windowHeight - y - 600; // 面板高度600
+        
+        // 移除所有方向class
+        panel.classList.remove('expand-left', 'expand-right', 'expand-up', 'expand-down');
+        
+        // 根据最近的边设置展开方向
+        const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+        
+        if (minDist === distToLeft) {
+            panel.classList.add('expand-right'); // 靠左边，向右展开
+        } else if (minDist === distToRight) {
+            panel.classList.add('expand-left'); // 靠右边，向左展开
+        } else if (minDist === distToTop) {
+            panel.classList.add('expand-down'); // 靠顶部，向下展开
+        } else {
+            panel.classList.add('expand-up'); // 靠底部，向上展开
+        }
+        
+        console.log('展开方向已更新:', {
+            position: {x, y},
+            direction: minDist === distToLeft ? '向右' : minDist === distToRight ? '向左' : minDist === distToTop ? '向下' : '向上'
+        });
+    }
+    
+    // ========== 面板控制 ==========
+    function toggle() {
+        state.collapsed = !state.collapsed;
+        const panel = document.getElementById('dev-tool-panel');
+        panel.classList.toggle('collapsed');
+        
+        // 展开时更新展开方向
+        if (!state.collapsed) {
+            updateExpandDirection();
+        }
+        
+        // 保存状态（触发器位置保持不变）
+        saveState();
+        
+        console.log('面板' + (state.collapsed ? '收起' : '展开'));
+    }
+
+    function switchMainTab(button, tab, shouldSave = true) {
+        // 更新标签状态
+        document.querySelectorAll('.dev-tool-tab').forEach(t => t.classList.remove('active'));
+        if (button) button.classList.add('active');
+        
+        state.activeMainTab = tab;
+        if (shouldSave) saveState();
+        
+        // 显示/隐藏搜索区域
+        const routeSearchArea = document.getElementById('route-search-area');
+        const docSearchArea = document.getElementById('doc-search-area');
+        
+        if (tab === 'routes') {
+            routeSearchArea.style.display = 'block';
+            docSearchArea.style.display = 'none';
+            loadRoutes(state.currentRouteType);
+        } else {
+            routeSearchArea.style.display = 'none';
+            docSearchArea.style.display = 'block';
+            if (state.currentDocId) {
+                // 如果有打开的文档，恢复它
+                loadDocDetail(state.currentDocId);
+            } else {
+                // 否则搜索文档
+                searchDocsAPI();
+            }
+        }
+    }
+
+    // ========== 路由功能 ==========
+    function switchRouteTab(button, type) {
+        document.querySelectorAll('#route-search-area .search-mode-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        button.classList.add('active');
+        
+        state.currentRouteType = type;
+        saveState();
+        loadRoutes(type);
+    }
+
+    function loadRoutes(type) {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return Promise.resolve();
+        
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载路由...</div></div>';
+        
+        return fetch('/dev/tool/api/routes?type=' + type)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.success) {
+                    state.allRouteModules = data.data || [];
+                    renderRouteModules(state.allRouteModules);
+                } else {
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data?.message || '加载失败') + '</div>';
+                }
+            })
+            .catch(error => {
+                console.warn('[DevToolPanel] Failed to load routes:', error);
+                content.innerHTML = '<div class="dev-tool-empty">⚠️ 路由接口暂时不可用</div>';
+                return Promise.resolve();
+            });
+    }
+
+    function renderRouteModules(modules) {
+        const content = document.getElementById('dev-tool-content');
+        
+        if (!modules || modules.length === 0) {
+            content.innerHTML = '<div class="dev-tool-empty">📦 暂无模块</div>';
+            return;
+        }
+        
+        let html = '';
+        modules.forEach(module => {
+            if (!module.routes || module.routes.length === 0) return;
+            
+            html += '<div class="module-group">';
+            html += '<div class="module-header" onclick="DevToolPanel.toggleModule(this)">';
+            html += '<div class="module-name">';
+            html += '<i class="fa fa-cube"></i>';
+            html += module.name;
+            html += '<span class="badge badge-primary">' + module.routes.length + '</span>';
+            html += '</div>';
+            html += '<i class="fa fa-chevron-down module-toggle"></i>';
+            html += '</div>';
+            html += '<div class="module-routes">';
+            
+            module.routes.forEach(route => {
+                html += '<div class="route-item" onclick="DevToolPanel.openRoute(\'' + route.url + '\')">';
+                html += '<a href="' + route.url + '" class="route-path" onclick="event.stopPropagation()">' + (route.path || route.url) + '</a>';
+                html += '<div class="route-info">' + route.method + ' · ' + route.controller.split('\\').pop() + '</div>';
+                html += '</div>';
+            });
+            
+            html += '</div>';
+            html += '</div>';
+        });
+        
+        content.innerHTML = html;
+        
+        // 恢复搜索
+        const searchInput = document.getElementById('route-search-input');
+        if (state.routeSearchKeyword) {
+            searchInput.value = state.routeSearchKeyword;
+            searchRoutes({ target: searchInput });
+        }
+    }
+
+    function toggleModule(header) {
+        header.classList.toggle('collapsed');
+        const routes = header.nextElementSibling;
+        routes.classList.toggle('collapsed');
+    }
+
+    function openRoute(url) {
+        window.open(url, '_blank');
+    }
+
+    function searchRoutes(event) {
+        const keyword = event.target.value.trim().toLowerCase();
+        state.routeSearchKeyword = keyword;
+        saveState();
+        
+        if (!keyword) {
+            renderRouteModules(state.allRouteModules);
+            return;
+        }
+        
+        const filtered = state.allRouteModules.map(module => {
+            const matchingRoutes = module.routes.filter(route => {
+                return route.path.toLowerCase().includes(keyword) ||
+                       route.url.toLowerCase().includes(keyword) ||
+                       module.name.toLowerCase().includes(keyword);
+            });
+            
+            if (matchingRoutes.length > 0) {
+                return { ...module, routes: matchingRoutes };
+            }
+            return null;
+        }).filter(m => m !== null);
+        
+        renderRouteModules(filtered);
+    }
+
+    // ========== 文档功能 ==========
+    function loadModules() {
+        return fetch('/dev/tool/api/document/modules')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.code === 0) {
+                    state.allModules = data.data || [];
+                    updateModuleSelect();
+                } else {
+                    console.warn('[DevToolPanel] Failed to load modules:', data?.msg || 'Unknown error');
+                    state.allModules = [];
+                    updateModuleSelect();
+                }
+            })
+            .catch(error => {
+                console.warn('[DevToolPanel] Failed to load modules:', error);
+                state.allModules = [];
+                updateModuleSelect();
+                // 不要阻塞初始化
+                return Promise.resolve();
+            });
+    }
+
+    function updateModuleSelect() {
+        const select = document.getElementById('doc-module-select');
+        select.innerHTML = '<option value="">选择模块...</option>';
+        
+        state.allModules.forEach(module => {
+            const option = document.createElement('option');
+            option.value = module.name;
+            option.textContent = module.display_name + ' (' + module.doc_count + ')';
+            if (module.name === state.selectedModule) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    }
+
+    function switchDocSearchMode(button, mode) {
+        document.querySelectorAll('#doc-search-area .search-mode-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        button.classList.add('active');
+        
+        state.docSearchMode = mode;
+        saveState();
+        
+        const moduleSelect = document.getElementById('doc-module-select');
+        if (mode === 'module') {
+            moduleSelect.classList.add('show');
+        } else {
+            moduleSelect.classList.remove('show');
+            state.selectedModule = '';
+        }
+        
+        searchDocsAPI();
+    }
+
+    function onModuleChange() {
+        const select = document.getElementById('doc-module-select');
+        state.selectedModule = select.value;
+        saveState();
+        searchDocsAPI();
+    }
+
+    function searchDocs(event) {
+        const keyword = event.target.value.trim();
+        state.docSearchKeyword = keyword;
+        saveState();
+        searchDocsAPI();
+    }
+
+    function searchDocsAPI() {
+        const content = document.getElementById('dev-tool-content');
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>搜索文档...</div></div>';
+        
+        let url = '/dev/tool/api/document/search?';
+        const params = [];
+        
+        if (state.docSearchKeyword) {
+            params.push('keyword=' + encodeURIComponent(state.docSearchKeyword));
+        }
+        
+        if (state.docSearchMode === 'module' && state.selectedModule) {
+            params.push('module=' + encodeURIComponent(state.selectedModule));
+        }
+        
+        url += params.join('&');
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 0) {
+                    state.docList = data.data.items || [];
+                    renderDocList(state.docList);
+                } else {
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data.msg || '搜索失败') + '</div>';
+                }
+            })
+            .catch(error => {
+                content.innerHTML = '<div class="dev-tool-empty">❌ 搜索失败: ' + error.message + '</div>';
+            });
+    }
+
+    function renderDocList(docs) {
+        const content = document.getElementById('dev-tool-content');
+        
+        if (!docs || docs.length === 0) {
+            content.innerHTML = '<div class="dev-tool-empty">📄 暂无文档</div>';
+            return;
+        }
+        
+        let html = '';
+        docs.forEach(doc => {
+            const isActive = doc.id === state.currentDocId ? ' active' : '';
+            html += '<div class="doc-list-item' + isActive + '" onclick="DevToolPanel.openDoc(' + doc.id + ')">';
+            html += '<div class="doc-title">' + (doc.title || '无标题') + '</div>';
+            html += '<div class="doc-meta">';
+            html += '<span class="doc-module-tag">' + (doc.module_display || doc.module_name) + '</span>';
+            if (doc.summary) {
+                const summary = doc.summary.length > 60 ? doc.summary.substring(0, 60) + '...' : doc.summary;
+                html += '<span>' + summary + '</span>';
+            }
+            html += '</div>';
+            html += '</div>';
+        });
+        
+        content.innerHTML = html;
+    }
+
+    function openDoc(docId) {
+        state.currentDocId = docId;
+        state.currentDocScrollPos = 0;
+        saveState();
+        loadDocDetail(docId);
+    }
+
+    function loadDocDetail(docId) {
+        const content = document.getElementById('dev-tool-content');
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
+        
+        fetch('/dev/tool/api/document/detail?id=' + docId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 0) {
+                    renderDocContent(data.data);
+                } else {
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data.msg || '加载失败') + '</div>';
+                }
+            })
+            .catch(error => {
+                content.innerHTML = '<div class="dev-tool-empty">❌ 加载失败: ' + error.message + '</div>';
+            });
+    }
+
+    function renderDocContent(doc) {
+        const content = document.getElementById('dev-tool-content');
+        
+        // 简单 Markdown 转换为 HTML
+        let html = doc.content || '';
+        html = html
+            .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+            .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/```([\s\S]+?)```/g, '<pre><code>$1</code></pre>')
+            .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        
+        html = '<p>' + html + '</p>';
+        
+        content.innerHTML = '<div class="doc-content-view show">' +
+            '<div class="doc-content-header">' +
+                '<button class="doc-back-btn" onclick="DevToolPanel.backToDocList()">' +
+                    '<i class="fa fa-arrow-left"></i> 返回列表' +
+                '</button>' +
+            '</div>' +
+            '<div class="doc-content-title">' + (doc.title || '无标题') + '</div>' +
+            '<div class="doc-meta" style="margin-bottom: 12px;">' +
+                '<span class="doc-module-tag">' + (doc.module_display || doc.module_name) + '</span>' +
+            '</div>' +
+            '<div class="doc-content-body">' + html + '</div>' +
+        '</div>';
+        
+        // 恢复滚动位置
+        setTimeout(() => {
+            content.scrollTop = state.currentDocScrollPos;
+        }, 50);
+        
+        // 监听滚动事件保存位置
+        content.onscroll = () => {
+            state.currentDocScrollPos = content.scrollTop;
+            saveState();
+        };
+    }
+
+    function backToDocList() {
+        state.currentDocId = null;
+        state.currentDocScrollPos = 0;
+        saveState();
+        searchDocsAPI();
+    }
+
+    function restoreDocSearchState() {
+        // 恢复搜索模式
+        const modeButtons = document.querySelectorAll('#doc-search-area .search-mode-btn');
+        modeButtons.forEach(btn => {
+            if (btn.dataset.mode === state.docSearchMode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // 恢复模块选择
+        const moduleSelect = document.getElementById('doc-module-select');
+        if (state.docSearchMode === 'module') {
+            moduleSelect.classList.add('show');
+            moduleSelect.value = state.selectedModule;
+        }
+        
+        // 恢复搜索关键词
+        const searchInput = document.getElementById('doc-search-input');
+        searchInput.value = state.docSearchKeyword;
+        
+        // 如果有打开的文档，直接加载
+        if (state.currentDocId) {
+            loadDocDetail(state.currentDocId);
+        } else {
+            // 否则执行搜索
+            searchDocsAPI();
+        }
+    }
+
+    // ========== 导出公共API ==========
+    return {
+        init,
+        toggle,
+        updateExpandDirection,
+        switchMainTab,
+        switchRouteTab,
+        searchRoutes,
+        toggleModule,
+        openRoute,
+        switchDocSearchMode,
+        onModuleChange,
+        searchDocs,
+        openDoc,
+        backToDocList,
+    };
+})();
+
+// 页面加载完成后初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', DevToolPanel.init);
+} else {
+    DevToolPanel.init();
+}
+</script>

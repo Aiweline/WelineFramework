@@ -14,6 +14,27 @@ $isEdit = $this->getData('isEdit');
 ?>
 
 <style>
+/* 费用提示动画 */
+@keyframes pulse-border {
+    0%, 100% { border-color: #ffc107; }
+    50% { border-color: #ff9800; }
+}
+
+.cost-info-box {
+    animation: pulse-border 2s ease-in-out infinite;
+}
+
+/* 提示框图标旋转动画 */
+@keyframes icon-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.info-icon-animate {
+    display: inline-block;
+    animation: icon-spin 3s linear infinite;
+}
+
 .assistant-form-group {
     margin-bottom: 1.5rem;
 }
@@ -161,6 +182,57 @@ $isEdit = $this->getData('isEdit');
     </div>
 
     <div class="assistant-form-group">
+        <label for="adapter_code">
+            <lang>场景适配器</lang>
+            <span class="required">*</span>
+        </label>
+        <div style="position: relative;">
+            <input type="text" 
+                   id="adapter_search" 
+                   placeholder="<?= __('搜索适配器...') ?>"
+                   autocomplete="off"
+                   style="margin-bottom: 8px;">
+            <div id="adapter_loading" style="display: none; color: #6c757d; font-size: 0.875rem; margin-bottom: 8px;">
+                <lang>搜索中...</lang>
+            </div>
+            <select id="adapter_code" name="adapter_code" required size="5" style="width: 100%; min-height: 120px;">
+                <!-- 适配器选项将通过JavaScript动态加载 -->
+            </select>
+        </div>
+        <small class="form-help">
+            <lang>选择场景适配器，默认适配器直接传递输入输出无任何处理</lang>
+        </small>
+    </div>
+
+    <!-- 适配器参数配置区域（动态生成） -->
+    <div id="adapter_params_container" style="display: none;" class="assistant-form-group">
+        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <label style="margin: 0; font-weight: 600; color: #495057;">
+                    <i class="mdi mdi-cog-outline" style="margin-right: 6px;"></i>
+                    <lang>适配器参数配置</lang>
+                </label>
+                <button type="button" 
+                        onclick="showAdapterHelp()" 
+                        class="btn btn-sm btn-outline-info" 
+                        style="padding: 2px 8px; font-size: 0.85rem;">
+                    <i class="mdi mdi-help-circle"></i> <lang>帮助</lang>
+                </button>
+            </div>
+            <div id="adapter_params_description" style="font-size: 0.875rem; color: #6c757d; margin-bottom: 12px;"></div>
+            <div id="adapter_params_fields"></div>
+            <div id="adapter_params_examples" style="margin-top: 12px; display: none;">
+                <details>
+                    <summary style="cursor: pointer; color: #007bff; font-weight: 500;">
+                        <i class="mdi mdi-lightbulb-outline"></i> <lang>使用示例</lang>
+                    </summary>
+                    <div id="adapter_examples_content" style="margin-top: 8px; padding: 8px; background: #fff; border-radius: 4px;"></div>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <div class="assistant-form-group">
         <label for="model_code">
             <lang>AI模型</lang>
             <span class="required">*</span>
@@ -179,6 +251,15 @@ $isEdit = $this->getData('isEdit');
             </select>
         </div>
         <small class="form-help"><lang>搜索并选择助手使用的AI模型</lang></small>
+        
+        <!-- 模型费用信息显示 -->
+        <div id="model_cost_info" style="display: none; margin-top: 12px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <i class="mdi mdi-cash-multiple" style="color: #ffc107; font-size: 20px; margin-right: 8px;"></i>
+                <strong style="color: #856404;"><lang>选中模型费用信息</lang></strong>
+            </div>
+            <div id="model_cost_details" style="font-size: 0.9rem; color: #856404;"></div>
+        </div>
     </div>
 
     <div class="assistant-form-group">
@@ -225,6 +306,138 @@ $isEdit = $this->getData('isEdit');
         <small class="form-help">
             <lang>JSON格式的模型配置覆盖。示例：</lang><br>
             <code>{"max_tokens": 2048, "temperature": 0.7, "top_p": 0.9}</code>
+        </small>
+    </div>
+    
+    <!-- API配置 -->
+    <h6 class="assistant-section-title">
+        <lang>模型配置</lang>
+        <span class="assistant-optional">(<lang>可选，不配置将使用官方模型</lang>)</span>
+    </h6>
+    
+    <!-- 账户余额显示 -->
+    <?php 
+    $userBalance = $this->getData('user_balance') ?? 0.0;
+    $balanceClass = $userBalance >= 1.0 ? 'success' : 'danger';
+    $balanceIcon = $userBalance >= 1.0 ? 'check-circle' : 'alert-circle';
+    ?>
+    <div class="alert alert-<?= $balanceClass ?>" style="border-radius: 8px; padding: 16px; margin-bottom: 16px; border-width: 2px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center;">
+                <i class="mdi mdi-wallet" style="font-size: 24px; margin-right: 12px;"></i>
+                <div>
+                    <strong><lang>当前账户余额</lang>:</strong>
+                    <span style="font-size: 1.3em; font-weight: 700; margin-left: 8px;">¥<?= number_format($userBalance, 2) ?></span>
+                </div>
+            </div>
+            <?php if ($userBalance < 1.0): ?>
+                <a href="<?= $this->getBackendUrl('ai/backend/recharge') ?>" 
+                   class="btn btn-warning btn-sm" 
+                   target="_blank"
+                   style="text-decoration: none;">
+                    <i class="mdi mdi-cash-plus"></i> <lang>立即充值</lang>
+                </a>
+            <?php else: ?>
+                <i class="mdi mdi-<?= $balanceIcon ?>" style="font-size: 24px; color: #28a745;"></i>
+            <?php endif; ?>
+        </div>
+        <?php if ($userBalance < 1.0): ?>
+            <div style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.8); border-radius: 4px;">
+                <i class="mdi mdi-alert"></i>
+                <strong><lang>重要提示</lang>：</strong>
+                <lang>创建使用官方模型的助手需要账户余额至少</lang> <strong>¥1.00</strong>，
+                <lang>您当前余额不足，请先充值后再创建助手</lang>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <!-- 费用提示 -->
+    <div class="alert alert-info" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 1px solid #667eea50; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: start;">
+            <i class="mdi mdi-information" style="font-size: 24px; color: #667eea; margin-right: 12px;"></i>
+            <div>
+                <h6 style="margin: 0 0 8px 0; color: #667eea; font-weight: 600;">
+                    <lang>关于模型配置和费用说明</lang>
+                </h6>
+                <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li>
+                        <strong><lang>使用官方密钥</lang></strong>：
+                        <lang>如果您不配置自己的API密钥，系统将使用官方模型服务。</lang>
+                        <span style="color: #f5576c; font-weight: 600;"><lang>此服务将按使用量收费</lang></span>
+                    </li>
+                    <li>
+                        <strong><lang>使用自己的密钥</lang></strong>：
+                        <lang>配置您自己的API密钥和代理后，费用将直接由您的API提供商收取</lang>
+                    </li>
+                    <li>
+                        <strong><lang>收费标准</lang></strong>：
+                        <lang>官方模型按Token计费，具体费用请查看</lang>
+                        <a href="<?= $this->getBackendUrl('ai/backend/model') ?>" target="_blank" style="color: #667eea; text-decoration: none;">
+                            <lang>AI模型管理</lang> <i class="mdi mdi-open-in-new"></i>
+                        </a>
+                        <lang>中各模型的单价信息</lang>
+                    </li>
+                </ul>
+                <div style="margin-top: 12px; padding: 8px 12px; background: #fff; border-radius: 4px; border-left: 3px solid #667eea;">
+                    <small style="color: #666;">
+                        <i class="mdi mdi-lightbulb-outline" style="color: #ffc107;"></i>
+                        <strong><lang>建议</lang>：</strong>
+                        <lang>如果您有高频使用需求，建议配置自己的API密钥以节省成本</lang>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="assistant-form-group">
+        <label for="api_key">
+            <lang>自定义API密钥</lang>
+            <span class="badge bg-secondary" style="font-size: 0.7rem; margin-left: 8px;"><lang>可选</lang></span>
+        </label>
+        <input type="password" 
+               id="api_key" 
+               name="api_key" 
+               value="<?= $isEdit && $assistant ? $assistant->getData('api_key') : '' ?>"
+               placeholder="<?= __('留空使用官方模型（收费）') ?>"
+               autocomplete="off">
+        <small class="form-help">
+            <i class="mdi mdi-information-outline"></i>
+            <lang>填写您自己的API密钥（如OpenAI、Claude等），留空则使用官方提供的付费模型服务</lang>
+        </small>
+    </div>
+    
+    <div class="assistant-form-group">
+        <label for="proxy_config">
+            <lang>代理配置</lang>
+            <span class="badge bg-secondary" style="font-size: 0.7rem; margin-left: 8px;"><lang>可选</lang></span>
+        </label>
+        <textarea id="proxy_config" 
+                  name="proxy_config" 
+                  rows="6"
+                  style="font-family: monospace; font-size: 13px;"
+                  placeholder="<?= __('留空不使用代理，或输入JSON格式的代理配置...') ?>"><?php 
+            if ($isEdit && $assistant && $assistant->getData('proxy_config')) {
+                $proxyConfig = $assistant->getData('proxy_config');
+                // 如果是JSON字符串，格式化显示
+                if (is_string($proxyConfig)) {
+                    $decoded = json_decode($proxyConfig, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    } else {
+                        echo $proxyConfig;
+                    }
+                } else if (is_array($proxyConfig)) {
+                    echo json_encode($proxyConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                } else {
+                    echo $proxyConfig;
+                }
+            }
+        ?></textarea>
+        <small class="form-help">
+            <lang>JSON格式的代理配置。示例：</lang><br>
+            <code>{"http": "http://proxy.example.com:8080", "https": "https://proxy.example.com:8080"}</code><br>
+            <lang>或 SOCKS5 代理：</lang><br>
+            <code>{"http": "socks5://127.0.0.1:1080", "https": "socks5://127.0.0.1:1080"}</code>
         </small>
     </div>
     
@@ -392,11 +605,284 @@ $isEdit = $this->getData('isEdit');
 (function() {
     // 获取所有需要的DOM元素
     let modelSearchTimeout;
+    let adapterSearchTimeout;
     const modelSearchInput = document.getElementById('model_search');
     const modelSelect = document.getElementById('model_code');
     const modelLoading = document.getElementById('model_loading');
     const loadModelConfigBtn = document.getElementById('loadModelConfig');
     const modelConfigField = document.getElementById('model_config');
+    const adapterSearchInput = document.getElementById('adapter_search');
+    const adapterSelect = document.getElementById('adapter_code');
+    const adapterLoading = document.getElementById('adapter_loading');
+    
+    // 搜索适配器
+    function searchAdapters(keyword) {
+        console.log('searchAdapters called with keyword:', keyword);
+        if (!adapterLoading || !adapterSelect) {
+            console.error('Required elements not found');
+            return;
+        }
+        
+        adapterLoading.style.display = 'block';
+        
+        <?php if ($isEdit && $assistant && $assistant->getData('adapter_code')): ?>
+        const currentAdapterCode = '<?= $assistant->getData('adapter_code') ?>';
+        <?php else: ?>
+        const currentAdapterCode = 'default'; // 默认使用default适配器
+        <?php endif; ?>
+        
+        const url = '<?= $this->getBackendUrl('*/backend/assistant/searchAdapters') ?>?keyword=' + encodeURIComponent(keyword);
+        console.log('Fetching adapters from:', url);
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Adapters received:', data);
+                adapterLoading.style.display = 'none';
+                adapterSelect.innerHTML = '';
+                
+                if (data.success && data.adapters && data.adapters.length > 0) {
+                    console.log('Processing', data.adapters.length, 'adapters');
+                    let currentAdapter = null;
+                    const otherAdapters = [];
+                    
+                    // 分离当前适配器和其他适配器
+                    data.adapters.forEach(adapter => {
+                        if (adapter.code === currentAdapterCode) {
+                            currentAdapter = adapter;
+                        } else {
+                            otherAdapters.push(adapter);
+                        }
+                    });
+                    
+                    // 先添加当前选择的适配器（优先显示）
+                    if (currentAdapter) {
+                        const option = document.createElement('option');
+                        option.value = currentAdapter.code;
+                        option.textContent = currentAdapter.name + ' (v' + currentAdapter.version + ') - <?= __("已选择") ?>';
+                        option.selected = true;
+                        adapterSelect.appendChild(option);
+                    }
+                    
+                    // 再添加其他适配器
+                    otherAdapters.forEach(adapter => {
+                        const option = document.createElement('option');
+                        option.value = adapter.code;
+                        option.textContent = adapter.name + ' (v' + adapter.version + ')';
+                        adapterSelect.appendChild(option);
+                    });
+                } else {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = '<?= __("未找到匹配的适配器") ?>';
+                    option.disabled = true;
+                    adapterSelect.appendChild(option);
+                }
+            })
+            .catch(error => {
+                adapterLoading.style.display = 'none';
+                console.error('<?= __("搜索失败：") ?>', error);
+            });
+    }
+    
+    // 页面加载时自动搜索适配器（会自动将默认适配器设为选中）
+    searchAdapters('');
+    
+    if (adapterSearchInput) {
+        // 输入时触发搜索（带防抖）
+        adapterSearchInput.addEventListener('input', function() {
+            clearTimeout(adapterSearchTimeout);
+            adapterSearchTimeout = setTimeout(() => {
+                searchAdapters(this.value);
+            }, 300);
+        });
+        
+        // 按Enter键选择第一个
+        adapterSearchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (adapterSelect.options.length > 0 && adapterSelect.options[0].value) {
+                    adapterSelect.selectedIndex = 0;
+                    adapterSearchInput.focus();
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                adapterSelect.focus();
+            }
+        });
+    }
+    
+    // 监听适配器选择变化，动态加载参数模板
+    if (adapterSelect) {
+        adapterSelect.addEventListener('change', function() {
+            const selectedCode = this.value;
+            if (selectedCode) {
+                loadAdapterParams(selectedCode);
+            }
+        });
+    }
+    
+    // 加载适配器参数模板
+    function loadAdapterParams(adapterCode) {
+        const url = '<?= $this->getBackendUrl('*/backend/assistant/getAdapterParams') ?>?code=' + encodeURIComponent(adapterCode);
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    displayAdapterParams(data.data);
+                } else {
+                    hideAdapterParams();
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load adapter params:', error);
+                hideAdapterParams();
+            });
+    }
+    
+    // 显示适配器参数配置
+    function displayAdapterParams(adapterData) {
+        const container = document.getElementById('adapter_params_container');
+        const descriptionEl = document.getElementById('adapter_params_description');
+        const fieldsEl = document.getElementById('adapter_params_fields');
+        const examplesEl = document.getElementById('adapter_params_examples');
+        const examplesContent = document.getElementById('adapter_examples_content');
+        
+        if (!container || !fieldsEl) return;
+        
+        const paramTemplate = adapterData.param_template || {};
+        const fields = paramTemplate.fields || [];
+        
+        // 如果没有参数字段，隐藏配置区域
+        if (fields.length === 0) {
+            hideAdapterParams();
+            return;
+        }
+        
+        // 显示描述
+        if (descriptionEl) {
+            descriptionEl.innerHTML = '<i class="mdi mdi-information-outline"></i> ' + (paramTemplate.description || '');
+        }
+        
+        // 生成表单字段
+        let fieldsHTML = '';
+        <?php
+        // 获取现有的适配器参数（编辑模式）
+        $existingParams = [];
+        if ($isEdit && $assistant && $assistant->getData('adapter_params')) {
+            $paramsData = $assistant->getData('adapter_params');
+            $existingParams = is_string($paramsData) ? json_decode($paramsData, true) : $paramsData;
+            if (!is_array($existingParams)) {
+                $existingParams = [];
+            }
+        }
+        ?>
+        const existingParams = <?= json_encode($existingParams) ?>;
+        
+        fields.forEach(field => {
+            const value = existingParams[field.name] || field.default || '';
+            const required = field.required ? 'required' : '';
+            const requiredMark = field.required ? '<span style="color: #dc3545;">*</span>' : '';
+            
+            fieldsHTML += `
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 0.9rem; font-weight: 500; color: #495057; margin-bottom: 4px;">
+                        ${field.label} ${requiredMark}
+                    </label>
+            `;
+            
+            if (field.type === 'select') {
+                fieldsHTML += `<select name="adapter_params[${field.name}]" ${required} style="width: 100%; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px;">`;
+                if (field.options) {
+                    field.options.forEach(opt => {
+                        const selected = opt.value == value ? 'selected' : '';
+                        fieldsHTML += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+                    });
+                }
+                fieldsHTML += `</select>`;
+            } else if (field.type === 'textarea') {
+                fieldsHTML += `<textarea name="adapter_params[${field.name}]" ${required} rows="3" style="width: 100%; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px;" placeholder="${field.placeholder || ''}">${value}</textarea>`;
+            } else if (field.type === 'checkbox') {
+                const checked = value ? 'checked' : '';
+                fieldsHTML += `<div style="display: flex; align-items: center;"><input type="checkbox" name="adapter_params[${field.name}]" value="1" ${checked} style="margin-right: 6px;"><span>${field.description || ''}</span></div>`;
+            } else {
+                fieldsHTML += `<input type="${field.type || 'text'}" name="adapter_params[${field.name}]" value="${value}" ${required} style="width: 100%; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px;" placeholder="${field.placeholder || ''}">`;
+            }
+            
+            if (field.description) {
+                fieldsHTML += `<small style="display: block; margin-top: 4px; color: #6c757d; font-size: 0.875rem;">${field.description}</small>`;
+            }
+            
+            fieldsHTML += `</div>`;
+        });
+        
+        fieldsEl.innerHTML = fieldsHTML;
+        
+        // 显示示例
+        if (adapterData.examples && adapterData.examples.length > 0 && examplesContent) {
+            let examplesHTML = '';
+            adapterData.examples.forEach((example, index) => {
+                examplesHTML += `
+                    <div style="margin-bottom: 12px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                        <strong style="color: #495057;">${index + 1}. ${example.title}</strong>
+                        <p style="margin: 4px 0; font-size: 0.875rem; color: #6c757d;">${example.description}</p>
+                        <div style="margin-top: 4px;">
+                            <small style="color: #28a745;">输入: ${example.input}</small><br>
+                            <small style="color: #007bff;">输出: ${example.expected_output}</small>
+                        </div>
+                    </div>
+                `;
+            });
+            examplesContent.innerHTML = examplesHTML;
+            examplesEl.style.display = 'block';
+        } else {
+            examplesEl.style.display = 'none';
+        }
+        
+        // 显示配置区域
+        container.style.display = 'block';
+    }
+    
+    // 隐藏适配器参数配置
+    function hideAdapterParams() {
+        const container = document.getElementById('adapter_params_container');
+        if (container) {
+            container.style.display = 'none';
+        }
+    }
+    
+    // 显示适配器帮助信息
+    function showAdapterHelp() {
+        const adapterCode = adapterSelect.value;
+        if (!adapterCode) {
+            alert('<?= __("请先选择一个适配器") ?>');
+            return;
+        }
+        
+        fetch('<?= $this->getBackendUrl('*/backend/assistant/getAdapterParams') ?>?code=' + encodeURIComponent(adapterCode))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    let helpText = '<?= __("适配器") ?>: ' + data.data.name + '\n\n';
+                    helpText += '<?= __("描述") ?>: ' + data.data.description + '\n\n';
+                    
+                    if (data.data.examples && data.data.examples.length > 0) {
+                        helpText += '<?= __("示例") ?>:\n';
+                        data.data.examples.forEach((ex, i) => {
+                            helpText += `\n${i + 1}. ${ex.title}\n`;
+                            helpText += `   ${ex.description}\n`;
+                            helpText += `   输入: ${ex.input}\n`;
+                            helpText += `   输出: ${ex.expected_output}\n`;
+                        });
+                    }
+                    
+                    alert(helpText);
+                } else {
+                    alert('<?= __("无法获取适配器帮助信息") ?>');
+                }
+            });
+    }
     
     function searchModels(keyword) {
         console.log('searchModels called with keyword:', keyword);
@@ -496,18 +982,93 @@ $isEdit = $this->getData('isEdit');
         });
     }
     
-    // 监听模型选择变化，自动提示加载配置
-    if (modelSelect && modelConfigField) {
+    // 监听模型选择变化，显示费用信息和配置加载提示
+    if (modelSelect) {
         modelSelect.addEventListener('change', function() {
-            if (this.value) {
+            const selectedOption = this.options[this.selectedIndex];
+            const modelCode = this.value;
+            
+            if (modelCode) {
+                // 显示模型费用信息
+                showModelCostInfo(modelCode);
+                
                 // 询问是否加载新模型的配置
-                const confirmMessage = '<?= __("检测到模型已切换，是否加载新模型的默认配置？") ?>' + '\n' + '<?= __("（当前配置将被覆盖）") ?>';
-                if (confirm(confirmMessage)) {
-                    // 触发加载配置按钮
-                    if (loadModelConfigBtn) {
-                        loadModelConfigBtn.click();
+                if (modelConfigField) {
+                    const confirmMessage = '<?= __("检测到模型已切换，是否加载新模型的默认配置？") ?>' + '\n' + '<?= __("（当前配置将被覆盖）") ?>';
+                    if (confirm(confirmMessage)) {
+                        // 触发加载配置按钮
+                        if (loadModelConfigBtn) {
+                            loadModelConfigBtn.click();
+                        }
                     }
                 }
+            }
+        });
+    }
+    
+    // 显示模型费用信息
+    function showModelCostInfo(modelCode) {
+        const costInfoDiv = document.getElementById('model_cost_info');
+        const costDetailsDiv = document.getElementById('model_cost_details');
+        
+        if (!costInfoDiv || !costDetailsDiv) return;
+        
+        // 获取模型配置（包含费用信息）
+        fetch('<?= $this->getBackendUrl('*/backend/assistant/getModelConfig') ?>?model_code=' + encodeURIComponent(modelCode))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.model) {
+                    const model = data.model;
+                    const costPerToken = parseFloat(model.cost_per_token || 0);
+                    const maxTokens = parseInt(model.max_tokens || 0);
+                    
+                    // 计算预估费用（假设使用50%的最大tokens）
+                    const estimatedTokens = Math.floor(maxTokens * 0.5);
+                    const estimatedCost = (estimatedTokens * costPerToken).toFixed(4);
+                    
+                    let costHTML = '<div style="line-height: 1.6;">';
+                    costHTML += '<div><i class="mdi mdi-tag"></i> <strong><lang>模型</lang>:</strong> ' + (model.name || modelCode) + ' (' + (model.supplier || '') + ')</div>';
+                    costHTML += '<div><i class="mdi mdi-currency-cny"></i> <strong><lang>单价</lang>:</strong> ¥' + costPerToken.toFixed(6) + ' / Token</div>';
+                    costHTML += '<div><i class="mdi mdi-counter"></i> <strong><lang>最大Tokens</lang>:</strong> ' + maxTokens.toLocaleString() + '</div>';
+                    costHTML += '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffc10730;">';
+                    costHTML += '<i class="mdi mdi-calculator"></i> <strong><lang>预估费用</lang>:</strong> ';
+                    costHTML += '<span style="color: #d63031; font-size: 1.1em;">¥' + estimatedCost + '</span> ';
+                    costHTML += '<small>(<lang>按使用</lang>' + estimatedTokens.toLocaleString() + ' Tokens<lang>计算</lang>)</small>';
+                    costHTML += '</div>';
+                    
+                    // 如果用户配置了自己的API密钥，显示提示
+                    const apiKeyInput = document.getElementById('api_key');
+                    if (apiKeyInput && apiKeyInput.value.trim()) {
+                        costHTML += '<div style="margin-top: 8px; padding: 6px; background: #d4edda; border-radius: 4px; color: #155724;">';
+                        costHTML += '<i class="mdi mdi-check-circle"></i> <lang>您已配置自定义密钥，费用将由您的API提供商收取</lang>';
+                        costHTML += '</div>';
+                    } else {
+                        costHTML += '<div style="margin-top: 8px; padding: 6px; background: #f8d7da; border-radius: 4px; color: #721c24;">';
+                        costHTML += '<i class="mdi mdi-alert"></i> <lang>未配置自定义密钥，将使用官方模型并从账户余额扣费</lang>';
+                        costHTML += '</div>';
+                    }
+                    
+                    costHTML += '</div>';
+                    
+                    costDetailsDiv.innerHTML = costHTML;
+                    costInfoDiv.style.display = 'block';
+                } else {
+                    costInfoDiv.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('获取模型费用信息失败:', error);
+                costInfoDiv.style.display = 'none';
+            });
+    }
+    
+    // API密钥输入变化时，更新费用提示
+    const apiKeyInput = document.getElementById('api_key');
+    if (apiKeyInput) {
+        apiKeyInput.addEventListener('input', function() {
+            const modelCode = modelSelect ? modelSelect.value : '';
+            if (modelCode) {
+                showModelCostInfo(modelCode);
             }
         });
     }
@@ -591,6 +1152,25 @@ $isEdit = $this->getData('isEdit');
         });
     }
     
+    // 代理配置JSON验证
+    const proxyConfigField = document.getElementById('proxy_config');
+    if (proxyConfigField) {
+        proxyConfigField.addEventListener('blur', function() {
+            const value = this.value.trim();
+            if (value && value !== '{}' && value !== '') {
+                try {
+                    JSON.parse(value);
+                    this.style.borderColor = '#28a745';
+                } catch (e) {
+                    this.style.borderColor = '#dc3545';
+                    alert('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
+                }
+            } else {
+                this.style.borderColor = '';
+            }
+        });
+    }
+    
     // 租赁设置控制
     const isRentableCheckbox = document.getElementById('is_rentable');
     const rentalSettings = document.getElementById('rentalSettings');
@@ -622,11 +1202,35 @@ $isEdit = $this->getData('isEdit');
             
             // 验证必填字段
             const name = document.getElementById('name').value.trim();
+            const adapterCode = document.getElementById('adapter_code').value;
             const modelCode = document.getElementById('model_code').value;
             const prompt = document.getElementById('prompt').value.trim();
 
-            if (!name || !modelCode || !prompt) {
+            if (!name || !adapterCode || !modelCode || !prompt) {
                 alert('<?= __("请填写所有必填字段") ?>');
+                return false;
+            }
+            
+            // 检查余额（如果没有配置自定义API密钥）
+            const apiKeyValue = document.getElementById('api_key').value.trim();
+            const userBalance = <?= $userBalance ?>;
+            const minBalance = 1.0;
+            
+            if (!apiKeyValue && userBalance < minBalance) {
+                // 余额不足的友好提示
+                const confirmMsg = '❌ <?= __("账户余额不足") ?>\n\n' +
+                    '<?= __("当前余额") ?>: ¥' + userBalance.toFixed(2) + '\n' +
+                    '<?= __("最低要求") ?>: ¥' + minBalance.toFixed(2) + '\n\n' +
+                    '<?= __("创建使用官方模型的助手需要至少") ?> ¥1.00 <?= __("的账户余额") ?>\n\n' +
+                    '<?= __("您可以选择") ?>:\n' +
+                    '1️⃣ <?= __("点击确定前往充值页面") ?>\n' +
+                    '2️⃣ <?= __("点击取消，配置自己的API密钥") ?>\n\n' +
+                    '<?= __("是否前往充值页面？") ?>';
+                
+                if (confirm(confirmMsg)) {
+                    // 打开充值页面
+                    window.open('<?= $this->getBackendUrl('ai/backend/recharge') ?>', '_blank');
+                }
                 return false;
             }
 
@@ -637,6 +1241,17 @@ $isEdit = $this->getData('isEdit');
                     JSON.parse(mcpConfig);
                 } catch (error) {
                     alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+                    return false;
+                }
+            }
+            
+            // 验证代理配置
+            const proxyConfig = document.getElementById('proxy_config').value.trim();
+            if (proxyConfig && proxyConfig !== '{}' && proxyConfig !== '') {
+                try {
+                    JSON.parse(proxyConfig);
+                } catch (error) {
+                    alert('<?= __("代理配置格式错误，请输入有效的JSON格式") ?>');
                     return false;
                 }
             }
@@ -685,7 +1300,24 @@ $isEdit = $this->getData('isEdit');
                         location.reload();
                     }
                 } else {
-                    alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                    // 处理余额不足错误
+                    if (data.error_code === 'INSUFFICIENT_BALANCE') {
+                        const confirmMsg = '❌ <?= __("账户余额不足") ?>\n\n' +
+                            '<?= __("当前余额") ?>: ¥' + (data.current_balance || 0).toFixed(2) + '\n' +
+                            '<?= __("最低要求") ?>: ¥' + (data.required_balance || 1).toFixed(2) + '\n\n' +
+                            data.message + '\n\n' +
+                            '<?= __("是否前往充值页面？") ?>';
+                        
+                        if (confirm(confirmMsg)) {
+                            if (data.recharge_url) {
+                                window.open(data.recharge_url, '_blank');
+                            } else {
+                                window.open('<?= $this->getBackendUrl('ai/backend/recharge') ?>', '_blank');
+                            }
+                        }
+                    } else {
+                        alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+                    }
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                 }

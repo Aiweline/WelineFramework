@@ -53,6 +53,11 @@ Session implements SessionInterface
 
     public function start(string|null $session_id = ''): void
     {
+        // 如果 headers 已发送或在 CLI 模式下，跳过 session 启动
+        if (headers_sent() || PHP_SAPI === 'cli') {
+            return;
+        }
+        
         if ($session_id) {
             if (session_id() != $session_id) {
                 session_id($session_id);

@@ -11,6 +11,7 @@ namespace Weline\Framework\System\RunType\System;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\System\File\Io\File;
+use Weline\Framework\App\Env;
 
 class Init
 {
@@ -28,8 +29,7 @@ class Init
             throw new Exception('环境为空！');
         }
         # 获取运行用户
-        exec('whoami', $output);
-        $current_user = $output[0] ?? 'SYSTEM';
+        $current_user = Env::user();
         $env['user'] = $current_user;
         $env['admin'] = $params['admin'];
         $env['api_admin'] = $params['api_admin'];

@@ -158,12 +158,11 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         $this->runner->installDb(['db' => $db_config, 'sandbox_db' => $sandbox_db_config]);
         $this->printer->note('第四步：数据安装...', '系统');
 //        $this->runner->systemInstall();
-        $this->printer->note('第五步：系统命令更新...', '系统');
-        $this->runner->systemCommands();
-        $this->printer->note('第六步：系统初始化...', '系统');
         $initData['admin'] = 'admin_' . uniqid();
         $initData['api_admin'] = 'api_' . uniqid();
         $this->runner->systemInit($initData);
+        $this->printer->note('第五步：系统命令更新...', '系统');
+        $this->runner->systemCommands();
         $this->printer->success('初始化数据完成！', 'OK');
         $this->printer->note('-------------------------------------------------------');
         // 生成安装锁文件
@@ -189,15 +188,70 @@ class Install extends \Weline\Framework\Console\CommandAbstract
 
     public function help(): array|string
     {
+        // 检测操作系统
+        $isWindows = (DIRECTORY_SEPARATOR === '\\');
+        
+        // 根据操作系统准备不同的示例
+        if ($isWindows) {
+            // Windows PowerShell 格式 - 使用反引号或单行
+            $examples = [
+                '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
+                '使用 MySQL 数据库安装（生产环境推荐）' => 
+                    'php bin/w system:install `' . "\n" .
+                    '  --db-type=mysql `' . "\n" .
+                    '  --db-hostname=127.0.0.1 `' . "\n" .
+                    '  --db-hostport=3306 `' . "\n" .
+                    '  --db-database=weline `' . "\n" .
+                    '  --db-username=root `' . "\n" .
+                    '  --db-password=your_password `' . "\n" .
+                    '  --db-prefix=w_ `' . "\n" .
+                    '  --db-charset=utf8mb4 `' . "\n" .
+                    '  --db-collate=utf8mb4_general_ci',
+            ];
+        } else {
+            // Unix/Linux/Mac 格式 - 使用反斜杠
+            $examples = [
+                '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
+                '使用 MySQL 数据库安装（生产环境推荐）' => 
+                    'php bin/w system:install \\' . "\n" .
+                    '  --db-type=mysql \\' . "\n" .
+                    '  --db-hostname=127.0.0.1 \\' . "\n" .
+                    '  --db-hostport=3306 \\' . "\n" .
+                    '  --db-database=weline \\' . "\n" .
+                    '  --db-username=root \\' . "\n" .
+                    '  --db-password=your_password \\' . "\n" .
+                    '  --db-prefix=w_ \\' . "\n" .
+                    '  --db-charset=utf8mb4 \\' . "\n" .
+                    '  --db-collate=utf8mb4_general_ci',
+            ];
+        }
+        
         // 基于tip的默认help实现
         return \Weline\Framework\Console\CommandHelper::formatHelp(
-            '',
+            'system:install',
             $this->tip(),
             [
+                '--db-type' => '数据库类型（mysql/sqlite，默认：sqlite）',
+                '--db-hostname' => '数据库主机地址（默认：127.0.0.1）',
+                '--db-hostport' => '数据库端口（默认：3306）',
+                '--db-database' => '数据库名称（MySQL必填）',
+                '--db-username' => '数据库用户名（MySQL必填）',
+                '--db-password' => '数据库密码（MySQL必填）',
+                '--db-prefix' => '表前缀（默认：w_）',
+                '--db-charset' => '字符集（默认：utf8mb4）',
+                '--db-collate' => '排序规则（默认：utf8mb4_general_ci）',
+                '--sandbox_db-*' => '沙盒数据库配置（可选，参数同上）',
                 '-h, --help' => '显示帮助信息',
             ],
-            [],
-            []
+            [
+                '注意事项：',
+                '  1. 生产环境强烈推荐使用 MySQL 数据库',
+                '  2. 安装前请确保数据库已创建',
+                '  3. 安装完成后会生成随机的后台入口密钥',
+                '  4. 安装成功后使用 php bin/w server:start 启动服务',
+                $isWindows ? '  5. Windows PowerShell 使用反引号 (`) 连接多行命令' : '  5. Unix/Linux 使用反斜杠 (\\) 连接多行命令',
+            ],
+            $examples
         );
     }
 }

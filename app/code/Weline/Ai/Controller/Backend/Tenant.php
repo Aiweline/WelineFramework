@@ -14,12 +14,12 @@ use Weline\Ai\Model\AiTenant;
  */
 class Tenant extends BackendController
 {
-    private AiTenant $aiTenant;
-
-    public function __construct(
-        AiTenant $aiTenant
-    ) {
-        $this->aiTenant = $aiTenant;
+    /**
+     * 获取租户模型（懒加载）
+     */
+    private function getAiTenant(): AiTenant
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiTenant::class);
     }
 
     /**
@@ -38,7 +38,7 @@ class Tenant extends BackendController
             $status = $this->request->getGet('status', '');
             
             // 构建查询
-            $query = $this->aiTenant->reset()->select();
+            $query = $this->getAiTenant()->reset()->select();
             
             // 搜索过滤
             if (!empty($keyword)) {
@@ -96,7 +96,7 @@ class Tenant extends BackendController
         $id = (int)$this->request->getGet('id');
         
         if ($id) {
-            $tenant = $this->aiTenant->reset()->load($id);
+            $tenant = $this->getAiTenant()->reset()->load($id);
             
             if (!$tenant->getId()) {
                 return '<div class="alert alert-danger">' . __('租户不存在') . '</div>';
@@ -104,7 +104,7 @@ class Tenant extends BackendController
             
             $this->assign('tenant', $tenant);
         } else {
-            $this->assign('tenant', $this->aiTenant->reset());
+            $this->assign('tenant', $this->getAiTenant()->reset());
         }
         
         return $this->fetch();
@@ -127,7 +127,7 @@ class Tenant extends BackendController
         $data = $this->request->getPost();
 
         try {
-            $tenant = $this->aiTenant->reset();
+            $tenant = $this->getAiTenant()->reset();
             
             if ($id) {
                 $tenant->load($id);
@@ -150,7 +150,7 @@ class Tenant extends BackendController
             
             // 检查名称重复
             if (!$id || $data['name'] !== $tenant->getData('name')) {
-                $existTenant = $this->aiTenant->reset()
+                $existTenant = $this->getAiTenant()->reset()
                     ->where('name', '=', $data['name'])
                     ->find()
                     ->fetch();
@@ -203,7 +203,7 @@ class Tenant extends BackendController
         }
         
         try {
-            $tenant = $this->aiTenant->reset()->load($id);
+            $tenant = $this->getAiTenant()->reset()->load($id);
             
             if (!$tenant->getId()) {
                 return $this->jsonResponse([

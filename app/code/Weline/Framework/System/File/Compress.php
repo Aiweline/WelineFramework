@@ -20,13 +20,13 @@ class Compress
     /**
      * Compress 初始函数...
      *
-     * @param \ZipArchive $zipArchive
+     * @param \ZipArchive|null $zipArchive
      */
     public function __construct(
-        \ZipArchive $zipArchive
+        ?\ZipArchive $zipArchive = null
     )
     {
-        $this->zipArchive = $zipArchive;
+        $this->zipArchive = $zipArchive ?? new \ZipArchive();
     }
 
     private array $files = [];

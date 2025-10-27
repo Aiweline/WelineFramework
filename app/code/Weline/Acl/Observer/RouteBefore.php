@@ -251,7 +251,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         $request->getMethod(),
                         $request->getUri()
                     ]));
-                    $request->_response->redirect($request->getPrePath() . trim($access_source['route'], '/'));
+                    // 使用后台 URL 构建器生成正确的后台地址
+                    $backendUrl = $request->getUrlBuilder()->getBackendUrl($access_source['route']);
+                    $request->_response->redirect($backendUrl);
                 }
             }
         }

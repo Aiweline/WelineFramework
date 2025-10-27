@@ -292,7 +292,20 @@ class AdapterScanner
 
         $adapters = [];
         
-        foreach ($adapterRecords as $record) {
+        // 检查结果类型
+        if (!$adapterRecords || !is_iterable($adapterRecords)) {
+            return $adapters;
+        }
+        
+        $items = is_object($adapterRecords) && method_exists($adapterRecords, 'getItems') 
+            ? $adapterRecords->getItems() 
+            : $adapterRecords;
+        
+        foreach ($items as $record) {
+            if (!is_object($record)) {
+                continue;
+            }
+            
             $code = $record->getData(AiScenarioAdapter::fields_CODE);
             $adapter = $this->getAdapter($code);
             

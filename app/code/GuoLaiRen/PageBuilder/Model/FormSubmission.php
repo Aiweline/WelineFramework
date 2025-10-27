@@ -27,8 +27,14 @@ class FormSubmission extends Model
     public const fields_IP_ADDRESS = 'ip_address';
     public const fields_USER_AGENT = 'user_agent';
     public const fields_REFERER = 'referer';
+    public const fields_STATUS = 'status';
     public const fields_SUBMITTED_AT = 'submitted_at';
     public const fields_CREATE_TIME = 'create_time';
+    
+    // 状态常量
+    public const STATUS_NEW = 'new';
+    public const STATUS_PROCESSED = 'processed';
+    public const STATUS_SPAM = 'spam';
     
     /**
      * 获取额外字段
@@ -140,6 +146,13 @@ class FormSubmission extends Model
                 '来源页面'
             )
             ->addColumn(
+                self::fields_STATUS,
+                TableInterface::column_type_VARCHAR,
+                20,
+                "not null default 'new'",
+                '状态'
+            )
+            ->addColumn(
                 self::fields_SUBMITTED_AT,
                 TableInterface::column_type_DATETIME,
                 0,
@@ -156,6 +169,7 @@ class FormSubmission extends Model
             ->addIndex(TableInterface::index_type_KEY, 'idx_page_id', [self::fields_PAGE_ID], '页面ID索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_email', [self::fields_EMAIL], '邮箱索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_phone', [self::fields_PHONE], '电话索引')
+            ->addIndex(TableInterface::index_type_KEY, 'idx_status', [self::fields_STATUS], '状态索引')
             ->addIndex(TableInterface::index_type_KEY, 'idx_submitted_at', [self::fields_SUBMITTED_AT], '提交时间索引')
             ->create();
     }
@@ -165,7 +179,25 @@ class FormSubmission extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: 未来版本升级时使用
+        // 添加status字段（如果不存在）
+        if ($setup->tableExist() && !$setup->getConn()->columnExist($setup->getTableName(), self::fields_STATUS)) {
+            $setup->getConn()->addColumn(
+                $setup->getTableName(),
+                self::fields_STATUS,
+                TableInterface::column_type_VARCHAR,
+                20,
+                "not null default 'new'",
+                '状态'
+            );
+            
+            // 添加索引
+            $setup->getConn()->addIndex(
+                $setup->getTableName(),
+                TableInterface::index_type_KEY,
+                'idx_status',
+                [self::fields_STATUS]
+            );
+        }
     }
 
     /**

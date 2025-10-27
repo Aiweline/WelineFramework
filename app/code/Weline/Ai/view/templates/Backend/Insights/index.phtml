@@ -9,9 +9,71 @@
  * @var array $top_scenarios 热门场景
  * @var string $date_range 日期范围
  */
-?>
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
-<div class="page-header">
+$stats = $this->stats ?? [];
+$model_stats = $this->model_stats ?? [];
+$daily_trend = $this->daily_trend ?? [];
+$top_scenarios = $this->top_scenarios ?? [];
+$date_range = $this->date_range ?? '7';
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>商业洞察报表</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 面包屑导航 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box">
+                            <h4 class="page-title">
+                                <i class="mdi mdi-chart-line"></i> <lang>商业洞察报表</lang>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>AI助手</lang></a></li>
+                                    <li class="breadcrumb-item active"><lang>商业洞察报表</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="page-header">
     <h1 class="page-title">
         <i class="mdi mdi-chart-line"></i> 商业洞察报表
     </h1>
@@ -39,8 +101,8 @@
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
                         <p class="text-muted mb-1">总请求数</p>
-                        <h3 class="mb-0"><?= number_format($stats['total_requests']) ?></h3>
-                        <small class="text-muted">平均 <?= $stats['avg_tokens_per_request'] ?> tokens/请求</small>
+                        <h3 class="mb-0"><?= number_format($stats['total_requests'] ?? 0) ?></h3>
+                        <small class="text-muted">平均 <?= $stats['avg_tokens_per_request'] ?? 0 ?> tokens/请求</small>
                     </div>
                     <div class="text-primary">
                         <i class="mdi mdi-chart-bar" style="font-size: 2rem;"></i>
@@ -55,10 +117,10 @@
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
                         <p class="text-muted mb-1">总Token数</p>
-                        <h3 class="mb-0"><?= number_format($stats['total_tokens']) ?></h3>
+                        <h3 class="mb-0"><?= number_format($stats['total_tokens'] ?? 0) ?></h3>
                         <small class="text-muted">
-                            输入: <?= number_format($stats['total_input_tokens']) ?> | 
-                            输出: <?= number_format($stats['total_output_tokens']) ?>
+                            输入: <?= number_format($stats['total_input_tokens'] ?? 0) ?> | 
+                            输出: <?= number_format($stats['total_output_tokens'] ?? 0) ?>
                         </small>
                     </div>
                     <div class="text-info">
@@ -74,8 +136,8 @@
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
                         <p class="text-muted mb-1">总成本</p>
-                        <h3 class="mb-0">$<?= $stats['total_cost'] ?></h3>
-                        <small class="text-muted">平均 $<?= $stats['avg_cost_per_request'] ?>/请求</small>
+                        <h3 class="mb-0">$<?= $stats['total_cost'] ?? '0.00' ?></h3>
+                        <small class="text-muted">平均 $<?= $stats['avg_cost_per_request'] ?? '0.0000' ?>/请求</small>
                     </div>
                     <div class="text-success">
                         <i class="mdi mdi-currency-usd" style="font-size: 2rem;"></i>
@@ -250,3 +312,22 @@ function changeDateRange(range) {
 }
 </script>
 
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 卡片结束 -->
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+
+</body>
+</html>

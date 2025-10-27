@@ -30,18 +30,13 @@ use Weline\Framework\Acl\Acl;
 class ApiKey extends BackendController
 {
     /**
-     * @var AiApiKey
-     */
-    private AiApiKey $aiApiKey;
-
-    /**
-     * 构造函数
+     * 获取API密钥模型（懒加载）
      * 
-     * @param AiApiKey $aiApiKey
+     * @return AiApiKey
      */
-    public function __construct(AiApiKey $aiApiKey)
+    private function getAiApiKey(): AiApiKey
     {
-        $this->aiApiKey = $aiApiKey;
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiApiKey::class);
     }
 
     /**
@@ -58,14 +53,14 @@ class ApiKey extends BackendController
             $status = $this->request->getGet('status', '');
 
             // 构建查询
-            $query = $this->aiApiKey->reset();
+            $query = $this->getAiApiKey()->reset();
             
             if ($status !== '') {
                 $query->where('status', $status);
             }
 
             $apiKeys = $query->pagination($page, $pageSize)
-                ->order('created_time', 'DESC')
+                ->order(AiApiKey::fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch();
 
@@ -82,10 +77,10 @@ class ApiKey extends BackendController
             // 统计各状态数量
             $stats = [
                 'total' => $total,
-                'pending' => $this->aiApiKey->reset()->where('status', 'pending')->select()->fetch()->count(),
-                'approved' => $this->aiApiKey->reset()->where('status', 'approved')->select()->fetch()->count(),
-                'rejected' => $this->aiApiKey->reset()->where('status', 'rejected')->select()->fetch()->count(),
-                'active' => $this->aiApiKey->reset()->where('is_active', 1)->select()->fetch()->count(),
+                'pending' => $this->getAiApiKey()->reset()->where('status', 'pending')->select()->fetch()->count(),
+                'approved' => $this->getAiApiKey()->reset()->where('status', 'approved')->select()->fetch()->count(),
+                'rejected' => $this->getAiApiKey()->reset()->where('status', 'rejected')->select()->fetch()->count(),
+                'active' => $this->getAiApiKey()->reset()->where('status', 'approved')->select()->fetch()->count(), // 已激活=已批准
             ];
             $this->assign('stats', $stats);
 
@@ -127,7 +122,7 @@ class ApiKey extends BackendController
         $action = $this->request->getPost('action'); // approve or reject
 
         try {
-            $apiKey = $this->aiApiKey->reset()->load($id);
+            $apiKey = $this->getAiApiKey()->reset()->load($id);
             
             if (!$apiKey->getId()) {
                 return $this->jsonResponse([
@@ -138,15 +133,13 @@ class ApiKey extends BackendController
 
             if ($action === 'approve') {
                 $apiKey->setData('status', 'approved');
-                $apiKey->setData('is_active', 1);
                 $message = __('API密钥已审核通过');
             } else {
                 $apiKey->setData('status', 'rejected');
-                $apiKey->setData('is_active', 0);
                 $message = __('API密钥已拒绝');
             }
 
-            $apiKey->setData('updated_time', time());
+            $apiKey->setData(AiApiKey::fields_UPDATED_AT, time());
             $apiKey->save();
 
             return $this->jsonResponse([
@@ -181,7 +174,7 @@ class ApiKey extends BackendController
         $quotaLimit = (int)$this->request->getPost('quota_limit');
 
         try {
-            $apiKey = $this->aiApiKey->reset()->load($id);
+            $apiKey = $this->getAiApiKey()->reset()->load($id);
             
             if (!$apiKey->getId()) {
                 return $this->jsonResponse([
@@ -190,8 +183,8 @@ class ApiKey extends BackendController
                 ]);
             }
 
-            $apiKey->setData('quota_limit', $quotaLimit);
-            $apiKey->setData('updated_time', time());
+            $apiKey->setData(AiApiKey::fields_QUOTA_MONTHLY, $quotaLimit);
+            $apiKey->setData(AiApiKey::fields_UPDATED_AT, time());
             $apiKey->save();
 
             return $this->jsonResponse([
@@ -225,7 +218,7 @@ class ApiKey extends BackendController
         $id = (int)$this->request->getPost('id');
 
         try {
-            $apiKey = $this->aiApiKey->reset()->load($id);
+            $apiKey = $this->getAiApiKey()->reset()->load($id);
             
             if (!$apiKey->getId()) {
                 return $this->jsonResponse([
@@ -260,7 +253,7 @@ class ApiKey extends BackendController
         $id = (int)$this->request->getGet('id');
         
         if ($id) {
-            $apiKey = $this->aiApiKey->reset()->load($id);
+            $apiKey = $this->getAiApiKey()->reset()->load($id);
             
             if (!$apiKey->getId()) {
                 return '<div class="alert alert-danger">' . __('API密钥不存在') . '</div>';
@@ -269,7 +262,7 @@ class ApiKey extends BackendController
             $this->assign('apiKey', $apiKey);
         } else {
             // 创建新密钥时传空对象
-            $this->assign('apiKey', $this->aiApiKey->reset());
+            $this->assign('apiKey', $this->getAiApiKey()->reset());
         }
         
         return $this->fetch();
@@ -308,9 +301,9 @@ class ApiKey extends BackendController
             $result = [];
             foreach ($users as $user) {
                 $result[] = [
-                    'id' => $user->getId(),
+                    'id' => $user->getData('user_id') ?: $user->getId(),
                     'username' => $user->getData('username'),
-                    'email' => $user->getData('email'),
+                    'email' => $user->getData('email') ?: '',
                     'nickname' => $user->getData('nickname') ?: $user->getData('username'),
                 ];
             }
@@ -401,7 +394,7 @@ class ApiKey extends BackendController
         $data = $this->request->getPost();
 
         try {
-            $apiKey = $this->aiApiKey->reset();
+            $apiKey = $this->getAiApiKey()->reset();
             
             if ($id) {
                 $apiKey->load($id);

@@ -629,9 +629,13 @@ class Dictionary extends BaseController
      */
     private function formatUpdateTime($timestamp)
     {
-        if (!$timestamp || $timestamp == 0) {
+        // 确保 $timestamp 是有效的数字
+        if (!$timestamp || !is_numeric($timestamp) || $timestamp == 0) {
             return '从未更新';
         }
+        
+        // 转换为整数
+        $timestamp = (int)$timestamp;
         
         $now = time();
         $diff = $now - $timestamp;

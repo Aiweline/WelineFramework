@@ -46,12 +46,20 @@ class DefaultModel extends BackendController
      * @param AiModel $aiModel
      * @param DefaultModelManager $defaultModelManager
      */
-    public function __construct(
-        AiModel $aiModel,
-        DefaultModelManager $defaultModelManager
-    ) {
-        $this->aiModel = $aiModel;
-        $this->defaultModelManager = $defaultModelManager;
+    /**
+     * 获取AI模型（懒加载）
+     */
+    private function getAiModel(): AiModel
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiModel::class);
+    }
+
+    /**
+     * 获取默认模型管理器（懒加载）
+     */
+    private function getDefaultModelManager(): DefaultModelManager
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(DefaultModelManager::class);
     }
 
     /**
@@ -62,29 +70,30 @@ class DefaultModel extends BackendController
     public function index(): string
     {
         // 获取所有默认模型配置
-        $defaultModels = $this->defaultModelManager->getAllDefaultModels();
+        $defaultModels = $this->getDefaultModelManager()->getAllDefaultModels();
         
         // 获取可用的服务类型
-        $serviceTypes = $this->defaultModelManager->getAvailableServiceTypes();
+        $serviceTypes = $this->getDefaultModelManager()->getAvailableServiceTypes();
         
         // 获取所有可用模型
-        $availableModels = $this->aiModel->reset()
+        $availableModels = $this->getAiModel()->reset()
             ->where(AiModel::fields_IS_ACTIVE, 1)
             ->order(AiModel::fields_SUPPLIER, 'ASC')
             ->order(AiModel::fields_NAME, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems(); // 确保获取模型对象数组
 
         // 安全处理结果：确保是数组
         $defaultModelsArray = is_array($defaultModels) ? $defaultModels : 
             (is_object($defaultModels) && method_exists($defaultModels, 'getItems') ? $defaultModels->getItems() : []);
         
-        $availableModelsArray = is_array($availableModels) ? $availableModels : 
-            (is_object($availableModels) && method_exists($availableModels, 'getItems') ? $availableModels->getItems() : []);
+        $availableModelsArray = is_array($availableModels) ? $availableModels : [];
 
         $this->assign('defaultModels', $defaultModelsArray);
         $this->assign('serviceTypes', $serviceTypes);
         $this->assign('availableModels', $availableModelsArray);
+        $this->assign('models', $availableModelsArray); // 兼容模板变量名
 
         return $this->fetch();
     }
@@ -108,7 +117,7 @@ class DefaultModel extends BackendController
         }
 
         try {
-            $result = $this->defaultModelManager->setDefaultModel($serviceType, $modelCode, $priority);
+            $result = $this->getDefaultModelManager()->setDefaultModel($serviceType, $modelCode, $priority);
             
             if ($result) {
                 return $this->jsonResponse([
@@ -146,7 +155,7 @@ class DefaultModel extends BackendController
         }
 
         try {
-            $result = $this->defaultModelManager->removeDefaultModel($serviceType);
+            $result = $this->getDefaultModelManager()->removeDefaultModel($serviceType);
             
             if ($result) {
                 return $this->jsonResponse([
@@ -183,9 +192,9 @@ class DefaultModel extends BackendController
             ]);
         }
 
-        $isProtected = $this->defaultModelManager->isProtectedModel($modelCode);
-        $reason = $isProtected ? $this->defaultModelManager->getProtectionReason($modelCode) : '';
-        $usage = $this->defaultModelManager->getModelUsageAsDefault($modelCode);
+        $isProtected = $this->getDefaultModelManager()->isProtectedModel($modelCode);
+        $reason = $isProtected ? $this->getDefaultModelManager()->getProtectionReason($modelCode) : '';
+        $usage = $this->getDefaultModelManager()->getModelUsageAsDefault($modelCode);
 
         return $this->jsonResponse([
             'success' => true,
@@ -205,7 +214,7 @@ class DefaultModel extends BackendController
     public function initialize(): string
     {
         try {
-            $result = $this->defaultModelManager->initializeDefaults();
+            $result = $this->getDefaultModelManager()->initializeDefaults();
             
             if ($result) {
                 Message::success(__('默认配置初始化成功'));
@@ -227,7 +236,7 @@ class DefaultModel extends BackendController
     public function validate(): string
     {
         try {
-            $issues = $this->defaultModelManager->validateDefaultModels();
+            $issues = $this->getDefaultModelManager()->validateDefaultModels();
             
             if (empty($issues)) {
                 return $this->jsonResponse([
@@ -260,7 +269,7 @@ class DefaultModel extends BackendController
         $serviceType = $this->request->getGet('service_type', DefaultModelManager::SERVICE_TYPE_DEFAULT);
         
         try {
-            $model = $this->defaultModelManager->getDefaultModel($serviceType);
+            $model = $this->getDefaultModelManager()->getDefaultModel($serviceType);
             
             if ($model) {
                 return $this->jsonResponse([
@@ -294,7 +303,7 @@ class DefaultModel extends BackendController
     public function clearCache(): string
     {
         try {
-            $this->defaultModelManager->clearCache();
+            $this->getDefaultModelManager()->clearCache();
             
             Message::success(__('默认模型缓存清除成功'));
         } catch (\Exception $e) {
@@ -336,7 +345,7 @@ class DefaultModel extends BackendController
             }
 
             try {
-                $result = $this->defaultModelManager->setDefaultModel(
+                $result = $this->getDefaultModelManager()->setDefaultModel(
                     $config['service_type'],
                     $config['model_code'],
                     $config['priority'] ?? 100

@@ -68,15 +68,40 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <!-- 按钮操作栏 -->
                 <div class="row mb-3">
                     <div class="col-12">
-                        <div class="d-flex justify-content-end gap-2">
-                            <button type="button" class="btn btn-success" onclick="collectModels()">
-                                <i class="mdi mdi-download me-1"></i>
-                                <lang>收集模型</lang>
-                            </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
-                                <i class="mdi mdi-star me-1"></i>
-                                <lang>默认模型管理</lang>
-                            </a>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <!-- 批量操作区域 -->
+                            <div id="bulkActions" style="display: none;">
+                                <span class="me-2 text-muted">
+                                    <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
+                                </span>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
+                                        <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning" onclick="bulkDeactivate()">
+                                        <i class="mdi mdi-cancel me-1"></i><lang>批量禁用</lang>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">
+                                        <i class="mdi mdi-delete me-1"></i><lang>批量删除</lang>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 右侧按钮 -->
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-success" onclick="collectModels()">
+                                    <i class="mdi mdi-download me-1"></i>
+                                    <lang>收集模型</lang>
+                                </button>
+                                <a href="<?= $this->getBackendUrl('*/backend/defaultModel') ?>" class="btn btn-primary">
+                                    <i class="mdi mdi-star me-1"></i>
+                                    <lang>默认模型管理</lang>
+                                </a>
+                                <button type="button" class="btn btn-danger" onclick="clearAllModels()">
+                                    <i class="mdi mdi-trash-can-outline me-1"></i>
+                                    <lang>清空模型表</lang>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -154,9 +179,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     </div>
                                 <?php else: ?>
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table class="table table-bordered table-striped table-hover">
                                             <thead>
                                                 <tr>
+                                                    <th width="50">
+                                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                                    </th>
                                                     <th width="60"><lang>ID</lang></th>
                                                     <th><lang>模型名称</lang></th>
                                                     <th><lang>供应商</lang></th>
@@ -172,20 +200,23 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             </thead>
                                             <tbody id="modelTable">
                                                 <?php foreach ($models as $model): ?>
-                                                    <tr data-model-id="<?= $model->getId() ?>">
-                                                        <td><?= $model->getId() ?></td>
+                                                    <tr data-model-id="<?= $model['id'] ?? '' ?>">
                                                         <td>
-                                                            <strong><?= $model->getName() ?></strong>
+                                                            <input type="checkbox" class="model-checkbox" value="<?= $model['id'] ?? '' ?>" onchange="updateBulkActions()">
+                                                        </td>
+                                                        <td><?= $model['id'] ?? '' ?></td>
+                                                        <td>
+                                                            <strong><?= $model['name'] ?? '' ?></strong>
                                                         </td>
                                                         <td>
-                                                            <span class="badge bg-info"><?= $model->getVendor() ?></span>
+                                                            <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
                                                         </td>
                                                         <td>
-                                                            <code><?= $model->getModelCode() ?></code>
+                                                            <code><?= $model['model_code'] ?? '' ?></code>
                                                         </td>
-                                                        <td><?= $model->getVersion() ?></td>
+                                                        <td><?= $model['version'] ?? '' ?></td>
                                                         <td>
-                                                            <?php if ($model->isCopied()): ?>
+                                                            <?php if (!empty($model['is_copied'])): ?>
                                                                 <span class="badge bg-warning text-dark">
                                                                     <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
                                                                 </span>
@@ -195,17 +226,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                 </span>
                                                             <?php endif; ?>
                                                         </td>
-                                                        <td>$<?= number_format((float)($model->getData('token_price_input') ?? 0), 6) ?>/1K</td>
-                                                        <td>$<?= number_format((float)($model->getData('token_price_output') ?? 0), 6) ?>/1K</td>
+                                                        <td>$<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</td>
+                                                        <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
                                                         <td>
-                                                            <?php if ($model->isActive()): ?>
+                                                            <?php if (!empty($model['is_active'])): ?>
                                                                 <span class="badge bg-success"><lang>激活</lang></span>
                                                             <?php else: ?>
                                                                 <span class="badge bg-secondary"><lang>未激活</lang></span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
-                                                            <?php if ($model->isDefault()): ?>
+                                                            <?php if (!empty($model['is_default'])): ?>
                                                                 <span class="badge bg-primary"><lang>是</lang></span>
                                                             <?php else: ?>
                                                                 -
@@ -254,15 +285,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        flush-button-text='刷新'
                                                                        off-canvas-body-style=''
                                                                 />
-                                                                <button type="button" class="btn btn-outline-<?= $model->isActive() ? 'warning' : 'success' ?>" 
-                                                                        onclick="toggleStatus(<?= $model->getId() ?>)" 
-                                                                        title="<?= $model->isActive() ? __('停用') : __('激活') ?>">
-                                                                    <i class="mdi mdi-<?= $model->isActive() ? 'pause' : 'play' ?>"></i>
+                                                                <button type="button" class="btn btn-outline-<?= !empty($model['is_active']) ? 'warning' : 'success' ?>" 
+                                                                        onclick="toggleStatus(<?= $model['id'] ?? 0 ?>)" 
+                                                                        title="<?= !empty($model['is_active']) ? __('停用') : __('激活') ?>">
+                                                                    <i class="mdi mdi-<?= !empty($model['is_active']) ? 'pause' : 'play' ?>"></i>
                                                                 </button>
                                                                 <block class='Weline\Component\Block\OffCanvas'
                                                                        template='Weline_Component::off-canvas.phtml'
                                                                        cache='0'
-                                                                       id='model_copy_<?= $model->getId() ?>'
+                                                                       id='model_copy_<?= $model['id'] ?? 0 ?>'
                                                                        action="*/backend/model/copyForm"
                                                                        target-tag="button"
                                                                        vars="model"
@@ -280,9 +311,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        flush-button-text='<?= __("刷新") ?>'
                                                                        off-canvas-body-style=''
                                                                 />
-                                                                <?php if ($model->isCopied()): ?>
+                                                                <?php if (!empty($model['is_copied'])): ?>
                                                                 <button type="button" class="btn btn-outline-danger" 
-                                                                        onclick="deleteModel(<?= $model->getId() ?>, '<?= $model->getModelCode() ?>', <?= $model->isCopied() ? 'true' : 'false' ?>)" 
+                                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', <?= !empty($model['is_copied']) ? 'true' : 'false' ?>)" 
                                                                         title="<?= __('删除') ?>">
                                                                     <i class="mdi mdi-delete"></i>
                                                                 </button>
@@ -308,6 +339,146 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <!-- 模型列表卡片结束 -->
 
 <script>
+// 批量选择功能
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.model-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+    const count = checkboxes.length;
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (count > 0) {
+        bulkActions.style.display = 'block';
+        selectedCount.textContent = count;
+    } else {
+        bulkActions.style.display = 'none';
+    }
+}
+
+function getSelectedIds() {
+    const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// 批量激活
+function bulkActivate() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('<?= __('请先选择要激活的模型') ?>');
+        return;
+    }
+    
+    if (!confirm('<?= __('确定要激活选中的 {count} 个模型吗？', ['count' => "' + ids.length + '"]) ?>'.replace('{count}', ids.length))) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/bulkActivate') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + data.message);
+        }
+    });
+}
+
+// 批量禁用
+function bulkDeactivate() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('<?= __('请先选择要禁用的模型') ?>');
+        return;
+    }
+    
+    if (!confirm('<?= __('确定要禁用选中的模型吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/bulkDeactivate') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + data.message);
+        }
+    });
+}
+
+// 批量删除
+function bulkDelete() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('<?= __('请先选择要删除的模型') ?>');
+        return;
+    }
+    
+    if (!confirm('<?= __('确定要删除选中的模型吗？此操作不可恢复！\n注意：只能删除复制的模型，原始模型无法删除。') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + data.message);
+        }
+    });
+}
+
+// 清空模型表
+function clearAllModels() {
+    if (!confirm('<?= __('⚠️ 危险操作！\n\n确定要清空所有模型吗？\n这将删除所有模型数据，包括原始模型和复制模型！\n此操作不可恢复！\n\n请再次确认！') ?>')) {
+        return;
+    }
+    
+    const confirmText = prompt('<?= __('请输入 "CLEAR ALL MODELS" 以确认清空操作：') ?>');
+    if (confirmText !== 'CLEAR ALL MODELS') {
+        alert('<?= __('确认文本不正确，操作已取消') ?>');
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/clearAll') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + data.message);
+        }
+    });
+}
+
 function collectModels() {
     const btn = event.target.closest('button');
     btn.disabled = true;

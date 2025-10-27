@@ -31,6 +31,19 @@ class FrontendUser extends \Weline\Framework\Database\Model
     public const fields_sess_id       = 'sess_id';
 
     /**
+     * @var array 主键字段
+     */
+    public array $_unit_primary_keys = ['user_id'];
+
+    /**
+     * 初始化模型
+     */
+    public function _init(): void
+    {
+        $this->_primary_key = 'user_id';
+    }
+
+    /**
      * @inheritDoc
      */
     public function setup(ModelSetup $setup, Context $context): void
@@ -148,7 +161,7 @@ class FrontendUser extends \Weline\Framework\Database\Model
         return $this->getData(self::fields_sess_id);
     }
 
-    public function setSessionId(string $sess_id): AdminUser
+    public function setSessionId(string $sess_id): static
     {
         return $this->setData(self::fields_sess_id, $sess_id);
     }
@@ -158,7 +171,7 @@ class FrontendUser extends \Weline\Framework\Database\Model
         return $this->getData(self::fields_login_ip);
     }
 
-    public function setLoginIp(string $ip): AdminUser
+    public function setLoginIp(string $ip): static
     {
         return $this->setData(self::fields_login_ip, $ip);
     }

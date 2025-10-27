@@ -10,20 +10,17 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Controller\Frontend;
 
 use GuoLaiRen\PageBuilder\Model\FormSubmission;
-use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 
 class Form extends FrontendController
 {
     private FormSubmission $formSubmissionModel;
-    private Page $pageModel;
 
     public function __construct(
-        FormSubmission $formSubmissionModel,
-        Page $pageModel
+        FormSubmission $formSubmissionModel
     ) {
         $this->formSubmissionModel = $formSubmissionModel;
-        $this->pageModel = $pageModel;
     }
 
     /**
@@ -31,118 +28,99 @@ class Form extends FrontendController
      */
     public function submit()
     {
-        if (!$this->request->isPost()) {
-            return $this->returnJson(['success' => false, 'message' => __('请求方法错误')], 405);
-        }
-
         try {
-            // 获取所有POST数据
-            $postData = $this->request->getPost();
-            
-            // 提取基本字段
-            $email = $postData['email'] ?? '';
-            $phone = $postData['phone'] ?? '';
-            $pageId = $postData['page_id'] ?? 0;
-            
-            // 验证基本字段
-            if (empty($email) && empty($phone)) {
-                return $this->returnJson([
-                    'success' => false, 
-                    'message' => __('邮箱和电话至少需要填写一项')
-                ], 400);
+            // 只接受 POST 请求
+            if (!$this->request->isPost()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('非法请求')
+                ], 405);
             }
-            
-            // 提取额外字段
-            $excludeKeys = ['email', 'phone', 'page_id', 'form_key'];
-            $extraFields = [];
-            foreach ($postData as $key => $value) {
-                if (!in_array($key, $excludeKeys)) {
-                    $extraFields[$key] = $value;
-                }
+
+            // 获取表单数据
+            $pageId = (int)($this->request->getPost('page_id') ?: $this->request->getGet('page_id', 0));
+            $email = trim($this->request->getPost('email', ''));
+            $phone = trim($this->request->getPost('phone', ''));
+
+            // 验证必填字段
+            if (empty($email)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('请输入邮箱地址')
+                ]);
             }
-            
-            // 获取请求信息
-            $ipAddress = $this->getClientIp();
-            $userAgent = $this->request->getServer('HTTP_USER_AGENT', '');
-            $referer = $this->request->getServer('HTTP_REFERER', '');
-            
-            // 创建提交记录
+
+            if (empty($phone)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('请输入电话号码')
+                ]);
+            }
+
+            // 验证邮箱格式
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('邮箱格式不正确')
+                ]);
+            }
+
+            // 验证电话格式（简单验证）
+            if (!preg_match('/^[\d\s\-\+\(\)]+$/', $phone)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('电话号码格式不正确')
+                ]);
+            }
+
+            // 获取其他信息
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+            $referer = $_SERVER['HTTP_REFERER'] ?? '';
+
+            // 保存表单提交记录
             $submission = clone $this->formSubmissionModel;
             $submission->clearData()
                 ->setData(FormSubmission::fields_PAGE_ID, $pageId)
                 ->setData(FormSubmission::fields_EMAIL, $email)
                 ->setData(FormSubmission::fields_PHONE, $phone)
-                ->setExtraFields($extraFields)
-                ->setData(FormSubmission::fields_IP_ADDRESS, $ipAddress)
                 ->setData(FormSubmission::fields_USER_AGENT, $userAgent)
+                ->setData(FormSubmission::fields_IP_ADDRESS, $ipAddress)
                 ->setData(FormSubmission::fields_REFERER, $referer)
-                ->save(true);
-            
-            // 获取页面的跳转URL
-            $redirectUrl = '';
-            if ($pageId) {
-                $page = clone $this->pageModel;
-                $page->clear()->load($pageId);
-                if ($page->getId()) {
-                    $redirectUrl = $page->getData(Page::fields_REDIRECT_URL) ?: '';
-                }
-            }
-            
-            $response = [
+                ->setData(FormSubmission::fields_STATUS, FormSubmission::STATUS_NEW)
+                ->save();
+
+            // 返回成功响应
+            return $this->fetchJson([
                 'success' => true,
-                'message' => __('提交成功'),
-                'submission_id' => $submission->getId()
-            ];
-            
-            // 如果有跳转URL，则添加到响应中
-            if (!empty($redirectUrl)) {
-                $response['redirect_url'] = $redirectUrl;
-            }
-            
-            return $this->returnJson($response);
-            
+                'message' => __('提交成功！感谢您的关注。'),
+                'data' => [
+                    'submission_id' => $submission->getId()
+                ]
+            ]);
+
         } catch (\Exception $exception) {
+            // 记录错误日志
+            error_log('Form submission error: ' . $exception->getMessage() . "\n" . $exception->getTraceAsString());
+
+            // 开发环境返回详细错误信息
             if (DEV) {
-                return $this->returnJson([
+                return $this->fetchJson([
                     'success' => false,
-                    'message' => $exception->getMessage()
+                    'message' => __('提交失败：') . $exception->getMessage(),
+                    'error_detail' => [
+                        'message' => $exception->getMessage(),
+                        'file' => $exception->getFile(),
+                        'line' => $exception->getLine(),
+                        'trace' => $exception->getTraceAsString()
+                    ]
                 ], 500);
             }
-            
-            return $this->returnJson([
+
+            return $this->fetchJson([
                 'success' => false,
-                'message' => __('提交失败，请稍后重试')
+                'message' => __('提交失败，请稍后再试')
             ], 500);
         }
     }
-    
-    /**
-     * 获取客户端IP地址
-     */
-    private function getClientIp(): string
-    {
-        $ip = '';
-        
-        if (!empty($this->request->getServer('HTTP_CLIENT_IP'))) {
-            $ip = $this->request->getServer('HTTP_CLIENT_IP');
-        } elseif (!empty($this->request->getServer('HTTP_X_FORWARDED_FOR'))) {
-            $ip = $this->request->getServer('HTTP_X_FORWARDED_FOR');
-        } else {
-            $ip = $this->request->getServer('REMOTE_ADDR', '');
-        }
-        
-        return $ip;
-    }
-    
-    /**
-     * 返回JSON响应
-     */
-    private function returnJson(array $data, int $statusCode = 200)
-    {
-        header('Content-Type: application/json');
-        http_response_code($statusCode);
-        echo json_encode($data);
-        exit;
-    }
 }
-

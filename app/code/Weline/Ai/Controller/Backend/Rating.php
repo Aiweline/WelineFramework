@@ -25,20 +25,28 @@ use Weline\Framework\Acl\Acl;
  */
 class Rating extends BackendController
 {
-    private AiAssistantRating $aiAssistantRating;
-    private AiAssistant $aiAssistant;
-    private AiAssistantRental $aiAssistantRental;
+    /**
+     * 获取评分模型（懒加载）
+     */
+    private function getAiAssistantRating(): AiAssistantRating
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiAssistantRating::class);
+    }
 
-    public function __construct(
-        AiAssistantRating $aiAssistantRating,
-        AiAssistant $aiAssistant,
-        AiAssistantRental $aiAssistantRental,
-        DataObject $data_object
-    ) {
-        parent::__construct($data_object);
-        $this->aiAssistantRating = $aiAssistantRating;
-        $this->aiAssistant = $aiAssistant;
-        $this->aiAssistantRental = $aiAssistantRental;
+    /**
+     * 获取助手模型（懒加载）
+     */
+    private function getAiAssistant(): AiAssistant
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiAssistant::class);
+    }
+
+    /**
+     * 获取助手租赁模型（懒加载）
+     */
+    private function getAiAssistantRental(): AiAssistantRental
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(AiAssistantRental::class);
     }
 
     /**
@@ -80,7 +88,7 @@ class Rating extends BackendController
             }
 
             // 检查助手是否存在
-            $assistant = $this->aiAssistant->reset()->load($assistantId);
+            $assistant = $this->getAiAssistant()->reset()->load($assistantId);
             if (!$assistant->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -92,7 +100,7 @@ class Rating extends BackendController
             $userId = 1; // 暂时硬编码
 
             // 检查用户是否租用了此助手
-            $rental = $this->aiAssistantRental->reset()
+            $rental = $this->getAiAssistantRental()->reset()
                 ->where('assistant_id', $assistantId)
                 ->where('renter_id', $userId)
                 ->where('status', 'active')
@@ -108,7 +116,7 @@ class Rating extends BackendController
             }
 
             // 检查是否已经评分过
-            $existingRating = $this->aiAssistantRating->reset()
+            $existingRating = $this->getAiAssistantRating()->reset()
                 ->where('assistant_id', $assistantId)
                 ->where('user_id', $userId)
                 ->select()
@@ -130,7 +138,7 @@ class Rating extends BackendController
                 $message = __('评分已更新');
             } else {
                 // 创建新评分
-                $newRating = $this->aiAssistantRating->reset();
+                $newRating = $this->getAiAssistantRating()->reset();
                 $newRating->setData([
                     'assistant_id' => $assistantId,
                     'user_id' => $userId,
@@ -176,24 +184,30 @@ class Rating extends BackendController
         $page = max(1, (int)$this->request->getGet('page', 1));
         $pageSize = 20;
 
-        // 获取我的评分
-        $ratings = $this->aiAssistantRating->reset()
-            ->where('user_id', $userId)
-            ->order('created_time', 'DESC')
-            ->limit($pageSize, ($page - 1) * $pageSize)
-            ->select()
-            ->fetch()
-            ->getItems();
+        try {
+            // 获取我的评分
+            $ratings = $this->getAiAssistantRating()->reset()
+                ->where('user_id', $userId)
+                ->order('created_time', 'DESC')
+                ->limit($pageSize, ($page - 1) * $pageSize)
+                ->select()
+                ->fetch()
+                ->getItems();
 
-        $total = $this->aiAssistantRating->reset()
-            ->where('user_id', $userId)
-            ->count();
+            $total = $this->getAiAssistantRating()->reset()
+                ->where('user_id', $userId)
+                ->count();
 
-        // 获取关联的助手信息
-        foreach ($ratings as $rating) {
-            $assistant = $this->aiAssistant->reset()->load($rating->getData('assistant_id'));
-            $rating->setData('assistant_name', $assistant->getData('name'));
-            $rating->setData('assistant_description', $assistant->getData('description'));
+            // 获取关联的助手信息
+            foreach ($ratings as $rating) {
+                $assistant = $this->getAiAssistant()->reset()->load($rating->getData('assistant_id'));
+                $rating->setData('assistant_name', $assistant->getData('name'));
+                $rating->setData('assistant_description', $assistant->getData('description'));
+            }
+        } catch (\Exception $e) {
+            // 表不存在或其他错误，返回空数据
+            $ratings = [];
+            $total = 0;
         }
 
         $this->assign('ratings', $ratings);
@@ -221,7 +235,7 @@ class Rating extends BackendController
         }
 
         try {
-            $rating = $this->aiAssistantRating->reset()->load($ratingId);
+            $rating = $this->getAiAssistantRating()->reset()->load($ratingId);
             
             if (!$rating->getId()) {
                 return $this->jsonResponse([
@@ -255,7 +269,7 @@ class Rating extends BackendController
     private function updateAssistantRating(int $assistantId): void
     {
         // 计算平均评分（只计算已审核通过的）
-        $ratings = $this->aiAssistantRating->reset()
+        $ratings = $this->getAiAssistantRating()->reset()
             ->where('assistant_id', $assistantId)
             ->where('status', 'approved')
             ->select()
@@ -276,7 +290,7 @@ class Rating extends BackendController
         $average = $totalRating / $count;
 
         // 更新助手
-        $assistant = $this->aiAssistant->reset()->load($assistantId);
+        $assistant = $this->getAiAssistant()->reset()->load($assistantId);
         if ($assistant->getId()) {
             $assistant->setData('rating_average', round($average, 2));
             $assistant->save();

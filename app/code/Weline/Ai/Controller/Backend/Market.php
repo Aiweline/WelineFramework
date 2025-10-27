@@ -26,20 +26,28 @@ use Weline\Framework\Acl\Acl;
  */
 class Market extends BackendController
 {
-    private AiAssistant $aiAssistant;
-    private AiAssistantRental $aiAssistantRental;
-    private AiAssistantRating $aiAssistantRating;
+    /**
+     * 获取助手模型（懒加载）
+     */
+    private function getAiAssistant(): AiAssistant
+    {
+        return ObjectManager::getInstance(AiAssistant::class);
+    }
 
-    public function __construct(
-        AiAssistant $aiAssistant,
-        AiAssistantRental $aiAssistantRental,
-        AiAssistantRating $aiAssistantRating,
-        DataObject $data_object
-    ) {
-        parent::__construct($data_object);
-        $this->aiAssistant = $aiAssistant;
-        $this->aiAssistantRental = $aiAssistantRental;
-        $this->aiAssistantRating = $aiAssistantRating;
+    /**
+     * 获取助手租赁模型（懒加载）
+     */
+    private function getAiAssistantRental(): AiAssistantRental
+    {
+        return ObjectManager::getInstance(AiAssistantRental::class);
+    }
+
+    /**
+     * 获取助手评分模型（懒加载）
+     */
+    private function getAiAssistantRating(): AiAssistantRating
+    {
+        return ObjectManager::getInstance(AiAssistantRating::class);
     }
 
     /**
@@ -56,37 +64,36 @@ class Market extends BackendController
         $pageSize = 12;
 
         // 构建查询
-        $assistantModel = $this->aiAssistant->reset();
-        $select = $assistantModel->where('is_rentable', 1)
-            ->where('is_active', 1)
-            ->where('audit_status', 'approved'); // 只显示审核通过的
+        $assistantModel = $this->getAiAssistant()->reset();
+        $select = $assistantModel->where(AiAssistant::fields_IS_RENTABLE, 1)
+            ->where(AiAssistant::fields_STATUS, 'active')
+            ->where(AiAssistant::fields_AUDIT_STATUS, 'approved'); // 只显示审核通过的
 
         // 分类筛选
         if ($category) {
-            $select->where('category', $category);
+            $select->where(AiAssistant::fields_CATEGORY, $category);
         }
 
         // 搜索
         if ($search) {
-            $select->where('name', 'like', "%{$search}%", 'or')
-                ->where('description', 'like', "%{$search}%", 'or')
-                ->where('tags', 'like', "%{$search}%", 'or');
+            $select->where(AiAssistant::fields_NAME, 'like', "%{$search}%", 'or')
+                ->where(AiAssistant::fields_DESCRIPTION, 'like', "%{$search}%", 'or');
         }
 
         // 排序
         switch ($sortBy) {
             case 'newest':
-                $select->order('created_time', 'DESC');
+                $select->order(AiAssistant::fields_CREATED_AT, 'DESC');
                 break;
             case 'highest_rated':
-                $select->order('rating_average', 'DESC');
+                $select->order(AiAssistant::fields_RATING_AVERAGE, 'DESC');
                 break;
             case 'cheapest':
-                $select->order('rental_price', 'ASC');
+                $select->order(AiAssistant::fields_RENTAL_PRICE, 'ASC');
                 break;
             case 'popular':
             default:
-                $select->order('rental_count', 'DESC');
+                $select->order(AiAssistant::fields_RENTAL_COUNT, 'DESC');
                 break;
         }
 
@@ -95,9 +102,9 @@ class Market extends BackendController
 
         $assistants = $select->select()->fetch()->getItems();
         $total = $assistantModel->reset()
-            ->where('is_rentable', 1)
-            ->where('is_active', 1)
-            ->where('audit_status', 'approved')
+            ->where(AiAssistant::fields_IS_RENTABLE, 1)
+            ->where(AiAssistant::fields_STATUS, 'active')
+            ->where(AiAssistant::fields_AUDIT_STATUS, 'approved')
             ->count();
 
         // 获取所有分类（用于筛选器）
@@ -137,18 +144,20 @@ class Market extends BackendController
             return $this->redirect('*/backend/market/index');
         }
 
-        $assistant = $this->aiAssistant->reset()->load($id);
+        $assistant = $this->getAiAssistant()->reset()->load($id);
         
-        if (!$assistant->getId() || !$assistant->getData('is_rentable') || !$assistant->getData('is_active')) {
+        if (!$assistant->getId() 
+            || !$assistant->getData(AiAssistant::fields_IS_RENTABLE) 
+            || $assistant->getData(AiAssistant::fields_STATUS) !== 'active') {
             $this->getMessageManager()->addError(__('助手不存在或不可用'));
             return $this->redirect('*/backend/market/index');
         }
 
         // 获取评分列表
-        $ratings = $this->aiAssistantRating->reset()
-            ->where('assistant_id', $id)
-            ->where('status', 'approved')
-            ->order('created_time', 'DESC')
+        $ratings = $this->getAiAssistantRating()->reset()
+            ->where(AiAssistantRating::fields_ASSISTANT_ID, $id)
+            ->where(AiAssistantRating::fields_STATUS, 'approved')
+            ->order(AiAssistantRating::fields_CREATED_AT, 'DESC')
             ->limit(10)
             ->select()
             ->fetch()
@@ -158,15 +167,15 @@ class Market extends BackendController
         $ratingStats = [
             '5' => 0, '4' => 0, '3' => 0, '2' => 0, '1' => 0
         ];
-        $allRatings = $this->aiAssistantRating->reset()
-            ->where('assistant_id', $id)
-            ->where('status', 'approved')
+        $allRatings = $this->getAiAssistantRating()->reset()
+            ->where(AiAssistantRating::fields_ASSISTANT_ID, $id)
+            ->where(AiAssistantRating::fields_STATUS, 'approved')
             ->select()
             ->fetch()
             ->getItems();
         
         foreach ($allRatings as $rating) {
-            $score = (string)$rating->getData('rating');
+            $score = (string)$rating->getData(AiAssistantRating::fields_RATING);
             if (isset($ratingStats[$score])) {
                 $ratingStats[$score]++;
             }
@@ -196,9 +205,9 @@ class Market extends BackendController
         }
 
         try {
-            $assistant = $this->aiAssistant->reset()->load($assistantId);
+            $assistant = $this->getAiAssistant()->reset()->load($assistantId);
             
-            if (!$assistant->getId() || !$assistant->getData('is_rentable')) {
+            if (!$assistant->getId() || !$assistant->getData(AiAssistant::fields_IS_RENTABLE)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('助手不存在或不可租用')
@@ -209,7 +218,7 @@ class Market extends BackendController
             $userId = 1; // 暂时硬编码
 
             // 检查是否已经租用
-            $existingRental = $this->aiAssistantRental->reset()
+            $existingRental = $this->getAiAssistantRental()->reset()
                 ->where('assistant_id', $assistantId)
                 ->where('renter_id', $userId)
                 ->where('status', 'active')
@@ -250,23 +259,24 @@ class Market extends BackendController
                     break;
             }
 
-            $rental = $this->aiAssistantRental->reset();
+            $rental = $this->getAiAssistantRental()->reset();
             $rental->setData([
-                'assistant_id' => $assistantId,
-                'owner_id' => $assistant->getData('owner_id'),
-                'renter_id' => $userId,
-                'rental_type' => $rentalType,
-                'rental_price' => $rentalPrice,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'status' => 'active',
-                'payment_status' => 'pending', // 支付状态待完善
-                'created_time' => $startTime
+                AiAssistantRental::fields_ASSISTANT_ID => $assistantId,
+                AiAssistantRental::fields_OWNER_ID => $assistant->getData(AiAssistant::fields_USER_ID),
+                AiAssistantRental::fields_RENTER_ID => $userId,
+                AiAssistantRental::fields_RENTAL_TYPE => $rentalType,
+                AiAssistantRental::fields_RENTAL_PRICE => $rentalPrice,
+                AiAssistantRental::fields_START_TIME => $startTime,
+                AiAssistantRental::fields_END_TIME => $endTime,
+                AiAssistantRental::fields_STATUS => 'active',
+                AiAssistantRental::fields_PAYMENT_STATUS => 'pending', // 支付状态待完善
+                AiAssistantRental::fields_CREATED_AT => date('Y-m-d H:i:s', $startTime)
             ]);
             $rental->save();
 
             // 更新助手统计
-            $assistant->setData('rental_count', ($assistant->getData('rental_count') ?? 0) + 1);
+            $rentalCount = (int)$assistant->getData(AiAssistant::fields_RENTAL_COUNT);
+            $assistant->setData(AiAssistant::fields_RENTAL_COUNT, $rentalCount + 1);
             $assistant->save();
 
             return $this->jsonResponse([
