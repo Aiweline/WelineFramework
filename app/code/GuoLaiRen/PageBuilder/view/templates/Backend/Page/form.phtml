@@ -811,7 +811,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="cta_event_name" 
                                name="cta_event_name" 
-                               value="<?= htmlspecialchars($page ? $page->getData('cta_event_name') : '') ?>"
+                               value="<?= htmlspecialchars($page ? ($page->getData('cta_event_name') ?? '') : '') ?>"
                                placeholder="<?= __('例如：money_calendar_signup (留空自动生成)') ?>">
                         <small class="form-text text-muted">
                             <?= __('用于 Google Analytics 和 Facebook Pixel 事件跟踪。留空时将自动生成为：<页面句柄>_form_submit') ?>
