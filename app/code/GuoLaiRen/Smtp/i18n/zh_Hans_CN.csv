@@ -1,30 +1,79 @@
-"Original Text","Translated Text"
-"SMTP Mail Sender","SMTP邮件发送器"
-"Send email via SMTP","通过SMTP发送邮件"
-"Test SMTP configuration","测试SMTP配置"
-"Sending email...","正在发送邮件..."
-"Email sent successfully!","邮件发送成功！"
-"Email sending failed!","邮件发送失败！"
-"Email sending failed: %s","邮件发送失败：%s"
-"Recipient email address cannot be empty","收件人地址不能为空"
-"Email subject cannot be empty","邮件主题不能为空"
-"Email body cannot be empty","邮件内容不能为空"
-"Test email address cannot be empty","测试邮箱地址不能为空"
-"Testing SMTP configuration...","正在测试SMTP配置..."
-"Test email sent successfully!","测试邮件发送成功！"
-"Test email sending failed!","测试邮件发送失败！"
-"Test failed: %s","测试失败：%s"
-"Please check the following configuration:","请检查以下配置："
+"No SMTP accounts available","No SMTP accounts available"
+"No enabled SMTP accounts found","No enabled SMTP accounts found"
+"Found ","Found "
+"No file specified, auto-detecting Excel files...","No file specified, auto-detecting Excel files..."
+"No Excel files found in emails directory","No Excel files found in emails directory"
+"Using detected file: ","Using detected file: "
+"File not found: ","File not found: "
+"Available files in emails directory:","Available files in emails directory:"
+"  - ","  - "
+"Using specified file: ","Using specified file: "
+"Recipient list is empty","Recipient list is empty"
+"Loaded ","Loaded "
+"Limiting to first ","Limiting to first "
+"No email templates found in templates directory","No email templates found in templates directory"
+"Initiating bulk email campaign...","Initiating bulk email campaign..."
+"Bulk sending failed: ","Bulk sending failed: "
+"Email column not detected, using first column as email","Email column not detected, using first column as email"
+"Account [","Account ["
+"] sending ","] sending "
+" emails ("," emails ("
+"✓ Sent: ","✓ Sent: "
+"✗ Failed: ","✗ Failed: "
+"✗ Error: ","✗ Error: "
+,
+"========== Campaign Results ==========","========== Campaign Results =========="
+"Total: ","Total: "
+"Successful: ","Successful: "
+"Failed: ","Failed: "
+"Success Rate: ","Success Rate: "
+"]: Success ","]: Success "
+", Failed ",", Failed "
+"Emails directory not found","Emails directory not found"
+"========== Available Email List Files ==========","========== Available Email List Files =========="
+"Directory: ","Directory: "
+"Supported formats: .txt, .csv, .json, .xlsx, .xls","Supported formats: .txt, .csv, .json, .xlsx, .xls"
+"Usage: php bin/w mail:bulk --file=""filename.xlsx"" --subject=""Subject"" --body=""Content""","Usage: php bin/w mail:bulk --file=""filename.xlsx"" --subject=""Subject"" --body=""Content"""
+"Recipient address is required","Recipient address is required"
+"Email subject is required","Email subject is required"
+"Email body is required","Email body is required"
+"Sending email...",正在发送邮件...
+"Email sent successfully!",邮件发送成功！
+"Recipient: ","Recipient: "
+"Subject: ","Subject: "
+"Email delivery failed!","Email delivery failed!"
+"Email sending error: ","Email sending error: "
+"Test email address is required","Test email address is required"
+"Testing SMTP configuration...",正在测试SMTP配置...
+"Test failed: ","Test failed: "
+"Please verify the following:","Please verify the following:"
 "1. SMTP server address and port","1. SMTP服务器地址和端口"
+"2. Account credentials","2. Account credentials"
+"Test email sent successfully!",测试邮件发送成功！
+"If not received, please check spam folder.","If not received, please check spam folder."
+"Test email failed!","Test email failed!"
+"Please verify your SMTP configuration.","Please verify your SMTP configuration."
+"Original Text","Translated Text"
+"SMTP Mail Sender",SMTP邮件发送器
+"Send email via SMTP",通过SMTP发送邮件
+"Test SMTP configuration",测试SMTP配置
+"Email sending failed!",邮件发送失败！
+"Email sending failed: %s",邮件发送失败：%s
+"Recipient email address cannot be empty",收件人地址不能为空
+"Email subject cannot be empty",邮件主题不能为空
+"Email body cannot be empty",邮件内容不能为空
+"Test email address cannot be empty",测试邮箱地址不能为空
+"Test email sending failed!",测试邮件发送失败！
+"Test failed: %s",测试失败：%s
+"Please check the following configuration:",请检查以下配置：
 "2. Username and password","2. 用户名和密码"
 "3. Encryption method (TLS/SSL)","3. 加密方式（TLS/SSL）"
 "Please check your mailbox: %s","请检查邮箱: %s"
-"If you did not receive the email, please check your spam folder.","如果没有收到邮件，请检查垃圾邮件箱。"
-"Please check if SMTP configuration is correct.","请检查SMTP配置是否正确。"
+"If you did not receive the email, please check your spam folder.",如果没有收到邮件，请检查垃圾邮件箱。
+"Please check if SMTP configuration is correct.",请检查SMTP配置是否正确。
 "Recipient: %s","收件人: %s"
 "Subject: %s","主题: %s"
 "Mail sent to %s","邮件已发送到 %s"
 "Failed to send mail to %s","发送邮件到 %s 失败"
 "SMTP configuration failed: %s","SMTP配置失败: %s"
 "Mail sending failed: %s","邮件发送失败: %s"
-
