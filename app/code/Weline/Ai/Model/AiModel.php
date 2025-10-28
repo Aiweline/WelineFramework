@@ -99,59 +99,7 @@ class AiModel extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 添加 is_active 字段
-        if (!$setup->hasField(self::fields_IS_ACTIVE)) {
-            $setup->query("
-                ALTER TABLE {$this->getTable()}
-                ADD " . self::fields_IS_ACTIVE . " INT(1) DEFAULT 1 NULL COMMENT '是否激活' AFTER status;
-            ");
-        }
-
-        // 添加 is_default 字段
-        if (!$setup->hasField(self::fields_IS_DEFAULT)) {
-            $setup->query("
-                ALTER TABLE {$this->getTable()}
-                ADD " . self::fields_IS_DEFAULT . " INT(1) DEFAULT 0 NULL COMMENT '是否默认' AFTER is_active;
-            ");
-        }
-
-        // 添加 provider_config 字段
-        if (!$setup->hasField(self::fields_PROVIDER_CONFIG)) {
-            $setup->query("
-                ALTER TABLE {$this->getTable()}
-                ADD " . self::fields_PROVIDER_CONFIG . " TEXT NULL COMMENT '提供商配置JSON' AFTER proxy_info;
-            ");
-        }
-
-        // 添加 connection_test_status 字段
-        if (!$setup->hasField(self::fields_CONNECTION_TEST_STATUS)) {
-            $setup->query("
-                ALTER TABLE {$this->getTable()}
-                ADD " . self::fields_CONNECTION_TEST_STATUS . " VARCHAR(20) DEFAULT 'pending' NULL COMMENT '连通性测试状态: pending/success/failed' AFTER is_default;
-            ");
-        }
-
-        // 添加 connection_test_time 字段
-        if (!$setup->hasField(self::fields_CONNECTION_TEST_TIME)) {
-            $setup->query("
-                ALTER TABLE {$this->getTable()}
-                ADD " . self::fields_CONNECTION_TEST_TIME . " INT NULL COMMENT '连通性测试时间戳' AFTER connection_test_status;
-            ");
-        }
-
-        // 调整唯一索引：将 唯一(supplier, model_code) 改为 唯一(model_code)
-        try {
-            // 尝试删除旧的联合唯一索引（若存在）
-            $setup->query("ALTER TABLE {$this->getTable()} DROP INDEX idx_supplier_model_code;");
-        } catch (\Exception $e) {
-            // 索引不存在时忽略
-        }
-        try {
-            // 创建基于 model_code 的唯一索引（若已存在则忽略异常）
-            $setup->query("CREATE UNIQUE INDEX idx_model_code ON {$this->getTable()} (" . self::fields_MODEL_CODE . ");");
-        } catch (\Exception $e) {
-            // 已存在时忽略
-        }
+        // 已迁移至 install：此处留空
     }
 
     /**
@@ -168,7 +116,14 @@ class AiModel extends Model
         if ($setup->tableExist() === false) {
             $setup->createTable('AI模型表')
                 ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                ->addColumn(self::fields_SUPPLIER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '供应商')
+                // 兼容字段：外部查询使用
+                ->addColumn('vendor', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 64, 'null', '供应商(兼容字段)')
+                ->addColumn('product', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 64, 'null', '产品(兼容字段)')
+                ->addColumn('model', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'null', '模型(兼容字段)')
+                ->addColumn('class', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '模型实现类(兼容字段)')
+                ->addColumn('default_api_key', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '默认API密钥(兼容字段)')
+                ->addColumn('default_api_url', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '默认API地址(兼容字段)')
+                ->addColumn(self::fields_SUPPLIER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'null', '供应商（兼容外部仅写入vendor时可为空）')
                 ->addColumn(self::fields_MODEL_CODE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '模型代码')
                 ->addColumn(self::fields_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '模型名称')
                 ->addColumn(self::fields_VERSION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '版本')
@@ -190,7 +145,8 @@ class AiModel extends Model
                 ->addColumn(self::fields_CONNECTION_TEST_TIME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '连通性测试时间戳')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_MODEL_CODE, '', 'UNIQUE', 'idx_model_code')
+                ->addIndex('UNIQUE', 'idx_model_code', [self::fields_MODEL_CODE])
+                ->addIndex('INDEX', 'idx_vendor_product_model', ['vendor','product','model'])
                 ->create();
         }
     }
@@ -333,6 +289,30 @@ class AiModel extends Model
     {
         $this->validate();
         
+        // 兼容外部只写入 vendor/product/model 的场景：自动回填必填字段
+        $vendor  = (string)($this->getData('vendor') ?? '');
+        $product = (string)($this->getData('product') ?? '');
+        $model   = (string)($this->getData('model') ?? '');
+
+        if (empty($this->getData(self::fields_SUPPLIER)) && $vendor !== '') {
+            $this->setData(self::fields_SUPPLIER, $vendor);
+        }
+
+        if (empty($this->getData(self::fields_MODEL_CODE))) {
+            $parts = array_filter([$vendor, $product, $model], static fn($v) => $v !== '');
+            if (!empty($parts)) {
+                $this->setData(self::fields_MODEL_CODE, implode('-', $parts));
+            }
+        }
+
+        // 自动回填 name 字段
+        if (empty($this->getData(self::fields_NAME))) {
+            $modelCode = $this->getData(self::fields_MODEL_CODE);
+            if (!empty($modelCode)) {
+                $this->setData(self::fields_NAME, $modelCode);
+            }
+        }
+
         // Ensure JSON fields are properly encoded
         if (is_array($this->getData(self::fields_CONFIG))) {
             $this->setData(self::fields_CONFIG, json_encode($this->getData(self::fields_CONFIG), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
