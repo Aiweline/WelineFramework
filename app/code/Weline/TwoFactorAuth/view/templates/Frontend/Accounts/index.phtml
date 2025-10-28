@@ -49,42 +49,57 @@
         
         .actions {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 15px;
+            margin-bottom: 25px;
+            justify-content: center;
+            flex-wrap: wrap;
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 14px 32px;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
+            min-width: 160px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
         .btn-primary {
-            background: #007bff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
         
         .btn-primary:hover {
-            background: #0056b3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
         }
         
         .btn-success {
-            background: #28a745;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
         }
         
         .btn-success:hover {
-            background: #218838;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(17, 153, 142, 0.4);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(118, 75, 162, 0.4);
         }
         
         .btn-danger {
