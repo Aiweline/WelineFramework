@@ -24,21 +24,19 @@
             background: #f5f5f5;
             margin: 0;
             padding: 0;
+            min-height: 100vh;
         }
         
         .container {
             max-width: 900px;
             margin: 0 auto;
-            padding: 10px;
+            padding: 20px 15px;
+            min-height: 100vh;
         }
         
         @media (min-width: 768px) {
-            body {
-                padding: 20px;
-            }
-            
             .container {
-                padding: 0;
+                padding: 20px;
             }
         }
         
@@ -94,9 +92,16 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
-            min-width: 0;
-            flex: 1;
+            width: 100%;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        @media (min-width: 640px) {
+            .btn {
+                width: auto;
+                min-width: 160px;
+                flex: 0 1 auto;
+            }
         }
         
         @media (min-width: 768px) {
@@ -105,8 +110,6 @@
                 border-radius: 12px;
                 font-size: 15px;
                 gap: 8px;
-                min-width: 160px;
-                flex: none;
             }
         }
         
