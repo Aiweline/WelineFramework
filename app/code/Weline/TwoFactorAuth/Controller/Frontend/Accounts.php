@@ -118,7 +118,8 @@ class Accounts extends FrontendController
     }
 
     /**
-     * 获取当前验证码
+     * 获取当前验证码的中间计算结果（不包含最终密码）
+     * 返回HMAC结果和偏移量，前端完成最后一步计算
      */
     public function getCode()
     {
@@ -145,20 +146,68 @@ class Accounts extends FrontendController
         $algorithm = $account->getData('algorithm') ?: 'SHA1';
         $digits = (int)($account->getData('digits') ?: 6);
         $period = (int)($account->getData('period') ?: 30);
-
-        // 调用generateCode，注意参数顺序
-        $code = TwoFactorAuthHelper::generateCode($secret, $algorithm, $digits, $period);
+        $timestamp = time();
         
-        // 调试输出
-        error_log("generateCode called with: secret=$secret, algorithm=$algorithm, digits=$digits, period=$period");
-        error_log("Generated code: $code");
-        $remaining = $period - (time() % $period);
+        // 后端计算HMAC和偏移量
+        $key = $this->base32Decode($secret);
+        $timeStep = (int)floor($timestamp / $period);
+        $timeBytes = pack('N*', 0, $timeStep);
+        $hash = hash_hmac(strtolower($algorithm), $timeBytes, $key, true);
+        
+        // 获取偏移量和截断后的hash
+        $offset = ord($hash[strlen($hash) - 1]) & 0x0F;
+        $truncatedHash = substr($hash, $offset, 4);
+        
+        // 转换为整数
+        $value = unpack('N', $truncatedHash)[1];
+        $value = $value & 0x7FFFFFFF;
+        
+        // 只返回中间结果，不计算最终密码
+        $remaining = $period - ($timestamp % $period);
 
         return $this->fetchJson([
             'success' => true,
-            'code' => $code,
-            'remaining' => $remaining
+            'hash_value' => $value,
+            'digits' => $digits,
+            'offset' => $offset,
+            'remaining' => $remaining,
+            'period' => $period
         ]);
+    }
+    
+    /**
+     * Base32解码（从Helper复制）
+     */
+    private function base32Decode(string $data): string
+    {
+        if (empty($data)) {
+            return '';
+        }
+        
+        $BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $data = strtoupper(str_replace([' ', '-', '='], '', $data));
+        $binary = '';
+        
+        for ($i = 0; $i < strlen($data); $i++) {
+            $char = $data[$i];
+            $pos = strpos($BASE32_CHARS, $char);
+            if ($pos === false) {
+                continue;
+            }
+            $binary .= str_pad(decbin($pos), 5, '0', STR_PAD_LEFT);
+        }
+        
+        $chunks = str_split($binary, 8);
+        $decoded = '';
+        
+        foreach ($chunks as $chunk) {
+            if (strlen($chunk) < 8) {
+                break;
+            }
+            $decoded .= chr(bindec($chunk));
+        }
+        
+        return $decoded;
     }
 
     /**

@@ -374,8 +374,33 @@ class DesensitizationService
             // 检测所有规则
             $rules = $this->ruleModel->reset()->getActiveRules()->select()->fetch();
             foreach ($rules as $rule) {
-                $type = $rule->getType();
-                if (preg_match($rule->getPattern(), $content, $matches, PREG_OFFSET_CAPTURE)) {
+                // 兼容不同返回结构（对象/数组/数据行）
+                $type = null;
+                $pattern = null;
+                if (is_object($rule)) {
+                    if (method_exists($rule, 'getType')) {
+                        $type = $rule->getType();
+                    } elseif (property_exists($rule, 'type')) {
+                        $type = $rule->type;
+                    }
+                    if (method_exists($rule, 'getPattern')) {
+                        $pattern = $rule->getPattern();
+                    } elseif (property_exists($rule, 'pattern')) {
+                        $pattern = $rule->pattern;
+                    }
+                } elseif (is_array($rule)) {
+                    $type = $rule['type'] ?? ($rule['rule_type'] ?? null);
+                    $pattern = $rule['pattern'] ?? ($rule['rule_pattern'] ?? null);
+                } else {
+                    // 非法结构跳过
+                    continue;
+                }
+
+                if (!$pattern) {
+                    continue;
+                }
+
+                if (preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
                     $result['has_sensitive'] = true;
                     if (!in_array($type, $result['sensitive_types'])) {
                         $result['sensitive_types'][] = $type;
@@ -393,6 +418,140 @@ class DesensitizationService
         }
 
         return $result;
+    }
+
+    /**
+     * 使用AI检测敏感内容
+     *
+     * @param string $content 待检测内容
+     * @param array $options 检测选项 ['rule_types' => [], 'model_code' => '']
+     * @return array 检测结果 ['has_sensitive' => bool, 'sensitive_types' => [], 'positions' => [], 'ai_analysis' => '']
+     * @throws Exception
+     */
+    public function detectSensitiveWithAI(string $content, array $options = []): array
+    {
+        if (empty($content)) {
+            return [
+                'has_sensitive' => false,
+                'sensitive_types' => [],
+                'positions' => [],
+                'ai_analysis' => ''
+            ];
+        }
+
+        // 检查AI是否启用
+        if (!($this->config['ai']['enabled'] ?? true)) {
+            throw new Exception('AI功能未启用');
+        }
+
+        try {
+            // 首先使用正则检测作为基础
+            $regexResult = $this->detectSensitive($content, ['return_positions' => true]);
+            
+            // 从系统配置加载平台敏感词作为参考
+            try {
+                /** @var \Weline\SystemConfig\Model\SystemConfig $sysCfg */
+                $sysCfg = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class);
+                $metaRules = (string)($sysCfg->getConfig('meta_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+                $googleRules = (string)($sysCfg->getConfig('google_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+            } catch (\Throwable $e) {
+                $metaRules = '';
+                $googleRules = '';
+            }
+
+            // 默认参考链接（可被适配器忽略，仅作语义提示）
+            $metaUrl = 'https://transparency.meta.com/zh-cn/policies/community-standards/';
+            $googleUrl = 'https://transparency.google/intl/en/our-policies/product-terms/google-ads/';
+
+            // 构建AI检测提示词（加入平台规则与参考链接）
+            $prompt = "你是一名合规审核与敏感信息检测助手。请参考下面的平台规则，对给定文本进行合规性判断并检测敏感信息（如电话、自杀、自残、性剥削、恐怖主义、成人性内容、儿童性剥削、诈骗、知识产权侵权、隐私侵犯、人工智能生成的性内容等）。\n\n";
+            if (trim($metaRules) !== '' || trim($googleRules) !== '') {
+                $prompt .= "【平台敏感词参考】\n";
+                if (trim($metaRules) !== '') {
+                    $prompt .= "- Meta 规则（换行分隔）：\n{$metaRules}\n\n";
+                }
+                if (trim($googleRules) !== '') {
+                    $prompt .= "- Google 规则（换行分隔）：\n{$googleRules}\n\n";
+                }
+            }
+            $prompt .= "【参考链接（可用于理解政策范围，无需抓取页面）】\n- Meta: {$metaUrl}\n- Google: {$googleUrl}\n\n";
+            $prompt .= "【待检测内容】\n{$content}\n\n";
+            $prompt .= "请以JSON格式返回结果，格式如下：\n";
+            $prompt .= "{\n";
+            $prompt .= '  "has_sensitive": true/false,' . "\n";
+            $prompt .= '  "sensitive_types": ["类型1", "类型2"],' . "\n";
+            $prompt .= '  "positions": [' . "\n";
+            $prompt .= '    {"type": "类型", "match": "匹配内容", "start": 位置, "end": 位置}' . "\n";
+            $prompt .= '  ],' . "\n";
+            $prompt .= '  "analysis": "结合平台规则给出合规性结论与说明"' . "\n";
+            $prompt .= "}\n\n";
+            
+            // 如果有正则检测结果，在提示词中提及
+            if ($regexResult['has_sensitive']) {
+                $prompt .= "注意：使用正则规则已检测到以下敏感信息：\n";
+                foreach ($regexResult['positions'] as $pos) {
+                    $prompt .= "- {$pos['type']}: {$pos['match']}\n";
+                }
+                $prompt .= "\n";
+            }
+            
+            $prompt .= "请确保检测准确，并补充可能遗漏的敏感信息。";
+
+            // 调用AI服务
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            
+            $modelCode = $options['model_code'] ?? $this->config['ai']['model_code'] ?? '';
+            $adapterCode = $options['adapter_code'] ?? $this->config['ai']['desensitization_adapter'] ?? 'desensitization';
+            
+            // 获取适配器参数配置
+            $adapterParams = $this->getAdapterParams($adapterCode, 'desensitization');
+            
+            $aiResponse = $aiService->generate(
+                $prompt,
+                $modelCode ?: null,
+                $adapterCode,
+                'zh_Hans_CN',
+                $adapterParams
+            );
+
+            // 解析AI返回的JSON结果
+            $aiResult = [
+                'has_sensitive' => false,
+                'sensitive_types' => [],
+                'positions' => [],
+                'analysis' => ''
+            ];
+
+            try {
+                // 尝试提取JSON
+                if (preg_match('/\{[\s\S]*\}/', $aiResponse, $matches)) {
+                    $jsonResult = json_decode($matches[0], true);
+                    if ($jsonResult) {
+                        $aiResult['has_sensitive'] = $jsonResult['has_sensitive'] ?? false;
+                        $aiResult['sensitive_types'] = $jsonResult['sensitive_types'] ?? [];
+                        $aiResult['positions'] = $jsonResult['positions'] ?? [];
+                        $aiResult['analysis'] = $jsonResult['analysis'] ?? '';
+                    }
+                }
+            } catch (\Exception $e) {
+                error_log("AI检测结果解析失败: " . $e->getMessage());
+            }
+
+            // 合并正则检测和AI检测结果
+            $finalResult = [
+                'has_sensitive' => $regexResult['has_sensitive'] || $aiResult['has_sensitive'],
+                'sensitive_types' => array_unique(array_merge($regexResult['sensitive_types'], $aiResult['sensitive_types'])),
+                'positions' => array_merge($regexResult['positions'], $aiResult['positions']),
+                'ai_analysis' => $aiResult['analysis'] ?? ''
+            ];
+
+            return $finalResult;
+        } catch (\Exception $e) {
+            error_log("AI检测失败: " . $e->getMessage());
+            // AI检测失败时，返回正则检测结果
+            return $this->detectSensitive($content, $options);
+        }
     }
 
     /**
@@ -435,10 +594,11 @@ class DesensitizationService
             $adapterParams = $this->getAdapterParams($adapterCode, 'rewrite');
             
             $rewritten = $aiService->generate(
-                prompt: $prompt,
-                modelCode: $modelCode ?: null,
-                scenarioCode: $adapterCode,
-                params: $adapterParams
+                $prompt,
+                $modelCode ?: null,
+                $adapterCode,
+                'zh_Hans_CN',
+                $adapterParams
             );
 
             return $rewritten;
@@ -497,28 +657,80 @@ class DesensitizationService
             /** @var AiModel $aiModel */
             $aiModel = ObjectManager::getInstance(AiModel::class);
             
-            $models = $aiModel->reset()
+            // 先尝试获取激活的模型
+            $collection = $aiModel->reset()
                 ->where(AiModel::fields_IS_ACTIVE, 1)
                 ->order(AiModel::fields_SUPPLIER, 'ASC')
                 ->order(AiModel::fields_NAME, 'ASC')
-                ->select()
-                ->fetch();
+                ->select();
+            
+            $models = $collection->fetch();
+            
+            // 如果激活的模型为空，获取所有模型
+            if (!$models || (method_exists($models, 'getItems') && count($models->getItems()) == 0)) {
+                error_log("激活的AI模型为空，尝试获取所有模型");
+                $collection = $aiModel->reset()
+                    ->order(AiModel::fields_SUPPLIER, 'ASC')
+                    ->order(AiModel::fields_NAME, 'ASC')
+                    ->select();
+                
+                $models = $collection->fetch();
+            }
             
             $result = [];
-            if ($models && method_exists($models, 'getItems')) {
-                foreach ($models->getItems() as $model) {
+            
+            // 处理查询结果
+            if ($models) {
+                // 如果是集合对象
+                if (method_exists($models, 'getItems')) {
+                    $items = $models->getItems();
+                    if (is_array($items)) {
+                        foreach ($items as $model) {
+                            if ($model && method_exists($model, 'getModelCode')) {
+                                $result[] = [
+                                    'code' => $model->getModelCode(),
+                                    'name' => $model->getName(),
+                                    'supplier' => $model->getSupplier(),
+                                    'version' => $model->getVersion(),
+                                    'max_tokens' => $model->getMaxTokens() ?: 0,
+                                ];
+                            }
+                        }
+                    }
+                } 
+                // 如果是单个模型对象数组
+                elseif (is_array($models)) {
+                    foreach ($models as $model) {
+                        if ($model && method_exists($model, 'getModelCode')) {
+                            $result[] = [
+                                'code' => $model->getModelCode(),
+                                'name' => $model->getName(),
+                                'supplier' => $model->getSupplier(),
+                                'version' => $model->getVersion(),
+                                'max_tokens' => $model->getMaxTokens() ?: 0,
+                            ];
+                        }
+                    }
+                }
+                // 如果是单个模型对象
+                elseif (method_exists($models, 'getModelCode')) {
                     $result[] = [
-                        'code' => $model->getModelCode(),
-                        'name' => $model->getName(),
-                        'supplier' => $model->getSupplier(),
-                        'version' => $model->getVersion(),
+                        'code' => $models->getModelCode(),
+                        'name' => $models->getName(),
+                        'supplier' => $models->getSupplier(),
+                        'version' => $models->getVersion(),
+                        'max_tokens' => $models->getMaxTokens() ?: 0,
                     ];
                 }
             }
             
+            // 调试日志
+            error_log("获取到 " . count($result) . " 个AI模型");
+            
             return $result;
         } catch (\Exception $e) {
             error_log("获取AI模型列表失败: " . $e->getMessage());
+            error_log("错误堆栈: " . $e->getTraceAsString());
             return [];
         }
     }
@@ -567,6 +779,97 @@ class DesensitizationService
         
         // 返回空数组，让适配器使用默认参数
         return [];
+    }
+
+    /**
+     * 润色敏感内容
+     *
+     * @param string $content 原始内容
+     * @param array $positions 敏感内容位置信息
+     * @param array $options 选项
+     * @return array 返回润色后的内容和相关信息
+     * @throws Exception
+     */
+    public function rewriteSensitiveContent(string $content, array $positions, array $options = []): array
+    {
+        if (empty($content)) {
+            throw new Exception('内容不能为空');
+        }
+
+        if (empty($positions)) {
+            throw new Exception('没有需要润色的敏感内容');
+        }
+
+        try {
+            // 获取AI模型代码
+            $modelCode = $options['model_code'] ?? '';
+            
+            // 构建润色提示词
+            $sensitiveInfo = [];
+            foreach ($positions as $pos) {
+                $sensitiveInfo[] = sprintf(
+                    '- 类型: %s, 内容: %s (位置: %d-%d)',
+                    $pos['type'] ?? '未知',
+                    $pos['match'] ?? '',
+                    $pos['start'] ?? 0,
+                    $pos['end'] ?? 0
+                );
+            }
+            
+            // 引入平台规则，指导改写为合规表达
+            try {
+                /** @var \Weline\SystemConfig\Model\SystemConfig $sysCfg */
+                $sysCfg = ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class);
+                $metaRules = (string)($sysCfg->getConfig('meta_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+                $googleRules = (string)($sysCfg->getConfig('google_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+            } catch (\Throwable $e) {
+                $metaRules = '';
+                $googleRules = '';
+            }
+
+            $policySection = '';
+            if (trim($metaRules) !== '' || trim($googleRules) !== '') {
+                $policySection .= "【平台合规要点（参考）】\n";
+                if (trim($metaRules) !== '') {
+                    $policySection .= "- Meta：\n{$metaRules}\n\n";
+                }
+                if (trim($googleRules) !== '') {
+                    $policySection .= "- Google：\n{$googleRules}\n\n";
+                }
+            }
+
+            $prompt = sprintf(
+                "你是一名内容合规改写助手。请在不改变核心信息与可读性的前提下，将原文改写为符合平台政策、避免违规/煽动/恐吓/成人/违法等的合规表达。要求：\n1) 保留原意，删除或替换敏感片段；\n2) 输出与原文同语言；\n3) 只输出改写后的完整文本，不要说明。\n\n%s原始内容：\n%s\n\n标记的敏感信息：\n%s\n\n",
+                $policySection,
+                $content,
+                implode("\n", $sensitiveInfo)
+            );
+            
+            // 获取AI服务
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            // 使用本模块场景适配器 + 模式=rewrite，避免找不到“rewrite”场景
+            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
+            
+            // 调用AI润色（指定场景适配器并传 mode=rewrite）
+            $rewrittenContent = $aiService->generate(
+                $prompt,
+                $modelCode ?: null,
+                $adapterCode,
+                'zh_Hans_CN',
+                ['mode' => 'rewrite']
+            );
+            
+            return [
+                'content' => $rewrittenContent,
+                'original_length' => mb_strlen($content),
+                'rewritten_length' => mb_strlen($rewrittenContent),
+                'positions_count' => count($positions)
+            ];
+        } catch (\Exception $e) {
+            error_log("润色失败: " . $e->getMessage());
+            throw new Exception("润色失败: " . $e->getMessage());
+        }
     }
 }
 
