@@ -10,6 +10,31 @@
 $model = $this->getData('model');
 $isEdit = $model && $model->getId();
 $title = $isEdit ? __('编辑模型') : __('新建模型');
+
+// 解析配置JSON
+$config = [];
+if ($isEdit && $model->getConfigJson()) {
+    $configJson = $model->getConfigJson();
+    $config = is_string($configJson) ? json_decode($configJson, true) : $configJson;
+    if (!is_array($config)) {
+        $config = [];
+    }
+}
+
+// 解析提供商配置
+$providerConfig = [];
+if ($isEdit && $model->getData('provider_config')) {
+    $providerConfigData = $model->getData('provider_config');
+    $providerConfig = is_string($providerConfigData) ? json_decode($providerConfigData, true) : $providerConfigData;
+    if (!is_array($providerConfig)) {
+        $providerConfig = [];
+    }
+}
+
+// 如果没有提供商配置，使用config作为默认值
+if (empty($providerConfig) && !empty($config)) {
+    $providerConfig = $config;
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -170,15 +195,42 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                     </div>
                 </div>
 
-                <!-- 提供商配置卡片 -->
+                <!-- API密钥配置卡片 -->
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
                             <h6 class="mb-0">
-                                <i class="bi bi-gear me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small>
+                                <i class="bi bi-key me-2"></i><?= __('API密钥配置') ?>
                             </h6>
                         </div>
                         <div class="card-body">
+                            <div class="mb-2">
+                                <label for="api_key_input" class="form-label">
+                                    <?= __('API密钥') ?>
+                                </label>
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="api_key_input" 
+                                       placeholder="<?= __('请输入API密钥，例如：sk-xxx...') ?>"
+                                       value="<?= $providerConfig['api_key'] ?? $config['api_key'] ?? '' ?>">
+                                <small class="form-text text-muted">
+                                    <?= __('用于测试模型和连接真实API的密钥。测试前必须填写。') ?>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 提供商配置卡片 -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header" style="cursor: pointer;" onclick="toggleProviderConfig()">
+                            <h6 class="mb-0">
+                                <i class="bi bi-chevron-right" id="providerConfigIcon" style="transition: transform 0.3s;"></i>
+                                <i class="bi bi-gear me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body" id="providerConfigBody" style="display: none;">
                             <div class="mb-2">
                                 <label for="provider_config_json" class="form-label">
                                     <?= __('配置JSON') ?>
@@ -186,14 +238,46 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                                 <textarea class="form-control" 
                                           id="provider_config_json" 
                                           name="provider_config_json" 
-                                          rows="4"
+                                          rows="14"
                                           style="font-family: 'Courier New', monospace; font-size: 0.85rem;"
-                                          placeholder='{"api_key": "your-api-key", "base_url": "https://api.example.com", "timeout": 30, "max_retries": 3}'><?= $model ? $model->getData('provider_config') : '' ?></textarea>
+                                          placeholder='{
+  "api_key": "your-api-key-here",
+  "base_url": "https://api.example.com",
+  "model_id": "model-name",
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "frequency_penalty": 0.0,
+  "presence_penalty": 0.0,
+  "stream": true,
+  "timeout": 30,
+  "max_retries": 3
+}'><?php
+// 优先使用provider_config，如果没有则使用config
+$displayConfig = $providerConfig;
+if (empty($displayConfig) && !empty($config)) {
+    $displayConfig = $config;
+}
+
+if (!empty($displayConfig)) {
+    // 如果是数组，转换为JSON
+    if (is_array($displayConfig)) {
+        echo json_encode($displayConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } else if (is_string($displayConfig)) {
+        // 如果是JSON字符串，尝试解析并格式化
+        $decoded = json_decode($displayConfig, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } else {
+            echo $displayConfig;
+        }
+    } else {
+        echo $displayConfig;
+    }
+}
+?></textarea>
                                 <div class="form-text">
-                                    <?= __('JSON格式的提供商特定配置') ?>
-                                    <br><small>• <code>api_key</code>: API密钥</small>
-                                    <br><small>• <code>base_url</code>: API基础URL</small>
-                                    <br><small>• <code>timeout</code>: 超时时间（秒）</small>
+                                    <?= __('JSON格式的提供商特定配置。所有字段都可自定义，预置值仅供参考。') ?>
                                 </div>
                             </div>
                         </div>
@@ -332,6 +416,7 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                     </div>
                 </div>
             
+            
             <!-- 状态管理卡片 -->
                 <div class="col-12">
                     <div class="card">
@@ -348,9 +433,37 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                                         <label for="status" class="form-label required">
                                             <?= __('状态') ?>
                                         </label>
+                                        <?php 
+                                        // 检查是否可以激活
+                                        $canActivate = true;
+                                        $disableReason = '';
+                                        
+                                        // 检查API密钥配置
+                                        $hasApiKey = false;
+                                        if (!empty($providerConfig)) {
+                                            $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+                                            $hasApiKey = !empty($providerData['api_key']);
+                                        }
+                                        if (!$hasApiKey && !empty($config)) {
+                                            $configData = is_string($config) ? json_decode($config, true) : $config;
+                                            $hasApiKey = !empty($configData['api_key']);
+                                        }
+                                        
+                                        if (!$hasApiKey) {
+                                            $canActivate = false;
+                                            $disableReason = '未配置API密钥';
+                                        } else {
+                                            // 检查连通性测试状态
+                                            $testStatus = $model ? $model->getData('connection_test_status') : 'pending';
+                                            if ($testStatus !== 'success') {
+                                                $canActivate = false;
+                                                $disableReason = '连通性测试未通过';
+                                            }
+                                        }
+                                        ?>
                                         <select class="form-select" id="status" name="status" required>
-                                            <option value="active" <?= $model && $model->getData('status') === 'active' ? 'selected' : '' ?>>
-                                                ✓ <?= __('激活') ?>
+                                            <option value="active" <?= $model && $model->getData('status') === 'active' ? 'selected' : '' ?> <?= !$canActivate ? 'disabled' : '' ?>>
+                                                ✓ <?= __('激活') ?> <?= !$canActivate ? '(' . $disableReason . ')' : '' ?>
                                             </option>
                                             <option value="deprecated" <?= $model && $model->getData('status') === 'deprecated' ? 'selected' : '' ?>>
                                                 ⊘ <?= __('已弃用') ?>
@@ -359,7 +472,15 @@ $title = $isEdit ? __('编辑模型') : __('新建模型');
                                                 ⚙ <?= __('维护中') ?>
                                             </option>
                                         </select>
-                                        <div class="form-text"><?= __('模型的当前状态') ?></div>
+                                        <div class="form-text">
+                                            <?= __('模型的当前状态') ?>
+                                            <?php if (!$canActivate): ?>
+                                                <br><small class="text-warning">
+                                                    <i class="mdi mdi-alert-circle"></i> 
+                                                    无法激活：<?= $disableReason ?>。请先配置API密钥并进行连通性测试。
+                                                </small>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -410,9 +531,30 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
         
-        // 验证提供商配置JSON
+        // 同步API密钥到JSON配置
+        const apiKeyInput = document.getElementById('api_key_input');
         const providerConfigTextarea = document.getElementById('provider_config_json');
-        if (providerConfigTextarea.value.trim()) {
+        
+        if (apiKeyInput && apiKeyInput.value.trim() && providerConfigTextarea) {
+            try {
+                // 获取现有配置
+                let config = {};
+                if (providerConfigTextarea.value.trim()) {
+                    config = JSON.parse(providerConfigTextarea.value);
+                }
+                
+                // 更新API密钥
+                config.api_key = apiKeyInput.value.trim();
+                
+                // 写回textarea
+                providerConfigTextarea.value = JSON.stringify(config, null, 2);
+            } catch (e) {
+                console.error('同步API密钥到JSON配置失败:', e);
+            }
+        }
+        
+        // 验证提供商配置JSON
+        if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
             try {
                 JSON.parse(providerConfigTextarea.value);
             } catch (e) {
@@ -475,7 +617,136 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.innerHTML = originalText;
         });
     });
+    
+    // 模型测试功能
+    <?php if ($isEdit): ?>
+    const testModelBtn = document.getElementById('testModelBtn');
+    if (testModelBtn) {
+        testModelBtn.addEventListener('click', function() {
+            const prompt = document.getElementById('test_prompt').value.trim();
+            const modelId = <?= $model->getId() ?>;
+            // 兼容：改为以模型代码为唯一键
+            const modelCodeInput = document.getElementById('model_code');
+            const modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
+            
+            if (!prompt) {
+                alert('<?= __("请输入测试提示词") ?>');
+                return;
+            }
+            
+            // 禁用按钮并显示加载状态
+            testModelBtn.disabled = true;
+            testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __("测试中...") ?>';
+            
+            // 隐藏之前的结果
+            document.getElementById('testResult').style.display = 'none';
+            
+            // 发送测试请求
+            const formData = new FormData();
+    // 改为传递模型代码，避免依赖数据库ID
+    formData.append('model_code', modelCode);
+            formData.append('prompt', prompt);
+            
+            fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 恢复按钮状态
+                testModelBtn.disabled = false;
+                testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __("测试模型") ?>';
+                
+                // 显示结果
+                const resultDiv = document.getElementById('testResult');
+                const resultContent = document.getElementById('testResultContent');
+                
+                if (data.success) {
+                    resultContent.innerHTML = `
+                        <div class="alert alert-success py-1 px-2 mb-2">
+                            <small><strong><?= __("成功") ?>!</strong> ${data.message}</small>
+                        </div>
+                        <div class="mb-1">
+                            <small class="text-muted"><?= __("响应时间:") ?></small>
+                            <code>${data.data.duration} ms</code>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1"><?= __("响应:") ?></small>
+                            <div class="alert alert-light py-1 px-2 mb-0" style="white-space: pre-wrap; font-size: 0.875rem; max-height: 200px; overflow-y: auto;">${data.data.response}</div>
+                        </div>
+                    `;
+                    // 刷新父页面以更新列表的“连通性”状态徽章
+                    try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
+                } else {
+                    resultContent.innerHTML = `
+                        <div class="alert alert-danger py-1 px-2 mb-2">
+                            <small><strong><?= __("失败") ?>!</strong> ${data.message}</small>
+                        </div>
+                        ${data.error ? `<div class="alert alert-warning py-1 px-2 mb-0"><small>${data.error}</small></div>` : ''}
+                    `;
+                }
+                
+                resultDiv.style.display = 'block';
+                
+                // 滚动到结果区域
+                resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            })
+            .catch(error => {
+                // 恢复按钮状态
+                testModelBtn.disabled = false;
+                testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> <?= __("测试模型") ?>';
+                
+                // 显示错误
+                const resultDiv = document.getElementById('testResult');
+                const resultContent = document.getElementById('testResultContent');
+                
+                resultContent.innerHTML = `
+                    <div class="alert alert-danger py-1 px-2">
+                        <small><strong><?= __("网络错误") ?>!</strong> ${error.message}</small>
+                    </div>
+                `;
+                
+                resultDiv.style.display = 'block';
+            });
+        });
+    }
+    
+    // 切换测试面板
+    const toggleTestPanel = document.getElementById('toggleTestPanel');
+    const testModelPanel = document.getElementById('testModelPanel');
+    const closeTestPanel = document.getElementById('closeTestPanel');
+    
+    if (toggleTestPanel && testModelPanel) {
+        toggleTestPanel.addEventListener('click', function() {
+            testModelPanel.style.display = testModelPanel.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+    
+    if (closeTestPanel && testModelPanel) {
+        closeTestPanel.addEventListener('click', function() {
+            testModelPanel.style.display = 'none';
+        });
+    }
+    <?php endif; ?>
 });
+
+// 切换提供商配置手风琴
+function toggleProviderConfig() {
+    const body = document.getElementById('providerConfigBody');
+    const icon = document.getElementById('providerConfigIcon');
+    
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+        icon.style.transform = 'rotate(0deg)';
+    } else {
+        body.style.display = 'none';
+        icon.classList.remove('bi-chevron-down');
+        icon.classList.add('bi-chevron-right');
+        icon.style.transform = 'rotate(0deg)';
+    }
+}
 </script>
 
 <style>
@@ -589,6 +860,44 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-bottom: 0;
 }
 </style>
+
+<?php if ($isEdit): ?>
+<!-- 浮动测试按钮和面板 -->
+<div id="testModelPanel" style="display: none; position: fixed; right: 20px; bottom: 100px; width: 400px; background: white; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1050; max-height: 600px; overflow-y: auto;">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center" style="padding: 12px 16px;">
+        <span><i class="bi bi-play-circle me-2"></i><?= __('模型测试') ?></span>
+        <button type="button" class="btn-close btn-close-white" id="closeTestPanel" style="opacity: 1;"></button>
+    </div>
+    <div class="card-body" style="padding: 16px;">
+        <div class="mb-3">
+            <label for="test_prompt" class="form-label"><?= __('测试提示词') ?></label>
+            <textarea class="form-control" 
+                      id="test_prompt" 
+                      rows="3"
+                      placeholder="<?= __('例如: 你好，请介绍一下你自己') ?>">Hello, this is a connection test.</textarea>
+        </div>
+        
+        <button type="button" class="btn btn-success w-100 mb-3" id="testModelBtn">
+            <i class="bi bi-play-circle"></i> <?= __('开始测试') ?>
+        </button>
+        
+        <div id="testResult" style="display: none;">
+            <div class="alert alert-light border">
+                <small class="text-muted d-block mb-2 fw-bold"><?= __('测试结果') ?></small>
+                <div id="testResultContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 浮动测试按钮 -->
+<button type="button" 
+        id="toggleTestPanel" 
+        class="btn btn-success shadow"
+        style="position: fixed; right: 20px; bottom: 20px; padding: 8px 16px; font-size: 14px; border-radius: 20px; z-index: 1040; display: flex; align-items: center; gap: 6px;">
+    <i class="mdi mdi-test-tube"></i> <span>测试</span>
+</button>
+<?php endif; ?>
 
 </body>
 </html>

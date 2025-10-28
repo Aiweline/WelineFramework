@@ -243,12 +243,23 @@ class AiService
     {
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
+            // 优先取已激活模型
             $model = $this->aiModel->reset()
                 ->where(AiModel::fields_MODEL_CODE, $modelCode)
                 ->where(AiModel::fields_IS_ACTIVE, 1)
                 ->find()
                 ->fetch();
-            
+
+            if ($model->getId()) {
+                return $model;
+            }
+
+            // 若未激活，则放宽激活限制，用于连接测试等场景
+            $model = $this->aiModel->reset()
+                ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                ->find()
+                ->fetch();
+
             if ($model->getId()) {
                 return $model;
             }
@@ -282,7 +293,7 @@ class AiService
 
         $adapter = $this->adapterScanner->getAdapter($scenarioCode);
         if (!$adapter) {
-            return $prompt;
+            throw new Exception(__("场景适配器不存在: %{code}", ['code' => $scenarioCode]));
         }
 
         // 验证参数
@@ -310,7 +321,7 @@ class AiService
 
         $adapter = $this->adapterScanner->getAdapter($scenarioCode);
         if (!$adapter) {
-            return $response;
+            throw new Exception(__("场景适配器不存在: %{code}", ['code' => $scenarioCode]));
         }
 
         return $adapter->processResponse($response, $params);

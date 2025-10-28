@@ -606,11 +606,7 @@
                                 </svg>
                                 <span class="countdown-number" id="countdown-<?= $account['account_id'] ?>">30</span>
                             </div>
-                            <div class="account-code" id="code-<?= $account['account_id'] ?>" 
-                                 data-secret="<?= htmlspecialchars($account['secret']) ?>"
-                                 data-algorithm="<?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?>"
-                                 data-digits="<?= (int)($account['digits'] ?? 6) ?>"
-                                 data-period="<?= (int)($account['period'] ?? 30) ?>">---- --</div>
+                            <div class="account-code" id="code-<?= $account['account_id'] ?>">---- --</div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -724,84 +720,63 @@
     </div>
 
     <script>
-        // TOTP算法实现
-        function base32Decode(str) {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-            let bits = '';
+        // 从后端获取TOTP中间结果（带缓存）
+        async function getTOTPIntermediateValue(accountId) {
+            const cacheKey = `totp_${accountId}`;
+            const cachedData = localStorage.getItem(cacheKey);
             
-            for (let i = 0; i < str.length; i++) {
-                const val = chars.indexOf(str[i]);
-                if (val === -1) continue;
-                bits += val.toString(2).padStart(5, '0');
-            }
-            
-            const bytes = [];
-            for (let i = 0; i < bits.length; i += 8) {
-                const byte = bits.substr(i, 8);
-                if (byte.length === 8) {
-                    bytes.push(parseInt(byte, 2));
+            // 检查缓存是否有效
+            if (cachedData) {
+                const data = JSON.parse(cachedData);
+                const now = Math.floor(Date.now() / 1000);
+                
+                // 如果缓存未过期（剩余5秒缓冲），直接使用
+                if (data.expires_at > now + 5) {
+                    return data;
                 }
             }
             
-            return new Uint8Array(bytes);
+            // 缓存无效或不存在，从后端获取
+            try {
+                const response = await fetch(`/two-factor-auth/frontend/accounts/getcode?account_id=${accountId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 计算过期时间并缓存
+                    const now = Math.floor(Date.now() / 1000);
+                    const cacheData = {
+                        hash_value: result.hash_value,
+                        digits: result.digits,
+                        period: result.period,
+                        expires_at: now + result.period,
+                        obtained_at: now
+                    };
+                    
+                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                    return result;
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error('获取验证码失败:', error);
+                return null;
+            }
         }
         
-        function generateTOTP(secret, algorithm = 'SHA1', digits = 6, period = 30) {
-            let timeStep = Math.floor(Date.now() / 1000 / period);
+        // 从后端获取TOTP中间结果并完成最后计算
+        async function generateTOTPFromBackend(accountId) {
+            const result = await getTOTPIntermediateValue(accountId);
             
-            // 将时间步数转换为8字节大端序
-            const timeBytes = new Uint8Array(8);
-            let currentStep = timeStep;
-            for (let i = 7; i >= 0; i--) {
-                timeBytes[i] = currentStep & 0xff;
-                currentStep >>= 8;
+            if (result) {
+                // 使用后端返回的hash_value完成最后一步计算
+                const code = result.hash_value % Math.pow(10, result.digits);
+                return code.toString().padStart(result.digits, '0');
+            } else {
+                return '-- --';
             }
-            
-            // HMAC计算
-            const secretBytes = base32Decode(secret);
-            
-            // 使用Web Crypto API计算HMAC
-            return crypto.subtle.importKey(
-                'raw',
-                secretBytes,
-                { name: 'HMAC', hash: { name: algorithm === 'SHA256' ? 'SHA-256' : 'SHA-1' } },
-                false,
-                ['sign']
-            ).then(key => {
-                return crypto.subtle.sign('HMAC', key, timeBytes);
-            }).then(signature => {
-                // 动态截断（RFC 4226）
-                const hash = new Uint8Array(signature);
-                const offset = hash[hash.length - 1] & 0x0F;
-                const truncated = ((hash[offset] & 0x7F) << 24) |
-                                 ((hash[offset + 1] & 0xFF) << 16) |
-                                 ((hash[offset + 2] & 0xFF) << 8) |
-                                 (hash[offset + 3] & 0xFF);
-                
-                const code = truncated % Math.pow(10, digits);
-                return code.toString().padStart(digits, '0');
-            });
         }
-
-        // 自动刷新验证码
-        function refreshCodes() {
-            const codeElements = document.querySelectorAll('[id^="code-"]');
-            codeElements.forEach(element => {
-                const secret = element.dataset.secret;
-                const algorithm = element.dataset.algorithm || 'SHA1';
-                const digits = parseInt(element.dataset.digits || '6');
-                const period = parseInt(element.dataset.period || '30');
-                
-                if (!secret) return;
-                
-                generateTOTP(secret, algorithm, digits, period).then(code => {
-                    element.textContent = code;
-                    
-                    // 显示剩余时间进度条
-                    updateProgressBar(element, period);
-                });
-            });
-        }
+        
+        // 自动刷新验证码（旧函数已废弃，现在使用refreshCodeWithSchedule）
         
         // 更新倒计时圆圈和数字
         function updateCountdownCircle(accountId, period) {
@@ -823,54 +798,63 @@
             return remaining * 1000;
         }
         
-        // 刷新单个账户并安排下次刷新
-        function refreshCodeWithSchedule(element) {
-            const secret = element.dataset.secret;
-            const algorithm = element.dataset.algorithm || 'SHA1';
-            const digits = parseInt(element.dataset.digits || '6');
-            const period = parseInt(element.dataset.period || '30');
+        // 刷新单个账户并安排下次刷新（使用后端API）
+        async function refreshCodeWithSchedule(element) {
             const accountId = element.id.replace('code-', '');
             
-            if (!secret) return;
+            if (!accountId) return;
             
-            generateTOTP(secret, algorithm, digits, period).then(code => {
+            try {
+                const code = await generateTOTPFromBackend(accountId);
                 element.textContent = code;
                 
-                // 更新倒计时圆圈
-                const nextRefresh = updateCountdownCircle(accountId, period);
+                // 获取中间值和周期信息（从缓存）
+                const result = await getTOTPIntermediateValue(accountId);
                 
-                // 安排下次倒计时更新（每秒）
-                let countdownTimer;
-                function startCountdown() {
-                    clearInterval(countdownTimer);
-                    countdownTimer = setInterval(() => {
-                        const newRemaining = period - (Math.floor(Date.now() / 1000) % period);
-                        const progressBar = document.getElementById(`progress-${accountId}`);
-                        const countdownNumber = document.getElementById(`countdown-${accountId}`);
-                        const circumference = 94.24;
-                        
-                        if (progressBar && countdownNumber) {
-                            countdownNumber.textContent = newRemaining;
-                            const offset = circumference - (newRemaining / period) * circumference;
-                            progressBar.style.strokeDashoffset = offset;
+                if (result) {
+                    const period = result.period;
+                    const now = Math.floor(Date.now() / 1000);
+                    const remaining = result.expires_at - now;
+                    
+                    // 更新倒计时圆圈
+                    updateCountdownCircle(accountId, period);
+                    
+                    // 安排下次倒计时更新（每秒）
+                    let countdownTimer;
+                    function startCountdown() {
+                        clearInterval(countdownTimer);
+                        countdownTimer = setInterval(() => {
+                            const now = Math.floor(Date.now() / 1000);
+                            const newRemaining = Math.max(0, result.expires_at - now);
+                            const progressBar = document.getElementById(`progress-${accountId}`);
+                            const countdownNumber = document.getElementById(`countdown-${accountId}`);
+                            const circumference = 94.24;
                             
-                            // 倒计时结束，刷新验证码
-                            if (newRemaining <= 1) {
-                                clearInterval(countdownTimer);
-                                refreshCodeWithSchedule(element);
+                            if (progressBar && countdownNumber) {
+                                countdownNumber.textContent = newRemaining;
+                                const offset = circumference - (newRemaining / period) * circumference;
+                                progressBar.style.strokeDashoffset = offset;
+                                
+                                // 倒计时结束，刷新验证码
+                                if (newRemaining <= 1) {
+                                    clearInterval(countdownTimer);
+                                    refreshCodeWithSchedule(element);
+                                }
                             }
-                        }
-                    }, 100);
+                        }, 100);
+                    }
+                    
+                    startCountdown();
+                    
+                    // 安排在验证码到期时刷新
+                    setTimeout(() => {
+                        clearInterval(countdownTimer);
+                        refreshCodeWithSchedule(element);
+                    }, remaining * 1000 + 100);
                 }
-                
-                startCountdown();
-                
-                // 安排在验证码到期时刷新
-                setTimeout(() => {
-                    clearInterval(countdownTimer);
-                    refreshCodeWithSchedule(element);
-                }, nextRefresh + 100);
-            });
+            } catch (error) {
+                console.error('刷新验证码失败:', error);
+            }
         }
 
         // 立即刷新所有验证码
