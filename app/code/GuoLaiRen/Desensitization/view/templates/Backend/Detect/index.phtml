@@ -1,22 +1,26 @@
 <?php
 /**
  * 敏感内容检测页面模板
- * 
- * @var array $types
- * @var array $models
  */
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-
-$types = $this->types ?? [];
-$models = $this->models ?? [];
 ?>
 <!DOCTYPE html>
 <html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
     @template(Weline_Admin::common/head.phtml)
     <title>敏感内容检测</title>
+    <style>
+        .highlight-marked {
+            background-color: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .accordion-button:not(.collapsed) {
+            background-color: #f8f9fa;
+        }
+    </style>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
 
@@ -46,10 +50,11 @@ $models = $this->models ?? [];
                     <template>Weline_Component::message.phtml</template>
                 </div>
 
-                <!-- 检测输入区域 -->
+                <!-- 左右布局容器 -->
                 <div class="row">
-                    <div class="col-12">
-                        <div class="card">
+                    <!-- 左侧：检测输入区域 -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
                             <div class="card-header">
                                 <h3 class="card-title">
                                     <i class="mdi mdi-file-search me-2"></i>
@@ -60,38 +65,32 @@ $models = $this->models ?? [];
                                 <form id="detectForm">
                                     <div class="mb-3">
                                         <label class="form-label">输入要检测的内容 <span class="text-danger">*</span></label>
-                                        <textarea class="form-control" id="content" name="content" rows="5" 
+                                        <textarea class="form-control" id="content" name="content" rows="15" 
                                                   placeholder="请输入需要检测的内容..."></textarea>
                                     </div>
                                     
                                     <div class="mb-3">
-                                        <label class="form-label">检测类型（可选）</label>
-                                        <div class="row">
-                                            <?php foreach ($types as $type): ?>
-                                                <div class="col-md-3 mb-2">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" 
-                                                               name="rule_types[]" value="<?= $type ?>" 
-                                                               id="type_<?= $type ?>" checked>
-                                                        <label class="form-check-label" for="type_<?= $type ?>">
-                                                            <?= $type ?>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
                                         <label class="form-label">AI模型（可选）</label>
-                                        <select class="form-select" id="model_code" name="model_code">
-                                            <option value="">使用默认模型</option>
-                                            <?php foreach ($models as $model): ?>
-                                                <option value="<?= $model['code'] ?>">
-                                                    <?= $model['name'] ?> (<?= $model['supplier'] ?>)
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                        <div class="position-relative">
+                                            <button type="button" class="btn btn-outline-secondary w-100 text-start" id="model_trigger" style="height: 38px;">
+                                                <span id="model_display">使用默认模型</span>
+                                            </button>
+                                            <div id="model_container" style="display: none;">
+                                                <input type="text" class="form-control mb-2" id="model_search" 
+                                                       placeholder="搜索AI模型..." 
+                                                       autocomplete="off">
+                                                <input type="hidden" id="model_code" name="model_code" value="">
+                                                <div class="border rounded" style="max-height: 300px; overflow-y: auto; background: white; position: relative;">
+                                                    <div id="model_loading" style="padding: 1rem; text-align: center; display: none;">
+                                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                            <span class="visually-hidden">加载中...</span>
+                                                        </div>
+                                                    </div>
+                                                    <div id="model_list" style="padding: 0.25rem;"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">提示：点击选择AI模型，输入关键词搜索（800ms防抖）</small>
                                     </div>
 
                                     <div class="text-end">
@@ -104,20 +103,67 @@ $models = $this->models ?? [];
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 检测结果 -->
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <div class="card" id="resultCard" style="display: none;">
+                    <!-- 右侧：检测结果（始终显示） -->
+                    <div class="col-md-6">
+                        <div class="card h-100" id="resultCard">
                             <div class="card-header">
                                 <h3 class="card-title">
                                     <i class="mdi mdi-check-circle me-2"></i>
                                     检测结果
                                 </h3>
                             </div>
-                            <div class="card-body" id="resultContent">
-                                <!-- 结果将在这里显示 -->
+                            <div class="card-body" id="resultContent" style="height: calc(100vh - 300px); overflow-y: auto;">
+                                <!-- 三个手风琴块 -->
+                                <div class="accordion" id="resultAccordion">
+                                    <!-- 1. 检测结果 -->
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="headingDetection">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDetection">
+                                                <i class="mdi mdi-shield-search me-2"></i>检测结果
+                                            </button>
+                                        </h2>
+                                        <div id="collapseDetection" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
+                                            <div class="accordion-body" id="detectionContent">
+                                                <div class="text-muted text-center py-4">等待检测...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 2. 润色结果 -->
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="headingRewrite">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRewrite">
+                                                <i class="mdi mdi-auto-fix me-2"></i>润色后的内容
+                                            </button>
+                                        </h2>
+                                        <div id="collapseRewrite" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
+                                            <div class="accordion-body" id="rewriteContent">
+                                                <div class="text-muted text-center py-4">等待润色...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 3. 新旧对比 -->
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="headingCompare">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCompare">
+                                                <i class="mdi mdi-compare me-2"></i>新旧对比
+                                            </button>
+                                        </h2>
+                                        <div id="collapseCompare" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
+                                            <div class="accordion-body" id="compareContent">
+                                                <div class="text-muted text-center py-4">等待对比 שכב...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer" id="resultFooter" style="display: none;">
+                                <button type="button" class="btn btn-success" onclick="rewriteContent()">
+                                    <i class="mdi mdi-auto-fix me-1"></i>
+                                    智能润色
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -129,16 +175,163 @@ $models = $this->models ?? [];
 
 </div>
 
+<!-- 检测中弹窗 -->
+<div class="modal fade" id="detectLoadingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body d-flex align-items-center">
+        <div class="spinner-border text-primary me-3" role="status" aria-hidden="true"></div>
+        <div>
+          <div class="fw-semibold" id="detectLoadingTitle">正在检测...</div>
+          <div class="text-muted small">请稍候，AI/规则正在分析文本</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 @template(Weline_Admin::common/right-sidebar.phtml)
 @template(Weline_Admin::common/footer.phtml)
 
 <script>
+// 全局变量
+let allModels = [];
+let detectionData = null;
+let rewriteData = null;
+
+// Debounce实现
+function debounce(func, delay) {
+    let timeoutId;
+    return function (...args) {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+            timeoutId = null;
+        }, delay);
+    };
+}
+
+// 加载AI模型列表
+function loadModels() {
+    const modelList = document.getElementById('model_list');
+    const loadingDiv = document.getElementById('model_loading');
+    const modelContainer = document.getElementById('model_container');
+    const modelTrigger = document.getElementById('model_trigger');
+    
+    modelTrigger.style.display = 'none';
+    modelContainer.style.display = 'block';
+    loadingDiv.style.display = 'block';
+    modelList.innerHTML = '';
+    
+    fetch('<?= $this->getBackendUrl('*/backend/detect/models') ?>', {
+        method: 'GET',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => {
+        loadingDiv.style.display = 'none';
+        if (!response.ok) {
+            throw new Error('网络请求失败: ' + response.status);
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.success && result.data && result.data.length > 0) {
+            allModels = result.data;
+            console.log('AI模型加载成功，共加载', result.data.length, '个模型');
+            displayModels(allModels);
+        } else {
+            modelList.innerHTML = '<div class="p-2 text-danger">⚠️ 未找到可用的AI模型</div>';
+            console.warn('未获取到AI模型数据');
+        }
+    })
+    .catch(error => {
+        loadingDiv.style.display = 'none';
+        modelList.innerHTML = '<div class="p-2 text-danger">❌ 加载失败: ' + (error.message || error) + '</div>';
+        console.error('加载AI模型失败:', error);
+    });
+}
+
+// 显示模型列表
+function displayModels(models) {
+    const modelList = document.getElementById('model_list');
+    
+    if (models.length === 0) {
+        modelList.innerHTML = '<div class="p-2 text-muted">未找到匹配的模型</div>';
+        return;
+    }
+    
+    modelList.innerHTML = models.map(model => {
+        const displayText = `${model.name} (${model.supplier}) - ${model.version}`;
+        return `<div class="p-2 border-bottom" style="cursor: pointer;" data-code="${model.code}" data-text="${displayText}" 
+                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                 onmouseout="this.style.backgroundColor='white'">
+                 ${displayText}
+                </div>`;
+    }).join('');
+    
+    modelList.querySelectorAll('[data-code]').forEach(item => {
+        item.addEventListener('click', function() {
+            const code = this.dataset.code;
+            const text = this.dataset.text;
+            
+            document.getElementById('model_code').value = code;
+            
+            const modelTrigger = document.getElementById('model_trigger');
+            const modelDisplay = document.getElementById('model_display');
+            const modelContainer = document.getElementById('model_container');
+            
+            modelDisplay.textContent = text;
+            modelTrigger.style.display = 'block';
+            modelContainer.style.display = 'none';
+        });
+    });
+}
+
+// 搜索模型（使用debounce）
+const debouncedSearch = debounce(function(searchTerm) {
+    if (!searchTerm.trim()) {
+        displayModels(allModels);
+        return;
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    const filtered = allModels.filter(model => {
+        const searchText = `${model.name} ${model.supplier} ${model.version}`.toLowerCase();
+        return searchText.includes(searchLower);
+    });
+    
+    displayModels(filtered);
+}, 800);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    const modelTrigger = document.getElementById('model_trigger');
+    const searchInput = document.getElementById('model_search');
+    
+    modelTrigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        loadModels();
+        setTimeout(() => searchInput.focus(), 100);
+    });
+    
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value;
+        debouncedSearch(searchTerm);
+    });
+});
+
 function executeDetect() {
     const content = document.getElementById('content').value;
     if (!content) {
         alert('请输入检测内容');
         return;
     }
+
+    // 显示“检测中”弹窗
+    const detectLoadingModal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
+    detectLoadingModal.show();
 
     const form = document.getElementById('detectForm');
     const formData = new FormData(form);
@@ -152,11 +345,11 @@ function executeDetect() {
         }
     });
 
-    const resultCard = document.getElementById('resultCard');
-    const resultContent = document.getElementById('resultContent');
+    const detectionContent = document.getElementById('detectionContent');
+    const resultFooter = document.getElementById('resultFooter');
     
-    resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
-    resultCard.style.display = 'block';
+    detectionContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
+    resultFooter.style.display = 'none';
 
     fetch('<?= $this->getBackendUrl('*/backend/detect/execute') ?>', {
         method: 'POST',
@@ -165,42 +358,175 @@ function executeDetect() {
     })
     .then(response => response.json())
     .then(data => {
+        detectLoadingModal.hide();
         if (data.success) {
-            const result = data.data;
-            let html = `
-                <div class="alert alert-info">
-                    <strong>检测完成</strong> - 执行时间: ${result.execution_time}
-                </div>
-            `;
+            detectionData = data.data;
+            displayDetectionResult(data.data);
             
-            if (result.detection.has_sensitive) {
-                html += `
-                    <div class="alert alert-warning">
-                        <h5><i class="mdi mdi-alert me-2"></i>发现敏感内容</h5>
-                        <strong>敏感类型：</strong> ${result.detection.sensitive_types.join(', ')}<br>
-                        <strong>发现 ${result.detection.positions.length} 处敏感信息</strong>
-                    </div>
-                `;
-                
-                if (result.detection.positions && result.detection.positions.length > 0) {
-                    html += '<div class="table-responsive mt-3"><table class="table table-sm table-bordered"><thead><tr><th>类型</th><th>内容</th><th>位置</th></tr></thead><tbody>';
-                    result.detection.positions.forEach(pos => {
-                        html += `<tr><td><span class="badge bg-danger">${pos.type}</span></td><td><code>${pos.match}</code></td><td>${pos.start}-${pos.end}</td></tr>`;
-                    });
-                    html += '</tbody></table></div>';
-                }
-            } else {
-                html += '<div class="alert alert-success"><i class="mdi mdi-check me-2"></i>未发现敏感内容</div>';
+            if (data.data.detection.has_sensitive) {
+                resultFooter.style.display = 'block';
             }
-            
-            resultContent.innerHTML = html;
         } else {
-            resultContent.innerHTML = `<div class="alert alert-danger">检测失败: ${data.message}</div>`;
+            detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${data.message}</div>`;
         }
     })
     .catch(error => {
-        resultContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
+        detectLoadingModal.hide();
+        detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
     });
+}
+
+// 显示检测结果
+function displayDetectionResult(result) {
+    const detectionContent = document.getElementById('detectionContent');
+    
+    let html = `
+        <div class="alert alert-info">
+            <strong>检测完成</strong> - 执行时间: ${result.execution_time}
+        </div>
+    `;
+    
+    if (result.detection.has_sensitive) {
+        html += `
+            <div class="alert alert-warning">
+                <h5><i class="mdi mdi-alert me-2"></i>发现敏感内容</h5>
+                <strong>敏感类型：</strong> ${result.detection.sensitive_types.join(', ')}<br>
+                <strong>发现 ${result.detection.positions.length} 处敏感信息</strong>
+            </div>
+        `;
+        
+        const markedContent = markSensitiveContent(result.original, result.detection.positions);
+        html += `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">标记后的内容</h5>
+                </div>
+                <div class="card-body">
+                    <div style="white-space: pre-wrap;">${markedContent}</div>
+                </div>
+            </div>
+        `;
+        
+        if (result.detection.positions && result.detection.positions.length > 0) {
+            html += '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>类型</th><th>内容</th><th>位置</th></tr></thead><tbody>';
+            result.detection.positions.forEach(pos => {
+                html += `<tr><td><span class="badge bg-danger">${pos.type}</span></td><td><code>${pos.match}</code></td><td>${pos.start}-${pos.end}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+        }
+    } else {
+        html += '<div class="alert alert-success"><i class="mdi mdi-check me-2"></i>未发现敏感内容</div>';
+    }
+    
+    detectionContent.innerHTML = html;
+    
+    // 展开检测结果手风琴
+    new bootstrap.Collapse(document.getElementById('collapseDetection'), {toggle: true});
+}
+
+// 标记敏感内容
+function markSensitiveContent(content, positions) {
+    if (!positions || positions.length === 0) {
+        return content;
+    }
+    
+    const sortedPositions = positions.sort((a, b) => b.start - a.start);
+    
+    let markedContent = content;
+    sortedPositions.forEach(pos => {
+        const before = markedContent.substring(0, pos.start);
+        const marked = `<span class="highlight-marked">${pos.match}</span>`;
+        const after = markedContent.substring(pos.end);
+        markedContent = before + marked + after;
+    });
+    
+    return markedContent;
+}
+
+// 润色内容
+function rewriteContent() {
+    if (!detectionData || !detectionData.detection.has_sensitive) {
+        alert('没有需要润色的内容');
+        return;
+    }
+
+    const rewriteContentDiv = document.getElementById('rewriteContent');
+    const resultFooter = document.getElementById('resultFooter');
+    
+    const rewriteBtn = resultFooter.querySelector('button');
+    const originalText = rewriteBtn.textContent;
+    rewriteBtn.disabled = true;
+    rewriteBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>正在润色...';
+    
+    const formData = new FormData(document.getElementById('detectForm'));
+    const modelCode = formData.get('model_code') || '';
+    
+    const data = {
+        content: detectionData.original,
+        positions: detectionData.detection.positions,
+        model_code: modelCode
+    };
+
+    fetch('<?= $this->getBackendUrl('*/backend/detect/rewrite') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        rewriteBtn.disabled = false;
+        rewriteBtn.textContent = originalText;
+        
+        if (data.success) {
+            rewriteData = data.data;
+            displayRewriteResult();
+        } else {
+            alert('润色失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        rewriteBtn.disabled = false;
+        rewriteBtn.textContent = originalText;
+        alert('润色失败: ' + error.message);
+    });
+}
+
+// 显示润色结果
+function displayRewriteResult() {
+    const rewriteContentDiv = document.getElementById('rewriteContent');
+    const compareContentDiv = document.getElementById('compareContent');
+    
+    rewriteContentDiv.innerHTML = `<div style="white-space: pre-wrap;">${rewriteData.content}</div>`;
+    compareContentDiv.innerHTML = generateComparisonContent();
+    
+    // 展开润色结果手风琴
+    new bootstrap.Collapse(document.getElementById('collapseRewrite'), {toggle: true});
+}
+
+// 生成对比内容
+function generateComparisonContent() {
+    if (!detectionData || !rewriteData) {
+        return '<div class="text-muted">暂无对比数据</div>';
+    }
+    
+    const markedOriginal = markSensitiveContent(detectionData.original, detectionData.detection.positions);
+    
+    return `
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-danger"><i class="mdi mdi-alert me-1"></i>原内容（标记敏感部分）</h6>
+                <div class="border rounded p-3" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
+                    ${markedOriginal}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-success"><i class="mdi mdi-auto-fix me-1"></i>润色后内容</h6>
+                <div class="border rounded p-3" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
+                    ${rewriteData.content}
+                </div>
+            </div>
+        </div>
+    `;
 }
 </script>
 

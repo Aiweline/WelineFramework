@@ -45,7 +45,7 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     public function getDescription(): string
     {
-        return '专门用于AI数据脱敏任务的场景适配器。支持四种工作模式：1. 检测模式（默认）- 检测敏感信息；2. 脱敏模式 - 对敏感信息进行脱敏处理；3. 标记模式 - 标记敏感词位置；4. 润色模式 - 脱敏后对内容进行润色。能够识别并保护邮箱、手机号、身份证、银行卡等敏感信息。';
+        return '专门用于AI数据脱敏任务的场景适配器。支持六种工作模式：1. 检测模式（默认）- 检测敏感信息；2. 脱敏模式 - 对敏感信息进行脱敏处理；3. 标记模式 - 标记敏感词位置；4. 检测+标记模式 - 同时输出问题点与位置信息；5. 润色模式 - 脱敏后对内容进行润色；6. 提取模式 - 从网页内容中提取敏感词规则。能够识别并保护邮箱、手机号、身份证、银行卡等敏感信息。';
     }
 
     /**
@@ -78,8 +78,12 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
                 return $this->buildDesensitizePrompt($prompt, $level);
             case 'mark':
                 return $this->buildMarkPrompt($prompt, $level);
+            case 'detect_mark':
+                return $this->buildDetectMarkPrompt($prompt, $level);
             case 'rewrite':
                 return $this->buildRewritePrompt($prompt, $level, $params);
+            case 'extract':
+                return $this->buildExtractPrompt($prompt, $params);
             case 'detect':
             default:
                 return $this->buildDetectPrompt($prompt);
@@ -166,6 +170,23 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         
         return $prompt;
     }
+
+    /**
+     * 构建检测+标记组合模式提示词
+     */
+    private function buildDetectMarkPrompt(string $content, string $level): string
+    {
+        $prompt = "请先检测以下内容中的敏感信息和违禁点，然后对检测到的项目进行位置标记；要求：\n";
+        $prompt .= "1) 输出问题清单（类型/原因/摘要）；\n";
+        $prompt .= "2) 同时给出原文中的起止位置标记列表（格式：[start:end:类型:片段]）；\n";
+        $prompt .= "3) 不要修改原文；\n\n";
+
+        // 结合检测关注点
+        $prompt .= "需要重点关注：\n";
+        $prompt .= $this->getProhibitedContentRules();
+        $prompt .= "\n\n原文：\n{$content}";
+        return $prompt;
+    }
     
     /**
      * 构建润色模式提示词
@@ -239,6 +260,192 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     }
     
     /**
+     * 构建提取模式提示词
+     */
+    private function buildExtractPrompt(string $input, array $params = []): string
+    {
+        // 若传入为URL，则内部抓取页面并提纯为纯文本；支持 crawl=true 进行站内聚合
+        $text = $input;
+        if (preg_match('/^https?:\/\//i', $input)) {
+            $crawl = (bool)($params['crawl'] ?? false);
+            $maxDepth = (int)($params['depth'] ?? 1);
+            if ($maxDepth < 0) { $maxDepth = 0; }
+            $maxPages = (int)($params['max_pages'] ?? 30);
+            if ($maxPages < 1) { $maxPages = 1; }
+
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'timeout' => 15,
+                    'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36\r\n"
+                ]
+            ]);
+
+            // 渲染源列表：params.renderers 可覆盖
+            $rendererBases = [];
+            if (isset($params['renderers']) && is_array($params['renderers']) && $params['renderers']) {
+                $rendererBases = $params['renderers'];
+            } else {
+                $rendererBases = [ 'https://r.jina.ai/' ];
+            }
+
+            if ($crawl) {
+                $aggregated = $this->crawlAndAggregate($input, $context, $rendererBases, $maxDepth, $maxPages);
+                $text = $aggregated !== '' ? $aggregated : $this->fetchRenderedFirst($input, $context, $rendererBases);
+            } else {
+                $text = $this->fetchRenderedFirst($input, $context, $rendererBases);
+            }
+        }
+
+        // 规范换行并限制长度，避免提示过长
+        $text = str_replace(["\r\n", "\r"], "\n", (string)$text);
+        if (mb_strlen($text, 'UTF-8') > 120000) {
+            $text = mb_substr($text, 0, 120000, 'UTF-8');
+        }
+
+        $prompt = "你是政策规则解析助手。请从以下网页内容中提取与广告/内容合规相关的'敏感范围术语或类别'，每行一个短语，只输出结果清单，不要编号/解释。每个词详细说明有哪些单词可能会被认为是这个词汇，并尽可能也列举出来当作敏感词（比如具体的股票）。\n\n";
+        
+        $prompt .= "示例格式：\n";
+        $prompt .= "暴力内容\n";
+        $prompt .= "仇恨言论\n";
+        $prompt .= "虚假信息\n";
+        $prompt .= "骚扰\n";
+        $prompt .= "自残\n";
+        $prompt .= "性剥削\n";
+        $prompt .= "恐怖主义\n";
+        $prompt .= "成人性内容\n";
+        $prompt .= "儿童性剥削\n";
+        $prompt .= "诈骗\n";
+        $prompt .= "知识产权侵权\n";
+        $prompt .= "隐私侵犯\n";
+        $prompt .= "人工智能生成的性内容\n\n";
+        
+        $prompt .= "网页内容：\n";
+        $prompt .= $text;
+        
+        return $prompt;
+    }
+
+    // 抓取并优先使用渲染源
+    private function fetchRenderedFirst(string $url, $context, array $rendererBases): string
+    {
+        foreach ($rendererBases as $base) {
+            $base = rtrim((string)$base, '/') . '/';
+            $renderUrl = $base . $url;
+            $rendered = @file_get_contents($renderUrl, false, $context);
+            if ($rendered !== false && $rendered !== '') {
+                return strip_tags($rendered);
+            }
+        }
+        $html = @file_get_contents($url, false, $context);
+        return $html !== false ? strip_tags($html) : '';
+    }
+
+    // 简单的同源/前缀限制
+    private function isAllowedUrl(string $startUrl, string $candidate): bool
+    {
+        $s = parse_url($startUrl);
+        $c = parse_url($candidate);
+        if (!$s || !$c) return false;
+        if (($s['scheme'] ?? '') !== ($c['scheme'] ?? '')) return false;
+        if (($s['host'] ?? '') !== ($c['host'] ?? '')) return false;
+        $startPath = rtrim($s['path'] ?? '/', '/');
+        $candPath = $c['path'] ?? '/';
+        return strpos($candPath, $startPath) === 0; // 下级路径
+    }
+
+    // 提取站内链接（非常简化，足够应对政策页）
+    private function extractLinks(string $html, string $baseUrl): array
+    {
+        $links = [];
+        if (preg_match_all('/<a[^>]+href=\"([^\"]+)\"/i', $html, $m)) {
+            foreach ($m[1] as $href) {
+                if (strpos($href, 'javascript:') === 0) continue;
+                if (strpos($href, '#') === 0) continue;
+                // 绝对/相对
+                if (preg_match('/^https?:\/\//i', $href)) {
+                    $links[] = $href;
+                } else {
+                    $links[] = rtrim($this->getBaseOrigin($baseUrl), '/') . '/' . ltrim($href, '/');
+                }
+            }
+        }
+        return array_values(array_unique($links));
+    }
+
+    private function getBaseOrigin(string $url): string
+    {
+        $u = parse_url($url);
+        $origin = ($u['scheme'] ?? 'http') . '://' . ($u['host'] ?? '');
+        if (isset($u['port'])) $origin .= ':' . $u['port'];
+        return $origin;
+    }
+
+    private function extractMainText(string $html): string
+    {
+        // 优先 main/article，再退回全文去标签
+        $html = (string)$html;
+        if (preg_match('/<(main|article)[^>]*>([\s\S]*?)<\/\1>/i', $html, $m)) {
+            return strip_tags($m[2]);
+        }
+        // 退一步：提取标题+段落
+        $buf = [];
+        if (preg_match_all('/<(h1|h2|h3)[^>]*>([\s\S]*?)<\/\1>/i', $html, $hm)) {
+            foreach ($hm[2] as $t) $buf[] = trim(strip_tags($t));
+        }
+        if (preg_match_all('/<(p|li)[^>]*>([\s\S]*?)<\/\1>/i', $html, $pm)) {
+            foreach ($pm[2] as $p) $buf[] = trim(strip_tags($p));
+        }
+        $txt = trim(implode("\n", array_filter($buf)));
+        return $txt !== '' ? $txt : strip_tags($html);
+    }
+
+    private function crawlAndAggregate(string $startUrl, $context, array $rendererBases, int $maxDepth, int $maxPages): string
+    {
+        $visited = [];
+        $queue = [[ $startUrl, 0 ]];
+        $pages = 0;
+        $allText = [];
+
+        while ($queue) {
+            list($url, $depth) = array_shift($queue);
+            if (isset($visited[$url])) continue;
+            $visited[$url] = true;
+            if ($pages >= $maxPages) break;
+
+            // 渲染抓取
+            $html = '';
+            foreach ($rendererBases as $base) {
+                $base = rtrim((string)$base, '/') . '/';
+                $renderUrl = $base . $url;
+                $r = @file_get_contents($renderUrl, false, $context);
+                if ($r !== false && $r !== '') { $html = $r; break; }
+            }
+            if ($html === '') {
+                $r = @file_get_contents($url, false, $context);
+                if ($r !== false) $html = $r;
+            }
+            if ($html === '') continue;
+            $pages++;
+
+            // 聚合正文
+            $allText[] = $this->extractMainText($html);
+
+            // 扩展链接
+            if ($depth < $maxDepth) {
+                foreach ($this->extractLinks($html, $url) as $lnk) {
+                    if ($this->isAllowedUrl($startUrl, $lnk) && !isset($visited[$lnk])) {
+                        $queue[] = [ $lnk, $depth + 1 ];
+                    }
+                }
+            }
+        }
+
+        $joined = trim(implode("\n\n", array_filter($allText)));
+        return $joined;
+    }
+    
+    /**
      * 构建检测模式提示词（默认模式）
      */
     private function buildDetectPrompt(string $content): string
@@ -301,9 +508,9 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         
         // 验证模式参数
         if (isset($params['mode'])) {
-            $validModes = ['detect', 'desensitize', 'mark', 'rewrite'];
+            $validModes = ['detect', 'desensitize', 'mark', 'detect_mark', 'rewrite', 'extract'];
             if (!in_array($params['mode'], $validModes)) {
-                $errors[] = __('无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, rewrite=润色)', [
+                $errors[] = __('无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)', [
                     'mode' => $params['mode'],
                     'valid' => implode(', ', $validModes)
                 ]);
@@ -345,8 +552,8 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
                 'type' => 'string',
                 'required' => false,
                 'default' => 'detect',
-                'description' => __('工作模式（detect=检测, desensitize=脱敏, mark=标记, rewrite=润色）'),
-                'options' => ['detect', 'desensitize', 'mark', 'rewrite']
+                'description' => __('工作模式（detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取）'),
+                'options' => ['detect', 'desensitize', 'mark', 'detect_mark', 'rewrite', 'extract']
             ],
             'level' => [
                 'type' => 'string',
@@ -398,6 +605,20 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
                 'input' => '我的银行卡号是6222021234567890123',
                 'params' => ['mode' => 'rewrite', 'level' => 'standard', 'style' => 'natural'],
                 'expected_output' => '相关金融信息已进行脱敏处理',
+            ],
+            [
+                'title' => '提取模式',
+                'description' => '从网页内容中提取敏感词规则',
+                'input' => 'Google Ads禁止推广危险商品、不当内容、敏感事件、受监管的内容、抄袭内容、非法活动、限制内容、欺诈行为等。',
+                'params' => ['mode' => 'extract'],
+                'expected_output' => '危险商品\n不当内容\n敏感事件\n受监管的内容\n抄袭内容\n非法活动\n限制内容\n欺诈行为',
+            ],
+            [
+                'title' => '检测+标记模式',
+                'description' => '先列出问题清单，再给出位置标记',
+                'input' => '联系我：me@company.com 或致电 13987654321',
+                'params' => ['mode' => 'detect_mark', 'level' => 'standard'],
+                'expected_output' => "问题：邮箱、手机\n标记：[6:21:邮箱:me@company.com][25:36:手机:13987654321]",
             ],
         ];
     }
