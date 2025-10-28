@@ -1,446 +1,259 @@
 <?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
 /**
- * 2FA管理主页
- * 
- * @var bool $is_enabled
- * @var array|null $config
- * @var int $user_id
- * @var int $remaining_seconds
+ * 变量：
+ * @var array $accounts TOTP账户列表
+ * @var int $user_id 用户ID
  */
+
+$accounts = $this->getData('accounts') ?: [];
+$totalAccounts = is_array($accounts) ? count($accounts) : 0;
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>双因素身份验证管理</title>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>2FA账户管理</lang></title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        
-        .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            color: #666;
-        }
-        
-        .status-card {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }
-        
-        .status-enabled {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-disabled {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .info-item {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        
-        .info-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .info-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .action-buttons {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-        }
-        
-        .btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #0056b3;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
-        .feature-list {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        
-        .feature-list h2 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        
-        .feature-item {
-            padding: 15px;
-            border-left: 4px solid #007bff;
-            background: #f8f9fa;
-            margin-bottom: 15px;
-            border-radius: 4px;
-        }
-        
-        .feature-item h3 {
-            color: #333;
-            font-size: 16px;
-            margin-bottom: 5px;
-        }
-        
-        .feature-item p {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .app-link {
+        .stat-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-top: 20px;
-            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: none;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
         
-        .app-link h2 {
-            margin-bottom: 10px;
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
         }
         
-        .app-link p {
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
             opacity: 0.9;
+        }
+        
+        .stat-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2.5rem;
+            opacity: 0.3;
+        }
+        
+        .account-card {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border: none;
             margin-bottom: 20px;
         }
         
-        .app-link .btn {
-            background: white;
-            color: #667eea;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 400px;
-            width: 90%;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
+        .account-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔐 双因素身份验证管理</h1>
-            <p>增强您的账户安全性，使用标准TOTP协议（兼容所有主流验证器应用）</p>
-        </div>
 
-        <div class="status-card">
-            <h2>当前状态</h2>
-            <?php if ($is_enabled): ?>
-                <span class="status-badge status-enabled">✓ 已启用</span>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
                 
-                <?php if ($config): ?>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">启用时间</div>
-                        <div class="info-value"><?= date('Y-m-d', strtotime($config['created_at'])) ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">最后使用</div>
-                        <div class="info-value"><?= $config['last_used_at'] ? date('Y-m-d H:i', strtotime($config['last_used_at'])) : '未使用' ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">剩余备份码</div>
-                        <div class="info-value"><?= $config['backup_codes_count'] ?> 个</div>
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-shield-account me-2"></i>
+                                <lang>2FA账户管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>双因素认证</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>账户管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <?php endif; ?>
 
-                <div class="action-buttons">
-                    <button class="btn btn-secondary" onclick="showRegenerateModal()">重新生成备份码</button>
-                    <button class="btn btn-danger" onclick="showDisableModal()">禁用2FA</button>
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card">
+                            <i class="mdi mdi-shield-check stat-icon"></i>
+                            <div class="stat-label"><lang>总账户数</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card success">
+                            <i class="mdi mdi-cellphone-key stat-icon"></i>
+                            <div class="stat-label"><lang>TOTP账户</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card warning">
+                            <i class="mdi mdi-account-multiple stat-icon"></i>
+                            <div class="stat-label"><lang>活跃用户</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card info">
+                            <i class="mdi mdi-security stat-icon"></i>
+                            <div class="stat-label"><lang>安全状态</lang></div>
+                            <div class="stat-number">正常</div>
+                        </div>
+                    </div>
                 </div>
-            <?php else: ?>
-                <span class="status-badge status-disabled">✗ 未启用</span>
-                <p style="margin-top: 15px; color: #666;">
-                    您的账户尚未启用双因素身份验证。启用后，登录时需要额外提供动态验证码。
-                </p>
-                <div class="action-buttons">
-                    <a href="/two-factor-auth/frontend/setup" class="btn btn-primary">立即启用</a>
+
+                <!-- TOTP账户列表 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-header'>
+                                <div class='d-flex align-items-center justify-content-between'>
+                                    <h4 class='mb-0'>
+                                        <i class="mdi mdi-shield-lock me-2"></i>
+                                        <lang>验证器账户列表</lang>
+                                    </h4>
+                                    <a href="/two-factor-auth/frontend/accounts" class="btn btn-primary btn-sm" target="_blank">
+                                        <i class="mdi mdi-open-in-new me-1"></i>
+                                        <lang>打开前端管理</lang>
+                                    </a>
+                                </div>
+                            </div>
+                            <div class='card-body'>
+                                <?php if (empty($accounts)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无账户数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="row">
+                                        <?php foreach ($accounts as $account): ?>
+                                        <div class="col-md-6 col-lg-4 mb-3">
+                                            <div class="account-card card">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                                        <div>
+                                                            <h5 class="mb-1"><?= htmlspecialchars($account['name'] ?? '未命名') ?></h5>
+                                                            <small class="text-muted"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></small>
+                                                        </div>
+                                                        <span class="badge bg-primary">TOTP</span>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <small class="text-muted d-block mb-1"><lang>密钥</lang></small>
+                                                        <code class="text-primary small"><?= htmlspecialchars(substr($account['secret'] ?? '', 0, 20)) ?>...</code>
+                                                    </div>
+                                                    
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <small class="text-muted d-block"><lang>创建时间</lang></small>
+                                                            <small class="text-dark"><?= htmlspecialchars($account['created_at'] ?? '未知') ?></small>
+                                                        </div>
+                                                        <div>
+                                                            <small class="text-muted d-block"><lang>算法</lang></small>
+                                                            <span class="badge bg-info"><?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            <?php endif; ?>
-        </div>
 
-        <div class="app-link">
-            <h2>📱 使用我们自己的验证器APP</h2>
-            <p>完全自主开发，无需依赖第三方应用</p>
-            <a href="/twofa-app/" class="btn" target="_blank">打开验证器APP</a>
-        </div>
+                <!-- 提示卡片 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='alert alert-info'>
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong>
+                            <lang>这里是后台账户管理页面，您可以查看所有用户的TOTP账户。要添加或管理账户，请使用前端管理界面。</lang>
+                            <a href="/two-factor-auth/frontend/accounts" class="alert-link" target="_blank"><lang>点击进入前端管理</lang></a>
+                        </div>
+                    </div>
+                </div>
 
-        <div class="feature-list">
-            <h2>功能特点</h2>
-            
-            <div class="feature-item">
-                <h3>🔒 完全自主开发</h3>
-                <p>纯PHP原生实现TOTP算法，不依赖任何第三方库</p>
-            </div>
-            
-            <div class="feature-item">
-                <h3>🌐 标准协议兼容</h3>
-                <p>遵循RFC 6238标准，兼容Google Authenticator、Microsoft Authenticator等所有主流应用</p>
-            </div>
-            
-            <div class="feature-item">
-                <h3>📱 独立PWA应用</h3>
-                <p>自带完整的验证器APP，可安装到手机桌面，支持离线使用</p>
-            </div>
-            
-            <div class="feature-item">
-                <h3>🔑 备份码支持</h3>
-                <p>提供10个一次性备份码，在无法获取动态验证码时使用</p>
-            </div>
-            
-            <div class="feature-item">
-                <h3>⚡ 高性能安全</h3>
-                <p>使用时间安全的字符串比较，支持时间窗口容错</p>
             </div>
         </div>
     </div>
+    <!-- 主要内容结束 -->
 
-    <!-- 禁用2FA模态框 -->
-    <div class="modal" id="disableModal">
-        <div class="modal-content">
-            <h2>禁用双因素身份验证</h2>
-            <p style="color: #666; margin: 15px 0;">请输入当前验证码以确认操作</p>
-            <div class="form-group">
-                <label>验证码</label>
-                <input type="text" id="disableCode" placeholder="输入6位验证码" maxlength="6">
-            </div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeDisableModal()">取消</button>
-                <button class="btn btn-danger" onclick="disableTwoFactor()">确认禁用</button>
-            </div>
-        </div>
-    </div>
+</div>
+<!-- 页面结束 -->
 
-    <!-- 重新生成备份码模态框 -->
-    <div class="modal" id="regenerateModal">
-        <div class="modal-content">
-            <h2>重新生成备份码</h2>
-            <p style="color: #666; margin: 15px 0;">旧的备份码将失效，请输入验证码确认</p>
-            <div class="form-group">
-                <label>验证码</label>
-                <input type="text" id="regenerateCode" placeholder="输入6位验证码" maxlength="6">
-            </div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeRegenerateModal()">取消</button>
-                <button class="btn btn-primary" onclick="regenerateBackupCodes()">确认生成</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function showDisableModal() {
-            document.getElementById('disableModal').classList.add('active');
-        }
-
-        function closeDisableModal() {
-            document.getElementById('disableModal').classList.remove('active');
-            document.getElementById('disableCode').value = '';
-        }
-
-        function showRegenerateModal() {
-            document.getElementById('regenerateModal').classList.add('active');
-        }
-
-        function closeRegenerateModal() {
-            document.getElementById('regenerateModal').classList.remove('active');
-            document.getElementById('regenerateCode').value = '';
-        }
-
-        async function disableTwoFactor() {
-            const code = document.getElementById('disableCode').value;
-            if (!code || code.length !== 6) {
-                alert('请输入6位验证码');
-                return;
-            }
-
-            try {
-                const response = await fetch('/two-factor-auth/frontend/setup/disable', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `code=${code}`
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(result.message);
-                    location.reload();
-                } else {
-                    alert(result.message);
-                }
-            } catch (error) {
-                alert('操作失败，请重试');
-            }
-        }
-
-        async function regenerateBackupCodes() {
-            const code = document.getElementById('regenerateCode').value;
-            if (!code || code.length !== 6) {
-                alert('请输入6位验证码');
-                return;
-            }
-
-            try {
-                const response = await fetch('/two-factor-auth/frontend/setup/regenerate-backup-codes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `code=${code}`
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    // 显示新的备份码
-                    let codesHtml = '<h3>新的备份码</h3><ul>';
-                    result.backup_codes.forEach(code => {
-                        codesHtml += `<li style="font-family: monospace; padding: 5px;">${code}</li>`;
-                    });
-                    codesHtml += '</ul><p style="color: red;">请妥善保存这些备份码！</p>';
-                    
-                    const modal = document.getElementById('regenerateModal');
-                    modal.querySelector('.modal-content').innerHTML = codesHtml + 
-                        '<button class="btn btn-primary" onclick="location.reload()">完成</button>';
-                } else {
-                    alert(result.message);
-                }
-            } catch (error) {
-                alert('操作失败，请重试');
-            }
-        }
-    </script>
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
 </body>
 </html>
-
