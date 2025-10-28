@@ -58,10 +58,12 @@
         
         .header h1 {
             margin-bottom: 10px;
+            font-size: clamp(20px, 5vw, 28px);
         }
         
         .header p {
             opacity: 0.9;
+            font-size: clamp(14px, 3vw, 16px);
         }
         
         .actions {
@@ -83,7 +85,7 @@
             padding: 12px 20px;
             border: none;
             border-radius: 10px;
-            font-size: 14px;
+            font-size: clamp(14px, 3.5vw, 15px);
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -108,7 +110,6 @@
             .btn {
                 padding: 14px 32px;
                 border-radius: 12px;
-                font-size: 15px;
                 gap: 8px;
             }
         }
@@ -178,7 +179,7 @@
         }
         
         .account-name {
-            font-size: 20px;
+            font-size: clamp(16px, 4vw, 20px);
             font-weight: bold;
             color: #333;
             margin-bottom: 5px;
@@ -186,7 +187,7 @@
         
         .account-issuer {
             color: #666;
-            font-size: 14px;
+            font-size: clamp(12px, 3vw, 14px);
         }
         
         .account-code-wrapper {
@@ -197,8 +198,8 @@
         }
         
         .countdown-circle {
-            width: 50px;
-            height: 50px;
+            width: clamp(40px, 10vw, 50px);
+            height: clamp(40px, 10vw, 50px);
             border-radius: 50%;
             border: 3px solid #ddd;
             display: flex;
@@ -231,17 +232,17 @@
         
         .countdown-number {
             position: absolute;
-            font-size: 12px;
+            font-size: clamp(10px, 2.5vw, 12px);
             font-weight: bold;
             color: #007bff;
         }
         
         .account-code {
-            font-size: 32px;
+            font-size: clamp(24px, 6vw, 32px);
             font-weight: bold;
             font-family: 'Courier New', monospace;
             color: #007bff;
-            letter-spacing: 4px;
+            letter-spacing: clamp(2px, 1vw, 4px);
         }
         
         .account-actions {
