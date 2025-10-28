@@ -131,6 +131,13 @@ class Request extends Request\RequestAbstract implements RequestInterface
         array_shift($params);
         $params = array_merge($params, $_POST);
         $params = array_merge($params, $_GET);
+        
+        // 合并 body 参数（JSON 或表单数据）
+        $bodyParams = $this->getBodyParams(true);
+        if (is_array($bodyParams)) {
+            $params = array_merge($params, $bodyParams);
+        }
+        
         $this->setData('params', $params);
         return $params;
     }

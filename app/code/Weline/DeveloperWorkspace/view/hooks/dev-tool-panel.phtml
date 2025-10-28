@@ -1842,7 +1842,7 @@ const DevToolPanel = (function() {
         
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载路由...</div></div>';
         
-        return fetch('/dev/tool/api/routes?type=' + type)
+        return fetch('/dev/tool/rest/v1/routes?type=' + type)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1946,7 +1946,7 @@ const DevToolPanel = (function() {
 
     // ========== 文档功能 ==========
     function loadModules() {
-        return fetch('/dev/tool/api/document/modules')
+        return fetch('/dev/tool/rest/v1/document/modules')
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -2025,7 +2025,7 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>搜索文档...</div></div>';
         
-        let url = '/dev/tool/api/document/search?';
+        let url = '/dev/tool/rest/v1/document/search?';
         const params = [];
         
         if (state.docSearchKeyword) {
@@ -2090,7 +2090,7 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
         
-        fetch('/dev/tool/api/document/detail?id=' + docId)
+        fetch('/dev/tool/rest/v1/document/detail?id=' + docId)
             .then(response => response.json())
             .then(data => {
                 if (data.code === 0) {
