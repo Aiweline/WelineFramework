@@ -209,21 +209,37 @@
             }
         }
         
+        .account-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
         @media (max-width: 479px) {
             .account-card {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 15px;
+                gap: 12px;
+            }
+            
+            .account-card-header {
+                align-items: flex-start;
+            }
+            
+            .account-info {
+                flex: 1;
+            }
+            
+            .account-actions {
+                align-self: flex-start;
+                margin-top: -5px;
             }
             
             .account-code-wrapper {
                 width: 100%;
                 justify-content: space-between;
                 margin-right: 0;
-            }
-            
-            .account-actions {
-                align-self: flex-end;
             }
         }
         
@@ -567,9 +583,19 @@
             <?php else: ?>
                 <?php foreach ($accounts as $account): ?>
                     <div class="account-card" data-account-id="<?= $account['account_id'] ?>">
-                        <div class="account-info">
-                            <div class="account-name"><?= htmlspecialchars($account['name']) ?></div>
-                            <div class="account-issuer"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></div>
+                        <div class="account-card-header">
+                            <div class="account-info">
+                                <div class="account-name"><?= htmlspecialchars($account['name']) ?></div>
+                                <div class="account-issuer"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></div>
+                            </div>
+                            <div class="account-actions">
+                                <button class="more-actions-btn" onclick="toggleDropdown(<?= $account['account_id'] ?>)">⋮</button>
+                                <div class="dropdown-menu" id="dropdown-<?= $account['account_id'] ?>">
+                                    <div class="dropdown-item delete" onclick="confirmDelete(<?= $account['account_id'] ?>)">
+                                        🗑️ 删除账户
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="account-code-wrapper">
                             <div class="countdown-circle" id="circle-<?= $account['account_id'] ?>">
@@ -585,14 +611,6 @@
                                  data-algorithm="<?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?>"
                                  data-digits="<?= (int)($account['digits'] ?? 6) ?>"
                                  data-period="<?= (int)($account['period'] ?? 30) ?>">---- --</div>
-                        </div>
-                        <div class="account-actions">
-                            <button class="more-actions-btn" onclick="toggleDropdown(<?= $account['account_id'] ?>)">⋮</button>
-                            <div class="dropdown-menu" id="dropdown-<?= $account['account_id'] ?>">
-                                <div class="dropdown-item delete" onclick="confirmDelete(<?= $account['account_id'] ?>)">
-                                    🗑️ 删除账户
-                                </div>
-                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
