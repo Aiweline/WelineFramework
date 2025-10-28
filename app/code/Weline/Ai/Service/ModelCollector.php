@@ -306,19 +306,52 @@ class ModelCollector
     {
         $modelCode = $modelData['model_code'];
         
-        // 检查模型是否已存在
+        // 先查询是否存在同 model_code 的多条记录，若有则去重（兼容不同返回类型）
+        $items = [];
+        $maybeCollection = $this->aiModel->reset()
+            ->where('model_code', $modelCode)
+            ->select()
+            ->fetch();
+
+        if ($maybeCollection) {
+            if (is_array($maybeCollection)) {
+                $items = $maybeCollection;
+            } elseif (method_exists($maybeCollection, 'getItems')) {
+                $items = $maybeCollection->getItems();
+            } else {
+                // 单条或未知类型，统一转数组
+                $items = [$maybeCollection];
+            }
+        }
+
+        // 过滤无效项
+        $items = array_values(array_filter($items, function($m) {
+            return $m && is_object($m) && method_exists($m, 'getId') && $m->getId();
+        }));
+
+        if (count($items) > 1) {
+            /** @var AiModel $keep */
+            $keep = array_shift($items);
+            foreach ($items as $dup) {
+                try { $dup->delete(); } catch (\Exception $e) { /* ignore */ }
+            }
+            return $this->updateExistingModel($keep, $modelData);
+        } elseif (count($items) === 1) {
+            return $this->updateExistingModel($items[0], $modelData);
+        }
+
+        // 若不存在任何记录，则单独查询一条（兼容不同驱动返回）
         $existingModel = $this->aiModel->reset()
             ->where('model_code', $modelCode)
             ->find()
             ->fetch();
 
-        if ($existingModel->getId()) {
-            // 更新现有模型
+        if ($existingModel && $existingModel->getId()) {
             return $this->updateExistingModel($existingModel, $modelData);
-        } else {
-            // 创建新模型
-            return $this->createNewModel($modelData);
         }
+
+        // 创建新模型
+        return $this->createNewModel($modelData);
     }
 
     /**

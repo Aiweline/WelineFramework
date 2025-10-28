@@ -49,6 +49,20 @@ class OpenAiProvider implements ProviderInterface
     public function generate(AiModel $model, string $prompt, array $params = []): array
     {
         $config = $model->getConfig();
+        
+        // 合并provider_config（优先）
+        $providerConfig = $model->getData('provider_config');
+        if (!empty($providerConfig)) {
+            $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            if (is_array($providerData)) {
+                foreach ($providerData as $k => $v) {
+                    if ($v !== '' && $v !== null) {
+                        $config[$k] = $v;
+                    }
+                }
+            }
+        }
+        
         $apiKey = $this->getApiKey($config);
         
         if (empty($apiKey)) {
@@ -67,11 +81,23 @@ class OpenAiProvider implements ProviderInterface
             'stream' => false,
         ];
 
+        // 优先使用base_url，如果没有则使用api_url，最后使用默认值
+        $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
+        if (!str_ends_with($apiUrl, '/chat/completions')) {
+            $apiUrl = rtrim($apiUrl, '/') . '/chat/completions';
+        }
+        
+        // 确保proxyInfo是数组
+        $proxyInfo = $model->getProxyInfo();
+        if (!is_array($proxyInfo)) {
+            $proxyInfo = [];
+        }
+        
         $response = $this->callApiWithRetry(
-            $config['api_url'] ?? 'https://api.openai.com/v1/chat/completions',
+            $apiUrl,
             $apiKey,
             $requestData,
-            $model->getProxyInfo()
+            $proxyInfo
         );
 
         return [
@@ -99,6 +125,20 @@ class OpenAiProvider implements ProviderInterface
     public function generateStream(AiModel $model, string $prompt, callable $callback, array $params = []): array
     {
         $config = $model->getConfig();
+        
+        // 合并provider_config（优先）
+        $providerConfig = $model->getData('provider_config');
+        if (!empty($providerConfig)) {
+            $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
+            if (is_array($providerData)) {
+                foreach ($providerData as $k => $v) {
+                    if ($v !== '' && $v !== null) {
+                        $config[$k] = $v;
+                    }
+                }
+            }
+        }
+        
         $apiKey = $this->getApiKey($config);
         
         if (empty($apiKey)) {
@@ -122,15 +162,27 @@ class OpenAiProvider implements ProviderInterface
 
         $fullContent = '';
         
+        // 优先使用base_url，如果没有则使用api_url，最后使用默认值
+        $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
+        if (!str_ends_with($apiUrl, '/chat/completions')) {
+            $apiUrl = rtrim($apiUrl, '/') . '/chat/completions';
+        }
+        
+        // 确保proxyInfo是数组
+        $proxyInfo = $model->getProxyInfo();
+        if (!is_array($proxyInfo)) {
+            $proxyInfo = [];
+        }
+        
         $this->callStreamApi(
-            $config['api_url'] ?? 'https://api.openai.com/v1/chat/completions',
+            $apiUrl,
             $apiKey,
             $requestData,
             function($chunk) use ($callback, &$fullContent) {
                 $fullContent .= $chunk;
                 $callback($chunk);
             },
-            $model->getProxyInfo()
+            $proxyInfo
         );
 
         // 估算token使用量
@@ -301,7 +353,17 @@ class OpenAiProvider implements ProviderInterface
             'Authorization: Bearer ' . $apiKey,
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        
+        // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
+        // 生产环境建议配置正确的CA证书包
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        if ($isWindows) {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        } else {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        }
 
         // 代理配置
         if (!empty($proxyInfo['enabled'])) {
@@ -359,7 +421,11 @@ class OpenAiProvider implements ProviderInterface
      */
     public function supports(string $modelCode): bool
     {
-        return str_contains($modelCode, 'gpt') || str_contains($modelCode, 'openai');
+        // 支持OpenAI和兼容OpenAI API的模型（如DeepSeek、Claude等）
+        return str_contains($modelCode, 'gpt') 
+            || str_contains($modelCode, 'openai') 
+            || str_contains($modelCode, 'deepseek')
+            || str_contains($modelCode, 'claude');
     }
 }
 

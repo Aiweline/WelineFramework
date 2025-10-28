@@ -193,6 +193,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <th width="100"><lang>类型</lang></th>
                                                     <th><lang>输入价格</lang></th>
                                                     <th><lang>输出价格</lang></th>
+                                                    <th width="100"><lang>配置状态</lang></th>
+                                                    <th width="100"><lang>连通性</lang></th>
                                                     <th width="100"><lang>状态</lang></th>
                                                     <th width="100"><lang>默认</lang></th>
                                                     <th width="250"><lang>操作</lang></th>
@@ -228,6 +230,34 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         </td>
                                                         <td>$<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</td>
                                                         <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
+                                                        <td>
+                                                            <?php if (!empty($model['has_api_key'])): ?>
+                                                                <span class="badge bg-success" title="<?= __('已配置API密钥') ?>">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>已配置</lang>
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-warning text-dark" title="<?= __('未配置API密钥') ?>">
+                                                                    <i class="mdi mdi-alert-circle"></i> <lang>未配置</lang>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php 
+                                                            $testStatus = $model['connection_test_status'] ?? 'pending';
+                                                            if ($testStatus === 'success'): ?>
+                                                                <span class="badge bg-success" title="<?= __('连通性测试通过') ?>">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
+                                                                </span>
+                                                            <?php elseif ($testStatus === 'failed'): ?>
+                                                                <span class="badge bg-danger" title="<?= __('连通性测试失败') ?>">
+                                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-info" title="<?= __('连通性测试待测试') ?>">
+                                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </td>
                                                         <td>
                                                             <?php if (!empty($model['is_active'])): ?>
                                                                 <span class="badge bg-success"><lang>激活</lang></span>
@@ -285,9 +315,24 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        flush-button-text='刷新'
                                                                        off-canvas-body-style=''
                                                                 />
-                                                                <button type="button" class="btn btn-outline-<?= !empty($model['is_active']) ? 'warning' : 'success' ?>" 
-                                                                        onclick="toggleStatus(<?= $model['id'] ?? 0 ?>)" 
-                                                                        title="<?= !empty($model['is_active']) ? __('停用') : __('激活') ?>">
+                                                                <?php 
+                                                                // 检查是否可以激活
+                                                                $canActivate = true;
+                                                                $disableReason = '';
+                                                                
+                                                                if (empty($model['has_api_key'])) {
+                                                                    $canActivate = false;
+                                                                    $disableReason = '未配置API密钥';
+                                                                } elseif (($model['connection_test_status'] ?? 'pending') !== 'success') {
+                                                                    $canActivate = false;
+                                                                    $disableReason = '连通性测试未通过';
+                                                                }
+                                                                ?>
+                                                                <button type="button" 
+                                                                        class="btn btn-outline-<?= !empty($model['is_active']) ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>" 
+                                                                        onclick="<?= $canActivate ? 'toggleStatusByCode(\'' . ($model['model_code'] ?? '') . '\')' : 'alert(\'无法激活: ' . $disableReason . '\')' ?>" 
+                                                                        title="<?= !empty($model['is_active']) ? __('停用') : ($canActivate ? __('激活') : __('无法激活: ' . $disableReason)) ?>"
+                                                                        <?= !$canActivate && empty($model['is_active']) ? 'disabled' : '' ?>>
                                                                     <i class="mdi mdi-<?= !empty($model['is_active']) ? 'pause' : 'play' ?>"></i>
                                                                 </button>
                                                                 <block class='Weline\Component\Block\OffCanvas'
@@ -454,13 +499,30 @@ function bulkDelete() {
 
 // 清空模型表
 function clearAllModels() {
-    if (!confirm('<?= __('⚠️ 危险操作！\n\n确定要清空所有模型吗？\n这将删除所有模型数据，包括原始模型和复制模型！\n此操作不可恢复！\n\n请再次确认！') ?>')) {
+    // 第一次确认 - 使用更醒目的提示
+    const firstConfirm = confirm('<?= __('🚨 危险操作警告！') ?>\n\n' +
+        '<?= __('您即将执行以下操作：') ?>\n' +
+        '• <?= __('删除所有AI模型数据') ?>\n' +
+        '• <?= __('包括原始模型和复制模型') ?>\n' +
+        '• <?= __('包括所有配置和测试记录') ?>\n' +
+        '• <?= __('此操作不可恢复！') ?>\n\n' +
+        '<?= __('确定要继续吗？') ?>');
+    
+    if (!firstConfirm) {
         return;
     }
     
-    const confirmText = prompt('<?= __('请输入 "CLEAR ALL MODELS" 以确认清空操作：') ?>');
+    // 第二次确认 - 输入确认文本
+    const confirmText = prompt('<?= __('⚠️ 最终确认') ?>\n\n' +
+        '<?= __('为了确保您了解此操作的严重性，') ?>\n' +
+        '<?= __('请输入以下文本以确认：') ?>\n\n' +
+        'CLEAR ALL MODELS\n\n' +
+        '<?= __('（区分大小写）') ?>');
+    
     if (confirmText !== 'CLEAR ALL MODELS') {
-        alert('<?= __('确认文本不正确，操作已取消') ?>');
+        alert('<?= __('❌ 确认文本不正确，操作已取消') ?>\n\n' +
+            '<?= __('请确保输入：') ?>CLEAR ALL MODELS\n' +
+            '<?= __('（区分大小写）') ?>');
         return;
     }
     
@@ -505,13 +567,13 @@ function collectModels() {
     });
 }
 
-function toggleStatus(modelId) {
+function toggleStatusByCode(modelCode) {
     fetch('<?= $this->getBackendUrl('*/backend/model/toggleStatus') ?>', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: 'id=' + modelId
+        body: 'model_code=' + encodeURIComponent(modelCode)
     })
     .then(response => response.json())
     .then(data => {

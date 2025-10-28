@@ -120,12 +120,12 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     public function setConfig(string $key, string $value, string $module, string $area): bool
     {
-        $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
         try {
             $this->setData(['key' => $key, 'area' => $area, 'module' => $module, 'v' => $value])
                 ->forceCheck()
                 ->save();
             # 设置配置缓存
+            $cache_key = 'system_config_cache_' . $key . '_' . $area . '_' . $module;
             $this->_cache->set($cache_key, $value);
             return true;
         } catch (\ReflectionException|Core $e) {
