@@ -75,6 +75,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
                                 </span>
                                 <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-info" onclick="bulkTestConnection()">
+                                        <i class="mdi mdi-wifi me-1"></i><lang>批量测试</lang>
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
                                         <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
                                     </button>
@@ -495,6 +498,151 @@ function bulkDelete() {
             alert('<?= __('操作失败：') ?>' + data.message);
         }
     });
+}
+
+// 批量测试连接
+function bulkTestConnection() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('<?= __('请先选择要测试的模型') ?>');
+        return;
+    }
+    
+    // 创建进度弹窗
+    const progressModal = createProgressModal();
+    progressModal.show();
+    
+    // 更新进度文本
+    updateProgress(progressModal, `开始测试 ${ids.length} 个模型...`);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_ids: ids})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 显示测试结果
+            showTestResults(data.results, data.summary);
+            progressModal.hide();
+            
+            // 刷新页面以更新连接状态
+            setTimeout(() => location.reload(), 3000);
+        } else {
+            alert('<?= __('测试失败：') ?>' + data.message);
+            progressModal.hide();
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+        progressModal.hide();
+    });
+}
+
+// 创建进度弹窗
+function createProgressModal() {
+    const modalHtml = `
+        <div class="modal fade" id="progressModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-4">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5 id="progressText">正在测试...</h5>
+                        <p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 如果已存在则移除
+    const existingModal = document.getElementById('progressModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    return new bootstrap.Modal(document.getElementById('progressModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+}
+
+// 更新进度文本
+function updateProgress(modal, text, detail = '') {
+    const progressText = document.getElementById('progressText');
+    const progressDetail = document.getElementById('progressDetail');
+    if (progressText) progressText.textContent = text;
+    if (progressDetail) progressDetail.textContent = detail;
+}
+
+// 显示测试结果
+function showTestResults(results, summary) {
+    let resultHtml = `
+        <div class="modal fade" id="testResultModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">批量测试结果</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info mb-3">
+                            <strong>测试统计：</strong>
+                            总计 ${summary.total} 个，
+                            成功 <span class="text-success">${summary.success}</span> 个，
+                            失败 <span class="text-danger">${summary.failed}</span> 个
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>模型</th>
+                                        <th>状态</th>
+                                        <th>消息</th>
+                                        <th>耗时</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+    
+    results.forEach(result => {
+        const statusClass = result.success ? 'success' : 'danger';
+        const statusText = result.success ? '成功' : '失败';
+        const duration = result.duration ? `${result.duration}ms` : '-';
+        
+        resultHtml += `
+            <tr>
+                <td>${result.model_name || result.model_code}</td>
+                <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                <td>${result.message}</td>
+                <td>${duration}</td>
+            </tr>`;
+    });
+    
+    resultHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    // 如果已存在则移除
+    const existingModal = document.getElementById('testResultModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', resultHtml);
+    const resultModal = new bootstrap.Modal(document.getElementById('testResultModal'));
+    resultModal.show();
 }
 
 // 清空模型表
