@@ -10,6 +10,8 @@ use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\Provider\ProviderInterface;
+use Weline\Ai\Service\Provider\VendorConfigManager;
+use Weline\Framework\App\Env;
 
 /**
  * Provider Account Service
@@ -26,36 +28,6 @@ class AccountService
     private ObjectManager $objectManager;
 
     /**
-     * 支持的供应商列表
-     */
-    private const SUPPORTED_PROVIDERS = [
-        'openai' => [
-            'name' => 'OpenAI',
-            'base_url' => 'https://api.openai.com/v1',
-            'models_prefix' => ['gpt-', 'text-', 'davinci', 'curie', 'babbage', 'ada'],
-            'test_model' => 'gpt-3.5-turbo'
-        ],
-        'deepseek' => [
-            'name' => 'DeepSeek',
-            'base_url' => 'https://api.deepseek.com/v1',
-            'models_prefix' => ['deepseek-'],
-            'test_model' => 'deepseek-chat'
-        ],
-        'google' => [
-            'name' => 'Google',
-            'base_url' => 'https://generativelanguage.googleapis.com/v1',
-            'models_prefix' => ['gemini-', 'bard-'],
-            'test_model' => 'gemini-pro'
-        ],
-        'anthropic' => [
-            'name' => 'Anthropic',
-            'base_url' => 'https://api.anthropic.com/v1',
-            'models_prefix' => ['claude-'],
-            'test_model' => 'claude-2'
-        ]
-    ];
-
-    /**
      * Constructor
      */
     public function __construct()
@@ -70,7 +42,7 @@ class AccountService
      */
     public function getSupportedProviders(): array
     {
-        return self::SUPPORTED_PROVIDERS;
+        return VendorConfigManager::getSupportedProviders();
     }
 
     /**
@@ -81,22 +53,7 @@ class AccountService
      */
     public function getProviderByModelCode(string $modelCode): ?string
     {
-        $modelCode = strtolower($modelCode);
-        
-        foreach (self::SUPPORTED_PROVIDERS as $providerCode => $providerInfo) {
-            foreach ($providerInfo['models_prefix'] as $prefix) {
-                if (str_starts_with($modelCode, $prefix)) {
-                    return $providerCode;
-                }
-            }
-        }
-        
-        // 特殊处理一些模型
-        if (str_contains($modelCode, 'openai')) {
-            return 'openai';
-        }
-        
-        return null;
+        return VendorConfigManager::getProviderByModelCode($modelCode);
     }
 
     /**
@@ -141,25 +98,35 @@ class AccountService
      * 测试账户连通性
      * 
      * @param Account $account
-     * @return array ['success' => bool, 'message' => string]
+     * @return array ['success' => bool, 'message' => string, 'model_code' => string]
      */
     public function testConnection(Account $account): array
     {
         try {
-            $providerInfo = self::SUPPORTED_PROVIDERS[$account->getData(Account::fields_PROVIDER_CODE)] ?? null;
+            $providerCode = $account->getData(Account::fields_PROVIDER_CODE);
+            $providerInfo = VendorConfigManager::getProviderConfig($providerCode);
             if (!$providerInfo) {
-                throw new Exception('不支持的供应商');
+                throw new Exception(__('不支持的供应商: %{provider}', ['provider' => $providerCode]));
             }
+            
+            $testModelCode = $providerInfo['test_model'];
+            $apiKeyPlain = $account->getDecryptedApiKey();
+            $apiKeyTail = $apiKeyPlain ? substr($apiKeyPlain, -4) : '';
+            $baseUrl = $account->getData(Account::fields_BASE_URL) ?: ($providerInfo['base_url'] ?? '');
+            Env::log('ai_provider_test.log', sprintf('[testConnection] account_id=%s provider=%s model=%s base_url=%s api_key_tail=%s',
+                (string)$account->getId(), $providerCode, $testModelCode, $baseUrl, $apiKeyTail
+            ));
             
             // 创建临时模型用于测试
             /** @var AiModel $testModel */
             $testModel = $this->objectManager->make(AiModel::class);
             $testModel->setData([
-                AiModel::fields_SUPPLIER => $account->getData(Account::fields_PROVIDER_CODE),
-                AiModel::fields_MODEL_CODE => $providerInfo['test_model'],
+                AiModel::fields_SUPPLIER => $providerCode,
+                AiModel::fields_MODEL_CODE => $testModelCode,
                 AiModel::fields_CONFIG => json_encode([
-                    'api_key' => $account->getDecryptedApiKey(),
-                    'base_url' => $account->getData(Account::fields_BASE_URL) ?: $providerInfo['base_url']
+                    'api_key' => $apiKeyPlain,
+                    'base_url' => $baseUrl,
+                    'model' => $testModelCode  // 使用model字段而不是model_id
                 ])
             ]);
             
@@ -172,31 +139,40 @@ class AccountService
             // 获取对应的Provider
             $provider = $this->getProviderInstance($account->getData(Account::fields_PROVIDER_CODE));
             if (!$provider) {
-                throw new Exception('无法创建供应商实例');
+                throw new Exception(__('无法创建供应商实例'));
             }
             
             // 执行测试请求
             $result = $provider->generate($testModel, '请回复"OK"表示连接成功', [
                 'max_tokens' => 10,
-                'temperature' => 0
+                'temperature' => 0,
+                'test_mode' => true
             ]);
             
             if (!empty($result['content'])) {
                 // 更新连接状态
                 $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_SUCCESS);
                 $account->setData(Account::fields_CONNECTION_TEST_TIME, time());
-                $account->setData(Account::fields_CONNECTION_TEST_MESSAGE, '连接成功');
+                $account->setData(Account::fields_CONNECTION_TEST_MESSAGE, __('连接成功'));
                 $account->save();
                 
                 return [
                     'success' => true,
-                    'message' => '连接测试成功'
+                    'message' => __('连接测试成功'),
+                    'model_code' => $testModelCode,
+                    'account_id' => $account->getId(),
+                    'provider' => $providerCode,
+                    'base_url' => $baseUrl,
+                    'api_key_tail' => $apiKeyTail
                 ];
             } else {
-                throw new Exception('API响应为空');
+                throw new Exception(__('API响应为空'));
             }
             
         } catch (\Exception $e) {
+            Env::log('ai_provider_test.log', sprintf('[testConnection][error] account_id=%s provider=%s error=%s',
+                (string)$account->getId(), (string)$account->getData(Account::fields_PROVIDER_CODE), $e->getMessage()
+            ));
             // 更新连接状态
             $account->setData(Account::fields_CONNECTION_STATUS, Account::STATUS_FAILED);
             $account->setData(Account::fields_CONNECTION_TEST_TIME, time());
@@ -205,7 +181,12 @@ class AccountService
             
             return [
                 'success' => false,
-                'message' => '连接测试失败: ' . $e->getMessage()
+                'message' => __('连接测试失败: %{msg}', ['msg' => $e->getMessage()]),
+                'model_code' => $testModelCode ?? 'unknown',
+                'account_id' => $account->getId(),
+                'provider' => $account->getData(Account::fields_PROVIDER_CODE),
+                'base_url' => $account->getData(Account::fields_BASE_URL) ?: ($providerInfo['base_url'] ?? ''),
+                'api_key_tail' => $apiKeyTail ?? ''
             ];
         }
     }
@@ -266,7 +247,7 @@ class AccountService
      * @param string $providerCode
      * @return ProviderInterface|null
      */
-    private function getProviderInstance(string $providerCode): ?ProviderInterface
+    public function getProviderInstance(string $providerCode): ?ProviderInterface
     {
         // 目前所有供应商都使用OpenAI兼容的API
         // 后续可以根据providerCode返回不同的实现
@@ -287,16 +268,14 @@ class AccountService
     {
         $providerCode = $account->getData(Account::fields_PROVIDER_CODE);
         
-        // 先取消该供应商的所有默认账户
+        // 先取消该供应商的所有默认账户（使用批量更新避免迭代对象类型不一致）
         /** @var Account $accountModel */
         $accountModel = $this->objectManager->make(Account::class);
-        $accounts = $accountModel->where(Account::fields_PROVIDER_CODE, $providerCode)
+        $accountModel->reset()
+            ->where(Account::fields_PROVIDER_CODE, $providerCode)
             ->where(Account::fields_IS_DEFAULT, 1)
-            ->select();
-            
-        foreach ($accounts as $acc) {
-            $acc->setData(Account::fields_IS_DEFAULT, 0)->save();
-        }
+            ->update([Account::fields_IS_DEFAULT => 0])
+            ->fetch();
         
         // 设置新的默认账户
         $account->setData(Account::fields_IS_DEFAULT, 1)->save();
@@ -313,10 +292,11 @@ class AccountService
         /** @var Account $accountModel */
         $accountModel = $this->objectManager->make(Account::class);
         
-        return $accountModel->where(Account::fields_PROVIDER_CODE, $providerCode)
+        $rows = $accountModel->where(Account::fields_PROVIDER_CODE, $providerCode)
             ->order(Account::fields_IS_DEFAULT, 'DESC')
             ->order(Account::fields_CREATED_AT, 'DESC')
             ->select()
-            ->fetchOrigin();
+            ->fetchArray();
+        return is_array($rows) ? $rows : [];
     }
 }

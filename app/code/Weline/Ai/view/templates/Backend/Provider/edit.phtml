@@ -17,11 +17,12 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="provider_code" class="form-label">供应商 <span class="text-danger">*</span></label>
-                                <select class="form-select" id="provider_code" name="provider_code" required <?= isset($account) ? 'readonly' : '' ?>>
+                                <select class="form-select" id="provider_code" name="provider_code" required <?= isset($account) ? 'readonly' : 'onchange="onProviderChange()"' ?>>
                                     <option value="">请选择供应商</option>
                                     <?php foreach ($providers as $code => $info): ?>
                                         <option value="<?= $code ?>" 
                                             data-base-url="<?= $info['base_url'] ?>"
+                                            data-name="<?= $info['name'] ?>"
                                             <?= isset($account) && $account->getData('provider_code') == $code ? 'selected' : '' ?>>
                                             <?= $info['name'] ?>
                                         </option>
@@ -98,13 +99,17 @@
                                 <div>
                                     <div class="form-check form-check-inline">
                                         <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1"
-                                            <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>>
+                                            <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>
+                                            onchange="onActivateChange()">
                                         <label class="form-check-label" for="is_active">激活账户</label>
                                     </div>
                                     <div class="form-check form-check-inline">
                                         <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1"
                                             <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
-                                        <label class="form-check-label" for="is_default">设为默认</label>
+                                        <label class="form-check-label" for="is_default">
+                                            设为默认
+                                            <span class="badge bg-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="只有设置为默认的账户才能被模型调用">?</span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -258,6 +263,152 @@ function togglePasswordVisibility(fieldId) {
         field.type = 'password';
         icon.classList.remove('mdi-eye-off');
         icon.classList.add('mdi-eye');
+    }
+}
+
+// 激活状态变化时的处理
+function onActivateChange() {
+    const activateCheckbox = document.getElementById('is_active');
+    
+    // 如果是要激活账户
+    if (activateCheckbox.checked) {
+        // 检查必要字段是否已填写
+        const providerCode = document.getElementById('provider_code').value;
+        const apiKey = document.getElementById('api_key').value;
+        
+        if (!providerCode) {
+            activateCheckbox.checked = false;
+            alert('请先选择供应商');
+            return;
+        }
+        
+        if (!apiKey) {
+            activateCheckbox.checked = false;
+            alert('请先填写API密钥');
+            return;
+        }
+        
+        // 先保存账户，然后进行连接测试
+        saveAccountForActivation();
+    }
+}
+
+// 为激活而保存账户
+function saveAccountForActivation() {
+    const activateCheckbox = document.getElementById('is_active');
+    const form = document.getElementById('accountForm');
+    
+    // 显示保存中状态
+    const originalLabel = document.querySelector('label[for="is_active"]').textContent;
+    document.querySelector('label[for="is_active"]').innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>保存中...';
+    activateCheckbox.disabled = true;
+    
+    // 验证表单
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        document.querySelector('label[for="is_active"]').textContent = originalLabel;
+        activateCheckbox.disabled = false;
+        activateCheckbox.checked = false;
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+    
+    // 确保激活状态为1
+    data.is_active = '1';
+    
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 保存成功，进行连接测试
+            testConnectionForActivation(data.account_id || data.id);
+        } else {
+            // 保存失败
+            document.querySelector('label[for="is_active"]').textContent = originalLabel;
+            activateCheckbox.disabled = false;
+            activateCheckbox.checked = false;
+            alert('保存失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        document.querySelector('label[for="is_active"]').textContent = originalLabel;
+        activateCheckbox.disabled = false;
+        activateCheckbox.checked = false;
+        console.error('Error:', error);
+        alert('保存失败');
+    });
+}
+
+// 为激活而进行的连接测试
+function testConnectionForActivation(accountId) {
+    const activateCheckbox = document.getElementById('is_active');
+    
+    // 更新状态为测试中
+    document.querySelector('label[for="is_active"]').innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...';
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: accountId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // 恢复状态
+        const originalLabel = '激活账户';
+        document.querySelector('label[for="is_active"]').textContent = originalLabel;
+        activateCheckbox.disabled = false;
+        
+        if (data.success) {
+            // 测试成功，保持激活状态
+            alert(`连接测试成功！\n\n使用的测试模型: ${data.model_code || '未知'}\n\n账户已激活。`);
+        } else {
+            // 测试失败，取消激活状态
+            activateCheckbox.checked = false;
+            alert(`连接测试失败，无法激活账户！\n\n错误信息: ${data.message}\n\n请检查API密钥和网络连接后重试。`);
+        }
+    })
+    .catch(error => {
+        // 恢复状态
+        const originalLabel = '激活账户';
+        document.querySelector('label[for="is_active"]').textContent = originalLabel;
+        activateCheckbox.disabled = false;
+        activateCheckbox.checked = false;
+        
+        console.error('Error:', error);
+        alert('连接测试失败，无法激活账户！\n\n网络错误，请检查网络连接后重试。');
+    });
+}
+
+// 供应商选择变化时的处理
+function onProviderChange() {
+    const providerSelect = document.getElementById('provider_code');
+    const accountNameInput = document.getElementById('account_name');
+    const baseUrlInput = document.getElementById('base_url');
+    
+    const selectedOption = providerSelect.options[providerSelect.selectedIndex];
+    
+    if (selectedOption.value) {
+        // 自动填充供应商名称到账户名称（仅在账户名称为空时）
+        const providerName = selectedOption.getAttribute('data-name');
+        if (providerName && !accountNameInput.value.trim()) {
+            accountNameInput.value = providerName;
+        }
+        
+        // 自动填充基础URL（仅在基础URL为空时）
+        const baseUrl = selectedOption.getAttribute('data-base-url');
+        if (baseUrl && !baseUrlInput.value.trim()) {
+            baseUrlInput.value = baseUrl;
+        }
     }
 }
 
