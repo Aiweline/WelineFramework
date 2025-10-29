@@ -130,30 +130,44 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </div>
                                     </div>
                                     
-                                    <!-- 2. 润色结果 -->
+                                    <!-- 2. AI润色 -->
                                     <div class="accordion-item">
                                         <h2 class="accordion-header" id="headingRewrite">
                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRewrite">
-                                                <i class="mdi mdi-auto-fix me-2"></i>润色后的内容
+                                                <i class="mdi mdi-auto-fix me-2"></i>AI润色
                                             </button>
                                         </h2>
                                         <div id="collapseRewrite" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
                                             <div class="accordion-body" id="rewriteContent">
-                                                <div class="text-muted text-center py-4">等待润色...</div>
-                                            </div>
-                                            <div class="accordion-footer p-3 border-top" id="rewriteFooter" style="display: none;">
-                                                <button type="button" class="btn btn-primary btn-sm" onclick="reDetectPolishedContent()">
-                                                    <i class="mdi mdi-refresh me-1"></i>再次检测
-                                                </button>
-                                                <button type="button" class="btn btn-success btn-sm ms-2" onclick="copyPolishedContent()">
-                                                    <i class="mdi mdi-content-copy me-1"></i>复制
-                                                </button>
-                                                <button type="button" class="btn btn-info btn-sm ms-2" onclick="exportPolishedContent('html')">
-                                                    <i class="mdi mdi-file-download me-1"></i>导出HTML
-                                                </button>
-                                                <button type="button" class="btn btn-secondary btn-sm ms-2" onclick="exportPolishedContent('txt')">
-                                                    <i class="mdi mdi-file-document me-1"></i>导出TXT
-                                                </button>
+                                                <div id="rewriteWaiting" class="text-muted text-center py-4">
+                                                    等待润色...
+                                                    <div class="mt-3">
+                                                        <button type="button" class="btn btn-primary" id="startRewriteBtn" onclick="startRewrite()" style="display: none;">
+                                                            <i class="mdi mdi-auto-fix me-1"></i>开始润色
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div id="rewriteResult" style="display: none;">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">润色后的内容</label>
+                                                        <textarea class="form-control" id="rewriteTextArea" rows="15" 
+                                                                  placeholder="润色后的内容将显示在这里..." readonly></textarea>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-primary btn-sm" onclick="reDetectPolishedContent()">
+                                                            <i class="mdi mdi-refresh me-1"></i>再次检测
+                                                        </button>
+                                                        <button type="button" class="btn btn-success btn-sm ms-2" onclick="copyPolishedContent()">
+                                                            <i class="mdi mdi-content-copy me-1"></i>复制
+                                                        </button>
+                                                        <button type="button" class="btn btn-info btn-sm ms-2" onclick="exportPolishedContent('html')">
+                                                            <i class="mdi mdi-file-download me-1"></i>导出HTML
+                                                        </button>
+                                                        <button type="button" class="btn btn-secondary btn-sm ms-2" onclick="exportPolishedContent('txt')">
+                                                            <i class="mdi mdi-file-document me-1"></i>导出TXT
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -186,12 +200,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="card-footer" id="resultFooter" style="display: none;">
-                                <button type="button" class="btn btn-success" onclick="rewriteContent()">
-                                    <i class="mdi mdi-auto-fix me-1"></i>
-                                    智能润色
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -348,6 +356,8 @@ const debouncedSearch = debounce(function(searchTerm) {
 document.addEventListener('DOMContentLoaded', function() {
     const modelTrigger = document.getElementById('model_trigger');
     const searchInput = document.getElementById('model_search');
+    // 初始化检测弹窗（单例）
+    initDetectModal();
     
     // 如果有默认模型，设置隐藏字段的值
     if (defaultModelCode) {
@@ -391,8 +401,61 @@ function loadDefaultModelInfo() {
     });
 }
 
-// 全局变量存储检测弹窗实例
+// 全局变量存储检测弹窗实例（单例）
 let detectLoadingModalInstance = null;
+let detectLoadingModalEl = null;
+
+function initDetectModal() {
+    if (detectLoadingModalInstance) return;
+    detectLoadingModalEl = document.getElementById('detectLoadingModal');
+    if (!detectLoadingModalEl) return;
+
+    // 初始化为不可通过键盘/点击关闭
+    detectLoadingModalInstance = new bootstrap.Modal(detectLoadingModalEl, {
+        keyboard: false,
+        backdrop: 'static'
+    });
+
+    // 统一在隐藏后做彻底清理，防止残留 backdrop / body 状态
+    detectLoadingModalEl.addEventListener('hidden.bs.modal', () => {
+        // 移除所有 modal-backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        // 恢复 body 状态
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    });
+}
+
+function showLoadingModal() {
+    initDetectModal();
+    if (!detectLoadingModalInstance || !detectLoadingModalEl) return;
+
+    // 强制设为不可关闭（加载态）
+    detectLoadingModalEl.setAttribute('data-bs-keyboard', 'false');
+    detectLoadingModalEl.setAttribute('data-bs-backdrop', 'static');
+    detectLoadingModalInstance._config.keyboard = false;
+    detectLoadingModalInstance._config.backdrop = 'static';
+
+    // 重置为加载内容
+    document.getElementById('detectLoadingContent').style.display = 'block';
+    document.getElementById('detectErrorContent').style.display = 'none';
+    document.getElementById('detectLoadingHeader').style.display = 'none';
+
+    detectLoadingModalInstance.show();
+}
+
+function hideLoadingModal() {
+    if (!detectLoadingModalInstance) return;
+    detectLoadingModalInstance.hide();
+    // 保险：等待过渡完成后再次清理残留（即使事件监听已清理）
+    setTimeout(() => {
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }, 300);
+}
 
 function executeDetect() {
     const content = document.getElementById('content').value;
@@ -401,27 +464,8 @@ function executeDetect() {
         return;
     }
 
-    // 显示"检测中"弹窗 - 确保弹窗不能被手动关闭
-    const modalElement = document.getElementById('detectLoadingModal');
-    
-    // 移除所有事件监听器，防止手动关闭
-    modalElement.removeEventListener('click', handleModalClick);
-    modalElement.addEventListener('click', handleModalClick);
-    
-    // 禁用ESC键关闭
-    modalElement.setAttribute('data-bs-keyboard', 'false');
-    modalElement.setAttribute('data-bs-backdrop', 'static');
-    
-    detectLoadingModalInstance = new bootstrap.Modal(modalElement, {
-        keyboard: false,
-        backdrop: 'static'
-    });
-    detectLoadingModalInstance.show();
-    
-    // 重置弹窗状态
-    document.getElementById('detectLoadingContent').style.display = 'block';
-    document.getElementById('detectErrorContent').style.display = 'none';
-    document.getElementById('detectLoadingHeader').style.display = 'none';
+    // 显示统一的加载弹窗
+    showLoadingModal();
 
     const form = document.getElementById('detectForm');
     const formData = new FormData(form);
@@ -453,34 +497,20 @@ function executeDetect() {
     })
     .then(response => response.json())
     .then(data => {
-        // 确保弹窗被正确关闭
-        if (detectLoadingModalInstance) {
-            detectLoadingModalInstance.hide();
-            // 完全销毁弹窗实例
-            detectLoadingModalInstance.dispose();
-            detectLoadingModalInstance = null;
-        }
-        
-        // 手动移除弹窗背景
-        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-        modalBackdrops.forEach(backdrop => backdrop.remove());
-        
-        // 移除body上的modal-open类
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+        // 统一关闭弹窗并清理
+        hideLoadingModal();
         
         if (data.success) {
             detectionData = data.data;
             displayDetectionResult(data.data);
             
-            if (data.data.detection.has_sensitive) {
-                resultFooter.style.display = 'block';
-            }
         } else {
             // 在弹窗中显示错误
             const isAIError = data.message && data.message.includes('AI');
             showErrorInModal(data.message, isAIError);
+            // 切换为可关闭并展示
+            initDetectModal();
+            if (detectLoadingModalInstance) detectLoadingModalInstance.show();
             
             // 同时在页面上显示错误信息
             detectionContent.innerHTML = `<div class="alert alert-danger">
@@ -551,14 +581,16 @@ function displayDetectionResult(result) {
             </div>
         `;
         
-        const markedContent = markSensitiveContent(result.original, result.detection.positions);
+        // 在原文拷贝上进行高亮标记
+        const originalCopy = result.original;
+        const markedContent = markSensitiveContent(originalCopy, result.detection.positions);
         html += `
             <div class="card mb-3">
                 <div class="card-header">
-                    <h5 class="mb-0">标记后的内容</h5>
+                    <h5 class="mb-0">检测结果（原文标记）</h5>
                 </div>
                 <div class="card-body">
-                    <div style="white-space: pre-wrap;">${markedContent}</div>
+                    <div style="white-space: pre-wrap; word-wrap: break-word;" id="markedContentDisplay">${markedContent}</div>
                 </div>
             </div>
         `;
@@ -576,8 +608,25 @@ function displayDetectionResult(result) {
     
     detectionContent.innerHTML = html;
     
-    // 展开检测结果手风琴
-    new bootstrap.Collapse(document.getElementById('collapseDetection'), {toggle: true});
+    // 自动展开检测结果手风琴
+    const detectionCollapseEl = document.getElementById('collapseDetection');
+    const detectionCollapse = new bootstrap.Collapse(detectionCollapseEl, {
+        toggle: true
+    });
+    // 确保展开
+    setTimeout(() => {
+        if (!detectionCollapseEl.classList.contains('show')) {
+            detectionCollapse.show();
+        }
+    }, 100);
+    
+    // 如果有敏感内容，显示开始润色按钮
+    if (result.detection.has_sensitive) {
+        const startRewriteBtn = document.getElementById('startRewriteBtn');
+        if (startRewriteBtn) {
+            startRewriteBtn.style.display = 'inline-block';
+        }
+    }
 }
 
 // 标记敏感内容
@@ -604,20 +653,32 @@ function markSensitiveContent(content, positions) {
     return markedContent;
 }
 
-// 润色内容
-function rewriteContent() {
+// 开始润色
+function startRewrite() {
     if (!detectionData || !detectionData.detection.has_sensitive) {
         alert('没有需要润色的内容');
         return;
     }
 
-    const rewriteContentDiv = document.getElementById('rewriteContent');
-    const resultFooter = document.getElementById('resultFooter');
+    // 隐藏等待区域，显示结果区域
+    document.getElementById('rewriteWaiting').style.display = 'none';
+    document.getElementById('rewriteResult').style.display = 'block';
     
-    const rewriteBtn = resultFooter.querySelector('button');
-    const originalText = rewriteBtn.textContent;
-    rewriteBtn.disabled = true;
-    rewriteBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>正在润色...';
+    const rewriteTextArea = document.getElementById('rewriteTextArea');
+    const startRewriteBtn = document.getElementById('startRewriteBtn');
+    
+    const originalHtml = startRewriteBtn.innerHTML;
+    startRewriteBtn.disabled = true;
+    startRewriteBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>正在润色...';
+    
+    rewriteTextArea.value = '正在润色，请稍候...';
+    rewriteTextArea.disabled = true;
+    
+    // 展开润色手风琴
+    const rewriteCollapseEl = document.getElementById('collapseRewrite');
+    const rewriteCollapse = new bootstrap.Collapse(rewriteCollapseEl, {
+        toggle: true
+    });
     
     const formData = new FormData(document.getElementById('detectForm'));
     let modelCode = formData.get('model_code') || '';
@@ -640,43 +701,45 @@ function rewriteContent() {
     })
     .then(response => response.json())
     .then(data => {
-        rewriteBtn.disabled = false;
-        rewriteBtn.textContent = originalText;
+        startRewriteBtn.disabled = false;
+        startRewriteBtn.innerHTML = originalHtml;
         
         if (data.success) {
             rewriteData = data.data;
-            displayRewriteResult();
+            // 将润色后的内容放入文本域
+            rewriteTextArea.value = rewriteData.content || '';
+            rewriteTextArea.disabled = false;
+            startRewriteBtn.style.display = 'none';
         } else {
-            // 显示错误弹窗
-            const modal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
-            modal.show();
+            rewriteTextArea.value = '润色失败: ' + data.message;
+            rewriteTextArea.disabled = false;
+            // 复用全局弹窗并显示错误
+            initDetectModal();
             showErrorInModal('润色失败: ' + data.message, data.message && data.message.includes('AI'));
+            if (detectLoadingModalInstance) detectLoadingModalInstance.show();
         }
     })
     .catch(error => {
-        rewriteBtn.disabled = false;
-        rewriteBtn.textContent = originalText;
-        // 显示错误弹窗
-        const modal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
-        modal.show();
+        startRewriteBtn.disabled = false;
+        startRewriteBtn.innerHTML = originalHtml;
+        rewriteTextArea.value = '润色失败: ' + (error.message || '网络错误或服务器异常');
+        rewriteTextArea.disabled = false;
+        // 复用全局弹窗并显示错误
+        initDetectModal();
         showErrorInModal('润色失败: ' + (error.message || '网络错误或服务器异常'), false);
+        if (detectLoadingModalInstance) detectLoadingModalInstance.show();
     });
 }
 
-// 显示润色结果
+// 兼容旧函数名（保留）
+function rewriteContent() {
+    startRewrite();
+}
+
+// 显示润色结果（已废弃，现在直接在startRewrite中处理）
 function displayRewriteResult() {
-    const rewriteContentDiv = document.getElementById('rewriteContent');
-    const rewriteFooter = document.getElementById('rewriteFooter');
-    const compareContentDiv = document.getElementById('compareContent');
-    
-    rewriteContentDiv.innerHTML = `<div style="white-space: pre-wrap;" id="polishedContent">${rewriteData.content}</div>`;
-    compareContentDiv.innerHTML = generateComparisonContent();
-    
-    // 显示润色后的操作按钮
-    rewriteFooter.style.display = 'block';
-    
-    // 展开润色结果手风琴
-    new bootstrap.Collapse(document.getElementById('collapseRewrite'), {toggle: true});
+    // 这个函数保留以兼容旧代码，但实际上不再使用
+    // 现在润色结果直接在startRewrite中显示到文本域
 }
 
 // 生成对比内容
@@ -770,7 +833,13 @@ function updateHistoryDisplay() {
 
 // 复制润色后的内容
 function copyPolishedContent() {
-    const polishedText = document.getElementById('polishedContent').innerText;
+    const rewriteTextArea = document.getElementById('rewriteTextArea');
+    const polishedText = rewriteTextArea ? rewriteTextArea.value : '';
+    
+    if (!polishedText) {
+        alert('没有可复制的内容');
+        return;
+    }
     
     // 创建临时文本框
     const tempInput = document.createElement('textarea');
@@ -890,9 +959,7 @@ function fallbackToRegexDetection() {
     document.getElementById('model_display').textContent = '使用默认模型';
     
     // 关闭弹窗
-    if (detectLoadingModalInstance) {
-        detectLoadingModalInstance.hide();
-    }
+    hideLoadingModal();
     
     // 重新执行检测
     executeDetect();
