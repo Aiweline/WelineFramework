@@ -10,12 +10,14 @@ use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\Acl\Acl;
 
 /**
  * Provider Account Management Controller
  * 
  * @package Weline_Ai
  */
+#[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'mdi-account-key', 'AI供应商账户管理', 'Weline_Ai::ai')]
 class Provider extends BaseController
 {
     /**
@@ -38,6 +40,7 @@ class Provider extends BaseController
     /**
      * 账户列表页面
      */
+    #[Acl('Weline_Ai::ai_provider_list', '查看供应商账户', 'mdi-view-list', '查看供应商账户列表')]
     public function index()
     {
         $this->assign->setTitle(__('AI供应商账户管理'));
