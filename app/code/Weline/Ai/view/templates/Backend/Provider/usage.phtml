@@ -1,0 +1,356 @@
+@template(Weline_Admin::common/page_header.phtml)
+@template(Weline_Admin::common/page_nav.phtml)
+
+<style>
+    .stat-card {
+        border-left: 4px solid;
+    }
+    .stat-card.total-requests { border-left-color: #0d6efd; }
+    .stat-card.total-tokens { border-left-color: #198754; }
+    .stat-card.total-cost { border-left-color: #dc3545; }
+    .stat-card.success-rate { border-left-color: #ffc107; }
+</style>
+
+<div class="container-fluid">
+    <!-- 统计卡片 -->
+    <div class="row mb-4" id="statsCards" style="display: none;">
+        <div class="col-md-3">
+            <div class="card stat-card total-requests">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">总请求数</h6>
+                    <h3 class="mb-0" id="totalRequests">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card total-tokens">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">总令牌数</h6>
+                    <h3 class="mb-0" id="totalTokens">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card total-cost">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">总花费</h6>
+                    <h3 class="mb-0" id="totalCost">$0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card success-rate">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">成功率</h6>
+                    <h3 class="mb-0" id="successRate">0%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 使用记录列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="card-title mb-0">
+                        使用记录
+                        <?php if (isset($account)): ?>
+                            - <?= htmlspecialchars($account->getData('account_name')) ?>
+                        <?php endif; ?>
+                    </h4>
+                    <div>
+                        <button type="button" class="btn btn-secondary" onclick="exportData()">
+                            <i class="mdi mdi-download me-1"></i>导出
+                        </button>
+                        <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-primary ms-2">
+                            <i class="mdi mdi-arrow-left me-1"></i>返回列表
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 筛选条件 -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="dateFrom" class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="dateFrom">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="dateTo" class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="dateTo">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-primary d-block" onclick="filterRecords()">
+                                <i class="mdi mdi-filter me-1"></i>筛选
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-secondary d-block" onclick="resetFilter()">
+                                <i class="mdi mdi-refresh me-1"></i>重置
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 记录列表 -->
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="usageTable">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>模型</th>
+                                    <th>用户</th>
+                                    <th>请求类型</th>
+                                    <th>输入令牌</th>
+                                    <th>输出令牌</th>
+                                    <th>总令牌</th>
+                                    <th>花费</th>
+                                    <th>耗时</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usageList">
+                                <tr>
+                                    <td colspan="11" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">加载中...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div id="pagination" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详情模态框 -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">使用详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="detailContent">
+                <!-- 动态加载内容 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+const accountId = <?= $account_id ?: 'null' ?>;
+let currentPage = 1;
+let currentDateFrom = '';
+let currentDateTo = '';
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 设置默认日期范围（最近30天）
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+    
+    document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+    document.getElementById('dateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+    
+    filterRecords();
+});
+
+// 加载使用记录
+function loadUsageRecords(page = 1) {
+    currentPage = page;
+    
+    const params = new URLSearchParams({
+        page: page,
+        limit: 20,
+        date_from: currentDateFrom,
+        date_to: currentDateTo
+    });
+    
+    if (accountId) {
+        params.append('account_id', accountId);
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/getUsageList') ?>?' + params)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayRecords(data.data);
+                displayPagination(data.total, data.page, data.limit);
+                updateStats(data.stats);
+            } else {
+                alert('加载失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载失败');
+        });
+}
+
+// 显示记录
+function displayRecords(records) {
+    const tbody = document.getElementById('usageList');
+    
+    if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center">暂无数据</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = records.map(record => `
+        <tr>
+            <td>${record.created_at_formatted}</td>
+            <td>${record.model_name || record.model_code}</td>
+            <td>${record.user_name || record.user_id || '-'}</td>
+            <td>${record.request_type || 'chat'}</td>
+            <td>${record.prompt_tokens.toLocaleString()}</td>
+            <td>${record.completion_tokens.toLocaleString()}</td>
+            <td>${record.total_tokens.toLocaleString()}</td>
+            <td>${record.total_cost_formatted}</td>
+            <td>${record.request_time_formatted}</td>
+            <td>
+                ${record.status === 'success' 
+                    ? '<span class="badge bg-success">成功</span>' 
+                    : '<span class="badge bg-danger">失败</span>'}
+            </td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick='viewDetail(${JSON.stringify(record)})'>
+                    <i class="mdi mdi-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// 显示分页
+function displayPagination(total, page, limit) {
+    const totalPages = Math.ceil(total / limit);
+    const pagination = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    
+    let html = '<nav><ul class="pagination justify-content-center">';
+    
+    // 上一页
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="loadUsageRecords(${page - 1}); return false;">上一页</a>
+    </li>`;
+    
+    // 页码
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+            html += `<li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadUsageRecords(${i}); return false;">${i}</a>
+            </li>`;
+        } else if (i === page - 3 || i === page + 3) {
+            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+    
+    // 下一页
+    html += `<li class="page-item ${page === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="loadUsageRecords(${page + 1}); return false;">下一页</a>
+    </li>`;
+    
+    html += '</ul></nav>';
+    pagination.innerHTML = html;
+}
+
+// 更新统计信息
+function updateStats(stats) {
+    if (stats) {
+        document.getElementById('totalRequests').textContent = stats.total_requests.toLocaleString();
+        document.getElementById('totalTokens').textContent = stats.total_tokens.toLocaleString();
+        document.getElementById('totalCost').textContent = '$' + stats.total_cost;
+        document.getElementById('successRate').textContent = stats.success_rate + '%';
+        document.getElementById('statsCards').style.display = 'flex';
+    }
+}
+
+// 筛选记录
+function filterRecords() {
+    currentDateFrom = document.getElementById('dateFrom').value;
+    currentDateTo = document.getElementById('dateTo').value;
+    loadUsageRecords(1);
+}
+
+// 重置筛选
+function resetFilter() {
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    currentDateFrom = '';
+    currentDateTo = '';
+    loadUsageRecords(1);
+}
+
+// 查看详情
+function viewDetail(record) {
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>请求ID:</strong> ${record.request_id || '-'}</p>
+                <p><strong>模型:</strong> ${record.model_name || record.model_code}</p>
+                <p><strong>用户:</strong> ${record.user_name || record.user_id || '-'}</p>
+                <p><strong>请求类型:</strong> ${record.request_type || 'chat'}</p>
+                <p><strong>时间:</strong> ${record.created_at_formatted}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>输入令牌:</strong> ${record.prompt_tokens.toLocaleString()}</p>
+                <p><strong>输出令牌:</strong> ${record.completion_tokens.toLocaleString()}</p>
+                <p><strong>总令牌:</strong> ${record.total_tokens.toLocaleString()}</p>
+                <p><strong>花费:</strong> ${record.total_cost_formatted}</p>
+                <p><strong>耗时:</strong> ${record.request_time_formatted}</p>
+            </div>
+        </div>
+        ${record.error_message ? `
+            <div class="alert alert-danger mt-3">
+                <strong>错误信息:</strong> ${record.error_message}
+            </div>
+        ` : ''}
+        ${record.request_data ? `
+            <div class="mt-3">
+                <h6>请求数据:</h6>
+                <pre class="bg-light p-2">${record.request_data}</pre>
+            </div>
+        ` : ''}
+        ${record.response_data ? `
+            <div class="mt-3">
+                <h6>响应数据:</h6>
+                <pre class="bg-light p-2">${record.response_data}</pre>
+            </div>
+        ` : ''}
+    `;
+    
+    document.getElementById('detailContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+// 导出数据
+function exportData() {
+    const params = new URLSearchParams({
+        format: 'csv',
+        date_from: currentDateFrom,
+        date_to: currentDateTo
+    });
+    
+    if (accountId) {
+        params.append('account_id', accountId);
+    }
+    
+    window.location.href = '<?= $this->getBackendUrl('*/backend/provider/exportUsage') ?>?' + params;
+}
+</script>

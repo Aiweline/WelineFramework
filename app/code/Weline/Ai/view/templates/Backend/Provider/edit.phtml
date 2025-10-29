@@ -1,0 +1,344 @@
+@template(Weline_Admin::common/page_header.phtml)
+@template(Weline_Admin::common/page_nav.phtml)
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0"><?= isset($account) ? '编辑供应商账户' : '添加供应商账户' ?></h4>
+                </div>
+                <div class="card-body">
+                    <form id="accountForm" method="post" action="<?= $this->getBackendUrl('*/backend/provider/save') ?>">
+                        <?php if (isset($account)): ?>
+                            <input type="hidden" name="id" value="<?= $account->getId() ?>">
+                        <?php endif; ?>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="provider_code" class="form-label">供应商 <span class="text-danger">*</span></label>
+                                <select class="form-select" id="provider_code" name="provider_code" required <?= isset($account) ? 'readonly' : '' ?>>
+                                    <option value="">请选择供应商</option>
+                                    <?php foreach ($providers as $code => $info): ?>
+                                        <option value="<?= $code ?>" 
+                                            data-base-url="<?= $info['base_url'] ?>"
+                                            <?= isset($account) && $account->getData('provider_code') == $code ? 'selected' : '' ?>>
+                                            <?= $info['name'] ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="account_name" class="form-label">账户名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="account_name" name="account_name" 
+                                    value="<?= isset($account) ? htmlspecialchars($account->getData('account_name')) : '' ?>" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="api_key" class="form-label">API密钥 <?= !isset($account) ? '<span class="text-danger">*</span>' : '' ?></label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="api_key" name="api_key" 
+                                        placeholder="<?= isset($account) ? '留空保持不变' : '请输入API密钥' ?>" 
+                                        <?= !isset($account) ? 'required' : '' ?>>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api_key')">
+                                        <i class="mdi mdi-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">API密钥将被加密存储</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="api_secret" class="form-label">API Secret（如需要）</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="api_secret" name="api_secret" 
+                                        placeholder="某些供应商可能需要">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api_secret')">
+                                        <i class="mdi mdi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="base_url" class="form-label">API基础URL</label>
+                                <input type="url" class="form-control" id="base_url" name="base_url" 
+                                    value="<?= isset($account) ? htmlspecialchars($account->getData('base_url')) : '' ?>"
+                                    placeholder="留空使用默认值">
+                                <small class="text-muted">自定义API端点，例如使用代理服务或私有部署</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="balance" class="form-label">账户余额</label>
+                                <input type="number" class="form-control" id="balance" name="balance" step="0.01" 
+                                    value="<?= isset($account) ? $account->getData('balance') : '0' ?>">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="currency" class="form-label">货币单位</label>
+                                <select class="form-select" id="currency" name="currency">
+                                    <?php 
+                                    $currencies = ['USD' => '美元', 'CNY' => '人民币', 'EUR' => '欧元'];
+                                    $currentCurrency = isset($account) ? $account->getData('currency') : 'USD';
+                                    foreach ($currencies as $code => $name): 
+                                    ?>
+                                        <option value="<?= $code ?>" <?= $currentCurrency == $code ? 'selected' : '' ?>>
+                                            <?= $code ?> - <?= $name ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">账户设置</label>
+                                <div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1"
+                                            <?= isset($account) && $account->getData('is_active') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="is_active">激活账户</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1"
+                                            <?= isset($account) && $account->getData('is_default') ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="is_default">设为默认</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if (isset($account)): ?>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">总花费</label>
+                                    <div class="form-control-plaintext">
+                                        <strong><?= $account->getData('currency') ?> <?= number_format((float)$account->getData('total_spent'), 2) ?></strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">连接状态</label>
+                                    <div class="form-control-plaintext">
+                                        <?php
+                                        $status = $account->getData('connection_status');
+                                        $statusClass = match($status) {
+                                            'success' => 'success',
+                                            'failed' => 'danger',
+                                            default => 'warning'
+                                        };
+                                        $statusText = match($status) {
+                                            'success' => '已连接',
+                                            'failed' => '连接失败',
+                                            default => '待测试'
+                                        };
+                                        ?>
+                                        <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                        <?php if ($account->getData('connection_test_time')): ?>
+                                            <small class="text-muted ms-2">
+                                                最后测试: <?= date('Y-m-d H:i:s', (int)$account->getData('connection_test_time')) ?>
+                                            </small>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- 代理设置 -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <div class="form-check">
+                                    <?php
+                                    $proxyConfig = isset($account) ? $account->getProxyConfig() : [];
+                                    $proxyEnabled = !empty($proxyConfig['enabled']);
+                                    ?>
+                                    <input class="form-check-input" type="checkbox" id="proxy_enabled" name="proxy_enabled" value="1"
+                                        <?= $proxyEnabled ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="proxy_enabled">
+                                        启用代理
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body" id="proxySettings" style="<?= $proxyEnabled ? '' : 'display: none;' ?>">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label for="proxy_type" class="form-label">代理类型</label>
+                                        <select class="form-select" id="proxy_type" name="proxy_type">
+                                            <option value="http" <?= ($proxyConfig['type'] ?? '') == 'http' ? 'selected' : '' ?>>HTTP</option>
+                                            <option value="https" <?= ($proxyConfig['type'] ?? '') == 'https' ? 'selected' : '' ?>>HTTPS</option>
+                                            <option value="socks5" <?= ($proxyConfig['type'] ?? '') == 'socks5' ? 'selected' : '' ?>>SOCKS5</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="proxy_host" class="form-label">代理地址</label>
+                                        <input type="text" class="form-control" id="proxy_host" name="proxy_host"
+                                            value="<?= htmlspecialchars($proxyConfig['host'] ?? '') ?>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="proxy_port" class="form-label">端口</label>
+                                        <input type="number" class="form-control" id="proxy_port" name="proxy_port"
+                                            value="<?= $proxyConfig['port'] ?? '' ?>">
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-6">
+                                        <label for="proxy_username" class="form-label">用户名（可选）</label>
+                                        <input type="text" class="form-control" id="proxy_username" name="proxy_username"
+                                            value="<?= htmlspecialchars($proxyConfig['username'] ?? '') ?>">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="proxy_password" class="form-label">密码（可选）</label>
+                                        <input type="password" class="form-control" id="proxy_password" name="proxy_password"
+                                            placeholder="<?= !empty($proxyConfig['password']) ? '已设置' : '' ?>">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="mdi mdi-content-save me-1"></i>保存
+                                </button>
+                                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="btn btn-secondary ms-2">
+                                    <i class="mdi mdi-arrow-left me-1"></i>返回列表
+                                </a>
+                            </div>
+                            <?php if (isset($account)): ?>
+                                <button type="button" class="btn btn-info" onclick="testConnection()">
+                                    <i class="mdi mdi-wifi me-1"></i>测试连接
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 代理设置切换
+    document.getElementById('proxy_enabled').addEventListener('change', function() {
+        document.getElementById('proxySettings').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // 供应商选择时自动填充基础URL
+    document.getElementById('provider_code').addEventListener('change', function() {
+        const baseUrl = this.options[this.selectedIndex].getAttribute('data-base-url');
+        if (baseUrl && !document.getElementById('base_url').value) {
+            document.getElementById('base_url').value = baseUrl;
+        }
+    });
+    
+    // 表单提交
+    document.getElementById('accountForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveAccount();
+    });
+});
+
+// 切换密码可见性
+function togglePasswordVisibility(fieldId) {
+    const field = document.getElementById(fieldId);
+    const button = event.currentTarget;
+    const icon = button.querySelector('i');
+    
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.classList.remove('mdi-eye');
+        icon.classList.add('mdi-eye-off');
+    } else {
+        field.type = 'password';
+        icon.classList.remove('mdi-eye-off');
+        icon.classList.add('mdi-eye');
+    }
+}
+
+// 保存账户
+function saveAccount() {
+    const form = document.getElementById('accountForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+    
+    // 显示加载状态
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>保存中...';
+    submitBtn.disabled = true;
+    
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        
+        if (data.success) {
+            alert(data.message);
+            window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+        } else {
+            alert('保存失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        console.error('Error:', error);
+        alert('保存失败');
+    });
+}
+
+<?php if (isset($account)): ?>
+// 测试连接
+function testConnection() {
+    const btn = event.currentTarget;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...';
+    btn.disabled = true;
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: <?= $account->getId() ?> })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        if (data.success) {
+            alert(data.message);
+            // 刷新页面以显示更新的连接状态
+            window.location.reload();
+        } else {
+            alert('测试失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        console.error('Error:', error);
+        alert('测试失败');
+    });
+}
+<?php endif; ?>
+</script>
