@@ -838,10 +838,29 @@ class DesensitizationService
                 }
             }
 
+            // 对内容进行预处理，给敏感内容添加特殊标记
+            $markedContent = $this->addMarkersToSensitiveContent($content, $positions);
+            
             $prompt = sprintf(
-                "你是一名内容合规改写助手。请在不改变核心信息与可读性的前提下，将原文改写为符合平台政策、避免违规/煽动/恐吓/成人/违法等的合规表达。要求：\n1) 保留原意，删除或替换敏感片段；\n2) 输出与原文同语言；\n3) 只输出改写后的完整文本，不要说明。\n\n%s原始内容：\n%s\n\n标记的敏感信息：\n%s\n\n",
+                "你是一名内容合规改写助手。请在不改变核心信息与可读性的前提下，将原文改写为符合平台政策、避免违规/煽动/恐吓/成人/违法等的合规表达。
+
+重要规则：
+1) 文中用【SENSITIVE_X】标记的内容是敏感词汇，必须进行改写或替换
+2) 改写时保持【SENSITIVE_X】标记的原有位置，只替换其内容
+3) 保留原意，删除或替换敏感片段
+4) 输出与原文同语言
+5) 只输出改写后的完整文本，不要说明
+6) 保持文本的整体结构和格式
+
+%s原始内容（已标记敏感内容）：
+%s
+
+标记的敏感信息详情：
+%s
+
+",
                 $policySection,
-                $content,
+                $markedContent,
                 implode("\n", $sensitiveInfo)
             );
             
@@ -852,13 +871,16 @@ class DesensitizationService
             $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
             // 调用AI润色（指定场景适配器并传 mode=rewrite）
-            $rewrittenContent = $aiService->generate(
+            $rewrittenWithMarkers = $aiService->generate(
                 $prompt,
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
                 ['mode' => 'rewrite']
             );
+            
+            // 移除标记，恢复正常文本
+            $rewrittenContent = $this->removeMarkersFromContent($rewrittenWithMarkers);
             
             return [
                 'content' => $rewrittenContent,
@@ -870,6 +892,48 @@ class DesensitizationService
             error_log("润色失败: " . $e->getMessage());
             throw new Exception("润色失败: " . $e->getMessage());
         }
+    }
+    
+    /**
+     * 为敏感内容添加标记
+     * 
+     * @param string $content 原始内容
+     * @param array $positions 敏感位置信息
+     * @return string 标记后的内容
+     */
+    private function addMarkersToSensitiveContent(string $content, array $positions): string
+    {
+        // 按位置从后往前排序，避免插入标记时位置偏移
+        $sortedPositions = $positions;
+        usort($sortedPositions, function($a, $b) {
+            return $b['start'] - $a['start'];
+        });
+        
+        $markedContent = $content;
+        foreach ($sortedPositions as $index => $pos) {
+            if (isset($pos['start']) && isset($pos['end']) && $pos['start'] < $pos['end']) {
+                $before = mb_substr($markedContent, 0, $pos['start']);
+                $sensitive = mb_substr($markedContent, $pos['start'], $pos['end'] - $pos['start']);
+                $after = mb_substr($markedContent, $pos['end']);
+                
+                // 使用索引作为标记ID
+                $markedContent = $before . '【SENSITIVE_' . $index . '】' . $after;
+            }
+        }
+        
+        return $markedContent;
+    }
+    
+    /**
+     * 移除内容中的标记
+     * 
+     * @param string $content 带标记的内容
+     * @return string 移除标记后的内容
+     */
+    private function removeMarkersFromContent(string $content): string
+    {
+        // 移除所有【SENSITIVE_X】标记
+        return preg_replace('/【SENSITIVE_\d+】/', '', $content);
     }
 }
 
