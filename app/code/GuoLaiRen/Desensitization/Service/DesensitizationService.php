@@ -823,16 +823,23 @@ class DesensitizationService
             // 获取AI模型代码
             $modelCode = $options['model_code'] ?? '';
             
-            // 构建润色提示词
-            $sensitiveInfo = [];
-            foreach ($positions as $pos) {
-                $sensitiveInfo[] = sprintf(
-                    '- 类型: %s, 内容: %s (位置: %d-%d)',
-                    $pos['type'] ?? '未知',
-                    $pos['match'] ?? '',
-                    $pos['start'] ?? 0,
-                    $pos['end'] ?? 0
-                );
+            // 提取所有检测到的敏感词组
+            $sensitivePhrases = [];
+            foreach ($positions as $index => $pos) {
+                $match = $pos['match'] ?? '';
+                if (!empty($match)) {
+                    $sensitivePhrases[] = [
+                        'index' => $index,
+                        'phrase' => $match,
+                        'type' => $pos['type'] ?? '未知',
+                        'start' => $pos['start'] ?? 0,
+                        'end' => $pos['end'] ?? 0
+                    ];
+                }
+            }
+            
+            if (empty($sensitivePhrases)) {
+                throw new Exception('未找到可重写的敏感词组');
             }
             
             // 引入平台规则，指导改写为合规表达
@@ -856,58 +863,76 @@ class DesensitizationService
                     $policySection .= "- Google：\n{$googleRules}\n\n";
                 }
             }
-
-            // 对内容进行预处理，给敏感内容添加特殊标记
-            $markedContent = $this->addMarkersToSensitiveContent($content, $positions);
             
+            // 构建敏感词组列表
+            $phrasesList = [];
+            foreach ($sensitivePhrases as $item) {
+                $phrasesList[] = sprintf(
+                    '%d. 类型: %s, 词组: "%s"',
+                    $item['index'] + 1,
+                    $item['type'],
+                    $item['phrase']
+                );
+            }
+            
+            // 构建提示词：只针对敏感词组进行重写
             $prompt = sprintf(
-                "你是一名内容合规改写助手。请在不改变核心信息与可读性的前提下，将原文改写为符合平台政策、避免违规/煽动/恐吓/成人/违法等的合规表达。
+                "你是一名内容合规改写助手。请将以下检测到的敏感词组改写为符合平台政策、避免违规的合规表达。
 
-重要规则：
-1) 文中用【SENSITIVE_X】标记的内容是敏感词汇，必须进行改写或替换
-2) 改写时保持【SENSITIVE_X】标记的原有位置，只替换其内容
-3) 保留原意，删除或替换敏感片段
-4) 输出与原文同语言
-5) 只输出改写后的完整文本，不要说明
-6) 保持文本的整体结构和格式
-
-%s原始内容（已标记敏感内容）：
 %s
 
-标记的敏感信息详情：
+需要重写的敏感词组列表：
 %s
+
+要求：
+1) 只改写指定的敏感词组，保持原意但使其合规化
+2) 改写后的词组应该保持相同的语义强度，但去除违规、煽动、恐吓、成人、违法等元素
+3) 每行输出一个改写后的词组，格式：序号: 改写后的词组
+4) 序号与输入列表中的序号一一对应
+5) 只输出改写后的词组，不要添加任何解释或其他内容
+6) 如果某个词组已经是合规的，可以保持不变或小幅调整
+
+示例输出格式：
+1: 改写后的词组1
+2: 改写后的词组2
+3: 改写后的词组3
 
 ",
                 $policySection,
-                $markedContent,
-                implode("\n", $sensitiveInfo)
+                implode("\n", $phrasesList)
             );
             
             // 获取AI服务
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            // 使用本模块场景适配器 + 模式=rewrite，避免找不到“rewrite”场景
             $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
-            // 调用AI润色（指定场景适配器并传 mode=rewrite）
-            $rewrittenWithMarkers = $aiService->generate(
+            // 调用AI重写敏感词组
+            Env::log('desensitization.log', "开始AI重写敏感词组，共 " . count($sensitivePhrases) . " 个词组", 'INFO');
+            $rewrittenPhrasesResponse = $aiService->generate(
                 $prompt,
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
                 ['mode' => 'rewrite'],
-                null, // userId - 后端调用
-                true  // isBackend - 后端调用
+                null,
+                true
             );
             
-            // 移除标记，恢复正常文本
-            $rewrittenContent = $this->removeMarkersFromContent($rewrittenWithMarkers);
+            Env::log('desensitization.log', "AI返回结果: " . substr($rewrittenPhrasesResponse, 0, 500), 'DEBUG');
+            
+            // 解析AI返回的改写后词组（格式：序号: 改写后的词组）
+            $rewrittenPhrases = $this->parseRewrittenPhrases($rewrittenPhrasesResponse, count($sensitivePhrases));
+            
+            // 在原文中替换敏感词组
+            $rewrittenContent = $this->replacePhrasesInContent($content, $positions, $rewrittenPhrases);
             
             return [
                 'content' => $rewrittenContent,
                 'original_length' => mb_strlen($content),
                 'rewritten_length' => mb_strlen($rewrittenContent),
-                'positions_count' => count($positions)
+                'positions_count' => count($positions),
+                'rewritten_phrases' => $rewrittenPhrases
             ];
         } catch (\Exception $e) {
             Env::log('desensitization.log', "润色失败: " . $e->getMessage(), 'ERROR');
@@ -916,45 +941,92 @@ class DesensitizationService
     }
     
     /**
-     * 为敏感内容添加标记
+     * 解析AI返回的改写后词组
      * 
-     * @param string $content 原始内容
-     * @param array $positions 敏感位置信息
-     * @return string 标记后的内容
+     * @param string $response AI返回的文本
+     * @param int $expectedCount 期望的词组数量
+     * @return array 改写后的词组数组 [索引 => 改写后的词组]
      */
-    private function addMarkersToSensitiveContent(string $content, array $positions): string
+    private function parseRewrittenPhrases(string $response, int $expectedCount): array
     {
-        // 按位置从后往前排序，避免插入标记时位置偏移
-        $sortedPositions = $positions;
-        usort($sortedPositions, function($a, $b) {
-            return $b['start'] - $a['start'];
-        });
+        $rewrittenPhrases = [];
         
-        $markedContent = $content;
-        foreach ($sortedPositions as $index => $pos) {
-            if (isset($pos['start']) && isset($pos['end']) && $pos['start'] < $pos['end']) {
-                $before = mb_substr($markedContent, 0, $pos['start']);
-                $sensitive = mb_substr($markedContent, $pos['start'], $pos['end'] - $pos['start']);
-                $after = mb_substr($markedContent, $pos['end']);
-                
-                // 使用索引作为标记ID
-                $markedContent = $before . '【SENSITIVE_' . $index . '】' . $after;
+        // 按行分割
+        $lines = explode("\n", trim($response));
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            
+            // 匹配格式：序号: 改写后的词组 或 序号. 改写后的词组
+            if (preg_match('/^(\d+)[:：.]\s*(.+)$/u', $line, $matches)) {
+                $index = (int)$matches[1] - 1; // 转换为0基索引
+                $phrase = trim($matches[2]);
+                if ($index >= 0 && $index < $expectedCount && !empty($phrase)) {
+                    $rewrittenPhrases[$index] = $phrase;
+                }
             }
         }
         
-        return $markedContent;
+        // 如果解析的数量不足，记录警告
+        if (count($rewrittenPhrases) < $expectedCount) {
+            Env::log('desensitization.log', "警告: AI只返回了 " . count($rewrittenPhrases) . " 个改写词组，期望 " . $expectedCount . " 个", 'WARNING');
+        }
+        
+        return $rewrittenPhrases;
     }
     
     /**
-     * 移除内容中的标记
+     * 在原文中替换敏感词组
      * 
-     * @param string $content 带标记的内容
-     * @return string 移除标记后的内容
+     * @param string $content 原文
+     * @param array $positions 敏感词组位置信息
+     * @param array $rewrittenPhrases 改写后的词组 [索引 => 改写后的词组]
+     * @return string 替换后的内容
      */
-    private function removeMarkersFromContent(string $content): string
+    private function replacePhrasesInContent(string $content, array $positions, array $rewrittenPhrases): string
     {
-        // 移除所有【SENSITIVE_X】标记
-        return preg_replace('/【SENSITIVE_\d+】/', '', $content);
+        // 按位置从后往前排序，避免替换时位置偏移
+        $sortedPositions = [];
+        foreach ($positions as $index => $pos) {
+            $sortedPositions[] = [
+                'index' => $index,
+                'pos' => $pos
+            ];
+        }
+        usort($sortedPositions, function($a, $b) {
+            return ($b['pos']['start'] ?? 0) - ($a['pos']['start'] ?? 0);
+        });
+        
+        $result = $content;
+        
+        foreach ($sortedPositions as $item) {
+            $originalIndex = $item['index'];
+            $pos = $item['pos'];
+            $originalPhrase = $pos['match'] ?? '';
+            $start = $pos['start'] ?? 0;
+            $end = $pos['end'] ?? 0;
+            
+            if (empty($originalPhrase) || $start >= $end || $start < 0 || $end > mb_strlen($result)) {
+                continue;
+            }
+            
+            // 查找对应的改写后词组
+            if (isset($rewrittenPhrases[$originalIndex])) {
+                $rewrittenPhrase = $rewrittenPhrases[$originalIndex];
+                // 替换敏感词组
+                $before = mb_substr($result, 0, $start);
+                $after = mb_substr($result, $end);
+                $result = $before . $rewrittenPhrase . $after;
+                
+                Env::log('desensitization.log', "替换词组 [{$originalIndex}]: '{$originalPhrase}' => '{$rewrittenPhrase}'", 'DEBUG');
+            } else {
+                // 如果没有找到改写后的词组，保留原文
+                Env::log('desensitization.log', "未找到改写后的词组 [{$originalIndex}]，保留原文: '{$originalPhrase}'", 'WARNING');
+            }
+        }
+        
+        return $result;
     }
 }
 
