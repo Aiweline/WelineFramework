@@ -15,10 +15,13 @@ namespace Weline\Ai\Service;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUsageLog;
+use Weline\Ai\Model\Provider\Account;
+use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
+use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 
@@ -75,6 +78,11 @@ class AiService
     private AiUsageLog $usageLog;
 
     /**
+     * @var AccountService
+     */
+    private AccountService $accountService;
+
+    /**
      * 构造函数
      * 
      * @param AiModel $aiModel
@@ -83,6 +91,7 @@ class AiService
      * @param I18nIntegration $i18nIntegration
      * @param ProviderFactory $providerFactory
      * @param AiUsageLog $usageLog
+     * @param AccountService $accountService
      */
     public function __construct(
         AiModel $aiModel,
@@ -90,7 +99,8 @@ class AiService
         AdapterScanner $adapterScanner,
         I18nIntegration $i18nIntegration,
         ProviderFactory $providerFactory,
-        AiUsageLog $usageLog
+        AiUsageLog $usageLog,
+        AccountService $accountService
     ) {
         $this->aiModel = $aiModel;
         $this->defaultModelManager = $defaultModelManager;
@@ -98,6 +108,7 @@ class AiService
         $this->i18nIntegration = $i18nIntegration;
         $this->providerFactory = $providerFactory;
         $this->usageLog = $usageLog;
+        $this->accountService = $accountService;
     }
 
     /**
@@ -352,19 +363,62 @@ class AiService
      */
     private function callModelApi(AiModel $model, string $prompt, array $params): string
     {
+        $startTime = microtime(true);
+        $account = null;
+        $usage = [];
+        
         try {
-            // 获取合适的提供者
+            // 1. 获取供应商代码
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+            if (!$providerCode) {
+                throw new Exception('无法确定模型的供应商');
+            }
+            
+            // 2. 获取可用的供应商账户
+            $account = $this->accountService->getAvailableAccount($providerCode);
+            if (!$account) {
+                throw new Exception("没有可用的{$providerCode}供应商账户");
+            }
+            
+            // 3. 将账户配置注入到模型中
+            $this->injectAccountConfig($model, $account);
+            
+            // 4. 获取合适的提供者
             $provider = $this->providerFactory->getProvider($model);
             
-            // 调用API
+            // 5. 调用API
             $result = $provider->generate($model, $prompt, $params);
+            $usage = $result['usage'] ?? [];
             
-            // 记录使用量
-            $this->logUsage($model, $result['usage'], $params);
+            // 6. 记录使用量（兼容旧系统）
+            $this->logUsage($model, $usage, $params);
+            
+            // 7. 记录到新的供应商使用记录
+            $requestTime = (int)((microtime(true) - $startTime) * 1000);
+            $this->accountService->recordUsage($account, $model, $usage, [
+                'request_type' => 'chat',
+                'user_id' => $params['user_id'] ?? null,
+                'user_name' => $params['user_name'] ?? null,
+                'request_time' => $requestTime,
+                'status' => 'success'
+            ]);
             
             return $result['content'];
             
         } catch (\Exception $e) {
+            // 记录错误到供应商使用记录
+            if ($account) {
+                $requestTime = (int)((microtime(true) - $startTime) * 1000);
+                $this->accountService->recordUsage($account, $model, $usage, [
+                    'request_type' => 'chat',
+                    'user_id' => $params['user_id'] ?? null,
+                    'user_name' => $params['user_name'] ?? null,
+                    'request_time' => $requestTime,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage()
+                ]);
+            }
+            
             // 记录错误
             error_log("AI API调用失败: " . $e->getMessage());
             throw new Exception("AI生成失败: " . $e->getMessage());
@@ -390,21 +444,99 @@ class AiService
         ?string $locale, 
         array $params
     ): void {
+        $startTime = microtime(true);
+        $account = null;
+        $usage = [];
+        
         try {
-            // 获取合适的提供者
+            // 1. 获取供应商代码
+            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+            if (!$providerCode) {
+                throw new Exception('无法确定模型的供应商');
+            }
+            
+            // 2. 获取可用的供应商账户
+            $account = $this->accountService->getAvailableAccount($providerCode);
+            if (!$account) {
+                throw new Exception("没有可用的{$providerCode}供应商账户");
+            }
+            
+            // 3. 将账户配置注入到模型中
+            $this->injectAccountConfig($model, $account);
+            
+            // 4. 获取合适的提供者
             $provider = $this->providerFactory->getProvider($model);
             
-            // 流式调用API
+            // 5. 流式调用API
             $result = $provider->generateStream($model, $prompt, $callback, $params);
+            $usage = $result['usage'] ?? [];
             
-            // 记录使用量
-            $this->logUsage($model, $result['usage'], $params);
+            // 6. 记录使用量（兼容旧系统）
+            $this->logUsage($model, $usage, $params);
+            
+            // 7. 记录到新的供应商使用记录
+            $requestTime = (int)((microtime(true) - $startTime) * 1000);
+            $this->accountService->recordUsage($account, $model, $usage, [
+                'request_type' => 'stream',
+                'user_id' => $params['user_id'] ?? null,
+                'user_name' => $params['user_name'] ?? null,
+                'request_time' => $requestTime,
+                'status' => 'success'
+            ]);
             
         } catch (\Exception $e) {
+            // 记录错误到供应商使用记录
+            if ($account) {
+                $requestTime = (int)((microtime(true) - $startTime) * 1000);
+                $this->accountService->recordUsage($account, $model, $usage, [
+                    'request_type' => 'stream',
+                    'user_id' => $params['user_id'] ?? null,
+                    'user_name' => $params['user_name'] ?? null,
+                    'request_time' => $requestTime,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage()
+                ]);
+            }
+            
             // 记录错误
             error_log("AI流式API调用失败: " . $e->getMessage());
             throw new Exception("AI流式生成失败: " . $e->getMessage());
         }
+    }
+
+    /**
+     * 将供应商账户配置注入到模型中
+     * 
+     * @param AiModel $model
+     * @param Account $account
+     * @return void
+     */
+    private function injectAccountConfig(AiModel $model, Account $account): void
+    {
+        // 获取模型原有配置
+        $modelConfig = $model->getConfig();
+        
+        // 注入账户配置
+        $modelConfig['api_key'] = $account->getDecryptedApiKey();
+        if ($account->getData(Account::fields_API_SECRET)) {
+            $modelConfig['api_secret'] = $account->getData(Account::fields_API_SECRET);
+        }
+        if ($account->getData(Account::fields_BASE_URL)) {
+            $modelConfig['base_url'] = $account->getData(Account::fields_BASE_URL);
+            $modelConfig['api_url'] = $account->getData(Account::fields_BASE_URL);
+        }
+        
+        // 注入代理配置
+        $proxyConfig = $account->getProxyConfig();
+        if (!empty($proxyConfig['enabled'])) {
+            $model->setData(AiModel::fields_PROXY_INFO, json_encode($proxyConfig));
+        }
+        
+        // 更新模型配置
+        $model->setData(AiModel::fields_CONFIG, json_encode($modelConfig));
+        
+        // 保存账户引用（供后续使用）
+        $model->setData('_provider_account', $account);
     }
 
     /**
