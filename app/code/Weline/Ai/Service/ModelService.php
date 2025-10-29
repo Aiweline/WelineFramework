@@ -15,7 +15,7 @@ class ModelService {
         // 获取源模型
         $src = $this->model->reset()->where('id', $modelId)->find()->fetch();
         if (!$src) {
-            throw new \Exception("Model #{$modelId} not found");
+            throw new \Exception(__('Model #%{id} not found', ['id' => $modelId]));
         }
 
         // 创建副本行
@@ -112,7 +112,7 @@ class ModelService {
     {
         $rec = $this->model->reset()->where('id', $modelId)->find()->fetch();
         if (!$rec) {
-            throw new \Exception("Model #{$modelId} not found");
+            throw new \Exception(__('Model #%{id} not found', ['id' => $modelId]));
         }
 
         // 获取 is_copied 字段的值，兼容 getter 或属性
@@ -129,7 +129,7 @@ class ModelService {
 
         if (empty($isCopied)) {
             // 原始模型不允许删除
-            throw new \Exception('该模型为系统原始模型，不能删除。如需移除请先取消保护或联系管理员。');
+            throw new \Exception(__('该模型为系统原始模型，不能删除。如需移除请先取消保护或联系管理员。'));
         }
 
         // 执行软删除，优先使用模型实例的字段和 save 方法
@@ -151,7 +151,7 @@ class ModelService {
             ]);
             return true;
         } catch (\Exception $e) {
-            throw new \Exception('删除失败: ' . $e->getMessage());
+            throw new \Exception(__('删除失败: %{msg}', ['msg' => $e->getMessage()]));
         }
     }
 
