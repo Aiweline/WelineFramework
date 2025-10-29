@@ -1,0 +1,24 @@
+{
+    "name": "Google",
+    "code": "google",
+    "base_url": "https://generativelanguage.googleapis.com/v1",
+    "models_prefix": ["gemini-", "bard-"],
+    "test_model": "gemini-pro",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "Google Gemini API服务",
+    "website": "https://ai.google.dev",
+    "documentation": "https://ai.google.dev/docs",
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": true,
+        "image": true,
+        "audio": false
+    },
+    "rate_limits": {
+        "requests_per_minute": 60,
+        "tokens_per_minute": 200000
+    }
+}

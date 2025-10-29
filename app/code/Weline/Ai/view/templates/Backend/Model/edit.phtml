@@ -542,34 +542,29 @@ if (!empty($displayConfig)) {
                     <div class="col-md-6">
                         <div class="mb-3">
                             <?php 
-                            // 检查是否可以激活
-                            $canActivate = true;
-                            $disableReason = '';
-                            
-                            // 检查API密钥配置
-                            $hasApiKey = false;
-                            $config = $model ? $model->getConfig() : '';
-                            $providerConfig = $model ? $model->getData('provider_config') : '';
-                            
-                            if (!empty($providerConfig)) {
-                                $providerData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
-                                $hasApiKey = !empty($providerData['api_key']);
+                            // 启用条件：供应商连通性成功；若存在自配置，则自配置连通性也必须成功
+                            $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
+                            // 判断是否存在自配置api_key
+                            $hasSelfConfig = false;
+                            $providerCfgRaw = $model ? $model->getData('provider_config') : '';
+                            if (!empty($providerCfgRaw)) {
+                                $pCfg = is_string($providerCfgRaw) ? json_decode($providerCfgRaw, true) : $providerCfgRaw;
+                                $hasSelfConfig = is_array($pCfg) && !empty($pCfg['api_key']);
                             }
-                            if (!$hasApiKey && !empty($config)) {
-                                $configData = is_string($config) ? json_decode($config, true) : $config;
-                                $hasApiKey = !empty($configData['api_key']);
-                            }
-                            
-                            if (!$hasApiKey) {
-                                $canActivate = false;
-                                $disableReason = '未配置API密钥';
-                            } else {
-                                // 检查连通性测试状态
-                                $testStatus = $model ? $model->getData('connection_test_status') : 'pending';
-                                if ($testStatus !== 'success') {
-                                    $canActivate = false;
-                                    $disableReason = '连通性测试未通过';
+                            if (!$hasSelfConfig) {
+                                $cfgRaw = $model ? $model->getData('config') : '';
+                                if (!empty($cfgRaw)) {
+                                    $cCfg = is_string($cfgRaw) ? json_decode($cfgRaw, true) : $cfgRaw;
+                                    $hasSelfConfig = is_array($cCfg) && !empty($cCfg['api_key']);
                                 }
+                            }
+                            $selfOk = !$hasSelfConfig || (($model ? $model->getData('self_config_test_status') : 'pending') === 'success');
+                            $canActivate = $providerOk && $selfOk;
+                            $disableReason = '';
+                            if (!$providerOk) {
+                                $disableReason = '供应商连通性未通过';
+                            } elseif ($hasSelfConfig && !$selfOk) {
+                                $disableReason = '自配置连通性未通过';
                             }
                             ?>
                             <div class="form-check form-switch">
@@ -688,7 +683,7 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
     
     if (!vendor || !modelCode || !modelName) {
         e.preventDefault();
-        alert('<?= __('请填写必填项：供应商、模型代码、模型名称') ?>');
+        alert(__('请填写必填项：供应商、模型代码、模型名称'));
         return false;
     }
     
@@ -699,7 +694,7 @@ document.getElementById('model-form').addEventListener('submit', function(e) {
             JSON.parse(providerConfigTextarea.value);
         } catch (e) {
             e.preventDefault();
-            alert('<?= __("提供商配置JSON格式错误，请检查语法") ?>');
+            alert(__('提供商配置JSON格式错误，请检查语法'));
             providerConfigTextarea.focus();
             return false;
         }
@@ -716,13 +711,13 @@ testModelBtn.addEventListener('click', function() {
     const modelId = <?= $model->getId() ?>;
     
     if (!prompt) {
-        alert('<?= __("请输入测试提示词") ?>');
+        alert(__('请输入测试提示词'));
         return;
     }
     
     // 禁用按钮并显示加载状态
     testModelBtn.disabled = true;
-    testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("测试中...") ?>';
+    testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> ' + __('测试中...');
     
     // 隐藏之前的结果
     document.getElementById('testResult').style.display = 'none';
@@ -740,34 +735,46 @@ testModelBtn.addEventListener('click', function() {
     .then(data => {
         // 恢复按钮状态
         testModelBtn.disabled = false;
-        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __("测试模型") ?>';
+        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
         
         // 显示结果
         const resultDiv = document.getElementById('testResult');
         const resultContent = document.getElementById('testResultContent');
         
-        if (data.success) {
+        if (data && data.data && data.data.results) {
+            const r = data.data.results;
+            const s = r.self_config || {};
+            const p = r.provider_account || {};
+            const sBadge = s.tested ? (s.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
+            const pBadge = p.tested ? (p.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
+            resultContent.innerHTML = `
+                <div class="row g-2">
+                    <div class="col-12">
+                        <div class="alert alert-${(s.success ? 'success' : (s.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
+                            <strong>自配置</strong> ${sBadge}<br>
+                            ${s.tested ? (`<small class=\"text-muted\">耗时：</small><code>${s.duration || 0} ms</code><br>` +
+                            `<small class=\"text-muted\">消息：</small>${(s.message || '')}<br>` +
+                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(s.response || '')}</div>`) : ''}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="alert alert-${(p.success ? 'success' : (p.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
+                            <strong>供应商账户</strong> ${pBadge} ${p.account_name ? ` <span class=\"badge bg-info\">${p.account_name}</span>` : ''}<br>
+                            ${p.tested ? (`<small class=\"text-muted\">耗时：</small><code>${p.duration || 0} ms</code><br>` +
+                            `<small class=\"text-muted\">消息：</small>${(p.message || '')}<br>` +
+                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(p.response || '')}</div>`) : ''}
+                        </div>
+                    </div>
+                </div>`;
+        } else if (data.success) {
             resultContent.innerHTML = `
                 <div class="alert alert-success">
-                    <strong><?= __("测试成功") ?>!</strong> ${data.message}
-                </div>
-                <div class="mb-2">
-                    <small class="text-muted"><?= __("响应时间:") ?></small>
-                    <code>${data.data.duration} ms</code>
-                </div>
-                <div class="mb-2">
-                    <small class="text-muted"><?= __("模型代码:") ?></small>
-                    <code>${data.data.model_code}</code>
-                </div>
-                <div>
-                    <small class="text-muted d-block mb-1"><?= __("AI响应:") ?></small>
-                    <div class="alert alert-light" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">${data.data.response}</div>
-                </div>
-            `;
+            <strong>${__('测试成功')}!</strong> ${data.message}
+                </div>`;
         } else {
             resultContent.innerHTML = `
                 <div class="alert alert-danger">
-                    <strong><?= __("测试失败") ?>!</strong> ${data.message}
+            <strong>${__('测试失败')}!</strong> ${data.message}
                 </div>
                 ${data.error ? `<div class="alert alert-warning"><small>${data.error}</small></div>` : ''}
             `;
@@ -781,7 +788,7 @@ testModelBtn.addEventListener('click', function() {
     .catch(error => {
         // 恢复按钮状态
         testModelBtn.disabled = false;
-        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> <?= __("测试模型") ?>';
+        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
         
         // 显示错误
         const resultDiv = document.getElementById('testResult');
@@ -789,7 +796,7 @@ testModelBtn.addEventListener('click', function() {
         
         resultContent.innerHTML = `
             <div class="alert alert-danger">
-                <strong><?= __("网络错误") ?>!</strong> ${error.message}
+                <strong>${__('网络错误')}!</strong> ${error.message}
             </div>
         `;
         

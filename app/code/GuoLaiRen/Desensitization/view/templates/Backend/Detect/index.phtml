@@ -207,11 +207,21 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <div class="modal fade" id="detectLoadingModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-body d-flex align-items-center">
-        <div class="spinner-border text-primary me-3" role="status" aria-hidden="true"></div>
-        <div>
-          <div class="fw-semibold" id="detectLoadingTitle">正在检测...</div>
-          <div class="text-muted small">请稍候，AI/规则正在分析文本</div>
+      <div class="modal-header border-0 pb-0" id="detectLoadingHeader" style="display: none;">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="detectLoadingContent">
+          <div class="d-flex align-items-center">
+            <div class="spinner-border text-primary me-3" role="status" aria-hidden="true"></div>
+            <div>
+              <div class="fw-semibold">正在检测...</div>
+              <div class="text-muted small">请稍候，AI/规则正在分析文本</div>
+            </div>
+          </div>
+        </div>
+        <div id="detectErrorContent" style="display: none;">
+          <!-- 错误内容将动态插入这里 -->
         </div>
       </div>
     </div>
@@ -226,6 +236,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 let allModels = [];
 let detectionData = null;
 let rewriteData = null;
+let defaultModelCode = '<?= $this->getData('defaultModel') ?? '' ?>';
 
 // Debounce实现
 function debounce(func, delay) {
@@ -338,6 +349,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const modelTrigger = document.getElementById('model_trigger');
     const searchInput = document.getElementById('model_search');
     
+    // 如果有默认模型，设置隐藏字段的值
+    if (defaultModelCode) {
+        document.getElementById('model_code').value = defaultModelCode;
+        // 可选：加载模型列表以显示默认模型名称
+        loadDefaultModelInfo();
+    }
+    
     modelTrigger.addEventListener('click', function(e) {
         e.stopPropagation();
         loadModels();
@@ -349,6 +367,29 @@ document.addEventListener('DOMContentLoaded', function() {
         debouncedSearch(searchTerm);
     });
 });
+
+// 加载默认模型信息
+function loadDefaultModelInfo() {
+    if (!defaultModelCode) return;
+    
+    fetch('<?= $this->getBackendUrl('*/backend/detect/models') ?>', {
+        method: 'GET',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success && result.data && result.data.length > 0) {
+            const defaultModel = result.data.find(model => model.code === defaultModelCode);
+            if (defaultModel) {
+                const displayText = `${defaultModel.name} (${defaultModel.supplier}) - ${defaultModel.version}`;
+                document.getElementById('model_display').textContent = displayText;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('加载默认模型信息失败:', error);
+    });
+}
 
 // 全局变量存储检测弹窗实例
 let detectLoadingModalInstance = null;
@@ -376,6 +417,11 @@ function executeDetect() {
         backdrop: 'static'
     });
     detectLoadingModalInstance.show();
+    
+    // 重置弹窗状态
+    document.getElementById('detectLoadingContent').style.display = 'block';
+    document.getElementById('detectErrorContent').style.display = 'none';
+    document.getElementById('detectLoadingHeader').style.display = 'none';
 
     const form = document.getElementById('detectForm');
     const formData = new FormData(form);
@@ -388,6 +434,11 @@ function executeDetect() {
             data[key] = value;
         }
     });
+    
+    // 如果没有选择模型，使用默认模型
+    if (!data.model_code && defaultModelCode) {
+        data.model_code = defaultModelCode;
+    }
 
     const detectionContent = document.getElementById('detectionContent');
     const resultFooter = document.getElementById('resultFooter');
@@ -427,28 +478,47 @@ function executeDetect() {
                 resultFooter.style.display = 'block';
             }
         } else {
-            detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${data.message}</div>`;
+            // 在弹窗中显示错误
+            const isAIError = data.message && data.message.includes('AI');
+            showErrorInModal(data.message, isAIError);
+            
+            // 同时在页面上显示错误信息
+            detectionContent.innerHTML = `<div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                <strong>检测失败</strong><br>
+                ${data.message}
+            </div>`;
+            
+            // 如果是AI相关错误，显示提示和回退选项
+            if (isAIError) {
+                detectionContent.innerHTML += `
+                    <div class="alert alert-warning mt-3">
+                        <i class="mdi mdi-information me-2"></i>
+                        <strong>提示</strong><br>
+                        • 请检查AI模型配置是否正确<br>
+                        • 确保供应商账户已配置并激活<br>
+                        • 您也可以取消选择模型，使用正则检测
+                    </div>
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-secondary" onclick="fallbackToRegexDetection()">
+                            <i class="mdi mdi-regex me-1"></i>
+                            使用正则检测
+                        </button>
+                    </div>
+                `;
+            }
         }
     })
     .catch(error => {
-        // 确保弹窗被正确关闭
-        if (detectLoadingModalInstance) {
-            detectLoadingModalInstance.hide();
-            // 完全销毁弹窗实例
-            detectLoadingModalInstance.dispose();
-            detectLoadingModalInstance = null;
-        }
+        // 在弹窗中显示错误
+        showErrorInModal(error.message || '网络错误或服务器异常', false);
         
-        // 手动移除弹窗背景
-        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-        modalBackdrops.forEach(backdrop => backdrop.remove());
-        
-        // 移除body上的modal-open类
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
-        
-        detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
+        // 同时在页面上显示错误信息
+        detectionContent.innerHTML = `<div class="alert alert-danger">
+            <i class="mdi mdi-alert-circle me-2"></i>
+            <strong>检测失败</strong><br>
+            ${error.message || '网络错误或服务器异常'}
+        </div>`;
     });
 }
 
@@ -550,7 +620,12 @@ function rewriteContent() {
     rewriteBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>正在润色...';
     
     const formData = new FormData(document.getElementById('detectForm'));
-    const modelCode = formData.get('model_code') || '';
+    let modelCode = formData.get('model_code') || '';
+    
+    // 如果没有选择模型，使用默认模型
+    if (!modelCode && defaultModelCode) {
+        modelCode = defaultModelCode;
+    }
     
     const data = {
         content: detectionData.original,
@@ -572,13 +647,19 @@ function rewriteContent() {
             rewriteData = data.data;
             displayRewriteResult();
         } else {
-            alert('润色失败: ' + data.message);
+            // 显示错误弹窗
+            const modal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
+            modal.show();
+            showErrorInModal('润色失败: ' + data.message, data.message && data.message.includes('AI'));
         }
     })
     .catch(error => {
         rewriteBtn.disabled = false;
         rewriteBtn.textContent = originalText;
-        alert('润色失败: ' + error.message);
+        // 显示错误弹窗
+        const modal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
+        modal.show();
+        showErrorInModal('润色失败: ' + (error.message || '网络错误或服务器异常'), false);
     });
 }
 
@@ -800,6 +881,61 @@ function exportPolishedContent(format) {
     setTimeout(() => {
         btn.innerHTML = originalHtml;
     }, 2000);
+}
+
+// 回退到正则检测
+function fallbackToRegexDetection() {
+    // 清除模型选择
+    document.getElementById('model_code').value = '';
+    document.getElementById('model_display').textContent = '使用默认模型';
+    
+    // 关闭弹窗
+    if (detectLoadingModalInstance) {
+        detectLoadingModalInstance.hide();
+    }
+    
+    // 重新执行检测
+    executeDetect();
+}
+
+// 在弹窗中显示错误
+function showErrorInModal(errorMessage, showFallbackOption = false) {
+    // 隐藏加载内容，显示错误内容
+    document.getElementById('detectLoadingContent').style.display = 'none';
+    document.getElementById('detectErrorContent').style.display = 'block';
+    document.getElementById('detectLoadingHeader').style.display = 'block';
+    
+    // 构建错误内容
+    let errorHtml = `
+        <div class="text-center">
+            <div class="mb-3">
+                <i class="mdi mdi-alert-circle text-danger" style="font-size: 48px;"></i>
+            </div>
+            <h5 class="text-danger">检测失败</h5>
+            <p class="text-muted">${errorMessage}</p>
+    `;
+    
+    if (showFallbackOption) {
+        errorHtml += `
+            <div class="mt-3">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="fallbackToRegexDetection()">
+                    <i class="mdi mdi-regex me-1"></i>
+                    使用正则检测
+                </button>
+            </div>
+        `;
+    }
+    
+    errorHtml += `</div>`;
+    
+    // 设置错误内容
+    document.getElementById('detectErrorContent').innerHTML = errorHtml;
+    
+    // 允许通过ESC键或点击背景关闭弹窗
+    if (detectLoadingModalInstance) {
+        detectLoadingModalInstance._config.keyboard = true;
+        detectLoadingModalInstance._config.backdrop = true;
+    }
 }
 
 // 删除重复的 markSensitiveContent 函数定义，使用原有的更完善版本
