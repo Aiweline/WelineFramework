@@ -408,7 +408,6 @@ class AiService
         $startTime = microtime(true);
         $account = null;
         $usage = [];
-        dd($model);
         try {
             // 1. 获取供应商代码
             $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
