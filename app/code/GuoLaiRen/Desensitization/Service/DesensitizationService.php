@@ -16,6 +16,7 @@ use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Framework\App\Env;
 
 class DesensitizationService
 {
@@ -83,7 +84,7 @@ class DesensitizationService
 
             return $desensitized;
         } catch (\Exception $e) {
-            error_log("脱敏处理失败: " . $e->getMessage());
+            Env::log('desensitization.log', "脱敏处理失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("脱敏处理失败: " . $e->getMessage());
         }
     }
@@ -127,7 +128,7 @@ class DesensitizationService
                     }
                 } catch (\Exception $e) {
                     // 跳过无效的规则
-                    error_log("规则执行失败 - Rule ID: {$rule->getRuleId()}, Error: " . $e->getMessage());
+                    Env::log('desensitization.log', "规则执行失败 - Rule ID: {$rule->getRuleId()}, Error: " . $e->getMessage(), 'ERROR');
                 }
             }
         }
@@ -185,7 +186,7 @@ class DesensitizationService
 
             return $result;
         } catch (\Exception $e) {
-            error_log("AI脱敏失败: " . $e->getMessage());
+            Env::log('desensitization.log', "AI脱敏失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("AI脱敏失败: " . $e->getMessage());
         }
     }
@@ -219,7 +220,7 @@ class DesensitizationService
                     $result = preg_replace($rule['pattern'], $replacement, $result);
                 }
             } catch (\Exception $e) {
-                error_log("自定义规则执行失败: " . $e->getMessage());
+                Env::log('desensitization.log', "自定义规则执行失败: " . $e->getMessage(), 'ERROR');
             }
         }
 
@@ -439,8 +440,11 @@ class DesensitizationService
             ];
         }
 
-        // 检查AI是否启用
-        if (!($this->config['ai']['enabled'] ?? true)) {
+        // 检查AI是否启用（默认为启用）
+        $aiEnabled = $this->config['ai']['enabled'] ?? true;
+        Env::log('desensitization.log', "AI功能状态: " . ($aiEnabled ? '启用' : '未启用'), 'INFO');
+        
+        if (!$aiEnabled) {
             throw new Exception('AI功能未启用');
         }
 
@@ -502,18 +506,29 @@ class DesensitizationService
             $aiService = ObjectManager::getInstance(AiService::class);
             
             $modelCode = $options['model_code'] ?? $this->config['ai']['model_code'] ?? '';
-            $adapterCode = $options['adapter_code'] ?? $this->config['ai']['desensitization_adapter'] ?? 'desensitization';
+            
+            // 使用本模块的场景适配器
+            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
             // 获取适配器参数配置
             $adapterParams = $this->getAdapterParams($adapterCode, 'desensitization');
             
+            // 添加调试日志
+            Env::log('desensitization.log', "AI检测 - 模型代码: " . $modelCode, 'DEBUG');
+            Env::log('desensitization.log', "AI检测 - 适配器代码: " . $adapterCode, 'DEBUG');
+            Env::log('desensitization.log', "AI检测 - 适配器参数: " . json_encode($adapterParams), 'DEBUG');
+            
+            Env::log('desensitization.log', "开始调用AI服务...", 'INFO');
             $aiResponse = $aiService->generate(
                 $prompt,
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
-                $adapterParams
+                $adapterParams,
+                null, // userId - 后端调用
+                true  // isBackend - 后端调用
             );
+            Env::log('desensitization.log', "AI服务响应: " . substr($aiResponse, 0, 500) . "...", 'DEBUG');
 
             // 解析AI返回的JSON结果
             $aiResult = [
@@ -535,7 +550,7 @@ class DesensitizationService
                     }
                 }
             } catch (\Exception $e) {
-                error_log("AI检测结果解析失败: " . $e->getMessage());
+                Env::log('desensitization.log', "AI检测结果解析失败: " . $e->getMessage(), 'ERROR');
             }
 
             // 合并正则检测和AI检测结果
@@ -548,9 +563,9 @@ class DesensitizationService
 
             return $finalResult;
         } catch (\Exception $e) {
-            error_log("AI检测失败: " . $e->getMessage());
-            // AI检测失败时，返回正则检测结果
-            return $this->detectSensitive($content, $options);
+            Env::log('desensitization.log', "AI检测失败: " . $e->getMessage(), 'ERROR');
+            // AI检测失败时，抛出异常让前端显示错误
+            throw new \Exception('AI检测失败: ' . $e->getMessage());
         }
     }
 
@@ -603,7 +618,7 @@ class DesensitizationService
 
             return $rewritten;
         } catch (\Exception $e) {
-            error_log("AI重写润色失败: " . $e->getMessage());
+            Env::log('desensitization.log', "AI重写润色失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("AI重写润色失败: " . $e->getMessage());
         }
     }
@@ -668,7 +683,7 @@ class DesensitizationService
             
             // 如果激活的模型为空，获取所有模型
             if (!$models || (method_exists($models, 'getItems') && count($models->getItems()) == 0)) {
-                error_log("激活的AI模型为空，尝试获取所有模型");
+                Env::log('desensitization.log', "激活的AI模型为空，尝试获取所有模型", 'DEBUG');
                 $collection = $aiModel->reset()
                     ->order(AiModel::fields_SUPPLIER, 'ASC')
                     ->order(AiModel::fields_NAME, 'ASC')
@@ -725,12 +740,12 @@ class DesensitizationService
             }
             
             // 调试日志
-            error_log("获取到 " . count($result) . " 个AI模型");
+            Env::log('desensitization.log', "获取到 " . count($result) . " 个AI模型", 'INFO');
             
             return $result;
         } catch (\Exception $e) {
-            error_log("获取AI模型列表失败: " . $e->getMessage());
-            error_log("错误堆栈: " . $e->getTraceAsString());
+            Env::log('desensitization.log', "获取AI模型列表失败: " . $e->getMessage(), 'ERROR');
+            Env::log('desensitization.log', "错误堆栈: " . $e->getTraceAsString(), 'ERROR');
             return [];
         }
     }
@@ -767,17 +782,21 @@ class DesensitizationService
             // 获取系统配置中的参数
             $paramsJson = $systemConfig->getConfig($configKey, 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND);
             
+            Env::log('desensitization.log', "获取适配器参数 - 配置键: " . $configKey . ", 原始值: " . ($paramsJson ?: '空'), 'DEBUG');
+            
             if ($paramsJson) {
                 $params = json_decode($paramsJson, true);
                 if (is_array($params)) {
+                    Env::log('desensitization.log', "成功解析适配器参数: " . json_encode($params), 'DEBUG');
                     return $params;
                 }
             }
         } catch (\Exception $e) {
-            error_log("获取适配器参数配置失败: " . $e->getMessage());
+            Env::log('desensitization.log', "获取适配器参数配置失败: " . $e->getMessage(), 'ERROR');
         }
         
         // 返回空数组，让适配器使用默认参数
+        Env::log('desensitization.log', "使用默认适配器参数（空数组）", 'DEBUG');
         return [];
     }
 
@@ -876,7 +895,9 @@ class DesensitizationService
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
-                ['mode' => 'rewrite']
+                ['mode' => 'rewrite'],
+                null, // userId - 后端调用
+                true  // isBackend - 后端调用
             );
             
             // 移除标记，恢复正常文本
@@ -889,7 +910,7 @@ class DesensitizationService
                 'positions_count' => count($positions)
             ];
         } catch (\Exception $e) {
-            error_log("润色失败: " . $e->getMessage());
+            Env::log('desensitization.log', "润色失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("润色失败: " . $e->getMessage());
         }
     }

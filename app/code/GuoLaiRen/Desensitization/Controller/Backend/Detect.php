@@ -11,6 +11,7 @@ namespace GuoLaiRen\Desensitization\Controller\Backend;
 use GuoLaiRen\Desensitization\Service\DesensitizationService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Env;
 
 class Detect extends BackendController
 {
@@ -28,8 +29,22 @@ class Detect extends BackendController
      */
     public function index()
     {
-        // 不再预加载模型，由前端点击时动态加载
-        $this->assign('models', []);
+        // 获取默认模型配置
+        $defaultModel = '';
+        try {
+            /** @var \Weline\SystemConfig\Model\SystemConfig $systemConfig */
+            $systemConfig = ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class);
+            $configParams = $systemConfig->getConfig('desensitization_adapter_params', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND);
+            
+            if ($configParams) {
+                $params = json_decode($configParams, true);
+                $defaultModel = $params['default_model'] ?? '';
+            }
+        } catch (\Exception $e) {
+            // 忽略错误，使用空默认值
+        }
+        
+        $this->assign('defaultModel', $defaultModel);
         return $this->fetch();
     }
 
@@ -78,7 +93,19 @@ class Detect extends BackendController
             return $this->jsonResponse(['success' => false, 'message' => '仅支持POST请求']);
         }
 
-        $data = $this->request->getParams();
+        // 获取原始POST数据（如果是JSON请求）
+        $rawData = file_get_contents('php://input');
+        Env::log('desensitization.log', "检测控制器: 原始POST数据: " . $rawData, 'DEBUG');
+        
+        // 尝试解析JSON数据
+        $data = json_decode($rawData, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            // 如果不是JSON，使用常规方法获取参数
+            $data = $this->request->getParams();
+        }
+        
+        // 调试日志：打印所有接收到的参数
+        Env::log('desensitization.log', "检测控制器: 接收到的参数: " . json_encode($data), 'DEBUG');
         
         $content = $data['content'] ?? '';
 
@@ -90,6 +117,7 @@ class Detect extends BackendController
             $startTime = microtime(true);
             
             $modelCode = $data['model_code'] ?? '';
+            Env::log('desensitization.log', "检测控制器: 初始模型代码: " . $modelCode, 'DEBUG');
             
             // 如果没有指定模型代码，尝试从配置中获取默认模型
             if (empty($modelCode)) {
@@ -105,11 +133,13 @@ class Detect extends BackendController
             
             // 如果指定了AI模型，使用AI检测；否则使用正则检测
             if (!empty($modelCode)) {
+                Env::log('desensitization.log', "检测控制器: 使用AI检测，模型代码: " . $modelCode, 'INFO');
                 $options = [
                     'model_code' => $modelCode
                 ];
                 $result = $this->service->detectSensitiveWithAI($content, $options);
             } else {
+                Env::log('desensitization.log', "检测控制器: 使用正则检测，没有模型代码", 'INFO');
                 $options = [
                     'return_positions' => true
                 ];

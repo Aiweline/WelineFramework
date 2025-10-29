@@ -138,6 +138,15 @@
          icon="mdi mdi-office-building"
          order="20"/>
     
+    <!-- 供应商账户管理 -->
+    <add source="Weline_Ai::ai_provider_account" 
+         name="ai_provider_account" 
+         title="供应商账户" 
+         action="ai/backend/provider" 
+         parent="Weline_Ai::ai_system_manager"
+         icon="mdi mdi-account-key"
+         order="25"/>
+    
     <!-- API密钥管理 -->
     <add source="Weline_Ai::ai_apikey_manager" 
          name="ai_apikey_manager" 
