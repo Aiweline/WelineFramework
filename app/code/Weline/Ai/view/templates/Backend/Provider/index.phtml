@@ -1,0 +1,526 @@
+@template(Weline_Admin::common/page_header.phtml)
+@template(Weline_Admin::common/page_nav.phtml)
+
+<style>
+    .provider-logo {
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+        margin-right: 8px;
+    }
+    .api-key-masked {
+        font-family: monospace;
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    .balance-low {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .balance-normal {
+        color: #198754;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="card-title mb-0">AI供应商账户管理</h4>
+                    <div>
+                        <button type="button" class="btn btn-primary" onclick="addAccount()">
+                            <i class="mdi mdi-plus me-1"></i>添加账户
+                        </button>
+                        <button type="button" class="btn btn-info ms-2" onclick="refreshList()">
+                            <i class="mdi mdi-refresh me-1"></i>刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 搜索过滤 -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="searchInput" placeholder="搜索账户名称...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="searchAccounts()">
+                                    <i class="mdi mdi-magnify"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="providerFilter" onchange="filterByProvider()">
+                                <option value="">所有供应商</option>
+                                <?php foreach ($providers as $code => $info): ?>
+                                    <option value="<?= $code ?>"><?= $info['name'] ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 账户列表 -->
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="accountsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>供应商</th>
+                                    <th>账户名称</th>
+                                    <th>API密钥</th>
+                                    <th>余额</th>
+                                    <th>总花费</th>
+                                    <th>连接状态</th>
+                                    <th>状态</th>
+                                    <th>创建时间</th>
+                                    <th style="width: 200px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accountsList">
+                                <tr>
+                                    <td colspan="10" class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">加载中...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div id="pagination" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑模态框 -->
+<div class="modal fade" id="accountModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountModalTitle">添加供应商账户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="accountForm">
+                    <input type="hidden" id="accountId" name="id" value="0">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="provider_code" class="form-label">供应商 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="provider_code" name="provider_code" required>
+                                <option value="">请选择供应商</option>
+                                <?php foreach ($providers as $code => $info): ?>
+                                    <option value="<?= $code ?>" data-base-url="<?= $info['base_url'] ?>">
+                                        <?= $info['name'] ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="account_name" class="form-label">账户名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="account_name" name="account_name" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="api_key" class="form-label">API密钥 <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="api_key" name="api_key" placeholder="编辑时留空表示不修改">
+                            <small class="text-muted">API密钥将被加密存储</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="base_url" class="form-label">API基础URL</label>
+                            <input type="url" class="form-control" id="base_url" name="base_url" placeholder="留空使用默认值">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="balance" class="form-label">账户余额</label>
+                            <input type="number" class="form-control" id="balance" name="balance" step="0.01" value="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="currency" class="form-label">货币单位</label>
+                            <select class="form-select" id="currency" name="currency">
+                                <option value="USD">USD</option>
+                                <option value="CNY">CNY</option>
+                                <option value="EUR">EUR</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">账户设置</label>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1">
+                                    <label class="form-check-label" for="is_active">激活</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1">
+                                    <label class="form-check-label" for="is_default">设为默认</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 代理设置 -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="proxy_enabled" name="proxy_enabled" value="1">
+                                <label class="form-check-label" for="proxy_enabled">
+                                    启用代理
+                                </label>
+                            </div>
+                        </div>
+                        <div class="card-body" id="proxySettings" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="proxy_type" class="form-label">代理类型</label>
+                                    <select class="form-select" id="proxy_type" name="proxy_type">
+                                        <option value="http">HTTP</option>
+                                        <option value="https">HTTPS</option>
+                                        <option value="socks5">SOCKS5</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="proxy_host" class="form-label">代理地址</label>
+                                    <input type="text" class="form-control" id="proxy_host" name="proxy_host">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="proxy_port" class="form-label">端口</label>
+                                    <input type="number" class="form-control" id="proxy_port" name="proxy_port">
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <label for="proxy_username" class="form-label">用户名（可选）</label>
+                                    <input type="text" class="form-control" id="proxy_username" name="proxy_username">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="proxy_password" class="form-label">密码（可选）</label>
+                                    <input type="password" class="form-control" id="proxy_password" name="proxy_password">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveAccount()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+let currentPage = 1;
+let currentSearch = '';
+let currentProvider = '';
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadAccounts();
+    
+    // 代理设置切换
+    document.getElementById('proxy_enabled').addEventListener('change', function() {
+        document.getElementById('proxySettings').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // 供应商选择时自动填充基础URL
+    document.getElementById('provider_code').addEventListener('change', function() {
+        const baseUrl = this.options[this.selectedIndex].getAttribute('data-base-url');
+        if (baseUrl && !document.getElementById('base_url').value) {
+            document.getElementById('base_url').value = baseUrl;
+        }
+    });
+});
+
+// 加载账户列表
+function loadAccounts(page = 1) {
+    currentPage = page;
+    
+    const params = new URLSearchParams({
+        page: page,
+        limit: 20,
+        search: currentSearch,
+        provider_code: currentProvider
+    });
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/getList') ?>?' + params)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayAccounts(data.data);
+                displayPagination(data.total, data.page, data.limit);
+            } else {
+                alert('加载失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载失败');
+        });
+}
+
+// 显示账户列表
+function displayAccounts(accounts) {
+    const tbody = document.getElementById('accountsList');
+    
+    if (accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center">暂无数据</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = accounts.map(account => `
+        <tr>
+            <td>${account.id}</td>
+            <td>${account.provider_name}</td>
+            <td>${account.account_name}${account.is_default == 1 ? ' <span class="badge bg-primary">默认</span>' : ''}</td>
+            <td><span class="api-key-masked">${account.api_key_masked || '******'}</span></td>
+            <td class="${account.balance > 10 ? 'balance-normal' : 'balance-low'}">${account.balance_formatted}</td>
+            <td>${account.total_spent_formatted}</td>
+            <td>${account.connection_status_text}</td>
+            <td>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" ${account.is_active == 1 ? 'checked' : ''} 
+                        onchange="toggleActive(${account.id})" ${account.connection_status !== 'success' ? 'disabled' : ''}>
+                </div>
+            </td>
+            <td>${account.created_at_formatted}</td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick="testConnection(${account.id})" title="测试连接">
+                    <i class="mdi mdi-wifi"></i>
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="editAccount(${account.id})" title="编辑">
+                    <i class="mdi mdi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-success" onclick="viewUsage(${account.id})" title="使用记录">
+                    <i class="mdi mdi-chart-line"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteAccount(${account.id})" title="删除">
+                    <i class="mdi mdi-delete"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// 显示分页
+function displayPagination(total, page, limit) {
+    const totalPages = Math.ceil(total / limit);
+    const pagination = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    
+    let html = '<nav><ul class="pagination justify-content-center">';
+    
+    // 上一页
+    html += `<li class="page-item ${page === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="loadAccounts(${page - 1}); return false;">上一页</a>
+    </li>`;
+    
+    // 页码
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+            html += `<li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadAccounts(${i}); return false;">${i}</a>
+            </li>`;
+        } else if (i === page - 3 || i === page + 3) {
+            html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+    
+    // 下一页
+    html += `<li class="page-item ${page === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="loadAccounts(${page + 1}); return false;">下一页</a>
+    </li>`;
+    
+    html += '</ul></nav>';
+    pagination.innerHTML = html;
+}
+
+// 搜索账户
+function searchAccounts() {
+    currentSearch = document.getElementById('searchInput').value;
+    loadAccounts(1);
+}
+
+// 按供应商筛选
+function filterByProvider() {
+    currentProvider = document.getElementById('providerFilter').value;
+    loadAccounts(1);
+}
+
+// 刷新列表
+function refreshList() {
+    loadAccounts(currentPage);
+}
+
+// 添加账户
+function addAccount() {
+    document.getElementById('accountModalTitle').textContent = '添加供应商账户';
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountId').value = '0';
+    document.getElementById('api_key').required = true;
+    document.getElementById('proxySettings').style.display = 'none';
+    
+    const modal = new bootstrap.Modal(document.getElementById('accountModal'));
+    modal.show();
+}
+
+// 编辑账户
+function editAccount(id) {
+    // 这里应该先加载账户数据，为了演示直接打开编辑页面
+    window.location.href = '<?= $this->getBackendUrl('*/backend/provider/edit/id/') ?>' + id;
+}
+
+// 保存账户
+function saveAccount() {
+    const form = document.getElementById('accountForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/save') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
+            loadAccounts(currentPage);
+            alert(data.message);
+        } else {
+            alert('保存失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('保存失败');
+    });
+}
+
+// 测试连接
+function testConnection(id) {
+    if (!confirm('确定要测试此账户的连接吗？')) {
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+    btn.disabled = true;
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        if (data.success) {
+            alert(data.message);
+            loadAccounts(currentPage);
+        } else {
+            alert('测试失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        console.error('Error:', error);
+        alert('测试失败');
+    });
+}
+
+// 切换激活状态
+function toggleActive(id) {
+    fetch('<?= $this->getBackendUrl('*/backend/provider/toggleActive') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            alert(data.message);
+            loadAccounts(currentPage);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('操作失败');
+        loadAccounts(currentPage);
+    });
+}
+
+// 删除账户
+function deleteAccount(id) {
+    if (!confirm('确定要删除此账户吗？此操作不可恢复！')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/provider/delete') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            loadAccounts(currentPage);
+        } else {
+            alert('删除失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('删除失败');
+    });
+}
+
+// 查看使用记录
+function viewUsage(id) {
+    window.location.href = '<?= $this->getBackendUrl('*/backend/provider/usage/account_id/') ?>' + id;
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchAccounts();
+    }
+});
+</script>
