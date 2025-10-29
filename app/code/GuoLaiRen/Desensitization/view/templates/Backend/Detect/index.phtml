@@ -405,8 +405,19 @@ function executeDetect() {
         // 确保弹窗被正确关闭
         if (detectLoadingModalInstance) {
             detectLoadingModalInstance.hide();
+            // 完全销毁弹窗实例
+            detectLoadingModalInstance.dispose();
             detectLoadingModalInstance = null;
         }
+        
+        // 手动移除弹窗背景
+        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+        modalBackdrops.forEach(backdrop => backdrop.remove());
+        
+        // 移除body上的modal-open类
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
         
         if (data.success) {
             detectionData = data.data;
@@ -423,8 +434,20 @@ function executeDetect() {
         // 确保弹窗被正确关闭
         if (detectLoadingModalInstance) {
             detectLoadingModalInstance.hide();
+            // 完全销毁弹窗实例
+            detectLoadingModalInstance.dispose();
             detectLoadingModalInstance = null;
         }
+        
+        // 手动移除弹窗背景
+        const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+        modalBackdrops.forEach(backdrop => backdrop.remove());
+        
+        // 移除body上的modal-open类
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
         detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
     });
 }
