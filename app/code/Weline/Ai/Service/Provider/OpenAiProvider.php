@@ -70,8 +70,11 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
+        // 超时优先级：params.timeout > config.timeout；0 表示不限制
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 100);
+        if ($timeout > 0) { @set_time_limit($timeout + 10); } else { @set_time_limit(0); }
         $requestData = [
-            'model' => $config['model_id'] ?? 'gpt-3.5-turbo',
+            'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => $params['temperature'] ?? $config['temperature'] ?? 0.7,
             'max_tokens' => $params['max_tokens'] ?? $config['max_tokens'] ?? 2000,
@@ -97,7 +100,8 @@ class OpenAiProvider implements ProviderInterface
             $apiUrl,
             $apiKey,
             $requestData,
-            $proxyInfo
+            $proxyInfo,
+            $timeout
         );
 
         return [
@@ -146,8 +150,10 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
+        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 100);
+        if ($timeout > 0) { @set_time_limit($timeout + 10); } else { @set_time_limit(0); }
         $requestData = [
-            'model' => $config['model_id'] ?? 'gpt-3.5-turbo',
+            'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => $params['temperature'] ?? $config['temperature'] ?? 0.7,
             'max_tokens' => $params['max_tokens'] ?? $config['max_tokens'] ?? 2000,
@@ -182,7 +188,8 @@ class OpenAiProvider implements ProviderInterface
                 $fullContent .= $chunk;
                 $callback($chunk);
             },
-            $proxyInfo
+            $proxyInfo,
+            $timeout
         );
 
         // 估算token使用量
@@ -240,10 +247,10 @@ class OpenAiProvider implements ProviderInterface
      * @return array
      * @throws Exception
      */
-    private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $retryCount = 0): array
+    private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
     {
         try {
-            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo);
+            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -259,7 +266,7 @@ class OpenAiProvider implements ProviderInterface
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 服务器错误，重试
                 sleep(self::RETRY_DELAY * ($retryCount + 1));
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $retryCount + 1);
+                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
@@ -276,7 +283,7 @@ class OpenAiProvider implements ProviderInterface
         } catch (\Exception $e) {
             if ($retryCount < self::MAX_RETRIES) {
                 sleep(self::RETRY_DELAY * ($retryCount + 1));
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $retryCount + 1);
+                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
         }
@@ -292,9 +299,9 @@ class OpenAiProvider implements ProviderInterface
      * @param array $proxyInfo
      * @throws Exception
      */
-    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo): void
+    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout): void
     {
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
         
         // 设置流式处理回调
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback) {
@@ -341,7 +348,7 @@ class OpenAiProvider implements ProviderInterface
      * @param array $proxyInfo
      * @return resource
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo)
+    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout)
     {
         $ch = curl_init($url);
         
@@ -352,7 +359,15 @@ class OpenAiProvider implements ProviderInterface
             'Content-Type: application/json',
             'Authorization: Bearer ' . $apiKey,
         ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        // 根据模型配置设置超时（秒）；0 表示不限制
+        $timeout = max(0, (int)$timeout);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
+        if ($timeout > 0) {
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
+        } else {
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
+        }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
         // 生产环境建议配置正确的CA证书包
