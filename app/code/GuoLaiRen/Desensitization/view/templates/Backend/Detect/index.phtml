@@ -141,6 +141,20 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                             <div class="accordion-body" id="rewriteContent">
                                                 <div class="text-muted text-center py-4">等待润色...</div>
                                             </div>
+                                            <div class="accordion-footer p-3 border-top" id="rewriteFooter" style="display: none;">
+                                                <button type="button" class="btn btn-primary btn-sm" onclick="reDetectPolishedContent()">
+                                                    <i class="mdi mdi-refresh me-1"></i>再次检测
+                                                </button>
+                                                <button type="button" class="btn btn-success btn-sm ms-2" onclick="copyPolishedContent()">
+                                                    <i class="mdi mdi-content-copy me-1"></i>复制
+                                                </button>
+                                                <button type="button" class="btn btn-info btn-sm ms-2" onclick="exportPolishedContent('html')">
+                                                    <i class="mdi mdi-file-download me-1"></i>导出HTML
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-sm ms-2" onclick="exportPolishedContent('txt')">
+                                                    <i class="mdi mdi-file-document me-1"></i>导出TXT
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -153,7 +167,21 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </h2>
                                         <div id="collapseCompare" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
                                             <div class="accordion-body" id="compareContent">
-                                                <div class="text-muted text-center py-4">等待对比 שכב...</div>
+                                                <div class="text-muted text-center py-4">等待对比...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 4. 历史版本 -->
+                                    <div class="accordion-item" id="historyAccordionItem" style="display: none;">
+                                        <h2 class="accordion-header" id="headingHistory">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHistory">
+                                                <i class="mdi mdi-history me-2"></i>历史版本
+                                            </button>
+                                        </h2>
+                                        <div id="collapseHistory" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
+                                            <div class="accordion-body" id="historyContent" style="max-height: 400px; overflow-y: auto;">
+                                                <div class="text-muted text-center py-4">暂无历史记录...</div>
                                             </div>
                                         </div>
                                     </div>
@@ -529,10 +557,14 @@ function rewriteContent() {
 // 显示润色结果
 function displayRewriteResult() {
     const rewriteContentDiv = document.getElementById('rewriteContent');
+    const rewriteFooter = document.getElementById('rewriteFooter');
     const compareContentDiv = document.getElementById('compareContent');
     
-    rewriteContentDiv.innerHTML = `<div style="white-space: pre-wrap;">${rewriteData.content}</div>`;
+    rewriteContentDiv.innerHTML = `<div style="white-space: pre-wrap;" id="polishedContent">${rewriteData.content}</div>`;
     compareContentDiv.innerHTML = generateComparisonContent();
+    
+    // 显示润色后的操作按钮
+    rewriteFooter.style.display = 'block';
     
     // 展开润色结果手风琴
     new bootstrap.Collapse(document.getElementById('collapseRewrite'), {toggle: true});
