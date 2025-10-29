@@ -176,7 +176,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 </div>
 
 <!-- 检测中弹窗 -->
-<div class="modal fade" id="detectLoadingModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="detectLoadingModal" tabindex="-1" aria-hidden="true" data-bs-keyboard="false" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-body d-flex align-items-center">
@@ -322,6 +322,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// 全局变量存储检测弹窗实例
+let detectLoadingModalInstance = null;
+
 function executeDetect() {
     const content = document.getElementById('content').value;
     if (!content) {
@@ -329,9 +332,22 @@ function executeDetect() {
         return;
     }
 
-    // 显示“检测中”弹窗
-    const detectLoadingModal = new bootstrap.Modal(document.getElementById('detectLoadingModal'));
-    detectLoadingModal.show();
+    // 显示"检测中"弹窗 - 确保弹窗不能被手动关闭
+    const modalElement = document.getElementById('detectLoadingModal');
+    
+    // 移除所有事件监听器，防止手动关闭
+    modalElement.removeEventListener('click', handleModalClick);
+    modalElement.addEventListener('click', handleModalClick);
+    
+    // 禁用ESC键关闭
+    modalElement.setAttribute('data-bs-keyboard', 'false');
+    modalElement.setAttribute('data-bs-backdrop', 'static');
+    
+    detectLoadingModalInstance = new bootstrap.Modal(modalElement, {
+        keyboard: false,
+        backdrop: 'static'
+    });
+    detectLoadingModalInstance.show();
 
     const form = document.getElementById('detectForm');
     const formData = new FormData(form);
@@ -358,7 +374,12 @@ function executeDetect() {
     })
     .then(response => response.json())
     .then(data => {
-        detectLoadingModal.hide();
+        // 确保弹窗被正确关闭
+        if (detectLoadingModalInstance) {
+            detectLoadingModalInstance.hide();
+            detectLoadingModalInstance = null;
+        }
+        
         if (data.success) {
             detectionData = data.data;
             displayDetectionResult(data.data);
@@ -371,9 +392,23 @@ function executeDetect() {
         }
     })
     .catch(error => {
-        detectLoadingModal.hide();
+        // 确保弹窗被正确关闭
+        if (detectLoadingModalInstance) {
+            detectLoadingModalInstance.hide();
+            detectLoadingModalInstance = null;
+        }
         detectionContent.innerHTML = `<div class="alert alert-danger">检测失败: ${error.message}</div>`;
     });
+}
+
+// 处理弹窗点击事件，防止意外关闭
+function handleModalClick(event) {
+    // 阻止点击弹窗背景关闭弹窗
+    if (event.target === event.currentTarget) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+    }
 }
 
 // 显示检测结果
