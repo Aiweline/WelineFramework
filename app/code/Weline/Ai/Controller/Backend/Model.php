@@ -15,6 +15,7 @@ namespace Weline\Ai\Controller\Backend;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\ModelCollector;
+use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
@@ -444,32 +445,29 @@ class Model extends BackendController
         }
 
         try {
-            // 获取模型配置（优先使用provider_config，如果没有则使用config）
-            $config = $model->getConfig();
-            $providerConfig = $model->getData(AiModel::fields_PROVIDER_CONFIG);
+            // 获取供应商账户服务
+            /** @var AccountService $accountService */
+            $accountService = ObjectManager::getInstance(AccountService::class);
             
-            if (!empty($providerConfig)) {
-                $providerConfigData = is_string($providerConfig) ? json_decode($providerConfig, true) : $providerConfig;
-                if (is_array($providerConfigData)) {
-                    // 合并配置：provider_config优先（忽略空值覆盖）
-                    foreach ($providerConfigData as $k => $v) {
-                        if ($v !== '' && $v !== null) {
-                            $config[$k] = $v;
-                        }
-                    }
-                }
-            }
-            
-            // 检查是否有API key
-            if (empty($config['api_key'])) {
+            // 获取供应商代码
+            $providerCode = $accountService->getProviderByModelCode($model->getData(AiModel::fields_MODEL_CODE));
+            if (!$providerCode) {
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => '模型未配置API密钥，无法测试。请在"API密钥配置"或"提供商配置"中填写api_key。',
-                    'error' => 'Missing API key in model configuration'
+                    'message' => '无法确定模型的供应商'
                 ]);
             }
             
-            // 使用AI服务测试连接（会自动使用模型中配置的API key）
+            // 检查是否有可用的供应商账户
+            $account = $accountService->getAvailableAccount($providerCode);
+            if (!$account) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => "没有可用的{$providerCode}供应商账户，请先配置并激活供应商账户"
+                ]);
+            }
+            
+            // 使用AI服务测试连接（会自动使用供应商账户）
             $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
             $startTime = microtime(true);
             $response = $aiService->generate($prompt, $model->getData(AiModel::fields_MODEL_CODE));
@@ -496,7 +494,8 @@ class Model extends BackendController
                     'response' => $response,
                     'duration' => $duration,
                     'prompt' => $prompt,
-                    'model_code' => $model->getData(AiModel::fields_MODEL_CODE)
+                    'model_code' => $model->getData(AiModel::fields_MODEL_CODE),
+                    'account_name' => $account->getData('account_name')
                 ]
             ]);
         } catch (\Exception $e) {
@@ -1247,6 +1246,120 @@ class Model extends BackendController
                 'message' => __('清空失败：%{1}', $e->getMessage())
             ]);
         }
+    }
+
+    /**
+     * 批量测试模型连接
+     * 
+     * @return string
+     */
+    #[Acl('Weline_Ai::ai_model_batch_test', '批量测试AI模型连接', 'mdi-connection', '批量测试AI模型连接')]
+    public function batchTestConnection(): string
+    {
+        $modelIds = $this->request->getPost('model_ids', []);
+        
+        if (empty($modelIds)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('请选择要测试的模型')
+            ]);
+        }
+
+        $results = [];
+        $successCount = 0;
+        $failedCount = 0;
+
+        // 获取供应商账户服务
+        /** @var AccountService $accountService */
+        $accountService = ObjectManager::getInstance(AccountService::class);
+        
+        foreach ($modelIds as $modelId) {
+            $model = $this->getAiModel()->reset()->load((int)$modelId);
+            
+            if (!$model->getId()) {
+                $results[] = [
+                    'model_id' => $modelId,
+                    'model_code' => '',
+                    'success' => false,
+                    'message' => '模型不存在'
+                ];
+                $failedCount++;
+                continue;
+            }
+            
+            $modelCode = $model->getData(AiModel::fields_MODEL_CODE);
+            
+            try {
+                // 获取供应商代码
+                $providerCode = $accountService->getProviderByModelCode($modelCode);
+                if (!$providerCode) {
+                    throw new \Exception('无法确定模型的供应商');
+                }
+                
+                // 检查是否有可用的供应商账户
+                $account = $accountService->getAvailableAccount($providerCode);
+                if (!$account) {
+                    throw new \Exception("没有可用的{$providerCode}供应商账户");
+                }
+                
+                // 使用AI服务测试连接
+                $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
+                $startTime = microtime(true);
+                $response = $aiService->generate('Test connection', $modelCode);
+                $duration = round((microtime(true) - $startTime) * 1000, 2);
+                
+                // 更新连接状态
+                $this->getAiModel()->reset()
+                    ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                    ->update([
+                        AiModel::fields_CONNECTION_TEST_STATUS => 'success',
+                        AiModel::fields_CONNECTION_TEST_TIME => time()
+                    ])->fetch();
+                
+                $results[] = [
+                    'model_id' => $modelId,
+                    'model_code' => $modelCode,
+                    'model_name' => $model->getData(AiModel::fields_NAME),
+                    'success' => true,
+                    'message' => '测试成功',
+                    'duration' => $duration,
+                    'account_name' => $account->getData('account_name')
+                ];
+                $successCount++;
+                
+            } catch (\Exception $e) {
+                // 更新连接状态为失败
+                try {
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::fields_CONNECTION_TEST_STATUS => 'failed',
+                            AiModel::fields_CONNECTION_TEST_TIME => time()
+                        ])->fetch();
+                } catch (\Exception $saveEx) {
+                    // 忽略保存错误
+                }
+                
+                $results[] = [
+                    'model_id' => $modelId,
+                    'model_code' => $modelCode,
+                    'model_name' => $model->getData(AiModel::fields_NAME),
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ];
+                $failedCount++;
+            }
+        }
+        
+        return $this->jsonResponse([
+            'success' => true,
+            'results' => $results,
+            'summary' => [
+                'total' => count($modelIds),
+                'success' => $successCount,
+                'failed' => $failedCount
+            ]
+        ]);
     }
 
     /**
