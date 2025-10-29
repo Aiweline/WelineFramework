@@ -17,6 +17,8 @@ $trends = $this->getData('trends') ?: [];
 $topModels = $this->getData('top_models') ?: [];
 $topAssistants = $this->getData('top_assistants') ?: [];
 $recentErrors = $this->getData('recent_errors') ?: [];
+$providerStats = $this->getData('provider_stats') ?: [];
+$topProviders = $this->getData('top_providers') ?: [];
 $error = $this->getData('error');
 ?>
 <!DOCTYPE html>
@@ -313,7 +315,7 @@ $error = $this->getData('error');
                                     </div>
                                 </div>
 
-                                <div>
+                                <div class="mb-3">
                                     <div class="d-flex justify-content-between mb-2">
                                         <span><lang>API密钥</lang></span>
                                         <span class="text-warning fw-bold"><?= $stats['total_api_keys'] ?? 0 ?></span>
@@ -321,6 +323,22 @@ $error = $this->getData('error');
                                     <div class="progress" style="height: 8px;">
                                         <div class="progress-bar bg-warning" style="width: 100%"></div>
                                     </div>
+                                </div>
+                                
+                                <div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><lang>供应商账户</lang></span>
+                                        <span class="text-success fw-bold"><?= $stats['active_provider_accounts'] ?? 0 ?>/<?= $stats['total_provider_accounts'] ?? 0 ?></span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <?php 
+                                        $activePercent = $stats['total_provider_accounts'] > 0 
+                                            ? round($stats['active_provider_accounts'] / $stats['total_provider_accounts'] * 100)
+                                            : 0;
+                                        ?>
+                                        <div class="progress-bar bg-success" style="width: <?= $activePercent ?>%"></div>
+                                    </div>
+                                    <small class="text-muted">今日花费: ¥<?= number_format($stats['provider_today_spent'] ?? 0, 2) ?></small>
                                 </div>
                             </div>
                         </div>
@@ -424,6 +442,130 @@ $error = $this->getData('error');
                                                         <?php else: ?>
                                                             <span class="badge bg-secondary"><lang>私有</lang></span>
                                                         <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Provider Statistics -->
+                <div class="row">
+                    <!-- Provider Stats -->
+                    <div class="col-xl-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-domain text-primary me-2"></i>
+                                    <lang>供应商账户统计</lang>
+                                </h5>
+                                
+                                <?php if (empty($providerStats)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无供应商账户数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th><lang>供应商</lang></th>
+                                                    <th><lang>账户数</lang></th>
+                                                    <th><lang>余额</lang></th>
+                                                    <th><lang>总花费</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($providerStats as $provider): ?>
+                                                <tr>
+                                                    <td>
+                                                        <strong><?= htmlspecialchars($provider['name']) ?></strong>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-info"><?= $provider['active_accounts'] ?></span> / <?= $provider['total_accounts'] ?>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-success">¥<?= number_format($provider['total_balance'], 2) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-danger">¥<?= number_format($provider['total_spent'], 2) ?></span>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr>
+                                                    <th><lang>总计</lang></th>
+                                                    <th>
+                                                        <?php
+                                                        $totalActive = array_sum(array_column($providerStats, 'active_accounts'));
+                                                        $totalAccounts = array_sum(array_column($providerStats, 'total_accounts'));
+                                                        ?>
+                                                        <span class="badge bg-primary"><?= $totalActive ?></span> / <?= $totalAccounts ?>
+                                                    </th>
+                                                    <th>
+                                                        <strong class="text-success">¥<?= number_format(array_sum(array_column($providerStats, 'total_balance')), 2) ?></strong>
+                                                    </th>
+                                                    <th>
+                                                        <strong class="text-danger">¥<?= number_format(array_sum(array_column($providerStats, 'total_spent')), 2) ?></strong>
+                                                    </th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Top Providers by Usage -->
+                    <div class="col-xl-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-4">
+                                    <i class="mdi mdi-cash-multiple text-success me-2"></i>
+                                    <lang>供应商花费TOP5（近30天）</lang>
+                                </h5>
+                                
+                                <?php if (empty($topProviders)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th><lang>供应商</lang></th>
+                                                    <th><lang>请求数</lang></th>
+                                                    <th><lang>Token数</lang></th>
+                                                    <th><lang>花费</lang></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($topProviders as $idx => $provider): ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <span class="badge bg-primary me-2"><?= $idx + 1 ?></span>
+                                                            <?= htmlspecialchars($provider['name']) ?>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-muted"><?= number_format($provider['total_requests']) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-info"><?= number_format($provider['total_tokens']) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <strong class="text-danger">¥<?= number_format($provider['total_cost'], 2) ?></strong>
                                                     </td>
                                                 </tr>
                                                 <?php endforeach; ?>
