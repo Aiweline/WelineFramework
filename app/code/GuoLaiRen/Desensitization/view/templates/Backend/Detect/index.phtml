@@ -416,14 +416,19 @@ function initDetectModal() {
         backdrop: 'static'
     });
 
-    // 统一在隐藏后做彻底清理，防止残留 backdrop / body 状态
+    // 隐藏后仅在无其它可见弹窗时清理 body 状态，避免与 Bootstrap 的销毁流程冲突
     detectLoadingModalEl.addEventListener('hidden.bs.modal', () => {
-        // 移除所有 modal-backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-        // 恢复 body 状态
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+        const anyModalShown = document.querySelector('.modal.show');
+        if (!anyModalShown) {
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            // 若仍有遗留 backdrop 且没有可见弹窗，再做兜底清理
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length) {
+                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
+            }
+        }
     });
 }
 
@@ -448,12 +453,18 @@ function showLoadingModal() {
 function hideLoadingModal() {
     if (!detectLoadingModalInstance) return;
     detectLoadingModalInstance.hide();
-    // 保险：等待过渡完成后再次清理残留（即使事件监听已清理）
+    // 兜底：仅当没有其它弹窗时再清理 body 与遗留 backdrop
     setTimeout(() => {
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+        const anyModalShown = document.querySelector('.modal.show');
+        if (!anyModalShown) {
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length) {
+                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
+            }
+        }
     }, 300);
 }
 
@@ -488,7 +499,7 @@ function executeDetect() {
     const resultFooter = document.getElementById('resultFooter');
     
     detectionContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
-    resultFooter.style.display = 'none';
+    if (resultFooter) resultFooter.style.display = 'none';
 
     fetch('<?= $this->getBackendUrl('*/backend/detect/execute') ?>', {
         method: 'POST',
@@ -497,20 +508,16 @@ function executeDetect() {
     })
     .then(response => response.json())
     .then(data => {
-        // 统一关闭弹窗并清理
-        hideLoadingModal();
-        
         if (data.success) {
+            // 成功才关闭加载弹窗
+            hideLoadingModal();
             detectionData = data.data;
             displayDetectionResult(data.data);
             
         } else {
-            // 在弹窗中显示错误
+            // 不关闭弹窗，直接切换为错误内容，避免隐藏/显示竞态
             const isAIError = data.message && data.message.includes('AI');
             showErrorInModal(data.message, isAIError);
-            // 切换为可关闭并展示
-            initDetectModal();
-            if (detectLoadingModalInstance) detectLoadingModalInstance.show();
             
             // 同时在页面上显示错误信息
             detectionContent.innerHTML = `<div class="alert alert-danger">
