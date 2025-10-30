@@ -113,15 +113,7 @@ $defaultModels = $this->defaultModels ?? [];
                     <tr>
                         <td><strong><?= $label ?></strong><br><small class="text-muted"><?= $type ?></small></td>
                         <td>
-                            <select class="form-control" name="model_<?= $type ?>" data-service-type="<?= $type ?>">
-                                <option value=""><?= __('-- 请选择模型 --') ?></option>
-                                <?php foreach ($models as $model): ?>
-                                    <option value="<?= $model->getModelCode() ?>" 
-                                            <?= ($currentDefault && $currentDefault['model_code'] == $model->getModelCode()) ? 'selected' : '' ?>>
-                                        <?= $model->getName() ?> (<?= $model->getVendor() ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <w:ai:model:select id="type" name="model_code" value="currentDefault.model_code|''" display="currentDefault.model_name|请选择模型" service_type="type" class="w-100" json="1" />
                         </td>
                         <td>
                             <input type="number" 
@@ -176,7 +168,11 @@ $defaultModels = $this->defaultModels ?? [];
 <script>
 function saveDefaultModel(serviceType) {
     const form = document.getElementById('defaultModelForm');
-    const modelCode = form.querySelector(`select[name="model_${serviceType}"]`).value;
+    // 读取隐藏字段（从标签生成的隐藏域，按 name 读取）
+    let modelCode = (form.querySelector(`input[name="model_${serviceType}"]`) || {}).value || '';
+    if (!modelCode && window.AiModelSelectSelected && window.AiModelSelectSelected[serviceType]) {
+        modelCode = window.AiModelSelectSelected[serviceType];
+    }
     const priority = form.querySelector(`input[name="priority_${serviceType}"]`).value;
     const isActive = form.querySelector(`input[name="active_${serviceType}"]`).checked ? 1 : 0;
 
@@ -191,7 +187,7 @@ function saveDefaultModel(serviceType) {
     data.append('priority', priority);
     data.append('is_active', isActive);
 
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/save') ?>', {
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/setDefault') ?>', {
         method: 'POST',
         body: data
     })
@@ -241,7 +237,7 @@ function initDefaultModels() {
         return;
     }
 
-    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/init') ?>', {
+    fetch('<?= $this->getBackendUrl('*/backend/defaultModel/initialize') ?>', {
         method: 'POST'
     })
     .then(response => response.json())
@@ -296,7 +292,16 @@ document.addEventListener('DOMContentLoaded', updateProtectedModelsList);
 .table input[type="number"] {
     width: 100%;
 }
+.model-search-input {
+    font-size: 12px;
+}
+.model-item.active,
+.model-item:hover {
+    background-color: #f0f6ff;
+}
 </style>
+
+<!-- 模型选择交互已由 <w:ai:model:select> 标签内联脚本提供，此处移除页面级脚本 -->
 
             </div>
         </div>
