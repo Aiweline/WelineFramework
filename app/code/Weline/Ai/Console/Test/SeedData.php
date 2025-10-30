@@ -14,11 +14,18 @@ use Weline\Ai\Service\AiApiKeyService;
  */
 class SeedData implements CommandInterface
 {
+    private AiModel $aiModel;
+    private AiTenant $aiTenant;
+    private AiApiKeyService $apiKeyService;
+
     public function __construct(
-        private readonly AiModel $aiModel,
-        private readonly AiTenant $aiTenant,
-        private readonly AiApiKeyService $apiKeyService
+        AiModel $aiModel,
+        AiTenant $aiTenant,
+        AiApiKeyService $apiKeyService
     ) {
+        $this->aiModel = $aiModel;
+        $this->aiTenant = $aiTenant;
+        $this->apiKeyService = $apiKeyService;
     }
 
     public function execute(array $args = [], array $data = [])

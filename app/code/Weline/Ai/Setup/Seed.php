@@ -249,6 +249,13 @@ class Seed
                 'max_tokens' => 4096,
                 'cost_per_token' => 0.000002,
                 'status' => AiModel::STATUS_ACTIVE,
+                // 兼容字段：确保外部查询能正常工作
+                'vendor' => 'openai',
+                'product' => 'gpt',
+                'model' => 'gpt-3.5-turbo',
+                'class' => '',
+                'default_api_key' => '',
+                'default_api_url' => '',
             ],
             [
                 'supplier' => 'openai',
@@ -267,6 +274,13 @@ class Seed
                 'max_tokens' => 8192,
                 'cost_per_token' => 0.00003,
                 'status' => AiModel::STATUS_ACTIVE,
+                // 兼容字段：确保外部查询能正常工作
+                'vendor' => 'openai',
+                'product' => 'gpt',
+                'model' => 'gpt-4',
+                'class' => '',
+                'default_api_key' => '',
+                'default_api_url' => '',
             ],
             [
                 'supplier' => 'anthropic',
@@ -284,6 +298,13 @@ class Seed
                 'max_tokens' => 200000,
                 'cost_per_token' => 0.000015,
                 'status' => AiModel::STATUS_ACTIVE,
+                // 兼容字段：确保外部查询能正常工作
+                'vendor' => 'anthropic',
+                'product' => 'claude',
+                'model' => 'claude-3-sonnet',
+                'class' => '',
+                'default_api_key' => '',
+                'default_api_url' => '',
             ],
             [
                 'supplier' => 'deepseek',
@@ -303,6 +324,13 @@ class Seed
                 'max_tokens' => 64000,
                 'cost_per_token' => 0.000001,
                 'status' => AiModel::STATUS_ACTIVE,
+                // 兼容字段：确保外部查询能正常工作
+                'vendor' => 'deepseek',
+                'product' => 'deepseek',
+                'model' => 'deepseek-v3.1',
+                'class' => '',
+                'default_api_key' => '',
+                'default_api_url' => '',
             ],
             [
                 'supplier' => 'deepseek',
@@ -322,6 +350,13 @@ class Seed
                 'max_tokens' => 32000,
                 'cost_per_token' => 0.0000008,
                 'status' => AiModel::STATUS_ACTIVE,
+                // 兼容字段：确保外部查询能正常工作
+                'vendor' => 'deepseek',
+                'product' => 'deepseek',
+                'model' => 'deepseek-r1-0528',
+                'class' => '',
+                'default_api_key' => '',
+                'default_api_url' => '',
             ],
         ];
         
