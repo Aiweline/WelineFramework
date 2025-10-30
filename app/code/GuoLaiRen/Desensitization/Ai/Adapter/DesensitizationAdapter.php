@@ -204,14 +204,14 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     private function buildMarkPrompt(string $content, string $level, array $params = []): string
     {
-        $prompt = "请对以下内容进行敏感范围检测与标记（包含直接敏感信息与可疑/涉及禁止范围的描述性文本），不要修改原文：\n\n";
+        $prompt = "请对以下内容进行敏感范围检测与标记（包含直接敏感信息、疑似项，以及带有明显情绪/煽动/辱骂/威胁/仇恨/攻击性/极化倾向的表达；同时识别涉及禁止范围的描述性文本），不要修改原文：\n\n";
         
         // 添加检测级别说明
         switch ($level) {
             case 'high':
                 $prompt .= "检测级别：严格检测\n";
                 $prompt .= "要求：\n";
-                $prompt .= "- 识别所有明确与模糊可疑项（即使仅为描述/意图/变体/暗示）；\n";
+                $prompt .= "- 识别所有明确与模糊可疑项（即使仅为描述/意图/变体/暗示）；对含强烈情绪色彩或引导性、煽动性的表达一并识别；\n";
                 $prompt .= "- 对出现频次高或上下文加重风险的表达提高权重；\n";
                 break;
             case 'low':
@@ -257,7 +257,7 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     private function buildDetectMarkPrompt(string $content, string $level, array $params = []): string
     {
-        $prompt = "请先检测以下内容中的敏感信息与\"禁止/敏感范围\"（包含可疑的描述性/引导性/意图类文本），然后进行位置标记；要求：\n";
+        $prompt = "请先检测以下内容中的敏感信息与\"禁止/敏感范围\"（包含疑似项、带有明显情绪/煽动/辱骂/威胁/仇恨/攻击性的表达，以及描述性/引导性/意图类文本），然后进行位置标记；要求：\n";
         $prompt .= "1) 输出问题清单（类型/原因/摘要，含直接/可疑两类，标明严重程度）；\n";
         $prompt .= "2) 给出\"标记列表\"（详见下方标记规范），索引基于原文UTF-8字符序；\n";
         $prompt .= "3) 不要修改原文；\n\n";
@@ -541,7 +541,11 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     private function buildDetectPrompt(string $content, array $params = []): string
     {
-        $prompt = "请检测以下内容是否包含敏感信息与\"禁止/敏感范围\"，同时识别可疑/描述涉及禁止范围的文本，并列出所有问题：\n\n";
+        $prompt = "请检测以下内容是否包含敏感信息与\"禁止/敏感范围\"，并全面识别：\n"
+                . "- 疑似/模糊匹配项（即使仅为描述、意图、暗示、变体、规避表达）；\n"
+                . "- 带有明显情绪化、煽动性、辱骂、威胁、仇恨、攻击性、极化倾向的表达；\n"
+                . "- 描述涉及禁止范围的文本；\n\n"
+                . "请列出所有问题。\n\n";
         
         $prompt .= "需要检测的敏感信息类型：\n";
         $prompt .= "- 邮箱地址\n";
@@ -563,7 +567,7 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= $this->getProhibitedContentRules();
         
         $prompt .= "\n输出要求：\n";
-        $prompt .= "A) 问题清单：每行 格式= 类型 | 位置 | 内容 | 严重程度 | 直接/可疑\n";
+        $prompt .= "A) 问题清单：每行 格式= 类型 | 位置 | 内容 | 严重程度 | 直接/可疑/情绪化\n";
         $prompt .= "B) 紧接输出‘标记列表’（详见下方标记规范）；\n";
         $prompt .= "C) 若未发现，输出：未发现敏感信息或违禁内容\n\n";
         $prompt .= $this->getMarkingSpecification();
