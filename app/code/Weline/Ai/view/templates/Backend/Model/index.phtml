@@ -75,6 +75,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                     <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
                                 </span>
                                 <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-info" onclick="bulkTestConnection()">
+                                        <i class="mdi mdi-wifi me-1"></i><lang>批量测试</lang>
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
                                         <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
                                     </button>
@@ -193,8 +196,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                     <th width="100"><lang>类型</lang></th>
                                                     <th><lang>输入价格</lang></th>
                                                     <th><lang>输出价格</lang></th>
-                                                    <th width="100"><lang>配置状态</lang></th>
-                                                    <th width="100"><lang>连通性</lang></th>
+                                                    <th width="100"><lang>自配置状态</lang></th>
+                                                    <th width="100"><lang>自配置连通性</lang></th>
+                                                    <th width="100"><lang>供应商连通性</lang></th>
                                                     <th width="100"><lang>状态</lang></th>
                                                     <th width="100"><lang>默认</lang></th>
                                                     <th width="250"><lang>操作</lang></th>
@@ -232,28 +236,51 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                         <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
                                                         <td>
                                                             <?php if (!empty($model['has_api_key'])): ?>
-                                                                <span class="badge bg-success" title="<?= __('已配置API密钥') ?>">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>已配置</lang>
+                                                                <span class="badge bg-success" title="<?= __('已配置自配置密钥') ?>">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>已自配置</lang>
                                                                 </span>
                                                             <?php else: ?>
-                                                                <span class="badge bg-warning text-dark" title="<?= __('未配置API密钥') ?>">
-                                                                    <i class="mdi mdi-alert-circle"></i> <lang>未配置</lang>
+                                                                <span class="badge bg-warning text-dark" title="<?= __('未配置自配置密钥') ?>">
+                                                                    <i class="mdi mdi-alert-circle"></i> <lang>未自配置</lang>
                                                                 </span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
                                                             <?php 
-                                                            $testStatus = $model['connection_test_status'] ?? 'pending';
-                                                            if ($testStatus === 'success'): ?>
-                                                                <span class="badge bg-success" title="<?= __('连通性测试通过') ?>">
+                                                            // 自配置连通性状态
+                                                            $selfConfigTestStatus = $model['self_config_test_status'] ?? 'pending';
+                                                            if ($selfConfigTestStatus === 'success'): ?>
+                                                                <span class="badge bg-success" title="<?= __('自配置连通性测试通过') ?>">
                                                                     <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
                                                                 </span>
-                                                            <?php elseif ($testStatus === 'failed'): ?>
-                                                                <span class="badge bg-danger" title="<?= __('连通性测试失败') ?>">
+                                                            <?php elseif ($selfConfigTestStatus === 'failed'): ?>
+                                                                <span class="badge bg-danger" title="<?= __('自配置连通性测试失败') ?>">
+                                                                    <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
+                                                                </span>
+                                                            <?php elseif (!empty($model['has_api_key'])): ?>
+                                                                <span class="badge bg-warning" title="<?= __('自配置连通性待测试') ?>">
+                                                                    <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-secondary" title="<?= __('无自配置') ?>">
+                                                                    <i class="mdi mdi-minus"></i> <lang>无配置</lang>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php 
+                                                            // 供应商连通性状态
+                                                            $providerTestStatus = $model['provider_test_status'] ?? 'pending';
+                                                            if ($providerTestStatus === 'success'): ?>
+                                                                <span class="badge bg-success" title="<?= __('供应商连通性测试通过') ?>">
+                                                                    <i class="mdi mdi-check-circle"></i> <lang>通过</lang>
+                                                                </span>
+                                                            <?php elseif ($providerTestStatus === 'failed'): ?>
+                                                                <span class="badge bg-danger" title="<?= __('供应商连通性测试失败') ?>">
                                                                     <i class="mdi mdi-close-circle"></i> <lang>失败</lang>
                                                                 </span>
                                                             <?php else: ?>
-                                                                <span class="badge bg-info" title="<?= __('连通性测试待测试') ?>">
+                                                                <span class="badge bg-info" title="<?= __('供应商连通性待测试') ?>">
                                                                     <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
                                                                 </span>
                                                             <?php endif; ?>
@@ -284,9 +311,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        action-params="{id: model.id}"
                                                                        target-button-class='btn btn-outline-primary'
                                                                        icon='mdi mdi-eye'
-                                                                       title='模型详情'
+                                                                       title='<?= __("模型详情") ?>'
                                                                        close-button-show='1'
-                                                                       close-button-text='关闭'
+                                                                       close-button-text='<?= __("关闭") ?>'
                                                                        target-button-text=''
                                                                        direction='right'
                                                                        class-names='w-75'
@@ -304,9 +331,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        action-params="{id: model.id}"
                                                                        target-button-class='btn btn-outline-info'
                                                                        icon='mdi mdi-pencil'
-                                                                       title='编辑模型'
+                                                                       title='<?= __("编辑模型") ?>'
                                                                        close-button-show='1'
-                                                                       close-button-text='关闭'
+                                                                       close-button-text='<?= __("关闭") ?>'
                                                                        target-button-text=''
                                                                        direction='right'
                                                                        class-names='w-50'
@@ -315,25 +342,53 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                                                        flush-button-text='刷新'
                                                                        off-canvas-body-style=''
                                                                 />
-                                                                <?php 
-                                                                // 检查是否可以激活
-                                                                $canActivate = true;
-                                                                $disableReason = '';
-                                                                
-                                                                if (empty($model['has_api_key'])) {
-                                                                    $canActivate = false;
-                                                                    $disableReason = '未配置API密钥';
-                                                                } elseif (($model['connection_test_status'] ?? 'pending') !== 'success') {
-                                                                    $canActivate = false;
-                                                                    $disableReason = '连通性测试未通过';
-                                                                }
-                                                                ?>
+                                                                <!-- 连通测试按钮 -->
                                                                 <button type="button" 
-                                                                        class="btn btn-outline-<?= !empty($model['is_active']) ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>" 
-                                                                        onclick="<?= $canActivate ? 'toggleStatusByCode(\'' . ($model['model_code'] ?? '') . '\')' : 'alert(\'无法激活: ' . $disableReason . '\')' ?>" 
-                                                                        title="<?= !empty($model['is_active']) ? __('停用') : ($canActivate ? __('激活') : __('无法激活: ' . $disableReason)) ?>"
-                                                                        <?= !$canActivate && empty($model['is_active']) ? 'disabled' : '' ?>>
-                                                                    <i class="mdi mdi-<?= !empty($model['is_active']) ? 'pause' : 'play' ?>"></i>
+                                                                        class="btn btn-outline-success" 
+                                                                        onclick="testModelConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                                        title="<?= __('连通测试') ?>">
+                                                                    <i class="mdi mdi-wifi"></i>
+                                                                </button>
+                                                                <!-- 自配置连通测试按钮 -->
+                                                                <?php if (!empty($model['has_api_key'])): ?>
+                                                                <button type="button" 
+                                                                        class="btn btn-outline-warning" 
+                                                                        onclick="testSelfConfigConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                                        title="<?= __('自配置连通测试') ?>">
+                                                                    <i class="mdi mdi-cog"></i>
+                                                                </button>
+                                                                <?php endif; ?>
+                                                                <?php 
+                                                                // 启用条件：
+                                                                // 1) 供应商连通性测试成功（代表存在可用供应商账户且测试通过）
+                                                                // 2) 若存在自配置API密钥，则自配置连通性测试也必须成功
+                                                                $providerOk = (($model['provider_test_status'] ?? 'pending') === 'success');
+                                                                $hasSelfConfig = !empty($model['has_api_key']);
+                                                                $selfOk = !$hasSelfConfig || (($model['self_config_test_status'] ?? 'pending') === 'success');
+                                                                $canActivate = $providerOk && $selfOk;
+                                                                $disableReason = '';
+                                                                if (!$providerOk) {
+                                                                    $disableReason = '供应商连通性未通过';
+                                                                } elseif ($hasSelfConfig && !$selfOk) {
+                                                                    $disableReason = '自配置连通性未通过';
+                                                                }
+                                                                $isActive = !empty($model['is_active']);
+                                                                $titleText = $isActive ? '停用' : ($canActivate ? '激活' : ('无法激活: ' . $disableReason));
+                                                                ?>
+                                                                <?php
+                                                                $onclick = $isActive
+                                                                    ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
+                                                                    : ($canActivate
+                                                                        ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
+                                                                        : 'showActivateBlocked(this)');
+                                                                ?>
+                                                                <button type="button"
+                                                                        class="btn btn-outline-<?= $isActive ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>"
+                                                                        title="<?= htmlspecialchars($titleText, ENT_QUOTES) ?>"
+                                                                        data-reason="<?= htmlspecialchars($disableReason, ENT_QUOTES) ?>"
+                                                                        <?= (!$canActivate && !$isActive) ? 'disabled' : '' ?>
+                                                                        onclick="<?= $onclick ?>">
+                                                                    <i class="mdi mdi-<?= $isActive ? 'pause' : 'play' ?>"></i>
                                                                 </button>
                                                                 <block class='Weline\Component\Block\OffCanvas'
                                                                        template='Weline_Component::off-canvas.phtml'
@@ -497,6 +552,151 @@ function bulkDelete() {
     });
 }
 
+// 批量测试连接
+function bulkTestConnection() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('<?= __('请先选择要测试的模型') ?>');
+        return;
+    }
+    
+    // 创建进度弹窗
+    const progressModal = createProgressModal();
+    progressModal.show();
+    
+    // 更新进度文本
+    updateProgress(progressModal, `开始测试 ${ids.length} 个模型...`);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/batchTestConnection') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_ids: ids})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 显示测试结果
+            showTestResults(data.results, data.summary);
+            progressModal.hide();
+            
+            // 刷新页面以更新连接状态
+            setTimeout(() => location.reload(), 3000);
+        } else {
+            alert('<?= __('测试失败：') ?>' + data.message);
+            progressModal.hide();
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+        progressModal.hide();
+    });
+}
+
+// 创建进度弹窗
+function createProgressModal() {
+    const modalHtml = `
+        <div class="modal fade" id="progressModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-4">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5 id="progressText">正在测试...</h5>
+                        <p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 如果已存在则移除
+    const existingModal = document.getElementById('progressModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    return new bootstrap.Modal(document.getElementById('progressModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+}
+
+// 更新进度文本
+function updateProgress(modal, text, detail = '') {
+    const progressText = document.getElementById('progressText');
+    const progressDetail = document.getElementById('progressDetail');
+    if (progressText) progressText.textContent = text;
+    if (progressDetail) progressDetail.textContent = detail;
+}
+
+// 显示测试结果
+function showTestResults(results, summary) {
+    let resultHtml = `
+        <div class="modal fade" id="testResultModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">批量测试结果</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info mb-3">
+                            <strong>测试统计：</strong>
+                            总计 ${summary.total} 个，
+                            成功 <span class="text-success">${summary.success}</span> 个，
+                            失败 <span class="text-danger">${summary.failed}</span> 个
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>模型</th>
+                                        <th>状态</th>
+                                        <th>消息</th>
+                                        <th>耗时</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+    
+    results.forEach(result => {
+        const statusClass = result.success ? 'success' : 'danger';
+        const statusText = result.success ? '成功' : '失败';
+        const duration = result.duration ? `${result.duration}ms` : '-';
+        
+        resultHtml += `
+            <tr>
+                <td>${result.model_name || result.model_code}</td>
+                <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                <td>${result.message}</td>
+                <td>${duration}</td>
+            </tr>`;
+    });
+    
+    resultHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    // 如果已存在则移除
+    const existingModal = document.getElementById('testResultModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', resultHtml);
+    const resultModal = new bootstrap.Modal(document.getElementById('testResultModal'));
+    resultModal.show();
+}
+
 // 清空模型表
 function clearAllModels() {
     // 第一次确认 - 使用更醒目的提示
@@ -520,8 +720,8 @@ function clearAllModels() {
         '<?= __('（区分大小写）') ?>');
     
     if (confirmText !== 'CLEAR ALL MODELS') {
-        alert('<?= __('❌ 确认文本不正确，操作已取消') ?>\n\n' +
-            '<?= __('请确保输入：') ?>CLEAR ALL MODELS\n' +
+        alert('<?= __('❌ 确认文本不正确，操作已取消') ?>' + '\n\n' +
+            '<?= __('请确保输入：') ?>' + 'CLEAR ALL MODELS\n' +
             '<?= __('（区分大小写）') ?>');
         return;
     }
@@ -552,7 +752,7 @@ function collectModels() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('<?= __('收集成功！') ?>\n' + data.message);
+            alert('<?= __('收集成功！') ?>' + '\n' + data.message);
             location.reload();
         } else {
             alert('<?= __('收集失败：') ?>' + data.message);
@@ -615,7 +815,7 @@ function deleteModel(modelId, modelCode, isCopied) {
         }
     })
     .catch(error => {
-        console.error('删除失败:', error);
+        console.error('<?= __('删除失败:') ?>', error);
         alert('<?= __('删除失败，请重试') ?>');
     });
 }
@@ -635,6 +835,216 @@ function applyFilters() {
 
 function resetFilters() {
     window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>';
+}
+
+// 测试模型连通性
+function testModelConnection(modelCode) {
+    if (!modelCode) {
+        alert('<?= __('模型代码不能为空') ?>');
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+    btn.disabled = true;
+    
+    // 显示测试中弹窗
+    const testModal = createTestModal();
+    document.body.appendChild(testModal);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model_code: modelCode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        // 移除测试弹窗
+        document.body.removeChild(testModal);
+        
+        if (data && data.data && data.data.results) {
+            const r = data.data.results;
+            const s = r.self_config || {};
+            const p = r.provider_account || {};
+            const sStatus = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+            const pStatus = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
+            const html = `
+自配置结果：${sStatus}\n` + (s.tested ? `消息：${s.message || ''}\n耗时：${s.duration || 0}ms\n响应：${(s.response || '').toString().slice(0,500)}\n\n` : '\n') +
+`供应商账户结果：${pStatus}\n` + (p.tested ? `消息：${p.message || ''}\n耗时：${p.duration || 0}ms\n账户：${p.account_name || ''}\n响应：${(p.response || '').toString().slice(0,500)}` : '');
+            const __ok = !!data.success;
+            let __retryName = null;
+            if (!__ok) {
+                __retryName = '__retry_test_' + Date.now();
+                window[__retryName] = function() { testModelConnection(modelCode); };
+            }
+            showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName);
+        } else if (data.success) {
+            showResultModal('success', '连通测试成功', data.message || '', true);
+        } else {
+            const fnName = '__retry_test_' + Date.now();
+            window[fnName] = function() { testModelConnection(modelCode); };
+            showResultModal('error', '连通测试失败', data.message, false, fnName);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        // 移除测试弹窗
+        document.body.removeChild(testModal);
+        
+        console.error('Error:', error);
+        const fnName = '__retry_test_' + Date.now();
+        window[fnName] = function() { testModelConnection(modelCode); };
+        showResultModal('error', '连通测试失败', __('测试失败: 网络错误'), false, fnName);
+    });
+}
+
+// 测试自配置连通性
+function testSelfConfigConnection(modelCode) {
+    if (!modelCode) {
+        alert('<?= __('模型代码不能为空') ?>');
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+    btn.disabled = true;
+    
+    // 显示测试中弹窗
+    const testModal = createTestModal();
+    document.body.appendChild(testModal);
+    
+    fetch('<?= $this->getBackendUrl('*/backend/model/testSelfConfig') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model_code: modelCode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        // 移除测试弹窗
+        document.body.removeChild(testModal);
+        
+        if (data.success) {
+            const message = data.data ? 
+                `${data.message}\n\n响应时间: ${data.data.duration}ms\n响应内容: ${data.data.response}` : 
+                data.message;
+            showResultModal('success', '自配置连通测试成功', message, true);
+        } else {
+            const fnName = '__retry_self_' + Date.now();
+            window[fnName] = function() { testSelfConfigConnection(modelCode); };
+            showResultModal('error', '自配置连通测试失败', data.message, false, fnName);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        
+        // 移除测试弹窗
+        document.body.removeChild(testModal);
+        
+        console.error('Error:', error);
+        const fnName = '__retry_self_' + Date.now();
+        window[fnName] = function() { testSelfConfigConnection(modelCode); };
+        showResultModal('error', '自配置连通测试失败', __('测试失败: 网络错误'), false, fnName);
+    });
+}
+
+// 创建测试中弹窗
+function createTestModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5>正在测试连通性...</h5>
+                    <p class="text-muted">请稍候，正在连接AI服务</p>
+                </div>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+// 显示结果弹窗
+function showResultModal(type, title, message, refreshOnClose = false, retryFnName = null, retryLabel = __('重试')) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    if (refreshOnClose) {
+        modal.setAttribute('data-refresh-on-close', '1');
+    }
+    const uid = 'retryBtn_' + Date.now();
+    const retryButtonHtml = retryFnName ? `<button type="button" class="btn btn-outline-primary" id="${uid}">${retryLabel}</button>` : '';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="mdi mdi-${type === 'success' ? 'check-circle text-success' : 'alert-circle text-danger'}"></i>
+                        ${title}
+                    </h5>
+                    <button type="button" class="btn-close" onclick="closeResultModal(this)"></button>
+                </div>
+                <div class="modal-body">
+                    <pre style="white-space: pre-wrap; font-size: 14px;">${message}</pre>
+                </div>
+                <div class="modal-footer">
+                    ${retryButtonHtml}
+                    <button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    if (retryFnName && typeof window[retryFnName] === 'function') {
+        const btn = modal.querySelector('#' + uid);
+        if (btn) {
+            btn.addEventListener('click', function() {
+                try { window[retryFnName](); } catch (e) {}
+                closeResultModal(btn);
+            });
+        }
+    }
+}
+
+// 关闭结果弹窗
+function closeResultModal(btn) {
+    const modal = btn.closest('.modal');
+    const shouldRefresh = modal && modal.getAttribute('data-refresh-on-close') === '1';
+    document.body.removeChild(modal);
+    if (shouldRefresh) {
+        window.location.reload();
+    }
+}
+</script>
+<script>
+function showActivateBlocked(btn) {
+    try {
+        const reason = btn.getAttribute('data-reason') || '<?= __('条件不足') ?>';
+        alert('<?= __('无法激活: ') ?>' + reason);
+    } catch (e) {
+        alert('<?= __('无法激活') ?>');
+    }
 }
 </script>
 

@@ -16,6 +16,9 @@ use Weline\Ai\Model\AiAssistant;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUserBill;
 use Weline\Ai\Model\AiApiKey;
+use Weline\Ai\Model\Provider\Account;
+use Weline\Ai\Model\Provider\UsageRecord;
+use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Acl\Acl;
@@ -52,11 +55,19 @@ class Dashboard extends BackendController
             // 获取最近错误日志
             $recentErrors = $this->getRecentErrors();
             
+            // 获取供应商账户统计
+            $providerStats = $this->getProviderStats();
+            
+            // 获取供应商花费TOP5
+            $topProviders = $this->getTopProviders();
+            
             $this->assign('stats', $stats);
             $this->assign('trends', $trends);
             $this->assign('top_models', $topModels);
             $this->assign('top_assistants', $topAssistants);
             $this->assign('recent_errors', $recentErrors);
+            $this->assign('provider_stats', $providerStats);
+            $this->assign('top_providers', $topProviders);
             
             return $this->fetch();
             
@@ -67,6 +78,8 @@ class Dashboard extends BackendController
             $this->assign('top_models', []);
             $this->assign('top_assistants', []);
             $this->assign('recent_errors', []);
+            $this->assign('provider_stats', []);
+            $this->assign('top_providers', []);
             return $this->fetch();
         }
     }
@@ -247,6 +260,46 @@ class Dashboard extends BackendController
             $totalApiKeys = 0;
         }
         
+        // 供应商账户统计
+        try {
+            $accountModel = ObjectManager::getInstance(Account::class);
+            $totalProviderAccounts = $accountModel->reset()
+                ->where(Account::fields_IS_ACTIVE, 1)
+                ->select()
+                ->count();
+                
+            $activeProviderAccounts = $accountModel->reset()
+                ->where(Account::fields_IS_ACTIVE, 1)
+                ->where(Account::fields_CONNECTION_STATUS, 'success')
+                ->where(Account::fields_BALANCE . ' > 0')
+                ->select()
+                ->count();
+        } catch (\Exception $e) {
+            $totalProviderAccounts = 0;
+            $activeProviderAccounts = 0;
+        }
+        
+        // 供应商总花费（从使用记录统计）
+        try {
+            $usageRecord = ObjectManager::getInstance(UsageRecord::class);
+            $providerTotalCost = $usageRecord->reset()
+                ->fields(['total_cost' => 'SUM(' . UsageRecord::fields_TOTAL_COST . ')'])
+                ->find()
+                ->fetch();
+            $providerTotalSpent = round((float)($providerTotalCost['total_cost'] ?? 0), 2);
+            
+            // 今日供应商花费
+            $providerTodayCost = $usageRecord->reset()
+                ->where(UsageRecord::fields_CREATED_AT, '>=', $todayStart)
+                ->fields(['total_cost' => 'SUM(' . UsageRecord::fields_TOTAL_COST . ')'])
+                ->find()
+                ->fetch();
+            $providerTodaySpent = round((float)($providerTodayCost['total_cost'] ?? 0), 2);
+        } catch (\Exception $e) {
+            $providerTotalSpent = 0;
+            $providerTodaySpent = 0;
+        }
+        
         return [
             'today_calls' => $todayCalls,
             'week_calls' => $weekCalls,
@@ -259,6 +312,10 @@ class Dashboard extends BackendController
             'total_models' => $totalModels,
             'total_assistants' => $totalAssistants,
             'total_api_keys' => $totalApiKeys,
+            'total_provider_accounts' => $totalProviderAccounts,
+            'active_provider_accounts' => $activeProviderAccounts,
+            'provider_total_spent' => $providerTotalSpent,
+            'provider_today_spent' => $providerTodaySpent,
         ];
     }
     
@@ -498,7 +555,119 @@ class Dashboard extends BackendController
             'total_models' => 0,
             'total_assistants' => 0,
             'total_api_keys' => 0,
+            'total_provider_accounts' => 0,
+            'active_provider_accounts' => 0,
+            'provider_total_spent' => 0,
+            'provider_today_spent' => 0,
         ];
+    }
+    
+    /**
+     * 获取供应商账户统计
+     */
+    private function getProviderStats(): array
+    {
+        try {
+            $accountService = ObjectManager::getInstance(AccountService::class);
+            $providers = $accountService->getSupportedProviders();
+            $stats = [];
+            
+            foreach ($providers as $code => $info) {
+                $accountModel = ObjectManager::getInstance(Account::class);
+                
+                // 该供应商的账户数
+                $totalAccounts = $accountModel->reset()
+                    ->where(Account::fields_PROVIDER_CODE, $code)
+                    ->select()
+                    ->count();
+                
+                // 活跃账户数
+                $activeAccounts = $accountModel->reset()
+                    ->where(Account::fields_PROVIDER_CODE, $code)
+                    ->where(Account::fields_IS_ACTIVE, 1)
+                    ->where(Account::fields_CONNECTION_STATUS, 'success')
+                    ->where(Account::fields_BALANCE . ' > 0')
+                    ->select()
+                    ->count();
+                
+                // 总余额
+                $balanceResult = $accountModel->reset()
+                    ->where(Account::fields_PROVIDER_CODE, $code)
+                    ->fields(['total_balance' => 'SUM(' . Account::fields_BALANCE . ')'])
+                    ->find()
+                    ->fetch();
+                $totalBalance = round((float)($balanceResult['total_balance'] ?? 0), 2);
+                
+                // 总花费
+                $usageRecord = ObjectManager::getInstance(UsageRecord::class);
+                $spentResult = $usageRecord->reset()
+                    ->where(UsageRecord::fields_PROVIDER_CODE, $code)
+                    ->fields(['total_spent' => 'SUM(' . UsageRecord::fields_TOTAL_COST . ')'])
+                    ->find()
+                    ->fetch();
+                $totalSpent = round((float)($spentResult['total_spent'] ?? 0), 2);
+                
+                $stats[] = [
+                    'code' => $code,
+                    'name' => $info['name'],
+                    'total_accounts' => $totalAccounts,
+                    'active_accounts' => $activeAccounts,
+                    'total_balance' => $totalBalance,
+                    'total_spent' => $totalSpent,
+                ];
+            }
+            
+            return $stats;
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+    
+    /**
+     * 获取供应商花费TOP5
+     */
+    private function getTopProviders(): array
+    {
+        try {
+            $usageRecord = ObjectManager::getInstance(UsageRecord::class);
+            $accountService = ObjectManager::getInstance(AccountService::class);
+            
+            // 获取最近30天的数据
+            $monthStart = strtotime('-30 days');
+            
+            // 按供应商分组统计
+            $results = $usageRecord->reset()
+                ->where(UsageRecord::fields_CREATED_AT, '>=', $monthStart)
+                ->fields([
+                    'provider_code' => UsageRecord::fields_PROVIDER_CODE,
+                    'total_cost' => 'SUM(' . UsageRecord::fields_TOTAL_COST . ')',
+                    'total_requests' => 'COUNT(*)',
+                    'total_tokens' => 'SUM(' . UsageRecord::fields_TOTAL_TOKENS . ')'
+                ])
+                ->group(UsageRecord::fields_PROVIDER_CODE)
+                ->order('total_cost DESC')
+                ->limit(5)
+                ->select()
+                ->fetchOrigin();
+            
+            $providers = $accountService->getSupportedProviders();
+            $topProviders = [];
+            
+            foreach ($results as $row) {
+                $providerCode = $row['provider_code'];
+                $topProviders[] = [
+                    'code' => $providerCode,
+                    'name' => $providers[$providerCode]['name'] ?? $providerCode,
+                    'total_cost' => round((float)$row['total_cost'], 2),
+                    'total_requests' => (int)$row['total_requests'],
+                    'total_tokens' => (int)$row['total_tokens'],
+                ];
+            }
+            
+            return $topProviders;
+        } catch (\Exception $e) {
+            return [];
+        }
     }
     
     /**
