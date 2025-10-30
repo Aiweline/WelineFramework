@@ -67,10 +67,26 @@ class Upgrade extends CommandAbstract
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Framework_Module::module_upgrade_before');
         $appoint = false;
-        // 支持 --module 和 -m 两种写法
+        // 支持 --module 和 -m 两种写法，以及位置参数
         $argsModule = $args['module'] ?? $args['m'] ?? [];
         if (is_string($argsModule)) {
             $argsModule = explode(' ', $argsModule);
+        }
+        
+        // 如果没有通过 --module 或 -m 指定模块，检查位置参数
+        if (empty($argsModule)) {
+            // 检查是否有位置参数（非选项参数）
+            $positionalArgs = [];
+            foreach ($args as $key => $value) {
+                // 如果是数字键且不是选项参数，则认为是位置参数
+                // 排除命令本身（通常是第一个位置参数）
+                if (is_numeric($key) && !str_starts_with($value, '-') && $key > 0) {
+                    $positionalArgs[] = $value;
+                }
+            }
+            if (!empty($positionalArgs)) {
+                $argsModule = $positionalArgs;
+            }
         }
         
         // 如果指定了模块，显示提示信息
@@ -365,6 +381,7 @@ class Upgrade extends CommandAbstract
                 '升级所有模块' => 'php bin/w module:upgrade',
                 '仅升级数据库模型' => 'php bin/w module:upgrade --model',
                 '仅升级路由' => 'php bin/w module:upgrade --route',
+                '升级指定模块（位置参数）' => 'php bin/w module:upgrade Weline_Demo',
                 '升级指定模块（长选项）' => 'php bin/w module:upgrade --module Weline_Demo',
                 '升级指定模块（短选项）' => 'php bin/w module:upgrade -m Weline_Demo',
                 '升级指定模块的模型' => 'php bin/w module:upgrade --model -m Weline_Demo',
