@@ -135,13 +135,27 @@ class ApiController extends BackendController
             /** @var \Weline\Ai\Model\AiModel $model */
             $model = ObjectManager::getInstance(\Weline\Ai\Model\AiModel::class);
             
-            $models = $model->where(\Weline\Ai\Model\AiModel::fields_IS_ACTIVE, 1)
-                           ->order(\Weline\Ai\Model\AiModel::fields_CREATED_AT, 'DESC')
-                           ->select()
-                           ->fetch();
+            $search = trim((string)$this->request->getParam('search', ''));
+            $limit  = (int)$this->request->getParam('limit', 0); // 0 表示不限制
+
+            $query = $model->reset()->where(\Weline\Ai\Model\AiModel::fields_IS_ACTIVE, 1);
+
+            if ($search !== '') {
+                $like = "%{$search}%";
+                // 按框架常用写法：concat 多字段进行一次 like 匹配
+                $query->where("concat(name,supplier,model_code,version)", $like, 'like');
+            }
+
+            $query->order(\Weline\Ai\Model\AiModel::fields_CREATED_AT, 'DESC');
+            if ($limit > 0) {
+                $query->limit($limit);
+            }
+
+            $models = $query->select()->fetch();
 
             $modelList = [];
-            foreach ($models as $modelItem) {
+            $items = method_exists($models, 'getItems') ? $models->getItems() : (array)$models;
+            foreach ($items as $modelItem) {
                 $modelList[] = [
                     'id' => $modelItem->getId(),
                     'code' => $modelItem->getModelCode(),
