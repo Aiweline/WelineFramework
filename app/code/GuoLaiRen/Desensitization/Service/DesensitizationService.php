@@ -16,6 +16,7 @@ use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Framework\App\Env;
 
 class DesensitizationService
 {
@@ -83,7 +84,7 @@ class DesensitizationService
 
             return $desensitized;
         } catch (\Exception $e) {
-            error_log("脱敏处理失败: " . $e->getMessage());
+            Env::log('desensitization.log', "脱敏处理失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("脱敏处理失败: " . $e->getMessage());
         }
     }
@@ -127,7 +128,7 @@ class DesensitizationService
                     }
                 } catch (\Exception $e) {
                     // 跳过无效的规则
-                    error_log("规则执行失败 - Rule ID: {$rule->getRuleId()}, Error: " . $e->getMessage());
+                    Env::log('desensitization.log', "规则执行失败 - Rule ID: {$rule->getRuleId()}, Error: " . $e->getMessage(), 'ERROR');
                 }
             }
         }
@@ -185,7 +186,7 @@ class DesensitizationService
 
             return $result;
         } catch (\Exception $e) {
-            error_log("AI脱敏失败: " . $e->getMessage());
+            Env::log('desensitization.log', "AI脱敏失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("AI脱敏失败: " . $e->getMessage());
         }
     }
@@ -219,7 +220,7 @@ class DesensitizationService
                     $result = preg_replace($rule['pattern'], $replacement, $result);
                 }
             } catch (\Exception $e) {
-                error_log("自定义规则执行失败: " . $e->getMessage());
+                Env::log('desensitization.log', "自定义规则执行失败: " . $e->getMessage(), 'ERROR');
             }
         }
 
@@ -439,8 +440,11 @@ class DesensitizationService
             ];
         }
 
-        // 检查AI是否启用
-        if (!($this->config['ai']['enabled'] ?? true)) {
+        // 检查AI是否启用（默认为启用）
+        $aiEnabled = $this->config['ai']['enabled'] ?? true;
+        Env::log('desensitization.log', "AI功能状态: " . ($aiEnabled ? '启用' : '未启用'), 'INFO');
+        
+        if (!$aiEnabled) {
             throw new Exception('AI功能未启用');
         }
 
@@ -502,18 +506,29 @@ class DesensitizationService
             $aiService = ObjectManager::getInstance(AiService::class);
             
             $modelCode = $options['model_code'] ?? $this->config['ai']['model_code'] ?? '';
-            $adapterCode = $options['adapter_code'] ?? $this->config['ai']['desensitization_adapter'] ?? 'desensitization';
+            
+            // 使用本模块的场景适配器
+            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
             // 获取适配器参数配置
             $adapterParams = $this->getAdapterParams($adapterCode, 'desensitization');
             
+            // 添加调试日志
+            Env::log('desensitization.log', "AI检测 - 模型代码: " . $modelCode, 'DEBUG');
+            Env::log('desensitization.log', "AI检测 - 适配器代码: " . $adapterCode, 'DEBUG');
+            Env::log('desensitization.log', "AI检测 - 适配器参数: " . json_encode($adapterParams), 'DEBUG');
+            
+            Env::log('desensitization.log', "开始调用AI服务...", 'INFO');
             $aiResponse = $aiService->generate(
                 $prompt,
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
-                $adapterParams
+                $adapterParams,
+                null, // userId - 后端调用
+                true  // isBackend - 后端调用
             );
+            Env::log('desensitization.log', "AI服务响应: " . substr($aiResponse, 0, 500) . "...", 'DEBUG');
 
             // 解析AI返回的JSON结果
             $aiResult = [
@@ -535,7 +550,7 @@ class DesensitizationService
                     }
                 }
             } catch (\Exception $e) {
-                error_log("AI检测结果解析失败: " . $e->getMessage());
+                Env::log('desensitization.log', "AI检测结果解析失败: " . $e->getMessage(), 'ERROR');
             }
 
             // 合并正则检测和AI检测结果
@@ -548,9 +563,9 @@ class DesensitizationService
 
             return $finalResult;
         } catch (\Exception $e) {
-            error_log("AI检测失败: " . $e->getMessage());
-            // AI检测失败时，返回正则检测结果
-            return $this->detectSensitive($content, $options);
+            Env::log('desensitization.log', "AI检测失败: " . $e->getMessage(), 'ERROR');
+            // AI检测失败时，抛出异常让前端显示错误
+            throw new \Exception('AI检测失败: ' . $e->getMessage());
         }
     }
 
@@ -603,7 +618,7 @@ class DesensitizationService
 
             return $rewritten;
         } catch (\Exception $e) {
-            error_log("AI重写润色失败: " . $e->getMessage());
+            Env::log('desensitization.log', "AI重写润色失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("AI重写润色失败: " . $e->getMessage());
         }
     }
@@ -668,7 +683,7 @@ class DesensitizationService
             
             // 如果激活的模型为空，获取所有模型
             if (!$models || (method_exists($models, 'getItems') && count($models->getItems()) == 0)) {
-                error_log("激活的AI模型为空，尝试获取所有模型");
+                Env::log('desensitization.log', "激活的AI模型为空，尝试获取所有模型", 'DEBUG');
                 $collection = $aiModel->reset()
                     ->order(AiModel::fields_SUPPLIER, 'ASC')
                     ->order(AiModel::fields_NAME, 'ASC')
@@ -725,12 +740,12 @@ class DesensitizationService
             }
             
             // 调试日志
-            error_log("获取到 " . count($result) . " 个AI模型");
+            Env::log('desensitization.log', "获取到 " . count($result) . " 个AI模型", 'INFO');
             
             return $result;
         } catch (\Exception $e) {
-            error_log("获取AI模型列表失败: " . $e->getMessage());
-            error_log("错误堆栈: " . $e->getTraceAsString());
+            Env::log('desensitization.log', "获取AI模型列表失败: " . $e->getMessage(), 'ERROR');
+            Env::log('desensitization.log', "错误堆栈: " . $e->getTraceAsString(), 'ERROR');
             return [];
         }
     }
@@ -767,17 +782,21 @@ class DesensitizationService
             // 获取系统配置中的参数
             $paramsJson = $systemConfig->getConfig($configKey, 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND);
             
+            Env::log('desensitization.log', "获取适配器参数 - 配置键: " . $configKey . ", 原始值: " . ($paramsJson ?: '空'), 'DEBUG');
+            
             if ($paramsJson) {
                 $params = json_decode($paramsJson, true);
                 if (is_array($params)) {
+                    Env::log('desensitization.log', "成功解析适配器参数: " . json_encode($params), 'DEBUG');
                     return $params;
                 }
             }
         } catch (\Exception $e) {
-            error_log("获取适配器参数配置失败: " . $e->getMessage());
+            Env::log('desensitization.log', "获取适配器参数配置失败: " . $e->getMessage(), 'ERROR');
         }
         
         // 返回空数组，让适配器使用默认参数
+        Env::log('desensitization.log', "使用默认适配器参数（空数组）", 'DEBUG');
         return [];
     }
 
@@ -804,16 +823,23 @@ class DesensitizationService
             // 获取AI模型代码
             $modelCode = $options['model_code'] ?? '';
             
-            // 构建润色提示词
-            $sensitiveInfo = [];
-            foreach ($positions as $pos) {
-                $sensitiveInfo[] = sprintf(
-                    '- 类型: %s, 内容: %s (位置: %d-%d)',
-                    $pos['type'] ?? '未知',
-                    $pos['match'] ?? '',
-                    $pos['start'] ?? 0,
-                    $pos['end'] ?? 0
-                );
+            // 提取所有检测到的敏感词组
+            $sensitivePhrases = [];
+            foreach ($positions as $index => $pos) {
+                $match = $pos['match'] ?? '';
+                if (!empty($match)) {
+                    $sensitivePhrases[] = [
+                        'index' => $index,
+                        'phrase' => $match,
+                        'type' => $pos['type'] ?? '未知',
+                        'start' => $pos['start'] ?? 0,
+                        'end' => $pos['end'] ?? 0
+                    ];
+                }
+            }
+            
+            if (empty($sensitivePhrases)) {
+                throw new Exception('未找到可重写的敏感词组');
             }
             
             // 引入平台规则，指导改写为合规表达
@@ -837,39 +863,170 @@ class DesensitizationService
                     $policySection .= "- Google：\n{$googleRules}\n\n";
                 }
             }
-
+            
+            // 构建敏感词组列表
+            $phrasesList = [];
+            foreach ($sensitivePhrases as $item) {
+                $phrasesList[] = sprintf(
+                    '%d. 类型: %s, 词组: "%s"',
+                    $item['index'] + 1,
+                    $item['type'],
+                    $item['phrase']
+                );
+            }
+            
+            // 构建提示词：只针对敏感词组进行重写
             $prompt = sprintf(
-                "你是一名内容合规改写助手。请在不改变核心信息与可读性的前提下，将原文改写为符合平台政策、避免违规/煽动/恐吓/成人/违法等的合规表达。要求：\n1) 保留原意，删除或替换敏感片段；\n2) 输出与原文同语言；\n3) 只输出改写后的完整文本，不要说明。\n\n%s原始内容：\n%s\n\n标记的敏感信息：\n%s\n\n",
+                "你是一名内容合规改写助手。请将以下检测到的敏感词组改写为符合平台政策、避免违规的合规表达。
+
+%s
+
+需要重写的敏感词组列表：
+%s
+
+要求：
+1) 只改写指定的敏感词组，保持原意但使其合规化
+2) 改写后的词组应该保持相同的语义强度，但去除违规、煽动、恐吓、成人、违法等元素
+3) 每行输出一个改写后的词组，格式：序号: 改写后的词组
+4) 序号与输入列表中的序号一一对应
+5) 只输出改写后的词组，不要添加任何解释或其他内容
+6) 如果某个词组已经是合规的，可以保持不变或小幅调整
+
+示例输出格式：
+1: 改写后的词组1
+2: 改写后的词组2
+3: 改写后的词组3
+
+",
                 $policySection,
-                $content,
-                implode("\n", $sensitiveInfo)
+                implode("\n", $phrasesList)
             );
             
             // 获取AI服务
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            // 使用本模块场景适配器 + 模式=rewrite，避免找不到“rewrite”场景
             $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
-            // 调用AI润色（指定场景适配器并传 mode=rewrite）
-            $rewrittenContent = $aiService->generate(
+            // 调用AI重写敏感词组
+            Env::log('desensitization.log', "开始AI重写敏感词组，共 " . count($sensitivePhrases) . " 个词组", 'INFO');
+            $rewrittenPhrasesResponse = $aiService->generate(
                 $prompt,
                 $modelCode ?: null,
                 $adapterCode,
                 'zh_Hans_CN',
-                ['mode' => 'rewrite']
+                ['mode' => 'rewrite'],
+                null,
+                true
             );
+            
+            Env::log('desensitization.log', "AI返回结果: " . substr($rewrittenPhrasesResponse, 0, 500), 'DEBUG');
+            
+            // 解析AI返回的改写后词组（格式：序号: 改写后的词组）
+            $rewrittenPhrases = $this->parseRewrittenPhrases($rewrittenPhrasesResponse, count($sensitivePhrases));
+            
+            // 在原文中替换敏感词组
+            $rewrittenContent = $this->replacePhrasesInContent($content, $positions, $rewrittenPhrases);
             
             return [
                 'content' => $rewrittenContent,
                 'original_length' => mb_strlen($content),
                 'rewritten_length' => mb_strlen($rewrittenContent),
-                'positions_count' => count($positions)
+                'positions_count' => count($positions),
+                'rewritten_phrases' => $rewrittenPhrases
             ];
         } catch (\Exception $e) {
-            error_log("润色失败: " . $e->getMessage());
+            Env::log('desensitization.log', "润色失败: " . $e->getMessage(), 'ERROR');
             throw new Exception("润色失败: " . $e->getMessage());
         }
+    }
+    
+    /**
+     * 解析AI返回的改写后词组
+     * 
+     * @param string $response AI返回的文本
+     * @param int $expectedCount 期望的词组数量
+     * @return array 改写后的词组数组 [索引 => 改写后的词组]
+     */
+    private function parseRewrittenPhrases(string $response, int $expectedCount): array
+    {
+        $rewrittenPhrases = [];
+        
+        // 按行分割
+        $lines = explode("\n", trim($response));
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            
+            // 匹配格式：序号: 改写后的词组 或 序号. 改写后的词组
+            if (preg_match('/^(\d+)[:：.]\s*(.+)$/u', $line, $matches)) {
+                $index = (int)$matches[1] - 1; // 转换为0基索引
+                $phrase = trim($matches[2]);
+                if ($index >= 0 && $index < $expectedCount && !empty($phrase)) {
+                    $rewrittenPhrases[$index] = $phrase;
+                }
+            }
+        }
+        
+        // 如果解析的数量不足，记录警告
+        if (count($rewrittenPhrases) < $expectedCount) {
+            Env::log('desensitization.log', "警告: AI只返回了 " . count($rewrittenPhrases) . " 个改写词组，期望 " . $expectedCount . " 个", 'WARNING');
+        }
+        
+        return $rewrittenPhrases;
+    }
+    
+    /**
+     * 在原文中替换敏感词组
+     * 
+     * @param string $content 原文
+     * @param array $positions 敏感词组位置信息
+     * @param array $rewrittenPhrases 改写后的词组 [索引 => 改写后的词组]
+     * @return string 替换后的内容
+     */
+    private function replacePhrasesInContent(string $content, array $positions, array $rewrittenPhrases): string
+    {
+        // 按位置从后往前排序，避免替换时位置偏移
+        $sortedPositions = [];
+        foreach ($positions as $index => $pos) {
+            $sortedPositions[] = [
+                'index' => $index,
+                'pos' => $pos
+            ];
+        }
+        usort($sortedPositions, function($a, $b) {
+            return ($b['pos']['start'] ?? 0) - ($a['pos']['start'] ?? 0);
+        });
+        
+        $result = $content;
+        
+        foreach ($sortedPositions as $item) {
+            $originalIndex = $item['index'];
+            $pos = $item['pos'];
+            $originalPhrase = $pos['match'] ?? '';
+            $start = $pos['start'] ?? 0;
+            $end = $pos['end'] ?? 0;
+            
+            if (empty($originalPhrase) || $start >= $end || $start < 0 || $end > mb_strlen($result)) {
+                continue;
+            }
+            
+            // 查找对应的改写后词组
+            if (isset($rewrittenPhrases[$originalIndex])) {
+                $rewrittenPhrase = $rewrittenPhrases[$originalIndex];
+                // 替换敏感词组
+                $before = mb_substr($result, 0, $start);
+                $after = mb_substr($result, $end);
+                $result = $before . $rewrittenPhrase . $after;
+                
+                Env::log('desensitization.log', "替换词组 [{$originalIndex}]: '{$originalPhrase}' => '{$rewrittenPhrase}'", 'DEBUG');
+            } else {
+                // 如果没有找到改写后的词组，保留原文
+                Env::log('desensitization.log', "未找到改写后的词组 [{$originalIndex}]，保留原文: '{$originalPhrase}'", 'WARNING');
+            }
+        }
+        
+        return $result;
     }
 }
 

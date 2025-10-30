@@ -55,6 +55,10 @@ class AiModel extends Model
     public const fields_IS_DEFAULT = 'is_default';
     public const fields_CONNECTION_TEST_STATUS = 'connection_test_status';  // 连通性测试状态
     public const fields_CONNECTION_TEST_TIME = 'connection_test_time';  // 连通性测试时间
+    public const fields_SELF_CONFIG_TEST_STATUS = 'self_config_test_status';  // 自配置测试状态
+    public const fields_SELF_CONFIG_TEST_TIME = 'self_config_test_time';  // 自配置测试时间
+    public const fields_PROVIDER_TEST_STATUS = 'provider_test_status';  // 供应商测试状态
+    public const fields_PROVIDER_TEST_TIME = 'provider_test_time';  // 供应商测试时间
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
 
@@ -99,7 +103,89 @@ class AiModel extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 已迁移至 install：此处留空
+        // 添加 is_active 字段
+        if (!$setup->hasField(self::fields_IS_ACTIVE)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_IS_ACTIVE . " INT(1) DEFAULT 1 NULL COMMENT '是否激活' AFTER status;
+            ");
+        }
+
+        // 添加 is_default 字段
+        if (!$setup->hasField(self::fields_IS_DEFAULT)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_IS_DEFAULT . " INT(1) DEFAULT 0 NULL COMMENT '是否默认' AFTER is_active;
+            ");
+        }
+
+        // 添加 provider_config 字段
+        if (!$setup->hasField(self::fields_PROVIDER_CONFIG)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_PROVIDER_CONFIG . " TEXT NULL COMMENT '提供商配置JSON' AFTER proxy_info;
+            ");
+        }
+
+        // 添加 connection_test_status 字段
+        if (!$setup->hasField(self::fields_CONNECTION_TEST_STATUS)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_CONNECTION_TEST_STATUS . " VARCHAR(20) DEFAULT 'pending' NULL COMMENT '连通性测试状态: pending/success/failed' AFTER is_default;
+            ");
+        }
+
+        // 添加 connection_test_time 字段
+        if (!$setup->hasField(self::fields_CONNECTION_TEST_TIME)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_CONNECTION_TEST_TIME . " INT NULL COMMENT '连通性测试时间戳' AFTER connection_test_status;
+            ");
+        }
+
+        // 添加自配置测试字段
+        if (!$setup->hasField(self::fields_SELF_CONFIG_TEST_STATUS)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_SELF_CONFIG_TEST_STATUS . " VARCHAR(20) DEFAULT 'pending' NULL COMMENT '自配置测试状态: pending/success/failed/no_config' AFTER connection_test_time;
+            ");
+        }
+
+        if (!$setup->hasField(self::fields_SELF_CONFIG_TEST_TIME)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_SELF_CONFIG_TEST_TIME . " INT NULL COMMENT '自配置测试时间戳' AFTER self_config_test_status;
+            ");
+        }
+
+        // 添加供应商测试字段
+        if (!$setup->hasField(self::fields_PROVIDER_TEST_STATUS)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_PROVIDER_TEST_STATUS . " VARCHAR(20) DEFAULT 'pending' NULL COMMENT '供应商测试状态: pending/success/failed' AFTER self_config_test_time;
+            ");
+        }
+
+        if (!$setup->hasField(self::fields_PROVIDER_TEST_TIME)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_PROVIDER_TEST_TIME . " INT NULL COMMENT '供应商测试时间戳' AFTER provider_test_status;
+            ");
+        }
+
+        // 调整唯一索引：将 唯一(supplier, model_code) 改为 唯一(model_code)
+        try {
+            // 尝试删除旧的联合唯一索引（若存在）
+            $setup->query("ALTER TABLE {$this->getTable()} DROP INDEX idx_supplier_model_code;");
+        } catch (\Exception $e) {
+            // 索引不存在时忽略
+        }
+        try {
+            // 创建基于 model_code 的唯一索引（若已存在则忽略异常）
+            $setup->query("CREATE UNIQUE INDEX idx_model_code ON {$this->getTable()} (" . self::fields_MODEL_CODE . ");");
+        } catch (\Exception $e) {
+            // 已存在时忽略
+        }
     }
 
     /**
@@ -116,14 +202,7 @@ class AiModel extends Model
         if ($setup->tableExist() === false) {
             $setup->createTable('AI模型表')
                 ->addColumn(self::fields_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
-                // 兼容字段：外部查询使用
-                ->addColumn('vendor', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 64, 'null', '供应商(兼容字段)')
-                ->addColumn('product', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 64, 'null', '产品(兼容字段)')
-                ->addColumn('model', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'null', '模型(兼容字段)')
-                ->addColumn('class', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '模型实现类(兼容字段)')
-                ->addColumn('default_api_key', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '默认API密钥(兼容字段)')
-                ->addColumn('default_api_url', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'null', '默认API地址(兼容字段)')
-                ->addColumn(self::fields_SUPPLIER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'null', '供应商（兼容外部仅写入vendor时可为空）')
+                ->addColumn(self::fields_SUPPLIER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '供应商')
                 ->addColumn(self::fields_MODEL_CODE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '模型代码')
                 ->addColumn(self::fields_NAME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '模型名称')
                 ->addColumn(self::fields_VERSION, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '版本')
@@ -143,10 +222,15 @@ class AiModel extends Model
                 // 首次安装即包含连通性测试字段
                 ->addColumn(self::fields_CONNECTION_TEST_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'pending'", '连通性测试状态: pending/success/failed')
                 ->addColumn(self::fields_CONNECTION_TEST_TIME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '连通性测试时间戳')
+                // 自配置测试字段
+                ->addColumn(self::fields_SELF_CONFIG_TEST_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'pending'", '自配置测试状态: pending/success/failed/no_config')
+                ->addColumn(self::fields_SELF_CONFIG_TEST_TIME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '自配置测试时间戳')
+                // 供应商测试字段
+                ->addColumn(self::fields_PROVIDER_TEST_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'pending'", '供应商测试状态: pending/success/failed')
+                ->addColumn(self::fields_PROVIDER_TEST_TIME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '供应商测试时间戳')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex('UNIQUE', 'idx_model_code', [self::fields_MODEL_CODE])
-                ->addIndex('INDEX', 'idx_vendor_product_model', ['vendor','product','model'])
+                ->addIndex(self::fields_MODEL_CODE, '', 'UNIQUE', 'idx_model_code')
                 ->create();
         }
     }
@@ -289,30 +373,6 @@ class AiModel extends Model
     {
         $this->validate();
         
-        // 兼容外部只写入 vendor/product/model 的场景：自动回填必填字段
-        $vendor  = (string)($this->getData('vendor') ?? '');
-        $product = (string)($this->getData('product') ?? '');
-        $model   = (string)($this->getData('model') ?? '');
-
-        if (empty($this->getData(self::fields_SUPPLIER)) && $vendor !== '') {
-            $this->setData(self::fields_SUPPLIER, $vendor);
-        }
-
-        if (empty($this->getData(self::fields_MODEL_CODE))) {
-            $parts = array_filter([$vendor, $product, $model], static fn($v) => $v !== '');
-            if (!empty($parts)) {
-                $this->setData(self::fields_MODEL_CODE, implode('-', $parts));
-            }
-        }
-
-        // 自动回填 name 字段
-        if (empty($this->getData(self::fields_NAME))) {
-            $modelCode = $this->getData(self::fields_MODEL_CODE);
-            if (!empty($modelCode)) {
-                $this->setData(self::fields_NAME, $modelCode);
-            }
-        }
-
         // Ensure JSON fields are properly encoded
         if (is_array($this->getData(self::fields_CONFIG))) {
             $this->setData(self::fields_CONFIG, json_encode($this->getData(self::fields_CONFIG), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -644,6 +704,46 @@ class AiModel extends Model
     public function getConfigJson(): string
     {
         $config = $this->getData(self::fields_CONFIG);
+        if (is_array($config)) {
+            return json_encode($config);
+        }
+        return (string) $config;
+    }
+
+    /**
+     * Get provider configuration as array
+     *
+     * @return array
+     */
+    public function getProviderConfig(): array
+    {
+        $config = $this->getData(self::fields_PROVIDER_CONFIG);
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($config) ? $config : [];
+    }
+
+    /**
+     * Set provider configuration
+     *
+     * @param array|string $config
+     * @return $this
+     */
+    public function setProviderConfig(array|string $config): self
+    {
+        return $this->setData(self::fields_PROVIDER_CONFIG, $config);
+    }
+
+    /**
+     * Get provider config as JSON string
+     *
+     * @return string
+     */
+    public function getProviderConfigJson(): string
+    {
+        $config = $this->getData(self::fields_PROVIDER_CONFIG);
         if (is_array($config)) {
             return json_encode($config);
         }

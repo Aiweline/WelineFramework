@@ -1,0 +1,24 @@
+{
+    "name": "OpenAI",
+    "code": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "models_prefix": ["gpt-", "text-", "davinci", "curie", "babbage", "ada"],
+    "test_model": "gpt-3.5-turbo",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "OpenAI官方API服务",
+    "website": "https://openai.com",
+    "documentation": "https://platform.openai.com/docs",
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": true,
+        "image": true,
+        "audio": true
+    },
+    "rate_limits": {
+        "requests_per_minute": 60,
+        "tokens_per_minute": 150000
+    }
+}
