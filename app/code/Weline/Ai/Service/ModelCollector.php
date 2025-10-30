@@ -83,7 +83,7 @@ class ModelCollector
         $configDir = BP . DIRECTORY_SEPARATOR . self::MODEL_CONFIG_DIR;
         
         if (!is_dir($configDir)) {
-            throw new Exception("模型配置目录不存在: {$configDir}");
+            throw new Exception(__('模型配置目录不存在: %{dir}', ['dir' => $configDir]));
         }
 
         $pattern = $configDir . '*' . self::CONFIG_FILE_EXTENSION;
@@ -106,7 +106,7 @@ class ModelCollector
                 }
             } catch (\Exception $e) {
                 // 记录错误但继续处理其他模型
-                error_log("处理模型配置文件失败: {$configFile}, 错误: " . $e->getMessage());
+                error_log(__('处理模型配置文件失败: %{file}, 错误: %{msg}', ['file' => $configFile, 'msg' => $e->getMessage()]));
             }
         }
 
@@ -130,7 +130,7 @@ class ModelCollector
         if (!$model->getId()) {
             return [
                 'success' => false,
-                'message' => '模型不存在',
+                'message' => __('模型不存在'),
                 'protected' => false
             ];
         }
@@ -140,7 +140,7 @@ class ModelCollector
             $reason = $this->defaultModelManager->getProtectionReason($modelCode);
             return [
                 'success' => false,
-                'message' => '无法删除受保护的模型',
+                'message' => __('无法删除受保护的模型'),
                 'reason' => $reason,
                 'protected' => true,
                 'usage' => $this->defaultModelManager->getModelUsageAsDefault($modelCode)
@@ -153,13 +153,13 @@ class ModelCollector
             
             return [
                 'success' => true,
-                'message' => '模型删除成功',
+                'message' => __('模型删除成功'),
                 'protected' => false
             ];
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'message' => '删除模型时发生错误: ' . $e->getMessage(),
+                'message' => __('删除模型时发生错误: %{msg}', ['msg' => $e->getMessage()]),
                 'protected' => false
             ];
         }
@@ -275,14 +275,14 @@ class ModelCollector
 
         $config = json_decode($content, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception("JSON解析错误: " . json_last_error_msg() . ", 文件: {$configFile}");
+            throw new Exception(__('JSON解析错误: %{err}, 文件: %{file}', ['err' => json_last_error_msg(), 'file' => $configFile]));
         }
 
         // 验证必需字段（兼容name和model_name）
         $requiredFields = ['model_code', 'vendor'];
         foreach ($requiredFields as $field) {
             if (!isset($config[$field]) || empty($config[$field])) {
-                throw new Exception("缺少必需字段 '{$field}' 在文件: {$configFile}");
+                throw new Exception(__('缺少必需字段 %{field} 在文件: %{file}', ['field' => $field, 'file' => $configFile]));
             }
         }
         
@@ -290,7 +290,7 @@ class ModelCollector
         if (isset($config['model_name'])) {
             $config['name'] = $config['model_name'];
         } elseif (!isset($config['name']) || empty($config['name'])) {
-            throw new Exception("缺少必需字段 'name' 或 'model_name' 在文件: {$configFile}");
+            throw new Exception(__('缺少必需字段 name 或 model_name 在文件: %{file}', ['file' => $configFile]));
         }
 
         return $config;
@@ -362,13 +362,8 @@ class ModelCollector
      */
     private function createNewModel(array $modelData): AiModel
     {
-        // 处理is_active字段，兼容status和is_active两种格式
-        $isActive = 1;
-        if (isset($modelData['status'])) {
-            $isActive = $modelData['status'] === 'active' ? 1 : 0;
-        } elseif (isset($modelData['is_active'])) {
-            $isActive = (int)$modelData['is_active'];
-        }
+        // 新收集的模型一律置为未激活，等待连通性测试通过后再启用
+        $isActive = 0;
 
         $data = [
             'model_code' => $modelData['model_code'],
@@ -380,7 +375,8 @@ class ModelCollector
             // TODO(临时): 注释掉这两个字段，因为ORM报告字段不存在（虽然数据库中确实有这些字段）
             // 'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             // 'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
-            'status' => $isActive ? 'active' : 'deprecated',
+            'status' => 'inactive',
+            'is_active' => 0,
             'is_copy' => 0,
             'origin_model_id' => null,
             'capabilities' => json_encode($modelData['capabilities'] ?? []),
@@ -407,13 +403,7 @@ class ModelCollector
      */
     private function updateExistingModel(AiModel $existingModel, array $modelData): AiModel
     {
-        // 处理is_active字段，兼容status和is_active两种格式
-        $isActive = 1;
-        if (isset($modelData['status'])) {
-            $isActive = $modelData['status'] === 'active' ? 1 : 0;
-        } elseif (isset($modelData['is_active'])) {
-            $isActive = (int)$modelData['is_active'];
-        }
+        // 更新时不改动激活状态，保持现状（避免收集动作把模型激活）
 
         // 只更新允许更新的字段
         $updateData = [
@@ -424,7 +414,7 @@ class ModelCollector
             'cost_per_token' => (string)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             'token_price_input' => (float)($modelData['token_price_input'] ?? $modelData['token_price'] ?? 0.000000),
             'token_price_output' => (float)($modelData['token_price_output'] ?? $modelData['token_price'] ?? 0.000000),
-            'status' => $isActive ? 'active' : 'deprecated',
+            // 不修改 status/is_active
             'capabilities' => json_encode($modelData['capabilities'] ?? []),
             'max_tokens' => $modelData['max_tokens'] ?? null,
         ];
@@ -507,22 +497,22 @@ class ModelCollector
 
         foreach ($requiredFields as $field => $label) {
             if (!isset($config[$field]) || empty($config[$field])) {
-                $errors[] = "缺少必需字段: {$label}";
+                $errors[] = __('缺少必需字段: %{label}', ['label' => $label]);
             }
         }
 
         // 检查数据类型
         if (isset($config['token_price']) && !is_numeric($config['token_price'])) {
-            $errors[] = 'Token价格必须是数字';
+            $errors[] = __('Token价格必须是数字');
         }
 
         if (isset($config['is_default']) && !is_bool($config['is_default']) && !in_array($config['is_default'], [0, 1])) {
-            $errors[] = '默认状态必须是布尔值或0/1';
+            $errors[] = __('默认状态必须是布尔值或0/1');
         }
 
         // 检查状态值
         if (isset($config['status']) && !in_array($config['status'], ['active', 'inactive'])) {
-            $errors[] = '状态值必须是 active 或 inactive';
+            $errors[] = __('状态值必须是 active 或 inactive');
         }
 
         return $errors;

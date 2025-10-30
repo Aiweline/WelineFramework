@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace GuoLaiRen\Desensitization\Ai\Adapter;
 
 use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 数据脱敏场景适配器
@@ -77,17 +79,85 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
             case 'desensitize':
                 return $this->buildDesensitizePrompt($prompt, $level);
             case 'mark':
-                return $this->buildMarkPrompt($prompt, $level);
+                return $this->buildMarkPrompt($prompt, $level, $params);
             case 'detect_mark':
-                return $this->buildDetectMarkPrompt($prompt, $level);
+                return $this->buildDetectMarkPrompt($prompt, $level, $params);
             case 'rewrite':
                 return $this->buildRewritePrompt($prompt, $level, $params);
             case 'extract':
                 return $this->buildExtractPrompt($prompt, $params);
             case 'detect':
             default:
-                return $this->buildDetectPrompt($prompt);
+                return $this->buildDetectPrompt($prompt, $params);
         }
+    }
+
+    /**
+     * 标记规范，统一复用，便于下游解析
+     */
+    private function getMarkingSpecification(): string
+    {
+        $spec = "标记规范（严格遵守）：\n";
+        $spec .= "- 输出标题：标记列表（四个字）后紧随所有标记；\n";
+        $spec .= "- 标记格式：[开始位置:结束位置:类型:片段:置信度:来源]，无空格；\n";
+        $spec .= "- 位置为基于原文UTF-8的字符索引（首字符=0），结束位置为不包含自身的闭区间右端；\n";
+        $spec .= "- 片段必须与原文对应；\n";
+        $spec .= "- 类型必须使用以下配置的类型名称之一（直接从配置中读取，保持原样，不进行映射转换）：\n";
+        $spec .= $this->getCategoryTaxonomy();
+        $spec .= "- 检测到敏感内容时，直接归类到上述类型之一，使用配置中的原始类型名称（中文或英文均可）；\n";
+        $spec .= "- 置信度取0~1两位小数；来源取：AI/规则/合并；\n";
+        $spec .= "- 对同一语义的相邻/重叠片段应合并成更完整的句子范围；\n";
+        $spec .= "- 同时包含直接命中与‘可疑/描述涉及禁止范围’的片段；\n";
+        $spec .= "- 标记必须覆盖完整的违规表达或上下文关键句，避免只截取词根；\n";
+        return $spec;
+    }
+
+    /**
+     * 分类体系说明，用于要求模型统一归类
+     * 从配置中读取类型列表
+     */
+    private function getCategoryTaxonomy(): string
+    {
+        // 基础个人信息类型（始终支持）
+        $lines = [];
+        $lines[] = "邮箱";
+        $lines[] = "手机号";
+        $lines[] = "身份证";
+        $lines[] = "银行卡";
+        $lines[] = "真实姓名";
+        $lines[] = "具体地址";
+        
+        // 从配置中读取类型列表
+        try {
+            /** @var SystemConfig $systemConfig */
+            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+            $metaRules = (string)($systemConfig->getConfig('meta_rules', 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND) ?? '');
+            $googleRules = (string)($systemConfig->getConfig('google_rules', 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND) ?? '');
+            
+            // 合并所有类型
+            $allTypes = [];
+            if (trim($metaRules) !== '') {
+                $metaLines = array_filter(array_map('trim', explode("\n", $metaRules)));
+                $allTypes = array_merge($allTypes, $metaLines);
+            }
+            if (trim($googleRules) !== '') {
+                $googleLines = array_filter(array_map('trim', explode("\n", $googleRules)));
+                $allTypes = array_merge($allTypes, $googleLines);
+            }
+            
+            // 去重并添加到类型列表
+            $allTypes = array_values(array_unique($allTypes));
+            foreach ($allTypes as $type) {
+                $type = trim($type);
+                if ($type !== '' && !in_array($type, $lines)) {
+                    $lines[] = $type;
+                }
+            }
+        } catch (\Throwable $e) {
+            // 配置读取失败时继续使用基础类型
+        }
+        
+        return "  - " . implode("\n  - ", $lines) . "\n";
     }
     
     /**
@@ -132,15 +202,17 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     /**
      * 构建标记模式提示词
      */
-    private function buildMarkPrompt(string $content, string $level): string
+    private function buildMarkPrompt(string $content, string $level, array $params = []): string
     {
-        $prompt = "请对以下内容进行敏感词检测和标记，不要在原文上进行修改：\n\n";
+        $prompt = "请对以下内容进行敏感范围检测与标记（包含直接敏感信息与可疑/涉及禁止范围的描述性文本），不要修改原文：\n\n";
         
         // 添加检测级别说明
         switch ($level) {
             case 'high':
                 $prompt .= "检测级别：严格检测\n";
-                $prompt .= "要求：尽可能严格地识别所有可能的敏感信息，包括不确定的内容。\n";
+                $prompt .= "要求：\n";
+                $prompt .= "- 识别所有明确与模糊可疑项（即使仅为描述/意图/变体/暗示）；\n";
+                $prompt .= "- 对出现频次高或上下文加重风险的表达提高权重；\n";
                 break;
             case 'low':
                 $prompt .= "检测级别：宽松检测\n";
@@ -161,11 +233,20 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= "- 银行卡号\n";
         $prompt .= "- 真实姓名\n";
         $prompt .= "- 具体地址\n";
+        
+        // 获取配置的敏感词规则并增强检测
+        $enhancedRules = $this->getEnhancedSensitiveRules();
+        if (!empty($enhancedRules)) {
+            $prompt .= "\n【强化检测规则】以下是从Meta和Google平台规则中提取并分类的敏感词清单，请严格按照这些规则进行强力检测：\n";
+            $prompt .= $enhancedRules;
+            $prompt .= "\n注意：检测时必须强力判断文本是否属于上述任一类别，即使只是暗示、描述、变体或规避表达也要识别。\n";
+        }
+        
+        $prompt .= "- 与以下\"禁止/敏感范围\"相关或引申、隐喻、规避表达（仅描述/策划/意图也算）：\n";
+        $prompt .= $this->getProhibitedContentRules();
         $prompt .= "\n";
-        $prompt .= "标记格式要求：\n";
-        $prompt .= "请按照以下格式输出标记结果，不要修改原文内容：\n";
-        $prompt .= "[开始位置:结束位置:类型:敏感词] [开始位置:结束位置:类型:敏感词]\n";
-        $prompt .= "例如：[0:15:邮箱:user@example.com][30:42:手机:13812345678]\n\n";
+        $prompt .= $this->getMarkingSpecification();
+        $prompt .= "\n";
         $prompt .= "需要标记的内容：\n{$content}";
         
         return $prompt;
@@ -174,16 +255,26 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     /**
      * 构建检测+标记组合模式提示词
      */
-    private function buildDetectMarkPrompt(string $content, string $level): string
+    private function buildDetectMarkPrompt(string $content, string $level, array $params = []): string
     {
-        $prompt = "请先检测以下内容中的敏感信息和违禁点，然后对检测到的项目进行位置标记；要求：\n";
-        $prompt .= "1) 输出问题清单（类型/原因/摘要）；\n";
-        $prompt .= "2) 同时给出原文中的起止位置标记列表（格式：[start:end:类型:片段]）；\n";
+        $prompt = "请先检测以下内容中的敏感信息与\"禁止/敏感范围\"（包含可疑的描述性/引导性/意图类文本），然后进行位置标记；要求：\n";
+        $prompt .= "1) 输出问题清单（类型/原因/摘要，含直接/可疑两类，标明严重程度）；\n";
+        $prompt .= "2) 给出\"标记列表\"（详见下方标记规范），索引基于原文UTF-8字符序；\n";
         $prompt .= "3) 不要修改原文；\n\n";
+
+        // 获取配置的敏感词规则并增强检测
+        $enhancedRules = $this->getEnhancedSensitiveRules();
+        if (!empty($enhancedRules)) {
+            $prompt .= "【强化检测规则】以下是从Meta和Google平台规则中提取并分类的敏感词清单，请严格按照这些规则进行强力检测：\n";
+            $prompt .= $enhancedRules;
+            $prompt .= "\n注意：检测时必须强力判断文本是否属于上述任一类别，即使只是暗示、描述、变体或规避表达也要识别。\n\n";
+        }
 
         // 结合检测关注点
         $prompt .= "需要重点关注：\n";
         $prompt .= $this->getProhibitedContentRules();
+        $prompt .= "\n";
+        $prompt .= $this->getMarkingSpecification();
         $prompt .= "\n\n原文：\n{$content}";
         return $prompt;
     }
@@ -448,9 +539,9 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     /**
      * 构建检测模式提示词（默认模式）
      */
-    private function buildDetectPrompt(string $content): string
+    private function buildDetectPrompt(string $content, array $params = []): string
     {
-        $prompt = "请检测以下内容是否包含敏感信息和违禁内容，并列出所有发现的问题：\n\n";
+        $prompt = "请检测以下内容是否包含敏感信息与\"禁止/敏感范围\"，同时识别可疑/描述涉及禁止范围的文本，并列出所有问题：\n\n";
         
         $prompt .= "需要检测的敏感信息类型：\n";
         $prompt .= "- 邮箱地址\n";
@@ -460,17 +551,23 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= "- 真实姓名\n";
         $prompt .= "- 具体地址\n";
         
-        $prompt .= "\n需要检测的违禁内容（根据社群守则）：\n";
+        // 获取配置的敏感词规则并增强检测
+        $enhancedRules = $this->getEnhancedSensitiveRules();
+        if (!empty($enhancedRules)) {
+            $prompt .= "\n【强化检测规则】以下是从Meta和Google平台规则中提取并分类的敏感词清单，请严格按照这些规则进行强力检测：\n";
+            $prompt .= $enhancedRules;
+            $prompt .= "\n注意：检测时必须强力判断文本是否属于上述任一类别，即使只是暗示、描述、变体或规避表达也要识别。\n";
+        }
+        
+        $prompt .= "\n需要检测的\"禁止/敏感范围\"（根据社群守则）：\n";
         $prompt .= $this->getProhibitedContentRules();
         
-        $prompt .= "\n输出格式要求：\n";
-        $prompt .= "如果发现敏感信息或违禁内容，请按以下格式输出：\n";
-        $prompt .= "类型 | 位置 | 内容 | 严重程度\n";
-        $prompt .= "例如：\n";
-        $prompt .= "邮箱 | 0-15 | user@example.com | 敏感信息\n";
-        $prompt .= "暴力 | 30-45 | 威胁性言论 | 严重违规\n";
-        $prompt .= "仇恨 | 50-65 | 歧视性言论 | 严重违规\n\n";
-        $prompt .= "如果未发现敏感信息或违禁内容，请输出：未发现敏感信息或违禁内容\n\n";
+        $prompt .= "\n输出要求：\n";
+        $prompt .= "A) 问题清单：每行 格式= 类型 | 位置 | 内容 | 严重程度 | 直接/可疑\n";
+        $prompt .= "B) 紧接输出‘标记列表’（详见下方标记规范）；\n";
+        $prompt .= "C) 若未发现，输出：未发现敏感信息或违禁内容\n\n";
+        $prompt .= $this->getMarkingSpecification();
+        $prompt .= "\n";
         $prompt .= "需要检测的内容：\n{$content}";
         
         return $prompt;
@@ -481,6 +578,19 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     public function processResponse(string $response, array $params = []): string
     {
+        // 归一化“标记列表”中的标记方括号，去除多余空白，便于下游解析
+        $response = preg_replace('/\s+/', ' ', (string)$response);
+        // 将中文全角方括号替换为半角
+        $response = str_replace(['【','】'], ['[',']'], $response);
+        // 去除标记内部的空格
+        $response = preg_replace_callback('/\[(.*?)\]/', function ($m) {
+            $inner = preg_replace('/\s+/', '', $m[1]);
+            return '[' . $inner . ']';
+        }, $response);
+
+        // 保持AI返回的原始类型，不进行映射转换
+        // 直接使用AI返回的类型标记，以便保持原文分类的准确性
+
         // 后处理：检查是否还有遗漏的敏感信息
         $patterns = [
             'email' => '/([a-zA-Z0-9._-]+)@([a-zA-Z0-9.-]+)\.([a-zA-Z]{2,})/',
@@ -629,6 +739,57 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     public function supportsModel(string $modelCode): bool
     {
         return true;
+    }
+    
+    /**
+     * 获取增强的敏感词规则（从配置中读取并合并Meta和Google规则）
+     * 
+     * @return string 增强的敏感词规则描述
+     */
+    private function getEnhancedSensitiveRules(): string
+    {
+        try {
+            /** @var SystemConfig $systemConfig */
+            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+            $metaRules = (string)($systemConfig->getConfig('meta_rules', 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND) ?? '');
+            $googleRules = (string)($systemConfig->getConfig('google_rules', 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND) ?? '');
+            
+            if (trim($metaRules) === '' && trim($googleRules) === '') {
+                return '';
+            }
+            
+            // 合并Meta和Google的敏感词
+            $allWords = [];
+            if (trim($metaRules) !== '') {
+                $metaLines = array_filter(array_map('trim', explode("\n", $metaRules)));
+                $allWords = array_merge($allWords, $metaLines);
+            }
+            if (trim($googleRules) !== '') {
+                $googleLines = array_filter(array_map('trim', explode("\n", $googleRules)));
+                $allWords = array_merge($allWords, $googleLines);
+            }
+            
+            // 去重并排序
+            $allWords = array_values(array_unique($allWords));
+            sort($allWords);
+            
+            if (empty($allWords)) {
+                return '';
+            }
+            
+            // 构建分类提示，告诉AI这些就是可用的类型分类
+            $rulesText = "平台敏感词类型分类列表（以下就是可用的类型名称，检测到时直接使用这些类型）：\n";
+            foreach ($allWords as $word) {
+                $rulesText .= "- " . trim($word) . "\n";
+            }
+            $rulesText .= "\n重要：检测到文本涉及上述任一类型时，标记中的'类型'字段必须直接使用上述列表中的类型名称（保持原样，不转换不映射）。\n";
+            $rulesText .= "例如：如果检测到'暴力内容'相关文本，类型就标记为'暴力内容'；如果检测到'股票'相关内容，类型就标记为'股票'。";
+            
+            return $rulesText;
+        } catch (\Throwable $e) {
+            // 配置读取失败时返回空字符串
+            return '';
+        }
     }
     
     /**
