@@ -392,7 +392,7 @@ class DefaultModel extends BackendController
      */
     private function jsonResponse(array $data): string
     {
-        $this->response->setHeader('Content-Type', 'application/json');
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data);
     }
 }
