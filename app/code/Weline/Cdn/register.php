@@ -14,9 +14,11 @@ Register::register(
     'Weline_Cdn',
     __DIR__,
     '1.0.0',
-    'CDN模块 - 提供CDN缓存管理和规则配置功能',
+    '<a href="https://bbs.aiweline.com">CDN模块: 多适配器CDN管理、缓存清理、预热</a>',
     [
-        'Weline_Framework'
+        'Weline_Framework',
+        'Weline_Websites',
+        'Weline_Cron'
     ]
 );
 
