@@ -49,7 +49,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         # 检测验证码
         if ($this->session->getData('need_backend_verification_code')) {
             $this->assign('need_backend_verification_code', true);
-            $this->assign('backend_verification_code_url', $this->_url->getBackendUrl('admin/login/verificationCode'));
+            // 使用连字符小写路径以与白名单精确匹配，并兼容路由规则
+            $this->assign('backend_verification_code_url', $this->_url->getBackendUrl('admin/login/verification-code'));
         }
         if ($this->session->getData('backend_disable_login')) {
             $this->messageManager->addError(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'));
