@@ -1,0 +1,37 @@
+[
+    {
+        "action": "cache",
+        "expression": "(http.request.uri.path matches \"\\\\.(css|js|jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|eot|pdf|zip)$\" and http.request.method eq \"GET\")",
+        "description": "静态资源缓存 - 前台静态文件（CSS/JS/图片/字体等）缓存24小时",
+        "action_parameters": {
+            "edge_cache_ttl": 86400,
+            "cache": true
+        }
+    },
+    {
+        "action": "bypass",
+        "expression": "(http.request.uri.path contains \"/backend/\" or http.request.uri.path contains \"/admin/\")",
+        "description": "后台排除缓存 - 后台管理页面不缓存",
+        "action_parameters": {
+            "cache": false
+        }
+    },
+    {
+        "action": "bypass",
+        "expression": "(http.request.uri.path contains \"/api/\" and not http.request.uri.path contains \"/api/static/\")",
+        "description": "API排除缓存 - 动态API接口不缓存（静态API除外）",
+        "action_parameters": {
+            "cache": false
+        }
+    },
+    {
+        "action": "cache",
+        "expression": "(http.request.method eq \"GET\" and not http.request.uri.path contains \"/backend/\" and not http.request.uri.path contains \"/admin/\" and not (http.request.uri.path contains \"/api/\" and not http.request.uri.path contains \"/api/static/\"))",
+        "description": "前台页面缓存 - GET请求的前台页面缓存1小时（排除后台和API）",
+        "action_parameters": {
+            "edge_cache_ttl": 3600,
+            "cache": true
+        }
+    }
+]
+
