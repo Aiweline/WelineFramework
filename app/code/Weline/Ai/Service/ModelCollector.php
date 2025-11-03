@@ -367,7 +367,7 @@ class ModelCollector
 
         $data = [
             'model_code' => $modelData['model_code'],
-            'name' => $modelData['name'],
+            'name' => $modelData['name'] ?? $modelData['model_code'], // 如果没有name，使用model_code作为name
             'supplier' => $modelData['vendor'],
             'version' => $modelData['model_version'] ?? '1.0',
             'config' => json_encode($modelData['config'] ?? []),
@@ -381,6 +381,13 @@ class ModelCollector
             'origin_model_id' => null,
             'capabilities' => json_encode($modelData['capabilities'] ?? []),
             'max_tokens' => $modelData['max_tokens'] ?? null,
+            // 兼容字段：确保外部查询能正常工作
+            'vendor' => $modelData['vendor'],
+            'product' => $modelData['product'] ?? '',
+            'model' => $modelData['model'] ?? $modelData['model_code'],
+            'class' => $modelData['class'] ?? '',
+            'default_api_key' => $modelData['default_api_key'] ?? '',
+            'default_api_url' => $modelData['default_api_url'] ?? ($modelData['config']['base_url'] ?? ''),
         ];
 
         $model = $this->aiModel->reset();

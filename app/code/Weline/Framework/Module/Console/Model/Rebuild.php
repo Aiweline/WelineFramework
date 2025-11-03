@@ -69,6 +69,21 @@ class Rebuild extends CommandAbstract
             return;
         }
         
+        // 若传入了模型文件路径，直接解析并执行
+        if ($fileContext = $this->tryResolveFromFileArg($args, $data)) {
+            $moduleName = $fileContext['module'];
+            $modelClass = $fileContext['class'];
+            $modules = $this->moduleHandle->getModules();
+            if (!isset($modules[$moduleName])) {
+                $this->printer->error(__('错误：模块 %{1} 不存在！', [$moduleName]));
+                return;
+            }
+            $module = new Module($modules[$moduleName]);
+            // 直接用完整类名重建
+            $this->rebuildModel($module, $modelClass);
+            return;
+        }
+
         // 支持 --module/-m 参数
         $moduleName = $args['module'] ?? $args['m'] ?? '';
         // 支持 --name/-n 参数
@@ -102,6 +117,120 @@ class Rebuild extends CommandAbstract
 
         // 查找并重建指定的模型
         $this->rebuildModel($module, $modelName);
+    }
+
+    /**
+     * 解析命令入参中的文件路径（例如：app\\code\\Weline\\Ai\\Model\\AiModel.php）
+     * 返回 ['module' => 模块名, 'class' => 模型完整类名] 或 null
+     */
+    private function tryResolveFromFileArg(array $args, array $data = []): ?array
+    {
+        $candidate = null;
+        $candidates = [];
+        foreach ([$args, $data] as $bag) {
+            foreach ($bag as $key => $value) {
+                if (is_string($value)) {
+                    $candidates[] = $value;
+                } elseif (is_array($value)) {
+                    foreach ($value as $v) {
+                        if (is_string($v)) {
+                            $candidates[] = $v;
+                        }
+                    }
+                }
+            }
+        }
+        if (!empty($_SERVER['argv']) && is_array($_SERVER['argv'])) {
+            foreach ($_SERVER['argv'] as $v) {
+                if (is_string($v)) {
+                    $candidates[] = $v;
+                }
+            }
+        }
+        foreach ($candidates as $v) {
+            if (str_ends_with($v, '.php')) {
+                $candidate = $v;
+                break;
+            }
+        }
+        if (!$candidate) {
+            return null;
+        }
+
+        // 归一化为绝对路径
+        $path = str_replace(['/', '\\'], DS, $candidate);
+        if (!str_starts_with($path, 'app' . DS)) {
+            // 允许直接传绝对路径
+            if (!is_file($path)) {
+                // 尝试拼接项目根目录
+                $path = rtrim(BP, DS) . DS . ltrim($path, DS);
+            }
+        } else {
+            $path = rtrim(BP, DS) . DS . $path;
+        }
+        if (!is_file($path)) {
+            return null;
+        }
+
+        // 推导完整类名：去掉 app\\code\\ 前缀，替换分隔符为命名空间反斜杠，去除 .php
+        $relative = str_replace(rtrim(BP, DS) . DS, '', $path);
+        $relative = ltrim($relative, DS);
+        $prefix = 'app' . DS . 'code' . DS;
+        if (!str_starts_with($relative, $prefix)) {
+            return null;
+        }
+        $nsPart = substr($relative, strlen($prefix));
+        $nsPart = str_replace(DS, '\\', $nsPart);
+        if (substr($nsPart, -4) === '.php') {
+            $nsPart = substr($nsPart, 0, -4);
+        }
+        $fqcn = $nsPart;
+
+        // 定位所属模块
+        $modules = $this->moduleHandle->getModules();
+        $moduleName = null;
+        foreach ($modules as $name => $meta) {
+            $base = $meta['base_path'] ?? '';
+            if ($base && str_starts_with($path, rtrim($base, DS) . DS)) {
+                $moduleName = $name;
+                break;
+            }
+        }
+        if (!$moduleName) {
+            // 根据命名空间头两个段推断模块名（Vendor_Module）
+            $parts = explode('\\', $fqcn);
+            if (count($parts) >= 2) {
+                $guess = $parts[0] . '_' . $parts[1];
+                if (isset($modules[$guess])) {
+                    $moduleName = $guess;
+                }
+            }
+        }
+        if (!$moduleName) {
+            return null;
+        }
+
+        // 尝试自动加载类（防止 class_exists 失败）
+        if (!class_exists($fqcn) && is_file($path)) {
+            require_once $path;
+        }
+        // 仅当该类存在且为 Model 子类时，才按文件直跑
+        if (!class_exists($fqcn)) {
+            return null;
+        }
+        try {
+            $ref = new \ReflectionClass($fqcn);
+            if (!$ref->isSubclassOf(\Weline\Framework\Database\Model::class)) {
+                return null;
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return [
+            'module' => $moduleName,
+            'class' => $fqcn,
+        ];
     }
 
     /**
@@ -274,6 +403,10 @@ class Rebuild extends CommandAbstract
      */
     private function findModelClass(Module $module, string $modelName): ?string
     {
+        // 已经是完整类名
+        if (class_exists($modelName)) {
+            return $modelName;
+        }
         // 模块名就是命名空间（例如：GuoLaiRen_PageBuilder -> GuoLaiRen\PageBuilder）
         $namespace = str_replace('_', '\\', $module->getName()) . '\\Model';
         

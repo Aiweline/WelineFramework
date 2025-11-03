@@ -14,9 +14,11 @@ use Weline\Ai\Service\AiModelService;
  */
 class Model extends FrontendRestController
 {
-    public function __construct(
-        private readonly AiModelService $modelService
-    ) {
+    private AiModelService $modelService;
+
+    public function __construct(AiModelService $modelService)
+    {
+        $this->modelService = $modelService;
     }
 
     /**

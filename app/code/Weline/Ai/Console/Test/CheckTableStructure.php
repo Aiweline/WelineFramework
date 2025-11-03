@@ -12,9 +12,11 @@ use Weline\Framework\Database\ConnectionFactory;
  */
 class CheckTableStructure implements CommandInterface
 {
-    public function __construct(
-        private readonly ConnectionFactory $connectionFactory
-    ) {
+    private ConnectionFactory $connectionFactory;
+
+    public function __construct(ConnectionFactory $connectionFactory)
+    {
+        $this->connectionFactory = $connectionFactory;
     }
 
     public function execute(array $args = [], array $data = [])
@@ -29,8 +31,7 @@ class CheckTableStructure implements CommandInterface
             echo "----------------------------------------\n";
             
             try {
-                $stmt = $connection->query("PRAGMA table_info({$table})");
-                $columns = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $columns = $connection->query("PRAGMA table_info({$table})")->fetchArray();
                 
                 foreach ($columns as $column) {
                     echo sprintf(
