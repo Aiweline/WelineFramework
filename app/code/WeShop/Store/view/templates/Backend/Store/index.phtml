@@ -84,13 +84,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                         <div class='card'>
                             <div class='card-body'>
                             <!-- 独立的d-form测试 -->
-                            <div style="margin-bottom: 20px; padding: 15px; border: 2px dashed #007bff; border-radius: 8px; background-color: #f8f9fa;">
-                                <h5 style="color: #007bff; margin-bottom: 15px;">
-                                    <i class="fas fa-vial"></i> d-form 独立测试
-                                </h5>
-                                <p style="margin-bottom: 15px; color: #6c757d;">
-                                    这是一个独立的d-form，应该显示为一个"添加店铺"按钮，点击后弹出模态框表单。
-                                </p>
+                            <div>
                                 <w:d-form model="WeShop\Store\Model\Store" scope="store-form-test" title="添加店铺">
                                     <w:field belong="d-form" name="name" type="text" placeholder="请输入店铺名称" required="true">店铺名称</w:field>
                                     <w:field belong="d-form" name="status" type="select" options="1:启用,0:禁用">状态</w:field>

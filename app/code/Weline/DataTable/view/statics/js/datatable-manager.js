@@ -196,6 +196,99 @@ var DataTableManager = {
     },
 
     /**
+     * 获取当前主题
+     * @returns {string} 'dark' | 'light'
+     */
+    getCurrentTheme: function () {
+        const body = document.body;
+        const sidebarTheme = body.getAttribute('data-sidebar');
+        const topbarTheme = body.getAttribute('data-topbar');
+
+        // 如果sidebar或topbar是dark，则返回dark
+        if (sidebarTheme === 'dark' || topbarTheme === 'dark') {
+            return 'dark';
+        }
+
+        // 检查媒体查询
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return 'dark';
+        }
+
+        return 'light';
+    },
+
+    /**
+     * 应用主题
+     * @param {string} theme - 'dark' | 'light'
+     */
+    applyTheme: function (theme) {
+        const body = document.body;
+        const tables = document.querySelectorAll('.weline-datatable, .w-datatable');
+
+        tables.forEach(function (table) {
+            if (theme === 'dark') {
+                table.classList.add('theme-dark');
+            } else {
+                table.classList.remove('theme-dark');
+            }
+        });
+
+        // 应用表单主题
+        const forms = document.querySelectorAll('.w-form-container, .w-form-inline-container');
+        forms.forEach(function (form) {
+            if (theme === 'dark') {
+                form.classList.add('theme-dark');
+            } else {
+                form.classList.remove('theme-dark');
+            }
+        });
+    },
+
+    /**
+     * 初始化主题
+     */
+    initTheme: function () {
+        const currentTheme = this.getCurrentTheme();
+        this.applyTheme(currentTheme);
+
+        // 监听主题变化（如果系统有全局主题切换事件）
+        if (window.addEventListener && typeof MutationObserver !== 'undefined') {
+            // 监听body属性变化
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' &&
+                        (mutation.attributeName === 'data-sidebar' || mutation.attributeName === 'data-topbar')) {
+                        const newTheme = this.getCurrentTheme();
+                        this.applyTheme(newTheme);
+                    }
+                });
+            });
+
+            observer.observe(document.body, {
+                attributes: true,
+                attributeFilter: ['data-sidebar', 'data-topbar']
+            });
+
+            // 监听媒体查询变化
+            if (window.matchMedia) {
+                const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                if (mediaQuery.addEventListener) {
+                    mediaQuery.addEventListener('change', (e) => {
+                        const theme = e.matches ? 'dark' : 'light';
+                        this.applyTheme(theme);
+                    });
+                } else {
+                    // 兼容旧版浏览器
+                    mediaQuery.addListener((e) => {
+                        const theme = e.matches ? 'dark' : 'light';
+                        this.applyTheme(theme);
+                    });
+                }
+            }
+        }
+    },
+
+    /**
      * 初始化主题配置功能
      */
     initThemeConfig: function () {
@@ -204,20 +297,20 @@ var DataTableManager = {
             // 确保翻译函数存在
             const translate = window.__ || function (text) { return text; };
 
-            const tableThemeConfig = translate('表格主题配置');
-            const displayOptions = translate('显示选项');
-            const showZebra = translate('显示斑马纹');
-            const showHover = translate('显示悬停效果');
-            const showSort = translate('显示排序图标');
-            const colorTheme = translate('颜色主题');
-            const primaryColor = translate('主色调');
-            const headerBackground = translate('表头背景');
-            const hoverColor = translate('行悬停色');
-            const fontSettings = translate('字体设置');
-            const fontSize = translate('字体大小');
-            const small = translate('小');
-            const medium = translate('中');
-            const large = translate('大');
+            const tableThemeConfig = __('表格主题配置');
+            const displayOptions = __('显示选项');
+            const showZebra = __('显示斑马纹');
+            const showHover = __('显示悬停效果');
+            const showSort = __('显示排序图标');
+            const colorTheme = __('颜色主题');
+            const primaryColor = __('主色调');
+            const headerBackground = __('表头背景');
+            const hoverColor = __('行悬停色');
+            const fontSettings = __('字体设置');
+            const fontSize = __('字体大小');
+            const small = __('小');
+            const medium = __('中');
+            const large = __('大');
 
             const themeConfigHtml = `
                 <div class="w-theme-config">
@@ -439,7 +532,7 @@ var DataTableManager = {
             table.querySelectorAll('th, td').forEach(function (cell) {
                 cell.style.display = '';
             });
-            table.querySelector('[data-w-action="important-view"]').textContent = '只显示重要数据';
+            table.querySelector('[data-w-action="important-view"]').textContent = __('只显示重要数据');
         } else {
             // 只显示重要列
             table.classList.add('w-important-view');
@@ -449,7 +542,7 @@ var DataTableManager = {
             table.querySelectorAll('.w-important-column').forEach(function (cell) {
                 cell.style.display = '';
             });
-            table.querySelector('[data-w-action="important-view"]').textContent = '显示所有数据';
+            table.querySelector('[data-w-action="important-view"]').textContent = __('显示所有数据');
         }
     },
 
@@ -510,18 +603,18 @@ var DataTableManager = {
         const totalRecords = instance ? instance.totalCount || 0 : 0;
         const pageSize = instance ? instance.pageSize || 20 : 20;
         const totalPages = Math.ceil(totalRecords / pageSize);
-        
+
         const modalHtml = `
             <div class="w-export-modal show">
                 <div class="w-export-content">
                     <div class="w-export-header">
                         <h3 class="w-export-title">
                             <i class="fas fa-download me-2"></i>
-                            正在导出数据
+                            ${__('正在导出数据')}
                         </h3>
                         <p class="w-export-subtitle">
-                            导出格式：<span class="format-badge ${format}">${format.toUpperCase()}</span>
-                            <br>预计导出 <strong>${totalRecords}</strong> 条记录，共 <strong>${totalPages}</strong> 页
+                            ${__('导出格式')}：<span class="format-badge ${format}">${format.toUpperCase()}</span>
+                            <br>${__('预计导出')} <strong>${totalRecords}</strong> ${__('条记录')}，${__('共')} <strong>${totalPages}</strong> ${__('页')}
                         </p>
                     </div>
                     
@@ -529,19 +622,19 @@ var DataTableManager = {
                         <div class="w-progress-info">
                             <div class="progress-stats">
                                 <div class="stat-item">
-                                    <span class="stat-label">当前页：</span>
+                                    <span class="stat-label">${__('当前页')}：</span>
                                     <span class="stat-value current-page">0</span>
                                     <span class="stat-separator">/</span>
                                     <span class="stat-value total-pages">${totalPages}</span>
                                 </div>
                                 <div class="stat-item">
-                                    <span class="stat-label">已导出：</span>
+                                    <span class="stat-label">${__('已导出')}：</span>
                                     <span class="stat-value exported-records">0</span>
                                     <span class="stat-separator">/</span>
                                     <span class="stat-value total-records">${totalRecords}</span>
                                 </div>
                                 <div class="stat-item">
-                                    <span class="stat-label">进度：</span>
+                                    <span class="stat-label">${__('进度')}：</span>
                                     <span class="stat-value progress-percentage">0%</span>
                                 </div>
                             </div>
@@ -556,29 +649,29 @@ var DataTableManager = {
                         
                         <div class="w-export-status">
                             <i class="fas fa-spinner fa-spin loading"></i>
-                            <span class="w-export-status-text">正在初始化导出...</span>
+                            <span class="w-export-status-text">${__('正在初始化导出...')}</span>
                         </div>
                         
                         <div class="w-export-time-info">
                             <div class="time-item">
-                                <span class="time-label">已用时间：</span>
+                                <span class="time-label">${__('已用时间')}：</span>
                                 <span class="time-value elapsed-time">00:00</span>
                             </div>
                             <div class="time-item">
-                                <span class="time-label">预计剩余：</span>
-                                <span class="time-value remaining-time">计算中...</span>
+                                <span class="time-label">${__('预计剩余')}：</span>
+                                <span class="time-value remaining-time">${__('计算中...')}</span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="w-export-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <span class="w-export-warning-text">导出过程中请勿关闭此窗口，以免导致数据丢失</span>
+                        <span class="w-export-warning-text">${__('导出过程中请勿关闭此窗口，以免导致数据丢失')}</span>
                     </div>
                     
                     <div class="w-export-actions">
                         <button type="button" class="w-export-btn secondary" onclick="DataTableManager.cancelExport()" id="cancel-export-btn">
-                            <i class="fas fa-times me-1"></i>取消导出
+                            <i class="fas fa-times me-1"></i>${__('取消导出')}
                         </button>
                     </div>
                 </div>
@@ -808,18 +901,18 @@ var DataTableManager = {
         let allData = [];
         let isCancelled = false;
         let startTime = Date.now();
-        
+
         // 计时器
         const timer = setInterval(() => {
             if (isCancelled) {
                 clearInterval(timer);
                 return;
             }
-            
+
             const elapsed = Date.now() - startTime;
             const elapsedText = this.formatTime(elapsed);
             $('.elapsed-time').text(elapsedText);
-            
+
             // 计算剩余时间
             if (currentPage > 1) {
                 const avgTimePerPage = elapsed / (currentPage - 1);
@@ -846,7 +939,7 @@ var DataTableManager = {
             // 更新进度信息
             const progress = Math.round(((currentPage - 1) / totalPages) * 100);
             const exportedRecords = (currentPage - 1) * pageSize;
-            
+
             $('.w-progress-fill').css('width', progress + '%');
             $('.w-progress-text').text(`${progress}%`);
             $('.current-page').text(currentPage);
@@ -877,7 +970,7 @@ var DataTableManager = {
                         clearInterval(timer);
                         return;
                     }
-                    
+
                     if (response.code === 200 && response.data) {
                         // 添加当前页数据
                         if (response.data.data) {
@@ -908,15 +1001,15 @@ var DataTableManager = {
         // 开始导出
         exportNextPage();
     },
-    
+
     /**
      * 格式化时间显示
      */
-    formatTime: function(milliseconds) {
+    formatTime: function (milliseconds) {
         const seconds = Math.floor(milliseconds / 1000);
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
-        
+
         return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     },
 
@@ -925,8 +1018,8 @@ var DataTableManager = {
      */
     completeExport: function (data, format, tableId) {
         document.querySelector('.w-progress-fill').style.width = '100%';
-        document.querySelector('.w-progress-text').textContent = '正在生成文件...';
-        document.querySelector('.w-export-status-text').textContent = '导出完成！';
+        document.querySelector('.w-progress-text').textContent = __('正在生成文件...');
+        document.querySelector('.w-export-status-text').textContent = __('导出完成！');
         let icon = document.querySelector('.w-export-status i');
         icon.classList.remove('fa-spinner', 'fa-spin', 'loading');
         icon.classList.add('fa-check-circle');
@@ -1004,9 +1097,9 @@ var DataTableManager = {
         let icon = document.querySelector('.w-export-status i');
         icon.classList.remove('fa-spinner', 'fa-spin', 'loading');
         icon.classList.add('fa-exclamation-circle');
-        document.querySelector('.w-export-status-text').textContent = '导出失败';
+        document.querySelector('.w-export-status-text').textContent = __('导出失败');
         document.querySelector('.w-export-actions').innerHTML = `
-            <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">关闭</button>
+            <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">${__('关闭')}</button>
         `;
         console.error('Export error:', message);
     },
@@ -1060,6 +1153,9 @@ var DataTableManager = {
             filterFields: []
         };
         this.instances[tableId] = instance;
+
+        // 初始化主题
+        this.initTheme();
 
         // 初始化批量操作工具栏
         this.initBatchActionToolbar(instance);
@@ -1250,12 +1346,12 @@ var DataTableManager = {
         }
 
         if (selectedIds.length === 0) {
-            this.showWarning(tableId, '没有可导出的数据');
+            this.showWarning(tableId, __('没有可导出的数据'));
             return;
         }
 
         // 显示加载状态
-        this.showLoading(tableId, '正在准备导出数据...');
+        this.showLoading(tableId, __('正在准备导出数据...'));
 
         // 准备导出参数
         const exportParams = {
@@ -1296,12 +1392,12 @@ var DataTableManager = {
                 }
             })
             .then(() => {
-                this.showSuccess(tableId, `成功导出 ${selectedIds.length} 条记录`);
+                this.showSuccess(tableId, __('成功导出 %{1} 条记录', selectedIds.length));
             })
             .catch(error => {
                 this.hideLoading(tableId);
                 console.error('Export error:', error);
-                this.showError(tableId, '导出失败：' + error.message);
+                this.showError(tableId, __('导出失败：%{1}', error.message));
             });
     },
 
@@ -1342,7 +1438,7 @@ var DataTableManager = {
         }
 
         if (exportData.length === 0) {
-            this.showWarning(tableId, '没有可导出的数据');
+            this.showWarning(tableId, __('没有可导出的数据'));
             return;
         }
 
@@ -1354,7 +1450,7 @@ var DataTableManager = {
         } else if (format === 'json') {
             this.exportToJson(exportData, visibleFields);
         } else {
-            this.showError(tableId, '不支持的导出格式');
+            this.showError(tableId, __('不支持的导出格式'));
         }
     },
 
@@ -1531,7 +1627,7 @@ var DataTableManager = {
             })
             .catch(error => {
                 console.error('loadModelFieldsForInit: 加载字段配置失败', error);
-                this.showError(tableId, error || '获取字段失败');
+                this.showError(tableId, error || __('获取字段失败'));
             });
     },
 
@@ -2057,14 +2153,14 @@ var DataTableManager = {
                     this.renderTable(instance);
                 } else {
                     console.error('API错误:', response.msg);
-                    this.showError(response.msg || '加载数据失败');
+                    this.showError(response.msg || __('加载数据失败'));
                 }
             })
             .catch(error => {
                 console.error('AJAX错误:', error);
                 $loading.hide();
                 $content.show();
-                this.showError('加载数据失败: ' + error);
+                this.showError(__('加载数据失败: %{1}', error));
             });
     },
 
@@ -2135,7 +2231,7 @@ var DataTableManager = {
         const instance = this.getInstanceByScope(scope);
         if (!instance) return;
 
-        const filterName = prompt('请输入过滤器名称');
+        const filterName = prompt(__('请输入过滤器名称'));
         if (!filterName) return;
 
         const $form = instance.container.find('#filter-form-' + scope);
@@ -2152,7 +2248,7 @@ var DataTableManager = {
         savedFilters[filterName] = filterData;
         localStorage.setItem('datatable_filters_' + scope, JSON.stringify(savedFilters));
 
-        this.showSuccess(scope, '过滤器保存成功');
+        this.showSuccess(scope, __('过滤器保存成功'));
     },
 
     /**
@@ -2184,7 +2280,7 @@ var DataTableManager = {
             .then(response => response.json())
             .then(response => {
                 if (response.code === 200) {
-                    this.showSuccess(scope, '配置保存成功');
+                    this.showSuccess(scope, __('配置保存成功'));
                     const modal = document.getElementById('table-config-modal-' + scope);
                     if (modal && typeof bootstrap !== 'undefined') {
                         const bsModal = bootstrap.Modal.getInstance(modal);
@@ -2197,7 +2293,7 @@ var DataTableManager = {
                 }
             })
             .catch(() => {
-                this.showError(scope, '保存配置失败');
+                this.showError(scope, __('保存配置失败'));
             });
     },
 
@@ -2206,7 +2302,7 @@ var DataTableManager = {
      */
     editRow: function (instance, rowIndex) {
         if (instance.isEditing) {
-            this.showWarning(instance.container.attr('id'), '请先保存当前编辑的行');
+            this.showWarning(instance.container.attr('id'), __('请先保存当前编辑的行'));
             return;
         }
 
@@ -2862,7 +2958,7 @@ var DataTableManager = {
                 }
             })
             .catch(() => {
-                this.showError(instance.container.attr('id'), '保存失败');
+                this.showError(instance.container.attr('id'), __('保存失败'));
             });
     },
 
@@ -2902,7 +2998,7 @@ var DataTableManager = {
     /**
      * 显示加载状态
      */
-    showLoading: function (tableId, message = '加载中...') {
+    showLoading: function (tableId, message = __('加载中...')) {
         const container = document.getElementById(tableId);
         if (!container) return;
 
@@ -3016,7 +3112,7 @@ var DataTableManager = {
      * 显示警告消息
      */
     showWarning: function (tableId, message) {
-        alert('警告: ' + message);
+        alert(__('警告: %{1}', message));
     },
 
     /**
@@ -3816,7 +3912,7 @@ var DataTableManager = {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        if (confirm('确定要重置为默认字段配置吗？这将显示所有可用字段？')) {
+        if (confirm(__('确定要重置为默认字段配置吗？这将显示所有可用字段？'))) {
             // 清除缓存
             const cacheKey = `datatable_fields_${tableId}_${instance.options.model}_${instance.options.scope}`;
             localStorage.removeItem(cacheKey);
@@ -4099,11 +4195,11 @@ var DataTableManager = {
                 DataTableManager.rebuildTableFromConfig(tableId, displayFields, filterFields);
 
             } else {
-                alert(response.message || '保存失败');
+                alert(response.message || __('保存失败'));
             }
         }).catch(error => {
             console.error('saveFieldConfig: 保存失败', error);
-            alert('保存失败: ' + error.message);
+            alert(__('保存失败: %{1}', error.message));
         }).finally(() => {
             if ($saveBtn) {
                 $saveBtn.innerHTML = originalText;
@@ -5016,7 +5112,7 @@ var DataTableManager = {
             return;
         }
 
-        if (confirm('确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置')) {
+        if (confirm(__('确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置'))) {
             this.clearConfig(tableId, 'header');
         }
     },
@@ -5032,7 +5128,7 @@ var DataTableManager = {
             return;
         }
 
-        if (confirm('确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置')) {
+        if (confirm(__('确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置'))) {
             this.clearConfig(tableId, 'filter');
         }
     },
@@ -5048,7 +5144,7 @@ var DataTableManager = {
             return;
         }
 
-        if (confirm('确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置')) {
+        if (confirm(__('确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置'))) {
             this.clearConfig(tableId, 'all');
         }
     },
@@ -5095,14 +5191,14 @@ var DataTableManager = {
                     this.loadModelFields(tableId);
 
                     // 显示成功消息
-                    this.showMessage('配置已重置', 'success');
+                    this.showMessage(__('配置已重置'), 'success');
                 } else {
-                    this.showMessage(response.message || '重置失败', 'error');
+                    this.showMessage(response.message || __('重置失败'), 'error');
                 }
             })
             .catch(error => {
                 console.error('Clear config error:', error);
-                this.showMessage('重置配置失败，请稍后重试', 'error');
+                this.showMessage(__('重置配置失败，请稍后重试'), 'error');
             })
             .finally(() => {
                 container.classList.remove('loading');
@@ -5664,7 +5760,7 @@ var DataTableManager = {
                 }
             })
             .catch(error => {
-                this.showError(tableId, error || '获取字段失败');
+                this.showError(tableId, error || __('获取字段失败'));
             });
     },
 
@@ -5860,13 +5956,13 @@ var DataTableManager = {
                 } else {
                     // 保存失败
                     this.restoreCellContent(cell, this.editingState.originalValue);
-                    this.showError(tableId, data.message || '保存失败');
+                    this.showError(tableId, data.message || __('保存失败'));
                 }
             })
             .catch(error => {
                 // 网络错误
                 this.restoreCellContent(cell, this.editingState.originalValue);
-                this.showError(tableId, '网络错误：' + error.message);
+                this.showError(tableId, __('网络错误：%{1}', error.message));
             });
     }
 };
@@ -5885,6 +5981,7 @@ document.addEventListener('click', function (e) {
 // 初始化下拉菜单功能
 document.addEventListener('DOMContentLoaded', function () {
     DataTableManager.initDropdowns();
+    DataTableManager.initTheme();
     DataTableManager.initThemeConfig();
     DataTableManager.initImportantFlags();
     DataTableManager.loadThemeConfig();
