@@ -115,11 +115,11 @@ window.DataTableFormManager = {
                 if (response.success) {
                     this.renderAutoFields(formId, response.data);
                 } else {
-                    this.showError(formId, response.message || '加载字段失败');
+                    this.showError(formId, response.message || __('加载字段失败'));
                 }
             })
             .catch(error => {
-                this.showError(formId, error.message || '网络错误');
+                this.showError(formId, error.message || __('网络错误'));
             });
     },
 
@@ -172,7 +172,7 @@ window.DataTableFormManager = {
         const readonlyAttr = field.readonly ? 'readonly' : '';
         const disabledAttr = field.disabled ? 'disabled' : '';
         const maxlengthAttr = field.maxlength > 0 ? 'maxlength="' + field.maxlength + '"' : '';
-        const placeholder = field.placeholder || '请输入' + (field.label || field.name);
+        const placeholder = field.placeholder || __('请输入%{1}', [field.label || field.name]);
 
         let fieldHtml = '<div class="w-form-field">';
 
@@ -312,11 +312,11 @@ window.DataTableFormManager = {
                 if (response.success) {
                     this.fillFormData(formId, response.data);
                 } else {
-                    this.showError(formId, response.message || '加载记录失败');
+                    this.showError(formId, response.message || __('加载记录失败'));
                 }
             })
             .catch(error => {
-                this.showError(formId, error.message || '网络错误');
+                this.showError(formId, error.message || __('网络错误'));
             });
     },
 
@@ -465,7 +465,7 @@ window.DataTableFormManager = {
         });
 
         if (!isValid) {
-            this.showError(formId, '请检查表单中的错误');
+            this.showError(formId, __('请检查表单中的错误'));
             return;
         }
 
@@ -507,7 +507,7 @@ window.DataTableFormManager = {
             .then(response => response.json())
             .then(response => {
                 if (response.success) {
-                    this.showSuccess(formId, response.message || '保存成功');
+                    this.showSuccess(formId, response.message || __('保存成功'));
                     // 关闭模态框
                     this.closeModal(formId);
                     // 触发成功回调
@@ -515,11 +515,11 @@ window.DataTableFormManager = {
                         window.onFormSuccess(formId, response.data);
                     }
                 } else {
-                    this.showError(formId, response.message || '保存失败');
+                    this.showError(formId, response.message || __('保存失败'));
                 }
             })
             .catch(error => {
-                this.showError(formId, error.message || '网络错误');
+                this.showError(formId, error.message || __('网络错误'));
             })
             .finally(() => {
                 this.hideSubmitting(formId);
@@ -559,6 +559,38 @@ window.DataTableFormManager = {
     /**
      * 关闭模态框
      */
+    /**
+     * 重置表单
+     */
+    resetForm: function (formId) {
+        const form = document.getElementById(formId);
+        if (!form) return;
+
+        // 重置表单数据
+        form.reset();
+
+        // 清除验证错误
+        const validationElements = form.querySelectorAll('.w-field-validation');
+        validationElements.forEach(function (element) {
+            element.innerHTML = '';
+            element.className = 'w-field-validation';
+        });
+
+        // 清除字段错误状态
+        const errorFields = form.querySelectorAll('.w-form-field.w-field-error');
+        errorFields.forEach(function (field) {
+            field.classList.remove('w-field-error');
+        });
+
+        // 清除表单消息
+        const messages = form.querySelectorAll('.w-form-message');
+        messages.forEach(function (message) {
+            message.remove();
+        });
+
+        console.log('表单已重置:', formId);
+    },
+
     closeModal: function (formId) {
         const modal = document.getElementById('w-form-modal-' + formId);
         if (!modal) return;
@@ -596,7 +628,7 @@ window.DataTableFormManager = {
         const submitBtn = form.querySelector('.w-btn-primary');
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存中...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + __('保存中...');
         }
     },
 
@@ -677,7 +709,7 @@ window.DataTableFormManager = {
             if (thead) {
                 const th = document.createElement('th');
                 th.className = 'w-table-actions';
-                th.textContent = '操作';
+                th.textContent = __('操作');
                 thead.appendChild(th);
             }
 
@@ -702,7 +734,7 @@ window.DataTableFormManager = {
                 if (!actionCell.querySelector('.w-edit-btn')) {
                     const editBtn = document.createElement('button');
                     editBtn.className = 'w-btn w-btn-sm w-btn-secondary w-edit-btn';
-                    editBtn.innerHTML = '<i class="fas fa-edit"></i> 编辑';
+                    editBtn.innerHTML = '<i class="fas fa-edit"></i> ' + __('编辑');
                     editBtn.onclick = function () {
                         // 获取行数据ID
                         const rowId = row.getAttribute('data-id') || row.querySelector('[data-id]')?.getAttribute('data-id');
@@ -1166,7 +1198,7 @@ window.DataTableFormManager = {
 
             // 验证文件类型
             if (!file.type.startsWith('image/')) {
-                alert('请选择图片文件');
+                alert(__('请选择图片文件'));
                 imageInput.value = '';
                 return;
             }
@@ -1174,7 +1206,7 @@ window.DataTableFormManager = {
             // 读取并显示图片预览
             const reader = new FileReader();
             reader.onload = (e) => {
-                preview.innerHTML = '<img src="' + e.target.result + '" alt="预览图片" class="w-image-preview-img">';
+                preview.innerHTML = '<img src="' + e.target.result + '" alt="' + __('预览图片') + '" class="w-image-preview-img">';
                 if (actions) {
                     actions.style.display = 'block';
                 }

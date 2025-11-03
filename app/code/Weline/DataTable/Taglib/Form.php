@@ -43,6 +43,9 @@ class Form implements TaglibInterface
             'mode' => false,
             'record_id' => false,
             'title' => false,
+            'form-mode' => false,
+            'form-title' => false,
+            'show-trigger-button' => false,
             'class' => false,
             'layout' => false,
             'auto_fields' => false,
@@ -73,7 +76,7 @@ class Form implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            // 获取属性
+            // 获取基础属性
             $model = $attributes['model'] ?? '';
             $scope = $attributes['scope'] ?? 'form';
             $id = $attributes['id'] ?? 'w-form-' . uniqid();
@@ -82,7 +85,7 @@ class Form implements TaglibInterface
             $mode = $attributes['mode'] ?? 'add';
             $recordId = $attributes['record_id'] ?? '';
             $title = $attributes['title'] ?? '';
-            $buttonText = $attributes['button-text'] ?? '添加';
+            $buttonText = $attributes['button-text'] ?? __('添加');
             $buttonClass = $attributes['button-class'] ?? 'w-btn w-btn-primary';
             $buttonIcon = $attributes['button-icon'] ?? 'fas fa-plus';
             $class = $attributes['class'] ?? 'w-form';
@@ -92,10 +95,19 @@ class Form implements TaglibInterface
             $includeFields = $attributes['include_fields'] ?? '';
             $for = $attributes['for'] ?? '';
 
+            // 获取新属性：form-mode, form-title, show-trigger-button
+            $formMode = $attributes['form-mode'] ?? 'modal'; // 默认modal模式
+            $formTitle = $attributes['form-title'] ?? '';
+            $showTriggerButton = isset($attributes['show-trigger-button']) 
+                ? filter_var($attributes['show-trigger-button'], FILTER_VALIDATE_BOOLEAN) 
+                : null; // null表示未设置，需要根据上下文决定
+
+            // 检测d-form是否在d-table内部
+            $tableContext = self::getTableContext();
+            $isInsideTable = ($tableContext !== null && isset($tableContext['type']) && $tableContext['type'] === 'd-table');
 
             // 如果模型或作用域未指定，尝试从表格上下文获取
             if (empty($model) || empty($scope)) {
-                $tableContext = self::getTableContext();
                 if ($tableContext) {
                     if (empty($model)) {
                         $model = $tableContext['model'] ?? '';
@@ -111,19 +123,37 @@ class Form implements TaglibInterface
                 throw new \Exception('d-form 标签必须指定 model 属性，或者确保在 d-table 标签内使用');
             }
 
+            // 处理form-title优先级：form-title > title > 根据mode自动生成
+            if (!empty($formTitle)) {
+                $title = $formTitle;
+            } elseif (empty($title)) {
+                $title = $mode === 'add' ? __('新增记录') : __('编辑记录');
+            }
+
+            // 处理show-trigger-button逻辑
+            // 如果未设置，根据上下文决定：
+            // - 独立使用时（不在d-table内）：mode=add时默认显示
+            // - 嵌套使用时（在d-table内）：默认不显示
+            if ($showTriggerButton === null) {
+                if ($isInsideTable) {
+                    // 嵌套使用时默认不显示按钮
+                    $showTriggerButton = false;
+                } else {
+                    // 独立使用时，mode=add时显示按钮
+                    $showTriggerButton = ($mode === 'add');
+                }
+            }
+
             // 设置表单上下文，供内部字段继承使用
             $formContext = [
                 'type' => 'd-form',
                 'scope' => $scope,
                 'model' => $model,
-                'attributes' => $attributes
+                'attributes' => $attributes,
+                'form-mode' => $formMode,
+                'is-inside-table' => $isInsideTable
             ];
             TableContext::pushChildTag('d-form', $scope, $formContext);
-
-            // 生成表单标题
-            if (empty($title)) {
-                $title = $mode === 'add' ? __('新增记录') : __('编辑记录');
-            }
 
             // 生成API URL
             if (empty($action)) {
@@ -142,7 +172,8 @@ class Form implements TaglibInterface
                 $id, $model, $scope, $action, $method,
                 $mode, $recordId, $title, $class, $layout,
                 $content, $autoFields, $excludeFieldsArray,
-                $includeFieldsArray, $for, $buttonText, $buttonClass, $buttonIcon
+                $includeFieldsArray, $for, $buttonText, $buttonClass, $buttonIcon,
+                $formMode, $showTriggerButton, $isInsideTable
             );
 
             // 弹出表单上下文
@@ -195,9 +226,12 @@ class Form implements TaglibInterface
         $excludeFields,
         $includeFields,
         $for,
-        $buttonText = '添加',
+        $buttonText = null,
         $buttonClass = 'w-btn w-btn-primary',
-        $buttonIcon = 'fas fa-plus'
+        $buttonIcon = 'fas fa-plus',
+        $formMode = 'modal',
+        $showTriggerButton = true,
+        $isInsideTable = false
     )
     {
         $layoutClass = $layout === 'horizontal' ? 'w-form-horizontal' : 'w-form-vertical';
@@ -205,76 +239,135 @@ class Form implements TaglibInterface
         $cancelText = __('取消');
         $saveText = __('保存');
         $loadingText = __('正在加载字段...');
+        
+        // 如果buttonText为null，使用默认值
+        if ($buttonText === null) {
+            $buttonText = __('添加');
+        }
 
-        // 生成模态框HTML
-        $formHtml = '<div class="w-form-modal" id="w-form-modal-' . $id . '">';
-        $formHtml .= '<div class="w-form-modal-overlay" onclick="DataTableFormManager.closeModal(\'' . $id . '\')"></div>';
-        $formHtml .= '<div class="w-form-modal-container">';
-        
-        $formHtml .= '<div class="w-form-container" id="w-form-container-' . $id . '">';
-        $formHtml .= '<div class="w-form-header">';
-        $formHtml .= '<h3 class="w-form-title">';
-        $formHtml .= '<i class="fas fa-edit"></i>';
-        $formHtml .= $title;
-        $formHtml .= '</h3>';
-        $formHtml .= '<button type="button" class="w-form-close" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
-        $formHtml .= '<i class="fas fa-times"></i>';
-        $formHtml .= '</button>';
-        $formHtml .= '</div>';
-        
         // 确保所有变量都是字符串
         $recordIdStr = is_array($recordId) ? implode(',', $recordId) : (string)$recordId;
         $modeStr = is_array($mode) ? implode(',', $mode) : (string)$mode;
         $scopeStr = is_array($scope) ? implode(',', $scope) : (string)$scope;
         $modelStr = is_array($model) ? implode(',', $model) : (string)$model;
-        $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '">';
-        $formHtml .= '<div class="w-form-body">';
-        $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
-        $formHtml .= '<!-- 手动设置的字段 -->';
-        // 确保 content 是字符串
-        $contentStr = (string)$tag_data[1]??'';
-
-        // 处理多表分组
-        $processedContent = self::processMultiTableGroups($contentStr, $modelStr);
-        $formHtml .= $processedContent;
-        $formHtml .= '<!-- 自动生成的字段将在这里插入 -->';
-        $formHtml .= '<div class="w-auto-fields" id="w-auto-fields-' . $id . '">';
-        $formHtml .= '<div class="w-loading-fields">';
-        $formHtml .= '<i class="fas fa-spinner fa-spin"></i>';
-        $formHtml .= $loadingText;
-        $formHtml .= '</div>';
-        $formHtml .= '</div>';
-        $formHtml .= '</div>';
-        $formHtml .= '</div>';
+        $formMode = (string)$formMode;
         
-        $formHtml .= '<div class="w-form-footer">';
-        $formHtml .= '<div class="w-form-actions">';
-        $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
-        $formHtml .= '<i class="fas fa-times"></i>';
-        $formHtml .= $cancelText;
-        $formHtml .= '</button>';
-        $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
-        $formHtml .= '<i class="fas fa-save"></i>';
-        $formHtml .= $saveText;
-        $formHtml .= '</button>';
-        $formHtml .= '</div>';
-        $formHtml .= '</div>';
-        $formHtml .= '</form>';
-        $formHtml .= '</div>';
-        
-        $formHtml .= '</div>'; // w-form-modal-container
-        $formHtml .= '</div>'; // w-form-modal
+        $formHtml = '';
 
-        // 生成触发按钮（仅在新增模式下）
-        if ($mode === 'add') {
+        // 根据form-mode生成不同的HTML结构
+        if ($formMode === 'inline') {
+            // Inline模式：直接显示表单，不包含模态框
+            $formHtml .= '<div class="w-form-inline-container" id="w-form-container-' . $id . '">';
+            $formHtml .= '<div class="w-form-header">';
+            $formHtml .= '<h3 class="w-form-title">';
+            $formHtml .= '<i class="fas fa-edit"></i> ';
+            $formHtml .= $title;
+            $formHtml .= '</h3>';
+            $formHtml .= '</div>';
+            
+            $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="inline">';
+            $formHtml .= '<div class="w-form-body">';
+            $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
+            $formHtml .= '<!-- 手动设置的字段 -->';
+            $contentStr = (string)($tag_data[1] ?? '');
+            $processedContent = self::processMultiTableGroups($contentStr, $modelStr);
+            $formHtml .= $processedContent;
+            $formHtml .= '<!-- 自动生成的字段将在这里插入 -->';
+            $formHtml .= '<div class="w-auto-fields" id="w-auto-fields-' . $id . '">';
+            $formHtml .= '<div class="w-loading-fields">';
+            $formHtml .= '<i class="fas fa-spinner fa-spin"></i> ';
+            $formHtml .= $loadingText;
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            
+            $formHtml .= '<div class="w-form-footer">';
+            $formHtml .= '<div class="w-form-actions">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.resetForm(\'' . $id . '\')">';
+            $formHtml .= '<i class="fas fa-redo"></i> ';
+            $formHtml .= __('重置');
+            $formHtml .= '</button>';
+            $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
+            $formHtml .= '<i class="fas fa-save"></i> ';
+            $formHtml .= $saveText;
+            $formHtml .= '</button>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</form>';
+            $formHtml .= '</div>';
+        } else {
+            // Modal模式：生成模态框HTML（默认）
+            $formHtml .= '<div class="w-form-modal" id="w-form-modal-' . $id . '">';
+            $formHtml .= '<div class="w-form-modal-overlay" onclick="DataTableFormManager.closeModal(\'' . $id . '\')"></div>';
+            $formHtml .= '<div class="w-form-modal-container">';
+            
+            $formHtml .= '<div class="w-form-container" id="w-form-container-' . $id . '">';
+            $formHtml .= '<div class="w-form-header">';
+            $formHtml .= '<h3 class="w-form-title">';
+            $formHtml .= '<i class="fas fa-edit"></i> ';
+            $formHtml .= $title;
+            $formHtml .= '</h3>';
+            $formHtml .= '<button type="button" class="w-form-close" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
+            $formHtml .= '<i class="fas fa-times"></i>';
+            $formHtml .= '</button>';
+            $formHtml .= '</div>';
+            
+            $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="modal">';
+            $formHtml .= '<div class="w-form-body">';
+            $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
+            $formHtml .= '<!-- 手动设置的字段 -->';
+            $contentStr = (string)($tag_data[1] ?? '');
+            $processedContent = self::processMultiTableGroups($contentStr, $modelStr);
+            $formHtml .= $processedContent;
+            $formHtml .= '<!-- 自动生成的字段将在这里插入 -->';
+            $formHtml .= '<div class="w-auto-fields" id="w-auto-fields-' . $id . '">';
+            $formHtml .= '<div class="w-loading-fields">';
+            $formHtml .= '<i class="fas fa-spinner fa-spin"></i> ';
+            $formHtml .= $loadingText;
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            
+            $formHtml .= '<div class="w-form-footer">';
+            $formHtml .= '<div class="w-form-actions">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
+            $formHtml .= '<i class="fas fa-times"></i> ';
+            $formHtml .= $cancelText;
+            $formHtml .= '</button>';
+            $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
+            $formHtml .= '<i class="fas fa-save"></i> ';
+            $formHtml .= $saveText;
+            $formHtml .= '</button>';
+            $formHtml .= '</div>';
+            $formHtml .= '</div>';
+            $formHtml .= '</form>';
+            $formHtml .= '</div>';
+            
+            $formHtml .= '</div>'; // w-form-modal-container
+            $formHtml .= '</div>'; // w-form-modal
+        }
+
+        // 生成触发按钮（根据showTriggerButton和mode决定）
+        if ($showTriggerButton && $mode === 'add') {
             $formHtml .= '<button type="button" class="' . $buttonClass . ' w-form-trigger" onclick="DataTableFormManager.openModal(\'' . $id . '\', \'add\')">';
-            $formHtml .= '<i class="' . $buttonIcon . '"></i>';
+            $formHtml .= '<i class="' . $buttonIcon . '"></i> ';
             $formHtml .= $buttonText;
             $formHtml .= '</button>';
         }
 
-        // 引入CSS和JS文件
-        $formHtml .= '<link rel="stylesheet" href="' . \Weline\Framework\App\Env::getInstance()->getBaseUrl() . 'pub/static/Weline/default/Weline/DataTable/view/statics/css/datatable-enhancements.css">';
+        // 内联CSS样式到HTML中
+        $cssFile = __DIR__ . '/../../view/statics/css/datatable-form.css';
+        if (file_exists($cssFile)) {
+            $cssContent = file_get_contents($cssFile);
+            // 移除CSS注释以提高性能（可选）
+            $cssContent = preg_replace('/\/\*.*?\*\//s', '', $cssContent);
+            $cssContent = preg_replace('/\s+/', ' ', $cssContent); // 压缩空白
+            $formHtml .= '<style id="w-form-styles-' . $id . '">' . $cssContent . '</style>';
+        }
+        
+        // 引入JS文件
         $formHtml .= '<script src="' . \Weline\Framework\App\Env::getInstance()->getBaseUrl() . 'pub/static/Weline/default/Weline/DataTable/view/statics/js/datatable-form-manager.js"></script>';
         $formHtml .= '<script>';
         $formHtml .= 'console.log("d-form 脚本开始执行，表单ID: ' . $id . '");';

@@ -472,4 +472,14 @@ class TableContext
     {
         self::$templateFields = [];
     }
+
+    /**
+     * 清除所有上下文（用于测试）
+     */
+    public static function clearAll(): void
+    {
+        self::$tableContexts = [];
+        self::$renderStack = [];
+        self::$templateFields = [];
+    }
 } 
