@@ -14,9 +14,11 @@ use Weline\Ai\Service\AiChatService;
  */
 class Chat extends FrontendRestController
 {
-    public function __construct(
-        private readonly AiChatService $chatService
-    ) {
+    private AiChatService $chatService;
+
+    public function __construct(AiChatService $chatService)
+    {
+        $this->chatService = $chatService;
     }
 
     /**
