@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- CDN缓存清理事件 -->
+    <event name="Weline_Cdn::clear">
+        <observer name="Weline_Cdn::clear_observer" 
+                  instance="Weline\Cdn\Observer\Clear" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
+    
+    <!-- CDN预热URL投递事件 -->
+    <event name="Weline_Cdn::send_warmup">
+        <observer name="Weline_Cdn::send_warmup_observer" 
+                  instance="Weline\Cdn\Observer\WarmupSend" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="0"/>
+    </event>
+</config>
+

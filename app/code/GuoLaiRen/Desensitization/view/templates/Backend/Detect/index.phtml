@@ -416,14 +416,19 @@ function initDetectModal() {
         backdrop: 'static'
     });
 
-    // 统一在隐藏后做彻底清理，防止残留 backdrop / body 状态
+    // 隐藏后仅在无其它可见弹窗时清理 body 状态，避免与 Bootstrap 的销毁流程冲突
     detectLoadingModalEl.addEventListener('hidden.bs.modal', () => {
-        // 移除所有 modal-backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-        // 恢复 body 状态
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+        const anyModalShown = document.querySelector('.modal.show');
+        if (!anyModalShown) {
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            // 若仍有遗留 backdrop 且没有可见弹窗，再做兜底清理
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length) {
+                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
+            }
+        }
     });
 }
 
@@ -448,12 +453,18 @@ function showLoadingModal() {
 function hideLoadingModal() {
     if (!detectLoadingModalInstance) return;
     detectLoadingModalInstance.hide();
-    // 保险：等待过渡完成后再次清理残留（即使事件监听已清理）
+    // 兜底：仅当没有其它弹窗时再清理 body 与遗留 backdrop
     setTimeout(() => {
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+        const anyModalShown = document.querySelector('.modal.show');
+        if (!anyModalShown) {
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length) {
+                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
+            }
+        }
     }, 300);
 }
 
@@ -488,7 +499,7 @@ function executeDetect() {
     const resultFooter = document.getElementById('resultFooter');
     
     detectionContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>正在检测...</div>';
-    resultFooter.style.display = 'none';
+    if (resultFooter) resultFooter.style.display = 'none';
 
     fetch('<?= $this->getBackendUrl('*/backend/detect/execute') ?>', {
         method: 'POST',
@@ -497,20 +508,16 @@ function executeDetect() {
     })
     .then(response => response.json())
     .then(data => {
-        // 统一关闭弹窗并清理
-        hideLoadingModal();
-        
         if (data.success) {
+            // 成功才关闭加载弹窗
+            hideLoadingModal();
             detectionData = data.data;
             displayDetectionResult(data.data);
             
         } else {
-            // 在弹窗中显示错误
+            // 不关闭弹窗，直接切换为错误内容，避免隐藏/显示竞态
             const isAIError = data.message && data.message.includes('AI');
             showErrorInModal(data.message, isAIError);
-            // 切换为可关闭并展示
-            initDetectModal();
-            if (detectLoadingModalInstance) detectLoadingModalInstance.show();
             
             // 同时在页面上显示错误信息
             detectionContent.innerHTML = `<div class="alert alert-danger">
@@ -631,26 +638,152 @@ function displayDetectionResult(result) {
 
 // 标记敏感内容
 function markSensitiveContent(content, positions) {
-    if (!positions || positions.length === 0) {
-        return content;
+    if (!positions || positions.length === 0) return content;
+
+    // —————————— 通用偏移标注方案 ——————————
+    // 1) Grapheme/码点到 UTF-16 码元索引映射
+    const useGrapheme = (typeof Intl !== 'undefined' && Intl.Segmenter);
+    let units = [];
+    if (useGrapheme) {
+        const seg = new Intl.Segmenter('zh-CN', { granularity: 'grapheme' });
+        for (const s of seg.segment(content)) units.push(s.segment);
+    } else {
+        units = Array.from(content); // 按码点
     }
-    
-    // 按起始位置排序，从后往前处理避免位置偏移
-    const sortedPositions = positions.sort((a, b) => b.start - a.start);
-    
-    let markedContent = content;
-    sortedPositions.forEach(pos => {
-        if (pos.start >= 0 && pos.end <= markedContent.length && pos.start < pos.end) {
-            const before = markedContent.substring(0, pos.start);
-            // 使用检测到的实际内容，如果没有则从原文中提取
-            const matchText = pos.match || markedContent.substring(pos.start, pos.end);
-            const marked = `<span class="highlight-marked" data-type="${pos.type || ''}" title="${pos.type || '敏感内容'}">${matchText}</span>`;
-            const after = markedContent.substring(pos.end);
-            markedContent = before + marked + after;
+    const uToCu = [0];
+    for (let i = 0, cu = 0; i < units.length; i++) {
+        uToCu[i] = cu;
+        const code = units[i].codePointAt(0);
+        cu += (code > 0xFFFF) ? 2 : 1;
+    }
+    const totalCu = [...content].length === units.length ? content.length : content.length; // 安全使用原 length
+    uToCu[units.length] = totalCu;
+    const toCu = (uIdx) => {
+        if (uIdx <= 0) return 0;
+        if (uIdx >= uToCu.length) return totalCu;
+        return uToCu[uIdx];
+    };
+
+    // 2) 区间标准化与就近纠偏（利用 match 文本）
+    const norm = positions
+        .map(p => ({
+            start: Math.max(0, Number(p.start ?? 0)),
+            end: Math.max(0, Number(p.end ?? 0)),
+            type: p.type || '',
+            match: p.match || ''
+        }))
+        .filter(p => p.end > p.start);
+
+    const adjustByMatch = (p) => {
+        if (!p.match) return p;
+        // 在 ±128 个“单位”(码点/字素)窗口内就近搜寻 match
+        const win = 128;
+        const startU = Math.max(0, p.start - win);
+        const endU = Math.min(units.length, p.end + win);
+        const windowText = content.substring(toCu(startU), toCu(endU));
+        let idxCu = windowText.indexOf(p.match);
+        if (idxCu >= 0) {
+            // 将窗口内的 CU 位置映射回全局 CU，再反推 U 索引
+            const baseCu = toCu(startU);
+            const absStartCu = baseCu + idxCu;
+            const absEndCu = absStartCu + p.match.length;
+            // 通过二分查找找到最接近的 U 边界
+            const toU = (cu) => {
+                let lo = 0, hi = uToCu.length - 1;
+                while (lo < hi) {
+                    const mid = (lo + hi) >> 1;
+                    if (uToCu[mid] <= cu) lo = mid + 1; else hi = mid;
+                }
+                return Math.max(0, lo - 1);
+            };
+            const newStartU = toU(absStartCu);
+            const newEndU = toU(absEndCu);
+            return { ...p, start: newStartU, end: Math.max(newStartU + 1, newEndU) };
         }
-    });
-    
-    return markedContent;
+        // 路径2：忽略空白进行匹配（处理 AI 返回忽略空格/换行导致的偏移）
+        const stripWs = (s) => s.replace(/[\s\u00A0\u200B\u202F\u3000]+/g, '');
+        const windowUnits = Array.from(windowText);
+        const compactChars = [];
+        const compactMap = []; // 紧凑索引 -> 原窗口内 CU 起始
+        let cuOffset = 0;
+        for (let i = 0; i < windowUnits.length; i++) {
+            const ch = windowUnits[i];
+            const code = ch.codePointAt(0);
+            const cuLen = (code > 0xFFFF) ? 2 : 1;
+            const isWs = /[\s\u00A0\u200B\u202F\u3000]/.test(ch);
+            if (!isWs) {
+                compactChars.push(ch);
+                compactMap.push(cuOffset);
+            }
+            cuOffset += cuLen;
+        }
+        const compactWindow = compactChars.join('');
+        const compactMatch = stripWs(p.match);
+        const idxCompact = compactWindow.indexOf(compactMatch);
+        if (idxCompact >= 0) {
+            const baseCu = toCu(startU);
+            const startCuInWindow = compactMap[idxCompact] || 0;
+            // 估算结束 CU：累加紧凑匹配长度对应的 CU（取末尾映射或末尾）
+            const endIndexCompact = idxCompact + compactMatch.length;
+            const endCuInWindow = endIndexCompact < compactMap.length
+                ? compactMap[endIndexCompact]
+                : (windowText.length);
+            const absStartCu = baseCu + startCuInWindow;
+            const absEndCu = baseCu + endCuInWindow;
+            const toU = (cu) => {
+                let lo = 0, hi = uToCu.length - 1;
+                while (lo < hi) {
+                    const mid = (lo + hi) >> 1;
+                    if (uToCu[mid] <= cu) lo = mid + 1; else hi = mid;
+                }
+                return Math.max(0, lo - 1);
+            };
+            const newStartU = toU(absStartCu);
+            const newEndU = toU(absEndCu);
+            return { ...p, start: newStartU, end: Math.max(newStartU + 1, newEndU) };
+        }
+        return p;
+    };
+
+    let adjusted = norm.map(adjustByMatch);
+
+    // 3) 合并重叠/相邻区间（按开始升序）
+    adjusted.sort((a, b) => a.start - b.start || a.end - b.end);
+    const merged = [];
+    for (const cur of adjusted) {
+        if (!merged.length) { merged.push({ ...cur }); continue; }
+        const last = merged[merged.length - 1];
+        if (cur.start <= last.end) {
+            last.end = Math.max(last.end, cur.end);
+            // 类型优先保留风险更高的一类，或拼接
+            last.type = last.type || cur.type;
+        } else {
+            merged.push({ ...cur });
+        }
+    }
+
+    // 4) 用文本节点分割+包裹，避免偏移
+    const container = document.createElement('div');
+    const textNode = document.createTextNode(content);
+    container.appendChild(textNode);
+
+    // 从后往前，依据 U 索引转换到 CU
+    for (let i = merged.length - 1; i >= 0; i--) {
+        const seg = merged[i];
+        const startCu = toCu(seg.start);
+        const endCu = toCu(seg.end);
+        if (startCu >= endCu || startCu < 0 || endCu > textNode.length) continue;
+        const tail = textNode.splitText(endCu);
+        const middle = textNode.splitText(startCu);
+        const span = document.createElement('span');
+        span.className = 'highlight-marked';
+        if (seg.type) span.setAttribute('data-type', String(seg.type));
+        span.title = String(seg.type || '敏感内容');
+        span.appendChild(middle);
+        textNode.parentNode.insertBefore(span, tail);
+    }
+
+    return container.innerHTML;
 }
 
 // 开始润色
