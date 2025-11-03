@@ -150,6 +150,8 @@ class Upgrade extends CommandAbstract
     private function getDirFileCommand(): array
     {
         $commands = [];
+        $processedClasses = [];
+        $processedFiles = [];
 
         # 模组命令
         $active_modules = Env::getInstance()->getActiveModules();
@@ -160,25 +162,40 @@ class Upgrade extends CommandAbstract
             $this->scan->globFile($pattern, $files, '.php', $module['base_path'], '', true, true);
             foreach ($files as $file) {
                 $class = $module['namespace_path'] . '\\' . $file;
-                // 排除非框架系统命令类
-                if (class_exists($class)) {
+                $filePath = $module['base_path'] . str_replace('\\', DS, $file) . '.php';
+                $fileReal = is_file($filePath) ? realpath($filePath) : $filePath;
+                if ($fileReal && isset($processedFiles[$fileReal])) {
+                    continue;
+                }
+                // 直接按文件加载一次，避免命名空间不一致导致的重复加载
+                $before = get_declared_classes();
+                if ($fileReal && is_file($fileReal)) {
+                    include_once $fileReal;
+                    $processedFiles[$fileReal] = true;
+                }
+                $after = get_declared_classes();
+                $newClasses = array_diff($after, $before);
+                // 逐个检查新声明的类
+                foreach ($newClasses as $declaredClass) {
+                    if (isset($processedClasses[$declaredClass])) {
+                        continue;
+                    }
                     try {
-                        $classRef = ObjectManager::getReflectionInstance($class);
+                        $classRef = ObjectManager::getReflectionInstance($declaredClass);
                         if ($classRef->isAbstract()) {
                             continue;
                         }
-                        $command_class = ObjectManager::getInstance($class);
+                        $command_class = ObjectManager::getInstance($declaredClass);
                         if ($command_class instanceof CommandInterface) {
                             $file_array = explode('\\', $file);
                             array_shift($file_array);
-                            $file = implode(':', $file_array);
+                            $fileKey = implode(':', $file_array);
                             # 处理大写字母转化成-开头
-                            $file = w_split_by_capital($file);
+                            $fileKey = w_split_by_capital($fileKey);
                             $file_str = '';
                             $pre_end_with = '';
                             $pre_is_one = false;
-                            foreach ($file as $key => &$item) {
-                                # 如果$item长度只有1个，那么直接跳过
+                            foreach ($fileKey as $key => &$item) {
                                 if (1 == strlen($item)) {
                                     $file_str .= $item;
                                     $pre_is_one = true;
@@ -212,18 +229,17 @@ class Upgrade extends CommandAbstract
                             $command_prefix = strtolower(implode(':', $file_array));
                             $commands[$command_prefix . '#' . $module_name][$command] = [
                                 'tip' => $command_class->tip(),
-                                'class' => $class,
+                                'class' => $declaredClass,
                                 'type' => 'module',
                                 'module' => $module['name']
                             ];
-                        } else {
-                            if (DEV && CLI) {
-                                $this->printer->warning(__('命令类：%{1} 必须继承：%{2}', [$class, CommandInterface::class]));
-                            }
+                            $processedClasses[$declaredClass] = true;
                         }
-                    } catch (\Exception $exception) {
-                        // 异常的类不加入命令
-                        $this->printer->warning($exception->getMessage());
+                    } catch (\Throwable $exception) {
+                        if (DEV && CLI) {
+                            $this->printer->warning($exception->getMessage());
+                        }
+                        continue;
                     }
                 }
             }
@@ -250,41 +266,45 @@ class Upgrade extends CommandAbstract
         );
         foreach ($framework_files as $class) {
             // 排除非框架系统命令类
-            if (class_exists($class)) {
-                try {
-                    $classRef = ObjectManager::getReflectionInstance($class);
-                    if ($classRef->isAbstract()) {
-                        continue;
+            // 框架类以类名去重即可
+            if (isset($processedClasses[$class])) {
+                continue;
+            }
+            try {
+                $classRef = ObjectManager::getReflectionInstance($class);
+                if ($classRef->isAbstract()) {
+                    continue;
+                }
+                $command_class = ObjectManager::getInstance($class);
+                if ($command_class instanceof CommandInterface) {
+                    $class_array = explode('\\', $class);
+                    array_shift($class_array);
+                    array_shift($class_array);
+                    $framework_module = array_shift($class_array);
+                    array_shift($class_array);
+                    $command = implode(':', $class_array);
+                    $command = str_replace('\\', ':', strtolower($command));
+                    array_pop($class_array);
+                    $command_prefix = strtolower(implode(':', $class_array));
+                    $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$command] = [
+                        'tip' => $command_class->tip(),
+                        'class' => $class,
+                        'type' => 'framework',
+                        'module' => 'Weline_Framework'
+                    ];
+                    $processedClasses[$class] = true;
+                } else {
+                    if (DEV && CLI) {
+                        $this->printer->warning(__('命令类：%{1} 必须继承：%{2}', [$class, CommandInterface::class]));
                     }
-                    $command_class = ObjectManager::getInstance($class);
-                    if ($command_class instanceof CommandInterface) {
-                        $class_array = explode('\\', $class);
-                        array_shift($class_array);
-                        array_shift($class_array);
-                        $framework_module = array_shift($class_array);
-                        array_shift($class_array);
-                        $command = implode(':', $class_array);
-                        $command = str_replace('\\', ':', strtolower($command));
-                        array_pop($class_array);
-                        $command_prefix = strtolower(implode(':', $class_array));
-                        $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$command] = [
-                            'tip' => $command_class->tip(),
-                            'class' => $class,
-                            'type' => 'framework',
-                            'module' => 'Weline_Framework'
-                        ];
-                    } else {
-                        if (DEV && CLI) {
-                            $this->printer->warning(__('命令类：%{1} 必须继承：%{2}', [$class, CommandInterface::class]));
-                        }
-                    }
-                } catch (\Exception $exception) {
-                    // 异常的类不加入命令
+                }
+            } catch (\Throwable $exception) {
+                // 异常的类不加入命令
+                if (DEV && CLI) {
                     $this->printer->warning($exception->getMessage());
                 }
             }
         }
-//        p($commands);
 
         return $commands;
     }
