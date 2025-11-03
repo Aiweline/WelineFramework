@@ -12,6 +12,13 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -186,7 +193,7 @@ class Page extends BackendController
                 $parentPageModel->clear()->load($parentId);
                 if ($parentPageModel->getId()) {
                     // 强制使用父页面的语言设置
-                    $selectedLocales = json_decode($parentPageModel->getData(PageModel::fields_LOCALES), true) ?: [];
+                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::fields_LOCALES) ?? '') ?? '', true) ?: [];
                     $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
                     
                     // 确保默认语言在列表中
@@ -208,10 +215,10 @@ class Page extends BackendController
             // 创建页面
             $page = clone $this->pageModel;
             
-            // CTA 事件名称：如果为空则自动生成为 handle_form_submit
+            // CTA 事件名称：如果为空则自动生成为 cta_{handle}_click
             $ctaEventName = $data['cta_event_name'] ?? '';
             if (empty($ctaEventName) && !empty($data['handle'])) {
-                $ctaEventName = $data['handle'] . '_form_submit';
+                $ctaEventName = 'cta_' . $data['handle'] . '_click';
             }
             
             $page->clearData()
@@ -449,7 +456,7 @@ class Page extends BackendController
                 $parentPageModel->clear()->load($currentParentId);
                 if ($parentPageModel->getId()) {
                     // 强制使用父页面的语言设置
-                    $selectedLocales = json_decode($parentPageModel->getData(PageModel::fields_LOCALES), true) ?: [];
+                    $selectedLocales = json_decode(($parentPageModel->getData(PageModel::fields_LOCALES) ?? '') ?? '', true) ?: [];
                     $defaultLocale = $parentPageModel->getData(PageModel::fields_DEFAULT_LOCALE);
                     
                     // 确保默认语言在列表中
@@ -484,10 +491,10 @@ class Page extends BackendController
                 $existingSettings[$currentStyleCode] = $currentStyleSettings;
             }
             
-            // CTA 事件名称：如果为空则自动生成为 handle_form_submit
+            // CTA 事件名称：如果为空则自动生成为 cta_{handle}_click
             $ctaEventName = $data['cta_event_name'] ?? '';
             if (empty($ctaEventName) && !empty($data['handle'])) {
-                $ctaEventName = $data['handle'] . '_form_submit';
+                $ctaEventName = 'cta_' . $data['handle'] . '_click';
             }
             
             // 更新页面
@@ -736,10 +743,11 @@ class Page extends BackendController
             // 强制扫描样式模板（实时获取最新数据）
             Style::forceScan();
             
-            // 获取所有可用样式
+            // 获取所有可用样式（只返回已发布的模板）
             $styles = clone $this->styleModel;
             $styleList = $styles->clear()
                 ->where(Style::fields_IS_ACTIVE, 1)
+                ->where(Style::fields_IS_PUBLISHED, 1)
                 ->order(Style::fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetch()
@@ -839,7 +847,7 @@ class Page extends BackendController
                         if ($localDesc->getId()) {
                             $configJson = $localDesc->getData('config');
                             if ($configJson) {
-                                $config = json_decode($configJson, true);
+                                $config = json_decode($configJson ?? '', true);
                                 if (isset($config['style_config']) && is_array($config['style_config'])) {
                                     // 语言特定配置覆盖主配置
                                     $pageSettings = array_merge($cleanMainSettings, $config['style_config']);
@@ -1154,6 +1162,582 @@ class Page extends BackendController
             if (DEV) {
                 error_log("Failed to create URL rewrite for page: " . $e->getMessage());
             }
+        }
+    }
+
+    /**
+     * 可视化配置文件上传（用于样式字段 file 类型）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_upload', '可视化字段文件上传', '', '上传文件到媒体目录', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function uploadAsset()
+    {
+        try {
+            if (!isset($_FILES['file'])) {
+                return $this->fetchJson(['success' => false, 'message' => '缺少文件参数']);
+            }
+            $file = $_FILES['file'];
+            if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                return $this->fetchJson(['success' => false, 'message' => '文件上传失败']);
+            }
+
+            $allowedMime = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            if (!in_array($mime, $allowedMime, true)) {
+                return $this->fetchJson(['success' => false, 'message' => '不支持的文件类型']);
+            }
+
+            $ext = pathinfo($file['name'], PATHINFO_EXTENSION) ?: $this->guessExtByMime($mime);
+            $baseDir = BP . 'pub/media/pagebuilder/uploads/';
+            if (!is_dir($baseDir)) {
+                @mkdir($baseDir, 0775, true);
+            }
+            $subDir = date('Y/m/d/');
+            $targetDir = $baseDir . $subDir;
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0775, true);
+            }
+            $filename = uniqid('pb_', true) . ($ext ? ('.' . strtolower($ext)) : '');
+            $targetPath = $targetDir . $filename;
+            if (!@move_uploaded_file($file['tmp_name'], $targetPath)) {
+                return $this->fetchJson(['success' => false, 'message' => '保存文件失败']);
+            }
+            $publicUrl = '/media/pagebuilder/uploads/' . $subDir . $filename;
+            return $this->fetchJson(['success' => true, 'url' => $publicUrl]);
+        } catch (\Exception $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 列出文件管理器中的资源（限制在 pub/media/page-build/ 下）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_list_assets', '列出页面资源', '', '列出页面资源')]
+    public function listAssets()
+    {
+        try {
+            $handle = trim((string)($this->request->getParam('handle') ?? ''));
+            $sub = trim((string)($this->request->getParam('sub') ?? ''));
+            if ($handle === '') {
+                throw new \Exception(__('缺少 handle'));
+            }
+            $baseDir = rtrim(BP . 'pub/media/page-build', '/');
+            $root = $baseDir . '/' . $handle;
+            if (!is_dir($root)) {
+                @mkdir($root, 0777, true);
+            }
+            // 规范化子路径，禁止跳出 handle 根目录
+            $relative = trim($sub, '/');
+            $path = $root . ($relative ? ('/' . $relative) : '');
+            $realRoot = realpath($root) ?: $root;
+            $realPath = realpath($path) ?: $path;
+            if (strpos($realPath, $realRoot) !== 0) {
+                $realPath = $realRoot; // 回退到根
+                $relative = '';
+            }
+
+            $items = [];
+            if (is_dir($realPath)) {
+                $dh = opendir($realPath);
+                if ($dh) {
+                    while (($file = readdir($dh)) !== false) {
+                        if ($file === '.' || $file === '..') continue;
+                        $full = $realPath . '/' . $file;
+                        $isDir = is_dir($full);
+                        $items[] = [
+                            'name' => $file,
+                            'type' => $isDir ? 'dir' : 'file',
+                            'size' => $isDir ? 0 : (filesize($full) ?: 0),
+                            'mtime' => filemtime($full) ?: time(),
+                            // 复制地址以 /pub 开头
+                            'url' => $isDir ? '' : ('/pub/media/page-build/' . $handle . ($relative ? '/' . $relative : '') . '/' . $file)
+                        ];
+                    }
+                    closedir($dh);
+                }
+            }
+
+            usort($items, function ($a, $b) {
+                if ($a['type'] === $b['type']) return strcmp($a['name'], $b['name']);
+                return $a['type'] === 'dir' ? -1 : 1;
+            });
+
+            return $this->fetchJson([
+                'success' => true,
+                'handle' => $handle,
+                'sub' => $relative,
+                'items' => $items,
+                'root' => '/media/page-build/' . $handle
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 上传文件到指定子目录（限制在 pub/media/page-build/{handle}/ 下）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_upload_asset_to', '上传页面资源(指定目录)', '', '上传页面资源(指定目录)')]
+    public function uploadAssetTo()
+    {
+        try {
+            $handle = trim((string)($this->request->getParam('handle') ?? ''));
+            $sub = trim((string)($this->request->getParam('sub') ?? ''));
+            if ($handle === '') {
+                throw new \Exception(__('缺少 handle'));
+            }
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                throw new \Exception(__('文件上传失败或未选择文件'));
+            }
+            $file = $_FILES['file'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+            if (!in_array($ext, $allowed)) {
+                throw new \Exception(__('只允许上传图片文件 (jpg, jpeg, png, gif, webp, svg)'));
+            }
+
+            $baseDir = rtrim(BP . 'pub/media/page-build', '/');
+            $root = $baseDir . '/' . $handle;
+            $relative = trim($sub, '/');
+            $targetDir = $root . ($relative ? ('/' . $relative) : '');
+            // 防跳出
+            $realRoot = realpath($root) ?: $root;
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0777, true);
+            }
+            $realTarget = realpath($targetDir) ?: $targetDir;
+            if (strpos($realTarget, $realRoot) !== 0) {
+                $realTarget = $realRoot;
+            }
+
+            $fileName = uniqid('pb_') . '.' . $ext;
+            $filePath = $realTarget . '/' . $fileName;
+            if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+                throw new \Exception(__('无法将文件移动到目标目录'));
+            }
+
+            $relativePath = '/pub/media/page-build/' . $handle . ($relative ? '/' . $relative : '') . '/' . $fileName;
+
+            return $this->fetchJson([
+                'success' => true,
+                'url' => $relativePath,
+                'path' => $relativePath
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    private function guessExtByMime(string $mime): string
+    {
+        return match ($mime) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
+            default => 'bin',
+        };
+    }
+
+    /**
+     * 导出页面配置到Excel
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_export_config', '导出页面配置', '', '导出页面配置到Excel')]
+    public function exportConfig()
+    {
+        try {
+            $pageId = (int)$this->request->getGet('page_id');
+            $styleCode = trim((string)$this->request->getGet('style_code'));
+            
+            if ($pageId <= 0 || empty($styleCode)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('参数不完整')
+                ]);
+            }
+            
+            // 加载页面
+            $page = clone $this->pageModel;
+            $page->load($pageId);
+            
+            if (!$page->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面不存在')
+                ]);
+            }
+            
+            // 强制扫描样式模板
+            Style::forceScan();
+            
+            // 获取样式配置
+            $styleModel = clone $this->styleModel;
+            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            
+            if (!$styleModel->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('样式模板不存在')
+                ]);
+            }
+            
+            $configGroups = $styleModel->getConfigGroups();
+            
+            // 获取页面配置值
+            $pageSettings = [];
+            $allSettings = $page->getStyleSetting();
+            if (isset($allSettings[$styleCode]) && is_array($allSettings[$styleCode])) {
+                foreach ($allSettings[$styleCode] as $key => $value) {
+                    if (!is_array($value)) {
+                        $pageSettings[$key] = $value;
+                    }
+                }
+            }
+            
+            // 使用PhpSpreadsheet生成Excel
+            $spreadsheet = new Spreadsheet();
+            $spreadsheet->removeSheetByIndex(0); // 删除默认sheet
+            
+            // 需要导出的文件类型
+            $fileTypes = ['header', 'content', 'footer'];
+            
+            foreach ($fileTypes as $fileType) {
+                if (!isset($configGroups[$fileType])) {
+                    continue;
+                }
+                
+                $fileGroup = $configGroups[$fileType];
+                $sheet = new Worksheet($spreadsheet, ucfirst($fileType));
+                $spreadsheet->addSheet($sheet);
+                
+                // 设置表头
+                $sheet->setCellValue('A1', __('配置Key'));
+                $sheet->setCellValue('B1', __('标签Label'));
+                $sheet->setCellValue('C1', __('值（填写此处）'));
+                $sheet->setCellValue('D1', __('提示Tip'));
+                
+                // 设置表头样式（加粗、悬浮、垂直居中）
+                $headerStyle = [
+                    'font' => ['bold' => true],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'E0E0E0']
+                    ],
+                    'alignment' => [
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'horizontal' => Alignment::HORIZONTAL_LEFT
+                    ]
+                ];
+                $sheet->getStyle('A1:D1')->applyFromArray($headerStyle);
+                
+                // 设置列宽
+                $sheet->getColumnDimension('A')->setWidth(30);
+                $sheet->getColumnDimension('B')->setWidth(25);
+                $sheet->getColumnDimension('C')->setWidth(40);
+                $sheet->getColumnDimension('D')->setWidth(50);
+                
+                // 冻结首行
+                $sheet->freezePane('A2');
+                
+                // 设置默认单元格样式（垂直居中）
+                $defaultStyle = [
+                    'alignment' => [
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'horizontal' => Alignment::HORIZONTAL_LEFT
+                    ]
+                ];
+                
+                $row = 2;
+                
+                // 遍历分组和配置项
+                if (isset($fileGroup['groups']) && is_array($fileGroup['groups'])) {
+                    foreach ($fileGroup['groups'] as $group) {
+                        if (isset($group['configs']) && is_array($group['configs'])) {
+                            foreach ($group['configs'] as $configKey => $config) {
+                                // 优先使用页面配置值，否则使用默认值
+                                $value = $pageSettings[$configKey] ?? $config['default'] ?? '';
+                                
+                                // 获取tip（从description或help_content）
+                                $tip = '';
+                                if (!empty($config['description'])) {
+                                    $tip = $config['description'];
+                                } elseif (!empty($group['help_content'])) {
+                                    $tip = $group['help_content'];
+                                }
+                                
+                                $sheet->setCellValue('A' . $row, $configKey);
+                                $sheet->setCellValue('B' . $row, $config['label'] ?? '');
+                                $sheet->setCellValue('C' . $row, $value);
+                                $sheet->setCellValue('D' . $row, $tip);
+                                
+                                // 设置所有列的垂直居中
+                                $sheet->getStyle('A' . $row . ':D' . $row)->applyFromArray($defaultStyle);
+                                
+                                // 设置第三列（值列）为红色边框、自动换行、自适应高度
+                                $valueCellStyle = [
+                                    'borders' => [
+                                        'allBorders' => [
+                                            'borderStyle' => Border::BORDER_THIN,
+                                            'color' => ['rgb' => 'FF0000']
+                                        ]
+                                    ],
+                                    'alignment' => [
+                                        'vertical' => Alignment::VERTICAL_CENTER,
+                                        'horizontal' => Alignment::HORIZONTAL_LEFT,
+                                        'wrapText' => true  // 启用自动换行
+                                    ]
+                                ];
+                                $sheet->getStyle('C' . $row)->applyFromArray($valueCellStyle);
+                                
+                                // 为value列设置自适应行高
+                                // 根据文本内容计算需要的行数
+                                $valueStr = (string)$value;
+                                $colWidth = 40; // C列宽度（字符数）
+                                $lineCount = 1;
+                                
+                                if (!empty($valueStr)) {
+                                    // 计算文本的实际显示宽度
+                                    // Excel中每个字符大约7像素宽，列宽40字符约280像素
+                                    // 估算：中文字符宽度约等于2个英文字符
+                                    $displayWidth = 0;
+                                    $maxDisplayWidth = $colWidth * 7; // 列宽对应的像素宽度（约）
+                                    
+                                    $chars = mb_str_split($valueStr, 1, 'UTF-8');
+                                    foreach ($chars as $char) {
+                                        // 判断是否为中文字符
+                                        if (preg_match('/[\x{4e00}-\x{9fff}]/u', $char)) {
+                                            $displayWidth += 14; // 中文字符占14像素
+                                        } else {
+                                            $displayWidth += 7;  // 英文字符占7像素
+                                        }
+                                    }
+                                    
+                                    // 计算需要的行数（考虑自动换行）
+                                    $lineCount = max(1, ceil($displayWidth / max(1, $maxDisplayWidth)));
+                                    
+                                    // 如果文本中包含换行符，增加行数
+                                    $newlineCount = substr_count($valueStr, "\n");
+                                    if ($newlineCount > 0) {
+                                        $lineCount += $newlineCount;
+                                    }
+                                }
+                                
+                                // 设置行高（每行约15磅，最小15，最大不超过200）
+                                // Excel中1磅约等于1.33像素，行高15磅约等于20像素
+                                $rowHeight = max(15, min(200, 15 + ($lineCount - 1) * 15));
+                                $sheet->getRowDimension($row)->setRowHeight($rowHeight);
+                                
+                                $row++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果没有数据，至少创建一个header sheet
+            if ($spreadsheet->getSheetCount() === 0) {
+                $sheet = new Worksheet($spreadsheet, 'Header');
+                $spreadsheet->addSheet($sheet);
+                $sheet->setCellValue('A1', __('配置Key'));
+                $sheet->setCellValue('B1', __('标签Label'));
+                $sheet->setCellValue('C1', __('值（填写此处）'));
+                $sheet->setCellValue('D1', __('提示Tip'));
+                $sheet->getStyle('A1:D1')->applyFromArray($headerStyle ?? []);
+            }
+            
+            // 设置第一个sheet为活动sheet
+            $spreadsheet->setActiveSheetIndex(0);
+            
+            // 输出Excel文件
+            $writer = new Xlsx($spreadsheet);
+            
+            // 设置响应头
+            $filename = sprintf(
+                'page-config-%d-%s-%s.xlsx',
+                $pageId,
+                $styleCode,
+                date('YmdHis')
+            );
+            
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            $writer->save('php://output');
+            exit;
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 从Excel导入页面配置
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_import_config', '导入页面配置', '', '从Excel导入页面配置')]
+    public function importConfig()
+    {
+        try {
+            $pageId = (int)$this->request->getPost('page_id');
+            $styleCode = trim((string)$this->request->getPost('style_code'));
+            
+            // 获取上传的文件
+            $uploadedFile = $this->request->getFile('config_file');
+            
+            // 如果没有获取到，尝试直接从 $_FILES 获取
+            if (!$uploadedFile && isset($_FILES['config_file'])) {
+                $uploadedFile = $_FILES['config_file'];
+            }
+            
+            if ($pageId <= 0 || empty($styleCode)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('参数不完整')
+                ]);
+            }
+            
+            if (!$uploadedFile || !isset($uploadedFile['tmp_name']) || !is_uploaded_file($uploadedFile['tmp_name'])) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('请选择要导入的Excel文件'),
+                    'debug' => [
+                        'has_file' => isset($_FILES['config_file']),
+                        'files_keys' => array_keys($_FILES),
+                        'uploaded_file' => $uploadedFile ? 'exists' : 'null'
+                    ]
+                ]);
+            }
+            
+            // 加载页面
+            $page = clone $this->pageModel;
+            $page->load($pageId);
+            
+            if (!$page->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面不存在')
+                ]);
+            }
+            
+            // 强制扫描样式模板以获取配置定义
+            Style::forceScan();
+            
+            // 获取样式配置定义
+            $styleModel = clone $this->styleModel;
+            $styleModel->clear()->where(Style::fields_CODE, $styleCode)->find()->fetch();
+            
+            if (!$styleModel->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('样式模板不存在')
+                ]);
+            }
+            
+            $configGroups = $styleModel->getConfigGroups();
+            
+            // 收集所有有效的配置key
+            $validConfigKeys = [];
+            foreach ($configGroups as $fileGroup) {
+                if (isset($fileGroup['groups']) && is_array($fileGroup['groups'])) {
+                    foreach ($fileGroup['groups'] as $group) {
+                        if (isset($group['configs']) && is_array($group['configs'])) {
+                            foreach ($group['configs'] as $configKey => $config) {
+                                $validConfigKeys[$configKey] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 读取Excel文件
+            $spreadsheet = IOFactory::load($uploadedFile['tmp_name']);
+            
+            $importedConfig = [];
+            $importCount = 0;
+            $skipCount = 0;
+            
+            // 遍历所有sheet
+            foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+                $sheetName = strtolower($worksheet->getTitle());
+                
+                // 只处理header、content、footer三个sheet
+                if (!in_array($sheetName, ['header', 'content', 'footer'])) {
+                    continue;
+                }
+                
+                $highestRow = $worksheet->getHighestRow();
+                
+                // 从第二行开始读取（第一行是表头）
+                for ($row = 2; $row <= $highestRow; $row++) {
+                    $configKey = trim((string)$worksheet->getCell('A' . $row)->getValue());
+                    $value = trim((string)$worksheet->getCell('C' . $row)->getValue());
+                    
+                    // 跳过空key
+                    if (empty($configKey)) {
+                        continue;
+                    }
+                    
+                    // 只处理模板中存在的配置项
+                    if (isset($validConfigKeys[$configKey])) {
+                        $importedConfig[$configKey] = $value;
+                        $importCount++;
+                    } else {
+                        $skipCount++;
+                    }
+                }
+            }
+            
+            if (empty($importedConfig)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('未找到有效的配置项')
+                ]);
+            }
+            
+            // 更新页面配置
+            $allSettings = $page->getStyleSetting();
+            if (!is_array($allSettings)) {
+                $allSettings = [];
+            }
+            
+            if (!isset($allSettings[$styleCode])) {
+                $allSettings[$styleCode] = [];
+            }
+            
+            // 合并导入的配置
+            $allSettings[$styleCode] = array_merge($allSettings[$styleCode], $importedConfig);
+            
+            // 保存配置
+            $page->setStyleSetting($allSettings);
+            $page->save();
+            
+            $message = sprintf(
+                __('成功导入 %d 个配置项，跳过 %d 个无效项'),
+                $importCount,
+                $skipCount
+            );
+            
+            return $this->fetchJson([
+                'success' => true,
+                'message' => $message,
+                'imported_count' => $importCount,
+                'skipped_count' => $skipCount
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         }
     }
 }

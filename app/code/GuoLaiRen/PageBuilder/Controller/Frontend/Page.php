@@ -120,14 +120,16 @@ class Page extends FrontendController
             }
         }
         
-        if ($styleCode) {
+		if ($styleCode) {
             // 加载样式信息
             $style = clone $this->styleModel;
-            $style->clear()
-                ->where(Style::fields_CODE, $styleCode)
-                ->where(Style::fields_IS_ACTIVE, 1)
-                ->find()
-                ->fetch();
+			$style->clear()
+				->where(Style::fields_CODE, $styleCode);
+			// 预览模式下允许未激活样式；非预览需限制仅激活样式
+			if (!$isPreview) {
+				$style->where(Style::fields_IS_ACTIVE, 1);
+			}
+			$style->find()->fetch();
             
             if ($style->getId()) {
                 // 获取样式的默认配置（最低优先级）
@@ -153,7 +155,7 @@ class Page extends FrontendController
                 // 从本地化描述中获取翻译的样式配置
                 if ($localizedContent && !empty($localizedContent['config'])) {
                     $translatedConfig = is_string($localizedContent['config']) 
-                        ? json_decode($localizedContent['config'], true) 
+                        ? json_decode($localizedContent['config'] ?? '', true) 
                         : $localizedContent['config'];
                     
                     // 检查是否有 style_config 节点
@@ -227,7 +229,7 @@ class Page extends FrontendController
         $html = '';
         
         // 标题
-        $html .= '<h1 class="page-title">' . htmlspecialchars($content['title']) . '</h1>';
+        $html .= '<h1 class="page-title">' . htmlspecialchars($content['title'] ?? '') . '</h1>';
         
         // 发布时间
         $page = $this->getData('page');
@@ -276,13 +278,13 @@ class Page extends FrontendController
                 
                 // 如果是数组，返回对应的值
                 if (is_array($varData) && isset($varData[$key])) {
-                    return htmlspecialchars($varData[$key]);
+                    return htmlspecialchars($varData[$key] ?? '');
                 }
                 
                 // 如果是对象，尝试调用 getData 方法
                 if (is_object($varData) && method_exists($varData, 'getData')) {
                     $value = $varData->getData($key);
-                    return $value !== null ? htmlspecialchars($value) : '';
+                    return $value !== null ? htmlspecialchars($value ?? '') : '';
                 }
             }
             
@@ -479,9 +481,9 @@ class Page extends FrontendController
             
             $html .= sprintf(
                 '<a href="%s" class="preview-lang-item%s">%s</a>',
-                htmlspecialchars($newUrl),
+                htmlspecialchars($newUrl ?? ''),
                 $isActive,
-                htmlspecialchars($localeName)
+                htmlspecialchars($localeName ?? '')
             );
         }
         

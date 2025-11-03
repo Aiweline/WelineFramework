@@ -12,161 +12,102 @@ declare(strict_types=1);
 namespace Weline\Cdn\Service;
 
 use Weline\Cdn\Model\Account;
+use Weline\Cdn\Model\Domain;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 账户管理服务
  * 
- * 提供账户的CRUD、默认账户设置、模块配置同步等功能
+ * @package Weline_Cdn
  */
 class AccountManager
 {
-    /**
-     * @var Account
-     */
-    private Account $accountModel;
+    private ObjectManager $objectManager;
 
-    /**
-     * 构造函数
-     */
-    public function __construct(Account $accountModel)
+    public function __construct(ObjectManager $objectManager)
     {
-        $this->accountModel = $accountModel;
+        $this->objectManager = $objectManager;
     }
 
     /**
-     * @DESC          # 获取默认账户（按适配器）
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 获取账户模型实例
+     * 
+     * @return Account
+     */
+    private function getAccountModel(): Account
+    {
+        return $this->objectManager->getInstance(Account::class);
+    }
+
+    /**
+     * 获取域名模型实例
+     * 
+     * @return Domain
+     */
+    private function getDomainModel(): Domain
+    {
+        return $this->objectManager->getInstance(Domain::class);
+    }
+
+    /**
+     * 设置默认账户
+     * 
+     * @param int $accountId 账户ID
+     * @return void
+     */
+    public function setDefaultAccount(int $accountId): void
+    {
+        $account = $this->getAccountModel()->reset()->load($accountId);
+        
+        if (!$account->getData(Account::fields_ACCOUNT_ID)) {
+            throw new \InvalidArgumentException(__('账户不存在'));
+        }
+
+        $adapter = $account->getData(Account::fields_ADAPTER);
+        
+        // 先取消该适配器的所有默认账户
+        $this->getAccountModel()->reset()
+            ->where(Account::fields_ADAPTER, $adapter)
+            ->where(Account::fields_IS_DEFAULT, 1)
+            ->update([Account::fields_IS_DEFAULT => 0])
+            ->fetch();
+        
+        // 设置新的默认账户
+        $account->setData(Account::fields_IS_DEFAULT, 1)->save();
+    }
+
+    /**
+     * 获取适配器的默认账户
      * 
      * @param string $adapter 适配器代码
      * @return Account|null
      */
     public function getDefaultAccount(string $adapter): ?Account
     {
-        try {
-            /** @var Account $account */
-            $account = $this->accountModel->clear()
-                ->reset()
-                ->where(Account::fields_ADAPTER, $adapter)
-                ->where(Account::fields_IS_DEFAULT, 1)
-                ->where(Account::fields_STATUS, Account::STATUS_ACTIVE)
-                ->find()
-                ->fetch();
-            
-            return $account->getId() ? $account : null;
-        } catch (\Exception $e) {
-            return null;
-        }
+        $account = $this->getAccountModel()->reset()
+            ->where(Account::fields_ADAPTER, $adapter)
+            ->where(Account::fields_IS_DEFAULT, 1)
+            ->where(Account::fields_STATUS, Account::STATUS_ACTIVE)
+            ->find()
+            ->fetch();
+        
+        return $account->getData(Account::fields_ACCOUNT_ID) ? $account : null;
     }
 
     /**
-     * @DESC          # 设置默认账户
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 获取账户关联的域名列表
      * 
      * @param int $accountId 账户ID
-     * @return bool
-     */
-    public function setDefaultAccount(int $accountId): bool
-    {
-        try {
-            /** @var Account $account */
-            $account = $this->accountModel->clear()->reset()->load($accountId);
-            if (!$account->getId()) {
-                return false;
-            }
-
-            $adapter = $account->getData(Account::fields_ADAPTER);
-
-            // 清除同适配器的其他默认账户
-            $this->accountModel->clear()
-                ->reset()
-                ->where(Account::fields_ADAPTER, $adapter)
-                ->where(Account::fields_IS_DEFAULT, 1)
-                ->where(Account::fields_ID, $accountId, '!=')
-                ->update([Account::fields_IS_DEFAULT => 0]);
-
-            // 设置当前账户为默认
-            $account->setData(Account::fields_IS_DEFAULT, 1)->save();
-
-            return true;
-        } catch (\Exception $e) {
-            error_log("设置默认账户失败: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * @DESC          # 获取所有账户
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param string|null $adapter 适配器过滤（可选）
      * @return array
      */
-    public function getAllAccounts(?string $adapter = null): array
+    public function getAccountDomains(int $accountId): array
     {
-        try {
-            $query = $this->accountModel->clear()->reset();
-            
-            if ($adapter) {
-                $query->where(Account::fields_ADAPTER, $adapter);
-            }
-            
-            return $query->select()->fetchArray();
-        } catch (\Exception $e) {
-            return [];
-        }
-    }
-
-    /**
-     * @DESC          # 获取账户关联的域名数量
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param int $accountId 账户ID
-     * @return int
-     */
-    public function getDomainCount(int $accountId): int
-    {
-        try {
-            /** @var \Weline\Cdn\Model\Domain $domainModel */
-            $domainModel = ObjectManager::getInstance(\Weline\Cdn\Model\Domain::class);
-            return (int)$domainModel->clear()
-                ->reset()
-                ->where(\Weline\Cdn\Model\Domain::fields_ACCOUNT_ID, $accountId)
-                ->count();
-        } catch (\Exception $e) {
-            return 0;
-        }
-    }
-
-    /**
-     * @DESC          # 获取未关联账户的域名列表
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @return array
-     */
-    public function getUnlinkedDomains(): array
-    {
-        try {
-            /** @var \Weline\Cdn\Model\Domain $domainModel */
-            $domainModel = ObjectManager::getInstance(\Weline\Cdn\Model\Domain::class);
-            return $domainModel->clear()
-                ->reset()
-                ->where(\Weline\Cdn\Model\Domain::fields_ACCOUNT_ID, [null, 0], 'in')
-                ->where(\Weline\Cdn\Model\Domain::fields_INHERIT_DEFAULT, 0)
-                ->select()
-                ->fetchArray();
-        } catch (\Exception $e) {
-            return [];
-        }
+        $domains = $this->getDomainModel()->reset()
+            ->where(Domain::fields_ACCOUNT_ID, $accountId)
+            ->select()
+            ->fetch();
+        
+        return $domains->getItems();
     }
 }
+

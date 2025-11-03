@@ -26,6 +26,7 @@ class Style extends Model
     public const fields_PATH = 'path';
     public const fields_PREVIEW_IMAGE = 'preview_image';
     public const fields_IS_ACTIVE = 'is_active';
+    public const fields_IS_PUBLISHED = 'is_published';
     public const fields_SORT_ORDER = 'sort_order';
     public const fields_CREATE_TIME = 'create_time';
     public const fields_UPDATE_TIME = 'update_time';
@@ -797,6 +798,13 @@ class Style extends Model
                 '是否启用:0禁用,1启用'
             )
             ->addColumn(
+                self::fields_IS_PUBLISHED,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'not null default 0',
+                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
+            )
+            ->addColumn(
                 self::fields_SORT_ORDER,
                 TableInterface::column_type_INTEGER,
                 0,
@@ -827,6 +835,20 @@ class Style extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        // 添加 is_published 字段（如果不存在）
+        if ($setup->tableExist() && !$setup->hasField(self::fields_IS_PUBLISHED)) {
+            $setup->alterTable()->addColumn(
+                self::fields_IS_PUBLISHED,
+                self::fields_IS_ACTIVE,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'not null default 0',
+                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
+            )
+            ->addIndex(TableInterface::index_type_KEY, 'idx_is_published', [self::fields_IS_PUBLISHED], '发布状态索引')
+            ->alter();
+        }
+        
         // 扫描并注册默认样式模板
         $this->scanAndRegisterStyles();
     }

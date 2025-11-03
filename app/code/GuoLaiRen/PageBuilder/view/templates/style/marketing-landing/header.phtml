@@ -97,33 +97,31 @@ $metaDescription = $page ? $page->getData('meta_description') : '';
 $metaKeywords = $page ? $page->getData('meta_keywords') : '';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>">
+<html lang="<?= htmlspecialchars(($this->getData('locale') ?? '') ?: 'zh_Hans_CN') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
     
-    <?php if ($page && $page->getData('icon')): ?>
-    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
-    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <!-- Favicon -->
+    <?php $pageIcon = $page ? ($page->getData('icon') ?: '') : ''; ?>
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <?php endif; ?>
     
     <?php if ($metaDescription): ?>
-    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
     <?php endif; ?>
     
     <?php if ($metaKeywords): ?>
-    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
     <?php endif; ?>
     
-    <!-- Google Tag Manager -->
-    <?php if (!$isPreview && $page && $page->getData('gtm_id')): ?>
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
-    <?php endif; ?>
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
     
     <!-- 预览模式调试信息 -->
     <?php if ($isPreview): ?>
@@ -163,9 +161,9 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         
         // Logo 配置
         const logoConfig = {
-            display: '<?= htmlspecialchars($logoDisplay) ?>',
-            url: '<?= htmlspecialchars($logoUrl) ?>',
-            position: '<?= htmlspecialchars($logoPosition) ?>',
+            display: '<?= htmlspecialchars($logoDisplay ?? '') ?>',
+            url: '<?= htmlspecialchars($logoUrl ?? '') ?>',
+            position: '<?= htmlspecialchars($logoPosition ?? '') ?>',
             width: '<?= $logoWidth ?>'
         };
         
@@ -174,7 +172,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         
         // 头部样式配置
         const headerStyle = {
-            background_color: '<?= htmlspecialchars($bgColor) ?>',
+            background_color: '<?= htmlspecialchars($bgColor ?? '') ?>',
             padding_v: '<?= $paddingV ?>',
             container_max_width: '<?= $containerMaxWidth ?>',
             container_padding_h: '<?= $containerPaddingH ?>'
@@ -186,7 +184,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         // 环境信息
         const envInfo = {
             is_preview: <?= $isPreview ? 'true' : 'false' ?>,
-            locale: '<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>',
+            locale: '<?= htmlspecialchars(($this->getData('locale') ?? '') ?: 'zh_Hans_CN') ?>',
             current_url: window.location.href,
             user_agent: navigator.userAgent
         };
@@ -217,7 +215,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         .marketing-header {
             width: 100%;
             padding: <?= $paddingV ?> 0;
-            background-color: <?= htmlspecialchars($bgColor) ?>;
+            background-color: <?= htmlspecialchars($bgColor ?? '') ?>;
         }
         
         .marketing-header-container {
@@ -230,7 +228,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         
         .marketing-logo {
             display: <?= $logoDisplay === 'yes' ? 'block' : 'none' ?>;
-            text-align: <?= htmlspecialchars($logoPosition) ?>;
+            text-align: <?= htmlspecialchars($logoPosition ?? '') ?>;
             max-width: <?= $logoWidth ?>;
             margin: 0 <?= $logoPosition === 'left' ? 'auto 0 0' : ($logoPosition === 'right' ? '0 0 auto' : 'auto') ?>;
         }
@@ -254,17 +252,19 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
 </style>
 </head>
 <body>
-    <!-- Google Tag Manager (noscript) -->
-    <?php if (!$isPreview && $page && $page->getData('gtm_id')): ?>
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($page->getData('gtm_id')) ?>"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <?php endif; ?>
     
     <header class="marketing-header">
         <div class="marketing-header-container">
-            <?php if ($logoDisplay === 'yes' && $logoUrl): ?>
+            <?php 
+            // 优先使用 page 的 logo 字段，如果没有则使用配置的 logo.url
+            $pageLogo = $page ? ($page->getData('logo') ?: '') : '';
+            $finalLogoUrl = !empty($pageLogo) ? $pageLogo : $logoUrl;
+            ?>
+            <?php if ($logoDisplay === 'yes' && $finalLogoUrl): ?>
             <div class="marketing-logo">
-                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+                <img data-src="<?= htmlspecialchars($finalLogoUrl ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="<?= htmlspecialchars($pageTitle ?? '') ?>" loading="lazy" decoding="async" fetchpriority="low">
+
+            <template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</template>
             </div>
             <?php endif; ?>
         </div>

@@ -30,5 +30,14 @@
          icon="mdi mdi-email-open" 
          order="20"/>
     
+    <!-- 模板管理子菜单 -->
+    <add source="GuoLaiRen_PageBuilder::template_management" 
+         name="template_management" 
+         title="模板管理" 
+         action="pagebuilder/backend/template/index"
+         parent="GuoLaiRen_PageBuilder::menu_page_management" 
+         icon="mdi mdi-palette" 
+         order="30"/>
+    
 </menus>
 

@@ -91,11 +91,11 @@ $linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffff
 
 <style>
 .algo-footer {
-    background-color: <?= htmlspecialchars($disclaimerBgColor) ?>;
+    background-color: <?= htmlspecialchars($disclaimerBgColor ?? '') ?>;
     padding: <?= $disclaimerPadding ?>;
     margin-top: 60px;
     <?php if ($disclaimerBorderTop === 'yes'): ?>
-    border-top: 1px solid <?= htmlspecialchars($disclaimerBorderColor) ?>;
+    border-top: 1px solid <?= htmlspecialchars($disclaimerBorderColor ?? '') ?>;
     <?php endif; ?>
 }
 
@@ -108,7 +108,7 @@ $linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffff
 .algo-copyright {
     text-align: center;
     margin-bottom: 20px;
-    color: <?= htmlspecialchars($disclaimerColor) ?>;
+    color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
     font-size: <?= $disclaimerFontSize ?>;
 }
 
@@ -118,7 +118,7 @@ $linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffff
 }
 
 .algo-footer-link {
-    color: <?= htmlspecialchars($linkColor) ?>;
+    color: <?= htmlspecialchars($linkColor ?? '') ?>;
     text-decoration: none;
 }
 
@@ -127,7 +127,7 @@ $linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffff
 }
 
 .algo-disclaimer {
-    color: <?= htmlspecialchars($disclaimerColor) ?>;
+    color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
     font-size: <?= $disclaimerFontSize ?>;
     line-height: <?= $disclaimerLineHeight ?>;
     text-align: center;
@@ -148,9 +148,9 @@ $linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffff
         <div class="algo-footer-container">
             <?php if ($copyrightEnabled === 'yes'): ?>
             <div class="algo-copyright">
-                <p><?= htmlspecialchars($copyrightText) ?> 
+                <p><?= htmlspecialchars($copyrightText ?? '') ?> 
                 <span class="algo-copyright-links">
-                    <a href="<?= htmlspecialchars($link1Url) ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link1Text) ?></a> | <a href="<?= htmlspecialchars($link2Url) ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link2Text) ?></a>
+                    <a href="<?= htmlspecialchars($link1Url ?? '') ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link1Text ?? '') ?></a> | <a href="<?= htmlspecialchars($link2Url ?? '') ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link2Text ?? '') ?></a>
                 </span>
                 </p>
             </div>

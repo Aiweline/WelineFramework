@@ -14,379 +14,158 @@ namespace Weline\Cdn\Service;
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Model\Account;
 use Weline\Cdn\Model\Domain;
-use Weline\Framework\App\Exception;
+use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 缓存清理服务
  * 
- * 提供多域名、多模式的缓存清理功能
+ * @package Weline_Cdn
  */
 class CachePurger
 {
-    /**
-     * @var AdapterResolver
-     */
+    private ObjectManager $objectManager;
     private AdapterResolver $adapterResolver;
-
-    /**
-     * @var Domain
-     */
-    private Domain $domainModel;
-
-    /**
-     * @var AccountManager
-     */
     private AccountManager $accountManager;
 
-    /**
-     * 构造函数
-     */
     public function __construct(
+        ObjectManager $objectManager,
         AdapterResolver $adapterResolver,
-        Domain $domainModel,
         AccountManager $accountManager
     ) {
+        $this->objectManager = $objectManager;
         $this->adapterResolver = $adapterResolver;
-        $this->domainModel = $domainModel;
         $this->accountManager = $accountManager;
     }
 
     /**
-     * @DESC          # 清理指定域名的所有缓存
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 清理缓存
      * 
-     * @param int|string $domainIdOrName 域名ID或域名名称
-     * @return array ['success' => bool, 'message' => string]
+     * @param string|int $domain 域名ID或名称
+     * @param string $mode 清理模式：everything|urls|hosts|tags|cache_keys
+     * @param array $data 模式相关的数据
+     * @return array ['success' => bool, 'message' => string, ...]
+     * @throws Core
      */
-    public function purgeDomain(int|string $domainIdOrName): array
+    public function purge($domain, string $mode, array $data = []): array
     {
-        $domain = $this->loadDomain($domainIdOrName);
-        if (!$domain || !$domain->getId()) {
-            return [
-                'success' => false,
-                'message' => __('域名不存在')
-            ];
+        // 获取域名
+        $domainModel = $this->getDomain($domain);
+        if (!$domainModel) {
+            throw new Core(__('域名不存在：%{1}', [$domain]));
         }
 
-        if (!$domain->isEnabled()) {
-            return [
-                'success' => false,
-                'message' => __('域名未启用')
-            ];
+        if (!$domainModel->isEnabled()) {
+            throw new Core(__('域名未启用'));
         }
 
-        $adapterCode = $domain->getData(Domain::fields_ADAPTER);
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
-
-        if (empty($adapterCode) || empty($zoneId)) {
-            return [
-                'success' => false,
-                'message' => __('域名配置不完整')
-            ];
-        }
-
-        $adapter = $this->adapterResolver->get($adapterCode);
+        // 获取适配器
+        $adapter = $this->adapterResolver->getAdapter($domainModel->getData(Domain::fields_ADAPTER));
         if (!$adapter) {
-            return [
-                'success' => false,
-                'message' => __('适配器不存在: %{1}', [$adapterCode])
-            ];
+            throw new Core(__('适配器不存在：%{1}', [$domainModel->getData(Domain::fields_ADAPTER)]));
         }
 
-        $credentials = $this->resolveCredentials($domain);
-        if (empty($credentials)) {
-            return [
-                'success' => false,
-                'message' => __('域名未配置有效的凭据')
-            ];
-        }
-
-        try {
-            $result = $adapter->purgeEverything($zoneId, $credentials);
-            return [
-                'success' => $result['success'] ?? false,
-                'message' => $result['message'] ?? __('清理完成')
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => __('清理失败: %{1}', [$e->getMessage()])
-            ];
+        // 获取凭据
+        $credentials = $this->getCredentials($domainModel);
+        
+        $zoneId = $domainModel->getData(Domain::fields_ZONE_ID);
+        
+        // 根据模式调用不同的清理方法
+        switch ($mode) {
+            case 'everything':
+                return $adapter->purgeEverything($zoneId, $credentials);
+                
+            case 'urls':
+                if (empty($data['urls'])) {
+                    throw new Core(__('URL列表不能为空'));
+                }
+                $urls = is_array($data['urls']) ? $data['urls'] : explode(',', $data['urls']);
+                return $adapter->purgeUrls($zoneId, $urls, $credentials);
+                
+            case 'hosts':
+                if (empty($data['hosts'])) {
+                    throw new Core(__('Host列表不能为空'));
+                }
+                $hosts = is_array($data['hosts']) ? $data['hosts'] : explode(',', $data['hosts']);
+                return $adapter->purgeHosts($zoneId, $hosts, $credentials);
+                
+            case 'tags':
+                if (empty($data['tags'])) {
+                    throw new Core(__('Tag列表不能为空'));
+                }
+                $tags = is_array($data['tags']) ? $data['tags'] : explode(',', $data['tags']);
+                return $adapter->purgeTags($zoneId, $tags, $credentials);
+                
+            case 'cache_keys':
+                if (empty($data['keys'])) {
+                    throw new Core(__('Cache Key列表不能为空'));
+                }
+                $keys = is_array($data['keys']) ? $data['keys'] : explode(',', $data['keys']);
+                return $adapter->purgeCacheKeys($zoneId, $keys, $credentials);
+                
+            default:
+                throw new Core(__('无效的清理模式：%{1}', [$mode]));
         }
     }
 
     /**
-     * @DESC          # 按URL清理缓存
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 获取域名模型
      * 
-     * @param int|string $domainIdOrName 域名ID或域名名称
-     * @param array $urls URL数组
-     * @return array
-     */
-    public function purgeUrls(int|string $domainIdOrName, array $urls): array
-    {
-        $domain = $this->loadDomain($domainIdOrName);
-        if (!$domain || !$domain->getId()) {
-            return [
-                'success' => false,
-                'message' => __('域名不存在')
-            ];
-        }
-
-        $adapterCode = $domain->getData(Domain::fields_ADAPTER);
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
-        $credentials = $this->resolveCredentials($domain);
-
-        if (empty($adapterCode) || empty($zoneId) || empty($credentials)) {
-            return [
-                'success' => false,
-                'message' => __('域名配置不完整')
-            ];
-        }
-
-        $adapter = $this->adapterResolver->get($adapterCode);
-        if (!$adapter) {
-            return [
-                'success' => false,
-                'message' => __('适配器不存在')
-            ];
-        }
-
-        try {
-            return $adapter->purgeUrls($zoneId, $urls, $credentials);
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => __('清理失败: %{1}', [$e->getMessage()])
-            ];
-        }
-    }
-
-    /**
-     * @DESC          # 按Host清理缓存
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param int|string $domainIdOrName 域名ID或域名名称
-     * @param array $hosts Host数组
-     * @return array
-     */
-    public function purgeHosts(int|string $domainIdOrName, array $hosts): array
-    {
-        $domain = $this->loadDomain($domainIdOrName);
-        if (!$domain || !$domain->getId()) {
-            return [
-                'success' => false,
-                'message' => __('域名不存在')
-            ];
-        }
-
-        $adapterCode = $domain->getData(Domain::fields_ADAPTER);
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
-        $credentials = $this->resolveCredentials($domain);
-
-        if (empty($adapterCode) || empty($zoneId) || empty($credentials)) {
-            return [
-                'success' => false,
-                'message' => __('域名配置不完整')
-            ];
-        }
-
-        $adapter = $this->adapterResolver->get($adapterCode);
-        if (!$adapter) {
-            return [
-                'success' => false,
-                'message' => __('适配器不存在')
-            ];
-        }
-
-        try {
-            return $adapter->purgeHosts($zoneId, $hosts, $credentials);
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => __('清理失败: %{1}', [$e->getMessage()])
-            ];
-        }
-    }
-
-    /**
-     * @DESC          # 按Tag清理缓存
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param int|string $domainIdOrName 域名ID或域名名称
-     * @param array $tags Tag数组
-     * @return array
-     */
-    public function purgeTags(int|string $domainIdOrName, array $tags): array
-    {
-        $domain = $this->loadDomain($domainIdOrName);
-        if (!$domain || !$domain->getId()) {
-            return [
-                'success' => false,
-                'message' => __('域名不存在')
-            ];
-        }
-
-        $adapterCode = $domain->getData(Domain::fields_ADAPTER);
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
-        $credentials = $this->resolveCredentials($domain);
-
-        if (empty($adapterCode) || empty($zoneId) || empty($credentials)) {
-            return [
-                'success' => false,
-                'message' => __('域名配置不完整')
-            ];
-        }
-
-        $adapter = $this->adapterResolver->get($adapterCode);
-        if (!$adapter) {
-            return [
-                'success' => false,
-                'message' => __('适配器不存在')
-            ];
-        }
-
-        try {
-            return $adapter->purgeTags($zoneId, $tags, $credentials);
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => __('清理失败: %{1}', [$e->getMessage()])
-            ];
-        }
-    }
-
-    /**
-     * @DESC          # 按Cache Key清理缓存
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param int|string $domainIdOrName 域名ID或域名名称
-     * @param array $keys Cache Key数组
-     * @return array
-     */
-    public function purgeCacheKeys(int|string $domainIdOrName, array $keys): array
-    {
-        $domain = $this->loadDomain($domainIdOrName);
-        if (!$domain || !$domain->getId()) {
-            return [
-                'success' => false,
-                'message' => __('域名不存在')
-            ];
-        }
-
-        $adapterCode = $domain->getData(Domain::fields_ADAPTER);
-        $zoneId = $domain->getData(Domain::fields_ZONE_ID);
-        $credentials = $this->resolveCredentials($domain);
-
-        if (empty($adapterCode) || empty($zoneId) || empty($credentials)) {
-            return [
-                'success' => false,
-                'message' => __('域名配置不完整')
-            ];
-        }
-
-        $adapter = $this->adapterResolver->get($adapterCode);
-        if (!$adapter) {
-            return [
-                'success' => false,
-                'message' => __('适配器不存在')
-            ];
-        }
-
-        try {
-            return $adapter->purgeCacheKeys($zoneId, $keys, $credentials);
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => __('清理失败: %{1}', [$e->getMessage()])
-            ];
-        }
-    }
-
-    /**
-     * @DESC          # 加载域名（支持ID或名称）
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param int|string $domainIdOrName
+     * @param string|int $domain 域名ID或名称
      * @return Domain|null
      */
-    private function loadDomain(int|string $domainIdOrName): ?Domain
+    private function getDomain($domain): ?Domain
     {
-        try {
-            /** @var Domain $domain */
-            $domain = $this->domainModel->clear()->reset();
-            
-            if (is_numeric($domainIdOrName)) {
-                $domain->load((int)$domainIdOrName);
-            } else {
-                $domain->where(Domain::fields_DOMAIN_NAME, $domainIdOrName)->find()->fetch();
-            }
-            
-            return $domain->getId() ? $domain : null;
-        } catch (\Exception $e) {
-            return null;
+        /** @var Domain $domainModel */
+        $domainModel = $this->objectManager->getInstance(Domain::class);
+        
+        if (is_numeric($domain)) {
+            $domainModel->reset()->load((int)$domain);
+        } else {
+            $domainModel->reset()->where(Domain::fields_DOMAIN_NAME, $domain)->find()->fetch();
         }
+        
+        return $domainModel->getData(Domain::fields_DOMAIN_ID) ? $domainModel : null;
     }
 
     /**
-     * @DESC          # 解析域名凭据
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 获取凭据
      * 
-     * @param Domain $domain
+     * @param Domain $domain 域名模型
      * @return array
+     * @throws Core
      */
-    private function resolveCredentials(Domain $domain): array
+    private function getCredentials(Domain $domain): array
     {
-        // 1. 自定义凭据
-        $customCredentials = $domain->getCredentials();
-        if (!empty($customCredentials)) {
-            return $customCredentials;
+        // 如果域名有自定义凭据，使用自定义凭据
+        if (!$domain->isInheritDefault() && !empty($domain->getCredentialsArray())) {
+            return $domain->getCredentialsArray();
         }
 
-        // 2. 指定账户凭据
+        // 否则使用账户凭据
         $accountId = $domain->getData(Domain::fields_ACCOUNT_ID);
-        if ($accountId) {
-            try {
-                /** @var Account $account */
-                $account = ObjectManager::getInstance(Account::class)->clear()->reset()->load($accountId);
-                if ($account->getId()) {
-                    $accountCredentials = $account->getCredentials();
-                    if (!empty($accountCredentials)) {
-                        return $accountCredentials;
-                    }
-                }
-            } catch (\Exception $e) {
-                // 忽略错误
-            }
-        }
-
-        // 3. 默认账户凭据
-        $adapter = $domain->getData(Domain::fields_ADAPTER);
-        if ($adapter && ($domain->getData(Domain::fields_INHERIT_DEFAULT) ?? true)) {
-            $defaultAccount = $this->accountManager->getDefaultAccount($adapter);
+        if (!$accountId) {
+            // 如果没有账户ID，尝试获取默认账户
+            $defaultAccount = $this->accountManager->getDefaultAccount($domain->getData(Domain::fields_ADAPTER));
             if ($defaultAccount) {
-                $defaultCredentials = $defaultAccount->getCredentials();
-                if (!empty($defaultCredentials)) {
-                    return $defaultCredentials;
-                }
+                return $defaultAccount->getCredentialsArray();
             }
+            
+            throw new Core(__('域名未配置账户且无默认账户'));
         }
 
-        return [];
+        /** @var Account $account */
+        $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
+        
+        if (!$account->getData(Account::fields_ACCOUNT_ID)) {
+            throw new Core(__('账户不存在'));
+        }
+
+        if (!$account->isActive()) {
+            throw new Core(__('账户未激活'));
+        }
+
+        return $account->getCredentialsArray();
     }
 }
+

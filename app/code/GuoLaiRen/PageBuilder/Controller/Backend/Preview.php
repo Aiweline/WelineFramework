@@ -275,7 +275,7 @@ class Preview extends BackendController
             if ($localDesc->getId()) {
                 $configJson = $localDesc->getData('config');
                 if ($configJson) {
-                    $config = json_decode($configJson, true);
+                    $config = json_decode($configJson ?? '', true);
                     if (isset($config['style_config']) && is_array($config['style_config'])) {
                         // 语言特定配置覆盖之前的配置
                         $finalSettings = array_merge($finalSettings, $config['style_config']);
@@ -339,21 +339,25 @@ class Preview extends BackendController
         $headerHtml = $this->fetch("{$stylePath}/header.phtml");
         
         // 渲染 content
-        // 如果页面有自定义内容，使用自定义内容替代 content.phtml
-        $customContent = $page->getData(\GuoLaiRen\PageBuilder\Model\Page::fields_CONTENT);
-        if (!empty($customContent)) {
-            // 使用自定义内容
-            $contentHtml = $customContent;
-        } else {
-            // 使用样式模板的 content.phtml
-            $contentHtml = $this->fetch("{$stylePath}/content.phtml");
-        }
+        // 预览模式下：始终使用样式模板的 content.phtml（忽略页面自定义 content）
+        $contentHtml = $this->fetch("{$stylePath}/content.phtml");
         
         // 渲染 footer
         $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
         
         // 输出组合后的完整页面
-        echo $headerHtml . $contentHtml . $footerHtml;
+        // 在预览模式下，强制在地址栏附加 preview=1 并设置全局预览标记，避免触发统计
+        $previewBoot = '<script>(function(){
+            try {
+                window.__PAGEBUILDER_PREVIEW__ = true;
+                var url = new URL(window.location.href);
+                if (!url.searchParams.get("preview")) {
+                    url.searchParams.set("preview", "1");
+                    window.history.replaceState({}, document.title, url.toString());
+                }
+            } catch(e) {}
+        })();</script>';
+        echo $previewBoot . $headerHtml . $contentHtml . $footerHtml;
     }
 
     /**
@@ -374,12 +378,19 @@ class Preview extends BackendController
             return;
         }
 
+        // 为确保样式列表最新，先强制扫描一次
+        try {
+            \GuoLaiRen\PageBuilder\Model\Style::forceScan();
+        } catch (\Throwable $e) {
+            // 忽略扫描异常，继续按现有数据处理
+        }
+
         // 验证样式是否存在
         $styleModel = clone $this->styleModel;
         $styleModel->clear()->where(\GuoLaiRen\PageBuilder\Model\Style::fields_CODE, $styleCode)->find()->fetch();
         
         if (!$styleModel->getId()) {
-            echo '<div style="padding: 20px; color: red;">样式模板不存在：' . htmlspecialchars($styleCode) . '</div>';
+            echo '<div style="padding: 20px; color: red;">样式模板不存在：' . htmlspecialchars($styleCode ?? '') . '</div>';
             return;
         }
 
@@ -423,9 +434,9 @@ class Preview extends BackendController
         } catch (\Exception $e) {
             echo '<div style="padding: 20px; color: red;">';
             echo '<h3>模板渲染错误</h3>';
-            echo '<p>样式代码：' . htmlspecialchars($styleCode) . '</p>';
-            echo '<p>错误信息：' . htmlspecialchars($e->getMessage()) . '</p>';
-            echo '<p>模板路径：' . htmlspecialchars($stylePath) . '</p>';
+            echo '<p>样式代码：' . htmlspecialchars($styleCode ?? '') . '</p>';
+            echo '<p>错误信息：' . htmlspecialchars((($e->getMessage() ?? '')) ?? '') . '</p>';
+            echo '<p>模板路径：' . htmlspecialchars($stylePath ?? '') . '</p>';
             echo '</div>';
         }
     }
@@ -439,7 +450,7 @@ class Preview extends BackendController
         try {
             // 获取 JSON 请求体
             $rawBody = file_get_contents('php://input');
-            $data = json_decode($rawBody, true);
+            $data = json_decode($rawBody ?? '', true);
             
             // 如果 JSON 解析失败，尝试从 POST 获取
             if (!$data) {
@@ -503,7 +514,7 @@ class Preview extends BackendController
                 if ($localDesc->getId()) {
                     $configJson = $localDesc->getData('config');
                     if ($configJson) {
-                        $config = json_decode($configJson, true) ?: [];
+                        $config = json_decode($configJson ?? '', true) ?: [];
                     }
                 }
                 
@@ -605,7 +616,7 @@ class Preview extends BackendController
             $rawBody = file_get_contents('php://input');
             error_log('🔵 请求体: ' . $rawBody);
             
-            $data = json_decode($rawBody, true);
+            $data = json_decode($rawBody ?? '');
             error_log('🔵 解析后数据: ' . json_encode($data));
             
             // 如果 JSON 解析失败，尝试从 POST 获取
@@ -683,7 +694,7 @@ class Preview extends BackendController
                     $configJson = $localDesc->getData('config');
                     $config = [];
                     if ($configJson) {
-                        $config = json_decode($configJson, true) ?: [];
+                        $config = json_decode($configJson ?? '', true) ?: [];
                     }
                     
                     // 从style_config中删除指定的键

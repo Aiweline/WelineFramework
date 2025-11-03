@@ -171,35 +171,35 @@ $metaDescription = $page ? $page->getData('meta_description') : '';
 $metaKeywords = $page ? $page->getData('meta_keywords') : '';
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>">
+<html lang="<?= htmlspecialchars((($this->getData('locale') ?? '') ?: 'zh_Hans_CN') ?? '') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
+    <title><?= htmlspecialchars(($metaTitle ?: $pageTitle) ?? '') ?></title>
     
     <?php if ($page && $page->getData('icon')): ?>
-    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
-    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars(($page->getData('icon') ?? '') ?? '') ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars(($page->getData('icon') ?? '') ?? '') ?>">
     <?php endif; ?>
     
     <?php if ($metaDescription): ?>
-    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
     <?php endif; ?>
     
     <?php if ($metaKeywords): ?>
-    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
     <?php endif; ?>
     
     <!-- Head 跟踪代码（仅在非预览模式下执行） -->
 <?php if (!$isPreview): ?>
     <!-- Google Analytics 4 -->
     <?php if ($ga4Id): ?>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($ga4Id) ?>"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($ga4Id ?? '') ?>"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', '<?= htmlspecialchars($ga4Id) ?>');
+        gtag('config', '<?= htmlspecialchars($ga4Id ?? '') ?>');
     </script>
     <?php endif; ?>
     
@@ -209,7 +209,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId) ?>');</script>
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId ?? '') ?>');</script>
     <?php endif; ?>
 <?php endif; ?>
     
@@ -251,8 +251,8 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         
         // Logo 配置
         const logoConfig = {
-            url: '<?= htmlspecialchars($logoUrl) ?>',
-            position: '<?= htmlspecialchars($logoPosition) ?>'
+            url: '<?= htmlspecialchars($logoUrl ?? '') ?>',
+            position: '<?= htmlspecialchars($logoPosition ?? '') ?>'
         };
         
         console.log('%c🖼️ Logo 配置 (Logo Config):', 'color: #ffcc00; font-weight: bold;');
@@ -260,14 +260,14 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         
         // 头部样式配置
         const headerStyle = {
-            background_color: '<?= htmlspecialchars($bgColor) ?>',
-            border_bottom: '<?= htmlspecialchars($borderBottom) ?>',
-            border_color: '<?= htmlspecialchars($borderColor) ?>',
-            height_mobile: '<?= htmlspecialchars($height['mobile']) ?>',
-            height_desktop: '<?= htmlspecialchars($height['desktop']) ?>',
-            max_width: '<?= htmlspecialchars($maxWidthResponsive) ?>',
-            padding_h_mobile: '<?= htmlspecialchars($paddingH['mobile']) ?>',
-            padding_h_desktop: '<?= htmlspecialchars($paddingH['desktop']) ?>'
+            background_color: '<?= htmlspecialchars($bgColor ?? '') ?>',
+            border_bottom: '<?= htmlspecialchars($borderBottom ?? '') ?>',
+            border_color: '<?= htmlspecialchars($borderColor ?? '') ?>',
+            height_mobile: '<?= htmlspecialchars($height['mobile'] ?? '') ?>',
+            height_desktop: '<?= htmlspecialchars($height['desktop'] ?? '') ?>',
+            max_width: '<?= htmlspecialchars($maxWidthResponsive ?? '') ?>',
+            padding_h_mobile: '<?= htmlspecialchars($paddingH['mobile'] ?? '') ?>',
+            padding_h_desktop: '<?= htmlspecialchars($paddingH['desktop'] ?? '') ?>'
         };
         
         console.log('%c📐 头部样式 (Header Style):', 'color: #ffcc00; font-weight: bold;');
@@ -276,7 +276,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         // 环境信息
         const envInfo = {
             is_preview: <?= $isPreview ? 'true' : 'false' ?>,
-            locale: '<?= htmlspecialchars($this->getData('locale') ?: 'zh_Hans_CN') ?>',
+            locale: '<?= htmlspecialchars((($this->getData('locale') ?? '') ?: 'zh_Hans_CN') ?? '') ?>',
             current_url: window.location.href,
             user_agent: navigator.userAgent
         };
@@ -364,23 +364,23 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
 <body>
     <!-- Google Tag Manager (noscript) -->
     <?php if (!$isPreview && $gtmId): ?>
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId ?? '') ?>"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <?php endif; ?>
     
     <!-- Header 头部 -->
     <header class="page-header" 
-        data-bg-color="<?= htmlspecialchars($bgColor) ?>" 
-        data-height-mobile="<?= htmlspecialchars($height['mobile']) ?>"
-        data-height-desktop="<?= htmlspecialchars($height['desktop']) ?>">
+        data-bg-color="<?= htmlspecialchars($bgColor ?? '') ?>" 
+        data-height-mobile="<?= htmlspecialchars($height['mobile'] ?? '') ?>"
+        data-height-desktop="<?= htmlspecialchars($height['desktop'] ?? '') ?>">
     <div class="header-container" 
-         data-logo-position="<?= htmlspecialchars($logoPosition) ?>"
-         data-max-width-mobile="<?= htmlspecialchars($maxWidth['mobile']) ?>"
-         data-max-width-desktop="<?= htmlspecialchars($maxWidth['desktop']) ?>"
-         data-padding-mobile="<?= htmlspecialchars($paddingH['mobile']) ?>"
-         data-padding-desktop="<?= htmlspecialchars($paddingH['desktop']) ?>">
+         data-logo-position="<?= htmlspecialchars($logoPosition ?? '') ?>"
+         data-max-width-mobile="<?= htmlspecialchars($maxWidth['mobile'] ?? '') ?>"
+         data-max-width-desktop="<?= htmlspecialchars($maxWidth['desktop'] ?? '') ?>"
+         data-padding-mobile="<?= htmlspecialchars($paddingH['mobile'] ?? '') ?>"
+         data-padding-desktop="<?= htmlspecialchars($paddingH['desktop'] ?? '') ?>">
         <div class="header-logo" 
-             data-position="<?= htmlspecialchars($logoPosition) ?>"
+             data-position="<?= htmlspecialchars($logoPosition ?? '') ?>"
              style="<?php 
                 // 根据位置配置添加对齐样式
                 if ($logoPosition === 'center') {
@@ -392,11 +392,12 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
                 }
              ?>">
             <?php if ($logoUrl): ?>
-                <a href="<?= htmlspecialchars($logoLink) ?>" title="<?= htmlspecialchars($pageTitle) ?>">
-                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($pageTitle) ?>">
+                <a href="<?= htmlspecialchars($logoLink ?? '') ?>" title="<?= htmlspecialchars($pageTitle ?? '') ?>">
+                    <img data-src="<?= htmlspecialchars($logoUrl ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="<?= htmlspecialchars($pageTitle ?? '') ?>" loading="lazy" decoding="async" fetchpriority="low">
+                <template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</template>
                 </a>
             <?php else: ?>
-                <a href="<?= htmlspecialchars($logoLink) ?>" class="header-logo-text">
+                <a href="<?= htmlspecialchars($logoLink ?? '') ?>" class="header-logo-text">
                     <?= htmlspecialchars($pageTitle ?: 'Logo') ?>
                 </a>
             <?php endif; ?>

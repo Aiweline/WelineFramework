@@ -57,7 +57,7 @@ $page = $this->getData('page');
                             <td>
                                 <?php if ($page): ?>
                                     <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $page->getId()]) ?>">
-                                        <?= htmlspecialchars($page->getData('name')) ?>
+                                        <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
                                     </a>
                                 <?php else: ?>
                                     <?= __('无') ?>
@@ -68,8 +68,8 @@ $page = $this->getData('page');
                             <th><?= __('邮箱') ?>:</th>
                             <td>
                                 <?php if ($submission->getData('email')): ?>
-                                    <a href="mailto:<?= htmlspecialchars($submission->getData('email')) ?>">
-                                        <?= htmlspecialchars($submission->getData('email')) ?>
+                                    <a href="mailto:<?= htmlspecialchars((($submission->getData('email') ?? '')) ?? '') ?>">
+                                        <?= htmlspecialchars((($submission->getData('email') ?? '')) ?? '') ?>
                                     </a>
                                 <?php else: ?>
                                     <span class="text-muted"><?= __('未提供') ?></span>
@@ -80,7 +80,7 @@ $page = $this->getData('page');
                             <th><?= __('电话') ?>:</th>
                             <td>
                                 <?php if ($submission->getData('phone')): ?>
-                                    <?= htmlspecialchars($submission->getData('phone')) ?>
+                                    <?= htmlspecialchars((($submission->getData('phone') ?? '')) ?? '') ?>
                                 <?php else: ?>
                                     <span class="text-muted"><?= __('未提供') ?></span>
                                 <?php endif; ?>
@@ -88,11 +88,11 @@ $page = $this->getData('page');
                         </tr>
                         <tr>
                             <th><?= __('IP地址') ?>:</th>
-                            <td><?= htmlspecialchars($submission->getData('ip_address')) ?></td>
+                            <td><?= htmlspecialchars((($submission->getData('ip_address') ?? '')) ?? '') ?></td>
                         </tr>
                         <tr>
                             <th><?= __('提交时间') ?>:</th>
-                            <td><?= htmlspecialchars($submission->getData('submitted_at')) ?></td>
+                            <td><?= htmlspecialchars((($submission->getData('submitted_at') ?? '')) ?? '') ?></td>
                         </tr>
                     </tbody>
                 </table>
@@ -120,12 +120,12 @@ $page = $this->getData('page');
                         <tbody>
                             <?php foreach ($extraFields as $key => $value): ?>
                                 <tr>
-                                    <td><strong><?= htmlspecialchars($key) ?></strong></td>
+                                    <td><strong><?= htmlspecialchars($key ?? '') ?></strong></td>
                                     <td>
                                         <?php if (is_array($value)): ?>
                                             <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;"><?= htmlspecialchars(json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
                                         <?php else: ?>
-                                            <?= htmlspecialchars($value) ?>
+                                            <?= htmlspecialchars($value ?? '') ?>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -148,7 +148,7 @@ $page = $this->getData('page');
                 <div class="mb-3">
                     <label class="form-label"><?= __('User Agent') ?>:</label>
                     <div class="p-2 bg-light rounded" style="word-break: break-all; font-size: 12px;">
-                        <?= htmlspecialchars($submission->getData('user_agent') ?: __('无')) ?>
+                        <?= htmlspecialchars(($submission->getData('user_agent') ?? '') ?: __('无')) ?>
                     </div>
                 </div>
 
@@ -156,8 +156,8 @@ $page = $this->getData('page');
                     <label class="form-label"><?= __('来源页面') ?>:</label>
                     <div class="p-2 bg-light rounded" style="word-break: break-all; font-size: 12px;">
                         <?php if ($submission->getData('referer')): ?>
-                            <a href="<?= htmlspecialchars($submission->getData('referer')) ?>" target="_blank">
-                                <?= htmlspecialchars($submission->getData('referer')) ?>
+                            <a href="<?= htmlspecialchars((($submission->getData('referer') ?? '')) ?? '') ?>" target="_blank">
+                                <?= htmlspecialchars((($submission->getData('referer') ?? '')) ?? '') ?>
                             </a>
                         <?php else: ?>
                             <?= __('无') ?>

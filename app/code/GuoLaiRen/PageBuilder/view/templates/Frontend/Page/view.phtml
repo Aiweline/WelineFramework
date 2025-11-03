@@ -18,24 +18,24 @@ $currentLocale = $this->getData('current_locale');
     <!-- SEO Meta -->
     <title><?= htmlspecialchars($seo['title'] ?? $content['title'] ?? '') ?></title>
     <?php if (!empty($seo['description'])): ?>
-    <meta name="description" content="<?= htmlspecialchars($seo['description']) ?>">
+    <meta name="description" content="<?= htmlspecialchars($seo['description'] ?? '') ?>">
     <?php endif; ?>
     <?php if (!empty($seo['keywords'])): ?>
-    <meta name="keywords" content="<?= htmlspecialchars($seo['keywords']) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($seo['keywords'] ?? '') ?>">
     <?php endif; ?>
     
     <!-- Open Graph -->
     <?php if (!empty($seo['og_title'])): ?>
-    <meta property="og:title" content="<?= htmlspecialchars($seo['og_title']) ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($seo['og_title'] ?? '') ?>">
     <?php endif; ?>
     <?php if (!empty($seo['og_description'])): ?>
-    <meta property="og:description" content="<?= htmlspecialchars($seo['og_description']) ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($seo['og_description'] ?? '') ?>">
     <?php endif; ?>
     
     <!-- Hreflang for multilingual SEO -->
     <?php if (!empty($seo['hreflangs'])): ?>
         <?php foreach ($seo['hreflangs'] as $hreflang): ?>
-            <link rel="alternate" hreflang="<?= htmlspecialchars($hreflang['locale']) ?>" href="<?= htmlspecialchars($hreflang['url']) ?>" />
+            <link rel="alternate" hreflang="<?= htmlspecialchars($hreflang['locale'] ?? '') ?>" href="<?= htmlspecialchars($hreflang['url'] ?? '') ?>" />
         <?php endforeach; ?>
     <?php endif; ?>
     
@@ -45,17 +45,17 @@ $currentLocale = $this->getData('current_locale');
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
         j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-        })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
+        })(window,document,'script','dataLayer','<?= htmlspecialchars((($page->getData('gtm_id') ?? '')) ?? '') ?>');</script>
     <?php endif; ?>
     
     <!-- Google Analytics 4 -->
     <?php if ($page && $page->getData('ga4_id')): ?>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($page->getData('ga4_id')) ?>"></script>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars((($page->getData('ga4_id') ?? '')) ?? '') ?>"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', '<?= htmlspecialchars($page->getData('ga4_id')) ?>');
+            gtag('config', '<?= htmlspecialchars((($page->getData('ga4_id') ?? '')) ?? '') ?>');
         </script>
     <?php endif; ?>
     
@@ -70,17 +70,17 @@ $currentLocale = $this->getData('current_locale');
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
-        fbq('init', '<?= htmlspecialchars($page->getData('fb_pixel_id')) ?>');
+        fbq('init', '<?= htmlspecialchars((($page->getData('fb_pixel_id') ?? '')) ?? '') ?>');
         fbq('track', 'PageView');
         </script>
         <noscript><img height="1" width="1" style="display:none"
-        src="https://www.facebook.com/tr?id=<?= htmlspecialchars($page->getData('fb_pixel_id')) ?>&ev=PageView&noscript=1"
+        src="https://www.facebook.com/tr?id=<?= htmlspecialchars((($page->getData('fb_pixel_id') ?? '')) ?? '') ?>&ev=PageView&noscript=1"
         /></noscript>
     <?php endif; ?>
     
     <!-- Favicon -->
     <?php if ($page && $page->getData('icon')): ?>
-        <link rel="icon" href="<?= htmlspecialchars($page->getData('icon')) ?>">
+        <link rel="icon" href="<?= htmlspecialchars((($page->getData('icon') ?? '')) ?? '') ?>">
     <?php endif; ?>
     
     <style>
@@ -226,14 +226,14 @@ $currentLocale = $this->getData('current_locale');
 <body>
     <!-- Google Tag Manager (noscript) -->
     <?php if ($page && $page->getData('gtm_id')): ?>
-        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($page->getData('gtm_id')) ?>"
+        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars((($page->getData('gtm_id') ?? '')) ?? '') ?>"
         height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <?php endif; ?>
     
     <div class="default-page-container">
         <?php if ($page && $page->getData('logo')): ?>
             <div class="page-logo">
-                <img src="<?= htmlspecialchars($page->getData('logo')) ?>" alt="Logo">
+                <img src="<?= htmlspecialchars((($page->getData('logo') ?? '')) ?? '') ?>" alt="Logo">
             </div>
         <?php endif; ?>
         
@@ -241,7 +241,7 @@ $currentLocale = $this->getData('current_locale');
             <h1><?= htmlspecialchars($content['title'] ?? '') ?></h1>
             <?php if ($page && $page->getData('create_time')): ?>
                 <div class="page-meta">
-                    <span><?= __('发布时间：') ?><?= htmlspecialchars($page->getData('create_time')) ?></span>
+                    <span><?= __('发布时间：') ?><?= htmlspecialchars((($page->getData('create_time') ?? '')) ?? '') ?></span>
                 </div>
             <?php endif; ?>
         </div>

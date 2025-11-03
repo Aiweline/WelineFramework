@@ -1,35 +1,214 @@
-<!-- Body 跟踪代码（仅在非预览模式下执行） -->
+<?php
+/**
+ * 统计代码模板 - Tracking Code Template
+ * 包含所有统计代码的加载和通用事件跟踪函数
+ * 
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$page = $this->getData('page');
+$isPreview = (bool)($this->getData('is_preview') ?? false);
+
+// 获取统计代码配置
+$gtmId = $page ? $page->getData('gtm_id') : '';
+$gaId = $page ? ($page->getData('ga4_id') ?: $page->getData('ga_id')) : '';
+$fbId = $page ? ($page->getData('fb_pixel_id') ?: $page->getData('fb_id')) : '';
+?>
+
+<!-- 头部统计代码（Head Section） -->
 <?php if (!$isPreview): ?>
-    <!-- Google Tag Manager (noscript) -->
-    <?php if ($gtmId): ?>
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId) ?>"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- Google Tag Manager -->
+    <?php if (!empty($gtmId)): ?>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','<?= htmlspecialchars($gtmId ?? '') ?>');</script>
     <?php endif; ?>
     
-    <!-- Facebook Pixel -->
-    <?php if ($fbPixelId): ?>
+    <!-- Google Analytics (GA4) -->
+    <?php if (!empty($gaId)): ?>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($gaId ?? '') ?>"></script>
     <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);} 
+    gtag('js', new Date());
+    gtag('config', '<?= htmlspecialchars($gaId ?? '') ?>');
+    </script>
+    <?php endif; ?>
+
+    <!-- Meta Pixel (Facebook) -->
+    <?php if (!empty($fbId)): ?>
+    <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '<?= htmlspecialchars($fbPixelId) ?>');
+    fbq('init', '<?= htmlspecialchars($fbId ?? '') ?>');
     fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbPixelId) ?>&ev=PageView&noscript=1"
-    /></noscript>
+    <noscript><img height="1" width="1" style="display:none" alt=""
+    src="https://www.facebook.com/tr?id=<?= htmlspecialchars($fbId ?? '') ?>&ev=PageView&noscript=1"/></noscript>
+    <?php endif; ?>
+<?php endif; ?>
+
+<!-- 通用事件跟踪函数（Window Level） -->
+<script>
+(function() {
+    'use strict';
+    
+    // 预览模式检测函数
+    function detectPreviewMode() {
+        try {
+            var qs = window.location ? window.location.search : '';
+            return (
+                /[?&](preview|is_preview|pb_preview|builder)=1/i.test(qs) ||
+                !!window.__PAGEBUILDER_PREVIEW__ ||
+                !!window.__IS_PREVIEW__ ||
+                (document && (
+                    document.documentElement.hasAttribute('data-preview') ||
+                    (document.body && (
+                        document.body.classList.contains('preview') ||
+                        document.body.classList.contains('is-preview')
+                    ))
+                ))
+            );
+        } catch(e) {
+            return false;
+        }
+    }
+    
+    // 检查统计代码是否可用
+    var trackingConfig = {
+        hasGTM: <?php echo (!empty($gtmId)) ? 'true' : 'false'; ?>,
+        hasGA: <?php echo (!empty($gaId)) ? 'true' : 'false'; ?>,
+        hasFB: <?php echo (!empty($fbId)) ? 'true' : 'false'; ?>
+    };
+    
+    var isPreview = detectPreviewMode();
+    
+    // 通用事件跟踪函数
+    window.trackEvent = function(eventName, eventParams) {
+        if (!eventName) {
+            console.warn('[Tracking] Event name is required');
+            return;
+        }
+        
+        eventParams = eventParams || {};
+        
+        if (isPreview) {
+            // 预览模式：只打印日志
+            try {
+                console.info('%c[Preview][Tracking] Event:', 'color: #00ff00; font-weight: bold;', eventName);
+                if (Object.keys(eventParams).length > 0) {
+                    console.info('%c[Preview][Tracking] Params:', 'color: #00ff00;', eventParams);
+                }
+                if (trackingConfig.hasGTM) console.info('%c[Preview][GTM]', 'color: #4285f4;', eventName);
+                if (trackingConfig.hasGA) console.info('%c[Preview][GA]', 'color: #4285f4;', eventName);
+                if (trackingConfig.hasFB) console.info('%c[Preview][Meta]', 'color: #4285f4;', eventName);
+            } catch(e) {}
+            return;
+        }
+        
+        // 正常模式：发送真实统计数据
+        try {
+            // Google Tag Manager
+            if (trackingConfig.hasGTM && window.dataLayer && typeof window.dataLayer.push === 'function') {
+                var gtmEvent = { event: eventName };
+                if (Object.keys(eventParams).length > 0) {
+                    Object.assign(gtmEvent, eventParams);
+                }
+                window.dataLayer.push(gtmEvent);
+            }
+            
+            // Google Analytics 4
+            if (trackingConfig.hasGA && typeof window.gtag === 'function') {
+                if (Object.keys(eventParams).length > 0) {
+                    window.gtag('event', eventName, eventParams);
+                } else {
+                    window.gtag('event', eventName);
+                }
+            }
+            
+            // Legacy Google Analytics
+            if (trackingConfig.hasGA && typeof window.ga === 'function') {
+                window.ga('send', 'event', 'cta', eventName, { nonInteraction: false });
+            }
+            
+            // Facebook Pixel
+            if (trackingConfig.hasFB && typeof window.fbq === 'function') {
+                // 发送自定义事件
+                window.fbq('trackCustom', eventName, eventParams);
+                
+                // 如果是 Lead 相关事件，也发送标准 Lead 事件
+                if (eventName.toLowerCase().indexOf('lead') !== -1 || eventName.toLowerCase().indexOf('submit') !== -1) {
+                    window.fbq('track', 'Lead', {
+                        content_name: eventName,
+                        status: 'completed'
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('[Tracking] Event tracking failed:', error);
+        }
+    };
+    
+    // CTA 点击事件跟踪（便捷函数）
+    window.trackCTA = function(eventName, buttonType) {
+        var fullEventName = eventName;
+        if (buttonType) {
+            fullEventName = eventName + '_' + buttonType;
+        }
+        window.trackEvent(fullEventName, {
+            event_category: 'CTA',
+            event_label: buttonType || 'click'
+        });
+    };
+    
+    // 表单提交事件跟踪（便捷函数）
+    window.trackFormSubmit = function(eventName, formData) {
+        window.trackEvent(eventName, {
+            event_category: 'Lead Generation',
+            event_label: 'Form Submission',
+            value: 1,
+            form_data: formData || {}
+        });
+    };
+    
+    // 页面浏览事件跟踪（便捷函数）
+    window.trackPageView = function(pageName) {
+        window.trackEvent('page_view', {
+            page_name: pageName || window.location.pathname
+        });
+    };
+    
+    // 暴露预览模式状态（供外部检查）
+    window.__TRACKING_CONFIG__ = {
+        isPreview: isPreview,
+        hasGTM: trackingConfig.hasGTM,
+        hasGA: trackingConfig.hasGA,
+        hasFB: trackingConfig.hasFB
+    };
+    
+    // 预览模式提示
+    if (isPreview) {
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log('%c🔍 预览模式 - 统计代码已禁用', 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log('%c📊 跟踪配置:', 'color: #ffcc00; font-weight: bold;', window.__TRACKING_CONFIG__);
+        console.log('%c💡 提示: 所有 trackEvent() 调用将只打印日志，不会发送真实数据', 'color: #999999; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+    }
+})();
+</script>
+
+<!-- Body 跟踪代码（Noscript Fallback） -->
+<?php if (!$isPreview): ?>
+    <!-- Google Tag Manager (noscript) -->
+    <?php if (!empty($gtmId)): ?>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars($gtmId ?? '') ?>"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <?php endif; ?>
 <?php else: ?>
-    <!-- 预览模式：跟踪代码已禁用 -->
-    <script>
-        console.log('[预览模式] 跟踪代码已禁用');
-        <?php if ($ga4Id): ?>console.log('Google Analytics 4 ID: <?= htmlspecialchars($ga4Id) ?>');<?php endif; ?>
-        <?php if ($gtmId): ?>console.log('Google Tag Manager ID: <?= htmlspecialchars($gtmId) ?>');<?php endif; ?>
-        <?php if ($fbPixelId): ?>console.log('Facebook Pixel ID: <?= htmlspecialchars($fbPixelId) ?>');<?php endif; ?>
-    </script>
+    <script>try{console.log('[预览模式] Footer 跟踪代码已禁用');}catch(e){}</script>
 <?php endif; ?>
