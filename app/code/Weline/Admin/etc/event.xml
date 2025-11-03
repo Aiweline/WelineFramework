@@ -36,4 +36,9 @@
         <observer name="Weline_Admin::backend_controller_init_after" instance="Weline\Admin\Observer\BackendControllerInitAfter" disabled="false"
                   shared="true"/>
     </event>
+    <!--菜单访问记录-->
+    <event name="Framework_App::backend_controller_init_after">
+        <observer name="Weline_Admin::menu_access_log" instance="Weline\Admin\Observer\MenuAccessLogObserver" disabled="false"
+                  shared="true" sort="10"/>
+    </event>
 </config>
