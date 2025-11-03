@@ -162,7 +162,7 @@ function processContentText($text) {
     // 先将字面的 \n 转换为真正的换行符
     $text = str_replace('\\n', "\n", $text);
     
-    $text = htmlspecialchars($text);
+    $text = htmlspecialchars($text ?? '');
     // 先处理粗体标记
     $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
     
@@ -374,20 +374,20 @@ $formMessages = [
     }
     
     .marketing-title {
-        color: <?= htmlspecialchars($titleColor) ?>;
+        color: <?= htmlspecialchars($titleColor ?? '') ?>;
         font-size: <?= $titleSize ?>;
-        font-weight: <?= htmlspecialchars($titleWeight) ?>;
-        line-height: <?= htmlspecialchars($titleLineHeight) ?>;
-        text-align: <?= htmlspecialchars($titleAlign) ?>;
+        font-weight: <?= htmlspecialchars($titleWeight ?? '') ?>;
+        line-height: <?= htmlspecialchars($titleLineHeight ?? '') ?>;
+        text-align: <?= htmlspecialchars($titleAlign ?? '') ?>;
         margin-bottom: <?= $titleMargin ?>;
     }
     
     .marketing-subtitle p {
-        color: <?= htmlspecialchars($subtitleColor) ?>;
+        color: <?= htmlspecialchars($subtitleColor ?? '') ?>;
         font-size: <?= $subtitleSize ?>;
-        font-weight: <?= htmlspecialchars($subtitleWeight) ?>;
-        line-height: <?= htmlspecialchars($subtitleLineHeight) ?>;
-        text-align: <?= htmlspecialchars($subtitleAlign) ?>;
+        font-weight: <?= htmlspecialchars($subtitleWeight ?? '') ?>;
+        line-height: <?= htmlspecialchars($subtitleLineHeight ?? '') ?>;
+        text-align: <?= htmlspecialchars($subtitleAlign ?? '') ?>;
         margin-top: 0;
         margin-bottom: <?= $subtitleMargin ?>;
     }
@@ -402,15 +402,15 @@ $formMessages = [
     }
     
     .marketing-form {
-        background-color: <?= htmlspecialchars($formBg) ?>;
-        border-radius: <?= htmlspecialchars($formRadius) ?>px;
+        background-color: <?= htmlspecialchars($formBg ?? '') ?>;
+        border-radius: <?= htmlspecialchars($formRadius ?? '') ?>px;
         padding: <?= $formPadding ?>;
     }
     
     .marketing-form-title {
-        color: <?= htmlspecialchars($formTitleColor) ?>;
+        color: <?= htmlspecialchars($formTitleColor ?? '') ?>;
         font-size: <?= $formTitleSize ?>;
-        font-weight: <?= htmlspecialchars($formTitleWeight) ?>;
+        font-weight: <?= htmlspecialchars($formTitleWeight ?? '') ?>;
         margin-bottom: <?= $formTitleMargin ?>;
     }
     
@@ -444,10 +444,10 @@ $formMessages = [
     .marketing-input {
         width: 100%;
         height: <?= $inputHeight ?>;
-        background-color: <?= htmlspecialchars($inputBg) ?>;
-        color: <?= htmlspecialchars($inputText) ?>;
-        border: 1px solid <?= htmlspecialchars($inputBorder) ?>;
-        border-radius: <?= htmlspecialchars($inputRadius) ?>px;
+        background-color: <?= htmlspecialchars($inputBg ?? '') ?>;
+        color: <?= htmlspecialchars($inputText ?? '') ?>;
+        border: 1px solid <?= htmlspecialchars($inputBorder ?? '') ?>;
+        border-radius: <?= htmlspecialchars($inputRadius ?? '') ?>px;
         padding: <?= $inputPadding ?>;
         font-size: <?= $inputSize ?>;
         outline: none;
@@ -502,14 +502,14 @@ $formMessages = [
         background-color: #00ff00;
         color: #000000;
         border: none;
-        border-radius: <?= htmlspecialchars($btnRadius) ?>px;
+        border-radius: <?= htmlspecialchars($btnRadius ?? '') ?>px;
         padding-left: <?= $btnPaddingH ?>;
         padding-right: <?= $btnPaddingH ?>;
         font-size: <?= $btnSize ?>;
-        font-weight: <?= htmlspecialchars($btnWeight) ?>;
+        font-weight: <?= htmlspecialchars($btnWeight ?? '') ?>;
         cursor: pointer;
         transition: background-color 0.3s;
-        animation: wiggle <?= htmlspecialchars($btnWiggleInterval) ?>s ease infinite;
+        animation: wiggle <?= htmlspecialchars($btnWiggleInterval ?? '') ?>s ease infinite;
     }
     
     .marketing-button:hover {
@@ -523,9 +523,9 @@ $formMessages = [
     }
     
     .marketing-disclaimer {
-        color: <?= htmlspecialchars($disclaimerColor) ?>;
+        color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
         font-size: <?= $disclaimerSize ?>;
-        line-height: <?= htmlspecialchars($disclaimerHeight) ?>;
+        line-height: <?= htmlspecialchars($disclaimerHeight ?? '') ?>;
         margin-top: <?= $disclaimerMargin ?>;
     }
     
@@ -545,7 +545,7 @@ $formMessages = [
     .marketing-image {
         width: 100%;
         height: auto;
-        border-radius: <?= htmlspecialchars($imageRadius) ?>px;
+        border-radius: <?= htmlspecialchars($imageRadius ?? '') ?>px;
         object-fit: cover;
         transform-style: preserve-3d;
         animation: bookFloat 4s ease-in-out infinite;
@@ -571,9 +571,9 @@ $formMessages = [
     }
     
     .marketing-content-text {
-        color: <?= htmlspecialchars($contentColor) ?>;
+        color: <?= htmlspecialchars($contentColor ?? '') ?>;
         font-size: <?= $contentSize ?>;
-        line-height: <?= htmlspecialchars($contentHeight) ?>;
+        line-height: <?= htmlspecialchars($contentHeight ?? '') ?>;
         margin-bottom: <?= $gap ?>;
     }
     
@@ -789,7 +789,7 @@ $formMessages = [
                 <!-- 标题和副标题 -->
                 <div class="marketing-text-section">
                     <?php if ($titleText): ?>
-                    <h1 class="marketing-title"><?= htmlspecialchars($titleText) ?></h1>
+                    <h1 class="marketing-title"><?= htmlspecialchars($titleText ?? '') ?></h1>
                     <?php endif; ?>
                     
                     <div class="marketing-subtitle"><?= processContentText($subtitleText) ?></div>
@@ -798,10 +798,10 @@ $formMessages = [
                 <!-- 表单 -->
                 <div class="marketing-form">
                     <?php if ($formTitle): ?>
-                    <h2 class="marketing-form-title"><?= htmlspecialchars($formTitle) ?></h2>
+                    <h2 class="marketing-form-title"><?= htmlspecialchars($formTitle ?? '') ?></h2>
                     <?php endif; ?>
                     
-                    <form method="POST" action="<?= htmlspecialchars($formAction) ?>" id="marketingForm">
+                    <form method="POST" action="<?= htmlspecialchars($formAction ?? '') ?>" id="marketingForm">
                     <?= $this->getFormKey($formAction) ?>
                         <input type="hidden" name="page_id" value="<?= $page ? $page->getId() : 0 ?>">
                         
@@ -843,7 +843,7 @@ $formMessages = [
                         </div>
                         
                         <button type="submit" class="marketing-button" id="submitBtn">
-                            <?= htmlspecialchars($btnText) ?>
+                            <?= htmlspecialchars($btnText ?? '') ?>
                         </button>
                         
                         <!-- 提交状态提示 -->
@@ -861,8 +861,8 @@ $formMessages = [
             <!-- 图片区域 -->
             <?php if ($imageUrl): ?>
             <div class="marketing-image-wrapper">
-                <img src="<?= htmlspecialchars($imageUrl) ?>" 
-                     alt="<?= htmlspecialchars($imageAlt) ?>" 
+                <img src="<?= htmlspecialchars($imageUrl ?? '') ?>" loading="lazy"
+                     alt="<?= htmlspecialchars($imageAlt ?? '') ?>" 
                      class="marketing-image">
             </div>
             <?php endif; ?>
@@ -881,8 +881,6 @@ $formMessages = [
     const messages = <?= json_encode($formMessages) ?>;
     
     // 跟踪代码配置
-    const ga4Id = <?= json_encode($ga4Id) ?>;
-    const fbPixelId = <?= json_encode($fbPixelId) ?>;
     const ctaEventName = <?= json_encode($ctaEventName) ?>;
     
     if (!form) return;
@@ -971,29 +969,11 @@ $formMessages = [
                     : messages.success;
                 showMessage(successMsg, 'success');
                 
-                // 触发转化事件跟踪
-                try {
-                    // Google Analytics 4 事件跟踪
-                    if (ga4Id && typeof gtag !== 'undefined') {
-                        gtag('event', ctaEventName, {
-                            'event_category': 'Lead Generation',
-                            'event_label': 'Form Submission',
-                            'value': 1
-                        });
-                        console.log('✅ GA4 事件已触发:', ctaEventName);
-                    }
-                    
-                    // Facebook Pixel 事件跟踪
-                    if (fbPixelId && typeof fbq !== 'undefined') {
-                        fbq('track', 'Lead', {
-                            content_name: ctaEventName,
-                            status: 'completed'
-                        });
-                        console.log('✅ Facebook Pixel 事件已触发:', ctaEventName);
-                    }
-                } catch (trackingError) {
-                    console.error('事件跟踪失败:', trackingError);
-                }
+                // 触发转化事件跟踪 - 使用通用跟踪函数
+                window.trackFormSubmit(ctaEventName, {
+                    email: formData.get('email'),
+                    phone: formData.get('phone')
+                });
                 
                 // 如果配置了跳转地址，1秒后跳转；否则不跳转
                 if (redirectUrl && redirectUrl.trim() !== '') {

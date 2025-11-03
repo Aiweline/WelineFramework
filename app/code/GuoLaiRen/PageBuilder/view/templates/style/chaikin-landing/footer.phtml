@@ -146,16 +146,16 @@ $footerBorderTop = getFooterConfig($styleSettings, 'footer.border_top', 'yes');
 $footerBorderColor = getFooterConfig($styleSettings, 'footer.border_color', '#e5e5e5');
 
 // 处理法律声明中的链接占位符
-$noticeProcessed = str_replace('Disclosures and Details', '<a href="' . htmlspecialchars($disclosureUrl) . '" style="color: ' . htmlspecialchars($linkColor) . '; text-decoration: underline;">' . htmlspecialchars($disclosureText) . '</a>', $noticeText);
-$noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUrl) . '" style="color: ' . htmlspecialchars($linkColor) . '; text-decoration: underline;">' . htmlspecialchars($privacyText) . '</a>', $noticeProcessed);
+$noticeProcessed = str_replace('Disclosures and Details', '<a href="' . htmlspecialchars($disclosureUrl ?? '') . '" style="color: ' . htmlspecialchars($linkColor ?? '') . '; text-decoration: underline;">' . htmlspecialchars($disclosureText ?? '') . '</a>', $noticeText);
+$noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUrl ?? '') . '" style="color: ' . htmlspecialchars($linkColor ?? '') . '; text-decoration: underline;">' . htmlspecialchars($privacyText ?? '') . '</a>', $noticeProcessed);
 ?>
 
 <style>
 .chaikin-footer {
-    background-color: <?= htmlspecialchars($footerBg) ?>;
+    background-color: <?= htmlspecialchars($footerBg ?? '') ?>;
     padding: <?= $footerPaddingV ?> 0;
     <?php if ($footerBorderTop === 'yes'): ?>
-    border-top: 1px solid <?= htmlspecialchars($footerBorderColor) ?>;
+    border-top: 1px solid <?= htmlspecialchars($footerBorderColor ?? '') ?>;
     <?php endif; ?>
 }
 
@@ -164,14 +164,14 @@ $noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUr
 }
 
 .chaikin-legal-notice {
-    color: <?= htmlspecialchars($noticeColor) ?>;
+    color: <?= htmlspecialchars($noticeColor ?? '') ?>;
     font-size: <?= $noticeSize ?>;
     line-height: <?= $noticeLineHeight ?>;
     margin-bottom: <?= $noticeMargin ?>;
 }
 
 .chaikin-legal-notice a:hover {
-    color: <?= htmlspecialchars($linkHoverColor) ?>;
+    color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
 }
 
 .chaikin-footer-links {
@@ -181,24 +181,24 @@ $noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUr
 }
 
 .chaikin-footer-links a {
-    color: <?= htmlspecialchars($linksColor) ?>;
+    color: <?= htmlspecialchars($linksColor ?? '') ?>;
     text-decoration: none;
     margin: 0 8px;
     transition: color 0.3s ease;
 }
 
 .chaikin-footer-links a:hover {
-    color: <?= htmlspecialchars($linksHoverColor) ?>;
+    color: <?= htmlspecialchars($linksHoverColor ?? '') ?>;
     text-decoration: underline;
 }
 
 .chaikin-footer-links .separator {
-    color: <?= htmlspecialchars($linksColor) ?>;
+    color: <?= htmlspecialchars($linksColor ?? '') ?>;
     margin: 0 4px;
 }
 
 .chaikin-copyright {
-    color: <?= htmlspecialchars($copyrightColor) ?>;
+    color: <?= htmlspecialchars($copyrightColor ?? '') ?>;
     font-size: <?= $copyrightSize ?>;
     margin-top: <?= $copyrightMargin ?>;
 }
@@ -231,10 +231,10 @@ $noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUr
             <div class="chaikin-footer-links">
                 <?php foreach ($footerLinks as $index => $link): ?>
                     <?php if ($index > 0): ?>
-                        <span class="separator"><?= htmlspecialchars($linksSeparator) ?></span>
+                        <span class="separator"><?= htmlspecialchars($linksSeparator ?? '') ?></span>
                     <?php endif; ?>
-                    <a href="<?= htmlspecialchars($link['url']) ?>">
-                        <?= htmlspecialchars($link['text']) ?>
+                    <a href="<?= htmlspecialchars($link['url'] ?? '') ?>">
+                        <?= htmlspecialchars($link['text'] ?? '') ?>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -242,7 +242,7 @@ $noticeProcessed = str_replace('here', '<a href="' . htmlspecialchars($privacyUr
             
             <!-- 版权信息 -->
             <div class="chaikin-copyright">
-                <?= htmlspecialchars($copyrightText) ?>
+                <?= htmlspecialchars($copyrightText ?? '') ?>
             </div>
         </div>
     </footer>

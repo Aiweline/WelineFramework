@@ -163,7 +163,7 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 
 <style>
 .page-content {
-    background: <?= htmlspecialchars($bgColor) ?>;
+    background: <?= htmlspecialchars($bgColor ?? '') ?>;
     min-height: 60vh;
     padding: <?= intval($marginTop) ?>px 0 <?= intval($marginBottom) ?>px 0;
 }
@@ -172,8 +172,8 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
     max-width: <?= intval($maxWidth) ?>px;
     margin: 0 auto;
     padding: 0 <?= intval($padding) ?>px;
-    color: <?= htmlspecialchars($textColor) ?>;
-    font-family: <?= htmlspecialchars($fontFamily) ?>, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: <?= htmlspecialchars($textColor ?? '') ?>;
+    font-family: <?= htmlspecialchars($fontFamily ?? '') ?>, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: <?= intval($textSize) ?>px;
     line-height: <?= floatval($lineHeight) ?>;
     letter-spacing: <?= intval($letterSpacing) ?>px;
@@ -188,7 +188,7 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 }
 
 .content-title {
-    color: <?= htmlspecialchars($headingColor) ?>;
+    color: <?= htmlspecialchars($headingColor ?? '') ?>;
     font-size: <?= intval($titleSize) ?>px;
     font-weight: 700;
     margin-top: <?= intval($headingMarginTop) ?>px;
@@ -201,7 +201,7 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 }
 
 .content-subtitle {
-    color: <?= htmlspecialchars($headingColor) ?>;
+    color: <?= htmlspecialchars($headingColor ?? '') ?>;
     font-size: calc(<?= intval($titleSize) ?>px * 0.75);
     font-weight: 600;
     margin-top: calc(<?= intval($headingMarginTop) ?>px * 0.8);
@@ -218,15 +218,15 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 }
 
 .content-link {
-    color: <?= htmlspecialchars($linkColor) ?>;
+    color: <?= htmlspecialchars($linkColor ?? '') ?>;
     text-decoration: none;
     border-bottom: 1px solid transparent;
     transition: all 0.3s ease;
 }
 
 .content-link:hover {
-    color: <?= htmlspecialchars($linkHoverColor) ?>;
-    border-bottom-color: <?= htmlspecialchars($linkHoverColor) ?>;
+    color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
+    border-bottom-color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
 }
 
 .feature-grid {
@@ -258,7 +258,7 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 .feature-title {
     font-size: 20px;
     font-weight: 600;
-    color: <?= htmlspecialchars($headingColor) ?>;
+    color: <?= htmlspecialchars($headingColor ?? '') ?>;
     margin-bottom: 12px;
 }
 
@@ -270,20 +270,20 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 .cta-section {
     text-align: center;
     padding: 48px 32px;
-    background: linear-gradient(135deg, <?= htmlspecialchars($ctaBgColor1) ?> 0%, <?= htmlspecialchars($ctaBgColor2) ?> 100%);
+    background: linear-gradient(135deg, <?= htmlspecialchars($ctaBgColor1 ?? '') ?> 0%, <?= htmlspecialchars($ctaBgColor2 ?? '') ?> 100%);
     border-radius: 16px;
     margin: <?= intval($sectionSpacing) ?>px 0;
 }
 
 .cta-title {
-    color: <?= htmlspecialchars($ctaTextColor) ?>;
+    color: <?= htmlspecialchars($ctaTextColor ?? '') ?>;
     font-size: 28px;
     font-weight: 700;
     margin-bottom: 16px;
 }
 
 .cta-text {
-    color: <?= htmlspecialchars($ctaTextColor) ?>;
+    color: <?= htmlspecialchars($ctaTextColor ?? '') ?>;
     opacity: 0.9;
     font-size: 18px;
     margin-bottom: 24px;
@@ -292,8 +292,8 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
 .cta-button {
     display: inline-block;
     padding: 14px 32px;
-    background: <?= htmlspecialchars($ctaButtonBg) ?>;
-    color: <?= htmlspecialchars($ctaButtonColor) ?>;
+    background: <?= htmlspecialchars($ctaButtonBg ?? '') ?>;
+    color: <?= htmlspecialchars($ctaButtonColor ?? '') ?>;
     border-radius: 8px;
     text-decoration: none;
     font-weight: 600;
@@ -336,17 +336,17 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
         <!-- 欢迎区块 -->
         <?php if ($welcomeShow === 'yes'): ?>
         <div class="content-section">
-            <h1 class="content-title"><?= htmlspecialchars($welcomeTitle) ?></h1>
+            <h1 class="content-title"><?= htmlspecialchars($welcomeTitle ?? '') ?></h1>
             <?php if ($welcomeText1): ?>
             <p class="content-text">
-                <?= nl2br(htmlspecialchars($welcomeText1)) ?>
+                <?= nl2br(htmlspecialchars($welcomeText1 ?? '')) ?>
             </p>
             <?php endif; ?>
             <?php if ($welcomeText2): ?>
             <p class="content-text">
-                <?= nl2br(htmlspecialchars($welcomeText2)) ?>
+                <?= nl2br(htmlspecialchars($welcomeText2 ?? '')) ?>
                 <?php if ($welcomeLinkText && $welcomeLinkUrl): ?>
-                <a href="<?= htmlspecialchars($welcomeLinkUrl) ?>" class="content-link"><?= htmlspecialchars($welcomeLinkText) ?></a>
+                <a href="<?= htmlspecialchars($welcomeLinkUrl ?? '') ?>" class="content-link"><?= htmlspecialchars($welcomeLinkText ?? '') ?></a>
                 <?php endif; ?>
             </p>
             <?php endif; ?>
@@ -356,17 +356,17 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
         <!-- 功能特性网格 -->
         <?php if ($featuresShow === 'yes'): ?>
         <div id="features" class="content-section">
-            <h2 class="content-subtitle"><?= htmlspecialchars($featuresTitle) ?></h2>
+            <h2 class="content-subtitle"><?= htmlspecialchars($featuresTitle ?? '') ?></h2>
             
             <div class="feature-grid">
                 <?php if ($card1Title || $card1Desc): ?>
                 <div class="feature-card">
                     <?php if ($card1Icon): ?>
-                    <span class="feature-icon"><?= htmlspecialchars($card1Icon) ?></span>
+                    <span class="feature-icon"><?= htmlspecialchars($card1Icon ?? '') ?></span>
                     <?php endif; ?>
-                    <h3 class="feature-title"><?= htmlspecialchars($card1Title) ?></h3>
+                    <h3 class="feature-title"><?= htmlspecialchars($card1Title ?? '') ?></h3>
                     <p class="feature-description">
-                        <?= nl2br(htmlspecialchars($card1Desc)) ?>
+                        <?= nl2br(htmlspecialchars($card1Desc ?? '')) ?>
                     </p>
                 </div>
                 <?php endif; ?>
@@ -374,11 +374,11 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
                 <?php if ($card2Title || $card2Desc): ?>
                 <div class="feature-card">
                     <?php if ($card2Icon): ?>
-                    <span class="feature-icon"><?= htmlspecialchars($card2Icon) ?></span>
+                    <span class="feature-icon"><?= htmlspecialchars($card2Icon ?? '') ?></span>
                     <?php endif; ?>
-                    <h3 class="feature-title"><?= htmlspecialchars($card2Title) ?></h3>
+                    <h3 class="feature-title"><?= htmlspecialchars($card2Title ?? '') ?></h3>
                     <p class="feature-description">
-                        <?= nl2br(htmlspecialchars($card2Desc)) ?>
+                        <?= nl2br(htmlspecialchars($card2Desc ?? '')) ?>
                     </p>
                 </div>
                 <?php endif; ?>
@@ -386,11 +386,11 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
                 <?php if ($card3Title || $card3Desc): ?>
                 <div class="feature-card">
                     <?php if ($card3Icon): ?>
-                    <span class="feature-icon"><?= htmlspecialchars($card3Icon) ?></span>
+                    <span class="feature-icon"><?= htmlspecialchars($card3Icon ?? '') ?></span>
                     <?php endif; ?>
-                    <h3 class="feature-title"><?= htmlspecialchars($card3Title) ?></h3>
+                    <h3 class="feature-title"><?= htmlspecialchars($card3Title ?? '') ?></h3>
                     <p class="feature-description">
-                        <?= nl2br(htmlspecialchars($card3Desc)) ?>
+                        <?= nl2br(htmlspecialchars($card3Desc ?? '')) ?>
                     </p>
                 </div>
                 <?php endif; ?>
@@ -401,17 +401,17 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
         <!-- 关于我们区块 -->
         <?php if ($aboutShow === 'yes'): ?>
         <div class="content-section">
-            <h2 class="content-subtitle"><?= htmlspecialchars($aboutTitle) ?></h2>
+            <h2 class="content-subtitle"><?= htmlspecialchars($aboutTitle ?? '') ?></h2>
             <?php if ($aboutText1): ?>
             <p class="content-text">
-                <?= nl2br(htmlspecialchars($aboutText1)) ?>
+                <?= nl2br(htmlspecialchars($aboutText1 ?? '')) ?>
             </p>
             <?php endif; ?>
             <?php if ($aboutText2): ?>
             <p class="content-text">
-                <?= nl2br(htmlspecialchars($aboutText2)) ?>
+                <?= nl2br(htmlspecialchars($aboutText2 ?? '')) ?>
                 <?php if ($aboutLinkText && $aboutLinkUrl): ?>
-                <a href="<?= htmlspecialchars($aboutLinkUrl) ?>" class="content-link"><?= htmlspecialchars($aboutLinkText) ?></a>
+                <a href="<?= htmlspecialchars($aboutLinkUrl ?? '') ?>" class="content-link"><?= htmlspecialchars($aboutLinkText ?? '') ?></a>
                 <?php endif; ?>
             </p>
             <?php endif; ?>
@@ -421,12 +421,12 @@ $ctaButtonColor = getContentConfig($styleSettings, 'cta.button_color', '#667eea'
         <!-- 行动号召区块 -->
         <?php if ($ctaShow === 'yes'): ?>
         <div class="cta-section">
-            <h2 class="cta-title"><?= htmlspecialchars($ctaTitle) ?></h2>
+            <h2 class="cta-title"><?= htmlspecialchars($ctaTitle ?? '') ?></h2>
             <?php if ($ctaText): ?>
-            <p class="cta-text"><?= htmlspecialchars($ctaText) ?></p>
+            <p class="cta-text"><?= htmlspecialchars($ctaText ?? '') ?></p>
             <?php endif; ?>
             <?php if ($ctaButtonText): ?>
-            <a href="<?= htmlspecialchars($ctaButtonUrl) ?>" class="cta-button"><?= htmlspecialchars($ctaButtonText) ?></a>
+            <a href="<?= htmlspecialchars($ctaButtonUrl ?? '') ?>" class="cta-button"><?= htmlspecialchars($ctaButtonText ?? '') ?></a>
             <?php endif; ?>
         </div>
         <?php endif; ?>

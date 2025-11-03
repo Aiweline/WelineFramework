@@ -1,0 +1,409 @@
+<?php
+/**
+ * StockCircle Email Template - Content
+ * 邮件模板 - 内容区域
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:theme => 全局主题设置[继承]:💡主题模式说明:此配置继承自Header的主题设置，三个文件共享同一主题配置\n• 如需修改主题，请在Header配置中修改\n• 保持三个文件的主题模式一致，确保整体风格统一
+ * theme.mode => 主题模式（继承Header）:select:dark|dark,light
+ * 
+ * group:container => 容器设置
+ * container.max_width => 最大宽度:responsive:100/600|%/px[移动端100%，PC端600px]
+ * container.padding_v => 上下内边距:responsive:40/40|px[移动端40px，PC端40px]
+ * container.padding_h => 左右内边距:responsive:30/30|px[移动端30px，PC端30px]
+ * container.background_color_dark => 背景颜色(暗色主题):color:#212a37
+ * container.background_color_light => 背景颜色(亮色主题):color:#ffffff
+ * 
+ * group:title => 标题设置
+ * title.text => 主标题内容:textarea:Get Exclusive Market Insights — Before Everyone Else Does
+ * title.color_dark => 标题颜色(暗色主题):color:#03d453
+ * title.color_light => 标题颜色(亮色主题):color:#333333
+ * title.size => 标题字号:responsive:24/24|px[移动端24px，PC端24px]
+ * title.weight => 字体粗细:select:bold|400,500,600,700,bold
+ * title.line_height => 行高:number:1.4
+ * title.margin_bottom => 下边距:responsive:20/20|px[移动端20px，PC端20px]
+ * 
+ * group:paragraph => 段落设置
+ * paragraph.text1 => 段落1内容:textarea:Curious about where the market is heading next year? Or which sectors might show early signs of momentum in 2026?
+ * paragraph.text2 => 段落2内容:textarea:Our market learning community gathers over 600 members who share real-time insights and discuss what's shaping global trends — often before it appears in the news.
+ * paragraph.text3 => 段落3内容:textarea:We keep the group small and focused to make every discussion valuable.
+ * paragraph.text4 => 段落4内容:textarea:The community runs on WhatsApp — so you can stay connected and learn from others anytime.
+ * paragraph.text5 => 段落5内容:textarea:Looking forward to seeing you inside,
+ * paragraph.text6 => 段落6内容:textarea:Best,\nThe StockCircle Team
+ * paragraph.color_dark => 文字颜色(暗色主题):color:#e0e0e0
+ * paragraph.color_light => 文字颜色(亮色主题):color:#666666
+ * paragraph.size => 字体大小:responsive:16/16|px[移动端16px，PC端16px]
+ * paragraph.line_height => 行高:number:1.6
+ * paragraph.margin_bottom => 段落间距:responsive:15/15|px[移动端15px，PC端15px]
+ * paragraph.strong_color_dark => 加粗文字颜色(暗色主题):color:#ffffff
+ * paragraph.strong_color_light => 加粗文字颜色(亮色主题):color:#333333
+ * 
+ * group:button => 按钮设置
+ * button.text => 按钮文本:text:Join Us
+ * button.url => 按钮链接地址:text:https://stockcircle.to/whatsapp.html
+ * button.background_color_dark => 背景颜色(暗色主题):color:#fefb41
+ * button.background_color_light => 背景颜色(亮色主题):color:#64e700
+ * button.text_color => 文字颜色:color:#000000
+ * button.font_size => 字体大小:responsive:16/16|px[移动端16px，PC端16px]
+ * button.weight => 字体粗细:select:bold|400,500,600,700,bold
+ * button.padding_v => 上下内边距:responsive:14/14|px[移动端14px，PC端14px]
+ * button.padding_h => 左右内边距:responsive:40/40|px[移动端40px，PC端40px]
+ * button.border_radius => 圆角大小:number:50|px
+ * button.margin_top => 上边距:responsive:30/30|px[移动端30px，PC端30px]
+ * button.margin_bottom => 下边距:responsive:30/30|px[移动端30px，PC端30px]
+ * 
+ * group:list => 列表设置
+ * list.title => 列表标题:text:Here's what you'll find inside:
+ * list.title_color_dark => 标题颜色(暗色主题):color:#ffffff
+ * list.title_color_light => 标题颜色(亮色主题):color:#333333
+ * list.item1 => 列表项1:text:Daily updates and market observations
+ * list.item2 => 列表项2:text:Real-time discussions on new developments
+ * list.item3 => 列表项3:text:Research highlights shared by our team
+ * list.item4 => 列表项4:text:Friendly, interactive exchanges with other members
+ * list.color_dark => 文字颜色(暗色主题):color:#e0e0e0
+ * list.color_light => 文字颜色(亮色主题):color:#666666
+ * list.size => 字体大小:responsive:16/16|px[移动端16px，PC端16px]
+ * list.line_height => 行高:number:1.8
+ * list.margin_top => 上边距:responsive:20/20|px[移动端20px，PC端20px]
+ * list.margin_bottom => 下边距:responsive:20/20|px[移动端20px，PC端20px]
+ * 
+ * group:image => 图片设置
+ * image.url => 图片地址:text:https://www.stockcircle.to/img/9bc87df1-a7eb-42ea-b6f2-840e123cff3c.png
+ * image.alt => 图片描述:text:Market Insights
+ * image.link => 图片链接地址:text:
+ * image.width => 图片宽度:responsive:100/100|%[移动端100%，PC端100%]
+ * image.max_width => 图片最大宽度:responsive:540/540|px[移动端540px，PC端540px]
+ * image.border_radius => 圆角大小:number:12|px
+ * image.margin_top => 上边距:responsive:20/20|px[移动端20px，PC端20px]
+ * image.margin_bottom => 下边距:responsive:20/20|px[移动端20px，PC端20px]
+ * 
+ * group:divider => 分割线设置
+ * divider.display => 显示分割线:select:yes|yes,no
+ * divider.color_dark => 分割线颜色(暗色主题):color:#4a5566
+ * divider.color_light => 分割线颜色(亮色主题):color:#e0e0e0
+ * divider.margin_v => 上下边距:responsive:30/30|px[移动端30px，PC端30px]
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// Helper function
+function getEmailContentConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+if (!function_exists('parseResponsive')) {
+function parseResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+}
+
+if (!function_exists('genResponsiveCSS')) {
+function genResponsiveCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+}
+
+// 主题配置 - 全局共享，与 Header 和 Footer 使用同一个配置
+// 如果需要修改主题，请在 Header 配置中修改 theme.mode，三个文件会自动同步
+$themeMode = getEmailContentConfig($styleSettings, 'theme.mode', 'dark');
+
+// 容器配置
+$containerMaxWidth = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'container.max_width', '100/600')));
+$paddingV = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'container.padding_v', '40/40') . 'px'));
+$paddingH = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'container.padding_h', '30/30') . 'px'));
+$bgColorDark = getEmailContentConfig($styleSettings, 'container.background_color_dark', '#212a37');
+$bgColorLight = getEmailContentConfig($styleSettings, 'container.background_color_light', '#ffffff');
+$bgColor = ($themeMode === 'dark') ? $bgColorDark : $bgColorLight;
+
+// 标题配置
+$titleText = getEmailContentConfig($styleSettings, 'title.text', 'Get Exclusive Market Insights — Before Everyone Else Does');
+$titleColorDark = getEmailContentConfig($styleSettings, 'title.color_dark', '#03d453');
+$titleColorLight = getEmailContentConfig($styleSettings, 'title.color_light', '#333333');
+$titleColor = ($themeMode === 'dark') ? $titleColorDark : $titleColorLight;
+$titleSize = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'title.size', '24/24') . 'px'));
+$titleWeight = getEmailContentConfig($styleSettings, 'title.weight', 'bold');
+$titleLineHeight = getEmailContentConfig($styleSettings, 'title.line_height', '1.4');
+$titleMarginBottom = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'title.margin_bottom', '20/20') . 'px'));
+
+// 段落配置
+$paragraphTexts = [
+    getEmailContentConfig($styleSettings, 'paragraph.text1', 'Curious about where the market is heading next year? Or which sectors might show early signs of momentum in 2026?'),
+    getEmailContentConfig($styleSettings, 'paragraph.text2', 'Our market learning community gathers over 600 members who share real-time insights and discuss what\'s shaping global trends — often before it appears in the news.'),
+    getEmailContentConfig($styleSettings, 'paragraph.text3', 'We keep the group small and focused to make every discussion valuable.'),
+    getEmailContentConfig($styleSettings, 'paragraph.text4', 'The community runs on WhatsApp — so you can stay connected and learn from others anytime.'),
+    getEmailContentConfig($styleSettings, 'paragraph.text5', 'Looking forward to seeing you inside,'),
+    getEmailContentConfig($styleSettings, 'paragraph.text6', 'Best,\nThe StockCircle Team'),
+];
+$paragraphColorDark = getEmailContentConfig($styleSettings, 'paragraph.color_dark', '#e0e0e0');
+$paragraphColorLight = getEmailContentConfig($styleSettings, 'paragraph.color_light', '#666666');
+$paragraphColor = ($themeMode === 'dark') ? $paragraphColorDark : $paragraphColorLight;
+$paragraphSize = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'paragraph.size', '16/16') . 'px'));
+$paragraphLineHeight = getEmailContentConfig($styleSettings, 'paragraph.line_height', '1.6');
+$paragraphMarginBottom = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'paragraph.margin_bottom', '15/15') . 'px'));
+$paragraphStrongColorDark = getEmailContentConfig($styleSettings, 'paragraph.strong_color_dark', '#ffffff');
+$paragraphStrongColorLight = getEmailContentConfig($styleSettings, 'paragraph.strong_color_light', '#333333');
+$paragraphStrongColor = ($themeMode === 'dark') ? $paragraphStrongColorDark : $paragraphStrongColorLight;
+
+// 按钮配置
+$buttonText = getEmailContentConfig($styleSettings, 'button.text', 'Join Us');
+$buttonUrl = getEmailContentConfig($styleSettings, 'button.url', 'https://stockcircle.to/whatsapp.html');
+$buttonBgDark = getEmailContentConfig($styleSettings, 'button.background_color_dark', '#fefb41');
+$buttonBgLight = getEmailContentConfig($styleSettings, 'button.background_color_light', '#64e700');
+$buttonBg = ($themeMode === 'dark') ? $buttonBgDark : $buttonBgLight;
+$buttonTextColor = getEmailContentConfig($styleSettings, 'button.text_color', '#000000');
+$buttonFontSize = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'button.font_size', '16/16') . 'px'));
+$buttonWeight = getEmailContentConfig($styleSettings, 'button.weight', 'bold');
+$buttonPaddingV = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'button.padding_v', '14/14') . 'px'));
+$buttonPaddingH = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'button.padding_h', '40/40') . 'px'));
+$buttonRadius = getEmailContentConfig($styleSettings, 'button.border_radius', '50');
+$buttonMarginTop = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'button.margin_top', '30/30') . 'px'));
+$buttonMarginBottom = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'button.margin_bottom', '30/30') . 'px'));
+
+// 列表配置
+$listTitle = getEmailContentConfig($styleSettings, 'list.title', 'Here\'s what you\'ll find inside:');
+$listTitleColorDark = getEmailContentConfig($styleSettings, 'list.title_color_dark', '#ffffff');
+$listTitleColorLight = getEmailContentConfig($styleSettings, 'list.title_color_light', '#333333');
+$listTitleColor = ($themeMode === 'dark') ? $listTitleColorDark : $listTitleColorLight;
+$listItems = [
+    getEmailContentConfig($styleSettings, 'list.item1', 'Daily updates and market observations'),
+    getEmailContentConfig($styleSettings, 'list.item2', 'Real-time discussions on new developments'),
+    getEmailContentConfig($styleSettings, 'list.item3', 'Research highlights shared by our team'),
+    getEmailContentConfig($styleSettings, 'list.item4', 'Friendly, interactive exchanges with other members'),
+];
+$listColorDark = getEmailContentConfig($styleSettings, 'list.color_dark', '#e0e0e0');
+$listColorLight = getEmailContentConfig($styleSettings, 'list.color_light', '#666666');
+$listColor = ($themeMode === 'dark') ? $listColorDark : $listColorLight;
+$listSize = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'list.size', '16/16') . 'px'));
+$listLineHeight = getEmailContentConfig($styleSettings, 'list.line_height', '1.8');
+$listMarginTop = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'list.margin_top', '20/20') . 'px'));
+$listMarginBottom = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'list.margin_bottom', '20/20') . 'px'));
+
+// 图片配置
+$imageUrl = getEmailContentConfig($styleSettings, 'image.url', 'https://www.stockcircle.to/img/9bc87df1-a7eb-42ea-b6f2-840e123cff3c.png');
+$imageAlt = getEmailContentConfig($styleSettings, 'image.alt', 'Market Insights');
+$imageLink = getEmailContentConfig($styleSettings, 'image.link', '');
+$imageWidth = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'image.width', '100/100') . '%'));
+$imageMaxWidth = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'image.max_width', '540/540') . 'px'));
+$imageRadius = getEmailContentConfig($styleSettings, 'image.border_radius', '12');
+$imageMarginTop = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'image.margin_top', '20/20') . 'px'));
+$imageMarginBottom = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'image.margin_bottom', '20/20') . 'px'));
+
+// 分割线配置
+$dividerDisplay = getEmailContentConfig($styleSettings, 'divider.display', 'yes');
+$dividerColorDark = getEmailContentConfig($styleSettings, 'divider.color_dark', '#4a5566');
+$dividerColorLight = getEmailContentConfig($styleSettings, 'divider.color_light', '#e0e0e0');
+$dividerColor = ($themeMode === 'dark') ? $dividerColorDark : $dividerColorLight;
+$dividerMarginV = genResponsiveCSS(parseResponsive(getEmailContentConfig($styleSettings, 'divider.margin_v', '30/30') . 'px'));
+?>
+
+<style>
+    .email-content {
+        width: 100%;
+        background-color: <?= htmlspecialchars($bgColor ?? '') ?>;
+        padding: <?= $paddingV ?> <?= $paddingH ?>;
+    }
+    
+    .email-content-container {
+        max-width: <?= $containerMaxWidth ?>;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .email-title {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $titleSize ?>;
+        font-weight: <?= htmlspecialchars($titleWeight ?? '') ?>;
+        color: <?= htmlspecialchars($titleColor ?? '') ?>;
+        line-height: <?= htmlspecialchars($titleLineHeight ?? '') ?>;
+        margin: 0 0 <?= $titleMarginBottom ?> 0;
+    }
+    
+    .email-paragraph {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $paragraphSize ?>;
+        color: <?= htmlspecialchars($paragraphColor ?? '') ?>;
+        line-height: <?= htmlspecialchars($paragraphLineHeight ?? '') ?>;
+        margin: 0 0 <?= $paragraphMarginBottom ?> 0;
+    }
+    
+    .email-paragraph:last-child {
+        margin-bottom: 0;
+    }
+    
+    .email-paragraph strong {
+        color: <?= htmlspecialchars($paragraphStrongColor ?? '') ?>;
+        font-weight: bold;
+    }
+    
+    .email-button-container {
+        margin: <?= $buttonMarginTop ?> 0 <?= $buttonMarginBottom ?> 0;
+        text-align: center;
+    }
+    
+    .email-button {
+        display: inline-block;
+        padding: <?= $buttonPaddingV ?> <?= $buttonPaddingH ?>;
+        background-color: <?= htmlspecialchars($buttonBg ?? '') ?>;
+        color: <?= htmlspecialchars($buttonTextColor ?? '') ?> !important;
+        text-decoration: none;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $buttonFontSize ?>;
+        font-weight: <?= htmlspecialchars($buttonWeight ?? '') ?>;
+        border-radius: <?= htmlspecialchars($buttonRadius ?? '') ?>px;
+        text-align: center;
+    }
+    
+    .email-button:hover {
+        opacity: 0.9;
+    }
+    
+    .email-list-title {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $paragraphSize ?>;
+        font-weight: bold;
+        color: <?= htmlspecialchars($listTitleColor ?? '') ?>;
+        margin: <?= $listMarginTop ?> 0 10px 0;
+    }
+    
+    .email-list {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: <?= $listSize ?>;
+        color: <?= htmlspecialchars($listColor ?? '') ?>;
+        line-height: <?= htmlspecialchars($listLineHeight ?? '') ?>;
+        margin: 0 0 <?= $listMarginBottom ?> 0;
+        padding-left: 20px;
+    }
+    
+    .email-list li {
+        margin-bottom: 8px;
+    }
+    
+    .email-list li:last-child {
+        margin-bottom: 0;
+    }
+    
+    .email-image {
+        width: <?= $imageWidth ?>;
+        max-width: <?= $imageMaxWidth ?>;
+        height: auto;
+        display: block;
+        margin: <?= $imageMarginTop ?> 0 <?= $imageMarginBottom ?> 0;
+        border-radius: <?= htmlspecialchars($imageRadius ?? '') ?>px;
+    }
+    
+    .email-divider {
+        border-top: 1px solid <?= htmlspecialchars($dividerColor ?? '') ?>;
+        margin: <?= $dividerMarginV ?> 0;
+    }
+    
+    /* 移动端优化 */
+    @media (max-width: 600px) {
+        .email-content {
+            padding: 30px 20px !important;
+        }
+        
+        .email-content-container {
+            max-width: 100% !important;
+        }
+        
+        .email-title {
+            font-size: 22px !important;
+        }
+        
+        .email-paragraph,
+        .email-list {
+            font-size: 15px !important;
+        }
+        
+        .email-button {
+            padding: 12px 30px !important;
+            font-size: 15px !important;
+        }
+    }
+</style>
+
+<main class="email-content">
+    <div class="email-content-container">
+        
+        <?php if ($titleText): ?>
+        <h1 class="email-title"><?= htmlspecialchars($titleText ?? '') ?></h1>
+        <?php endif; ?>
+        
+        <?php foreach ($paragraphTexts as $index => $text): ?>
+            <?php if (!empty($text)): ?>
+                <?php if ($index === 5): ?>
+                    <p class="email-paragraph">
+                        <strong><?= nl2br(htmlspecialchars($text ?? '')) ?></strong>
+                    </p>
+                <?php else: ?>
+                    <p class="email-paragraph"><?= htmlspecialchars($text ?? '') ?></p>
+                <?php endif; ?>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        
+        <?php if ($buttonText && $buttonUrl): ?>
+        <div class="email-button-container">
+            <a href="<?= htmlspecialchars($buttonUrl ?? '') ?>" class="email-button">
+                <?= htmlspecialchars($buttonText ?? '') ?>
+            </a>
+        </div>
+        <?php endif; ?>
+        
+        <?php if ($listTitle || !empty(array_filter($listItems))): ?>
+            <?php if ($listTitle): ?>
+            <p class="email-list-title"><strong><?= htmlspecialchars($listTitle ?? '') ?></strong></p>
+            <?php endif; ?>
+            
+            <?php if (!empty(array_filter($listItems))): ?>
+            <ul class="email-list">
+                <?php foreach ($listItems as $item): ?>
+                    <?php if (!empty($item)): ?>
+                    <li><?= htmlspecialchars($item ?? '') ?></li>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </ul>
+            <?php endif; ?>
+        <?php endif; ?>
+        
+        <?php if ($imageUrl): ?>
+            <?php if (!empty($imageLink)): ?>
+            <a href="<?= htmlspecialchars($imageLink ?? '') ?>" style="display: block; text-decoration: none;">
+                <img src="<?= htmlspecialchars($imageUrl ?? '') ?>" alt="<?= htmlspecialchars($imageAlt ?? '') ?>" class="email-image" loading="lazy">
+            </a>
+            <?php else: ?>
+            <img src="<?= htmlspecialchars($imageUrl ?? '') ?>" alt="<?= htmlspecialchars($imageAlt ?? '') ?>" class="email-image" loading="lazy">
+            <?php endif; ?>
+        <?php endif; ?>
+        
+        <?php if ($dividerDisplay === 'yes'): ?>
+        <div class="email-divider"></div>
+        <?php endif; ?>
+        
+    </div>
+</main>
+
+

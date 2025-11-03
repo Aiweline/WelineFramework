@@ -12,17 +12,27 @@ declare(strict_types=1);
 namespace Weline\Cdn\Model;
 
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
+use Weline\Framework\Setup\Data\Context;
 
 /**
  * 预热URL模型
+ * 
+ * @package Weline_Cdn
  */
 class WarmupUrl extends Model
 {
-    // 字段常量
-    public const fields_ID = 'warmup_url_id';
+    public const table = 'cdn_warmup_url';
+    
+    /**
+     * Primary keys
+     */
+    public array $_unit_primary_keys = ['warmup_url_id'];
+    
+    /**
+     * Field name constants
+     */
+    public const fields_WARMUP_URL_ID = 'warmup_url_id';
     public const fields_MODULE = 'module';
     public const fields_PROVIDER = 'provider';
     public const fields_URL = 'url';
@@ -39,13 +49,15 @@ class WarmupUrl extends Model
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
 
-    // 状态常量
+    /**
+     * Status constants
+     */
     public const STATUS_PENDING = 'pending';
     public const STATUS_SUCCESS = 'success';
     public const STATUS_FAIL = 'fail';
 
     /**
-     * @inheritDoc
+     * Initialize model
      */
     public function _init(): void
     {
@@ -54,10 +66,12 @@ class WarmupUrl extends Model
 
     /**
      * 获取主键字段名
+     * 
+     * @return string
      */
     public function getIdFieldName(): string
     {
-        return self::fields_ID;
+        return self::fields_WARMUP_URL_ID;
     }
 
     /**
@@ -81,77 +95,56 @@ class WarmupUrl extends Model
      */
     public function install(ModelSetup $setup, Context $context): void
     {
-        if ($setup->tableExist()) {
-            return;
+        if ($setup->tableExist() === false) {
+            $setup->createTable('预热URL表')
+                ->addColumn(self::fields_WARMUP_URL_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '预热URL ID')
+                ->addColumn(self::fields_MODULE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '来源模块')
+                ->addColumn(self::fields_PROVIDER, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '提供者')
+                ->addColumn(self::fields_URL, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 512, 'not null', 'URL地址')
+                ->addColumn(self::fields_SITE_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '站点ID')
+                ->addColumn(self::fields_DOMAIN_ID, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '域名ID')
+                ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'pending\'', '状态')
+                ->addColumn(self::fields_TARGET_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 1', '目标次数')
+                ->addColumn(self::fields_PROCESSED_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '已处理次数')
+                ->addColumn(self::fields_SUCCESS_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '成功次数')
+                ->addColumn(self::fields_FAIL_COUNT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '失败次数')
+                ->addColumn(self::fields_RETRIES, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '重试次数')
+                ->addColumn(self::fields_ENABLED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
+                ->addColumn(self::fields_LAST_WARMED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '最后预热时间')
+                ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
+                ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
+                ->addIndex(self::fields_MODULE, '', 'KEY', 'idx_module')
+                ->addIndex(self::fields_STATUS, '', 'KEY', 'idx_status')
+                ->addIndex(self::fields_ENABLED, '', 'KEY', 'idx_enabled')
+                ->addIndex(self::fields_DOMAIN_ID, '', 'KEY', 'idx_domain_id')
+                ->addIndex(self::fields_URL, '', 'KEY', 'idx_url')
+                ->create();
         }
-
-        $setup->createTable('CDN预热URL表')
-            ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 11, 'primary key auto_increment', '预热URL ID')
-            ->addColumn(self::fields_MODULE, TableInterface::column_type_VARCHAR, 128, 'not null', '来源模块')
-            ->addColumn(self::fields_PROVIDER, TableInterface::column_type_VARCHAR, 128, 'not null', '提供者')
-            ->addColumn(self::fields_URL, TableInterface::column_type_VARCHAR, 512, 'not null', 'URL地址')
-            ->addColumn(self::fields_SITE_ID, TableInterface::column_type_INTEGER, 11, '', '站点ID')
-            ->addColumn(self::fields_DOMAIN_ID, TableInterface::column_type_INTEGER, 11, '', '域名ID')
-            ->addColumn(self::fields_STATUS, TableInterface::column_type_VARCHAR, 20, "default 'pending'", '状态')
-            ->addColumn(self::fields_TARGET_COUNT, TableInterface::column_type_INTEGER, 11, 'default 0', '目标次数')
-            ->addColumn(self::fields_PROCESSED_COUNT, TableInterface::column_type_INTEGER, 11, 'default 0', '已处理次数')
-            ->addColumn(self::fields_SUCCESS_COUNT, TableInterface::column_type_INTEGER, 11, 'default 0', '成功次数')
-            ->addColumn(self::fields_FAIL_COUNT, TableInterface::column_type_INTEGER, 11, 'default 0', '失败次数')
-            ->addColumn(self::fields_RETRIES, TableInterface::column_type_INTEGER, 11, 'default 0', '重试次数')
-            ->addColumn(self::fields_ENABLED, TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
-            ->addColumn(self::fields_LAST_WARMED_AT, TableInterface::column_type_INTEGER, null, '', '最后预热时间')
-            ->addColumn(self::fields_CREATED_AT, TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-            ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-            ->addIndex([self::fields_MODULE, self::fields_URL], '', 'UNIQUE', 'idx_module_url')
-            ->addIndex(self::fields_SITE_ID, '', 'INDEX', 'idx_site_id')
-            ->addIndex(self::fields_STATUS, '', 'INDEX', 'idx_status')
-            ->addIndex(self::fields_ENABLED, '', 'INDEX', 'idx_enabled')
-            ->create();
     }
 
     /**
-     * 标记成功
+     * 检查是否启用
+     * 
+     * @return bool
      */
-    public function markSuccess(): self
+    public function isEnabled(): bool
     {
-        $processedCount = (int)$this->getData(self::fields_PROCESSED_COUNT);
-        $successCount = (int)$this->getData(self::fields_SUCCESS_COUNT);
-        
-        $this->setData(self::fields_STATUS, self::STATUS_SUCCESS)
-            ->setData(self::fields_PROCESSED_COUNT, $processedCount + 1)
-            ->setData(self::fields_SUCCESS_COUNT, $successCount + 1)
-            ->setData(self::fields_LAST_WARMED_AT, time())
-            ->setData(self::fields_UPDATED_AT, time());
-            
-        return $this;
+        return (int)$this->getData(self::fields_ENABLED) === 1;
     }
 
     /**
-     * 标记失败
+     * 保存前处理
+     * 
+     * @return self
      */
-    public function markFail(): self
+    public function beforeSave(): self
     {
-        $processedCount = (int)$this->getData(self::fields_PROCESSED_COUNT);
-        $failCount = (int)$this->getData(self::fields_FAIL_COUNT);
-        $retries = (int)$this->getData(self::fields_RETRIES);
-        
-        $this->setData(self::fields_STATUS, self::STATUS_FAIL)
-            ->setData(self::fields_PROCESSED_COUNT, $processedCount + 1)
-            ->setData(self::fields_FAIL_COUNT, $failCount + 1)
-            ->setData(self::fields_RETRIES, $retries + 1)
-            ->setData(self::fields_LAST_WARMED_AT, time())
-            ->setData(self::fields_UPDATED_AT, time());
-            
-        return $this;
-    }
-
-    /**
-     * 重置状态为待处理
-     */
-    public function resetToPending(): self
-    {
-        $this->setData(self::fields_STATUS, self::STATUS_PENDING)
-            ->setData(self::fields_UPDATED_AT, time());
-        return $this;
+        $now = time();
+        if (!$this->getData(self::fields_CREATED_AT)) {
+            $this->setData(self::fields_CREATED_AT, $now);
+        }
+        $this->setData(self::fields_UPDATED_AT, $now);
+        return parent::beforeSave();
     }
 }
+
