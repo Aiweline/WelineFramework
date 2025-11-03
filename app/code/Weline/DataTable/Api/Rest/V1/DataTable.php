@@ -33,7 +33,7 @@ class DataTable extends BackendRestController
         try {
             // 验证参数
             if (empty($model) || empty($scope)) {
-                return $this->error('缺少必需参数: model 和 scope');
+                return $this->error(__('缺少必需参数: model 和 scope'));
             }
 
             // 处理多模型配置
@@ -43,7 +43,7 @@ class DataTable extends BackendRestController
 
             // 单模型处理
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -106,7 +106,7 @@ class DataTable extends BackendRestController
         
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
             
             $modelInstance = w_obj($model);
@@ -280,7 +280,7 @@ class DataTable extends BackendRestController
         
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
             
             $modelInstance = new $model();
@@ -315,7 +315,7 @@ class DataTable extends BackendRestController
         
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
             
             $checkIds = !empty($ids) && is_array($ids) ? $ids : [$id];
@@ -370,7 +370,7 @@ class DataTable extends BackendRestController
 
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             // 处理批量删除
@@ -386,7 +386,7 @@ class DataTable extends BackendRestController
             return $this->singleDeleteWithCascade($model, $id, $softDelete, $cascadeDelete, $forceDelete);
 
         } catch (\Exception $e) {
-            return $this->error('数据删除失败: ' . $e->getMessage());
+            return $this->error(__('数据删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -400,7 +400,7 @@ class DataTable extends BackendRestController
             $modelInstance->load($id);
             
             if (!$modelInstance->getId()) {
-                return $this->error('记录不存在');
+                return $this->error(__('记录不存在'));
             }
             
             // 如果启用级联删除，先删除关联数据
@@ -411,13 +411,13 @@ class DataTable extends BackendRestController
             // 删除主记录
             if ($forceDelete && method_exists($modelInstance, 'forceDelete')) {
                 $result = $modelInstance->forceDelete();
-                $message = '记录已永久删除';
+                $message = __('记录已永久删除');
             } elseif ($softDelete && method_exists($modelInstance, 'softDelete')) {
                 $result = $modelInstance->softDelete();
-                $message = '记录已移至回收站';
+                $message = __('记录已移至回收站');
             } else {
                 $result = $modelInstance->delete();
-                $message = '数据删除成功';
+                $message = __('数据删除成功');
             }
             
             return $this->success($message, [
@@ -426,7 +426,7 @@ class DataTable extends BackendRestController
             ]);
             
         } catch (\Exception $e) {
-            return $this->error('删除失败: ' . $e->getMessage());
+            return $this->error(__('删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -455,7 +455,7 @@ class DataTable extends BackendRestController
             }
         }
         
-        $message = "批量删除完成，成功: {$successCount}，失败: {$failedCount}";
+        $message = __('批量删除完成，成功: %{1}，失败: %{2}', [$successCount, $failedCount]);
         
                  return $this->success($message, [
              'success_count' => $successCount,
@@ -718,7 +718,7 @@ class DataTable extends BackendRestController
         
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
             
             $modelInstance = new $model();
@@ -871,7 +871,7 @@ class DataTable extends BackendRestController
             $mainModel = reset($models);
 
             if (!class_exists($mainModel)) {
-                throw new \InvalidArgumentException("主模型类不存在: {$mainModel}");
+                    throw new \InvalidArgumentException(__('主模型类不存在: %{1}', $mainModel));
             }
 
             $modelInstance = w_obj($mainModel);
@@ -942,7 +942,7 @@ class DataTable extends BackendRestController
 
         try {
             if (empty($model) || empty($data)) {
-                return $this->error('缺少必需参数: model 和 data');
+                return $this->error(__('缺少必需参数: model 和 data'));
             }
 
             // 检查是否为多表操作
@@ -955,7 +955,7 @@ class DataTable extends BackendRestController
 
         } catch (\Exception $e) {
             error_log("DataTable Create Error: " . $e->getMessage());
-            return $this->error('记录创建失败: ' . $e->getMessage());
+            return $this->error(__('记录创建失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -966,7 +966,7 @@ class DataTable extends BackendRestController
     {
         $operation = function() use ($model, $data) {
             if (!class_exists($model)) {
-                throw new \InvalidArgumentException("模型类不存在: {$model}");
+                    throw new \InvalidArgumentException(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -986,7 +986,7 @@ class DataTable extends BackendRestController
             $result = $modelInstance->save();
 
             if (!$result) {
-                throw new \RuntimeException('记录创建失败');
+                throw new \RuntimeException(__('记录创建失败'));
             }
 
             return [
@@ -1056,7 +1056,7 @@ class DataTable extends BackendRestController
 
                 // 检查模型类是否存在
                 if (!class_exists($modelClass)) {
-                    throw new \InvalidArgumentException("模型类不存在: {$modelClass}");
+                    throw new \InvalidArgumentException(__('模型类不存在: %{1}', $modelClass));
                 }
 
                 // 实例化模型并保存
@@ -1077,7 +1077,7 @@ class DataTable extends BackendRestController
                 $result = $modelInstance->save();
 
                 if (!$result) {
-                    throw new \RuntimeException("表 {$tableAlias} 的记录创建失败");
+                    throw new \RuntimeException(__('表 %{1} 的记录创建失败', $tableAlias));
                 }
 
                 $savedResults[$tableAlias] = [
@@ -1112,11 +1112,11 @@ class DataTable extends BackendRestController
 
         try {
             if (empty($model) || empty($id) || empty($data)) {
-                return $this->error('缺少必需参数: model、id 和 data');
+                return $this->error(__('缺少必需参数: model、id 和 data'));
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -1124,7 +1124,7 @@ class DataTable extends BackendRestController
             // 查找记录
             $record = $modelInstance->find($id);
             if (!$record) {
-                return $this->error('记录不存在');
+                return $this->error(__('记录不存在'));
             }
 
             // 验证数据
@@ -1142,17 +1142,17 @@ class DataTable extends BackendRestController
             $result = $record->save();
 
             if ($result) {
-                return $this->success('记录更新成功', [
+                return $this->success(__('记录更新成功'), [
                     'id' => $record->getId(),
                     'data' => $record->getData()
                 ]);
             } else {
-                return $this->error('记录更新失败');
+                return $this->error(__('记录更新失败'));
             }
 
         } catch (\Exception $e) {
             error_log("DataTable Update Error: " . $e->getMessage());
-            return $this->error('记录更新失败: ' . $e->getMessage());
+            return $this->error(__('记录更新失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -1167,11 +1167,11 @@ class DataTable extends BackendRestController
 
         try {
             if (empty($model) || (empty($id) && empty($ids))) {
-                return $this->error('缺少必需参数: model 和 id/ids');
+                return $this->error(__('缺少必需参数: model 和 id/ids'));
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -1189,7 +1189,7 @@ class DataTable extends BackendRestController
                 // 单个删除
                 $record = $modelInstance->find($id);
                 if (!$record) {
-                    return $this->error('记录不存在');
+                    return $this->error(__('记录不存在'));
                 }
 
                 if ($record->delete()) {
@@ -1198,16 +1198,16 @@ class DataTable extends BackendRestController
             }
 
             if ($deletedCount > 0) {
-                return $this->success("成功删除 {$deletedCount} 条记录", [
+                return $this->success(__('成功删除 %{1} 条记录', $deletedCount), [
                     'deleted_count' => $deletedCount
                 ]);
             } else {
-                return $this->error('删除失败');
+                return $this->error(__('删除失败'));
             }
 
         } catch (\Exception $e) {
             error_log("DataTable Delete Error: " . $e->getMessage());
-            return $this->error('记录删除失败: ' . $e->getMessage());
+            return $this->error(__('记录删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -1552,12 +1552,11 @@ class DataTable extends BackendRestController
                     }
                 } catch (\Exception $e) {
                     $failedCount++;
-                    $errors[] = "ID {$id} 删除失败: " . $e->getMessage();
+                    $errors[] = __('ID %{1} 删除失败: %{2}', [$id, $e->getMessage()]);
                 }
             }
 
-            $message = $softDelete ? '批量移至回收站' : '批量删除';
-            $message .= "完成，成功: {$successCount}，失败: {$failedCount}";
+            $message = $softDelete ? __('批量移至回收站完成，成功: %{1}，失败: %{2}', [$successCount, $failedCount]) : __('批量删除完成，成功: %{1}，失败: %{2}', [$successCount, $failedCount]);
 
             if ($failedCount > 0) {
                 return $this->success($message, [
@@ -1572,7 +1571,7 @@ class DataTable extends BackendRestController
                 ]);
             }
         } catch (\Exception $e) {
-            return $this->error('批量删除失败: ' . $e->getMessage());
+            return $this->error(__('批量删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -1588,7 +1587,7 @@ class DataTable extends BackendRestController
 
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             if (empty($ids)) {
@@ -1732,7 +1731,7 @@ class DataTable extends BackendRestController
 
         try {
             if (!class_exists($model)) {
-                return $this->error('模型类不存在: ' . $model);
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             // 创建流式导出器
@@ -1881,13 +1880,13 @@ class DataTable extends BackendRestController
             $result = $this->deleteImageFile($imagePath);
             
             if ($result) {
-                return $this->success('图片删除成功');
+                return $this->success(__('图片删除成功'));
             } else {
-                return $this->error('图片删除失败');
+                return $this->error(__('图片删除失败'));
             }
 
         } catch (\Exception $e) {
-            return $this->error('图片删除失败: ' . $e->getMessage());
+            return $this->error(__('图片删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -2129,11 +2128,11 @@ class DataTable extends BackendRestController
 
         try {
             if (empty($model) || empty($scope)) {
-                return $this->error('缺少必需参数: model 和 scope');
+                return $this->error(__('缺少必需参数: model 和 scope'));
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -2244,7 +2243,7 @@ class DataTable extends BackendRestController
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             // 处理批量恢复
@@ -2285,7 +2284,7 @@ class DataTable extends BackendRestController
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             // 处理批量永久删除
@@ -2298,7 +2297,7 @@ class DataTable extends BackendRestController
 
         } catch (\Exception $e) {
             error_log("Permanently Delete Error: " . $e->getMessage());
-            return $this->error('永久删除失败: ' . $e->getMessage());
+            return $this->error(__('永久删除失败: %{1}', $e->getMessage()));
         }
     }
 
@@ -2321,7 +2320,7 @@ class DataTable extends BackendRestController
             }
 
             if (!class_exists($model)) {
-                return $this->error("模型类不存在: {$model}");
+                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -2361,7 +2360,7 @@ class DataTable extends BackendRestController
             $record = $modelInstance->withTrashed()->load($id);
             
             if (!$record->getId()) {
-                return $this->error('记录不存在');
+                return $this->error(__('记录不存在'));
             }
 
             // 检查记录是否已被软删除
@@ -2438,23 +2437,23 @@ class DataTable extends BackendRestController
             $record = $modelInstance->withTrashed()->load($id);
             
             if (!$record->getId()) {
-                return $this->error('记录不存在');
+                return $this->error(__('记录不存在'));
             }
 
             // 永久删除记录
             $result = $record->forceDelete();
 
             if ($result) {
-                return $this->success('记录已永久删除', [
+                return $this->success(__('记录已永久删除'), [
                     'id' => $id,
                     'deleted_at' => date('Y-m-d H:i:s')
                 ]);
             } else {
-                return $this->error('永久删除失败');
+                return $this->error(__('永久删除失败'));
             }
 
         } catch (\Exception $e) {
-            return $this->error('永久删除失败: ' . $e->getMessage());
+            return $this->error(__('永久删除失败: %{1}', $e->getMessage()));
         }
     }
 
