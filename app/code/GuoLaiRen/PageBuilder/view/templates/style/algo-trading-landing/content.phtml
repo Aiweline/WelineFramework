@@ -542,7 +542,7 @@ p, p * {
     <a href="<?= htmlspecialchars($ctaMiddleUrl ?? '') ?>" 
        target="_self"
        class="algo-cta-button"
-       data-handle="<?= htmlspecialchars($ctaMiddleHandle ?? '') ?>">
+       data-track-event="<?= htmlspecialchars($ctaMiddleHandle ?? '') ?>">
         <?= htmlspecialchars($ctaMiddleText ?? '') ?>
     </a>
 </div>
@@ -597,7 +597,7 @@ p, p * {
     <a href="<?= htmlspecialchars($ctaWhyUrl ?? '') ?>" 
        target="_self"
        class="algo-cta-button"
-       data-handle="<?= htmlspecialchars($ctaWhyHandle ?? '') ?>">
+       data-track-event="<?= htmlspecialchars($ctaWhyHandle ?? '') ?>">
         <?= htmlspecialchars($ctaWhyText ?? '') ?>
     </a>
 </div>
@@ -635,27 +635,14 @@ p, p * {
     <a href="<?= htmlspecialchars($finalCtaUrl ?? '') ?>" 
        target="<?= htmlspecialchars($finalCtaTarget ?? '') ?>"
        class="algo-cta-button"
-       data-handle="<?= htmlspecialchars($finalCtaHandle ?? '') ?>">
+       data-track-event="<?= htmlspecialchars($finalCtaHandle ?? '') ?>">
         <?= htmlspecialchars($finalCtaText ?? '') ?>
     </a>
 </div>
 <?php endif; ?>
 
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    var selector = '.algo-cta-middle .algo-cta-button, .algo-cta-why .algo-cta-button, .algo-final-cta .algo-cta-button';
-    var ctas = document.querySelectorAll(selector);
-    if (!ctas || ctas.length === 0) return;
-    ctas.forEach(function(btn) {
-        var handle = btn.getAttribute('data-handle') || 'handle_cta';
-        btn.addEventListener('click', function() {
-            // 使用通用跟踪函数
-            window.trackEvent(handle);
-        }, { once: false });
-    });
-});
-</script>
+<!-- CTA 按钮事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
 
 <w:template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</w:template>
 

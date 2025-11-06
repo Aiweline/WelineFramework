@@ -986,6 +986,64 @@ class Page extends BackendController
     }
     
     /**
+     * 通过 handle 获取页面信息（AJAX接口）
+     * 用于可视化配置组件初始化
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_get_page_by_handle', '通过句柄获取页面', '', '通过句柄获取页面信息')]
+    public function getPageByHandle()
+    {
+        try {
+            $handle = trim($this->request->getGet('handle', ''));
+            
+            if (empty($handle)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面句柄不能为空')
+                ]);
+            }
+            
+            // 查询页面
+            $page = clone $this->pageModel;
+            $page->clear()
+                ->where(PageModel::fields_HANDLE, $handle)
+                ->find()
+                ->fetch();
+            
+            if (!$page->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('页面不存在')
+                ]);
+            }
+            
+            // 获取页面信息
+            $pageId = $page->getId();
+            $styleCode = $page->getData('style') ?: '';
+            $defaultLocale = $page->getData('default_locale') ?: '';
+            $locales = json_decode($page->getData('locales') ?? '', true) ?: [];
+            
+            return $this->fetchJson([
+                'success' => true,
+                'data' => [
+                    'page_id' => $pageId,
+                    'handle' => $handle,
+                    'style_code' => $styleCode,
+                    'default_locale' => $defaultLocale,
+                    'locales' => $locales,
+                    'name' => $page->getData('name') ?: '',
+                    'title' => $page->getData('title') ?: ''
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
      * 预览页面（支持指定语言）
      */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_preview', '预览页面', 'mdi mdi-eye', '预览页面')]
