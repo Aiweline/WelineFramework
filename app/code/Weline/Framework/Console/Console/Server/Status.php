@@ -5,6 +5,7 @@ namespace Weline\Framework\Console\Console\Server;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 
 class Status implements CommandInterface
 {
@@ -38,7 +39,7 @@ class Status implements CommandInterface
         
         // 如果配置中的进程ID无效，检查端口是否被占用
         $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-        if (is_resource($connection)) {
+        if ($connection !== false) {
             fclose($connection);
             
             // 尝试获取占用端口的进程ID
@@ -104,7 +105,7 @@ class Status implements CommandInterface
                 ['前端API', "http://{$host}:{$port}/api/rest"],
                 ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
                 ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
-            ]);
+            ], true, 0, false); // false 表示不截断URL，完整显示地址
             
             echo "\n";
         }
@@ -116,14 +117,7 @@ class Status implements CommandInterface
      */
     private function isProcessRunning(int $pid): bool
     {
-        if (function_exists('posix_kill')) {
-            return posix_kill($pid, 0);
-        } else {
-            // Windows系统检查
-            $output = [];
-            exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-            return !empty($output) && count($output) > 1;
-        }
+        return Processer::isRunningByPid($pid);
     }
 
     /**
@@ -133,14 +127,12 @@ class Status implements CommandInterface
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             // Windows系统
-            $output = [];
-            exec("netstat -ano | findstr :{$port}", $output);
+            @exec('netstat -ano | findstr ":' . $port . '"', $output);
             
-            foreach ($output as $line) {
-                if (strpos($line, 'LISTENING') !== false) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    if (count($parts) >= 5) {
-                        $pid = (int)$parts[count($parts) - 1];
+            if (!empty($output)) {
+                foreach ($output as $line) {
+                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
+                        $pid = (int)$matches[1];
                         if ($pid > 0) {
                             return $pid;
                         }
@@ -150,7 +142,7 @@ class Status implements CommandInterface
         } else {
             // Unix/Linux系统
             $output = [];
-            exec("lsof -ti:{$port}", $output);
+            @exec("lsof -ti:{$port} 2>/dev/null", $output);
             
             if (!empty($output)) {
                 $pid = (int)trim($output[0]);

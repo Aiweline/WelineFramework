@@ -15,7 +15,7 @@ use Weline\Cdn\Model\Account as AccountModel;
 use Weline\Cdn\Service\AccountManager;
 use Weline\Cdn\Service\AdapterResolver;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Attribute\Acl as AclAttribute;
+use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -78,21 +78,20 @@ class Account extends BackendController
                 $query->where(AccountModel::fields_ADAPTER, $adapter);
             }
 
-            // 统计
-            $total = $query->count();
+            // 排序
+            $query->order(AccountModel::fields_CREATED_AT, 'DESC');
 
-            // 分页查询
-            $accounts = $query
-                ->limit($pageSize, ($page - 1) * $pageSize)
-                ->order(AccountModel::fields_CREATED_AT, 'DESC')
-                ->fetch()
-                ->getItems();
+            // 分页查询（Model会自动计算总数）
+            $result = $query->pagination($page, $pageSize)->fetch();
+            $accounts = $result->getItems();
+            
+            // 从分页信息中获取总数和总页数
+            $pagination = $query->getPaginationData();
+            $total = $pagination['totalSize'] ?? 0;
+            $totalPages = $pagination['lastPage'] ?? 0;
 
             // 获取所有适配器
             $adapters = $this->getAdapterResolver()->getAllAdapters();
-
-            // 计算分页信息
-            $totalPages = ceil($total / $pageSize);
 
             $this->assign('accounts', $accounts);
             $this->assign('total', $total);
@@ -260,9 +259,11 @@ class Account extends BackendController
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_account_delete', '删除账户', 'mdi-delete', '删除CDN账户')]
-    public function delete(): string
+    public function postDelete(): string
     {
-        $id = (int)$this->request->getPost('id');
+        // 支持 JSON 和表单数据
+        $params = $this->request->getParams();
+        $id = (int)($params['id'] ?? 0);
 
         if (!$id) {
             return $this->jsonResponse([
@@ -290,7 +291,7 @@ class Account extends BackendController
                 ]);
             }
 
-            $account->delete();
+            $account->delete()->fetch();
 
             Message::success(__('账户删除成功'));
 
@@ -382,6 +383,19 @@ class Account extends BackendController
             Message::error(__('加载域名列表失败：%{1}', $e->getMessage()));
             return $this->redirect('*/backend/account/index');
         }
+    }
+
+
+    /**
+     * JSON响应
+     * 
+     * @param array $data
+     * @return string
+     */
+    private function jsonResponse(array $data): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
 

@@ -140,6 +140,12 @@
 ### 主题和前端
 - 主题开发和继承
 - 静态资源管理
+- **w-delete 删除组件**：使用框架提供的 `w-delete` 组件实现删除确认功能，支持智能定位和自适应弹出方向
+  - 必须使用 `<js:part name="w-delete"/>` 引入组件
+  - 删除按钮使用 `w-delete="true"` 或 `w-delete="1"` 属性
+  - 支持 `w-url`、`w-method`、`w-msg`、`w-var-*` 等属性配置
+  - 后端控制器需要使用 `$this->request->getParams()` 支持 JSON 和表单数据
+  - 删除成功后组件会自动移除表格行，无需手动刷新页面
 
 ### 自定义标签系统 (Taglib)
 - 自定义标签创建：实现TaglibInterface接口

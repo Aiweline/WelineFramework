@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- Multipass管理顶级菜单 -->
+    <add source="Weline_Multipass::menu_multipass_management" 
+         name="multipass_management" 
+         title="Multipass管理" 
+         action=""
+         parent="" 
+         icon="mdi mdi-key-link" 
+         order="60"/>
+    
+    <!-- Multipass账户管理子菜单 -->
+    <add source="Weline_Multipass::account_management" 
+         name="multipass_account_management" 
+         title="账户管理" 
+         action=""
+         parent="Weline_Multipass::menu_multipass_management" 
+         icon="mdi mdi-account-key" 
+         order="10"/>
+    
+    <!-- 后端账户 -->
+    <add source="Weline_Multipass::account_backend" 
+         name="multipass_account_backend" 
+         title="后端账户" 
+         action="multipass/backend/account/backend"
+         parent="Weline_Multipass::account_management" 
+         icon="mdi mdi-account-cog" 
+         order="10"/>
+    
+    <!-- 前端账户 -->
+    <add source="Weline_Multipass::account_frontend" 
+         name="multipass_account_frontend" 
+         title="前端账户" 
+         action="multipass/backend/account/frontend"
+         parent="Weline_Multipass::account_management" 
+         icon="mdi mdi-account" 
+         order="20"/>
+    
+</menus>
+

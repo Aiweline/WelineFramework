@@ -113,7 +113,8 @@ class AdapterScanner
     }
     
     /**
-     * 扫描其他模块的 Ai/Adapter 目录
+     * 扫描其他模块的适配器
+     * 扫描位置：extends/Weline_Ai/Adapter/
      * 
      * @return array
      */
@@ -122,41 +123,30 @@ class AdapterScanner
         $adapters = [];
         
         try {
-            // 获取所有已安装的模块
-            $modules = Env::getInstance()->getModuleList();
+            // 扫描 extends/Weline_Ai/Adapter/ 目录
+            $adapterDir = BP . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Ai' . DIRECTORY_SEPARATOR . 'Adapter' . DIRECTORY_SEPARATOR;
             
-            foreach ($modules as $moduleName => $module) {
-                // 跳过 Weline_Ai 模块本身
-                if ($moduleName === 'Weline_Ai') {
-                    continue;
-                }
-                
-                // 获取模块基础路径
-                $basePath = $module['base_path'] ?? '';
-                if (empty($basePath) || !($module['status'] ?? false)) {
-                    continue;
-                }
-                
-                // 构建 Ai/Adapter 目录路径
-                $adapterDir = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'Ai' . DIRECTORY_SEPARATOR . 'Adapter' . DIRECTORY_SEPARATOR;
-                
-                // 检查目录是否存在
-                if (!is_dir($adapterDir)) {
-                    continue;
-                }
-                
-                // 扫描适配器文件
-                $adapterFiles = $this->fileScanner->globFile($adapterDir . '*' . self::ADAPTER_SUFFIX);
-                
-                foreach ($adapterFiles as $adapterFile) {
-                    try {
-                        $adapter = $this->loadAdapter($adapterFile, $moduleName, $module);
-                        if ($adapter) {
-                            $adapters[] = $adapter;
-                        }
-                    } catch (\Exception $e) {
-                        error_log("加载其他模块适配器失败: {$adapterFile}, 模块: {$moduleName}, 错误: " . $e->getMessage());
+            if (!is_dir($adapterDir)) {
+                return $adapters;
+            }
+            
+            // 扫描适配器文件（以 Adapter.php 结尾或直接以 .php 结尾）
+            $adapterFiles = $this->fileScanner->globFile($adapterDir . '*' . self::ADAPTER_SUFFIX);
+            // 也扫描直接以 .php 结尾的文件（如 Desensitization.php）
+            $phpFiles = glob($adapterDir . '*.php');
+            
+            // 合并并去重
+            $allFiles = array_unique(array_merge($adapterFiles, $phpFiles ?: []));
+            
+            foreach ($allFiles as $adapterFile) {
+                try {
+                    // 从文件内容中解析命名空间
+                    $adapter = $this->loadAdapter($adapterFile);
+                    if ($adapter) {
+                        $adapters[] = $adapter;
                     }
+                } catch (\Exception $e) {
+                    error_log("加载其他模块适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
                 }
             }
         } catch (\Exception $e) {
@@ -217,23 +207,33 @@ class AdapterScanner
      */
     private function getClassNameFromFile(string $filePath, ?string $moduleName = null, ?array $module = null): ?string
     {
-        $fileName = basename($filePath, '.php');
-        
-        // 验证文件名格式
-        if (!str_ends_with($fileName, 'Adapter')) {
-            return null;
-        }
-
-        // 如果是其他模块的适配器
-        if ($moduleName && $module && $moduleName !== 'Weline_Ai') {
-            // 从模块信息获取命名空间
-            $namespacePath = $module['namespace_path'] ?? '';
-            if (empty($namespacePath)) {
+        // 如果是 extends/Weline_Ai/Adapter/ 目录下的文件，从文件内容中解析命名空间
+        if (strpos($filePath, DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Ai' . DIRECTORY_SEPARATOR . 'Adapter' . DIRECTORY_SEPARATOR) !== false) {
+            // 读取文件内容，解析命名空间和类名
+            $content = file_get_contents($filePath);
+            if ($content === false) {
                 return null;
             }
             
-            // 构建完整类名
-            return "\\{$namespacePath}\\Ai\\Adapter\\{$fileName}";
+            // 解析命名空间
+            if (preg_match('/namespace\s+([^;]+);/', $content, $namespaceMatches)) {
+                $namespace = trim($namespaceMatches[1]);
+                
+                // 解析类名
+                if (preg_match('/class\s+(\w+)/', $content, $classMatches)) {
+                    $className = $classMatches[1];
+                    return "\\{$namespace}\\{$className}";
+                }
+            }
+            
+            return null;
+        }
+
+        $fileName = basename($filePath, '.php');
+        
+        // 验证文件名格式（Weline_Ai 模块的适配器必须以 Adapter 结尾）
+        if (!str_ends_with($fileName, 'Adapter')) {
+            return null;
         }
 
         // 默认 Weline_Ai 模块的适配器
