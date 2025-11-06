@@ -318,6 +318,17 @@ $popupButton2Color = $styleSettings['popup.button2_color'] ?? '#2c5aa0';
 $popupButton2TextColor = $styleSettings['popup.button2_text_color'] ?? '#ffffff';
 $popupCloseText = $styleSettings['popup.close_text'] ?? 'Close this message please';
 $popupCloseColor = $styleSettings['popup.close_color'] ?? '#0099cc';
+
+// 生成弹窗按钮事件名称
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+if ($pageDefaultCtaEvent !== '') {
+    $popupButton1EventName = $pageDefaultCtaEvent . '_primary';
+    $popupButton2EventName = $pageDefaultCtaEvent . '_secondary';
+} else {
+    $popupButton1EventName = 'cta_' . $pageHandleForEvent . '_popup_primary';
+    $popupButton2EventName = 'cta_' . $pageHandleForEvent . '_popup_secondary';
+}
 $popupMaxWidth = (int)($styleSettings['popup.max_width'] ?? 600);
 $popupPadding = parsePopupResponsive($styleSettings['popup.padding'] ?? '20/32/48');
 $popupBorderWidth = (int)($styleSettings['popup.border_width'] ?? 6);
@@ -336,11 +347,14 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
                     <a href="<?= htmlspecialchars($popupButton1Url ?? '') ?>" 
                        target="<?= htmlspecialchars($popupButton1Target ?? '') ?>"
                        class="chaikin-popup-btn chaikin-popup-btn-primary" 
-                       onclick="closeChaikinPopup()">
+                       onclick="closeChaikinPopup()"
+                       data-track-event="<?= htmlspecialchars($popupButton1EventName ?? '') ?>">
                         <?= htmlspecialchars($popupButton1Text ?? '') ?>
                     </a>
                 <?php else: ?>
-                    <button class="chaikin-popup-btn chaikin-popup-btn-primary" onclick="closeChaikinPopup()">
+                    <button class="chaikin-popup-btn chaikin-popup-btn-primary" 
+                            onclick="closeChaikinPopup()"
+                            data-track-event="<?= htmlspecialchars($popupButton1EventName ?? '') ?>">
                         <?= htmlspecialchars($popupButton1Text ?? '') ?>
                     </button>
                 <?php endif; ?>
@@ -349,11 +363,14 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
                     <a href="<?= htmlspecialchars($popupButton2Url ?? '') ?>" 
                        target="<?= htmlspecialchars($popupButton2Target ?? '') ?>"
                        class="chaikin-popup-btn chaikin-popup-btn-secondary" 
-                       onclick="closeChaikinPopup()">
+                       onclick="closeChaikinPopup()"
+                       data-track-event="<?= htmlspecialchars($popupButton2EventName ?? '') ?>">
                         <?= htmlspecialchars($popupButton2Text ?? '') ?>
                     </a>
                 <?php else: ?>
-                    <button class="chaikin-popup-btn chaikin-popup-btn-secondary" onclick="closeChaikinPopup()">
+                    <button class="chaikin-popup-btn chaikin-popup-btn-secondary" 
+                            onclick="closeChaikinPopup()"
+                            data-track-event="<?= htmlspecialchars($popupButton2EventName ?? '') ?>">
                         <?= htmlspecialchars($popupButton2Text ?? '') ?>
                     </button>
                 <?php endif; ?>
@@ -525,35 +542,6 @@ function closeChaikinPopup() {
     }
 }
 
-// CTA 事件绑定
-document.addEventListener('DOMContentLoaded', function() {
-    // 获取页面 handle 用于生成事件名
-    <?php 
-    $pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
-    $pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
-    ?>
-    var pageHandle = '<?= htmlspecialchars($pageHandleForEvent ?? '') ?>';
-    var pageDefaultEvent = '<?= htmlspecialchars($pageDefaultCtaEvent ?? '') ?>';
-    
-    // 为弹窗按钮绑定事件
-    var popupBtns = document.querySelectorAll('.chaikin-popup-btn');
-    if (popupBtns && popupBtns.length > 0) {
-        popupBtns.forEach(function(btn) {
-            var isPrimary = btn.classList.contains('chaikin-popup-btn-primary');
-            var eventName = '';
-            
-            if (pageDefaultEvent !== '') {
-                eventName = pageDefaultEvent + (isPrimary ? '_primary' : '_secondary');
-            } else {
-                eventName = 'cta_' + pageHandle + '_popup_' + (isPrimary ? 'primary' : 'secondary');
-            }
-            
-            btn.addEventListener('click', function() {
-                // 使用通用跟踪函数
-                window.trackCTA(eventName, isPrimary ? 'primary' : 'secondary');
-            }, { once: false });
-        });
-    }
 });
 
 // 延迟显示弹窗

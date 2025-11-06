@@ -235,18 +235,7 @@ if ($highlightWord) {
     <!-- 统计代码 -->
     <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
 
-    <!-- CTA 事件绑定 -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var btn = document.getElementById('algo-header-cta');
-        if (!btn) return;
-        var handle = btn.getAttribute('data-handle') || 'handle_cta';
-        btn.addEventListener('click', function() {
-            // 使用通用跟踪函数
-            window.trackEvent(handle);
-        }, { once: false });
-    });
-    </script>
+    <!-- CTA 事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
     
 <style>
     * {
@@ -485,7 +474,7 @@ if ($highlightWord) {
                target="<?= htmlspecialchars($ctaTarget ?? '') ?>"
                id="algo-header-cta"
                class="algo-cta-button"
-               data-handle="<?= htmlspecialchars($ctaHandleName ?? '') ?>">
+               data-track-event="<?= htmlspecialchars($ctaHandleName ?? '') ?>">
                 <?= htmlspecialchars($ctaText ?? '') ?>
             </a>
         </div>

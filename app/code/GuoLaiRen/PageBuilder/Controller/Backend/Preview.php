@@ -405,7 +405,7 @@ class Preview extends BackendController
             'handle' => 'template-preview-' . $styleCode,
             'style' => $styleCode,
             'status' => 1,
-            'content' => '这是样式模板的默认预览',
+            'content' => '',
             'description' => '预览模式：使用模板默认配置'
         ]);
 
@@ -616,11 +616,11 @@ class Preview extends BackendController
             $rawBody = file_get_contents('php://input');
             error_log('🔵 请求体: ' . $rawBody);
             
-            $data = json_decode($rawBody ?? '');
+            $data = json_decode($rawBody ?? '', true); // 第二个参数 true 表示返回数组而不是对象
             error_log('🔵 解析后数据: ' . json_encode($data));
             
             // 如果 JSON 解析失败，尝试从 POST 获取
-            if (!$data) {
+            if (!$data || !is_array($data)) {
                 $data = [
                     'page_id' => $this->request->getPost('page_id'),
                     'config_keys' => $this->request->getPost('config_keys', []),

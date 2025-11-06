@@ -5,6 +5,7 @@ $search = $this->getData('search') ?: '';
 $testPageId = $this->getData('test_page_id') ?: 0;
 $pages = $this->getData('pages') ?: [];
 ?>
+
 <w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
 
 <!-- start page title -->
@@ -255,7 +256,6 @@ $pages = $this->getData('pages') ?: [];
         </div>
     </div>
 </div>
-
 <!-- 复用form.phtml中的样式卡片CSS -->
 <link rel="stylesheet" href="<?= $this->getBackendUrl('pagebuilder/backend/page/index') ?>" onload="this.onload=null;this.rel='stylesheet'">
 <style>
@@ -472,11 +472,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // 配置预览 - 打开可视化配置界面
 function openConfigPreview(styleCode) {
     const pageId = document.getElementById('previewPageSelect').value || 0;
-    // 设置全局变量
+    // 设置全局变量供 visual_config.phtml 使用
     window.currentTemplateStyleCode = styleCode;
     window.currentTemplatePageId = parseInt(pageId) || 0;
-    // 打开可视化配置界面
-    openTemplateVisualConfig();
+    window.isTemplateConfigMode = true; // 标记为模板配置模式
+    
+    // 打开可视化配置界面（使用 visual_config.phtml）
+    openVisualConfig();
 }
 
 // 打开图片预览
@@ -657,537 +659,203 @@ function openDefaultPreview(styleCode, styleName) {
 }
 </script>
 
-<!-- 可视化配置界面 -->
-<style>
-/* 可视化配置容器 */
-.template-visual-config-wrapper {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9999;
-    background: #fff;
-    display: none;
-}
-
-.template-visual-config-wrapper.active {
-    display: flex;
-    flex-direction: column;
-}
-
-/* 顶部工具栏 */
-.template-visual-toolbar {
-    height: 60px;
-    background: #2c3e50;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    justify-content: space-between;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.template-visual-toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.template-visual-toolbar-center {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.template-visual-toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* 系统测试页面标识 */
-.system-test-badge {
-    background: #f39c12;
-    color: #fff;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-
-/* 设备切换按钮 */
-.template-device-btn {
-    background: rgba(255,255,255,0.1);
-    border: none;
-    color: #fff;
-    padding: 8px 15px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.template-device-btn:hover {
-    background: rgba(255,255,255,0.2);
-}
-
-.template-device-btn.active {
-    background: #3498db;
-}
-
-/* 保存状态 */
-.template-save-status {
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 13px;
-    background: rgba(255,255,255,0.1);
-}
-
-.template-save-status.saving {
-    background: #f39c12;
-}
-
-.template-save-status.saved {
-    background: #27ae60;
-}
-
-.template-save-status.error {
-    background: #e74c3c;
-}
-
-/* 主内容区域 */
-.template-visual-content {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-}
-
-/* 左侧配置面板 */
-.template-config-panel {
-    width: 400px;
-    background: #f8f9fa;
-    border-right: 1px solid #dee2e6;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.template-config-panel-header {
-    padding: 15px 20px;
-    background: #fff;
-    border-bottom: 1px solid #dee2e6;
-    font-weight: 600;
-}
-
-.template-config-panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
-}
-
-/* 配置区域折叠面板 */
-.template-config-section {
-    border-bottom: 1px solid #dee2e6;
-}
-
-.template-config-section-header {
-    padding: 15px 20px;
-    background: #fff;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
-    transition: background 0.3s;
-}
-
-.template-config-section-header:hover {
-    background: #f8f9fa;
-}
-
-.template-config-section-header i {
-    transition: transform 0.3s;
-}
-
-.template-config-section.collapsed .template-config-section-header i {
-    transform: rotate(-90deg);
-}
-
-.template-config-section-body {
-    padding: 20px;
-    background: #fff;
-    display: block;
-}
-
-.template-config-section.collapsed .template-config-section-body {
-    display: none;
-}
-
-/* 右侧预览面板 */
-.template-preview-panel {
-    flex: 1;
-    background: #ecf0f1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: auto;
-}
-
-.template-preview-container {
-    background: #fff;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    height: 100%;
-    width: 100%;
-    transition: all 0.3s;
-    position: relative;
-}
-
-/* 设备视图 */
-.template-preview-container.device-mobile {
-    max-width: 375px;
-    height: 667px;
-}
-
-.template-preview-container.device-tablet {
-    max-width: 768px;
-    height: 1024px;
-}
-
-.template-preview-container.device-desktop {
-    width: 100%;
-    height: 100%;
-}
-
-.template-preview-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-}
-
-/* 加载状态 */
-.template-preview-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255,255,255,0.95);
-    padding: 20px 40px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    display: none;
-}
-
-.template-preview-loading.active {
-    display: block;
-}
-</style>
-
-<div class="template-visual-config-wrapper" id="templateVisualConfigWrapper">
-    <!-- 顶部工具栏 -->
-    <div class="template-visual-toolbar">
-        <div class="template-visual-toolbar-left">
-            <button type="button" class="btn btn-sm btn-light" onclick="closeTemplateVisualConfig()">
-                <i class="mdi mdi-close"></i> <?= __('退出') ?>
-            </button>
-            <h5 class="mb-0 text-white"><?= __('模板配置预览') ?></h5>
-            <span class="system-test-badge">
-                <i class="mdi mdi-test-tube"></i> <?= __('系统测试页面') ?>
-            </span>
-        </div>
-        
-        <div class="template-visual-toolbar-center">
-            <!-- 设备切换 -->
-            <button type="button" class="template-device-btn active" data-device="desktop" onclick="templateSwitchDevice('desktop')">
-                <i class="mdi mdi-monitor"></i> <?= __('桌面') ?>
-            </button>
-            <button type="button" class="template-device-btn" data-device="tablet" onclick="templateSwitchDevice('tablet')">
-                <i class="mdi mdi-tablet"></i> <?= __('平板') ?>
-            </button>
-            <button type="button" class="template-device-btn" data-device="mobile" onclick="templateSwitchDevice('mobile')">
-                <i class="mdi mdi-cellphone"></i> <?= __('手机') ?>
-            </button>
-        </div>
-        
-        <div class="template-visual-toolbar-right">
-            <!-- 保存状态 -->
-            <div class="template-save-status" id="templateSaveStatus">
-                <i class="mdi mdi-check-circle"></i> <span id="templateSaveStatusText"><?= __('已保存') ?></span>
-            </div>
-            
-            <!-- 刷新预览 -->
-            <button type="button" class="btn btn-sm btn-info" onclick="templateRefreshPreview()">
+<!-- 可视化配置界面 - 使用 offcanvas iframe 按需加载，避免内存耗尽 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="templateConfigOffcanvas" style="width: 90%; max-width: 1600px;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="templateConfigOffcanvasLabel">
+            <i class="mdi mdi-palette"></i> <?= __('模板配置预览') ?>
+        </h5>
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" 
+                    class="btn btn-sm btn-outline-primary" 
+                    id="templateConfigRefreshBtn"
+                    onclick="refreshTemplateConfigIframe()"
+                    title="<?= __('刷新配置界面') ?>">
                 <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
             </button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= __('关闭') ?>"></button>
         </div>
     </div>
-    
-    <!-- 主内容区域 -->
-    <div class="template-visual-content">
-        <!-- 左侧配置面板 -->
-        <div class="template-config-panel">
-            <div class="template-config-panel-header">
-                <i class="mdi mdi-cog"></i> <?= __('样式配置') ?>
-            </div>
-            <div class="template-config-panel-body" id="templateConfigFields">
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
-                    </div>
-                    <div class="mt-2"><?= __('正在加载配置...') ?></div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 右侧预览面板 -->
-        <div class="template-preview-panel">
-            <div class="template-preview-container device-desktop" id="templatePreviewContainer">
-                <iframe id="templatePreviewIframe" 
-                        class="template-preview-iframe" 
-                        src=""></iframe>
-                
-                <div class="template-preview-loading" id="templatePreviewLoading">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
-                    </div>
-                    <div class="mt-2"><?= __('刷新预览中...') ?></div>
-                </div>
-            </div>
+    <div class="offcanvas-body p-0" style="height: calc(100vh - 60px);">
+        <div class="position-relative w-100 h-100">
+            <iframe id="templateConfigIframe" 
+                    class="w-100 h-100 border-0" 
+                    style="display: block;"
+                    allowfullscreen></iframe>
         </div>
     </div>
 </div>
 
 <script>
-// 全局变量（使用 var 绑定到 window，确保各处读取一致）
-var currentTemplateStyleCode = '';
-var currentTemplatePageId = 0;
-let templateAutoSaveTimer = null;
-const TEMPLATE_AUTO_SAVE_DELAY = 1000;
-
-// 打开可视化配置
-function openTemplateVisualConfig() {
-    // 兼容性读取（确保从 window 读取到最新赋值）
-    currentTemplateStyleCode = window.currentTemplateStyleCode || currentTemplateStyleCode || '';
-    currentTemplatePageId = window.currentTemplatePageId || currentTemplatePageId || 0;
-    if (!currentTemplateStyleCode) {
-        alert('<?= __('模板代码不能为空') ?>');
+// 修改 openConfigPreview 函数，使用 offcanvas 弹窗显示配置界面
+window.openConfigPreview = function(styleCode) {
+    const pageId = document.getElementById('previewPageSelect').value || <?= $testPageId ?: '0' ?>;
+    
+    // 构建配置界面的 URL（使用独立的配置页面）
+    const configUrl = '<?= $this->getBackendUrl('pagebuilder/backend/template/configPreview') ?>' +
+        '?style_code=' + encodeURIComponent(styleCode) +
+        '&page_id=' + pageId;
+    
+    // 获取 offcanvas 元素
+    const offcanvasEl = document.getElementById('templateConfigOffcanvas');
+    const iframe = document.getElementById('templateConfigIframe');
+    // 不再使用加载遮罩
+    const offcanvasTitle = document.getElementById('templateConfigOffcanvasLabel');
+    
+    if (!offcanvasEl || !iframe) {
+        console.error('找不到 offcanvas 元素');
         return;
     }
     
-    const wrapper = document.getElementById('templateVisualConfigWrapper');
-    wrapper.classList.add('active');
-    document.body.style.overflow = 'hidden';
-    
-    // 加载配置
-    loadTemplateStyleConfig();
-    
-    // 加载预览
-    templateRefreshPreview();
-}
-
-// 关闭可视化配置
-function closeTemplateVisualConfig() {
-    const wrapper = document.getElementById('templateVisualConfigWrapper');
-    wrapper.classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-// 加载样式配置
-async function loadTemplateStyleConfig() {
-    try {
-        const url = '<?= $this->getBackendUrl('*/backend/template/getStyleConfig') ?>' +
-            '?style_code=' + encodeURIComponent(currentTemplateStyleCode) +
-            '&page_id=' + currentTemplatePageId;
-        
-        const response = await fetch(url);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            renderTemplateConfig(result.data);
-        } else {
-            document.getElementById('templateConfigFields').innerHTML = 
-                '<div class="alert alert-danger m-3">' + (result.message || '<?= __('加载配置失败') ?>') + '</div>';
-        }
-    } catch (error) {
-        console.error('加载配置失败:', error);
-        document.getElementById('templateConfigFields').innerHTML = 
-            '<div class="alert alert-danger m-3"><?= __('加载配置失败') ?></div>';
-    }
-}
-
-// 渲染配置表单
-function renderTemplateConfig(configGroups) {
-    let html = '';
-    
-    for (const fileKey in configGroups) {
-        const fileGroup = configGroups[fileKey];
-        if (fileGroup.groups && typeof fileGroup.groups === 'object') {
-            for (const groupKey in fileGroup.groups) {
-                const group = fileGroup.groups[groupKey];
-                const sectionId = 'template_config_' + fileKey + '_' + groupKey;
-                
-                html += `<div class="template-config-section" id="${sectionId}">`;
-                html += `<div class="template-config-section-header" onclick="templateToggleSection('${sectionId}')">`;
-                html += `<span><i class="mdi mdi-${group.icon || 'cog'}"></i> ${escapeHtml(group.label || groupKey)}</span>`;
-                html += `<i class="mdi mdi-chevron-down"></i>`;
-                html += `</div>`;
-                html += `<div class="template-config-section-body">`;
-                
-                if (group.configs && typeof group.configs === 'object') {
-                    for (const configKey in group.configs) {
-                        const config = group.configs[configKey];
-                        const rawValue = config.value !== undefined ? config.value : (config.default || '');
-                        const fieldId = 'template_config_' + configKey.replace(/\./g, '_');
-                        
-                        html += `<div class="mb-3">`;
-                        html += `<label for="${fieldId}" class="form-label">${escapeHtml(config.label)}</label>`;
-                        
-                        if (config.type === 'color') {
-                            html += `<input type="color" id="${fieldId}" class="form-control form-control-color template-auto-save-field" 
-                                    data-config-key="${escapeHtml(configKey)}" value="${escapeHtml(rawValue)}">`;
-                        } else if (config.type === 'textarea') {
-                            html += `<textarea id="${fieldId}" class="form-control template-auto-save-field" 
-                                    data-config-key="${escapeHtml(configKey)}" rows="3">${escapeHtml(rawValue)}</textarea>`;
-                        } else if (config.type === 'select' && config.options) {
-                            html += `<select id="${fieldId}" class="form-select template-auto-save-field" 
-                                    data-config-key="${escapeHtml(configKey)}">`;
-                            for (const optValue in config.options) {
-                                html += `<option value="${escapeHtml(optValue)}" ${rawValue == optValue ? 'selected' : ''}>${escapeHtml(config.options[optValue])}</option>`;
-                            }
-                            html += `</select>`;
-                        } else {
-                            html += `<input type="${config.type || 'text'}" id="${fieldId}" class="form-control template-auto-save-field" 
-                                    data-config-key="${escapeHtml(configKey)}" value="${escapeHtml(rawValue)}" 
-                                    placeholder="${escapeHtml(config.placeholder || '')}">`;
-                        }
-                        
-                        html += `</div>`;
-                    }
-                }
-                
-                html += `</div></div>`;
-            }
-        }
+    // 更新标题
+    if (offcanvasTitle) {
+        offcanvasTitle.innerHTML = '<i class="mdi mdi-palette"></i> <?= __('模板配置预览') ?> - ' + escapeHtml(styleCode);
     }
     
-    document.getElementById('templateConfigFields').innerHTML = html || '<div class="alert alert-info m-3"><?= __('暂无配置项') ?></div>';
+    // 显示加载状态
+    // 直接显示 iframe，并在加载完成后同样保持显示
+    if (iframe) iframe.style.display = 'block';
     
-    // 绑定自动保存事件
-    document.querySelectorAll('.template-auto-save-field').forEach(field => {
-        field.addEventListener('input', templateAutoSaveConfig);
-        field.addEventListener('change', templateAutoSaveConfig);
-    });
-}
-
-// 切换配置区域
-function templateToggleSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    section.classList.toggle('collapsed');
-}
-
-// 切换设备视图
-function templateSwitchDevice(device) {
-    document.querySelectorAll('.template-device-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-device') === device);
-    });
+    // 先显示 offcanvas，然后在显示后再加载 iframe（避免隐藏时浏览器不加载 iframe）
+    const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
     
-    const container = document.getElementById('templatePreviewContainer');
-    container.className = 'template-preview-container device-' + device;
-}
-
-// 更新保存状态
-function templateUpdateSaveStatus(status, text) {
-    const statusEl = document.getElementById('templateSaveStatus');
-    const textEl = document.getElementById('templateSaveStatusText');
-    
-    statusEl.className = 'template-save-status ' + status;
-    textEl.textContent = text;
-}
-
-// 自动保存配置
-function templateAutoSaveConfig() {
-    if (templateAutoSaveTimer) {
-        clearTimeout(templateAutoSaveTimer);
-    }
-    
-    templateAutoSaveTimer = setTimeout(async () => {
-        templateUpdateSaveStatus('saving', '<?= __('保存中...') ?>');
+    // 监听 offcanvas 显示事件，在显示后再加载 iframe
+    const loadIframe = function() {
+        // 设置 iframe 源（只有在 offcanvas 显示后才加载）
+        iframe.src = configUrl;
+        console.log('📡 开始加载配置界面:', configUrl);
         
-        try {
-            const config = {};
-            document.querySelectorAll('.template-auto-save-field').forEach(field => {
-                const key = field.getAttribute('data-config-key');
-                config[key] = field.value;
-            });
-            
-            const response = await fetch('<?= $this->getBackendUrl('*/backend/template/autoSave') ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({
-                    page_id: currentTemplatePageId,
-                    style_code: currentTemplateStyleCode,
-                    style_config: config
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                templateUpdateSaveStatus('saved', '<?= __('已保存') ?>');
-                templateRefreshPreview();
-            } else {
-                templateUpdateSaveStatus('error', '<?= __('保存失败') ?>');
-                console.error('保存失败:', result.message);
-            }
-        } catch (error) {
-            templateUpdateSaveStatus('error', '<?= __('保存失败') ?>');
-            console.error('保存异常:', error);
-        }
-    }, TEMPLATE_AUTO_SAVE_DELAY);
-}
-
-// 刷新预览
-function templateRefreshPreview() {
-    const loading = document.getElementById('templatePreviewLoading');
-    const iframe = document.getElementById('templatePreviewIframe');
-    
-    loading.classList.add('active');
-    
-    const previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>' +
-        '?page_id=' + currentTemplatePageId +
-        '&style_code=' + encodeURIComponent(currentTemplateStyleCode) +
-        '&t=' + Date.now();
-    
-    iframe.src = previewUrl;
-    
-    iframe.onload = function() {
-        loading.classList.remove('active');
+        // 监听 iframe 加载完成（load）与父窗口 postMessage 的双保险
+        const onIframeLoad = function() {
+            console.log('✅ 配置界面加载完成(load)');
+            if (iframe) iframe.style.display = 'block';
+            iframe.removeEventListener('load', onIframeLoad);
+        };
+        iframe.addEventListener('load', onIframeLoad);
+        
+        // 监听 iframe 加载错误
+        iframe.onerror = function() {
+            console.error('❌ 配置界面加载失败');
+            // 无遮罩，打印错误即可
+        };
+        
+        // 移除事件监听器（只执行一次）
+        offcanvasEl.removeEventListener('shown.bs.offcanvas', loadIframe);
     };
-}
+    
+    // 在 offcanvas 显示后再加载 iframe
+    offcanvasEl.addEventListener('shown.bs.offcanvas', loadIframe, { once: true });
+    
+    // 显示 offcanvas
+    bsOffcanvas.show();
+    
+    // 接收 iframe 内页面的就绪通知，隐藏 loading（postMessage）
+    const onMessage = function(event) {
+        if (event && event.data && event.data.type === 'template-config-ready') {
+            console.log('✅ 收到 iframe 就绪通知');
+            if (iframe) iframe.style.display = 'block';
+            window.removeEventListener('message', onMessage);
+        }
+    };
+    window.addEventListener('message', onMessage);
 
-// HTML转义函数
+    // 兜底：8 秒后仍未就绪则强制显示 iframe
+    setTimeout(function() {
+        console.warn('⏱️ 加载超时，强制显示 iframe');
+        if (iframe) iframe.style.display = 'block';
+    }, 8000);
+
+    // 监听关闭事件，清空 iframe 内容释放内存
+    offcanvasEl.addEventListener('hidden.bs.offcanvas', function() {
+        console.log('🔒 清空 iframe 内容释放内存');
+        iframe.src = '';
+        if (iframe) {
+            iframe.style.display = 'none';
+        }
+        window.removeEventListener('message', onMessage);
+    }, { once: true });
+};
+
+// HTML 转义辅助函数
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// ESC键关闭
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        const wrapper = document.getElementById('templateVisualConfigWrapper');
-        if (wrapper && wrapper.classList.contains('active')) {
-            closeTemplateVisualConfig();
+// 刷新配置界面 iframe
+function refreshTemplateConfigIframe() {
+    const iframe = document.getElementById('templateConfigIframe');
+    const refreshBtn = document.getElementById('templateConfigRefreshBtn');
+    
+    if (!iframe || !iframe.src) {
+        console.warn('iframe 不存在或未加载');
+        return;
+    }
+    
+    // 显示加载状态
+    if (iframe) iframe.style.display = 'none';
+    
+    // 禁用刷新按钮，显示加载状态
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        const icon = refreshBtn.querySelector('i');
+        if (icon) {
+            icon.className = 'mdi mdi-loading mdi-spin';
         }
     }
-});
+    
+    // 重新加载 iframe：保留原有查询参数，仅更新/追加 t 避免缓存
+    const originalSrc = iframe.src;
+    let newSrc = originalSrc;
+    try {
+        const url = new URL(originalSrc, window.location.origin);
+        url.searchParams.set('t', String(Date.now()));
+        newSrc = url.toString();
+    } catch (e) {
+        // 兼容相对地址：用字符串方式替换/追加 t
+        if (originalSrc.includes('t=')) {
+            newSrc = originalSrc.replace(/([?&])t=[^&]*/, '$1t=' + Date.now());
+        } else {
+            newSrc = originalSrc + (originalSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+        }
+    }
+    iframe.src = newSrc;
+    
+    // 监听加载完成
+    const onLoad = function() {
+        console.log('✅ 配置界面刷新完成');
+        if (iframe) iframe.style.display = 'block';
+        // 恢复刷新按钮
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            const icon = refreshBtn.querySelector('i');
+            if (icon) {
+                icon.className = 'mdi mdi-refresh';
+            }
+        }
+        iframe.removeEventListener('load', onLoad);
+    };
+    
+    iframe.addEventListener('load', onLoad);
+    
+    // 监听加载错误
+    const onError = function() {
+        console.error('❌ 配置界面刷新失败');
+        // 无遮罩，打印错误
+        // 恢复刷新按钮
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            const icon = refreshBtn.querySelector('i');
+            if (icon) {
+                icon.className = 'mdi mdi-refresh';
+            }
+        }
+        iframe.removeEventListener('error', onError);
+    };
+    
+    iframe.addEventListener('error', onError);
+}
 </script>
 
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

@@ -31,6 +31,56 @@ class Template extends BackendController
         $this->pageModel = $pageModel;
         $this->localDescriptionModel = $localDescriptionModel;
     }
+    
+    /**
+     * 确保模板测试页面存在且不允许发布
+     * 这个方法会在每次访问模板管理功能时自动调用，确保测试页面始终存在且状态正确
+     * 
+     * @return PageModel 测试页面对象
+     */
+    private function ensureTestPageExists(): PageModel
+    {
+        $testPage = clone $this->pageModel;
+        $testPage->clear()
+            ->where('handle', 'template-test-page')
+            ->find()
+            ->fetch();
+        
+        $needSave = false;
+        
+        if (!$testPage->getId()) {
+            // 创建系统test页面
+            $testPage->clearData()
+                ->setData('handle', 'template-test-page')
+                ->setData('name', '模板测试页面（系统）')
+                ->setData('title', 'Template Test Page')
+                ->setData('type', 'test_page')
+                ->setData('status', 0) // 设置为草稿状态，不允许发布
+                ->setData('content', '')
+                ->setData('meta_title', 'Template Test Page')
+                ->setData('meta_description', 'Template test page for preview')
+                ->save(true);
+        } else {
+            // 如果页面已存在，确保状态为草稿（不允许发布）
+            if ($testPage->getData('status') != 0) {
+                $testPage->setData('status', 0); // 强制设置为草稿状态
+                $needSave = true;
+            }
+            
+            // 确保页面类型正确
+            if ($testPage->getData('type') !== 'test_page') {
+                $testPage->setData('type', 'test_page');
+                $needSave = true;
+            }
+            
+            // 如果状态被修改，保存
+            if ($needSave) {
+                $testPage->save(true);
+            }
+        }
+        
+        return $testPage;
+    }
 
     /**
      * 模板列表页面
@@ -70,28 +120,11 @@ class Template extends BackendController
         $this->assign('styles', $styleList);
         $this->assign('search', $search);
         
-        // 获取或创建test页面（用于预览）
-        $testPage = clone $this->pageModel;
-        $testPage->clear()
-            ->where('handle', 'template-test-page')
-            ->find()
-            ->fetch();
-        
-        if (!$testPage->getId()) {
-            // 创建系统test页面
-            $testPage->clearData()
-                ->setData('handle', 'template-test-page')
-                ->setData('name', '模板测试页面（系统）')
-                ->setData('title', 'Template Test Page')
-                ->setData('type', 'test_page')
-                ->setData('status', 1)
-                ->setData('content', '这是模板测试页面，用于预览和测试模板配置。')
-                ->setData('meta_title', 'Template Test Page')
-                ->setData('meta_description', 'Template test page for preview')
-                ->save(true);
-        }
-        
+        // 确保测试页面存在且不允许发布
+        $testPage = $this->ensureTestPageExists();
         $this->assign('test_page_id', $testPage->getId() ?: 0);
+        // 同时传递 page 对象，供 visual_config.phtml 使用
+        $this->assign('page', $testPage);
         
         // 获取所有页面列表（用于选择预览页面）
         $allPages = clone $this->pageModel;
@@ -102,7 +135,6 @@ class Template extends BackendController
             ->getItems();
         
         $this->assign('pages', $pageList);
-        
         return $this->fetch();
     }
 
@@ -174,28 +206,8 @@ class Template extends BackendController
         
         // 如果没有指定页面，使用test页面
         if ($pageId <= 0) {
-            $testPage = clone $this->pageModel;
-            $testPage->clear()
-                ->where('handle', 'template-test-page')
-                ->find()
-                ->fetch();
-            
-            if ($testPage->getId()) {
-                $pageId = $testPage->getId();
-            } else {
-                // 自动创建test页面
-                $testPage->clearData()
-                    ->setData('handle', 'template-test-page')
-                    ->setData('name', '模板测试页面（系统）')
-                    ->setData('title', 'Template Test Page')
-                    ->setData('type', 'test_page')
-                    ->setData('status', 1)
-                    ->setData('content', '这是模板测试页面，用于预览和测试模板配置。')
-                    ->setData('meta_title', 'Template Test Page')
-                    ->setData('meta_description', 'Template test page for preview')
-                    ->save(true);
-                $pageId = $testPage->getId();
-            }
+            $testPage = $this->ensureTestPageExists();
+            $pageId = $testPage->getId();
         }
         
         // 加载页面数据
@@ -222,6 +234,35 @@ class Template extends BackendController
         $page->setData('style', $originalStyle);
         
         return $this->redirect($previewUrl);
+    }
+
+    /**
+     * 模板配置预览页面（独立的配置界面，避免内存问题）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::template_management_config_preview', '模板配置预览', 'mdi mdi-eye', '在独立页面中预览和配置模板')]
+    public function configPreview()
+    {
+        $styleCode = $this->request->getGet('style_code');
+        $pageId = (int)$this->request->getGet('page_id', 0);
+        
+        if (empty($styleCode)) {
+            $this->getMessageManager()->addError(__('模板代码不能为空'));
+            return $this->redirect('*/backend/template/index');
+        }
+        
+        // 确保测试页面存在
+        $testPage = $this->ensureTestPageExists();
+        if ($pageId <= 0) {
+            $pageId = $testPage->getId();
+        }
+        
+        // 设置模板配置模式，并直接渲染 visual_config（避免在模板中再次包含模板导致循环嵌套）
+        $this->assign('is_template_config_mode', true);
+        $this->assign('page', $testPage);
+        $this->assign('visual_config_page_id', $pageId);
+        $this->assign('page_title', __('模板配置预览 - %1', $styleCode));
+        
+        return $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/Page/form_component/visual_config.phtml');
     }
 
     /**
@@ -270,6 +311,98 @@ class Template extends BackendController
             }
             
             $configGroups = $styleModel->getConfigGroups();
+
+            // 统一色系结构为：
+            // data.color_scheme.groups.color_scheme.configs.color_scheme.color_schemes
+            if (isset($configGroups['color_scheme'])) {
+                $cs =& $configGroups['color_scheme'];
+                // 如果不存在 groups，则创建
+                if (!isset($cs['groups']) || !is_array($cs['groups'])) {
+                    $cs['groups'] = [];
+                }
+                // 确保存在分组 color_scheme
+                if (!isset($cs['groups']['color_scheme']) || !is_array($cs['groups']['color_scheme'])) {
+                    $cs['groups']['color_scheme'] = [
+                        'key' => 'color_scheme',
+                        'label' => __('色系选择'),
+                        'tag' => '',
+                        'help_title' => '',
+                        'help_content' => __('选择不同的色系可以快速改变整个模板的颜色方案'),
+                        'icon' => 'mdi-palette',
+                        'configs' => []
+                    ];
+                }
+                // 将可能散落在其他位置的 color_schemes 统一收敛到标准位置
+                $colorSchemes = null;
+                // 1) 标准位置已存在
+                if (isset($cs['groups']['color_scheme']['configs']['color_scheme']['color_schemes'])
+                    && is_array($cs['groups']['color_scheme']['configs']['color_scheme']['color_schemes'])) {
+                    $colorSchemes = $cs['groups']['color_scheme']['configs']['color_scheme']['color_schemes'];
+                }
+                // 2) 分组级直接提供了 color_schemes
+                if ($colorSchemes === null && isset($cs['groups']['color_scheme']['color_schemes']) && is_array($cs['groups']['color_scheme']['color_schemes'])) {
+                    $colorSchemes = $cs['groups']['color_scheme']['color_schemes'];
+                    unset($cs['groups']['color_scheme']['color_schemes']);
+                }
+                // 3) 文件级 configs.color_scheme
+                if ($colorSchemes === null && isset($cs['configs']['color_scheme']['color_schemes']) && is_array($cs['configs']['color_scheme']['color_schemes'])) {
+                    $colorSchemes = $cs['configs']['color_scheme']['color_schemes'];
+                    unset($cs['configs']);
+                }
+                // 4) 文件级直接提供了 color_schemes
+                if ($colorSchemes === null && isset($cs['color_schemes']) && is_array($cs['color_schemes'])) {
+                    $colorSchemes = $cs['color_schemes'];
+                    unset($cs['color_schemes']);
+                }
+                // 写回到标准位置
+                if ($colorSchemes !== null) {
+                    $cs['groups']['color_scheme']['configs']['color_scheme'] = [
+                        'key' => 'color_scheme',
+                        'label' => __('色系选择'),
+                        'type' => 'color_scheme',
+                        'default' => 'default',
+                        'color_schemes' => $colorSchemes,
+                        'options' => [],
+                        'file' => 'color_scheme',
+                        'group' => 'color_scheme',
+                    ];
+                }
+            }
+
+            // 处理色系的 preview_image，直接在后端解析为可访问的静态URL
+            try {
+                $templateHelper = \Weline\Framework\View\Template::getInstance();
+                foreach ($configGroups as $fileKey => &$fileGroup) {
+                    if (!isset($fileGroup['groups']) || !is_array($fileGroup['groups'])) continue;
+                    foreach ($fileGroup['groups'] as $groupKey => &$group) {
+                        if (!isset($group['configs']) || !is_array($group['configs'])) continue;
+                        foreach ($group['configs'] as $configKey => &$config) {
+                            if (($config['type'] ?? '') === 'color_scheme' && isset($config['color_schemes']) && is_array($config['color_schemes'])) {
+                                foreach ($config['color_schemes'] as $schemeKey => $scheme) {
+                                    $preview = $scheme['preview_image'] ?? '';
+                                    if (is_string($preview) && $preview !== '') {
+                                        // 支持已是绝对URL/以斜杠开头的URL：直接保留
+                                        if (preg_match('#^(https?:)?//#', $preview) || str_starts_with($preview, '/')) {
+                                            $resolved = $preview;
+                                        } else {
+                                            // 将相对 templates/ 路径转换为可访问URL
+                                            $source = 'GuoLaiRen_PageBuilder::' . ltrim($preview, '/');
+                                            $resolved = $templateHelper->fetchTemplateStatic($source);
+                                        }
+                                        // 回写为标准字段，尽量覆盖 preview_image，前端可直接使用
+                                        $config['color_schemes'][$schemeKey]['preview_image'] = $resolved ?? '';
+                                    }
+                                }
+                            }
+                        }
+                        unset($config);
+                    }
+                    unset($group);
+                }
+                unset($fileGroup);
+            } catch (\Throwable $e) {
+                // 忽略解析异常，保持原始数据返回
+            }
             
             // 如果有页面ID，获取页面的配置值
             $pageSettings = [];
@@ -344,7 +477,11 @@ class Template extends BackendController
             
             return $this->fetchJson([
                 'success' => true,
-                'data' => $configGroups
+                'data' => $configGroups,
+                'style_info' => [
+                    'code' => $styleModel->getData(Style::fields_CODE),
+                    'name' => $styleModel->getData(Style::fields_NAME)
+                ]
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -385,28 +522,13 @@ class Template extends BackendController
             
             // 如果没有指定页面ID，使用测试页面
             if ($pageId <= 0) {
-                $testPage = clone $this->pageModel;
-                $testPage->clear()
-                    ->where('handle', 'template-test-page')
-                    ->find()
-                    ->fetch();
+                $testPage = $this->ensureTestPageExists();
+                $pageId = $testPage->getId();
                 
-                if ($testPage->getId()) {
-                    $pageId = $testPage->getId();
-                } else {
-                    // 自动创建测试页面
-                    $testPage->clearData()
-                        ->setData('handle', 'template-test-page')
-                        ->setData('name', '模板测试页面（系统）')
-                        ->setData('title', 'Template Test Page')
-                        ->setData('type', 'test_page')
-                        ->setData('status', 1)
-                        ->setData('content', '这是模板测试页面，用于预览和测试模板配置。')
-                        ->setData('meta_title', 'Template Test Page')
-                        ->setData('meta_description', 'Template test page for preview')
-                        ->setData('style', $styleCode)
-                        ->save(true);
-                    $pageId = $testPage->getId();
+                // 如果指定了样式代码，更新测试页面的样式
+                if ($styleCode && $testPage->getData('style') !== $styleCode) {
+                    $testPage->setData('style', $styleCode);
+                    $testPage->save(true);
                 }
             }
             
