@@ -326,6 +326,9 @@ class Template extends DataObject
                 $repContent = "<!--" . PHP_EOL . "$tpl_str_pad_all " . PHP_EOL . $tpl_str_pad_file . PHP_EOL . $tpl_str_pad_all . PHP_EOL . ' -->'
                     . PHP_EOL . $repContent . PHP_EOL
                     . '<!--' . PHP_EOL . $com_str_pad_all . PHP_EOL . $com_str_pad_file . PHP_EOL . $com_str_pad_all . PHP_EOL . '-->';
+            } else {
+                // 当 template.show_comments 为 false 时，移除所有 HTML 注释
+                $repContent = preg_replace('/\<!--([\s\S]*?)-->/', '', $repContent);
             }
             file_put_contents($comFileName, $repContent);                               //将替换后的文件写入定义的缓存文件中
         }
