@@ -54,9 +54,9 @@ abstract class RequestAbstract extends RequestFilter
 
     public function __init()
     {
-        # FIXME 兼容$_GET将”."替换成"_“的情况，暂不清楚$_POST情况，可能第一层键名也会有此情况
+        # FIXME 兼容$_GET将"."替换成"_"的情况，暂不清楚$_POST情况，可能第一层键名也会有此情况
         $query_str = $this->getServer('QUERY_STRING');
-        if (str_contains($query_str, '.')) {
+        if (str_contains($query_str ?? '', '.')) {
             $query_str = str_replace('&amp;', '&', $query_str);
             $query_str_arr = explode('&', $query_str);
             foreach ($query_str_arr as $item) {
@@ -72,8 +72,22 @@ abstract class RequestAbstract extends RequestFilter
         if (empty($this->cache)) {
             $this->cache = ObjectManager::getInstance(RequestCache::class . 'Factory');
         }
+        // 使用统一的缓存键生成方法，自动包含域名信息
+        // 如果 uri_cache_key 为空或不包含域名信息（旧格式），则重新生成
+        $uri = $this->getServer('REQUEST_URI') ?? '';
+        $method = $this->getMethod() ?: 'GET';
+        $expected_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+        
+        // 检查是否需要重新生成缓存键（旧格式不包含域名信息）
         if (empty($this->uri_cache_key)) {
-            $this->uri_cache_key = $this->getUri() . $this->getMethod();
+            $this->uri_cache_key = $expected_cache_key;
+        } else {
+            // 检查缓存键是否包含域名信息
+            $domain_key = RequestCache::getDomainKey($this);
+            $host = $this->getServer('HTTP_HOST') ?? '';
+            if (!str_contains($this->uri_cache_key, $domain_key) && !str_contains($this->uri_cache_key, $host)) {
+                $this->uri_cache_key = $expected_cache_key;
+            }
         }
         if (empty($this->_response)) {
             $this->_response = $this->getResponse();
@@ -372,13 +386,31 @@ abstract class RequestAbstract extends RequestFilter
         if ($this->uri !== '') {
             return $this->uri;
         }
-        $uri = rtrim($this->getServer('REQUEST_URI'), '/');
+        $uri = $this->getServer('REQUEST_URI') ?? '';
+        $uri = RequestCache::normalizeUri($uri);
 
-        $url_path = $this->cache->get($this->uri_cache_key);
-        if ($url_path) {
-            $this->uri_cache_url_path_data = $url_path;
-            $this->setServer('REQUEST_URI', $uri);
-            return $url_path;
+        // 使用统一的缓存键生成方法，确保 uri_cache_key 包含域名信息
+        if (empty($this->uri_cache_key)) {
+            $method = $this->getMethod() ?: 'GET';
+            $this->uri_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+        } else {
+            // 检查缓存键是否包含域名信息（旧格式可能不包含）
+            $domain_key = RequestCache::getDomainKey($this);
+            $host = $this->getServer('HTTP_HOST') ?? '';
+            if (!str_contains($this->uri_cache_key, $domain_key) && !str_contains($this->uri_cache_key, $host)) {
+                $method = $this->getMethod() ?: 'GET';
+                $this->uri_cache_key = RequestCache::buildUriCacheKey($uri, $method, $this);
+            }
+        }
+
+        // 只有在 uri_cache_key 已正确设置且包含域名信息时才查找缓存
+        if (!empty($this->uri_cache_key) && $this->cache) {
+            $url_path = $this->cache->get($this->uri_cache_key);
+            if ($url_path) {
+                $this->uri_cache_url_path_data = $url_path;
+                $this->setServer('REQUEST_URI', $uri);
+                return $url_path;
+            }
         }
         $this->uri = $uri;
         return $uri;

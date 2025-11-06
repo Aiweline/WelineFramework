@@ -3229,6 +3229,165 @@ if (!$themeConfig->getThemeConfig('topnav')):
                 }, 100);
             }
             
+            // 自动滚动到激活的菜单项，使其居中显示
+            function scrollToActiveMenu() {
+                // 查找激活的菜单项
+                var $activeMenu = null;
+                
+                // 优先查找带有 active 类的链接（最精确的激活项）
+                var $activeLink = $('#sidebar-menu .mm-active .active, #sidebar-menu .mm-active > a.active, #sidebar-menu li.mm-active > a.active');
+                if ($activeLink.length > 0) {
+                    $activeMenu = $activeLink.closest('li');
+                } else {
+                    // 如果没有找到 active 链接，查找 mm-active 的菜单项
+                    $activeMenu = $('#sidebar-menu li.mm-active').first();
+                }
+                
+                if (!$activeMenu || $activeMenu.length === 0) {
+                    return; // 没有找到激活的菜单项
+                }
+                
+                // 获取滚动容器
+                var $simplebarContainer = $('.vertical-menu [data-simplebar]');
+                var scrollElement = null;
+                
+                if ($simplebarContainer.length > 0 && $simplebarContainer[0].simpleBar) {
+                    // 使用 simplebar 的滚动元素
+                    scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
+                } else {
+                    // 降级方案：使用侧边栏菜单本身
+                    var $sidebarMenu = $('#sidebar-menu');
+                    if ($sidebarMenu.length && $sidebarMenu[0].scrollHeight > $sidebarMenu[0].clientHeight) {
+                        scrollElement = $sidebarMenu[0];
+                    } else {
+                        // 再降级：使用 window
+                        scrollElement = window;
+                    }
+                }
+                
+                if (!scrollElement) {
+                    return;
+                }
+                
+                // 等待DOM完全渲染和菜单展开完成
+                setTimeout(function() {
+                    try {
+                        // 确保激活菜单项的父级菜单都已展开
+                        $activeMenu.parents('li').each(function() {
+                            var $parent = $(this);
+                            var $subMenu = $parent.find('> .sub-menu').first();
+                            if ($subMenu.length > 0 && $subMenu.attr('aria-expanded') === 'false') {
+                                $parent.find('> a.has-arrow').first().trigger('click');
+                            }
+                        });
+                        
+                        // 再次等待展开动画完成
+                        setTimeout(function() {
+                            try {
+                                var menuElement = $activeMenu[0];
+                                if (!menuElement) {
+                                    return;
+                                }
+                                
+                                // 如果使用 simplebar，必须使用手动计算（因为 scrollIntoView 可能不会正确滚动 simplebar 容器）
+                                var useScrollIntoView = ($simplebarContainer.length === 0 || !$simplebarContainer[0].simpleBar);
+                                
+                                // 对于非 simplebar 的情况，尝试使用原生 scrollIntoView 方法（更简单可靠）
+                                if (useScrollIntoView && typeof menuElement.scrollIntoView === 'function') {
+                                    try {
+                                        menuElement.scrollIntoView({
+                                            behavior: 'smooth',
+                                            block: 'center',
+                                            inline: 'nearest'
+                                        });
+                                        return; // 如果成功，直接返回
+                                    } catch (e) {
+                                        // 如果 scrollIntoView 失败，继续使用手动计算
+                                        console.warn('scrollIntoView 失败，使用手动计算:', e);
+                                    }
+                                }
+                                
+                                // 手动计算滚动位置（simplebar 或 scrollIntoView 失败时使用）
+                                var menuOffset = $activeMenu.offset();
+                                
+                                if (!menuOffset) {
+                                    return;
+                                }
+                                
+                                var scrollTop = 0;
+                                var menuTop = 0;
+                                var containerHeight = 0;
+                                var containerOffset = null;
+                                
+                                if (scrollElement === window) {
+                                    // 使用 window 滚动
+                                    menuTop = menuOffset.top;
+                                    containerHeight = $(window).height();
+                                    scrollTop = $(window).scrollTop();
+                                } else {
+                                    // 使用元素滚动
+                                    var $scrollContainer = $(scrollElement);
+                                    containerOffset = $scrollContainer.offset();
+                                    
+                                    if (containerOffset) {
+                                        // 计算菜单项相对于滚动容器的位置
+                                        menuTop = menuOffset.top - containerOffset.top + $scrollContainer.scrollTop();
+                                    } else {
+                                        // 降级：使用 position()
+                                        menuTop = $activeMenu.position().top + $scrollContainer.scrollTop();
+                                    }
+                                    
+                                    containerHeight = $scrollContainer.height();
+                                    scrollTop = $scrollContainer.scrollTop();
+                                }
+                                
+                                // 计算目标滚动位置：使菜单项位于容器中间
+                                var menuHeight = $activeMenu.outerHeight() || 40; // 默认高度40px
+                                var targetScrollTop = menuTop - (containerHeight / 2) + (menuHeight / 2);
+                                
+                                // 确保不超出滚动范围
+                                var maxScrollTop = 0;
+                                if (scrollElement === window) {
+                                    maxScrollTop = $(document).height() - $(window).height();
+                                } else {
+                                    maxScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight;
+                                }
+                                
+                                targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+                                
+                                // 执行滚动动画
+                                if (scrollElement === window) {
+                                    $('html, body').animate({
+                                        scrollTop: targetScrollTop
+                                    }, 500);
+                                } else {
+                                    $(scrollElement).animate({
+                                        scrollTop: targetScrollTop
+                                    }, 500);
+                                }
+                            } catch (e) {
+                                console.warn('计算滚动位置时出错:', e);
+                            }
+                        }, 300);
+                    } catch (e) {
+                        console.warn('滚动到激活菜单项时出错:', e);
+                    }
+                }, 200);
+            }
+            
+            // 页面加载完成后执行滚动
+            $(document).ready(function() {
+                scrollToActiveMenu();
+            });
+            
+            // 如果使用 jQuery 的 ready 事件，也监听 DOMContentLoaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', scrollToActiveMenu);
+            } else {
+                // DOM 已经加载完成，直接执行
+                setTimeout(scrollToActiveMenu, 300);
+            }
+            
             
         })(jQuery);
     </script>

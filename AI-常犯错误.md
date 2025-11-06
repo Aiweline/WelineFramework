@@ -10,6 +10,8 @@
 - [类属性类型声明错误](#类属性类型声明错误)
 - [XML 配置文件格式错误](#xml-配置文件格式错误)
 - [类名冲突错误](#类名冲突错误)
+- [删除功能实现错误](#删除功能实现错误)
+- [PHP 8.2+ 兼容性错误](#php-82-兼容性错误)
 
 ---
 
@@ -301,6 +303,296 @@ class Account extends BackendController  // 控制器类名保持不变
 
 ---
 
+## 删除功能实现错误
+
+### 错误示例
+```php
+// ❌ 错误：使用自定义 JavaScript 函数实现删除，没有使用框架提供的 w-delete 组件
+function deleteAccount(id) {
+    if (!confirm('确定要删除吗？')) {
+        return;
+    }
+    fetch('/api/delete', {
+        method: 'POST',
+        body: 'id=' + id
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        }
+    });
+}
+
+// ❌ 错误：后端只支持表单数据，不支持 JSON 请求
+public function postDelete(): string
+{
+    $id = (int)$this->request->getPost('id');  // 只支持表单数据
+    // ...
+}
+```
+
+### 正确写法
+
+#### 前端模板
+```html
+<!-- ✅ 正确：使用 w-delete 组件 -->
+<button type="button" 
+        class="btn btn-danger" 
+        w-delete="true"
+        w-url="<?= $this->getBackendUrl('*/backend/account/delete') ?>"
+        w-method="POST"
+        w-var-id="<?= $account->getData('account_id') ?>"
+        w-msg="<?= __('确定要删除账户 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($account->getData('name'))) ?>">
+    <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+</button>
+
+<!-- 在页面底部引入组件 -->
+<js:part name="w-delete"/>
+```
+
+#### 后端控制器
+```php
+// ✅ 正确：使用 getParams() 同时支持 JSON 和表单数据
+public function postDelete(): string
+{
+    // 支持 JSON 和表单数据
+    $params = $this->request->getParams();
+    $id = (int)($params['id'] ?? 0);
+
+    if (!$id) {
+        return $this->jsonResponse([
+            'success' => false,
+            'message' => __('账户ID不能为空')
+        ]);
+    }
+
+    try {
+        $account = $this->getAccountModel()->reset()->load($id);
+        
+        if (!$account->getData(AccountModel::fields_ACCOUNT_ID)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('账户不存在')
+            ]);
+        }
+
+        $account->delete()->fetch();
+
+        return $this->jsonResponse([
+            'success' => true,
+            'message' => __('账户删除成功')
+        ]);
+    } catch (\Exception $e) {
+        return $this->jsonResponse([
+            'success' => false,
+            'message' => __('删除失败：%{1}', $e->getMessage())
+        ]);
+    }
+}
+```
+
+### 要点
+- **必须使用 `w-delete` 组件**：框架提供了智能删除确认组件，不要自定义 JavaScript 实现
+- **必须引入组件**：在页面底部使用 `<js:part name="w-delete"/>` 引入组件
+- **后端支持 JSON**：使用 `$this->request->getParams()` 同时支持 JSON 和表单数据，因为 `w-delete` 组件在 POST 请求时发送 JSON 数据
+- **自动移除行**：删除成功后组件会自动移除对应的表格行，无需手动刷新页面
+- **确认消息**：使用 `w-msg` 属性自定义确认消息，建议包含要删除的记录名称
+- **HTTP方法**：使用 `w-method="POST"` 指定 HTTP 方法
+- **参数传递**：使用 `w-var-*` 属性传递额外参数，如 `w-var-id="123"`
+
+---
+
+## PHP 8.2+ 兼容性错误
+
+**重要提示**：PHP 8.2+ 对函数参数类型要求更严格，很多函数不再接受 `null` 值。必须确保传递给这些函数的参数是期望的类型。
+
+### htmlspecialchars() 不能传入 null
+
+#### 错误示例
+```php
+// ❌ 错误：PHP 8.2+ 中 htmlspecialchars() 不接受 null
+$name = $page->getData('name');  // 可能返回 null
+echo htmlspecialchars($name);  // 错误：Deprecated: Passing null to parameter #1 of htmlspecialchars() is deprecated
+```
+
+#### 正确写法
+```php
+// ✅ 正确：使用 null 合并运算符确保传递字符串
+$name = $page->getData('name') ?? '';
+echo htmlspecialchars($name);
+
+// ✅ 或者使用三元运算符
+$name = $page ? ($page->getData('name') ?? '') : '';
+echo htmlspecialchars($name);
+
+// ✅ 复杂表达式需要正确嵌套括号
+echo htmlspecialchars(($page ? ($page->getData('handle') ?? '') : ''));
+```
+
+#### 常见场景
+- 模板文件中：`htmlspecialchars($var ?? '')`
+- 数组访问：`htmlspecialchars($array['key'] ?? '')`
+- 对象方法调用：`htmlspecialchars(($obj ? $obj->getData('key') : '') ?? '')`
+- 字符串拼接：`"style='" . htmlspecialchars($bgColor ?? '') . "'"`
+
+---
+
+### json_decode() 不能传入 null
+
+#### 错误示例
+```php
+// ❌ 错误：PHP 8.2+ 中 json_decode() 不接受 null
+$locales = $page->getData('locales');  // 可能返回 null
+$data = json_decode($locales, true);  // 错误：Deprecated: Passing null to parameter #1 of json_decode() is deprecated
+```
+
+#### 正确写法
+```php
+// ✅ 正确：使用 null 合并运算符确保传递字符串
+$locales = $page->getData('locales') ?? '';
+$data = json_decode($locales, true);
+
+// ✅ 或者直接使用
+$data = json_decode($page->getData('locales') ?? '', true);
+```
+
+#### 常见场景
+- 模型数据：`json_decode($model->getData('config') ?? '', true)`
+- 请求数据：`json_decode($this->request->getPost('data') ?? '', true)`
+- 文件内容：`json_decode(file_get_contents($file) ?: '', true)`
+
+---
+
+### addColumn() 的 $options 参数不能是 null
+
+#### 错误示例
+```php
+// ❌ 错误：addColumn() 的 $options 参数必须是 string，不能是 null
+$setup->createTable('表名')
+    ->addColumn(
+        self::fields_DETAILS,
+        TableInterface::column_type_TEXT,
+        null,      // $length 可以是 null
+        null,      // ❌ 错误：$options 不能是 null
+        '字段注释'
+    )
+    ->create();
+```
+
+#### 错误信息
+```
+Fatal error: Uncaught TypeError: Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create::addColumn(): 
+Argument #4 ($options) must be of type string, null given
+```
+
+#### 正确写法
+```php
+// ✅ 正确：对于可空字段，使用空字符串 '' 而不是 null
+$setup->createTable('表名')
+    ->addColumn(
+        self::fields_DETAILS,
+        TableInterface::column_type_TEXT,
+        null,      // $length 可以是 null（TEXT 类型不需要长度）
+        '',        // ✅ 正确：$options 使用空字符串表示可空字段
+        '字段注释'
+    )
+    ->create();
+
+// ✅ 对于非空字段
+->addColumn(
+    self::fields_MESSAGE,
+    TableInterface::column_type_TEXT,
+    null,
+    'not null',   // ✅ 正确：非空字段使用 'not null'
+    '消息内容'
+)
+```
+
+#### 常见选项值
+- 可空字段：`''`（空字符串）
+- 非空字段：`'not null'`
+- 带默认值：`'not null default 0'`
+- 主键自增：`'primary key auto_increment'`
+
+---
+
+### 其他常见 PHP 8.2+ 兼容性问题
+
+#### str_replace() / str_contains() 等字符串函数
+```php
+// ❌ 错误
+str_replace('old', 'new', $text);  // $text 可能为 null
+
+// ✅ 正确
+str_replace('old', 'new', $text ?? '');
+```
+
+#### array_merge() / array_key_exists() 等数组函数
+```php
+// ❌ 错误
+array_merge($array1, $array2);  // $array1 或 $array2 可能为 null
+
+// ✅ 正确
+array_merge($array1 ?? [], $array2 ?? []);
+```
+
+#### count() / sizeof() 等统计函数
+```php
+// ❌ 错误（PHP 8.2+ 中 count(null) 会报错）
+count($array);  // $array 可能为 null
+
+// ✅ 正确
+count($array ?? []);
+```
+
+#### strlen() / mb_strlen() 等长度函数
+```php
+// ❌ 错误
+strlen($string);  // $string 可能为 null
+
+// ✅ 正确
+strlen($string ?? '');
+```
+
+---
+
+### 要点总结
+
+1. **使用 null 合并运算符 `??`**：
+   - 对于可能为 null 的变量，使用 `$var ?? ''` 或 `$var ?? []` 提供默认值
+   - 字符串类型使用 `''`，数组类型使用 `[]`
+
+2. **复杂表达式需要正确嵌套括号**：
+   ```php
+   // ❌ 错误：括号不匹配
+   htmlspecialchars($page ? $page->getData('handle') ?? '' : '')
+   
+   // ✅ 正确：明确优先级
+   htmlspecialchars(($page ? ($page->getData('handle') ?? '') : ''))
+   ```
+
+3. **检查函数签名**：
+   - 查看 PHP 文档确认函数是否接受 null
+   - PHP 8.2+ 中很多函数参数类型声明为 `string`，不再接受 null
+
+4. **常见需要处理的函数**：
+   - `htmlspecialchars()`, `htmlentities()`
+   - `json_decode()`, `json_encode()`
+   - `strlen()`, `mb_strlen()`
+   - `str_replace()`, `str_contains()`, `str_starts_with()`, `str_ends_with()`
+   - `count()`, `sizeof()`
+   - `array_merge()`, `array_key_exists()`
+   - 框架的 `addColumn()`, `alterColumn()` 等方法的 `$options` 参数
+
+5. **批量修复建议**：
+   - 使用 IDE 的查找替换功能批量修复
+   - 搜索模式：`htmlspecialchars($` 替换为 `htmlspecialchars(($`（需要手动检查）
+   - 搜索模式：`json_decode($` 替换为 `json_decode($`（需要手动检查）
+
+---
+
 ## 快速检查清单
 
 生成代码时，请检查以下事项：
@@ -312,6 +604,12 @@ class Account extends BackendController  // 控制器类名保持不变
 - [ ] 子类属性的类型声明是否与父类完全一致
 - [ ] XML 配置文件是否使用正确的命名空间和属性格式
 - [ ] 是否存在类名冲突（控制器类名与导入的模型类名相同），如有则使用别名
+- [ ] 删除功能是否使用 `w-delete` 组件而不是自定义 JavaScript
+- [ ] 后端删除方法是否使用 `getParams()` 支持 JSON 和表单数据
+- [ ] **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
+- [ ] **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
+- [ ] **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
+- [ ] **PHP 8.2+ 兼容性**：所有字符串函数参数是否处理了可能的 null 值
 
 ---
 
@@ -325,4 +623,5 @@ class Account extends BackendController  // 控制器类名保持不变
 
 *最后更新：2025-01-XX*
 *文档维护：AI 代码审查助手*
+*PHP 版本要求：PHP 8.2+*
 

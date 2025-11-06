@@ -15,8 +15,9 @@ trait TablePrinter
      * @param array $data 数据数组 [['key', 'value'], ...]
      * @param bool $showBorder 是否显示边框
      * @param int $maxWidth 最大总宽度（0表示自动检测终端宽度）
+     * @param bool $truncateUrls 是否截断URL（默认true，设为false时完整显示URL，允许超出终端宽度）
      */
-    protected function printTable(string $title, array $data, bool $showBorder = true, int $maxWidth = 0): void
+    protected function printTable(string $title, array $data, bool $showBorder = true, int $maxWidth = 0, bool $truncateUrls = true): void
     {
         if (empty($data)) {
             return;
@@ -56,14 +57,30 @@ trait TablePrinter
             $valueWidth = $availableWidth - $keyWidth;
         }
         
-        // 如果超出终端宽度，则进行调整
-        if ($totalWidth > $maxWidth) {
-            $totalWidth = $maxWidth;
-            // 可用宽度 = 总宽度 - 3个边框字符
-            $availableWidth = $totalWidth - 3;
-            // 键列占30%，但至少15个字符
-            $keyWidth = max(15, min($maxKeyWidth + 2, (int)($availableWidth * 0.3)));
-            $valueWidth = $availableWidth - $keyWidth;
+        // 如果超出终端宽度且允许截断URL，则进行调整
+        // 如果不允许截断URL，也要限制最大宽度，避免str_repeat生成过长字符串导致卡住
+        // 设置一个合理的最大宽度限制（500字符），即使不截断URL内容，边框也不应该超过这个宽度
+        // 安全限制：最大宽度不超过1000字符，避免生成过长字符串导致卡住或内存问题
+        $safeMaxWidth = min($maxWidth, 1000); // 安全上限：1000字符
+        $maxAllowedWidth = max($safeMaxWidth, 500); // 至少500字符，但不超过安全上限
+        
+        if ($totalWidth > $maxAllowedWidth) {
+            if ($truncateUrls) {
+                // 允许截断URL时，严格限制在终端宽度内
+                $totalWidth = $safeMaxWidth;
+                // 可用宽度 = 总宽度 - 3个边框字符
+                $availableWidth = $totalWidth - 3;
+                // 键列占30%，但至少15个字符
+                $keyWidth = max(15, min($maxKeyWidth + 2, (int)($availableWidth * 0.3)));
+                $valueWidth = $availableWidth - $keyWidth;
+            } else {
+                // 不截断URL时，限制最大宽度避免卡住，但值列宽度保持足够大以显示完整URL
+                $totalWidth = $maxAllowedWidth;
+                // 键列保持固定大小
+                $keyWidth = min($maxKeyWidth + 2, 50); // 键列最多50字符
+                // 值列使用剩余空间
+                $valueWidth = $totalWidth - $keyWidth - 3; // 减去3个边框字符
+            }
         }
         
         if ($showBorder) {
@@ -91,7 +108,8 @@ trait TablePrinter
             $availableValueWidth = $valueWidth - 2;
             $currentValueWidth = $this->getDisplayWidth($value);
             
-            if ($currentValueWidth > $availableValueWidth) {
+            // 只有在允许截断URL时才进行截断
+            if ($truncateUrls && $currentValueWidth > $availableValueWidth) {
                 // 对于URL等长文本，智能截断并保留重要部分
                 if ($this->isUrl($value)) {
                     // URL保留协议和域名，中间部分省略
@@ -315,21 +333,15 @@ trait TablePrinter
      */
     protected function getTerminalWidth(): int
     {
-        // Windows系统
+        // Windows系统 - 直接返回默认值，避免执行可能阻塞的命令
+        // 在 PowerShell 环境中，exec('mode con') 可能会卡住
+        // 为了确保命令不阻塞，直接返回合理的默认宽度
         if (DIRECTORY_SEPARATOR === '\\') {
-            $output = [];
-            exec('mode con', $output);
-            foreach ($output as $line) {
-                if (preg_match('/Columns:\s*(\d+)/', $line, $matches)) {
-                    return (int)$matches[1];
-                }
-                if (preg_match('/列:\s*(\d+)/', $line, $matches)) {
-                    return (int)$matches[1];
-                }
-            }
+            // Windows 系统：直接返回默认宽度，避免执行可能阻塞的命令
+            return 120;
         } else {
             // Unix/Linux/Mac系统
-            $width = exec('tput cols');
+            $width = @exec('tput cols 2>/dev/null');
             if (is_numeric($width) && $width > 0) {
                 return (int)$width;
             }

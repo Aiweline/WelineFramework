@@ -574,6 +574,21 @@ class Url implements UrlInterface
             }
         }
 
+        # 如果网站匹配失败，从完整URL中提取路径部分
+        if (!isset($data['website']) && str_contains($url, '://')) {
+            $parsed = self::parse_url($url);
+            if (isset($parsed['path'])) {
+                # 规范化路径：去除多余斜杠，确保以 / 开头
+                $path = $parsed['path'];
+                $path = str_replace('//', '/', $path);
+                if (!str_starts_with($path, '/')) {
+                    $path = '/' . $path;
+                }
+                $url = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+                $uri = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+            }
+        }
+
         # 前缀区域去除
         $splits = self::split_url($url, 'split');
 

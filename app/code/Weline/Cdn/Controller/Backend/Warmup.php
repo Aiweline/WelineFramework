@@ -15,7 +15,7 @@ use Weline\Cdn\Model\WarmupUrl;
 use Weline\Cdn\Service\WarmupRunner;
 use Weline\Cdn\Service\WarmupProviderScanner;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Attribute\Acl as AclAttribute;
+use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -98,7 +98,7 @@ class Warmup extends BackendController
 
             // 获取所有模块（用于筛选）
             $modules = $this->getWarmupUrlModel()->reset()
-                ->select([WarmupUrl::fields_MODULE])
+                ->select(WarmupUrl::fields_MODULE)
                 ->group(WarmupUrl::fields_MODULE)
                 ->fetch()
                 ->getItems();
@@ -145,13 +145,7 @@ class Warmup extends BackendController
         try {
             // 按模块统计
             $stats = $this->getWarmupUrlModel()->reset()
-                ->select([
-                    WarmupUrl::fields_MODULE,
-                    'COUNT(*) as total_count',
-                    'SUM(' . WarmupUrl::fields_PROCESSED_COUNT . ') as total_processed',
-                    'SUM(' . WarmupUrl::fields_SUCCESS_COUNT . ') as total_success',
-                    'SUM(' . WarmupUrl::fields_FAIL_COUNT . ') as total_fail'
-                ])
+                ->select(WarmupUrl::fields_MODULE . ', COUNT(*) as total_count, SUM(' . WarmupUrl::fields_PROCESSED_COUNT . ') as total_processed, SUM(' . WarmupUrl::fields_SUCCESS_COUNT . ') as total_success, SUM(' . WarmupUrl::fields_FAIL_COUNT . ') as total_fail')
                 ->group(WarmupUrl::fields_MODULE)
                 ->fetch()
                 ->getItems();

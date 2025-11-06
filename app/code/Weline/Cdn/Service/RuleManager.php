@@ -13,6 +13,7 @@ namespace Weline\Cdn\Service;
 
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Model\Domain;
+use Weline\Cdn\Model\Account;
 use Weline\Framework\App\Env;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
@@ -26,13 +27,16 @@ class RuleManager
 {
     private ObjectManager $objectManager;
     private AdapterResolver $adapterResolver;
+    private AccountManager $accountManager;
 
     public function __construct(
         ObjectManager $objectManager,
-        AdapterResolver $adapterResolver
+        AdapterResolver $adapterResolver,
+        AccountManager $accountManager
     ) {
         $this->objectManager = $objectManager;
         $this->adapterResolver = $adapterResolver;
+        $this->accountManager = $accountManager;
     }
 
     /**
@@ -107,10 +111,9 @@ class RuleManager
             throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::fields_ADAPTER)]));
         }
 
-        // 获取凭据（简化版，实际应该使用AccountManager）
-        $credentials = $domain->getCredentialsArray();
-        if (empty($credentials) && $domain->isInheritDefault()) {
-            // TODO: 从默认账户获取凭据
+        // 获取凭据
+        $credentials = $this->getCredentials($domain);
+        if (empty($credentials)) {
             throw new Core(__('未配置账户凭据'));
         }
 
@@ -141,10 +144,9 @@ class RuleManager
         // 获取合并后的规则
         $rules = $this->getMergedRules($domain);
 
-        // 获取凭据（简化版，实际应该使用AccountManager）
-        $credentials = $domain->getCredentialsArray();
-        if (empty($credentials) && $domain->isInheritDefault()) {
-            // TODO: 从默认账户获取凭据
+        // 获取凭据
+        $credentials = $this->getCredentials($domain);
+        if (empty($credentials)) {
             throw new Core(__('未配置账户凭据'));
         }
 
@@ -152,6 +154,47 @@ class RuleManager
         $result = $adapter->putRules($zoneId, $rules, $credentials);
 
         return $result;
+    }
+
+    /**
+     * 获取域名使用的凭据
+     * 
+     * @param Domain $domain 域名模型
+     * @return array 凭据数组
+     */
+    private function getCredentials(Domain $domain): array
+    {
+        // 1. 如果域名有自定义凭据，优先使用
+        $credentials = $domain->getCredentialsArray();
+        if (!empty($credentials)) {
+            return $credentials;
+        }
+
+        // 2. 如果指定了 account_id，使用该账户的凭据
+        $accountId = $domain->getData(Domain::fields_ACCOUNT_ID);
+        if ($accountId) {
+            $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
+            if ($account->getId()) {
+                $accountCredentials = $account->getCredentialsArray();
+                if (!empty($accountCredentials)) {
+                    return $accountCredentials;
+                }
+            }
+        }
+
+        // 3. 如果继承默认账户，使用默认账户的凭据
+        if ($domain->isInheritDefault()) {
+            $adapter = $domain->getData(Domain::fields_ADAPTER);
+            $defaultAccount = $this->accountManager->getDefaultAccount($adapter);
+            if ($defaultAccount) {
+                $defaultCredentials = $defaultAccount->getCredentialsArray();
+                if (!empty($defaultCredentials)) {
+                    return $defaultCredentials;
+                }
+            }
+        }
+
+        return [];
     }
 }
 

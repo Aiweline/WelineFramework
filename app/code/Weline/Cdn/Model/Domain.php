@@ -25,6 +25,11 @@ class Domain extends Model
     public const table = 'cdn_domain';
     
     /**
+     * Primary key
+     */
+    public string $_primary_key = 'domain_id';
+    
+    /**
      * Primary keys
      */
     public array $_unit_primary_keys = ['domain_id'];

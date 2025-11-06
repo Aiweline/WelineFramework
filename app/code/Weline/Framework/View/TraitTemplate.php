@@ -259,6 +259,76 @@ trait TraitTemplate
     }
 
     /**
+     * 获取模板(view/templates)目录下资源的可访问URL（生产环境兼容）。
+     * - 支持 module::path 写法；path 相对于 templates/ 目录（如 style/jion-landing/asset/img/banner.png）
+     * - DEV：直接将真实路径转为URL（/app/code/...）。
+     * - PROD：发布到模块静态目录下（/pub/static/...），并返回对应URL。
+     */
+    public function fetchTemplateStatic(string $source, bool $rand_version_with_system = true): string
+    {
+        $source = trim($source);
+        if ('/' !== DS) {
+            $source = str_replace('/', DS, $source);
+        }
+        
+        // 手动解析 module::path，避免 processModuleSourceFilePath 自动添加 templates/ 前缀
+        $module_name = null;
+        $rel_path = $source;
+        if (strpos($source, '::') !== false) {
+            $parts = explode('::', $source, 2);
+            $module_name = trim($parts[0]);
+            $rel_path = trim($parts[1], DS);
+        }
+        
+        // 移除 rel_path 中可能存在的 templates/ 前缀（避免重复）
+        $rel_path = ltrim($rel_path, DS);
+        if (strpos($rel_path, 'templates' . DS) === 0) {
+            $rel_path = substr($rel_path, strlen('templates' . DS));
+        }
+        
+        // 确保路径以 templates/ 开头
+        $rel_path = 'templates' . DS . $rel_path;
+        
+        // 获取模块路径
+        $modules = Env::getInstance()->getModuleList();
+        if ($module_name && isset($modules[$module_name]) && $module = $modules[$module_name]) {
+            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+        } else {
+            $module_name = $this->getRequest()->getModuleName();
+            $module_view_dir_path = $this->getRequest()->getModulePath() . 'view' . DS;
+        }
+        
+        // 构建真实文件路径
+        $real_path = rtrim($module_view_dir_path, DS) . DS . $rel_path;
+
+        if (!PROD) {
+            // 开发环境：直接转URL
+            $dir = dirname($real_path);
+            $url_base = $this->getUrlPath($dir);
+            $url = rtrim($url_base, '/') . '/' . basename($real_path);
+            return str_replace('//', '/', str_replace('\\', '/', $url));
+        }
+
+        // 生产环境：发布到静态目录
+        $statics_base_dir = $this->getModuleViewDir($module_view_dir_path, DataInterface::view_STATICS_DIR, $module_name);
+        $publish_target = rtrim($statics_base_dir, DS) . DS . $rel_path;
+        $publish_dir = dirname($publish_target);
+        if (!is_dir($publish_dir)) {
+            mkdir($publish_dir, 0770, true);
+        }
+        if (is_file($real_path)) {
+            if (!is_file($publish_target) || filemtime($real_path) > @filemtime($publish_target)) {
+                @copy($real_path, $publish_target);
+            }
+        }
+        $url = rtrim($this->getUrlPath($publish_dir), '/') . '/' . basename($publish_target);
+        if ($rand_version_with_system && Env::getInstance()->getConfig('static_file_rand_version')) {
+            $url .= '?v=' . random_int(10000, 100000);
+        }
+        return str_replace('//', '/', str_replace('\\', '/', $url));
+    }
+
+    /**
      * @DESC         |按照类型获取view目录
      *
      * 参数区：

@@ -17,7 +17,7 @@ use Weline\Cdn\Service\CachePurger;
 use Weline\Cdn\Service\RuleManager;
 use Weline\Cdn\Service\AccountManager;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\App\Attribute\Acl as AclAttribute;
+use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -101,23 +101,37 @@ class Domain extends BackendController
                 $query->where(DomainModel::fields_ENABLED, (int)$enabled);
             }
 
-            // 统计
-            $total = $query->count();
-
-            // 分页查询
-            $domains = $query
-                ->limit($pageSize, ($page - 1) * $pageSize)
-                ->order(DomainModel::fields_CREATED_AT, 'DESC')
-                ->fetch()
-                ->getItems();
-
             // 获取所有适配器
             $adapters = $this->getAdapterResolver()->getAllAdapters();
 
-            // 计算分页信息
-            $totalPages = ceil($total / $pageSize);
+            // 排序
+            $query->order(DomainModel::fields_CREATED_AT, 'DESC');
+
+            // 使用 Model 的 pagination 方法进行分页查询
+            $domainsResult = $query->pagination($page, $pageSize)->fetch();
+            $domains = $domainsResult->getItems();
+            
+            // 从查询对象中获取分页信息
+            $pagination = $query->getPaginationData();
+            $total = $pagination['totalSize'] ?? 0;
+            $totalPages = $pagination['lastPage'] ?? 0;
+
+            // 获取网站信息（用于显示网站名称）
+            $websites = [];
+            if (class_exists(\Weline\Websites\Model\Website::class)) {
+                try {
+                    $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                    $websiteList = $websiteModel->reset()->select()->fetchArray();
+                    foreach ($websiteList as $website) {
+                        $websites[(int)$website['website_id']] = $website;
+                    }
+                } catch (\Exception $e) {
+                    // 忽略错误，继续执行
+                }
+            }
 
             $this->assign('domains', $domains);
+            $this->assign('websites', $websites);
             $this->assign('total', $total);
             $this->assign('page', $page);
             $this->assign('pageSize', $pageSize);
@@ -131,6 +145,7 @@ class Domain extends BackendController
         } catch (\Exception $e) {
             Message::error(__('加载域名列表失败：%{1}', $e->getMessage()));
             $this->assign('domains', []);
+            $this->assign('websites', []);
             $this->assign('total', 0);
             $this->assign('page', 1);
             $this->assign('pageSize', 20);
@@ -153,13 +168,13 @@ class Domain extends BackendController
     {
         $id = (int)$this->request->getGet('id');
 
-            if ($id) {
-                $domain = $this->getDomainModel()->reset()->load($id);
-                
-                if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
-                    Message::error(__('域名不存在'));
-                    return $this->redirect('*/backend/domain/index');
-                }
+        if ($id) {
+            $domain = $this->getDomainModel()->reset()->load($id);
+            
+            if (!$domain->getId()) {
+                Message::error(__('域名不存在'));
+                return $this->redirect('*/backend/domain/index');
+            }
             
             $this->assign('domain', $domain);
         } else {
@@ -170,11 +185,41 @@ class Domain extends BackendController
         $adapters = $this->getAdapterResolver()->getAllAdapters();
         $this->assign('adapters', $adapters);
 
-        // 获取所有账户（用于选择）
-        // TODO: 需要根据适配器筛选账户
+        // 获取所有账户（用于选择），按适配器分组
+        $accounts = [];
+        try {
+            $accountModel = ObjectManager::getInstance(\Weline\Cdn\Model\Account::class);
+            $accountList = $accountModel->reset()
+                ->where(\Weline\Cdn\Model\Account::fields_STATUS, \Weline\Cdn\Model\Account::STATUS_ACTIVE)
+                ->select()
+                ->fetchArray();
+            
+            // 按适配器分组账户
+            foreach ($accountList as $account) {
+                $adapterCode = $account['adapter'] ?? '';
+                if (!isset($accounts[$adapterCode])) {
+                    $accounts[$adapterCode] = [];
+                }
+                $accounts[$adapterCode][] = $account;
+            }
+        } catch (\Exception $e) {
+            // 如果获取失败，使用空数组
+            $accounts = [];
+        }
+        $this->assign('accounts', $accounts);
         
         // 获取网站列表（从Weline_Websites模块）
-        // TODO: 需要获取网站列表供选择
+        $websites = [];
+        if (class_exists(\Weline\Websites\Model\Website::class)) {
+            try {
+                $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                $websites = $websiteModel->reset()->select()->fetchArray();
+            } catch (\Exception $e) {
+                // 如果获取失败，使用空数组
+                $websites = [];
+            }
+        }
+        $this->assign('websites', $websites);
 
         return $this->fetch();
     }
@@ -194,8 +239,10 @@ class Domain extends BackendController
             ]);
         }
 
-        $id = (int)$this->request->getPost('id');
-        $data = $this->request->getPost();
+        // 支持 JSON 和表单数据
+        $params = $this->request->getParams();
+        $id = (int)($params['id'] ?? 0);
+        $data = $params;
 
         try {
             $domain = $this->getDomainModel()->reset();
@@ -203,7 +250,7 @@ class Domain extends BackendController
             if ($id) {
                 $domain->load($id);
                 
-                if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+                if (!$domain->getId()) {
                     return $this->jsonResponse([
                         'success' => false,
                         'message' => __('域名不存在')
@@ -249,19 +296,40 @@ class Domain extends BackendController
                 ]);
             }
 
-            // 如果是新域名，检查是否已存在
-            if (!$id) {
-                $existing = $this->getDomainModel()->reset()
-                    ->where(DomainModel::fields_SITE_ID, $data['site_id'])
-                    ->find()
-                    ->fetch();
-                
-                if ($existing->getData(DomainModel::fields_DOMAIN_ID)) {
-                    return $this->jsonResponse([
-                        'success' => false,
-                        'message' => __('该网站已配置CDN域名')
-                    ]);
-                }
+            // 检查域名名称全局唯一性
+            $existingByName = $this->getDomainModel()->reset()
+                ->where(DomainModel::fields_DOMAIN_NAME, $data['domain_name']);
+            
+            if ($id) {
+                // 编辑时，排除当前记录
+                $existingByName->where(DomainModel::fields_DOMAIN_ID, $id, '!=');
+            }
+            
+            $existingByName = $existingByName->find()->fetch();
+            
+            if ($existingByName->getId()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('域名 "%{1}" 已存在，请使用不同的域名', $data['domain_name'])
+                ]);
+            }
+            
+            // 检查 Zone ID 全局唯一性
+            $existingByZoneId = $this->getDomainModel()->reset()
+                ->where(DomainModel::fields_ZONE_ID, $data['zone_id']);
+            
+            if ($id) {
+                // 编辑时，排除当前记录
+                $existingByZoneId->where(DomainModel::fields_DOMAIN_ID, $id, '!=');
+            }
+            
+            $existingByZoneId = $existingByZoneId->find()->fetch();
+            
+            if ($existingByZoneId->getId()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('Zone ID "%{1}" 已存在，请使用不同的 Zone ID', $data['zone_id'])
+                ]);
             }
 
             // 设置数据
@@ -269,7 +337,16 @@ class Domain extends BackendController
             $domain->setData(DomainModel::fields_ADAPTER, $data['adapter']);
             $domain->setData(DomainModel::fields_DOMAIN_NAME, $data['domain_name']);
             $domain->setData(DomainModel::fields_ZONE_ID, $data['zone_id']);
-            $domain->setData(DomainModel::fields_ACCOUNT_ID, $data['account_id'] ?? null);
+            
+            // account_id 处理：空字符串转换为 null
+            $accountId = $data['account_id'] ?? null;
+            if ($accountId === '' || $accountId === '0') {
+                $accountId = null;
+            } else {
+                $accountId = $accountId ? (int)$accountId : null;
+            }
+            $domain->setData(DomainModel::fields_ACCOUNT_ID, $accountId);
+            
             $domain->setData(DomainModel::fields_INHERIT_DEFAULT, isset($data['inherit_default']) ? (int)$data['inherit_default'] : 1);
             $domain->setData(DomainModel::fields_WARMUP_INTERVAL_SECONDS, (int)($data['warmup_interval_seconds'] ?? 300));
             $domain->setData(DomainModel::fields_ENABLED, isset($data['enabled']) ? (int)$data['enabled'] : 1);
@@ -327,9 +404,11 @@ class Domain extends BackendController
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_domain_delete', '删除域名', 'mdi-delete', '删除CDN域名')]
-    public function delete(): string
+    public function postDelete(): string
     {
-        $id = (int)$this->request->getPost('id');
+        // 支持 JSON 和表单数据
+        $params = $this->request->getParams();
+        $id = (int)($params['id'] ?? 0);
 
         if (!$id) {
             return $this->jsonResponse([
@@ -341,14 +420,14 @@ class Domain extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
                 ]);
             }
 
-            $domain->delete();
+            $domain->delete()->fetch();
 
             Message::success(__('域名删除成功'));
 
@@ -385,7 +464,7 @@ class Domain extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
@@ -429,7 +508,7 @@ class Domain extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
@@ -482,7 +561,7 @@ class Domain extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
@@ -540,7 +619,7 @@ class Domain extends BackendController
         try {
             $domain = $this->getDomainModel()->reset()->load($id);
             
-            if (!$domain->getData(DomainModel::fields_DOMAIN_ID)) {
+            if (!$domain->getId()) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('域名不存在')
@@ -567,6 +646,18 @@ class Domain extends BackendController
                 'message' => __('清理失败：%{1}', $e->getMessage())
             ]);
         }
+    }
+
+    /**
+     * JSON响应
+     * 
+     * @param array $data
+     * @return string
+     */
+    private function jsonResponse(array $data): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
 

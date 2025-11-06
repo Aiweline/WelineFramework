@@ -1,0 +1,167 @@
+<?php
+/**
+ * Sticker 管理列表页
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$stickers = $this->getData('stickers') ?: [];
+$total = (int)$this->getData('total');
+$search = $this->getData('search') ?: '';
+$targetModule = $this->getData('target_module') ?: '';
+$sourceModule = $this->getData('source_module') ?: '';
+$modules = $this->getData('modules') ?: [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Sticker管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0">
+                                <i class="mdi mdi-sticker text-primary"></i> <?= __('Sticker管理') ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><?= __('系统') ?></li>
+                                    <li class="breadcrumb-item active"><?= __('Sticker管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 操作栏 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-primary"><?= __('总数：%{1}', [$total]) ?></span>
+                            </div>
+                            <div>
+                                <form method="get" class="d-inline-flex gap-2">
+                                    <input type="text" name="search" class="form-control form-control-sm" 
+                                           placeholder="<?= __('搜索模块名、文件路径') ?>" 
+                                           value="<?= htmlspecialchars($search) ?>">
+                                    <select name="target_module" class="form-select form-select-sm">
+                                        <option value=""><?= __('所有目标模块') ?></option>
+                                        <?php foreach ($modules as $moduleName): ?>
+                                            <option value="<?= htmlspecialchars($moduleName) ?>" <?= $targetModule === $moduleName ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($moduleName) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <select name="source_module" class="form-select form-select-sm">
+                                        <option value=""><?= __('所有来源模块') ?></option>
+                                        <?php foreach ($modules as $moduleName): ?>
+                                            <option value="<?= htmlspecialchars($moduleName) ?>" <?= $sourceModule === $moduleName ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($moduleName) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                    </button>
+                                    <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="btn btn-sm btn-secondary">
+                                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                                    </a>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sticker列表 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <?php if (empty($stickers)): ?>
+                                    <div class="text-center py-5">
+                                        <i class="mdi mdi-sticker-outline" style="font-size: 48px; color: #ccc;"></i>
+                                        <p class="text-muted mt-3"><?= __('暂无Sticker') ?></p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th><?= __('目标模块') ?></th>
+                                                    <th><?= __('目标文件') ?></th>
+                                                    <th><?= __('来源模块') ?></th>
+                                                    <th><?= __('Sticker文件') ?></th>
+                                                    <th><?= __('规则数量') ?></th>
+                                                    <th><?= __('操作') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($stickers as $sticker): ?>
+                                                    <tr>
+                                                        <td>
+                                                            <span class="badge bg-info"><?= htmlspecialchars($sticker['target_module']) ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <code class="text-primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-success"><?= htmlspecialchars($sticker['source_module']) ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <code class="text-secondary"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-warning"><?= $sticker['actions_count'] ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <a href="<?= $this->getBackendUrl('*/backend/sticker/detail', [
+                                                                'target_module' => $sticker['target_module'],
+                                                                'target_file' => $sticker['target_file'],
+                                                                'source_module' => $sticker['source_module']
+                                                            ]) ?>" 
+                                                               class="btn btn-sm btn-primary">
+                                                                <i class="mdi mdi-eye"></i> <?= __('查看详情') ?>
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

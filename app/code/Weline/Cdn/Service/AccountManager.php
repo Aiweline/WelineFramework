@@ -91,7 +91,7 @@ class AccountManager
             ->find()
             ->fetch();
         
-        return $account->getData(Account::fields_ACCOUNT_ID) ? $account : null;
+        return $account->getId() ? $account : null;
     }
 
     /**
