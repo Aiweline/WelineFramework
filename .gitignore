@@ -41,3 +41,7 @@ debug_*.json
 debug_*.txt
 debug_*.php
 response_*.html
+ 
+# 不再追踪的业务模块
+app/code/GuoLaiRen/Center/
+app/code/GuoLaiRen/Smtp/
