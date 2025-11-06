@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- CDN管理顶级菜单 -->
+    <add source="Weline_Cdn::cdn_manager" 
+         name="cdn_manager" 
+         title="CDN管理" 
+         action=""
+         parent="" 
+         icon="mdi mdi-cloud" 
+         order="50000"/>
+    
+    <!-- 账户管理子菜单 -->
+    <add source="Weline_Cdn::cdn_account_manager" 
+         name="cdn_account_manager" 
+         title="账户管理" 
+         action="*/backend/account/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-account-circle" 
+         order="10"/>
+    
+    <!-- 域名管理子菜单 -->
+    <add source="Weline_Cdn::cdn_domain_manager" 
+         name="cdn_domain_manager" 
+         title="域名管理" 
+         action="*/backend/domain/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-web" 
+         order="20"/>
+    
+    <!-- 规则管理子菜单 -->
+    <add source="Weline_Cdn::cdn_rules_manager" 
+         name="cdn_rules_manager" 
+         title="规则管理" 
+         action="*/backend/rules/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-file-document-edit" 
+         order="30"/>
+    
+    <!-- 预热管理子菜单 -->
+    <add source="Weline_Cdn::cdn_warmup_manager" 
+         name="cdn_warmup_manager" 
+         title="预热管理" 
+         action="*/backend/warmup/index"
+         parent="Weline_Cdn::cdn_manager" 
+         icon="mdi mdi-fire" 
+         order="40"/>
+    
+</menus>
+

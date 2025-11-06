@@ -1,0 +1,301 @@
+<?php
+/**
+ * CDN域名表单页
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$domain = $this->getData('domain');
+$adapters = $this->getData('adapters') ?: [];
+$websites = $this->getData('websites') ?: [];
+$accounts = $this->getData('accounts') ?: [];
+$isEdit = $domain && $domain->getId() ? true : false;
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $isEdit ? __('编辑域名') : __('添加域名') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0">
+                                <i class="mdi mdi-<?= $isEdit ? 'pencil' : 'plus' ?> text-primary"></i> 
+                                <?= $isEdit ? __('编辑域名') : __('添加域名') ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>"><?= __('域名管理') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('添加') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 表单 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <form id="domainForm" method="post" action="<?= $this->getBackendUrl('*/backend/domain/save') ?>">
+                                    <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
+                                    
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('网站') ?> <span class="text-danger">*</span></label>
+                                        <div class="col-md-10">
+                                            <select name="site_id" id="siteSelect" class="form-select" required>
+                                                <option value=""><?= __('请选择网站') ?></option>
+                                                <?php foreach ($websites as $website): ?>
+                                                    <option value="<?= (int)$website['website_id'] ?>" 
+                                                            data-url="<?= htmlspecialchars((string)($website['url'] ?? '')) ?>"
+                                                            <?= ($domain && $domain->getData('site_id') == $website['website_id']) ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars((string)($website['name'] ?? '')) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <small class="form-text text-muted"><?= __('从Weline_Websites模块选择网站') ?></small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
+                                        <div class="col-md-10">
+                                            <select name="adapter" id="adapterSelect" class="form-select" required>
+                                                <option value=""><?= __('请选择适配器') ?></option>
+                                                <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                                                    <option value="<?= htmlspecialchars((string)$adapterCode) ?>" 
+                                                            <?= ($domain && $domain->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('域名名称') ?> <span class="text-danger">*</span></label>
+                                        <div class="col-md-10">
+                                            <input type="text" name="domain_name" id="domainNameInput" class="form-control" 
+                                                   value="<?= htmlspecialchars((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" 
+                                                   required>
+                                            <small class="form-text text-muted"><?= __('例如：example.com') ?></small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('Zone ID') ?> <span class="text-danger">*</span></label>
+                                        <div class="col-md-10">
+                                            <input type="text" name="zone_id" class="form-control" 
+                                                   value="<?= htmlspecialchars((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" 
+                                                   required>
+                                            <small class="form-text text-muted"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('账户关联') ?></label>
+                                        <div class="col-md-10">
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="inherit_default" value="1" 
+                                                       id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="inheritDefault">
+                                                    <?= __('继承默认账户') ?>
+                                                </label>
+                                            </div>
+                                            <select name="account_id" class="form-select" id="accountSelect" disabled>
+                                                <option value=""><?= __('请先选择适配器') ?></option>
+                                            </select>
+                                            <small class="form-text text-muted"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('预热间隔') ?></label>
+                                        <div class="col-md-10">
+                                            <input type="number" name="warmup_interval_seconds" class="form-control" 
+                                                   value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" 
+                                                   min="60" step="60">
+                                            <small class="form-text text-muted"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mb-3">
+                                        <label class="col-md-2 col-form-label"><?= __('状态') ?></label>
+                                        <div class="col-md-10">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="enabled" value="1" 
+                                                       id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
+                                                <label class="form-check-label" for="enabled">
+                                                    <?= __('启用') ?>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-10 offset-md-2">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                                            </button>
+                                            <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="btn btn-secondary">
+                                                <i class="mdi mdi-close"></i> <?= __('取消') ?>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+
+<script>
+document.getElementById('domainForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            } else {
+                window.location.href = '<?= $this->getBackendUrl('*/backend/domain/index') ?>';
+            }
+        } else {
+            alert('<?= __('保存失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+    });
+});
+
+// 账户数据（按适配器分组）
+const accountsByAdapter = <?= json_encode($accounts, JSON_UNESCAPED_UNICODE) ?>;
+const currentDomainAccountId = <?= $domain && $domain->getData('account_id') ? (int)$domain->getData('account_id') : 'null' ?>;
+
+// 更新账户选择框
+function updateAccountSelect(adapterCode) {
+    const accountSelect = document.getElementById('accountSelect');
+    const inheritDefault = document.getElementById('inheritDefault');
+    
+    // 清空现有选项
+    accountSelect.innerHTML = '<option value=""><?= __('请选择账户（可选）') ?></option>';
+    
+    if (!adapterCode) {
+        accountSelect.disabled = true;
+        accountSelect.innerHTML = '<option value=""><?= __('请先选择适配器') ?></option>';
+        return;
+    }
+    
+    // 获取该适配器的账户列表
+    const accounts = accountsByAdapter[adapterCode] || [];
+    
+    if (accounts.length === 0) {
+        accountSelect.disabled = false;
+        accountSelect.innerHTML = '<option value=""><?= __('该适配器暂无可用账户') ?></option>';
+        return;
+    }
+    
+    // 填充账户选项
+    accounts.forEach(function(account) {
+        const option = document.createElement('option');
+        option.value = account.account_id;
+        option.textContent = account.name + (account.is_default ? ' (默认)' : '');
+        
+        // 如果是编辑模式且当前域名使用此账户，则选中
+        if (currentDomainAccountId && currentDomainAccountId == account.account_id) {
+            option.selected = true;
+        }
+        
+        accountSelect.appendChild(option);
+    });
+    
+    // 启用选择框（如果未勾选继承默认账户）
+    accountSelect.disabled = inheritDefault.checked;
+}
+
+// 适配器选择变化时更新账户列表
+document.getElementById('adapterSelect').addEventListener('change', function() {
+    updateAccountSelect(this.value);
+});
+
+// 继承默认账户时禁用账户选择
+document.getElementById('inheritDefault').addEventListener('change', function() {
+    const accountSelect = document.getElementById('accountSelect');
+    accountSelect.disabled = this.checked;
+});
+
+// 页面加载时，如果已选择适配器，初始化账户列表
+document.addEventListener('DOMContentLoaded', function() {
+    const adapterSelect = document.getElementById('adapterSelect');
+    if (adapterSelect.value) {
+        updateAccountSelect(adapterSelect.value);
+    }
+});
+
+// 选择网站时自动填充域名名称
+document.getElementById('siteSelect').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const siteUrl = selectedOption.getAttribute('data-url');
+    const domainNameInput = document.getElementById('domainNameInput');
+    
+    if (siteUrl && domainNameInput && !domainNameInput.value) {
+        try {
+            // 从 URL 中提取域名
+            const url = new URL(siteUrl);
+            const hostname = url.hostname;
+            
+            // 如果 hostname 存在，自动填充域名名称
+            if (hostname) {
+                domainNameInput.value = hostname;
+            }
+        } catch (e) {
+            // 如果 URL 解析失败，尝试从 URL 中提取域名部分
+            const match = siteUrl.match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/i);
+            if (match && match[1]) {
+                domainNameInput.value = match[1];
+            }
+        }
+    }
+});
+</script>
+
+</body>
+</html>
+

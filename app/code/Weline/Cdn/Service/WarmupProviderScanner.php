@@ -18,7 +18,7 @@ use Weline\Framework\System\File\Scan;
 /**
  * 预热Provider扫描器
  * 
- * 扫描所有模块的Cdn/WarmupProvider.php文件
+ * 扫描所有模块的 extends/Weline_Cdn/ 目录下的PHP文件
  * 
  * @package Weline_Cdn
  */
@@ -53,17 +53,25 @@ class WarmupProviderScanner
                     continue;
                 }
                 
-                // 构建 Cdn/WarmupProvider.php 路径
-                $providerFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'Cdn' . DIRECTORY_SEPARATOR . 'WarmupProvider.php';
+                // 构建 extends/Weline_Cdn/ 目录路径
+                $extendsCdnPath = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Cdn';
                 
-                if (!file_exists($providerFile)) {
+                if (!is_dir($extendsCdnPath)) {
                     continue;
                 }
                 
-                // 获取类名
-                $className = $this->getClassNameFromFile($providerFile, $moduleName, $module);
-                if ($className && class_exists($className)) {
-                    $providers[] = $className;
+                // 扫描目录下的所有PHP文件
+                $files = glob($extendsCdnPath . DIRECTORY_SEPARATOR . '*.php');
+                
+                foreach ($files as $providerFile) {
+                    // 获取类名
+                    $className = $this->getClassNameFromFile($providerFile, $moduleName, $module);
+                    if ($className && class_exists($className)) {
+                        // 检查类是否有 execute 方法
+                        if (method_exists($className, 'execute')) {
+                            $providers[] = $className;
+                        }
+                    }
                 }
             }
         } catch (\Exception $e) {
@@ -109,15 +117,23 @@ class WarmupProviderScanner
      */
     private function getClassNameFromFile(string $filePath, string $moduleName, array $module): ?string
     {
+        // 获取文件名（不含扩展名）
+        $fileName = basename($filePath, '.php');
+        
         // 尝试从模块信息中获取命名空间
         if (isset($module['namespace_path'])) {
-            return $module['namespace_path'] . '\\Cdn\\WarmupProvider';
+            return $module['namespace_path'] . '\\Extends\\Weline_Cdn\\' . $fileName;
         }
 
         // 尝试从路径推断命名空间
+        // 将路径转换为命名空间格式：app/code/Vendor/Module/extends/Weline_Cdn/File.php -> Vendor\Module\Extends\Weline_Cdn\File
         $relativePath = str_replace(BP . DIRECTORY_SEPARATOR, '', $filePath);
         $relativePath = str_replace(['.php', '\\'], ['', '\\'], $relativePath);
         $relativePath = str_replace('/', '\\', $relativePath);
+        
+        // 处理 extends/Weline_Cdn 路径
+        $relativePath = str_replace('extends\\Weline_Cdn', 'Extends\\Weline_Cdn', $relativePath);
+        $relativePath = str_replace('extends/Weline_Cdn', 'Extends\\Weline_Cdn', $relativePath);
         
         return $relativePath;
     }

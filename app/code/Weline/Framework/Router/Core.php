@@ -71,9 +71,13 @@ class Core
             $this->is_admin = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
         }
         // 读取url
-        $this->url_cache_key = 'url_cache_key_' . $this->request->getUri() . $this->request->getMethod();
-        $this->rule_cache_key = 'rule_data_cache_key_' . $this->request->getUri() . $this->request->getMethod();
-        $this->_router_cache_key = 'router_start_cache_key_' . $this->request->getUri() . $this->request->getMethod();
+        // 使用统一的缓存键生成方法，自动包含域名信息
+        $uri = $this->request->getUri();
+        $method = $this->request->getMethod() ?: 'GET';
+        
+        $this->url_cache_key = RouterCache::buildUrlCacheKey($uri, $method, $this->request);
+        $this->rule_cache_key = RouterCache::buildRuleCacheKey($uri, $method, $this->request);
+        $this->_router_cache_key = RouterCache::buildRouterStartCacheKey($uri, $method, $this->request);
     }
 
     public function getRequest(): Request
@@ -160,7 +164,8 @@ class Core
         }
         $rule = $this->cache->get($this->rule_cache_key);
         
-        if (PROD && $url) {
+        // 修复：验证缓存的有效性，确保 rule 不为空且包含必要信息
+        if (PROD && $url && $rule && is_array($rule) && !empty($rule)) {
             $this->url_cache_data = $url;
             $this->rule_cache_data = $rule;
             # 将规则设置到请求类

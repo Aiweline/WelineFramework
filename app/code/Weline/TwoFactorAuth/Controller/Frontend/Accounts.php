@@ -418,5 +418,26 @@ class Accounts extends FrontendController
 
         return $uri;
     }
+
+    /**
+     * 提供Worker文件（加密混淆的TOTP计算Worker）
+     */
+    public function worker()
+    {
+        $workerPath = __DIR__ . '/../../view/statics/Frontend/Accounts/totp-worker.js';
+        
+        if (file_exists($workerPath)) {
+            $content = file_get_contents($workerPath);
+            header('Content-Type: application/javascript; charset=utf-8');
+            // 设置缓存头，但允许更新
+            header('Cache-Control: public, max-age=3600');
+            echo $content;
+            exit();
+        } else {
+            header('Content-Type: application/javascript; charset=utf-8');
+            echo '// Worker文件不存在';
+            exit();
+        }
+    }
 }
 

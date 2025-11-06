@@ -25,6 +25,11 @@ class Account extends Model
     public const table = 'cdn_account';
     
     /**
+     * Primary key
+     */
+    public string $_primary_key = 'account_id';
+    
+    /**
      * Primary keys
      */
     public array $_unit_primary_keys = ['account_id'];
@@ -155,16 +160,16 @@ class Account extends Model
     /**
      * 保存前处理
      * 
-     * @return self
+     * @return void
      */
-    public function beforeSave(): self
+    public function save_before(): void
     {
         $now = time();
-        if (!$this->getData(self::fields_CREATED_AT)) {
+        // 判断是否为新建记录（通过检查是否有ID）
+        if (!$this->getId()) {
             $this->setData(self::fields_CREATED_AT, $now);
         }
         $this->setData(self::fields_UPDATED_AT, $now);
-        return parent::beforeSave();
     }
 }
 

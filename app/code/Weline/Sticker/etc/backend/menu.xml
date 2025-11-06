@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- Sticker管理顶级菜单 -->
+    <add source="Weline_Sticker::sticker_manager" 
+         name="sticker_manager" 
+         title="Sticker管理" 
+         action="*/backend/sticker/index"
+         parent="Weline_Backend::system_configuration" 
+         icon="mdi mdi-sticker" 
+         order="60000"/>
+    
+</menus>
+

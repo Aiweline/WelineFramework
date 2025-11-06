@@ -720,148 +720,243 @@
     </div>
 
     <script>
-        // 从后端获取TOTP中间结果（带缓存）
-        async function getTOTPIntermediateValue(accountId) {
-            const cacheKey = `totp_${accountId}`;
-            const cachedData = localStorage.getItem(cacheKey);
+        // Worker管理器 - 使用加密混淆的Worker处理TOTP计算
+        const TotpWorkerManager = (function() {
+            let worker = null;
+            let workerReady = false;
+            const callbacks = new Map();
+            let callbackId = 0;
+            let globalCountdownTimer = null;
             
-            // 检查缓存是否有效
-            if (cachedData) {
-                const data = JSON.parse(cachedData);
+            // 初始化Worker
+            function initWorker() {
+                if (worker) return Promise.resolve();
+                
+                return new Promise((resolve, reject) => {
+                    try {
+                        // 使用Worker处理所有TOTP计算和API调用
+                        worker = new Worker('/two-factor-auth/frontend/accounts/worker');
+                        
+                        worker.onmessage = function(e) {
+                            const data = e.data;
+                            
+                            switch(data.type) {
+                                case 'init_complete':
+                                    workerReady = true;
+                                    if (data.accounts && data.accounts.length > 0) {
+                                        data.accounts.forEach(acc => {
+                                            updateAccountDisplay(acc.accountId, acc.code, acc.data);
+                                        });
+                                        // 立即触发一次倒计时更新，确保所有账户显示正确
+                                        postMessage('update_countdowns', {});
+                                    }
+                                    resolve();
+                                    break;
+                                    
+                                case 'code_update':
+                                    updateAccountDisplay(data.accountId, data.code, data.data);
+                                    break;
+                                    
+                        case 'countdown_update':
+                            if (data.countdowns) {
+                                data.countdowns.forEach(cd => {
+                                    // 更新倒计时圆圈
+                                    updateCountdownCircle(cd.accountId, cd.period, cd.remaining);
+                                    // 同时更新验证码显示（如果提供了code和data）
+                                    if (cd.code && cd.data) {
+                                        updateAccountDisplay(cd.accountId, cd.code, cd.data);
+                                    }
+                                });
+                            }
+                            if (data.toRefresh && data.toRefresh.length > 0) {
+                                data.toRefresh.forEach(accountId => {
+                                    refreshAccountCode(accountId);
+                                });
+                            }
+                            break;
+                            
+                        case 'parse_result':
+                            // 文件解析结果
+                            const previewEl = document.getElementById('importFileText');
+                            const previewSection = document.getElementById('importFilePreview');
+                            if (previewEl && previewSection) {
+                                if (data.count === 0) {
+                                    previewEl.innerHTML = 
+                                        `<span style="color:orange;">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
+                                        <small style="color:#999;">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
+                                } else {
+                                    previewEl.innerHTML = 
+                                        `<span style="color:green;">✓ 解析成功，找到 ${data.count} 个账户</span>`;
+                                    // 存储解析结果，用于后续导入
+                                    window._importAccounts = data.accounts;
+                                    // 自动开始导入
+                                    if (data.accounts && data.accounts.length > 0) {
+                                        TotpWorkerManager.importAccounts(data.accounts);
+                                    }
+                                }
+                                previewSection.style.display = 'block';
+                            }
+                            break;
+                            
+                        case 'parse_error':
+                            // 文件解析错误
+                            const errorEl = document.getElementById('importFileText');
+                            const errorSection = document.getElementById('importFilePreview');
+                            if (errorEl && errorSection) {
+                                errorEl.innerHTML = 
+                                    `<span style="color:red;">✗ 解析失败：${data.error}</span><br>
+                                    <small style="color:#999;">请检查文件格式是否正确</small>`;
+                                errorSection.style.display = 'block';
+                            }
+                            break;
+                            
+                        case 'import_result':
+                            // 导入结果
+                            let message = `导入完成！成功：${data.result.success} 个`;
+                            if (data.result.fail > 0) {
+                                message += `，失败：${data.result.fail} 个`;
+                            }
+                            alert(message);
+                            
+                            if (data.result.success > 0) {
+                                closeModal('addModal');
+                                location.reload();
+                            }
+                            break;
+                            }
+                        };
+                        
+                        worker.onerror = function(error) {
+                            console.error('Worker错误:', error);
+                            reject(error);
+                        };
+                        
+                        // Worker创建后立即认为就绪（实际初始化在init消息中）
+                        workerReady = true;
+                        resolve();
+                    } catch (error) {
+                        console.error('无法创建Worker:', error);
+                        reject(error);
+                    }
+                });
+            }
+            
+            // 发送消息到Worker
+            function postMessage(type, data) {
+                if (!worker || !workerReady) {
+                    console.warn('Worker未就绪');
+                    return;
+                }
+                worker.postMessage({ type, ...data });
+            }
+            
+            // 初始化所有账户
+            function initAccounts(accountIds) {
+                // 立即启动全局倒计时定时器（不等待初始化完成）
+                if (globalCountdownTimer) {
+                    clearInterval(globalCountdownTimer);
+                }
+                globalCountdownTimer = setInterval(() => {
+                    postMessage('update_countdowns', {});
+                }, 100);
+                
+                // 然后发送初始化请求（并行获取所有账户数据）
+                postMessage('init', { accountIds });
+            }
+            
+            // 刷新账户验证码
+            function refreshAccountCode(accountId) {
+                postMessage('refresh', { accountId });
+            }
+            
+            // 移除账户
+            function removeAccount(accountId) {
+                postMessage('remove', { accountId });
+            }
+            
+            // 解析导入文件
+            function parseFile(fileContent, fileName) {
+                postMessage('parse_file', { fileContent, fileName });
+            }
+            
+            // 批量导入账户
+            function importAccounts(accounts) {
+                postMessage('import_accounts', { accounts });
+            }
+            
+            return {
+                init: initWorker,
+                initAccounts: initAccounts,
+                refreshAccountCode: refreshAccountCode,
+                removeAccount: removeAccount,
+                parseFile: parseFile,
+                importAccounts: importAccounts
+            };
+        })();
+        
+        // 更新账户显示
+        function updateAccountDisplay(accountId, code, data) {
+            const codeElement = document.getElementById(`code-${accountId}`);
+            if (codeElement && code) {
+                codeElement.textContent = code;
+            }
+            
+            if (data) {
                 const now = Math.floor(Date.now() / 1000);
-                
-                // 如果缓存未过期（剩余5秒缓冲），直接使用
-                if (data.expires_at > now + 5) {
-                    return data;
-                }
-            }
-            
-            // 缓存无效或不存在，从后端获取
-            try {
-                const response = await fetch(`/two-factor-auth/frontend/accounts/getcode?account_id=${accountId}`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    // 计算过期时间并缓存
-                    const now = Math.floor(Date.now() / 1000);
-                    const cacheData = {
-                        hash_value: result.hash_value,
-                        digits: result.digits,
-                        period: result.period,
-                        expires_at: now + result.period,
-                        obtained_at: now
-                    };
-                    
-                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-                    return result;
-                } else {
-                    return null;
-                }
-            } catch (error) {
-                console.error('获取验证码失败:', error);
-                return null;
+                const remaining = Math.max(0, data.expires_at - now);
+                updateCountdownCircle(accountId, data.period, remaining);
             }
         }
-        
-        // 从后端获取TOTP中间结果并完成最后计算
-        async function generateTOTPFromBackend(accountId) {
-            const result = await getTOTPIntermediateValue(accountId);
-            
-            if (result) {
-                // 使用后端返回的hash_value完成最后一步计算
-                const code = result.hash_value % Math.pow(10, result.digits);
-                return code.toString().padStart(result.digits, '0');
-            } else {
-                return '-- --';
-            }
-        }
-        
-        // 自动刷新验证码（旧函数已废弃，现在使用refreshCodeWithSchedule）
         
         // 更新倒计时圆圈和数字
-        function updateCountdownCircle(accountId, period) {
-            const remaining = period - (Math.floor(Date.now() / 1000) % period);
+        function updateCountdownCircle(accountId, period, remaining) {
             const progressBar = document.getElementById(`progress-${accountId}`);
             const countdownNumber = document.getElementById(`countdown-${accountId}`);
             const circumference = 94.24; // 2 * π * 15
             
             if (progressBar && countdownNumber) {
-                // 更新数字
-                countdownNumber.textContent = remaining;
-                
-                // 更新圆圈进度
+                countdownNumber.textContent = Math.max(0, Math.ceil(remaining));
                 const offset = circumference - (remaining / period) * circumference;
                 progressBar.style.strokeDashoffset = offset;
             }
-            
-            // 返回下次刷新时间（毫秒）
-            return remaining * 1000;
         }
         
-        // 刷新单个账户并安排下次刷新（使用后端API）
-        async function refreshCodeWithSchedule(element) {
-            const accountId = element.id.replace('code-', '');
-            
-            if (!accountId) return;
-            
+        // 刷新账户验证码（公开接口）
+        function refreshAccountCode(accountId) {
+            TotpWorkerManager.refreshAccountCode(accountId);
+        }
+        
+        // 初始化所有账户
+        async function initializeAccounts() {
             try {
-                const code = await generateTOTPFromBackend(accountId);
-                element.textContent = code;
+                // 初始化Worker
+                await TotpWorkerManager.init();
                 
-                // 获取中间值和周期信息（从缓存）
-                const result = await getTOTPIntermediateValue(accountId);
-                
-                if (result) {
-                    const period = result.period;
-                    const now = Math.floor(Date.now() / 1000);
-                    const remaining = result.expires_at - now;
-                    
-                    // 更新倒计时圆圈
-                    updateCountdownCircle(accountId, period);
-                    
-                    // 安排下次倒计时更新（每秒）
-                    let countdownTimer;
-                    function startCountdown() {
-                        clearInterval(countdownTimer);
-                        countdownTimer = setInterval(() => {
-                            const now = Math.floor(Date.now() / 1000);
-                            const newRemaining = Math.max(0, result.expires_at - now);
-                            const progressBar = document.getElementById(`progress-${accountId}`);
-                            const countdownNumber = document.getElementById(`countdown-${accountId}`);
-                            const circumference = 94.24;
-                            
-                            if (progressBar && countdownNumber) {
-                                countdownNumber.textContent = newRemaining;
-                                const offset = circumference - (newRemaining / period) * circumference;
-                                progressBar.style.strokeDashoffset = offset;
-                                
-                                // 倒计时结束，刷新验证码
-                                if (newRemaining <= 1) {
-                                    clearInterval(countdownTimer);
-                                    refreshCodeWithSchedule(element);
-                                }
-                            }
-                        }, 100);
+                // 获取所有账户ID
+                const codeElements = document.querySelectorAll('[id^="code-"]');
+                const accountIds = [];
+                codeElements.forEach(element => {
+                    const accountId = element.id.replace('code-', '');
+                    if (accountId) {
+                        accountIds.push(accountId);
                     }
-                    
-                    startCountdown();
-                    
-                    // 安排在验证码到期时刷新
-                    setTimeout(() => {
-                        clearInterval(countdownTimer);
-                        refreshCodeWithSchedule(element);
-                    }, remaining * 1000 + 100);
+                });
+                
+                // 初始化账户
+                if (accountIds.length > 0) {
+                    TotpWorkerManager.initAccounts(accountIds);
                 }
             } catch (error) {
-                console.error('刷新验证码失败:', error);
+                console.error('初始化失败:', error);
             }
         }
-
-        // 立即刷新所有验证码
-        const codeElements = document.querySelectorAll('[id^="code-"]');
-        codeElements.forEach(element => {
-            refreshCodeWithSchedule(element);
-        });
+        
+        // 页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeAccounts);
+        } else {
+            initializeAccounts();
+        }
 
         // 显示添加模态框
         function showAddModal() {
@@ -1133,6 +1228,8 @@
                 const result = await response.json();
                 
                 if (result.success) {
+                    // 从Worker中移除账户
+                    TotpWorkerManager.removeAccount(accountId);
                     alert('账户已删除');
                     location.reload();
                 } else {
@@ -1226,189 +1323,10 @@
             reader.readAsText(file);
         }
         
-        // 解析JSON格式（Google Authenticator、Microsoft Authenticator导出）
-        function parseJsonImport(text) {
-            const data = JSON.parse(text);
-            const accounts = [];
-            
-            console.log('JSON数据:', data);
-            
-            // 如果是数组，直接处理
-            if (Array.isArray(data)) {
-                data.forEach(item => {
-                    if (item.uri && item.uri.startsWith('otpauth://')) {
-                        accounts.push({ uri: item.uri });
-                    } else if (item.url && item.url.startsWith('otpauth://')) {
-                        accounts.push({ uri: item.url });
-                    }
-                });
-            }
-            // Google Authenticator 格式
-            else if (data.exportFormat === 'uri' && data.uris) {
-                data.uris.forEach(uriObj => {
-                    if (uriObj.uri && uriObj.uri.startsWith('otpauth://')) {
-                        accounts.push({ uri: uriObj.uri });
-                    }
-                });
-            }
-            // Microsoft Authenticator 格式
-            else if (data.rows && Array.isArray(data.rows)) {
-                data.rows.forEach(row => {
-                    if (row.url && row.url.startsWith('otpauth://')) {
-                        accounts.push({ uri: row.url });
-                    }
-                });
-            }
-            // 2FAS (2-Factor Authenticator Secrets) 格式
-            else if (data.schema_version && data.services) {
-                data.services.forEach(service => {
-                    if (service.secret && service.name) {
-                        const issuer = service.otp || service.issuer || '';
-                        const uri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(service.name)}?secret=${service.secret}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
-                        accounts.push({ uri: uri });
-                    }
-                });
-            }
-            // Authy 格式
-            else if (data.authy && Array.isArray(data.authy)) {
-                data.authy.forEach(item => {
-                    if (item.uri && item.uri.startsWith('otpauth://')) {
-                        accounts.push({ uri: item.uri });
-                    }
-                });
-            }
-            // 双因素身份验证 格式
-            else if (data.db && data.db.entries && Array.isArray(data.db.entries)) {
-                data.db.entries.forEach(entry => {
-                    if (entry.type === 'totp' && entry.info && entry.info.secret) {
-                        const name = entry.name || '';
-                        const issuer = entry.issuer || '';
-                        const algo = entry.info.algo || 'SHA1';
-                        const digits = entry.info.digits || 6;
-                        const period = entry.info.period || 30;
-                        const secret = entry.info.secret;
-                        
-                        const uri = `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${secret}&algorithm=${algo}&digits=${digits}&period=${period}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
-                        accounts.push({ uri: uri });
-                    }
-                });
-            }
-            // 其他格式，尝试直接使用
-            else {
-                Object.entries(data).forEach(([key, value]) => {
-                    if (typeof value === 'object' && value.secret) {
-                        const uri = buildOtpAuthUri(value);
-                        if (uri) {
-                            accounts.push({ uri: uri });
-                        }
-                    } else if (typeof value === 'string' && value.startsWith('otpauth://')) {
-                        accounts.push({ uri: value });
-                    }
-                });
-            }
-            
-            console.log('解析后的账户:', accounts);
-            return accounts;
-        }
-        
-        // 解析CSV格式
-        function parseCsvImport(text) {
-            const lines = text.split('\n');
-            const accounts = [];
-            
-            // 跳过标题行
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                
-                const parts = line.split(',');
-                if (parts.length >= 2) {
-                    const name = parts[0].trim();
-                    const secret = parts[1].trim();
-                    const issuer = parts[2] ? parts[2].trim() : '';
-                    
-                    if (secret) {
-                        const uri = `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${secret}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
-                        accounts.push({ uri: uri });
-                    }
-                }
-            }
-            
-            return accounts;
-        }
-        
-        // 解析TXT格式（每行一个URI）
-        function parseTxtImport(text) {
-            const lines = text.split('\n');
-            const accounts = [];
-            
-            lines.forEach(line => {
-                line = line.trim();
-                if (line && line.startsWith('otpauth://')) {
-                    accounts.push({ uri: line });
-                }
-            });
-            
-            return accounts;
-        }
-        
-        // 构建otpauth URI
-        function buildOtpAuthUri(data) {
-            if (!data.secret) return null;
-            
-            const name = data.name || data.label || 'Account';
-            const issuer = data.issuer || '';
-            const algorithm = data.algorithm || 'SHA1';
-            const digits = data.digits || 6;
-            const period = data.period || 30;
-            
-            return `otpauth://totp/${encodeURIComponent(issuer || name)}:${encodeURIComponent(name)}?secret=${data.secret}&algorithm=${algorithm}&digits=${digits}&period=${period}${issuer ? '&issuer=' + encodeURIComponent(issuer) : ''}`;
-        }
-        
         // 导出账户
         function exportAccounts() {
             const format = confirm('选择导出格式：\n\n确定 = JSON格式\n取消 = CSV格式') ? 'json' : 'csv';
             window.location.href = `/two-factor-auth/frontend/accounts/export?format=${format}`;
-        }
-        
-        // 批量导入账户
-        async function importAccounts(accounts) {
-            let successCount = 0;
-            let failCount = 0;
-            
-            for (const account of accounts) {
-                try {
-                    const response = await fetch('/two-factor-auth/frontend/accounts/import', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: `uri=${encodeURIComponent(account.uri)}`
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
-                } catch (error) {
-                    failCount++;
-                }
-            }
-            
-            let message = `导入完成！成功：${successCount} 个`;
-            if (failCount > 0) {
-                message += `，失败：${failCount} 个`;
-            }
-            
-            alert(message);
-            
-            if (successCount > 0) {
-                closeModal('addModal');
-                location.reload();
-            }
         }
     </script>
 </body>

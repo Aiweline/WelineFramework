@@ -10,6 +10,7 @@
   - 接口实现的正确签名（InstallInterface::setup 方法）
   - 类属性访问级别和类型声明规范
   - XML 配置文件的标准格式
+  - **PHP 8.2+ 兼容性规范**（重要）：函数参数不能传入 null
 
 ## 代码生成规范
 
@@ -46,6 +47,20 @@
 - **必须**为 observer 添加所有必需属性：`disabled`, `shared`, `sort`
 - **必须**使用正确的命名格式：`Module::observer_name`
 
+### PHP 8.2+ 兼容性（重要）
+
+- **禁止**向以下函数传入 `null` 值，必须使用 `??` 运算符提供默认值：
+  - `htmlspecialchars()` → `htmlspecialchars($var ?? '')`
+  - `json_decode()` → `json_decode($var ?? '', true)`
+  - `strlen()`, `mb_strlen()` → `strlen($var ?? '')`
+  - `str_replace()`, `str_contains()` 等字符串函数 → `str_replace('old', 'new', $var ?? '')`
+  - `count()`, `sizeof()` → `count($var ?? [])`
+  - `array_merge()` → `array_merge($array1 ?? [], $array2 ?? [])`
+- **数据库字段定义**：
+  - `addColumn()` 的 `$options` 参数**必须是字符串**，不能是 `null`
+  - 可空字段使用 `''`（空字符串），非空字段使用 `'not null'`
+- **复杂表达式**：必须正确嵌套括号，确保 null 合并运算符优先级正确
+
 ## 代码审查清单
 
 生成代码后，请自动检查：
@@ -56,6 +71,10 @@
 4. ✅ 类属性访问级别是否符合继承规则
 5. ✅ 类属性类型是否与父类完全一致
 6. ✅ XML 配置是否符合标准格式
+7. ✅ **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
+8. ✅ **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
+9. ✅ **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
+10. ✅ **PHP 8.2+ 兼容性**：所有可能接收 null 的字符串/数组函数是否已处理
 
 ## 参考文档路径
 
@@ -65,5 +84,8 @@
 
 ---
 
-**重要提示**：生成代码前，请先阅读 `AI-常犯错误.md` 文件，避免重复常见错误。
+**重要提示**：
+1. 生成代码前，请先阅读 `AI-常犯错误.md` 文件，避免重复常见错误
+2. **PHP 8.2+ 要求**：所有函数参数必须符合类型要求，不能传入 `null`。使用 `??` 运算符提供默认值
+3. 特别注意：`htmlspecialchars()`, `json_decode()`, `addColumn()` 等函数对 null 参数的限制
 

@@ -7,6 +7,11 @@
 use Weline\Framework\Manager\ObjectManager;
 
 $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+// 确保变量存在
+$website = $website ?? [];
+$locales = $locales ?? [];
+$timezones = $timezones ?? [];
 ?>
 <!DOCTYPE html>
 <!--
@@ -96,24 +101,25 @@ $themeConfig = ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::cla
                     <div class="col-4 mb-3">
                         <label for="default_language" class="form-label">默认语言</label>
                         <select class="form-select" name="default_language" id="default_language" required>
-                            <foreach name="locales" item="local">
-                                <option value="{{ local.code }}" @if(local.code== website.default_language=>
-                                    'selected')>
-                                    {{ local.name }}
+                            <?php foreach ($locales as $local): ?>
+                                <option value="<?= htmlspecialchars($local['code']) ?>" 
+                                    <?= (isset($website['default_language']) && $website['default_language'] === $local['code']) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($local['name']) ?>
                                 </option>
-                            </foreach>
+                            <?php endforeach; ?>
                         </select>
                         <div class="invalid-feedback">请输入默认语言</div>
                     </div>
 
                     <div class="col-4 mb-3">
-                        <label for="default_timezone" class="form-label">默认时区{{ website.default_timezone }}</label>
+                        <label for="default_timezone" class="form-label">默认时区</label>
                         <select class="form-select" name="default_timezone" id="default_timezone" required>
-                            <foreach name="timezones" item="timezone">
-                                <option value="{{ timezone }}" @if(timezone== website.default_timezone=> 'selected')>
-                                    {{ timezone }}
+                            <?php foreach ($timezones as $timezone): ?>
+                                <option value="<?= htmlspecialchars($timezone) ?>" 
+                                    <?= (isset($website['default_timezone']) && $website['default_timezone'] === $timezone) ? 'selected' : (empty($website) && $timezone === 'Asia/Shanghai' ? 'selected' : '') ?>>
+                                    <?= htmlspecialchars($timezone) ?>
                                 </option>
-                            </foreach>
+                            <?php endforeach; ?>
                         </select>
                         <div class="invalid-feedback">请输入默认时区</div>
                     </div>
