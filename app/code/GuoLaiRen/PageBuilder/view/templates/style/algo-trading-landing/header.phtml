@@ -42,6 +42,7 @@
  * cta.padding => 内边距:responsive:10/18|px
  * cta.border_radius => 边框圆角:number:6|px
  * cta.margin => 下边距:responsive:40/60|px
+ * cta.event_name => 事件名:text:
  * 
  * group:media => 媒体Logo
  * media.display => 显示媒体Logo:select:yes|yes,no
@@ -144,6 +145,17 @@ $ctaFontWeight = getAlgoConfig($styleSettings, 'cta.font_weight', '700');
 $ctaPadding = genAlgoCSS(parseAlgoResponsive(getAlgoConfig($styleSettings, 'cta.padding', '10/18') . 'px'));
 $ctaBorderRadius = getAlgoConfig($styleSettings, 'cta.border_radius', '6') . 'px';
 $ctaMargin = genAlgoCSS(parseAlgoResponsive(getAlgoConfig($styleSettings, 'cta.margin', '40/60') . 'px'));
+// CTA 事件名：cta_{pageHandle}{_custom}，默认 custom 来自 page.cta_event_name
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+$ctaEventRaw = trim(getAlgoConfig($styleSettings, 'cta.event_name', ''));
+if ($ctaEventRaw !== '') {
+    $ctaHandleName = 'cta_' . $pageHandleForEvent . '_' . $ctaEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $ctaHandleName = $pageDefaultCtaEvent; // 使用页面默认名，保持原样
+} else {
+    $ctaHandleName = 'cta_' . $pageHandleForEvent . '_click'; // 双重兜底
+}
 
 // 媒体Logo配置
 $mediaDisplay = getAlgoConfig($styleSettings, 'media.display', 'yes');
@@ -176,9 +188,9 @@ $customCssCode = getAlgoConfig($styleSettings, 'custom_css.code', '');
 
 // 生成背景样式
 if ($pageBgGradient === 'yes') {
-    $heroBgStyle = "background: linear-gradient(" . htmlspecialchars($pageGradientColor1) . ", " . htmlspecialchars($pageGradientColor2) . ", " . htmlspecialchars($pageGradientColor3) . ");";
+    $heroBgStyle = "background: linear-gradient(" . htmlspecialchars($pageGradientColor1 ?? '') . ", " . htmlspecialchars($pageGradientColor2 ?? '') . ", " . htmlspecialchars($pageGradientColor3 ?? '') . ");";
 } else {
-    $heroBgStyle = "background-color: " . htmlspecialchars($pageBgColor) . ";";
+    $heroBgStyle = "background-color: " . htmlspecialchars($pageBgColor ?? '') . ";";
 }
 
 // SEO信息
@@ -188,41 +200,42 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
 $pageTitle = $page ? $page->getData('title') : '';
 
 // 处理标题高亮
-$mainTitleProcessed = htmlspecialchars($mainTitle);
+$mainTitleProcessed = htmlspecialchars($mainTitle ?? '');
 if ($highlightWord) {
     $mainTitleProcessed = str_replace(
-        htmlspecialchars($highlightWord),
-        '<span class="algo-highlight">' . htmlspecialchars($highlightWord) . '</span>',
+        htmlspecialchars($highlightWord ?? ''),
+        '<span class="algo-highlight">' . htmlspecialchars($highlightWord ?? '') . '</span>',
         $mainTitleProcessed
     );
 }
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'en_US') ?>">
+<html lang="<?= htmlspecialchars(($this->getData('locale') ?? '') ?: 'en_US') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
     
     <?php if ($metaDescription): ?>
-    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
     <?php endif; ?>
     
     <?php if ($metaKeywords): ?>
-    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
     <?php endif; ?>
     
     <!-- Favicon -->
+    <?php $pageIcon = $page ? ($page->getData('icon') ?: '') : ''; ?>
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <?php else: ?>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    
-    <!-- Google Tag Manager -->
-    <?php if ($page && $page->getData('gtm_id')): ?>
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','<?= htmlspecialchars($page->getData('gtm_id')) ?>');</script>
     <?php endif; ?>
+    
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <!-- CTA 事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
     
 <style>
     * {
@@ -256,14 +269,16 @@ if ($highlightWord) {
     /* 白色内容区域 - 明显的容器 */
     .algo-content-wrapper {
         max-width: 1280px;
-        margin: -150px auto 0;
+        margin: 0 auto 0;
         padding: 0 20px;
+        transform: translateY(-150px);
+        will-change: transform;
     }
     
     .algo-content-section {
         background-color: #ffffff;
         border-radius: 8px;
-        padding: clamp(40px, calc(40px + 20 * ((100vw - 375px) / 905)), 60px);
+        padding: clamp(15px, calc(15px + 45 * ((100vw - 375px) / 905)), 60px);
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
@@ -275,8 +290,8 @@ if ($highlightWord) {
     /* 警告条 */
     <?php if ($alertEnabled === 'yes'): ?>
     .algo-alert-bar {
-        background-color: <?= htmlspecialchars($alertBgColor) ?>;
-        color: <?= htmlspecialchars($alertTextColor) ?>;
+        background-color: <?= htmlspecialchars($alertBgColor ?? '') ?>;
+        color: <?= htmlspecialchars($alertTextColor ?? '') ?>;
         font-size: <?= $alertFontSize ?>;
         font-weight: <?= $alertFontWeight ?>;
         padding: <?= $alertPadding ?>;
@@ -288,7 +303,7 @@ if ($highlightWord) {
     
     /* 主标题 */
     .algo-main-title {
-        color: <?= htmlspecialchars($mainTitleColor) ?>;
+        color: <?= htmlspecialchars($mainTitleColor ?? '') ?>;
         font-size: <?= $mainTitleSize ?>;
         font-weight: <?= $mainTitleWeight ?>;
         line-height: <?= $mainTitleLineHeight ?>;
@@ -329,8 +344,8 @@ if ($highlightWord) {
     
     .algo-cta-button {
         display: inline-block;
-        background-color: <?= htmlspecialchars($ctaBgColor) ?>;
-        color: <?= htmlspecialchars($ctaTextColor) ?>;
+        background-color: <?= htmlspecialchars($ctaBgColor ?? '') ?>;
+        color: <?= htmlspecialchars($ctaTextColor ?? '') ?>;
         font-size: <?= $ctaFontSize ?>;
         font-weight: <?= $ctaFontWeight ?>;
         padding: <?= $ctaPadding ?> calc(<?= $ctaPadding ?> * 2);
@@ -338,7 +353,7 @@ if ($highlightWord) {
         text-decoration: none;
         transition: all 0.3s ease;
         cursor: pointer;
-        border: 2px solid <?= htmlspecialchars($ctaBgColor) ?>;
+        border: 2px solid <?= htmlspecialchars($ctaBgColor ?? '') ?>;
         box-shadow: none;
         animation: rocking 2s infinite;
         animation-timing-function: cubic-bezier(0,0,.58,1);
@@ -346,8 +361,8 @@ if ($highlightWord) {
     
     .algo-cta-button:hover {
         background-color: transparent;
-        border-color: <?= htmlspecialchars($ctaBgColor) ?>;
-        color: <?= htmlspecialchars($ctaBgColor) ?> !important;  /* 使用按钮背景色作为文字颜色 */
+        border-color: <?= htmlspecialchars($ctaBgColor ?? '') ?>;
+        color: <?= htmlspecialchars($ctaBgColor ?? '') ?> !important;  /* 使用按钮背景色作为文字颜色 */
         animation: popbtn 0.3s forwards ease-in-out !important;
         transform: scale(1.1);
     }
@@ -374,7 +389,7 @@ if ($highlightWord) {
     }
     
     .algo-media-title {
-        color: <?= htmlspecialchars($mediaTitleColor) ?>;
+        color: <?= htmlspecialchars($mediaTitleColor ?? '') ?>;
         font-size: <?= $mediaTitleSize ?>;
         margin-bottom: 20px;
         font-family: 'Caveat', cursive;
@@ -437,7 +452,7 @@ if ($highlightWord) {
         <?php if ($alertEnabled === 'yes'): ?>
         <!-- 顶部警告条 -->
         <div class="algo-alert-bar">
-            <?= htmlspecialchars($alertText) ?>
+            <?= htmlspecialchars($alertText ?? '') ?>
         </div>
         <?php endif; ?>
         
@@ -449,31 +464,35 @@ if ($highlightWord) {
         <!-- 图表展示 -->
         <?php if ($chartImage): ?>
         <div class="algo-chart-container">
-            <img src="<?= htmlspecialchars($chartImage) ?>" alt="Stock Chart">
+            <img src="<?= htmlspecialchars($chartImage ?? '') ?>" alt="Stock Chart" loading="eager" decoding="async" fetchpriority="high">
         </div>
         <?php endif; ?>
         
         <!-- CTA按钮 -->
         <div class="algo-cta-container">
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" 
-               target="<?= htmlspecialchars($ctaTarget) ?>"
-               class="algo-cta-button">
-                <?= htmlspecialchars($ctaText) ?>
+            <a href="<?= htmlspecialchars($ctaUrl ?? '') ?>" 
+               target="<?= htmlspecialchars($ctaTarget ?? '') ?>"
+               id="algo-header-cta"
+               class="algo-cta-button"
+               data-track-event="<?= htmlspecialchars($ctaHandleName ?? '') ?>">
+                <?= htmlspecialchars($ctaText ?? '') ?>
             </a>
         </div>
         
         <!-- 媒体Logo -->
         <?php if ($mediaDisplay === 'yes'): ?>
         <div class="algo-media-section">
-            <h2 class="algo-media-title"><?= htmlspecialchars($mediaTitle) ?></h2>
+            <h2 class="algo-media-title"><?= htmlspecialchars($mediaTitle ?? '') ?></h2>
             <?php if ($mediaUseImage === 'yes' && $mediaImage): ?>
                 <div class="algo-media-image">
-                    <img src="<?= htmlspecialchars($mediaImage) ?>" alt="brands" class="img-fluid">
+                    <img data-src="<?= htmlspecialchars($mediaImage ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="brands" class="img-fluid" loading="lazy" decoding="async" fetchpriority="low">
+
+        <template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</template>
                 </div>
             <?php else: ?>
                 <div class="algo-media-logos">
                     <?php foreach ($logosArray as $logo): ?>
-                        <div class="algo-media-logo"><?= htmlspecialchars($logo) ?></div>
+                        <div class="algo-media-logo"><?= htmlspecialchars($logo ?? '') ?></div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>

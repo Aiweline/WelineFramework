@@ -229,8 +229,8 @@ class Upgrade extends CommandAbstract
             if (!isset($dependencyModules[$module['name']])) {
                 $no_modules[] = $module['name'];
             }
-            $dependencyModule = $dependencyModules[$module['name']];
-            if ($module['base_path'] != $dependencyModule['base_path']) {
+            $dependencyModule = $dependencyModules[$module['name']]??[];
+            if ($module['base_path'] != $dependencyModule['base_path']??'') {
                 $diff_base_path_modules[] = $module['name'];
             }
         }

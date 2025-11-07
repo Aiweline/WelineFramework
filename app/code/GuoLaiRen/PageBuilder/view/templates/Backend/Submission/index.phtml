@@ -43,7 +43,7 @@
                     <div class="col-md-3">
                         <label class="form-label"><?= __('搜索（邮箱/电话）') ?></label>
                         <input type="text" class="form-control" name="search" 
-                               value="<?= htmlspecialchars($this->getData('search')) ?>"
+                               value="<?= htmlspecialchars((($this->getData('search') ?? '')) ?? '') ?>"
                                placeholder="<?= __('输入邮箱或电话') ?>">
                     </div>
                     
@@ -54,7 +54,7 @@
                             <?php foreach ($this->getData('pages') as $page): ?>
                                 <option value="<?= $page->getId() ?>" 
                                         <?= ($this->getData('page_id') == $page->getId()) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($page->getData('name')) ?>
+                                    <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -63,13 +63,13 @@
                     <div class="col-md-2">
                         <label class="form-label"><?= __('开始日期') ?></label>
                         <input type="date" class="form-control" name="start_date" 
-                               value="<?= htmlspecialchars($this->getData('start_date')) ?>">
+                               value="<?= htmlspecialchars((($this->getData('start_date') ?? '')) ?? '') ?>">
                     </div>
                     
                     <div class="col-md-2">
                         <label class="form-label"><?= __('结束日期') ?></label>
                         <input type="date" class="form-control" name="end_date" 
-                               value="<?= htmlspecialchars($this->getData('end_date')) ?>">
+                               value="<?= htmlspecialchars((($this->getData('end_date') ?? '')) ?? '') ?>">
                     </div>
                     
                     <?php if (!empty($this->getData('extra_field_keys'))): ?>
@@ -78,9 +78,9 @@
                             <select class="form-select" name="extra_field_key">
                                 <option value=""><?= __('选择字段') ?></option>
                                 <?php foreach ($this->getData('extra_field_keys') as $key): ?>
-                                    <option value="<?= htmlspecialchars($key) ?>"
+                                    <option value="<?= htmlspecialchars($key ?? '') ?>"
                                             <?= ($this->getData('extra_field_key') == $key) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($key) ?>
+                                        <?= htmlspecialchars($key ?? '') ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -89,7 +89,7 @@
                         <div class="col-md-2">
                             <label class="form-label"><?= __('字段值') ?></label>
                             <input type="text" class="form-control" name="extra_field_value" 
-                                   value="<?= htmlspecialchars($this->getData('extra_field_value')) ?>"
+                                   value="<?= htmlspecialchars((($this->getData('extra_field_value') ?? '')) ?? '') ?>"
                                    placeholder="<?= __('字段值') ?>">
                         </div>
                     <?php endif; ?>
@@ -145,7 +145,7 @@
                                         if ($pageId) {
                                             foreach ($this->getData('pages') as $page) {
                                                 if ($page->getId() == $pageId) {
-                                                    echo htmlspecialchars($page->getData('name'));
+                                                    echo htmlspecialchars((($page->getData('name') ?? '')) ?? '');
                                                     break;
                                                 }
                                             }
@@ -154,10 +154,10 @@
                                         }
                                         ?>
                                     </td>
-                                    <td><?= htmlspecialchars($submission->getData('email') ?: '-') ?></td>
-                                    <td><?= htmlspecialchars($submission->getData('phone') ?: '-') ?></td>
-                                    <td><?= htmlspecialchars($submission->getData('ip_address') ?: '-') ?></td>
-                                    <td><?= htmlspecialchars($submission->getData('submitted_at')) ?></td>
+                                    <td><?= htmlspecialchars(($submission->getData('email') ?? '') ?: '-') ?></td>
+                                    <td><?= htmlspecialchars(($submission->getData('phone') ?? '') ?: '-') ?></td>
+                                    <td><?= htmlspecialchars(($submission->getData('ip_address') ?? '') ?: '-') ?></td>
+                                    <td><?= htmlspecialchars((($submission->getData('submitted_at') ?? '')) ?? '') ?></td>
                                     <td>
                                         <div class="btn-group" role="group">
                                             <acl source="GuoLaiRen_PageBuilder::form_submissions_view">

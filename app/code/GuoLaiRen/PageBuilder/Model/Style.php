@@ -26,6 +26,7 @@ class Style extends Model
     public const fields_PATH = 'path';
     public const fields_PREVIEW_IMAGE = 'preview_image';
     public const fields_IS_ACTIVE = 'is_active';
+    public const fields_IS_PUBLISHED = 'is_published';
     public const fields_SORT_ORDER = 'sort_order';
     public const fields_CREATE_TIME = 'create_time';
     public const fields_UPDATE_TIME = 'update_time';
@@ -622,6 +623,45 @@ class Style extends Model
             ],
         ];
         
+        // 自动检测 colors 目录，如果存在则创建独立的色系配置分组
+        $colorSchemes = null;
+        try {
+            $colorSchemes = $this->scanColorSchemes();
+        } catch (\Exception $e) {
+            // 扫描失败不影响整体流程
+        }
+        
+        // 如果检测到色系配置，创建独立的色系配置分组（放在最顶部）
+        if (!empty($colorSchemes)) {
+            $fileGroups['color_scheme'] = [
+                'key' => 'color_scheme',
+                'label' => __('色系配置'),
+                'icon' => 'mdi-palette',
+                'groups' => [
+                    'color_scheme' => [
+                        'key' => 'color_scheme',
+                        'label' => __('色系选择'),
+                        'tag' => '',
+                        'help_title' => '',
+                        'help_content' => __('选择不同的色系可以快速改变整个模板的颜色方案'),
+                        'icon' => 'mdi-palette',
+                        'configs' => [
+                            'color_scheme' => [
+                                'key' => 'color_scheme',
+                                'label' => __('色系选择'),
+                                'type' => 'color_scheme',
+                                'default' => 'default',
+                                'color_schemes' => $colorSchemes,
+                                'options' => [],
+                                'file' => 'color_scheme',
+                                'group' => 'color_scheme',
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+        }
+        
         // 为每个文件创建分组
         foreach ($definedGroups as $groupKey => $groupInfo) {
             $fileKey = $groupInfo['file'];
@@ -642,7 +682,13 @@ class Style extends Model
         }
         
         // 将配置分配到对应的文件和分组
+        // 跳过 color_scheme 配置（已经自动创建）
         foreach ($allConfigs as $configKey => $config) {
+            // 跳过 color_scheme 配置，因为已经自动创建了
+            if ($configKey === 'color_scheme' || strpos($configKey, 'color_scheme') !== false) {
+                continue;
+            }
+            
             $fileKey = $config['file'];
             $groupKey = $config['group'];
             
@@ -667,14 +713,28 @@ class Style extends Model
             $fileGroups[$fileKey]['groups'][$groupKey]['configs'][$configKey] = $config;
         }
         
-        // 移除空的文件分组
+        // 移除空的文件分组（除了色系配置分组）
         foreach ($fileGroups as $fileKey => $fileGroup) {
+            if ($fileKey === 'color_scheme') {
+                continue; // 色系配置分组始终保留
+            }
             if (empty($fileGroup['groups'])) {
                 unset($fileGroups[$fileKey]);
             }
         }
         
-        return $fileGroups;
+        // 重新排序，确保色系配置在最顶部
+        $result = [];
+        if (isset($fileGroups['color_scheme'])) {
+            $result['color_scheme'] = $fileGroups['color_scheme'];
+            unset($fileGroups['color_scheme']);
+        }
+        // 添加其他配置分组
+        foreach ($fileGroups as $fileKey => $fileGroup) {
+            $result[$fileKey] = $fileGroup;
+        }
+        
+        return $result;
     }
     
     /**
@@ -731,6 +791,338 @@ class Style extends Model
         ];
         
         return $icons[$groupName] ?? 'mdi-cog';
+    }
+    
+    /**
+     * 扫描模板的 colors 目录，获取所有可用的色系
+     * 
+     * @return array 色系列表，格式：
+     * [
+     *   'default' => [
+     *     'name' => 'default',
+     *     'display_name' => '默认暗色主题',
+     *     'description' => '深色背景配以蓝色强调色...',
+     *     'preview_image' => 'style/jion-landing/colors/default.jpg' // 或 null
+     *   ],
+     *   ...
+     * ]
+     */
+    private function scanColorSchemes(): array
+    {
+        $styleCode = $this->getData(self::fields_CODE);
+        if (empty($styleCode)) {
+            return [];
+        }
+        
+        $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/';
+        $stylePath = (string)$this->getData(self::fields_PATH);
+        // 规范化分隔符，避免 Windows 下混合斜杠导致 glob 失效
+        $stylePath = str_replace('\\', '/', $stylePath);
+        $colorsDir = rtrim($basePath, '/\\') . '/' . trim($stylePath, '/\\') . '/colors';
+        // 如果按存储的路径不存在，回退到按 code 推导的标准路径
+        if (!is_dir($colorsDir)) {
+            $fallback = rtrim($basePath, '/\\') . '/style/' . $styleCode . '/colors';
+            $colorsDir = $fallback;
+        }
+        
+        if (!is_dir($colorsDir)) {
+            return [];
+        }
+        
+        $schemes = [];
+        
+        // 扫描所有 .phtml 文件
+        // 再次规范化目录，确保 glob 能正确匹配
+        $globDir = str_replace('\\', '/', $colorsDir);
+        $files = glob($globDir . '/*.phtml');
+        
+        foreach ($files as $file) {
+            // 以文件名作为唯一色系代码，避免被元信息覆盖导致 key 冲突
+            $schemeCode = basename($file, '.phtml');
+            
+            // 读取文件内容，提取色系元信息
+            $content = file_get_contents($file);
+            $displayName = $schemeCode;
+            $description = '';
+            
+            // 解析色系元信息（约定格式）
+            // 仅用于展示名称与描述，不改变色系代码
+            if (preg_match('/SCHEME_DISPLAY_NAME:\s*(.+)/i', $content, $displayMatch)) {
+                $displayName = trim($displayMatch[1]);
+            }
+            if (preg_match('/SCHEME_DESCRIPTION:\s*(.+)/i', $content, $descMatch)) {
+                $description = trim($descMatch[1]);
+            }
+            
+            // 查找预览图（支持 jpg, png, webp）
+            $actualSchemeName = $schemeCode;
+            $previewImage = null;
+            $previewExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+            foreach ($previewExtensions as $ext) {
+                // 先尝试与文件名同名的预览图
+                $previewPath = $colorsDir . '/' . $actualSchemeName . '.' . $ext;
+                if (file_exists($previewPath)) {
+                    // 返回相对于模板目录的路径
+                    $previewImage = 'style/' . $styleCode . '/colors/' . $actualSchemeName . '.' . $ext;
+                    break;
+                }
+                // 兜底：如果未找到，再尝试用展示名（不推荐，但兼容历史约定）
+                $fallbackByDisplay = $colorsDir . '/' . $displayName . '.' . $ext;
+                if ($displayName !== $actualSchemeName && file_exists($fallbackByDisplay)) {
+                    $previewImage = 'style/' . $styleCode . '/colors/' . $displayName . '.' . $ext;
+                    break;
+                }
+            }
+            
+            // 如果没有预览图，生成渐变色背景
+            $gradientColors = null;
+            if (!$previewImage) {
+                try {
+                    $gradientColors = $this->extractGradientColors($file);
+                } catch (\Exception $e) {
+                    // 如果提取渐变色失败，记录错误但不影响整体流程
+                    // 可以在这里添加日志记录
+                    $gradientColors = null;
+                }
+            }
+            
+            // 用文件名作为唯一 key，确保与 colors 目录下 phtml 文件一一对应
+            $schemes[$schemeCode] = [
+                'name' => $schemeCode,
+                'display_name' => $displayName,
+                'description' => $description,
+                'preview_image' => $previewImage,
+                'gradient_colors' => $gradientColors, // 渐变色数组，用于无预览图时显示
+            ];
+        }
+        
+        return $schemes;
+    }
+    
+    /**
+     * 从色系文件中提取渐变色
+     * 选择主色生成渐变色背景
+     * 
+     * @param string $colorSchemeFile 色系文件路径
+     * @return array|null 渐变色数组，格式：['#color1', '#color2', '#color3']，如果没有有效颜色则返回null
+     */
+    private function extractGradientColors(string $colorSchemeFile): ?array
+    {
+        if (!file_exists($colorSchemeFile)) {
+            return null;
+        }
+        
+        // 限制文件大小，避免内存问题（色系文件应该很小，限制在100KB以内）
+        $fileSize = filesize($colorSchemeFile);
+        if ($fileSize > 100 * 1024) {
+            return null;
+        }
+        
+        // 读取文件内容并解析颜色数组
+        $content = file_get_contents($colorSchemeFile);
+        
+        // 限制内容长度，避免处理过大的字符串
+        if (strlen($content) > 100 * 1024) {
+            return null;
+        }
+        
+        // 提取 $colors 数组定义
+        // 使用更精确的匹配，找到数组开始和结束位置
+        $arrayStart = strpos($content, '$colors');
+        if ($arrayStart === false) {
+            return null;
+        }
+        
+        // 找到数组开始标记 [
+        $bracketStart = strpos($content, '[', $arrayStart);
+        if ($bracketStart === false) {
+            return null;
+        }
+        
+        // 找到对应的结束标记 ]
+        $bracketCount = 0;
+        $bracketEnd = $bracketStart;
+        $maxLength = 50000; // 限制最大扫描长度
+        $scanLength = 0;
+        
+        for ($i = $bracketStart; $i < strlen($content) && $scanLength < $maxLength; $i++) {
+            $char = $content[$i];
+            if ($char === '[') {
+                $bracketCount++;
+            } elseif ($char === ']') {
+                $bracketCount--;
+                if ($bracketCount === 0) {
+                    $bracketEnd = $i;
+                    break;
+                }
+            }
+            $scanLength++;
+        }
+        
+        if ($bracketCount !== 0) {
+            // 没有找到匹配的结束括号
+            return null;
+        }
+        
+        // 提取数组内容（不包含括号）
+        $colorsArrayContent = substr($content, $bracketStart + 1, $bracketEnd - $bracketStart - 1);
+        
+        // 限制数组内容长度
+        if (strlen($colorsArrayContent) > 50000) {
+            return null;
+        }
+        
+        // 提取颜色值（支持多种格式：'#RRGGBB', 'rgb(...)', 'rgba(...)', 'transparent'等）
+        $colors = [];
+        
+        // 优先选择的颜色键（按优先级排序）
+        $priorityKeys = [
+            'primary_bg',
+            'accent_blue',
+            'section_bg_gradient_start',
+            'section_bg_gradient_end',
+            'accent_blue_light',
+            'button_primary_bg',
+            'card_bg',
+            'body_bg',
+        ];
+        
+        // 提取所有颜色值
+        foreach ($priorityKeys as $key) {
+            // 匹配 'key' => 'value' 或 'key' => "value"，支持跨行
+            // 匹配模式：'key' => 'value' 或 "key" => "value" 或 'key' => "value"
+            $pattern = '/[\'"]' . preg_quote($key, '/') . '[\'"]\s*=>\s*[\'"]([^\'"]+)[\'"]/';
+            if (preg_match($pattern, $colorsArrayContent, $keyMatch)) {
+                $colorValue = trim($keyMatch[1]);
+                // 跳过透明和无效值
+                if ($colorValue !== 'transparent' && !empty($colorValue)) {
+                    $hexColor = $this->colorToHex($colorValue);
+                    if ($hexColor && !in_array($hexColor, $colors)) {
+                        $colors[] = $hexColor;
+                        // 如果已经有足够的颜色（3-4个），可以提前结束
+                        if (count($colors) >= 4) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果提取到的颜色少于2个，尝试从其他颜色键提取
+        if (count($colors) < 2) {
+            // 匹配所有颜色值，限制匹配次数和长度
+            // 限制rgb/rgba括号内的内容长度（最多100字符）
+            $pattern = '/[\'"]\w+[\'"]\s*=>\s*[\'"](#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}|rgb\([^)]{0,100}\)|rgba\([^)]{0,100}\))[\'"]/';
+            $matchCount = preg_match_all($pattern, $colorsArrayContent, $allMatches, PREG_SET_ORDER);
+            
+            // 限制最多处理20个匹配结果
+            $maxMatches = min($matchCount, 20);
+            for ($i = 0; $i < $maxMatches && count($colors) < 4; $i++) {
+                if (isset($allMatches[$i][1])) {
+                    $colorValue = trim($allMatches[$i][1]);
+                    $hexColor = $this->colorToHex($colorValue);
+                    if ($hexColor && !in_array($hexColor, $colors)) {
+                        $colors[] = $hexColor;
+                    }
+                }
+            }
+        }
+        
+        // 至少需要2个颜色才能生成渐变
+        if (count($colors) < 2) {
+            return null;
+        }
+        
+        // 如果颜色少于3个，尝试生成中间色
+        if (count($colors) === 2) {
+            // 在两个颜色之间插入一个中间色
+            $color1 = $colors[0];
+            $color2 = $colors[1];
+            $middleColor = $this->blendColors($color1, $color2);
+            $colors = [$color1, $middleColor, $color2];
+        }
+        
+        // 限制最多4个颜色
+        return array_slice($colors, 0, 4);
+    }
+    
+    /**
+     * 将各种颜色格式转换为 HEX 格式
+     * 
+     * @param string $color 颜色值（支持 hex, rgb, rgba）
+     * @return string|null HEX格式颜色（如 #RRGGBB），转换失败返回null
+     */
+    private function colorToHex(string $color): ?string
+    {
+        $color = trim($color);
+        
+        // 已经是 HEX 格式
+        if (preg_match('/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/', $color)) {
+            // 如果是3位hex，转换为6位
+            if (strlen($color) === 4) {
+                return '#' . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
+            }
+            return strtoupper($color);
+        }
+        
+        // RGB 格式：rgb(255, 255, 255) 或 rgb(255 255 255) 或 rgb(16 30 56)
+        if (preg_match('/rgb\(([^)]+)\)/', $color, $matches)) {
+            // 处理空格或逗号分隔的值
+            $values = preg_split('/[,\s]+/', trim($matches[1]));
+            // 过滤空值
+            $values = array_filter($values, function($v) { return trim($v) !== ''; });
+            $values = array_values($values); // 重新索引数组
+            
+            if (count($values) >= 3) {
+                $r = intval(trim($values[0]));
+                $g = intval(trim($values[1]));
+                $b = intval(trim($values[2]));
+                // 确保值在有效范围内
+                $r = max(0, min(255, $r));
+                $g = max(0, min(255, $g));
+                $b = max(0, min(255, $b));
+                return sprintf('#%02X%02X%02X', $r, $g, $b);
+            }
+        }
+        
+        // RGBA 格式：rgba(255, 255, 255, 0.5)
+        if (preg_match('/rgba\(([^)]+)\)/', $color, $matches)) {
+            $values = preg_split('/[,\s]+/', trim($matches[1]));
+            if (count($values) >= 3) {
+                $r = intval($values[0]);
+                $g = intval($values[1]);
+                $b = intval($values[2]);
+                return sprintf('#%02X%02X%02X', $r, $g, $b);
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 混合两个颜色，生成中间色
+     * 
+     * @param string $color1 HEX格式颜色1
+     * @param string $color2 HEX格式颜色2
+     * @return string HEX格式中间色
+     */
+    private function blendColors(string $color1, string $color2): string
+    {
+        // 提取RGB值
+        $r1 = hexdec(substr($color1, 1, 2));
+        $g1 = hexdec(substr($color1, 3, 2));
+        $b1 = hexdec(substr($color1, 5, 2));
+        
+        $r2 = hexdec(substr($color2, 1, 2));
+        $g2 = hexdec(substr($color2, 3, 2));
+        $b2 = hexdec(substr($color2, 5, 2));
+        
+        // 计算中间值
+        $r = intval(($r1 + $r2) / 2);
+        $g = intval(($g1 + $g2) / 2);
+        $b = intval(($b1 + $b2) / 2);
+        
+        return sprintf('#%02X%02X%02X', $r, $g, $b);
     }
 
     /**
@@ -797,6 +1189,13 @@ class Style extends Model
                 '是否启用:0禁用,1启用'
             )
             ->addColumn(
+                self::fields_IS_PUBLISHED,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'not null default 0',
+                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
+            )
+            ->addColumn(
                 self::fields_SORT_ORDER,
                 TableInterface::column_type_INTEGER,
                 0,
@@ -827,6 +1226,20 @@ class Style extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        // 添加 is_published 字段（如果不存在）
+        if ($setup->tableExist() && !$setup->hasField(self::fields_IS_PUBLISHED)) {
+            $setup->alterTable()->addColumn(
+                self::fields_IS_PUBLISHED,
+                self::fields_IS_ACTIVE,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'not null default 0',
+                '是否发布:0未发布,1已发布(只有已发布的模板才能在页面创建时选择)'
+            )
+            ->addIndex(TableInterface::index_type_KEY, 'idx_is_published', [self::fields_IS_PUBLISHED], '发布状态索引')
+            ->alter();
+        }
+        
         // 扫描并注册默认样式模板
         $this->scanAndRegisterStyles();
     }

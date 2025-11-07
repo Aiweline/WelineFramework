@@ -13,177 +13,94 @@ namespace Weline\Cdn\Service;
 
 use Weline\Cdn\Model\Domain;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Model\Website;
 
 /**
  * URL站点解析服务
  * 
- * 根据URL的最长匹配（不区分大小写）解析出对应的站点和域名
+ * 根据URL解析对应的站点和域名
+ * 
+ * @package Weline_Cdn
  */
 class UrlSiteResolver
 {
-    /**
-     * @var Website
-     */
-    private Website $websiteModel;
+    private ObjectManager $objectManager;
 
-    /**
-     * @var Domain
-     */
-    private Domain $domainModel;
-
-    /**
-     * 构造函数
-     */
-    public function __construct(
-        Website $websiteModel,
-        Domain $domainModel
-    ) {
-        $this->websiteModel = $websiteModel;
-        $this->domainModel = $domainModel;
+    public function __construct(ObjectManager $objectManager)
+    {
+        $this->objectManager = $objectManager;
     }
 
     /**
-     * @DESC          # 解析URL对应的站点和域名
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
+     * 根据URL解析域名
+     * 
+     * 使用最长匹配原则，找到最匹配的域名
      * 
      * @param string $url URL地址
-     * @return array ['site_id' => int|null, 'domain_id' => int|null]
+     * @return Domain|null
      */
-    public function resolve(string $url): array
+    public function resolveDomainByUrl(string $url): ?Domain
     {
-        $url = trim($url);
-        if (empty($url)) {
-            return ['site_id' => null, 'domain_id' => null];
-        }
-
-        // 解析URL的host部分
+        // 解析URL获取主机名
         $parsedUrl = parse_url($url);
         if (!isset($parsedUrl['host'])) {
-            return ['site_id' => null, 'domain_id' => null];
+            return null;
         }
 
-        $host = strtolower($parsedUrl['host']);
+        $host = $parsedUrl['host'];
 
-        // 1. 先尝试匹配域名（最长匹配）
-        $domainId = $this->matchDomain($host);
+        /** @var Domain $domainModel */
+        $domainModel = $this->objectManager->getInstance(Domain::class);
+
+        // 获取所有启用的域名
+        $domains = $domainModel->reset()
+            ->where(Domain::fields_ENABLED, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $matchedDomain = null;
+        $maxMatchLength = 0;
+
+        // 使用最长匹配原则
+        foreach ($domains as $domain) {
+            $domainName = $domain->getData(Domain::fields_DOMAIN_NAME);
+            
+            // 完全匹配
+            if ($domainName === $host) {
+                return $domain;
+            }
+
+            // 检查是否为子域名
+            if (str_ends_with($host, '.' . $domainName)) {
+                $matchLength = strlen($domainName);
+                if ($matchLength > $maxMatchLength) {
+                    $maxMatchLength = $matchLength;
+                    $matchedDomain = $domain;
+                }
+            }
+        }
+
+        return $matchedDomain;
+    }
+
+    /**
+     * 根据站点ID解析域名
+     * 
+     * @param int $siteId 站点ID
+     * @return Domain|null
+     */
+    public function resolveDomainBySiteId(int $siteId): ?Domain
+    {
+        /** @var Domain $domainModel */
+        $domainModel = $this->objectManager->getInstance(Domain::class);
         
-        // 2. 如果找到域名，获取关联的站点
-        if ($domainId) {
-            try {
-                /** @var Domain $domain */
-                $domain = $this->domainModel->clear()->reset()->load($domainId);
-                if ($domain->getId()) {
-                    $siteId = $domain->getData(Domain::fields_SITE_ID);
-                    return [
-                        'site_id' => $siteId ? (int)$siteId : null,
-                        'domain_id' => $domainId
-                    ];
-                }
-            } catch (\Exception $e) {
-                // 忽略错误
-            }
-        }
+        $domain = $domainModel->reset()
+            ->where(Domain::fields_SITE_ID, $siteId)
+            ->where(Domain::fields_ENABLED, 1)
+            ->find()
+            ->fetch();
 
-        // 3. 如果没找到域名，尝试匹配网站URL（最长匹配）
-        $siteId = $this->matchWebsite($host);
-
-        return [
-            'site_id' => $siteId,
-            'domain_id' => $domainId
-        ];
-    }
-
-    /**
-     * @DESC          # 匹配域名（最长匹配，不区分大小写）
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param string $host
-     * @return int|null
-     */
-    private function matchDomain(string $host): ?int
-    {
-        try {
-            // 获取所有启用的域名
-            $domains = $this->domainModel->clear()
-                ->reset()
-                ->where(Domain::fields_ENABLED, 1)
-                ->select()
-                ->fetchArray();
-
-            $matchedDomain = null;
-            $maxMatchLength = 0;
-
-            foreach ($domains as $domain) {
-                $domainName = strtolower((string)$domain[Domain::fields_DOMAIN_NAME]);
-                
-                // 检查host是否包含domain_name（或完全匹配）
-                if ($host === $domainName || str_ends_with($host, '.' . $domainName)) {
-                    $matchLength = strlen($domainName);
-                    if ($matchLength > $maxMatchLength) {
-                        $maxMatchLength = $matchLength;
-                        $matchedDomain = $domain;
-                    }
-                }
-            }
-
-            return $matchedDomain ? (int)$matchedDomain[Domain::fields_ID] : null;
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    /**
-     * @DESC          # 匹配网站URL（最长匹配，不区分大小写）
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param string $host
-     * @return int|null
-     */
-    private function matchWebsite(string $host): ?int
-    {
-        try {
-            // 获取所有网站
-            $websites = $this->websiteModel->clear()
-                ->reset()
-                ->select()
-                ->fetchArray();
-
-            $matchedWebsite = null;
-            $maxMatchLength = 0;
-
-            foreach ($websites as $website) {
-                $websiteUrl = (string)$website[Website::fields_URL];
-                if (empty($websiteUrl)) {
-                    continue;
-                }
-
-                $parsedWebsiteUrl = parse_url($websiteUrl);
-                if (!isset($parsedWebsiteUrl['host'])) {
-                    continue;
-                }
-
-                $websiteHost = strtolower($parsedWebsiteUrl['host']);
-
-                // 检查host是否包含website_host（或完全匹配）
-                if ($host === $websiteHost || str_ends_with($host, '.' . $websiteHost)) {
-                    $matchLength = strlen($websiteHost);
-                    if ($matchLength > $maxMatchLength) {
-                        $maxMatchLength = $matchLength;
-                        $matchedWebsite = $website;
-                    }
-                }
-            }
-
-            return $matchedWebsite ? (int)$matchedWebsite[Website::fields_ID] : null;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return $domain->getData(Domain::fields_DOMAIN_ID) ? $domain : null;
     }
 }
+

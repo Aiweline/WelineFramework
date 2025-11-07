@@ -144,8 +144,8 @@ $pageName = $page ? $page->getData('name') : '';
     <style>
         /* Footer 移动端优化 */
         .marketing-footer {
-            background: <?= htmlspecialchars($bgColor) ?>;
-            <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor) . ';' : '' ?>
+            background: <?= htmlspecialchars($bgColor ?? '') ?>;
+            <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor ?? '') . ';' : '' ?>
             margin-top: clamp(40px, 10vw, 60px);
             padding: <?= $paddingVerticalResponsive ?> <?= $paddingHorizontalResponsive ?>;
         }
@@ -157,7 +157,7 @@ $pageName = $page ? $page->getData('name') : '';
         
         .marketing-footer-content {
             text-align: center;
-            color: <?= htmlspecialchars($textColor) ?>;
+            color: <?= htmlspecialchars($textColor ?? '') ?>;
             font-size: <?= $fontSizeResponsive ?>;
             line-height: <?= floatval($lineHeight) ?>;
         }
@@ -168,13 +168,13 @@ $pageName = $page ? $page->getData('name') : '';
         }
         
         .marketing-footer-link {
-            color: <?= htmlspecialchars($linkColor) ?>;
+            color: <?= htmlspecialchars($linkColor ?? '') ?>;
             text-decoration: none;
             transition: color 0.3s;
         }
         
         .marketing-footer-link:hover {
-            color: <?= htmlspecialchars($linkHoverColor) ?>;
+            color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
             text-decoration: underline;
         }
         
@@ -246,9 +246,9 @@ $pageName = $page ? $page->getData('name') : '';
                     <div class="marketing-footer-disclaimer">
                         <?php
                         // 处理 {disclaimer} 和 {Privacy Policy} 占位符
-                        $output = htmlspecialchars($disclaimerText);
-                        $output = str_replace('{disclaimer}', '<a href="' . htmlspecialchars($disclaimerLink) . '" class="marketing-footer-link">disclaimer</a>', $output);
-                        $output = str_replace('{Privacy Policy}', '<a href="' . htmlspecialchars($privacyLink) . '" class="marketing-footer-link">Privacy Policy</a>', $output);
+                        $output = htmlspecialchars($disclaimerText ?? '');
+                        $output = str_replace('{disclaimer}', '<a href="' . htmlspecialchars($disclaimerLink ?? '') . '" class="marketing-footer-link">disclaimer</a>', $output);
+                        $output = str_replace('{Privacy Policy}', '<a href="' . htmlspecialchars($privacyLink ?? '') . '" class="marketing-footer-link">Privacy Policy</a>', $output);
                         echo $output;
                         ?>
                     </div>
@@ -257,7 +257,7 @@ $pageName = $page ? $page->getData('name') : '';
                 <!-- Copyright -->
                 <?php if ($copyrightText): ?>
                     <p class="marketing-footer-copyright">
-                        <?= htmlspecialchars($copyrightText) ?>
+                        <?= htmlspecialchars($copyrightText ?? '') ?>
                     </p>
                 <?php endif; ?>
             </div>
