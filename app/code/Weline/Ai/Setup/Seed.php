@@ -61,7 +61,7 @@ class Seed
         
         // 检查是否已存在默认适配器
         $adapter = ObjectManager::getInstance(AiScenarioAdapter::class);
-        $existing = $adapter->reset()->where('code', 'default')->fetchOne();
+        $existing = $adapter->reset()->where('code', 'default')->find()->fetch();
         
         if ($existing && $existing->getId()) {
             echo "  ⚠ 默认适配器已存在，跳过创建\n";
@@ -122,7 +122,7 @@ class Seed
         
         // 检查是否已存在
         $adapter = ObjectManager::getInstance(AiScenarioAdapter::class);
-        $existing = $adapter->reset()->where('code', 'code_generation')->fetchOne();
+        $existing = $adapter->reset()->where('code', 'code_generation')->find()->fetch();
         
         if ($existing && $existing->getId()) {
             echo "  ⚠ 代码生成适配器已存在，跳过创建\n";

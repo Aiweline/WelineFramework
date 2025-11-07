@@ -161,7 +161,7 @@ class User extends BackendController
             if (!$id || $data['username'] !== $user->getData('username')) {
                 $existUser = $this->getFrontendUser()->reset()
                     ->where('username', '=', $data['username'])
-                    ->fetchOne();
+                    ->find()->fetch();
                 if ($existUser && $existUser->getData('user_id')) {
                     return $this->jsonResponse([
                         'success' => false,
@@ -174,7 +174,7 @@ class User extends BackendController
             if (!empty($data['email']) && (!$id || $data['email'] !== $user->getData('email'))) {
                 $existUser = $this->getFrontendUser()->reset()
                     ->where('email', '=', $data['email'])
-                    ->fetchOne();
+                    ->find()->fetch();
                 if ($existUser && $existUser->getData('user_id')) {
                     return $this->jsonResponse([
                         'success' => false,
