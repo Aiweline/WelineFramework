@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Admin\Controller;
 
 use Weline\Admin\Helper\Data;
+use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
@@ -156,21 +157,71 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $backend_login_referer = Url::removeExtraDoubleSlashes($this->session->getData('backend_login_referer'));
         if ($backend_login_referer) {
             if ($this->request->getUrlPath($backend_login_referer) !== $this->request->getUrlPath()) {
-                $this->session->delete('backend_login_referer');
-                $this->redirect($backend_login_referer);
+                // 验证是否是菜单链接
+                $parsed = \Weline\Framework\Http\Url::parser($backend_login_referer);
+                $refererRoutePath = trim($parsed['uri'] ?? '', '/');
+                if ($refererRoutePath && MenuUrlValidator::isMenuUrl($refererRoutePath)) {
+                    $this->session->delete('backend_login_referer');
+                    $this->redirect($backend_login_referer);
+                    return;
+                } else {
+                    // 不是菜单链接，清除
+                    $this->session->delete('backend_login_referer');
+                }
             }
         }
         $referer = Url::removeExtraDoubleSlashes($this->session->getData('referer'));
 
         if ($referer) {
             if (Url::is_same_site($referer) && $referer !== $this->request->getUrlPath()) {
-                $this->redirect($referer);
+                // 验证是否是菜单链接
+                $parsed = \Weline\Framework\Http\Url::parser($referer);
+                $refererRoutePath = trim($parsed['uri'] ?? '', '/');
+                if ($refererRoutePath && MenuUrlValidator::isMenuUrl($refererRoutePath)) {
+                    $this->redirect($referer);
+                } else {
+                    // 不是菜单链接，清除
+                    $this->session->delete('referer');
+                }
             }
         }
     }
 
     public function logout(): void
     {
+        // 在退出登录前，保存当前页面URL（如果是菜单链接）
+        // 优先从 session 的 referer 获取，如果没有则从 HTTP_REFERER 头获取
+        $currentUrl = '';
+        
+        // 1. 优先从 session 的 referer 获取
+        $referer = $this->session->getData('referer');
+        if ($referer) {
+            $referer = Url::removeExtraDoubleSlashes($referer);
+            if ($referer && Url::is_same_site($referer)) {
+                $currentUrl = $referer;
+            }
+        }
+        
+        // 2. 如果 session 中没有，尝试从 HTTP_REFERER 头获取
+        if (!$currentUrl) {
+            $httpReferer = $this->request->getReferer();
+            if ($httpReferer && Url::is_same_site($httpReferer)) {
+                $currentUrl = Url::removeExtraDoubleSlashes($httpReferer);
+            }
+        }
+        
+        // 验证URL是否是菜单链接，如果是则保存到 backend_login_referer
+        if ($currentUrl) {
+            // 使用 Url::parser 解析URL，获取真实的路径（已去除货币、语言、网站等前缀）
+            $parsed = \Weline\Framework\Http\Url::parser($currentUrl);
+            $routePath = trim($parsed['uri'] ?? '', '/');
+            
+            // 验证路径是否是菜单链接（路径已去除前后斜杠）
+            if ($routePath && MenuUrlValidator::isMenuUrl($routePath)) {
+                $this->session->setData('backend_login_referer', $currentUrl);
+            }
+        }
+        
         Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->logout();
         $this->redirect($this->_url->getBackendUrl('admin/login'));

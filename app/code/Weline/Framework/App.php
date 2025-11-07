@@ -92,7 +92,19 @@ class App
         // SERVER 整理
         if (!CLI) {
             $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $_SERVER['REQUEST_URI'];
+            // 完整的地址拼接（包含端口）
+            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $port = $_SERVER['SERVER_PORT'] ?? '80';
+            // 如果 HTTP_HOST 不包含端口，且端口不是默认端口，则添加端口
+            if (!str_contains($host, ':') && $port != '80' && $port != '443') {
+                $host .= ':' . $port;
+            }
+            $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $_SERVER['REQUEST_URI'];
+        }else{
+            $_SERVER['WELINE_FULL_REQUEST_URI'] = '';
         }
+
         // ############################# 应用相关配置 #####################
         // 应用 目录 (默认访问 web)
         if (!defined('APP_PATH')) {
@@ -277,6 +289,11 @@ class App
                     $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
                 }
                 $_SERVER = $parse['server'];
+                
+                // 根据 WELINE_AREA 设置后端标识，方便后续判断
+                $welineArea = $_SERVER['WELINE_AREA'] ?? 'frontend';
+                $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'admin' || $welineArea === 'api_admin');
+                
                 $default_cookies = [
                     'WELINE_USER_LANG',
                     'WELINE_USER_CURRENCY',
@@ -291,12 +308,24 @@ class App
                     $_SERVER['WELINE_USER_LANG'] = $parse['language'];
                 }
                 foreach ($default_cookies as $key) {
+                    // 允许 WELINE_WEBSITE_ID 和 WELINE_WEBSITE_CODE 为空（当匹配不到站点时）
+                    // 其他必需的 key 仍然需要检查
                     if (!isset($_SERVER[$key])) {
-                        throw new Exception(__('系统SERVER缺少key：%{1}', $key));
+                        if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'])) {
+                            // 网站 ID 和代码可以为空，设置为空字符串
+                            $_SERVER[$key] = '';
+                        } else {
+                            throw new Exception(__('系统SERVER缺少key：%{1}', $key));
+                        }
                     }
                     Cookie::set($key, $_SERVER[$key], 3600 * 24 * 30, [
 //                    'path' => $cookie_path,
                     ]);
+                }
+                
+                // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）
+                if (PROD && !($_SERVER['WELINE_IS_BACKEND'] ?? false)) {
+                    $eventManager->dispatch('App::url_parsed_after');
                 }
             }
             if (PROD) {

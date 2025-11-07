@@ -46,7 +46,8 @@ class RequestCache extends \Weline\Framework\Cache\CacheFactory
     }
 
     /**
-     * @DESC         |规范化 URI（去除尾部斜杠，空则使用 '/'）
+     * @DESC         |规范化 URI（去除查询参数和尾部斜杠，空则使用 '/'）
+     *                确保缓存键只基于路径部分，不包含查询参数，避免相同路径因查询参数不同而生成不同的缓存键
      *
      * @AUTH    秋枫雁飞
      * @EMAIL aiweline@qq.com
@@ -57,6 +58,11 @@ class RequestCache extends \Weline\Framework\Cache\CacheFactory
      */
     public static function normalizeUri(string $uri): string
     {
+        // 去除查询参数（? 及其后面的内容）
+        if (($pos = strpos($uri, '?')) !== false) {
+            $uri = substr($uri, 0, $pos);
+        }
+        // 去除尾部斜杠
         $uri = rtrim($uri, '/');
         return empty($uri) ? '/' : $uri;
     }

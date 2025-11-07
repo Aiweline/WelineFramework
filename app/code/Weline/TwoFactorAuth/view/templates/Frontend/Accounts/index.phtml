@@ -267,14 +267,29 @@
         .account-code-wrapper {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             margin-right: 15px;
+            flex-wrap: wrap;
         }
         
         @media (min-width: 480px) {
             .account-code-wrapper {
-                gap: 15px;
+                gap: 12px;
                 margin-right: 20px;
+                flex-wrap: nowrap;
+            }
+        }
+        
+        @media (max-width: 479px) {
+            .account-code-wrapper {
+                width: 100%;
+                justify-content: space-between;
+                margin-right: 0;
+            }
+            
+            .copy-code-btn {
+                font-size: 12px;
+                padding: 6px 10px;
             }
         }
         
@@ -324,6 +339,47 @@
             font-family: 'Courier New', monospace;
             color: #007bff;
             letter-spacing: clamp(2px, 1vw, 4px);
+            cursor: pointer;
+            user-select: all;
+            transition: all 0.3s;
+        }
+        
+        .account-code:hover {
+            color: #0056b3;
+            transform: scale(1.05);
+        }
+        
+        .copy-code-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        
+        .copy-code-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        }
+        
+        .copy-code-btn:active {
+            transform: translateY(0);
+        }
+        
+        .copy-code-btn.copied {
+            background: #28a745;
+        }
+        
+        .copy-code-btn.copied:hover {
+            background: #218838;
         }
         
         .account-actions {
@@ -606,7 +662,10 @@
                                 </svg>
                                 <span class="countdown-number" id="countdown-<?= $account['account_id'] ?>">30</span>
                             </div>
-                            <div class="account-code" id="code-<?= $account['account_id'] ?>">---- --</div>
+                            <div class="account-code" id="code-<?= $account['account_id'] ?>" onclick="copyAccountCode(<?= $account['account_id'] ?>)">---- --</div>
+                            <button class="copy-code-btn" id="copy-btn-<?= $account['account_id'] ?>" onclick="copyAccountCode(<?= $account['account_id'] ?>); event.stopPropagation();" title="复制验证码">
+                                📋 复制
+                            </button>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -1327,6 +1386,78 @@
         function exportAccounts() {
             const format = confirm('选择导出格式：\n\n确定 = JSON格式\n取消 = CSV格式') ? 'json' : 'csv';
             window.location.href = `/two-factor-auth/frontend/accounts/export?format=${format}`;
+        }
+        
+        // 复制账户验证码
+        async function copyAccountCode(accountId) {
+            const codeElement = document.getElementById(`code-${accountId}`);
+            const copyBtn = document.getElementById(`copy-btn-${accountId}`);
+            
+            if (!codeElement) {
+                return;
+            }
+            
+            // 获取验证码文本（去掉空格）
+            let code = codeElement.textContent.trim();
+            
+            // 如果验证码还是占位符，不执行复制
+            if (code === '---- --' || code === '' || code.length < 6) {
+                alert('验证码尚未生成，请稍候...');
+                return;
+            }
+            
+            // 去掉验证码中的空格
+            code = code.replace(/\s+/g, '');
+            
+            try {
+                // 使用 Clipboard API 复制
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(code);
+                    
+                    // 更新按钮状态
+                    if (copyBtn) {
+                        const originalText = copyBtn.innerHTML;
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = '✓ 已复制';
+                        
+                        // 2秒后恢复原状
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = originalText;
+                        }, 2000);
+                    }
+                } else {
+                    // 降级方案：使用传统方法
+                    const textArea = document.createElement('textarea');
+                    textArea.value = code;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        if (copyBtn) {
+                            const originalText = copyBtn.innerHTML;
+                            copyBtn.classList.add('copied');
+                            copyBtn.innerHTML = '✓ 已复制';
+                            setTimeout(() => {
+                                copyBtn.classList.remove('copied');
+                                copyBtn.innerHTML = originalText;
+                            }, 2000);
+                        }
+                    } catch (err) {
+                        alert('复制失败，请手动复制：' + code);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                }
+            } catch (error) {
+                console.error('复制失败:', error);
+                alert('复制失败，请手动复制：' + code);
+            }
         }
     </script>
 </body>

@@ -14,6 +14,7 @@
 - [PHP 8.2+ 兼容性错误](#php-82-兼容性错误)
 - [禁止使用 fetchOne() 方法](#禁止使用-fetchone-方法)
 - [ORM 查询使用规范](#orm-查询使用规范)
+- [环境配置读取错误](#环境配置读取错误)
 
 ---
 
@@ -1116,6 +1117,166 @@ if (!empty($user)) {
 
 ---
 
+## 环境配置读取错误
+
+**重要提示**：Weline Framework 中读取环境配置必须使用 `Env::get()` 静态方法，使用点号（`.`）分隔符访问嵌套配置。不要使用 `getConfig()` 或 `getData()` 方法，它们可能无法正确读取嵌套配置。
+
+### 错误示例
+
+#### 错误1：使用 getConfig() 读取嵌套配置
+```php
+// ❌ 错误：getConfig() 虽然支持点号，但返回 null
+$routerCacheEnabled = Env::getInstance()->getConfig('cache/status/router_cache') ?? 1;
+// 返回 null，因为 getConfig() 不支持斜杠分隔符
+
+// ❌ 错误：使用 getData() 虽然可以，但不是推荐方式
+$routerCacheEnabled = Env::getInstance()->getData('cache/status/router_cache') ?? 1;
+// 可以工作，但不是框架推荐的方式
+```
+
+#### 错误2：使用错误的路径分隔符
+```php
+// ❌ 错误：使用斜杠分隔符
+$value = Env::get('cache/status/router_cache');
+// getConfig() 不支持斜杠，会返回 null
+
+// ❌ 错误：使用 getInstance() 调用实例方法
+$value = Env::getInstance()->getConfig('cache.status.router_cache');
+// 可以工作，但不是推荐方式，应该使用静态方法
+```
+
+### 正确写法
+
+#### 正确1：使用静态方法 Env::get()
+```php
+// ✅ 正确：使用静态方法 Env::get()，使用点号分隔符
+$routerCacheEnabled = Env::get('cache.status.router_cache', 1);
+$frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
+
+// ✅ 正确：第二个参数是默认值
+$adminArea = Env::get('admin', 'admin');
+$apiArea = Env::get('api', 'rest');
+```
+
+#### 正确2：读取简单配置
+```php
+// ✅ 正确：读取顶级配置
+$env = Env::get('env', 'local');
+$debug = Env::get('debug', false);
+$user = Env::get('user', 'www');
+
+// ✅ 正确：读取嵌套配置（使用点号）
+$cacheDefault = Env::get('cache.default', 'file');
+$cacheStatus = Env::get('cache.status.router_cache', 1);
+```
+
+#### 正确3：读取模块配置
+```php
+// ✅ 正确：读取模块配置（第二个参数是模块名）
+$moduleConfig = Env::get('config_key', 'ModuleName');
+
+// ✅ 正确：读取模块配置（第三个参数是模块名，第二个是默认值）
+$moduleConfig = Env::get('config_key', 'default_value', 'ModuleName');
+```
+
+### 配置读取方法对比
+
+| 方法 | 使用方式 | 支持分隔符 | 推荐度 | 说明 |
+|------|---------|-----------|--------|------|
+| `Env::get()` | 静态方法 | 点号（`.`） | ⭐⭐⭐⭐⭐ | **推荐**：框架标准方式 |
+| `Env::getInstance()->getConfig()` | 实例方法 | 点号（`.`） | ⭐⭐⭐ | 可用但不推荐 |
+| `Env::getInstance()->getData()` | 实例方法 | 斜杠（`/`）或点号（`.`） | ⭐⭐ | 可用但不推荐 |
+
+### 常见配置读取场景
+
+#### 场景1：读取缓存配置
+```php
+// ✅ 正确
+$routerCacheEnabled = Env::get('cache.status.router_cache', 1);
+$frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
+$cacheDefault = Env::get('cache.default', 'file');
+```
+
+#### 场景2：读取数据库配置
+```php
+// ✅ 正确
+$dbHost = Env::get('db.master.hostname', '127.0.0.1');
+$dbName = Env::get('db.master.database', 'weline');
+$dbUser = Env::get('db.master.username', 'root');
+```
+
+#### 场景3：读取系统配置
+```php
+// ✅ 正确
+$adminArea = Env::get('admin', 'admin');
+$apiArea = Env::get('api', 'rest');
+$apiAdminArea = Env::get('api_admin', 'api_admin');
+```
+
+#### 场景4：读取模块配置
+```php
+// ✅ 正确：读取模块配置
+$moduleConfig = Env::get('config_key', 'ModuleName');
+
+// ✅ 正确：读取模块配置（带默认值）
+$moduleConfig = Env::get('config_key', 'default_value', 'ModuleName');
+```
+
+### 要点总结
+
+1. **必须使用静态方法**：
+   - ✅ 使用 `Env::get('config.key', $default)`
+   - ❌ 不要使用 `Env::getInstance()->getConfig()` 或 `getData()`
+
+2. **必须使用点号分隔符**：
+   - ✅ 使用 `'cache.status.router_cache'`
+   - ❌ 不要使用 `'cache/status/router_cache'`
+
+3. **提供默认值**：
+   - ✅ 使用 `Env::get('key', $default)` 提供默认值
+   - 如果配置不存在，会返回默认值
+
+4. **配置路径规则**：
+   - 顶级配置：`Env::get('key')`
+   - 嵌套配置：`Env::get('parent.child.grandchild')`
+   - 数组配置：`Env::get('cache.status.router_cache')`
+
+5. **模块配置**：
+   - 第二个参数是模块名：`Env::get('key', 'ModuleName')`
+   - 第三个参数是模块名：`Env::get('key', $default, 'ModuleName')`
+
+### 配置文件结构
+
+配置文件 `app/etc/env.php` 的结构：
+```php
+return [
+    'env' => 'local',
+    'cache' => [
+        'default' => 'file',
+        'status' => [
+            'router_cache' => 1,
+            'frontend_cache' => 1,
+        ],
+    ],
+    'db' => [
+        'master' => [
+            'hostname' => '127.0.0.1',
+            'database' => 'weline',
+        ],
+    ],
+];
+```
+
+对应的读取方式：
+```php
+$env = Env::get('env', 'local');
+$cacheDefault = Env::get('cache.default', 'file');
+$routerCache = Env::get('cache.status.router_cache', 1);
+$dbHost = Env::get('db.master.hostname', '127.0.0.1');
+```
+
+---
+
 ## 快速检查清单
 
 生成代码时，请检查以下事项：
@@ -1140,6 +1301,9 @@ if (!empty($user)) {
 - [ ] **ORM 使用规范**：所有 ORM 查询是否调用了 `fetch()` 或 `fetchArray()`
 - [ ] **ORM 使用规范**：批量更新和删除是否调用了 `fetch()`
 - [ ] **ORM 使用规范**：是否在业务逻辑中直接使用 `query("SELECT ...")`（禁止）
+- [ ] **环境配置读取**：是否使用 `Env::get()` 静态方法而不是 `getInstance()->getConfig()`
+- [ ] **环境配置读取**：是否使用点号（`.`）分隔符而不是斜杠（`/`）
+- [ ] **环境配置读取**：是否提供了默认值作为第二个参数
 
 ---
 
