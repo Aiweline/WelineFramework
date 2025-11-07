@@ -55,7 +55,7 @@ class Cleanup implements CommandInterface
         
         // 检查端口占用
         $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-        if (is_resource($connection)) {
+        if ($connection !== false) {
             fclose($connection);
             
             // 获取占用端口的进程ID
@@ -88,9 +88,8 @@ class Cleanup implements CommandInterface
             return posix_kill($pid, 0);
         } else {
             // Windows系统检查
-            $output = [];
-            exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-            return !empty($output) && count($output) > 1;
+            @exec('tasklist /FI "PID eq ' . $pid . '" 2>NUL', $output, $returnVar);
+            return !empty($output) && strpos(implode('', $output), (string)$pid) !== false;
         }
     }
 
@@ -103,8 +102,7 @@ class Cleanup implements CommandInterface
             return posix_kill($pid, SIGTERM);
         } else {
             // Windows系统
-            $output = [];
-            exec("taskkill /PID {$pid} /F 2>NUL", $output, $returnCode);
+            @exec('taskkill /F /PID ' . $pid . ' 2>NUL', $output, $returnCode);
             return $returnCode === 0;
         }
     }
@@ -116,14 +114,12 @@ class Cleanup implements CommandInterface
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             // Windows系统
-            $output = [];
-            exec("netstat -ano | findstr :{$port}", $output);
+            @exec('netstat -ano | findstr ":' . $port . '"', $output);
             
-            foreach ($output as $line) {
-                if (strpos($line, 'LISTENING') !== false) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    if (count($parts) >= 5) {
-                        $pid = (int)$parts[count($parts) - 1];
+            if (!empty($output)) {
+                foreach ($output as $line) {
+                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
+                        $pid = (int)$matches[1];
                         if ($pid > 0) {
                             return $pid;
                         }
@@ -133,7 +129,7 @@ class Cleanup implements CommandInterface
         } else {
             // Unix/Linux系统
             $output = [];
-            exec("lsof -ti:{$port}", $output);
+            @exec("lsof -ti:{$port} 2>/dev/null", $output);
             
             if (!empty($output)) {
                 $pid = (int)trim($output[0]);

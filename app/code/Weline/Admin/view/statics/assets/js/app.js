@@ -37,18 +37,146 @@ File: Main Js File
 
     function initActiveMenu() {
         // === following js will activate the menu in left side bar based on url ====
+        var $activeLink = null;
         $("#sidebar-menu a").each(function () {
             var pageUrl = window.location.href.split(/[?#]/)[0];
             if (this.href == pageUrl) {
-                $(this).addClass("active");
-                $(this).parent().addClass("mm-active"); // add active to li of the current link
-                $(this).parent().parent().addClass("mm-show");
-                $(this).parent().parent().prev().addClass("mm-active"); // add active class to an anchor
-                $(this).parent().parent().parent().addClass("mm-active");
-                $(this).parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
-                $(this).parent().parent().parent().parent().parent().addClass("mm-active");
+                $activeLink = $(this);
+                $activeLink.addClass("active");
+                $activeLink.parent().addClass("mm-active"); // add active to li of the current link
+                $activeLink.parent().parent().addClass("mm-show");
+                $activeLink.parent().parent().prev().addClass("mm-active"); // add active class to an anchor
+                $activeLink.parent().parent().parent().addClass("mm-active");
+                $activeLink.parent().parent().parent().parent().addClass("mm-show"); // add active to li of the current link
+                $activeLink.parent().parent().parent().parent().parent().addClass("mm-active");
             }
         });
+        
+        // 如果找到激活的菜单项，滚动到可视区域
+        if ($activeLink && $activeLink.length > 0) {
+            scrollToActiveMenuItem($activeLink);
+        }
+    }
+    
+    // 滚动到激活的菜单项
+    function scrollToActiveMenuItem($activeLink) {
+        if (!$activeLink || $activeLink.length === 0) {
+            return;
+        }
+        
+        var $activeMenu = $activeLink.closest('li');
+        if (!$activeMenu || $activeMenu.length === 0) {
+            return;
+        }
+        
+        // 等待DOM完全渲染和菜单展开完成
+        setTimeout(function() {
+            try {
+                // 确保激活菜单项的父级菜单都已展开
+                $activeMenu.parents('li').each(function() {
+                    var $parent = $(this);
+                    var $subMenu = $parent.find('> .sub-menu').first();
+                    if ($subMenu.length > 0 && $subMenu.attr('aria-expanded') === 'false') {
+                        $parent.find('> a.has-arrow').first().trigger('click');
+                    }
+                });
+                
+                // 再次等待展开动画完成
+                setTimeout(function() {
+                    try {
+                        var menuElement = $activeMenu[0];
+                        if (!menuElement) {
+                            return;
+                        }
+                        
+                        // 获取滚动容器
+                        var $simplebarContainer = $('.vertical-menu [data-simplebar]');
+                        var scrollElement = null;
+                        
+                        if ($simplebarContainer.length > 0 && $simplebarContainer[0].simpleBar) {
+                            // 使用 simplebar 的滚动元素
+                            scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
+                        } else {
+                            // 降级方案：使用侧边栏菜单本身
+                            var $sidebarMenu = $('#sidebar-menu');
+                            if ($sidebarMenu.length && $sidebarMenu[0].scrollHeight > $sidebarMenu[0].clientHeight) {
+                                scrollElement = $sidebarMenu[0];
+                            } else {
+                                // 再降级：使用 window
+                                scrollElement = window;
+                            }
+                        }
+                        
+                        if (!scrollElement) {
+                            return;
+                        }
+                        
+                        // 计算菜单项相对于滚动容器的位置
+                        var menuOffset = $activeMenu.offset();
+                        
+                        if (!menuOffset) {
+                            return;
+                        }
+                        
+                        var scrollTop = 0;
+                        var menuTop = 0;
+                        var containerHeight = 0;
+                        var containerOffset = null;
+                        
+                        if (scrollElement === window) {
+                            // 使用 window 滚动
+                            menuTop = menuOffset.top;
+                            containerHeight = $(window).height();
+                            scrollTop = $(window).scrollTop();
+                        } else {
+                            // 使用元素滚动
+                            var $scrollContainer = $(scrollElement);
+                            containerOffset = $scrollContainer.offset();
+                            
+                            if (containerOffset) {
+                                // 计算菜单项相对于滚动容器的位置
+                                menuTop = menuOffset.top - containerOffset.top + $scrollContainer.scrollTop();
+                            } else {
+                                // 降级：使用 position()
+                                menuTop = $activeMenu.position().top + $scrollContainer.scrollTop();
+                            }
+                            
+                            containerHeight = $scrollContainer.height();
+                            scrollTop = $scrollContainer.scrollTop();
+                        }
+                        
+                        // 计算目标滚动位置：使菜单项位于容器中间
+                        var menuHeight = $activeMenu.outerHeight() || 40; // 默认高度40px
+                        var targetScrollTop = menuTop - (containerHeight / 2) + (menuHeight / 2);
+                        
+                        // 确保不超出滚动范围
+                        var maxScrollTop = 0;
+                        if (scrollElement === window) {
+                            maxScrollTop = $(document).height() - $(window).height();
+                        } else {
+                            maxScrollTop = scrollElement.scrollHeight - scrollElement.clientHeight;
+                        }
+                        
+                        targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+                        
+                        // 执行滚动动画
+                        if (scrollElement === window) {
+                            $('html, body').animate({
+                                scrollTop: targetScrollTop
+                            }, 500);
+                        } else {
+                            $(scrollElement).animate({
+                                scrollTop: targetScrollTop
+                            }, 500);
+                        }
+                    } catch (e) {
+                        console.warn('计算滚动位置时出错:', e);
+                    }
+                }, 300);
+            } catch (e) {
+                console.warn('滚动到激活菜单项时出错:', e);
+            }
+        }, 200);
     }
 
     function initMenuItem() {
@@ -67,15 +195,35 @@ File: Main Js File
 
     function initMenuItemScroll() {
         // focus active menu in left sidebar
-        $(document).ready(function () {
-            if ($("#sidebar-menu").length > 0 && $("#sidebar-menu .mm-active .active").length > 0) {
-                var activeMenu = $("#sidebar-menu .mm-active .active").offset().top;
-                if (activeMenu > 300) {
-                    activeMenu = activeMenu - 300;
-                    $(".vertical-menu .simplebar-content-wrapper").animate({scrollTop: activeMenu}, "slow");
+        // 这个函数作为备用方案，如果 initActiveMenu 中的滚动没有执行，这里会再次尝试
+        setTimeout(function() {
+            var $activeLink = $("#sidebar-menu .mm-active .active, #sidebar-menu .mm-active > a.active, #sidebar-menu li.mm-active > a.active").first();
+            if ($activeLink.length > 0) {
+                // 调用滚动函数
+                if (typeof scrollToActiveMenuItem === 'function') {
+                    scrollToActiveMenuItem($activeLink);
+                } else {
+                    // 降级方案：使用简单的滚动逻辑
+                    var $activeMenu = $activeLink.closest('li');
+                    if ($activeMenu.length > 0) {
+                        var $simplebarContainer = $('.vertical-menu [data-simplebar]');
+                        if ($simplebarContainer.length > 0 && $simplebarContainer[0].simpleBar) {
+                            var scrollElement = $simplebarContainer[0].simpleBar.getScrollElement();
+                            var menuOffset = $activeMenu.offset();
+                            var containerOffset = $(scrollElement).offset();
+                            if (menuOffset && containerOffset) {
+                                var menuTop = menuOffset.top - containerOffset.top + $(scrollElement).scrollTop();
+                                var containerHeight = $(scrollElement).height();
+                                var targetScrollTop = menuTop - (containerHeight / 2) + ($activeMenu.outerHeight() / 2);
+                                $(scrollElement).animate({
+                                    scrollTop: Math.max(0, targetScrollTop)
+                                }, 500);
+                            }
+                        }
+                    }
                 }
             }
-        });
+        }, 800); // 延迟执行，确保菜单已经激活
     }
 
     function initFullScreen() {

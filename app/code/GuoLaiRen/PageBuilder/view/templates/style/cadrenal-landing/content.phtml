@@ -1,0 +1,375 @@
+<?php
+/**
+ * Cadrenal Therapeutics Landing Page - Content
+ * 生物制药公司落地页模板 - 内容
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:about => 关于我们
+ * about.enabled => 显示关于我们:select:yes|yes,no
+ * about.title => 标题:text:About Cadrenal Therapeutics
+ * about.title_color => 标题颜色:color:#1a1a1a
+ * about.title_size => 标题大小:responsive:24/36|px
+ * about.content => 内容:textarea:Cadrenal Therapeutics is a biopharmaceutical company focused on developing novel and differentiated products to bridge critical gaps in acute and chronic anticoagulation therapy. Our pipeline includes two clinical-stage assets: tecarfarin, an oral vitamin K antagonist (VKA) for chronic use, and frunexian, an injectable small molecule Factor XIa antagonist for acute hospital settings.
+ * about.content_color => 内容颜色:color:#4a5568
+ * about.content_size => 内容大小:responsive:15/18|px
+ * about.margin => 下边距:responsive:40/60|px
+ * 
+ * group:products => 产品展示
+ * products.enabled => 显示产品:select:yes|yes,no
+ * products.title => 标题:text:Our Clinical-Stage Assets
+ * products.title_color => 标题颜色:color:#1a1a1a
+ * products.title_size => 标题大小:responsive:24/36|px
+ * products.title_margin => 标题下边距:responsive:20/30|px
+ * 
+ * products.product1_name => 产品1名称:text:Tecarfarin
+ * products.product1_description => 产品1描述:textarea:An oral vitamin K antagonist (VKA) designed for chronic anticoagulation therapy
+ * products.product1_status => 产品1状态:text:Clinical Stage
+ * products.product2_name => 产品2名称:text:Frunexian
+ * products.product2_description => 产品2描述:textarea:An injectable small molecule Factor XIa antagonist for acute hospital settings
+ * products.product2_status => 产品2状态:text:Clinical Stage
+ * 
+ * products.item_bg => 产品卡片背景:color:#ffffff
+ * products.item_border => 产品卡片边框:color:#e5e7eb
+ * products.item_padding => 产品卡片内边距:responsive:20/30|px
+ * products.item_margin => 产品卡片间距:responsive:20/30|px
+ * products.margin => 区域下边距:responsive:40/60|px
+ * 
+ * group:mission => 使命愿景
+ * mission.enabled => 显示使命:select:yes|yes,no
+ * mission.title => 标题:text:Our Mission
+ * mission.title_color => 标题颜色:color:#1a1a1a
+ * mission.title_size => 标题大小:responsive:24/36|px
+ * mission.content => 内容:textarea:To develop novel and differentiated biopharmaceutical products that bridge critical gaps in current anticoagulation therapy, improving patient outcomes and quality of life.
+ * mission.content_color => 内容颜色:color:#4a5568
+ * mission.margin => 下边距:responsive:40/60|px
+ * 
+ * group:cta => 行动号召
+ * cta.enabled => 显示CTA:select:yes|yes,no
+ * cta.text => 按钮文字:text:Learn More
+ * cta.url => 按钮链接:textarea:#
+ * cta.target => 打开方式:select:_self|_self,_blank
+ * cta.bg_color => 按钮背景色:color:#0066cc
+ * cta.hover_bg => 悬停背景色:color:#0052a3
+ * cta.text_color => 文字颜色:color:#ffffff
+ * cta.font_size => 字体大小:responsive:16/18|px
+ * cta.font_weight => 字体粗细:select:600|400,500,600,700
+ * cta.padding => 内边距:responsive:12/18|px
+ * cta.border_radius => 圆角:number:6|px
+ * cta.margin => 下边距:responsive:40/60|px
+ * cta.event_name => 事件名:text:
+ * 
+ * group:content_style => 内容样式
+ * content.bg_color => 内容背景色:color:#ffffff
+ * content.padding_v => 上下内边距:responsive:40/80|px
+ * content.padding_h => 左右内边距:responsive:20/40|px
+ * 
+ * group:custom_css => 自定义CSS
+ * custom_css.enabled => 启用自定义CSS:select:no|yes,no
+ * custom_css.code => 自定义CSS代码:textarea:
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getCadrenalContentConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseCadrenalContentResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genCadrenalContentCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 关于我们配置
+$aboutEnabled = getCadrenalContentConfig($styleSettings, 'about.enabled', 'yes');
+$aboutTitle = getCadrenalContentConfig($styleSettings, 'about.title', 'About Cadrenal Therapeutics');
+$aboutTitleColor = getCadrenalContentConfig($styleSettings, 'about.title_color', '#1a1a1a');
+$aboutTitleSize = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'about.title_size', '24/36') . 'px'));
+$aboutContent = getCadrenalContentConfig($styleSettings, 'about.content', 'Cadrenal Therapeutics is a biopharmaceutical company focused on developing novel and differentiated products to bridge critical gaps in acute and chronic anticoagulation therapy.');
+$aboutContentColor = getCadrenalContentConfig($styleSettings, 'about.content_color', '#4a5568');
+$aboutContentSize = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'about.content_size', '15/18') . 'px'));
+$aboutMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'about.margin', '40/60') . 'px'));
+
+// 产品配置
+$productsEnabled = getCadrenalContentConfig($styleSettings, 'products.enabled', 'yes');
+$productsTitle = getCadrenalContentConfig($styleSettings, 'products.title', 'Our Clinical-Stage Assets');
+$productsTitleColor = getCadrenalContentConfig($styleSettings, 'products.title_color', '#1a1a1a');
+$productsTitleSize = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'products.title_size', '24/36') . 'px'));
+$productsTitleMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'products.title_margin', '20/30') . 'px'));
+
+$product1Name = getCadrenalContentConfig($styleSettings, 'products.product1_name', 'Tecarfarin');
+$product1Desc = getCadrenalContentConfig($styleSettings, 'products.product1_description', 'An oral vitamin K antagonist (VKA) designed for chronic anticoagulation therapy');
+$product1Status = getCadrenalContentConfig($styleSettings, 'products.product1_status', 'Clinical Stage');
+
+$product2Name = getCadrenalContentConfig($styleSettings, 'products.product2_name', 'Frunexian');
+$product2Desc = getCadrenalContentConfig($styleSettings, 'products.product2_description', 'An injectable small molecule Factor XIa antagonist for acute hospital settings');
+$product2Status = getCadrenalContentConfig($styleSettings, 'products.product2_status', 'Clinical Stage');
+
+$productItemBg = getCadrenalContentConfig($styleSettings, 'products.item_bg', '#ffffff');
+$productItemBorder = getCadrenalContentConfig($styleSettings, 'products.item_border', '#e5e7eb');
+$productItemPadding = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'products.item_padding', '20/30') . 'px'));
+$productItemMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'products.item_margin', '20/30') . 'px'));
+$productsMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'products.margin', '40/60') . 'px'));
+
+// 使命配置
+$missionEnabled = getCadrenalContentConfig($styleSettings, 'mission.enabled', 'yes');
+$missionTitle = getCadrenalContentConfig($styleSettings, 'mission.title', 'Our Mission');
+$missionTitleColor = getCadrenalContentConfig($styleSettings, 'mission.title_color', '#1a1a1a');
+$missionTitleSize = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'mission.title_size', '24/36') . 'px'));
+$missionContent = getCadrenalContentConfig($styleSettings, 'mission.content', 'To develop novel and differentiated biopharmaceutical products that bridge critical gaps in current anticoagulation therapy.');
+$missionContentColor = getCadrenalContentConfig($styleSettings, 'mission.content_color', '#4a5568');
+$missionMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'mission.margin', '40/60') . 'px'));
+
+// CTA配置
+$ctaEnabled = getCadrenalContentConfig($styleSettings, 'cta.enabled', 'yes');
+$ctaText = getCadrenalContentConfig($styleSettings, 'cta.text', 'Learn More');
+$ctaUrl = getCadrenalContentConfig($styleSettings, 'cta.url', '#');
+$ctaTarget = getCadrenalContentConfig($styleSettings, 'cta.target', '_self');
+$ctaBgColor = getCadrenalContentConfig($styleSettings, 'cta.bg_color', '#0066cc');
+$ctaHoverBg = getCadrenalContentConfig($styleSettings, 'cta.hover_bg', '#0052a3');
+$ctaTextColor = getCadrenalContentConfig($styleSettings, 'cta.text_color', '#ffffff');
+$ctaFontSize = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'cta.font_size', '16/18') . 'px'));
+$ctaFontWeight = getCadrenalContentConfig($styleSettings, 'cta.font_weight', '600');
+$ctaPadding = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'cta.padding', '12/18') . 'px'));
+$ctaBorderRadius = getCadrenalContentConfig($styleSettings, 'cta.border_radius', '6') . 'px';
+$ctaMargin = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'cta.margin', '40/60') . 'px'));
+
+// 获取事件名
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+$ctaEventRaw = trim(getCadrenalContentConfig($styleSettings, 'cta.event_name', ''));
+if ($ctaEventRaw !== '') {
+    $ctaEventName = 'cta_' . $pageHandleForEvent . '_' . $ctaEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $ctaEventName = $pageDefaultCtaEvent;
+} else {
+    $ctaEventName = 'cta_' . $pageHandleForEvent . '_click';
+}
+
+// 内容样式配置
+$contentBg = getCadrenalContentConfig($styleSettings, 'content.bg_color', '#ffffff');
+$contentPaddingV = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'content.padding_v', '40/80') . 'px'));
+$contentPaddingH = genCadrenalContentCSS(parseCadrenalContentResponsive(getCadrenalContentConfig($styleSettings, 'content.padding_h', '20/40') . 'px'));
+
+// 自定义CSS配置
+$customCssEnabled = getCadrenalContentConfig($styleSettings, 'custom_css.enabled', 'no');
+$customCssCode = getCadrenalContentConfig($styleSettings, 'custom_css.code', '');
+?>
+
+<style>
+.cadrenal-content {
+    background-color: <?= htmlspecialchars($contentBg ?? '') ?>;
+    padding: <?= $contentPaddingV ?> <?= $contentPaddingH ?>;
+}
+
+.cadrenal-content-section {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.cadrenal-section {
+    margin-bottom: <?= $aboutMargin ?>;
+}
+
+.cadrenal-section-title {
+    color: <?= htmlspecialchars($aboutTitleColor ?? '') ?>;
+    font-size: <?= $aboutTitleSize ?>;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.cadrenal-section-content {
+    color: <?= htmlspecialchars($aboutContentColor ?? '') ?>;
+    font-size: <?= $aboutContentSize ?>;
+    line-height: 1.8;
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+/* 产品卡片 */
+.cadrenal-products {
+    margin-bottom: <?= $productsMargin ?>;
+}
+
+.cadrenal-products-title {
+    color: <?= htmlspecialchars($productsTitleColor ?? '') ?>;
+    font-size: <?= $productsTitleSize ?>;
+    font-weight: 700;
+    margin-bottom: <?= $productsTitleMargin ?>;
+    text-align: center;
+}
+
+.cadrenal-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: <?= $productItemMargin ?>;
+    margin-top: 30px;
+}
+
+.cadrenal-product-card {
+    background: <?= htmlspecialchars($productItemBg ?? '') ?>;
+    border: 1px solid <?= htmlspecialchars($productItemBorder ?? '') ?>;
+    border-radius: 8px;
+    padding: <?= $productItemPadding ?>;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cadrenal-product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.cadrenal-product-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+}
+
+.cadrenal-product-status {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.cadrenal-product-description {
+    color: #4a5568;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+/* CTA按钮 */
+.cadrenal-cta {
+    text-align: center;
+    margin-bottom: <?= $ctaMargin ?>;
+}
+
+.cadrenal-cta-button {
+    display: inline-block;
+    background-color: <?= htmlspecialchars($ctaBgColor ?? '') ?>;
+    color: <?= htmlspecialchars($ctaTextColor ?? '') ?>;
+    font-size: <?= $ctaFontSize ?>;
+    font-weight: <?= $ctaFontWeight ?>;
+    padding: <?= $ctaPadding ?> calc(<?= $ctaPadding ?> * 2);
+    border-radius: <?= $ctaBorderRadius ?>;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.cadrenal-cta-button:hover {
+    background-color: <?= htmlspecialchars($ctaHoverBg ?? '') ?>;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+<?php if ($customCssEnabled === 'yes' && $customCssCode): ?>
+/* 自定义CSS */
+<?= $customCssCode ?>
+<?php endif; ?>
+
+@media (max-width: 768px) {
+    .cadrenal-products-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .cadrenal-section-content,
+    .cadrenal-product-description {
+        text-align: left;
+    }
+}
+</style>
+
+<!-- Content Section -->
+<main class="cadrenal-content">
+    <div class="cadrenal-content-section">
+        <!-- 关于我们 -->
+        <?php if ($aboutEnabled === 'yes'): ?>
+        <section class="cadrenal-section">
+            <h2 class="cadrenal-section-title"><?= htmlspecialchars($aboutTitle ?? '') ?></h2>
+            <div class="cadrenal-section-content">
+                <?= nl2br(htmlspecialchars($aboutContent ?? '')) ?>
+            </div>
+        </section>
+        <?php endif; ?>
+        
+        <!-- 产品展示 -->
+        <?php if ($productsEnabled === 'yes'): ?>
+        <section class="cadrenal-products">
+            <h2 class="cadrenal-products-title"><?= htmlspecialchars($productsTitle ?? '') ?></h2>
+            <div class="cadrenal-products-grid">
+                <div class="cadrenal-product-card">
+                    <div class="cadrenal-product-name"><?= htmlspecialchars($product1Name ?? '') ?></div>
+                    <span class="cadrenal-product-status"><?= htmlspecialchars($product1Status ?? '') ?></span>
+                    <p class="cadrenal-product-description"><?= htmlspecialchars($product1Desc ?? '') ?></p>
+                </div>
+                <div class="cadrenal-product-card">
+                    <div class="cadrenal-product-name"><?= htmlspecialchars($product2Name ?? '') ?></div>
+                    <span class="cadrenal-product-status"><?= htmlspecialchars($product2Status ?? '') ?></span>
+                    <p class="cadrenal-product-description"><?= htmlspecialchars($product2Desc ?? '') ?></p>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
+        
+        <!-- 使命愿景 -->
+        <?php if ($missionEnabled === 'yes'): ?>
+        <section class="cadrenal-section">
+            <h2 class="cadrenal-section-title"><?= htmlspecialchars($missionTitle ?? '') ?></h2>
+            <div class="cadrenal-section-content">
+                <?= nl2br(htmlspecialchars($missionContent ?? '')) ?>
+            </div>
+        </section>
+        <?php endif; ?>
+        
+        <!-- CTA按钮 -->
+        <?php if ($ctaEnabled === 'yes'): ?>
+        <div class="cadrenal-cta">
+            <a href="<?= htmlspecialchars($ctaUrl ?? '') ?>" 
+               target="<?= htmlspecialchars($ctaTarget ?? '') ?>"
+               class="cadrenal-cta-button"
+               id="cadrenal-cta-btn"
+               data-track-event="<?= htmlspecialchars($ctaEventName ?? '') ?>">
+                <?= htmlspecialchars($ctaText ?? '') ?>
+            </a>
+        </div>
+        <?php endif; ?>
+    </div>
+</main>
+
+<!-- CTA 按钮事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
+

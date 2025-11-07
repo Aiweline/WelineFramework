@@ -6,25 +6,12 @@ $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
 $parentId = $this->getData('parent_id') ?? 0;
 
-// 生成默认的 CTA 事件名称
-$ctaEventName = '';
-if ($page && $page->getId()) {
-    $ctaEventName = $page->getData('cta_event_name');
-    // 如果为空，自动生成
-    if (empty($ctaEventName)) {
-        $handle = $page->getData('handle');
-        if (!empty($handle)) {
-            $ctaEventName = $handle . '_form_submit';
-        }
-    }
-}
-
 // 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
 if ($isEdit && $page && $page->getId()) {
     $visualPageId = $page->getId();
     $visualStyleSettings = $page->getStyleSetting(); // 注意：方法名是单数形式
-    $pageDefaultLocale = $page->getData('default_locale') ?: \Weline\Framework\Http\Cookie::getLang();
-    $pageLocales = json_decode($page->getData('locales'), true) ?: [];
+    $pageDefaultLocale = ($page ? $page->getData('default_locale') : null) ?: \Weline\Framework\Http\Cookie::getLang();
+    $pageLocales = json_decode(($page ? ($page->getData('locales') ?? '') : ''), true) ?: [];
 } else {
     $visualPageId = null;
     $visualStyleSettings = [];
@@ -103,10 +90,10 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                    class="form-control" 
                                    id="handle" 
                                    name="handle" 
-                                   value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>"
+                                  value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>"
                                    placeholder="<?= __('例如：about-us, contact') ?>"
                                    required
-                                   data-original-value="<?= htmlspecialchars($page ? $page->getData('handle') : '') ?>">
+                                   data-original-value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>">
                             <div id="handle-validation-icon" class="position-absolute top-50 end-0 translate-middle-y pe-3" style="display: none;">
                                 <span class="handle-checking"><i class="mdi mdi-loading mdi-spin text-primary"></i></span>
                                 <span class="handle-available"><i class="mdi mdi-check-circle text-success"></i></span>
@@ -130,7 +117,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <input type="text" 
                                                class="form-control bg-white" 
                                                id="pageUrlDisplay" 
-                                               value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars($page->getData('handle')) ?>"
+                                              value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
                                                readonly>
                                         <button class="btn btn-outline-primary" 
                                                 type="button" 
@@ -168,7 +155,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             ?>
                                 <option value="<?= $parentPage->getId() ?>" 
                                         <?= ($currentParentId == $parentPage->getId()) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($parentPage->getData('name')) ?>
+                                    <?= htmlspecialchars((($parentPage->getData('name') ?? '')) ?? '') ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -304,7 +291,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                             name="<?= ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1) ? '' : 'content' ?>" 
                                             rows="15"
                                             <?= ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1) ? 'readonly' : '' ?>
-                                            placeholder="<?= __('在此输入自定义 HTML 内容，留空则使用样式模板的默认 content.phtml...') ?>"><?= $isEdit && $page ? htmlspecialchars($page->getData('content') ?? '') : '' ?></textarea>
+                                            placeholder="<?= __('在此输入自定义 HTML 内容，留空则使用样式模板的默认 content.phtml...') ?>"><?= $isEdit && $page ? htmlspecialchars(($page->getData('content') ?? '') ?? '') : '' ?></textarea>
                                         <div class="form-text">
                                             <i class="mdi mdi-code-tags"></i>
                                             <?php if ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1): ?>
@@ -404,7 +391,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                                               id="content_<?= $localeCode ?>" 
                                                               name="<?= $isDefault ? 'content' : 'content_' . $localeCode ?>" 
                                                               rows="12"
-                                                              placeholder="<?= $isDefault ? __('在此输入默认语言的自定义内容...') : __('在此输入 %{1} 的自定义内容，留空则使用默认语言内容...', $localeName) ?>"><?= htmlspecialchars($languageContent) ?></textarea>
+                                                              placeholder="<?= $isDefault ? __('在此输入默认语言的自定义内容...') : __('在此输入 %{1} 的自定义内容，留空则使用默认语言内容...', $localeName) ?>"><?= htmlspecialchars($languageContent ?? '') ?></textarea>
                                                     <div class="form-text mt-2">
                                                         <i class="mdi mdi-code-tags"></i>
                                                         <?= __('支持 HTML 代码。') ?>
@@ -458,19 +445,21 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                 <?= __('选择样式模板') ?> <span class="text-danger">*</span>
                             </label>
                             <?php if ($isEdit && $page && $page->getId()): ?>
-                            <button type="button" 
-                                    class="btn btn-sm btn-primary" 
-                                    onclick="openVisualConfig()"
-                                    id="openVisualConfigBtn"
-                                    disabled>
-                                <i class="mdi mdi-monitor-edit"></i> <?= __('可视化配置') ?>
-                            </button>
-                            <button type="button" 
-                                    class="btn btn-sm btn-success" 
-                                    onclick="openFrontendPreview()"
-                                    id="frontendPreviewBtn">
-                                <i class="mdi mdi-eye-outline"></i> <?= __('在线预览') ?>
-                            </button>
+                                <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
+                            <div class="d-flex gap-2">
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary" 
+                                        onclick="openVisualConfig((document.getElementById('handle')||{}).value||'')"
+                                        id="openVisualConfigBtn">
+                                    <i class="mdi mdi-monitor-edit"></i> <?= __('可视化配置') ?>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-sm btn-success" 
+                                        onclick="openFrontendPreview()"
+                                        id="frontendPreviewBtn">
+                                    <i class="mdi mdi-eye-outline"></i> <?= __('在线预览') ?>
+                                </button>
+                            </div>
                             <?php endif; ?>
                         </div>
                         
@@ -523,29 +512,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
                     </div>
 
-                    <!-- 样式配置区域 -->
-                    <div id="style-config-container" style="display: none;">
-                        <hr>
-                        <h5 class="mb-3">
-                            <i class="mdi mdi-cog"></i> <?= __('样式配置') ?>
-                        </h5>
-                        
-                        <!-- 配置说明 -->
-                        <div class="alert alert-info alert-dismissible fade show" role="alert">
-                            <i class="mdi mdi-information"></i>
-                            <strong><?= __('配置说明：') ?></strong>
-                            <ul class="mb-0 mt-2">
-                                <li><?= __('配置从样式模板（header/footer/content.phtml）自动扫描生成') ?></li>
-                                <li><?= __('每个配置项支持多语言翻译，点击"翻译"按钮可为不同语言设置不同的值') ?></li>
-                                <li><?= __('切换样式时，之前的配置会被保留') ?></li>
-                            </ul>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                        
-                        <div id="style-config-fields">
-                            <!-- 动态加载的配置字段将显示在这里 -->
-                        </div>
-                    </div>
+                    <!-- 样式配置区域（已移除） -->
                 </div>
             </div>
             
@@ -616,7 +583,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $relPage->getId()]) ?>" 
                                            class="text-decoration-none" 
                                            target="_blank">
-                                            <?= htmlspecialchars($relPage->getData('name')) ?>
+                                            <?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>
                                             <i class="mdi mdi-open-in-new ms-1"></i>
                                         </a>
                                     </h6>
@@ -625,12 +592,12 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <i class="mdi mdi-link-variant"></i>
                                         <code class="text-dark clickable-handle" 
                                               style="cursor: pointer; padding: 2px 6px; border-radius: 3px; background-color: #f8f9fa;"
-                                              data-handle="<?= htmlspecialchars($relPage->getData('handle')) ?>"
-                                              data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
+                                              data-handle="<?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>"
+                                              data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
                                               title="<?= __('点击复制 Handle') ?>"
                                               onmouseover="this.style.backgroundColor='#e9ecef'"
                                               onmouseout="this.style.backgroundColor='#f8f9fa'">
-                                            <?= htmlspecialchars($relPage->getData('handle')) ?>
+                                            <?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>
                                         </code>
                                     </div>
                                     
@@ -638,12 +605,12 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <i class="mdi mdi-web"></i>
                                         <span class="clickable-url" 
                                               style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;"
-                                              data-url="<?= htmlspecialchars($pageUrl) ?>"
-                                              data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
+                                              data-url="<?= htmlspecialchars($pageUrl ?? '') ?>"
+                                              data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
                                               title="<?= __('点击复制链接') ?>"
                                               onmouseover="this.style.color='#0d6efd'"
                                               onmouseout="this.style.color=''">
-                                            <?= htmlspecialchars($pageUrl) ?>
+                                            <?= htmlspecialchars($pageUrl ?? '') ?>
                                         </span>
                                     </div>
                                 </div>
@@ -653,8 +620,8 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                     <!-- 复制 Handle 按钮 -->
                                     <button type="button" 
                                             class="btn btn-sm btn-outline-secondary copy-handle-btn" 
-                                            data-handle="<?= htmlspecialchars($relPage->getData('handle')) ?>"
-                                            data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
+                                            data-handle="<?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>"
+                                            data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
                                             title="<?= __('复制 Handle') ?>">
                                         <i class="mdi mdi-code-tags"></i> Handle
                                     </button>
@@ -662,8 +629,8 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                     <!-- 复制链接按钮 -->
                                     <button type="button" 
                                             class="btn btn-sm btn-outline-primary copy-page-url-btn" 
-                                            data-url="<?= htmlspecialchars($pageUrl) ?>"
-                                            data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
+                                            data-url="<?= htmlspecialchars($pageUrl ?? '') ?>"
+                                            data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
                                             title="<?= __('复制页面链接') ?>">
                                         <i class="mdi mdi-content-copy"></i> 链接
                                     </button>
@@ -692,7 +659,6 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
             <?php endif; ?>
             <?php endif; ?>
         </div>
-
         <!-- 右侧边栏 -->
         <div class="col-lg-4">
             <!-- 品牌资源 -->
@@ -734,7 +700,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                   id="meta_description" 
                                   name="meta_description" 
                                   rows="3"
-                                  placeholder="<?= __('输入SEO描述') ?>"><?= htmlspecialchars($page ? $page->getData('meta_description') : '') ?></textarea>
+                                  placeholder="<?= __('输入SEO描述') ?>"><?= htmlspecialchars(($page ? ($page->getData('meta_description') ?? '') : '')) ?></textarea>
                         <?php if ($isEdit && $page && $page->getId()): ?>
                             <div class="form-text">
                                 <local model="GuoLaiRen\PageBuilder\Model\Page\LocalDescription" 
@@ -786,7 +752,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="ga4_id" 
                                name="ga4_id" 
-                               value="<?= htmlspecialchars($page ? $page->getData('ga4_id') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('ga4_id') ?? '') : '')) ?>"
                                placeholder="<?= __('例如：G-XXXXXXXXXX') ?>">
                     </div>
 
@@ -797,7 +763,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="gtm_id" 
                                name="gtm_id" 
-                               value="<?= htmlspecialchars($page ? $page->getData('gtm_id') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('gtm_id') ?? '') : '')) ?>"
                                placeholder="<?= __('例如：GTM-XXXXXXX') ?>">
                     </div>
 
@@ -808,26 +774,21 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="fb_pixel_id" 
                                name="fb_pixel_id" 
-                               value="<?= htmlspecialchars($page ? $page->getData('fb_pixel_id') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('fb_pixel_id') ?? '') : '')) ?>"
                                placeholder="<?= __('例如：123456789012345') ?>">
                     </div>
 
-                    <!-- CTA 事件名称 -->
+                    <!-- CTA/Event 事件名称（来自 page 数据） -->
                     <div class="mb-3">
-                        <label for="cta_event_name" class="form-label">
-                            <?= __('CTA 转化事件名称') ?>
-                            <i class="mdi mdi-information-outline text-muted" 
-                               data-bs-toggle="tooltip" 
-                               title="<?= __('自定义表单提交的转化事件名称。留空则自动使用：页面句柄_form_submit') ?>"></i>
-                        </label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="cta_event_name" 
-                               name="cta_event_name" 
-                               value="<?= htmlspecialchars($ctaEventName) ?>"
-                               placeholder="<?= __('例如：money_calendar_signup (留空自动生成)') ?>">
+                        <label for="cta_event_name" class="form-label"><?= __('CTA 转化事件名称') ?></label>
+                        <input type="text"
+                               class="form-control"
+                               id="cta_event_name"
+                               name="cta_event_name"
+                               value="<?= htmlspecialchars(($page ? (($page->getData('cta_event_name') ?? '') ?: $page->getData('event_name') ?: '') : '')) ?>"
+                               placeholder="<?= __('留空将自动生成为 cta_{handle}_click') ?>">
                         <small class="form-text text-muted">
-                            <?= __('用于 Google Analytics 和 Facebook Pixel 事件跟踪。留空时将自动生成为：<页面句柄>_form_submit') ?>
+                            <?= __('用于 GTM / GA / Meta 事件上报；若留空，保存时默认生成为 cta_{handle}_click') ?>
                         </small>
                     </div>
                 </div>
@@ -847,7 +808,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="redirect_url" 
                                name="redirect_url" 
-                               value="<?= htmlspecialchars($page ? $page->getData('redirect_url') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('redirect_url') ?? '') : '')) ?>"
                                placeholder="<?= __('例如：https://www.example.com/thank-you') ?>">
                         <div class="form-text">
                             <?= __('留空则不跳转。必须是完整的URL地址（包含 http:// 或 https://）') ?>
@@ -916,7 +877,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="logo" 
                                name="logo" 
-                               value="<?= htmlspecialchars($page ? $page->getData('logo') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('logo') ?? '') : '')) ?>"
                                placeholder="<?= __('输入Logo图片URL') ?>">
                     </div>
 
@@ -927,7 +888,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                class="form-control" 
                                id="icon" 
                                name="icon" 
-                               value="<?= htmlspecialchars($page ? $page->getData('icon') : '') ?>"
+                               value="<?= htmlspecialchars(($page ? ($page->getData('icon') ?? '') : '')) ?>"
                                placeholder="<?= __('输入网站图标URL') ?>">
                     </div>
                 </div>
@@ -1127,14 +1088,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
 <!-- 悬浮操作按钮 -->
 <?php if ($isEdit): ?>
 <div class="floating-actions">
-    <!-- 可视化配置 -->
-    <button type="button" 
-            class="floating-btn floating-btn-visual" 
-            onclick="openVisualConfig()" 
-            title="<?= __('可视化配置') ?>">
-        <i class="mdi mdi-palette"></i>
-        <span class="floating-btn-text"><?= __('可视化配置') ?></span>
-    </button>
+    <!-- 可视化配置按钮已移除，改由组件内提供入口 -->
     
     <!-- 在线预览 -->
     <button type="button" 
@@ -1332,6 +1286,7 @@ if (typeof ClassicEditor === 'undefined') {
 }
 </script>
 
+
 <style>
 /* ==================== 样式卡片选择器 ==================== */
 .style-card {
@@ -1498,14 +1453,12 @@ if (typeof ClassicEditor === 'undefined') {
     font-size: 12px;
     color: #999;
 }
-
 .style-card-code {
     font-family: 'Courier New', monospace;
     background: #f5f5f5;
     padding: 2px 6px;
     border-radius: 3px;
 }
-
 /* ==================== 样式预览模态框 ==================== */
 .style-preview-modal {
     display: none;
@@ -2856,7 +2809,6 @@ document.addEventListener('click', function(event) {
         }
     }
 });
-
 /**
  * 重置下拉列表显示（过滤已选中的）
  */
@@ -2881,7 +2833,6 @@ function resetLocaleDropdown() {
         }
     });
 }
-
 // 页面加载时初始化下拉列表
 document.addEventListener('DOMContentLoaded', function() {
     resetLocaleDropdown();
@@ -2896,982 +2847,20 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 
 // 页面ID（用于翻译功能）
-const pageId = <?= ($isEdit && $page && $page->getId()) ? $page->getId() : 'null' ?>;
-
-// 当前页面的样式设置（编辑时从后端传入）
-const currentStyleSettings = <?= json_encode($this->getData('style_settings') ?? []) ?>;
-console.log('📦 当前样式配置数据:', currentStyleSettings);
+const pageIdForm = <?= ($isEdit && $page && $page->getId()) ? $page->getId() : 'null' ?>;
 
 // 样式选择器
 const styleSelect = document.getElementById('style');
 const styleDescContainer = document.getElementById('style-description-container');
 const styleDescText = document.getElementById('style-description-text');
-const styleConfigContainer = document.getElementById('style-config-container');
-const styleConfigFields = document.getElementById('style-config-fields');
 
-/**
- * 加载样式配置
- */
-function loadStyleConfig(styleCode) {
-    console.log('🔧 loadStyleConfig 被调用, styleCode:', styleCode);
-    
-    if (!styleCode) {
-        console.log('⚠️ styleCode 为空，隐藏配置区域');
-        if (styleConfigContainer) {
-            styleConfigContainer.style.display = 'none';
-        }
-        if (styleDescContainer) {
-            styleDescContainer.style.display = 'none';
-        }
-        return;
-    }
-    
-    // 显示样式描述
-    const selectedOption = styleSelect ? styleSelect.options[styleSelect.selectedIndex] : null;
-    const description = selectedOption ? selectedOption.getAttribute('data-description') : null;
-    if (description && styleDescText && styleDescContainer) {
-        styleDescText.textContent = description;
-        styleDescContainer.style.display = 'block';
-    } else if (styleDescContainer) {
-        styleDescContainer.style.display = 'none';
-    }
-    
-    // 显示加载中
-    if (styleConfigFields) {
-        styleConfigFields.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> <?= __('加载配置中...') ?></div>';
-    }
-    if (styleConfigContainer) {
-        styleConfigContainer.style.display = 'block';
-    }
-    
-    // 构建请求 URL，包含 page_id 和 locale 参数
-    let configUrl = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyleConfig') ?>?style_code=' + encodeURIComponent(styleCode);
-    
-    <?php if ($isEdit && $page && $page->getId()): ?>
-    // 如果是编辑页面，添加 page_id 参数
-    configUrl += '&page_id=<?= $page->getId() ?>';
-    
-    // 添加默认语言参数
-    <?php if ($pageDefaultLocale): ?>
-    configUrl += '&locale=<?= $pageDefaultLocale ?>';
-    <?php endif; ?>
-    <?php endif; ?>
-    
-    console.log('📡 配置请求 URL:', configUrl);
-    
-    // 通过AJAX获取样式配置
-    fetch(configUrl, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin'
-    })
-        .then(response => {
-            console.log('📥 配置响应状态:', response.status, response.statusText);
-            return response.json();
-        })
-        .then(data => {
-            console.log('📦 配置响应数据:', data);
-            if (data.success && data.data) {
-                renderStyleConfig(data.data);
-            } else {
-                console.warn('⚠️ 该样式没有可配置项');
-                if (styleConfigFields) {
-                    styleConfigFields.innerHTML = '<div class="alert alert-warning"><?= __('该样式没有可配置项') ?></div>';
-                }
-            }
-        })
-        .catch(error => {
-            console.error('❌ 加载配置失败:', error);
-            if (styleConfigFields) {
-                styleConfigFields.innerHTML = '<div class="alert alert-danger"><?= __('加载配置失败：') ?>' + error.message + '</div>';
-            }
-        });
-}
-
-/**
- * 渲染样式配置表单（支持两级分组：文件 -> 分组）
- */
-function renderStyleConfig(configGroups) {
-    console.log('🔨 开始渲染样式配置表单');
-    console.log('📋 配置组:', configGroups);
-    console.log('💾 当前保存的配置值:', currentStyleSettings);
-    
-    if (!styleConfigFields) {
-        console.error('❌ styleConfigFields 元素不存在');
-        return;
-    }
-    
-    if (!configGroups || Object.keys(configGroups).length === 0) {
-        styleConfigFields.innerHTML = '<div class="alert alert-info"><?= __('该样式没有可配置项') ?></div>';
-        return;
-    }
-    
-    let html = '';
-    
-    // 遍历文件级别（header, content, footer）
-    for (const fileKey in configGroups) {
-        const fileGroup = configGroups[fileKey];
-        
-        // 跳过没有分组的文件
-        if (!fileGroup.groups || Object.keys(fileGroup.groups).length === 0) {
-            continue;
-        }
-        
-        // 文件级别的大卡片（可折叠）
-        const fileIcon = fileGroup.icon || 'mdi-file';
-        html += `
-            <div class="config-file-group mb-4" data-file="${fileKey}" id="file_${fileKey}">
-                <div class="card border-primary">
-                    <div class="card-header bg-primary text-white" style="cursor: pointer;" onclick="toggleFileGroup('${fileKey}')">
-                        <h5 class="mb-0 d-flex justify-content-between align-items-center">
-                            <span>
-                                <i class="mdi ${fileIcon}"></i> ${fileGroup.label || fileKey}
-                            </span>
-                            <span class="d-flex align-items-center" style="gap: 0.5rem;">
-                                <a href="javascript:void(0)" 
-                                   class="text-warning" 
-                                   onclick="event.stopPropagation(); resetConfigFile('file_${fileKey}')"
-                                   title="<?= __('恢复此部件所有字段为默认值') ?>"
-                                   style="font-size: 1.1rem; line-height: 1;">
-                                    <i class="mdi mdi-restore"></i>
-                                </a>
-                                <i class="mdi mdi-chevron-down" id="icon_${fileKey}" style="font-size: 1.2rem;"></i>
-                            </span>
-                        </h5>
-                    </div>
-                    <div class="card-body" id="body_${fileKey}">
-        `;
-        
-        // 遍历该文件下的分组（layout, style, size等）
-        for (const groupKey in fileGroup.groups) {
-            const group = fileGroup.groups[groupKey];
-            
-            // 跳过没有配置项的分组
-            if (!group.configs || Object.keys(group.configs).length === 0) {
-                continue;
-            }
-            
-            // 调试：输出分组信息
-            console.log(`📁 分组 ${fileKey}.${groupKey}:`, {
-                label: group.label,
-                tag: group.tag,
-                help_title: group.help_title,
-                help_content: group.help_content
-            });
-            
-            // 使用服务器返回的图标，如果没有则使用默认图标
-            const icon = group.icon || 'mdi-cog';
-            
-            // 使用 fileKey + groupKey 确保ID唯一性，分组默认收起
-            html += `
-                <div class="config-group config-section collapsed mb-3" data-group="${groupKey}" id="visual_${fileKey}_${groupKey}_group">
-                    <div class="card">
-                        <div class="card-header bg-light" style="cursor: pointer;" onclick="toggleFormSection('visual_${fileKey}_${groupKey}_group')">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">
-                                    <i class="mdi ${icon}"></i> ${group.label || groupKey}`;
-            
-            // 如果分组有标记（如 MD, MTD），显示响应式徽章
-            if (group.tag) {
-                let tagIcons = '';
-                if (group.tag.includes('M')) tagIcons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
-                if (group.tag.includes('T')) tagIcons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
-                if (group.tag.includes('D')) tagIcons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
-                
-                html += ` <span class="badge bg-info ms-2" style="font-size: 0.65rem; vertical-align: middle;">
-                            ${tagIcons}
-                         </span>`;
-            }
-            
-            html += `
-                                </h6>
-                                <div class="d-flex align-items-center" style="gap: 0.5rem;">
-                                    <a href="javascript:void(0)" 
-                                       class="link-warning" 
-                                       onclick="event.stopPropagation(); resetConfigGroup('visual_${fileKey}_${groupKey}_group')"
-                                       title="<?= __('恢复此组所有字段为默认值') ?>"
-                                       style="font-size: 0.95rem; line-height: 1;">
-                                        <i class="mdi mdi-restore"></i>
-                                    </a>
-                                    <i class="mdi mdi-chevron-down" style="font-size: 1rem;"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body config-section-body">`;
-            
-            // 如果有说明信息，直接显示（不折叠）
-            if (group.help_title || group.help_content) {
-                const escapedContent = escapeHtml(group.help_content || '');
-                
-                html += `
-                    <div class="alert alert-info mb-3" role="alert">
-                        <h6 class="alert-heading mb-2">
-                            <i class="mdi mdi-information-outline"></i> ${escapeHtml(group.help_title || '说明')}
-                        </h6>
-                        <div class="help-content-static">
-                            ${escapedContent}
-                        </div>
-                    </div>`;
-            }
-            
-            html += `
-                            <div class="row">
-            `;
-            
-            // 渲染每个配置项
-            for (const configKey in group.configs) {
-                const config = group.configs[configKey];
-            const rawValue = currentStyleSettings[configKey] || config.default || '';
-            const currentValue = escapeHtml(rawValue); // 转义 HTML 特殊字符
-            
-            // 调试信息：显示配置项和当前值
-            if (currentStyleSettings[configKey]) {
-                console.log(`  - ${config.label} (${configKey}): "${rawValue}"`);
-            }
-            
-            html += `<div class="col-md-6 mb-3">`;
-            html += `<label for="style_config_${configKey.replace(/\./g, '_')}" class="form-label">${escapeHtml(config.label || '')}`;
-            
-            // 添加响应式标记图标（使用 Material Design Icons）
-            if (config.responsive) {
-                // 解析描述信息，提取支持的设备类型
-                let devices = '';
-                let icons = '';
-                
-                // 根据描述信息判断支持的设备
-                if (config.description) {
-                    const desc = config.description;
-                    if (desc.includes('移动端')) {
-                        icons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
-                    }
-                    if (desc.includes('平板')) {
-                        icons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
-                    }
-                    if (desc.includes('PC端')) {
-                        icons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
-                    }
-                }
-                
-                // 如果没有解析到设备类型，默认显示移动端和PC端
-                if (!icons) {
-                    icons = '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> <i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i>';
-                }
-                
-                html += ` <span class="badge bg-info ms-1" title="${escapeHtml(config.description || '支持响应式配置')}" style="font-size: 0.75rem; vertical-align: middle;">
-                            ${icons}
-                         </span>`;
-            }
-            
-            // 添加翻译按钮（仅在编辑模式下）
-            if (pageId && pageId !== 'null') {
-                const escapedValue = String(rawValue || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                const escapedLabel = String(config.label || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                html += ` <a href="javascript:void(0)" 
-                             class="link-info ms-1 style-config-translate-btn" 
-                             data-config-key="${configKey}"
-                             data-config-label="${escapedLabel}"
-                             data-config-value="${escapedValue}"
-                             title="<?= __('翻译此配置项') ?>">
-                            <i class="mdi mdi-translate"></i>
-                         </a>`;
-            }
-            
-            // 定义 fieldId（必须在使用之前）
-            const fieldId = `style_config_${configKey.replace(/\./g, '_')}`;
-            
-            // 添加恢复默认按钮
-            const escapedDefault = escapeHtml(config.default || '');
-            html += ` <a href="javascript:void(0)" 
-                         class="link-warning ms-1 style-config-reset-btn" 
-                         data-field-id="${fieldId}"
-                         data-config-key="${configKey}"
-                         data-config-type="${config.type}"
-                         data-default-value="${escapedDefault}"
-                         onclick="resetConfigField(this)"
-                         title="<?= __('恢复默认值') ?>">
-                        <i class="mdi mdi-restore"></i>
-                     </a>`;
-            
-            html += `</label>`;
-            
-            // 添加描述信息
-            if (config.description) {
-                html += `<div class="form-text text-muted mb-2" style="margin-top: -8px; font-size: 0.85rem;">
-                            <i class="mdi mdi-information-outline"></i> ${escapeHtml(config.description)}
-                         </div>`;
-            }
-            
-            // 根据类型渲染不同的输入控件
-            switch (config.type) {
-                case 'responsive':
-                    // 响应式配置：支持 60/80 或 60/70/80 格式，使用 text 输入框
-                    html += `
-                        <div class="input-group">
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="${fieldId}" 
-                                   name="style_settings[${configKey}]" 
-                                   value="${currentValue}"
-                                   placeholder="${escapeHtml(config.default || '')}"
-                                   title="<?= __('支持单一值(如: 80)或多端值(如: 60/80 或 60/70/80)') ?>">
-                            ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit || '')}</span>` : ''}
-                        </div>
-                    `;
-                    break;
-                    
-                case 'text':
-                case 'number':
-                    html += `
-                        <div class="input-group">
-                            <input type="${config.type}" 
-                                   class="form-control" 
-                                   id="${fieldId}" 
-                                   name="style_settings[${configKey}]" 
-                                   value="${currentValue}"
-                                   placeholder="${escapeHtml(config.default || '')}">
-                            ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit || '')}</span>` : ''}
-                        </div>
-                    `;
-                    break;
-                    
-                case 'select':
-                    html += `<select class="form-select" id="${fieldId}" name="style_settings[${configKey}]">`;
-                    if (config.options && config.options.length > 0) {
-                        config.options.forEach(option => {
-                            const optValue = String(option || '');
-                            const selected = rawValue == optValue ? 'selected' : '';
-                            html += `<option value="${escapeHtml(optValue)}" ${selected}>${escapeHtml(optValue)}</option>`;
-                        });
-                    }
-                    html += `</select>`;
-                    break;
-                    
-                case 'color':
-                    html += `
-                        <div class="input-group">
-                            <input type="color" 
-                                   class="form-control form-control-color" 
-                                   id="${fieldId}" 
-                                   name="style_settings[${configKey}]" 
-                                   value="${escapeHtml(currentValue || config.default || '#ffffff')}" 
-                                   title="<?= __('选择颜色') ?>">
-                            <input type="text" 
-                                   class="form-control" 
-                                   value="${escapeHtml(currentValue || config.default || '#ffffff')}" 
-                                   readonly>
-                        </div>
-                    `;
-                    break;
-                    
-                case 'textarea':
-                    html += `
-                        <textarea class="form-control" 
-                                  id="${fieldId}" 
-                                  name="style_settings[${configKey}]" 
-                                  rows="3"
-                                  placeholder="${escapeHtml(config.default || '')}">${currentValue}</textarea>
-                    `;
-                    break;
-                    
-                case 'image':
-                    html += `
-                        <input type="text" 
-                               class="form-control" 
-                               id="${fieldId}" 
-                               name="style_settings[${configKey}]" 
-                               value="${currentValue}"
-                               placeholder="${escapeHtml(config.default || '')}">
-                        <div class="form-text"><?= __('输入图片URL') ?></div>
-                    `;
-                    break;
-            }
-            
-            html += `</div>`;
-            }
-            
-            // 关闭分组卡片
-            html += `
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // 关闭文件分组卡片
-        html += `
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    styleConfigFields.innerHTML = html;
-    
-    // 为颜色选择器添加事件监听
-    styleConfigFields.querySelectorAll('input[type="color"]').forEach(colorInput => {
-        const textInput = colorInput.parentElement.querySelector('input[type="text"]');
-        colorInput.addEventListener('change', function() {
-            textInput.value = this.value;
-        });
-    });
-}
-
-/**
- * 切换文件分组的折叠状态
- */
-function toggleFileGroup(fileKey) {
-    const body = document.getElementById('body_' + fileKey);
-    const icon = document.getElementById('icon_' + fileKey);
-    
-    if (body && icon) {
-        if (body.style.display === 'none') {
-            body.style.display = 'block';
-            icon.classList.remove('mdi-chevron-right');
-            icon.classList.add('mdi-chevron-down');
-        } else {
-            body.style.display = 'none';
-            icon.classList.remove('mdi-chevron-down');
-            icon.classList.add('mdi-chevron-right');
-        }
-    }
-}
-
-/**
- * 切换主表单分组的折叠状态
- */
-function toggleFormSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    if (section) {
-        section.classList.toggle('collapsed');
-    }
-}
-
-/**
- * 恢复配置字段为默认值
- */
-function resetConfigField(button) {
-    // 从按钮的data属性中读取信息
-    const fieldId = button.getAttribute('data-field-id');
-    const fieldType = button.getAttribute('data-config-type');
-    const defaultValue = button.getAttribute('data-default-value');
-    
-    console.log('🔄 恢复默认值:', { fieldId, fieldType, defaultValue });
-    
-    const field = document.getElementById(fieldId);
-    if (!field) {
-        console.error('❌ 找不到字段:', fieldId);
-        return;
-    }
-    
-    // 根据字段类型进行不同的处理
-    switch (fieldType) {
-        case 'text':
-        case 'number':
-        case 'responsive':
-        case 'textarea':
-            // 文本类型：设置为默认值（如果为空则清空）
-            field.value = defaultValue || '';
-            break;
-            
-        case 'select':
-            // 下拉框：设置为默认值或第一个选项
-            if (defaultValue) {
-                // 尝试找到并选择默认值
-                for (let i = 0; i < field.options.length; i++) {
-                    if (field.options[i].value === defaultValue) {
-                        field.selectedIndex = i;
-                        break;
-                    }
-                }
-            } else {
-                field.selectedIndex = 0;
-            }
-            break;
-            
-        case 'color':
-            // 颜色选择器：找到同一输入组的两个输入框
-            const inputGroup = field.closest('.input-group');
-            if (inputGroup) {
-                const colorInput = inputGroup.querySelector('input[type="color"]');
-                const textInput = inputGroup.querySelector('input[type="text"]');
-                const resetValue = defaultValue || '#ffffff';
-                
-                if (colorInput) colorInput.value = resetValue;
-                if (textInput) textInput.value = resetValue;
-            }
-            break;
-            
-        default:
-            // 其他类型：设置为默认值
-            field.value = defaultValue || '';
-    }
-    
-    // 主表单不触发change事件，避免导致表单重新渲染
-    // 用户需要手动保存表单
-    
-    // 显示提示信息
-    showToast('success', '<?= __('成功') ?>', '<?= __('已恢复为默认值') ?>');
-    
-    console.log('✅ 字段已恢复默认值');
-    
-    // 注意：主表单需要手动保存后才能在预览中看到效果
-    // 这里刷新预览只是让预览保持最新状态（如果用户已经保存了其他修改）
-    if (typeof refreshStylePreview === 'function') {
-        console.log('🔄 提示刷新预览（需要保存后生效）...');
-        // 可以选择不刷新，或者添加一个提示"请保存后查看效果"
-        // refreshStylePreview();
-    }
-}
-
-/**
- * 显示恢复默认值确认模态框
- */
-function showResetConfigConfirmModal(title, message, details, onConfirm) {
-    console.log('🔔 showResetConfigConfirmModal 被调用');
-    console.log('  title:', title);
-    console.log('  message:', message);
-    
-    // 检查 bootstrap 是否可用
-    if (typeof bootstrap === 'undefined') {
-        console.error('❌ Bootstrap 未加载！');
-        alert('Bootstrap 未加载，无法显示确认对话框！');
-        return;
-    }
-    
-    const modalElement = document.getElementById('resetConfigConfirmModal');
-    console.log('  modalElement:', modalElement);
-    
-    if (!modalElement) {
-        console.error('❌ 找不到模态框元素！');
-        alert('模态框初始化失败！');
-        return;
-    }
-    
-    let modal;
-    try {
-        modal = new bootstrap.Modal(modalElement);
-        console.log('  modal 创建成功:', modal);
-    } catch (error) {
-        console.error('❌ 创建 modal 失败:', error);
-        alert('模态框创建失败: ' + error.message);
-        return;
-    }
-    
-    const messageEl = document.getElementById('resetConfigMessage');
-    const detailsEl = document.getElementById('resetConfigDetails');
-    const confirmBtn = document.getElementById('confirmResetConfigBtn');
-    
-    console.log('  messageEl:', messageEl);
-    console.log('  confirmBtn:', confirmBtn);
-    
-    // 设置内容
-    messageEl.textContent = message;
-    detailsEl.innerHTML = details;
-    
-    // 清除之前的事件监听器
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    
-    // 添加确认事件
-    newConfirmBtn.addEventListener('click', function() {
-        modal.hide();
-        if (typeof onConfirm === 'function') {
-            onConfirm();
-        }
-    });
-    
-    // 显示模态框
-    console.log('  📤 调用 modal.show()...');
-    modal.show();
-    
-    // 手动设置 backdrop 和 modal 的 z-index，并检查样式
-    setTimeout(() => {
-        const backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) {
-            backdrop.style.zIndex = '9998';
-            console.log('  ✅ backdrop 已找到，设置 z-index: 9998');
-            console.log('  backdrop 样式:', window.getComputedStyle(backdrop).cssText.substring(0, 200));
-        } else {
-            console.warn('  ⚠️ 未找到 backdrop');
-        }
-        
-        modalElement.style.zIndex = '9999';
-        modalElement.style.display = 'block';
-        
-        const computedStyle = window.getComputedStyle(modalElement);
-        console.log('  ✅ modal 样式:');
-        console.log('    - display:', computedStyle.display);
-        console.log('    - opacity:', computedStyle.opacity);
-        console.log('    - z-index:', computedStyle.zIndex);
-        console.log('    - position:', computedStyle.position);
-        console.log('    - visibility:', computedStyle.visibility);
-        
-        // 检查模态框是否在视口内
-        const rect = modalElement.getBoundingClientRect();
-        console.log('  📐 modal 位置:', {
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
-            inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth
-        });
-    }, 100);
-}
-
-/**
- * 恢复整个部件（文件）的所有字段为默认值（主表单）
- */
-function resetConfigFile(fileId) {
-    console.log('🔄 恢复部件默认值:', fileId);
-    
-    const fileElement = document.getElementById(fileId);
-    if (!fileElement) {
-        console.error('❌ 找不到部件:', fileId);
-        return;
-    }
-    
-    // 获取部件信息
-    const fileLabel = fileElement.querySelector('.card-header h5')?.textContent.trim() || '此部件';
-    const resetButtons = fileElement.querySelectorAll('.style-config-reset-btn');
-    const groupCount = fileElement.querySelectorAll('.config-group').length;
-    
-    // 显示确认模态框
-    showResetConfigConfirmModal(
-        '<?= __('确认恢复部件') ?>',
-        `<?= __('确定要恢复') ?> "${fileLabel}" <?= __('下所有字段为默认值吗？') ?>`,
-        `<i class="mdi mdi-alert"></i> <?= __('这将影响') ?> <strong>${groupCount}</strong> <?= __('个配置组，共') ?> <strong>${resetButtons.length}</strong> <?= __('个字段！') ?>`,
-        function() {
-            // 执行恢复操作
-            let resetCount = 0;
-            resetButtons.forEach(button => {
-                try {
-                    resetConfigField(button);
-                    resetCount++;
-                } catch (error) {
-                    console.error('恢复字段失败:', error);
-                }
-            });
-            
-            // 显示提示信息
-            showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${resetCount} <?= __('个字段为默认值') ?>`);
-            console.log(`✅ 已恢复 ${resetCount} 个字段`);
-        }
-    );
-}
-
-/**
- * 恢复整个配置组的所有字段为默认值（主表单）
- */
-function resetConfigGroup(groupId) {
-    console.log('🔄 恢复配置组默认值:', groupId);
-    
-    const groupElement = document.getElementById(groupId);
-    if (!groupElement) {
-        console.error('❌ 找不到配置组:', groupId);
-        return;
-    }
-    
-    // 获取组信息
-    const groupLabel = groupElement.querySelector('.card-header h6')?.textContent.trim() || '此组';
-    const resetButtons = groupElement.querySelectorAll('.style-config-reset-btn');
-    
-    // 显示确认模态框
-    showResetConfigConfirmModal(
-        '<?= __('确认恢复配置组') ?>',
-        `<?= __('确定要恢复') ?> "${groupLabel}" <?= __('下所有字段为默认值吗？') ?>`,
-        `<i class="mdi mdi-information-outline"></i> <?= __('共') ?> <strong>${resetButtons.length}</strong> <?= __('个字段将被恢复') ?>`,
-        function() {
-            // 执行恢复操作
-            let resetCount = 0;
-            resetButtons.forEach(button => {
-                try {
-                    resetConfigField(button);
-                    resetCount++;
-                } catch (error) {
-                    console.error('恢复字段失败:', error);
-                }
-            });
-            
-            // 显示提示信息
-            showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${resetCount} <?= __('个字段为默认值') ?>`);
-            console.log(`✅ 已恢复 ${resetCount} 个字段`);
-        }
-    );
-}
-
-/**
- * 恢复可视化配置字段为默认值
- * @param {Element} button - 恢复按钮元素
- * @param {boolean} skipSave - 是否跳过自动保存（用于批量操作）
- * @returns {Object} 返回字段配置信息（用于批量操作）
- */
-function resetVisualConfigField(button, skipSave = false) {
-    // 从按钮的data属性中读取信息
-    const fieldId = button.getAttribute('data-field-id');
-    const fieldType = button.getAttribute('data-config-type');
-    const defaultValue = button.getAttribute('data-default-value');
-    const configKey = button.getAttribute('data-config-key');
-    
-    console.log('🔄 恢复可视化配置默认值:', { fieldId, fieldType, defaultValue, skipSave });
-    
-    // 如果是批量操作，只返回配置信息，不修改DOM
-    if (skipSave) {
-        return {
-            configKey: configKey,
-            defaultValue: defaultValue || '',
-            fieldId: fieldId
-        };
-    }
-    
-    // 单个字段操作：修改DOM并触发保存
-    switch (fieldType) {
-        case 'text':
-        case 'number':
-        case 'responsive':
-        case 'textarea':
-            const textField = document.getElementById(fieldId);
-            if (textField) {
-                textField.value = defaultValue || '';
-                textField.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            break;
-            
-        case 'select':
-            const selectField = document.getElementById(fieldId);
-            if (selectField) {
-                if (defaultValue) {
-                    for (let i = 0; i < selectField.options.length; i++) {
-                        if (selectField.options[i].value === defaultValue) {
-                            selectField.selectedIndex = i;
-                            break;
-                        }
-                    }
-                } else {
-                    selectField.selectedIndex = 0;
-                }
-                selectField.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            break;
-            
-        case 'color':
-            const pickerField = document.getElementById(fieldId + '_picker');
-            const textFieldColor = document.getElementById(fieldId + '_text');
-            const resetValue = defaultValue || '#ffffff';
-            
-            if (pickerField) pickerField.value = resetValue;
-            if (textFieldColor) {
-                textFieldColor.value = resetValue;
-                textFieldColor.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            break;
-            
-        default:
-            console.warn('未知字段类型:', fieldType);
-    }
-    
-    showToast('success', '<?= __('成功') ?>', '<?= __('已恢复为默认值') ?>');
-    console.log('✅ 可视化配置字段已恢复默认值');
-    
-    // 刷新预览
-    if (typeof refreshStylePreview === 'function') {
-        console.log('🔄 自动刷新预览...');
-        refreshStylePreview();
-    }
-}
-
-/**
- * 恢复整个可视化部件（文件）的所有字段为默认值
- */
-function resetVisualConfigFile(fileId) {
-    console.log('🔄 恢复可视化部件默认值:', fileId);
-    
-    const fileElement = document.getElementById(fileId);
-    if (!fileElement) {
-        console.error('❌ 找不到部件:', fileId);
-        return;
-    }
-    
-    // 获取部件信息
-    const fileLabel = fileElement.querySelector('.config-section-header span')?.textContent.trim() || '此部件';
-    const resetButtons = fileElement.querySelectorAll('.visual-config-reset-btn');
-    const groupCount = fileElement.querySelectorAll('.config-section.ms-3').length;
-    
-    // 显示确认模态框
-    showResetConfigConfirmModal(
-        '<?= __('确认恢复部件') ?>',
-        `<?= __('确定要恢复') ?> "${fileLabel}" <?= __('下所有字段为默认值吗？') ?>`,
-        `<i class="mdi mdi-alert"></i> <?= __('这将影响') ?> <strong>${groupCount}</strong> <?= __('个配置组，共') ?> <strong>${resetButtons.length}</strong> <?= __('个字段！修改将自动保存。') ?>`,
-        async function() {
-            try {
-                // 收集需要重置的字段的 configKey
-                const configKeys = [];
-                
-                resetButtons.forEach(button => {
-                    try {
-                        const configKey = button.getAttribute('data-config-key');
-                        if (configKey) {
-                            configKeys.push(configKey);
-                        }
-                    } catch (error) {
-                        console.error('收集字段配置键失败:', error);
-                    }
-                });
-                
-                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
-                
-                // 调用后端接口重置为默认值
-                updateVisualSaveStatus('saving', '<?= __('重置中...') ?>');
-                
-                const styleCode = '<?= $page && $page->getData('style') ? $page->getData('style') : 'default' ?>';
-                const requestData = {
-                    page_id: visualPageId,
-                    style_code: styleCode,
-                    config_keys: configKeys,
-                    locale: currentVisualLanguage || defaultLanguage
-                };
-                
-                const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    console.log('✅ 重置成功，重新加载配置...');
-                    
-                    // 标记需要展开和定位的部件（使用 localStorage）
-                    localStorage.setItem('pagebuilder_reset_target', JSON.stringify({
-                        type: 'file',
-                        id: fileId,
-                        timestamp: Date.now(),
-                        needRefreshPreview: true  // 标记需要刷新预览
-                    }));
-                    
-                    // 重新加载配置（从模板中提取默认值）
-                    await loadVisualStyleConfig();
-                    
-                    updateVisualSaveStatus('saved', '<?= __('已重置') ?>');
-                    showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${result.reset_count || configKeys.length} <?= __('个字段为默认值') ?>`);
-                } else {
-                    updateVisualSaveStatus('error', '<?= __('重置失败') ?>: ' + result.message);
-                    console.error('❌ 重置失败:', result);
-                    showToast('error', '<?= __('失败') ?>', result.message || '<?= __('重置失败') ?>');
-                }
-            } catch (error) {
-                updateVisualSaveStatus('error', '<?= __('重置失败') ?>');
-                console.error('❌ 重置操作异常:', error);
-                showToast('error', '<?= __('错误') ?>', error.message || '<?= __('操作失败') ?>');
-            }
-        }
-    );
-}
-
-/**
- * 恢复整个可视化配置组的所有字段为默认值
- */
-function resetVisualConfigGroup(groupId) {
-    console.log('🔄 恢复可视化配置组默认值:', groupId);
-    
-    const groupElement = document.getElementById(groupId);
-    if (!groupElement) {
-        console.error('❌ 找不到配置组:', groupId);
-        return;
-    }
-    
-    // 获取组信息
-    const groupLabel = groupElement.querySelector('.config-section-header span')?.textContent.trim() || '此组';
-    const resetButtons = groupElement.querySelectorAll('.visual-config-reset-btn');
-    
-    // 显示确认模态框
-    showResetConfigConfirmModal(
-        '<?= __('确认恢复配置组') ?>',
-        `<?= __('确定要恢复') ?> "${groupLabel}" <?= __('下所有字段为默认值吗？') ?>`,
-        `<i class="mdi mdi-information-outline"></i> <?= __('共') ?> <strong>${resetButtons.length}</strong> <?= __('个字段将被恢复，修改将自动保存。') ?>`,
-        async function() {
-            try {
-                // 收集需要重置的字段的 configKey
-                const configKeys = [];
-                
-                resetButtons.forEach(button => {
-                    try {
-                        const configKey = button.getAttribute('data-config-key');
-                        if (configKey) {
-                            configKeys.push(configKey);
-                        }
-                    } catch (error) {
-                        console.error('收集字段配置键失败:', error);
-                    }
-                });
-                
-                console.log(`✅ 已收集 ${configKeys.length} 个配置键:`, configKeys);
-                
-                // 调用后端接口重置为默认值
-                updateVisualSaveStatus('saving', '<?= __('重置中...') ?>');
-                
-                const styleCode = '<?= $page && $page->getData('style') ? $page->getData('style') : 'default' ?>';
-                const requestData = {
-                    page_id: visualPageId,
-                    style_code: styleCode,
-                    config_keys: configKeys,
-                    locale: currentVisualLanguage || defaultLanguage
-                };
-                
-                const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/preview/resetFieldsToDefault') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    console.log('✅ 重置成功，重新加载配置...');
-                    
-                    // 标记需要展开和定位的组（使用 localStorage）
-                    localStorage.setItem('pagebuilder_reset_target', JSON.stringify({
-                        type: 'group',
-                        id: groupId,
-                        timestamp: Date.now(),
-                        needRefreshPreview: true  // 标记需要刷新预览
-                    }));
-                    
-                    // 重新加载配置（从模板中提取默认值）
-                    await loadVisualStyleConfig();
-                    
-                    updateVisualSaveStatus('saved', '<?= __('已重置') ?>');
-                    showToast('success', '<?= __('成功') ?>', `<?= __('已恢复') ?> ${result.reset_count || configKeys.length} <?= __('个字段为默认值') ?>`);
-                } else {
-                    updateVisualSaveStatus('error', '<?= __('重置失败') ?>: ' + result.message);
-                    console.error('❌ 重置失败:', result);
-                    showToast('error', '<?= __('失败') ?>', result.message || '<?= __('重置失败') ?>');
-                }
-            } catch (error) {
-                updateVisualSaveStatus('error', '<?= __('重置失败') ?>');
-                console.error('❌ 重置操作异常:', error);
-                showToast('error', '<?= __('错误') ?>', error.message || '<?= __('操作失败') ?>');
-            }
-        }
-    );
-}
 
 /**
  * 通过AJAX加载样式列表
  * 实时扫描样式目录并渲染为卡片
  */
 let allStyles = []; // 存储所有样式数据用于搜索
-
+loadStyleList();
 async function loadStyleList() {
     console.log('🚀 开始加载样式列表...');
     
@@ -3885,7 +2874,7 @@ async function loadStyleList() {
         return;
     }
     
-    const currentStyle = '<?= $page ? htmlspecialchars($page->getData('style')) : '' ?>';
+    const currentStyle = '<?= $page ? htmlspecialchars((($page->getData('style') ?? '')) ?? '') : '' ?>';
     const currentPageId = '<?= $page ? $page->getId() : '' ?>';
     console.log('🎯 当前选择的样式:', currentStyle || '(无)');
     console.log('📄 当前页面ID:', currentPageId || '(新建)');
@@ -3940,21 +2929,6 @@ async function loadStyleList() {
             
             // 渲染样式卡片
             renderStyleCards(result.data, currentStyle, currentPageId);
-            
-            // 启用可视化配置按钮
-            const visualBtn = document.getElementById('openVisualConfigBtn');
-            if (visualBtn && currentStyle) {
-                visualBtn.disabled = false;
-                console.log('✅ 可视化配置按钮已启用');
-            }
-            
-            // 加载样式配置（如果有选中的样式）
-            if (currentStyle) {
-                console.log(`🔧 开始加载样式配置: ${currentStyle}`);
-                loadStyleConfig(currentStyle);
-            }
-            
-            console.log(`✅ 样式列表加载成功，共 ${result.count} 个样式`);
         } else {
             console.error('❌ 加载样式列表失败:', result);
             styleCardsEmpty.innerHTML = '<i class="mdi mdi-alert"></i> ' + (result.message || '加载失败，请刷新重试');
@@ -4188,9 +3162,6 @@ async function selectStyle(styleCode) {
         visualBtn.disabled = false;
     }
     
-    // 加载样式配置
-    loadStyleConfig(styleCode);
-    
     // 🚫 如果正在应用继承配置，跳过自动保存
     if (window.isApplyingInheritance) {
         console.log('🚫 正在应用继承配置，跳过样式自动保存');
@@ -4198,8 +3169,8 @@ async function selectStyle(styleCode) {
     }
     
     // 如果是编辑模式，自动保存样式切换
-    const pageId = '<?= $isEdit && $page ? $page->getId() : '' ?>';
-    if (pageId && styleCode !== oldStyle) {
+    const pageIdForm = '<?= $isEdit && $page ? $page->getId() : '' ?>';
+    if (pageIdForm && styleCode !== oldStyle) {
         await autoSaveStyleChange(styleCode);
     }
 }
@@ -4239,9 +3210,9 @@ function openImagePreview(imageUrl, styleName) {
  * 打开真实页面预览
  * @param {string} styleCode - 样式代码
  * @param {string} styleName - 样式名称
- * @param {number} pageId - 页面ID
+ * @param {number} pageIdForm - 页面ID
  */
-function openRealPreview(styleCode, styleName, pageId) {
+function openRealPreview(styleCode, styleName, pageIdForm) {
     console.log('🖥️ 打开真实预览:', styleName, styleCode);
     
     const modal = document.getElementById('stylePreviewModal');
@@ -4254,7 +3225,7 @@ function openRealPreview(styleCode, styleName, pageId) {
     modalIcon.className = 'mdi mdi-monitor';
     
     // 构建iframe URL
-    const previewUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/full') ?>?page_id=' + pageId + '&style_code=' + encodeURIComponent(styleCode);
+    const previewUrl = '<?= $this->getBackendUrl('pagebuilder/backend/preview/full') ?>?page_id=' + pageIdForm + '&style_code=' + encodeURIComponent(styleCode);
     
     // 保存URL用于刷新
     currentPreviewUrl = previewUrl;
@@ -4381,7 +3352,6 @@ function refreshStylePreview() {
         };
     }
 }
-
 /**
  * 关闭样式预览模态框
  */
@@ -4596,7 +3566,7 @@ if (refreshStyleBtn) {
             // 显示成功提示
             const toast = document.createElement('div');
             toast.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
-            toast.style.zIndex = '9999';
+            toast.style.zIndex = '11000';
             toast.innerHTML = `
                 <i class="mdi mdi-check-circle me-2"></i>
                 样式配置已刷新
@@ -4701,7 +3671,7 @@ function showMessage(type, message) {
     // 创建 toast 通知
     const toast = document.createElement('div');
     toast.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
-    toast.style.zIndex = '9999';
+    toast.style.zIndex = '11000';
     toast.style.minWidth = '300px';
     toast.innerHTML = `
         <i class="mdi ${iconClass} me-2"></i>
@@ -4830,10 +3800,7 @@ async function autoSaveStyleChange(newStyle) {
     }
 }
 
-// 页面加载时立即通过AJAX获取样式列表
-document.addEventListener('DOMContentLoaded', function() {
-    loadStyleList();
-});
+
 
 // 使用事件委托处理翻译按钮点击
 document.addEventListener('click', function(e) {
@@ -4854,7 +3821,7 @@ document.addEventListener('click', function(e) {
  * @param {string} currentValue - 当前值
  */
 function openStyleConfigTranslation(configKey, configLabel, currentValue) {
-    if (!pageId || pageId === 'null') {
+    if (!pageIdForm || pageIdForm === 'null') {
         alert('<?= __('只有在编辑模式下才能翻译配置项') ?>');
         return;
     }
@@ -4872,7 +3839,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
         const translationUrl = '<?= $this->getBackendUrl('i18n/backend/taglib/local') ?>' +
             '?model=<?= urlencode('GuoLaiRen\\PageBuilder\\Model\\Page\\LocalDescription') ?>' +
             '&field=' + encodeURIComponent('config.' + configKey) +
-            '&id=' + pageId +
+            '&id=' + pageIdForm +
             '&value=' + encodeURIComponent(currentValue);
         
         console.log('🌐 打开翻译界面:', translationUrl);
@@ -4967,2006 +3934,7 @@ function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     bsOffcanvas.show();
 }
 </script>
-
-<!-- 可视化配置功能 -->
-<!-- 可视化配置样式 -->
-<style>
-/* 可视化配置容器 */
-.visual-config-wrapper {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9999;
-    background: #fff;
-    display: none;
-}
-
-.visual-config-wrapper.active {
-    display: flex;
-    flex-direction: column;
-}
-
-/* 顶部工具栏 */
-.visual-toolbar {
-    height: 60px;
-    background: #2c3e50;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    justify-content: space-between;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.visual-toolbar-left, .visual-toolbar-center, .visual-toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-/* 设备切换按钮 */
-.device-btn {
-    background: rgba(255,255,255,0.1);
-    border: none;
-    color: #fff;
-    padding: 8px 15px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.device-btn:hover {
-    background: rgba(255,255,255,0.2);
-}
-
-.device-btn.active {
-    background: #3498db;
-}
-
-/* 语言切换器 */
-.language-switcher-visual {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: 20px;
-    padding-left: 20px;
-    border-left: 1px solid rgba(255,255,255,0.2);
-}
-
-.language-switcher-visual i {
-    color: #fff;
-    font-size: 18px;
-}
-
-.language-switcher-visual .form-select {
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    font-size: 13px;
-    padding: 5px 30px 5px 10px;
-    min-width: 120px;
-}
-
-.language-switcher-visual .form-select:focus {
-    background: rgba(255,255,255,0.15);
-    border-color: rgba(255,255,255,0.3);
-    color: #fff;
-    box-shadow: none;
-}
-
-.language-switcher-visual .form-select option {
-    background: #2c3e50;
-    color: #fff;
-}
-
-/* 保存状态 */
-.save-status {
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 13px;
-    background: rgba(255,255,255,0.1);
-}
-
-.save-status.saving {
-    background: #f39c12;
-}
-
-.save-status.saved {
-    background: #27ae60;
-}
-
-.save-status.error {
-    background: #e74c3c;
-}
-
-/* 主内容区域 */
-.visual-content {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-}
-
-/* 左侧配置面板 */
-.config-panel {
-    width: 400px;
-    background: #f8f9fa;
-    border-right: 1px solid #dee2e6;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    transition: transform 0.3s ease;
-    position: relative;
-    z-index: 10;
-    pointer-events: auto;
-}
-
-.config-panel-header {
-    padding: 15px 20px;
-    background: #fff;
-    border-bottom: 1px solid #dee2e6;
-    font-weight: 600;
-}
-
-.config-panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
-    pointer-events: auto;
-}
-
-.config-panel-body * {
-    pointer-events: auto;
-}
-
-.config-panel-body .alert-info {
-    pointer-events: auto;
-    cursor: pointer;
-    position: relative;
-    z-index: 1;
-}
-
-/* 静态展示的帮助内容样式 */
-.config-panel-body .help-content-static {
-    white-space: pre-line;
-    line-height: 1.6;
-    font-size: 0.9rem;
-    color: #555;
-    margin: 0;
-    padding: 0;
-}
-
-.config-panel-body .alert-info {
-    background-color: #e8f4f8;
-    border-color: #b8dce8;
-    color: #31708f;
-}
-
-.config-panel-body .alert-info .alert-heading {
-    color: #1a5a75;
-    font-size: 0.95rem;
-    font-weight: 600;
-}
-
-.config-panel-body .alert-info .mdi-information-outline {
-    color: #17a2b8;
-    margin-right: 5px;
-}
-
-/* 全屏模式 */
-.visual-config-wrapper.fullscreen-mode {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    z-index: 99999 !important;
-    transform: none !important;
-}
-
-/* 全屏模式下的配置面板变为悬浮 */
-.visual-config-wrapper.fullscreen-mode .config-panel {
-    position: absolute;
-    left: 0;
-    top: 60px;
-    bottom: 0;
-    z-index: 100;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    pointer-events: auto;
-}
-
-/* 全屏模式下配置面板收起状态 */
-.visual-config-wrapper.fullscreen-mode .config-panel.collapsed {
-    transform: translateX(-400px);
-}
-
-/* 全屏模式下显示收起按钮 */
-.visual-config-wrapper.fullscreen-mode .config-panel-toggle {
-    display: inline-block !important;
-}
-
-/* 全屏模式下的预览面板占满空间 */
-.visual-config-wrapper.fullscreen-mode .preview-panel {
-    width: 100%;
-    position: relative;
-    z-index: 1;
-}
-
-/* 全屏按钮样式 */
-.fullscreen-btn {
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s;
-    margin-left: 10px;
-}
-
-.fullscreen-btn:hover {
-    background: rgba(255,255,255,0.2);
-}
-
-.fullscreen-btn.active {
-    background: rgba(255,255,255,0.3);
-    border-color: rgba(255,255,255,0.4);
-}
-
-.fullscreen-btn i {
-    font-size: 18px;
-}
-
-/* 悬浮展开按钮 */
-.floating-expand-btn {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 0 12px 12px 0;
-    padding: 24px 10px;
-    cursor: pointer;
-    box-shadow: 2px 0 12px rgba(102, 126, 234, 0.4);
-    z-index: 99;
-    transition: all 0.3s ease;
-    display: none;
-}
-
-.floating-expand-btn:hover {
-    padding-right: 14px;
-    box-shadow: 2px 0 16px rgba(102, 126, 234, 0.6);
-}
-
-.floating-expand-btn i {
-    font-size: 28px;
-    color: #fff;
-}
-
-/* 配置区域折叠面板 */
-.config-section {
-    border-bottom: 1px solid #dee2e6;
-}
-
-.config-section-header {
-    padding: 15px 20px;
-    background: #fff;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    font-weight: 600;
-    transition: background 0.3s;
-}
-
-.config-section-header:hover {
-    background: #f8f9fa;
-}
-
-.config-section-header i.mdi-chevron-down {
-    transition: transform 0.3s;
-}
-
-.config-section.collapsed .config-section-header i.mdi-chevron-down {
-    transform: rotate(-90deg);
-}
-
-.config-section-body {
-    padding: 20px;
-    background: #fff;
-    display: block;
-}
-
-.config-section.collapsed .config-section-body {
-    display: none;
-}
-
-/* 自定义内容覆盖的配置区域样式 */
-.config-section-header.bg-secondary {
-    opacity: 0.85;
-    cursor: pointer;
-}
-
-.config-section-header.bg-secondary:hover {
-    opacity: 0.95;
-}
-
-.config-section.collapsed .config-section-header.bg-secondary {
-    opacity: 0.75;
-}
-
-.config-file-section .config-section-body {
-    position: relative;
-}
-
-/* 为有自定义内容的配置区域添加半透明遮罩效果 */
-.config-file-section.has-custom-content .config-section-body {
-    position: relative;
-}
-
-.config-file-section.has-custom-content .config-section-body::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(108, 117, 125, 0.05);
-    pointer-events: none;
-    z-index: 0;
-}
-
-.config-file-section.has-custom-content .config-section-body > * {
-    position: relative;
-    z-index: 1;
-}
-
-/* 右侧预览面板 */
-.preview-panel {
-    flex: 1;
-    background: #ecf0f1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: auto;
-    z-index: 1;
-}
-
-.preview-container {
-    background: #fff;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    height: 100%;
-    width: 100%;
-    transition: all 0.3s;
-    position: relative;
-}
-
-/* 设备视图 */
-.preview-container.device-mobile {
-    max-width: 375px;
-    height: 667px;
-}
-
-.preview-container.device-tablet {
-    max-width: 768px;
-    height: 1024px;
-}
-
-.preview-container.device-desktop {
-    width: 100%;
-    height: 100%;
-}
-
-.preview-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-}
-
-/* 加载状态 */
-.preview-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255,255,255,0.95);
-    padding: 20px 40px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    display: none;
-    z-index: 10;
-}
-
-.preview-loading.active {
-    display: block;
-}
-
-/* 可视化编辑器中的页面关系树样式 */
-.visual-page-tree {
-    border-top: 1px solid #dee2e6;
-    padding-top: 1rem;
-}
-
-.visual-page-tree-header {
-    font-weight: 600;
-    font-size: 0.9rem;
-    padding: 0.5rem 1rem;
-    background: #f8f9fa;
-    border-radius: 0.25rem;
-    margin-bottom: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: background-color 0.2s;
-}
-
-.visual-page-tree-header.has-body {
-    margin-bottom: 0.75rem;
-}
-
-.visual-page-tree-header:hover {
-    background: #e9ecef;
-}
-
-.visual-page-tree-header i#visualPageTreeIcon {
-    font-size: 1rem;
-    transition: transform 0.3s;
-}
-
-.visual-page-tree-header i#visualPageTreeIcon.expanded {
-    transform: rotate(90deg);
-}
-
-.visual-page-tree-body {
-    max-height: 300px;
-    overflow-y: auto;
-    transition: all 0.3s ease;
-}
-
-.visual-page-tree-header + .visual-page-tree-body[style*="display: none"] {
-    margin-bottom: 0;
-}
-
-.visual-page-item {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    border: 1px solid #e0e0e0;
-    border-radius: 0.25rem;
-    background: #fff;
-    transition: all 0.2s;
-}
-
-.visual-page-item:hover {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-color: #c0c0c0;
-}
-
-.visual-page-item.current {
-    background: #e7f3ff;
-    border-color: #0d6efd;
-}
-
-.visual-page-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.visual-page-header i {
-    font-size: 1.1rem;
-}
-
-.visual-page-name {
-    flex: 1;
-    font-size: 0.9rem;
-}
-
-.visual-page-handle,
-.visual-page-url {
-    margin-bottom: 0.4rem;
-    font-size: 0.85rem;
-}
-
-.visual-page-handle small,
-.visual-page-url small {
-    display: block;
-    color: #6c757d;
-    margin-bottom: 0.2rem;
-}
-
-.clickable-handle-visual,
-.clickable-url-visual {
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.clickable-handle-visual {
-    display: inline-block;
-    padding: 0.2rem 0.4rem;
-    background: #f8f9fa;
-    border-radius: 0.2rem;
-    color: #212529;
-    font-size: 0.85rem;
-}
-
-.clickable-handle-visual:hover {
-    background: #e9ecef;
-    color: #0d6efd;
-}
-
-.clickable-url-visual {
-    display: block;
-    padding: 0.3rem;
-    word-break: break-all;
-    text-decoration: underline;
-    text-decoration-style: dotted;
-    color: #6c757d;
-}
-
-.clickable-url-visual:hover {
-    color: #0d6efd;
-    background: #f8f9fa;
-}
-
-/* 滚动条样式 */
-.visual-page-tree-body::-webkit-scrollbar {
-    width: 6px;
-}
-
-.visual-page-tree-body::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.visual-page-tree-body::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-.visual-page-tree-body::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-</style>
-
-<!-- 可视化配置容器 -->
-<div class="visual-config-wrapper" id="visualConfigWrapper">
-    <!-- 顶部工具栏 -->
-    <div class="visual-toolbar">
-        <div class="visual-toolbar-left">
-            <button type="button" class="btn btn-sm btn-light" onclick="closeVisualConfig()">
-                <i class="mdi mdi-close"></i> <?= __('退出') ?>
-            </button>
-            <h5 class="mb-0 text-white"><?= __('可视化配置') ?></h5>
-        </div>
-        
-        <div class="visual-toolbar-center">
-            <!-- 设备切换 -->
-            <button type="button" class="device-btn active" data-device="desktop" onclick="switchDevice('desktop')">
-                <i class="mdi mdi-monitor"></i> <?= __('桌面') ?>
-            </button>
-            <button type="button" class="device-btn" data-device="tablet" onclick="switchDevice('tablet')">
-                <i class="mdi mdi-tablet"></i> <?= __('平板') ?>
-            </button>
-            <button type="button" class="device-btn" data-device="mobile" onclick="switchDevice('mobile')">
-                <i class="mdi mdi-cellphone"></i> <?= __('手机') ?>
-            </button>
-            
-            <!-- 全屏切换 -->
-            <button type="button" class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="<?= __('全屏模式') ?>">
-                <i class="mdi mdi-fullscreen"></i>
-            </button>
-            
-            <!-- 语言切换 -->
-            <div class="language-switcher-visual">
-                <i class="mdi mdi-translate"></i>
-                <select id="visualLanguageSelect" class="form-select form-select-sm" onchange="switchVisualLanguage(this.value)">
-                    <?php 
-                    // $pageDefaultLocale 和 $pageLocales 已在文件开头定义
-                    
-                    // 如果页面有默认语言，显示默认语言
-                    if ($pageDefaultLocale) {
-                        $i18nInstance = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
-                        $defaultLocaleName = $i18nInstance->getLocaleName($pageDefaultLocale);
-                        echo '<option value="' . htmlspecialchars($pageDefaultLocale) . '" selected>' . htmlspecialchars($defaultLocaleName) . '</option>';
-                    }
-                    
-                    // 显示其他语言
-                    foreach ($pageLocales as $locale) {
-                        if ($locale === $pageDefaultLocale) continue; // 跳过默认语言
-                        $i18nInstance = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
-                        $localeName = $i18nInstance->getLocaleName($locale);
-                        echo '<option value="' . htmlspecialchars($locale) . '">' . htmlspecialchars($localeName) . '</option>';
-                    }
-                    ?>
-                </select>
-            </div>
-        </div>
-        
-        <div class="visual-toolbar-right">
-            <!-- 保存状态 -->
-            <div class="save-status" id="visualSaveStatus">
-                <i class="mdi mdi-check-circle"></i> <span id="visualSaveStatusText"><?= __('已保存') ?></span>
-            </div>
-            
-            <!-- 刷新预览 -->
-            <button type="button" class="btn btn-sm btn-info" onclick="refreshVisualPreview()">
-                <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>
-            </button>
-        </div>
-    </div>
-    
-    <!-- 主内容区域 -->
-    <div class="visual-content">
-        <!-- 悬浮展开按钮（仅全屏收起时显示） -->
-        <button type="button" 
-                class="floating-expand-btn" 
-                id="floatingExpandBtn"
-                onclick="toggleConfigPanel()" 
-                title="<?= __('展开配置面板') ?>">
-            <i class="mdi mdi-chevron-right"></i>
-        </button>
-        
-        <!-- 左侧配置面板 -->
-        <div class="config-panel" id="configPanel">
-            <div class="config-panel-header d-flex justify-content-between align-items-center">
-                <span><i class="mdi mdi-cog"></i> <?= __('样式配置') ?></span>
-                <div class="d-flex gap-2">
-                    <button type="button" 
-                            class="btn btn-sm btn-light" 
-                            onclick="refreshVisualStyleConfig()" 
-                            title="<?= __('刷新配置') ?>">
-                        <i class="mdi mdi-refresh"></i>
-                    </button>
-                    <button type="button" 
-                            class="btn btn-sm btn-light config-panel-toggle" 
-                            id="configPanelToggle"
-                            onclick="toggleConfigPanel()" 
-                            title="<?= __('收起面板') ?>"
-                            style="display: none;">
-                        <i class="mdi mdi-chevron-left"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="config-panel-body" id="visualConfigFields">
-                <!-- 配置项将通过 JavaScript 动态加载 -->
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
-                    </div>
-                    <div class="mt-2"><?= __('正在加载配置...') ?></div>
-                </div>
-            </div>
-            
-            <!-- 页面关系树（在可视化编辑中） -->
-            <?php if ($isEdit && $page && $page->getId()): ?>
-            <?php
-            $relatedPages = $this->getData('related_pages') ?? [];
-            $isChildPage = $this->getData('is_child_page') ?? false;
-            ?>
-            <?php if (!empty($relatedPages)): ?>
-            <div class="visual-page-tree mt-3">
-                <div class="visual-page-tree-header" onclick="toggleVisualPageTree()" style="cursor: pointer;">
-                    <i class="mdi mdi-chevron-right" id="visualPageTreeIcon"></i>
-                    <i class="mdi mdi-file-tree"></i> 
-                    <?php if ($isChildPage): ?>
-                        <?= __('同级页面') ?>
-                    <?php else: ?>
-                        <?= __('子页面') ?>
-                    <?php endif; ?>
-                    <span class="badge bg-primary ms-2"><?= count($relatedPages) ?></span>
-                </div>
-                
-                <div class="visual-page-tree-body" id="visualPageTreeBody" style="display: none;">
-                    <?php foreach ($relatedPages as $relPage): ?>
-                    <?php
-                    $isCurrentPage = $relPage->getId() === $page->getId();
-                    $pageUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . ltrim($relPage->getData('handle'), '/');
-                    $isPublished = $relPage->getData('status') == 1;
-                    ?>
-                    <div class="visual-page-item <?= $isCurrentPage ? 'current' : '' ?>">
-                        <div class="visual-page-header">
-                            <?php if ($isCurrentPage): ?>
-                                <i class="mdi mdi-arrow-right-circle text-primary"></i>
-                            <?php else: ?>
-                                <i class="mdi mdi-file-outline text-secondary"></i>
-                            <?php endif; ?>
-                            <span class="visual-page-name"><?= htmlspecialchars($relPage->getData('name')) ?></span>
-                            <?php if ($isCurrentPage): ?>
-                                <span class="badge bg-primary">当前</span>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <div class="visual-page-handle">
-                            <small class="text-muted">Handle:</small>
-                            <code class="clickable-handle-visual" 
-                                  data-handle="<?= htmlspecialchars($relPage->getData('handle')) ?>"
-                                  data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
-                                  title="<?= __('点击复制 Handle') ?>">
-                                <?= htmlspecialchars($relPage->getData('handle')) ?>
-                            </code>
-                        </div>
-                        
-                        <div class="visual-page-url">
-                            <small class="text-muted">URL:</small>
-                            <div class="clickable-url-visual" 
-                                 data-url="<?= htmlspecialchars($pageUrl) ?>"
-                                 data-page-name="<?= htmlspecialchars($relPage->getData('name')) ?>"
-                                 title="<?= __('点击复制链接') ?>">
-                                <small><?= htmlspecialchars($pageUrl) ?></small>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-            <?php endif; ?>
-        </div>
-        
-        <!-- 右侧预览面板 -->
-        <div class="preview-panel">
-            <div class="preview-container device-desktop" id="visualPreviewContainer">
-                <iframe id="visualPreviewIframe" 
-                        class="preview-iframe" 
-                        src="<?= $this->getBackendUrl('pagebuilder/backend/preview/full', ['page_id' => $visualPageId]) ?>"></iframe>
-                
-                <div class="preview-loading" id="visualPreviewLoading">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden"><?= __('加载中...') ?></span>
-                    </div>
-                    <div class="mt-2"><?= __('刷新预览中...') ?></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
-// 可视化配置相关的JavaScript函数
-(function() {
-    // 全局变量（将关键变量暴露到全局作用域，供其他函数使用）
-    window.visualPageId = <?= $visualPageId ? (int)$visualPageId : 'null' ?>;
-    window.currentVisualLanguage = '<?= $pageDefaultLocale ?: '' ?>'; // 当前选择的语言
-    window.defaultLanguage = '<?= $pageDefaultLocale ?: '' ?>'; // 页面默认语言
-    let visualAutoSaveTimer = null;
-    const VISUAL_AUTO_SAVE_DELAY = 1000; // 1秒
-    let visualConfigGroups = null;
-    
-    // 为 IIFE 内部创建局部引用（保持代码兼容性）
-    let currentVisualLanguage = window.currentVisualLanguage;
-    const defaultLanguage = window.defaultLanguage;
-    
-    // 批量操作标志：在批量操作期间禁用自动保存
-    window.isBatchResetting = false;
-    
-    // 调试信息
-    console.log('📋 可视化配置初始化', {
-        visualPageId: visualPageId,
-        pageIdType: typeof visualPageId,
-        pageIdValid: visualPageId > 0,
-        currentLanguage: currentVisualLanguage,
-        defaultLanguage: defaultLanguage
-    });
-
-    // 打开可视化配置
-    window.openVisualConfig = function() {
-        document.getElementById('visualConfigWrapper').classList.add('active');
-        document.body.style.overflow = 'hidden';
-        
-        // 始终重新加载配置以确保获取最新的语言配置
-        loadVisualStyleConfig();
-        
-        // 初始化页面树的复制功能
-        initVisualPageTreeCopy();
-    };
-
-    // 关闭可视化配置
-    window.closeVisualConfig = function() {
-        document.getElementById('visualConfigWrapper').classList.remove('active');
-        document.body.style.overflow = '';
-    };
-
-    // 复制页面URL
-    window.copyPageUrl = function() {
-        const urlInput = document.getElementById('pageUrlDisplay');
-        if (!urlInput) return;
-        
-        // 选择文本
-        urlInput.select();
-        urlInput.setSelectionRange(0, 99999); // 兼容移动设备
-        
-        // 复制到剪贴板
-        try {
-            document.execCommand('copy');
-            
-            // 显示成功提示
-            const btn = event.target.closest('button');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已复制') ?>';
-            btn.classList.remove('btn-outline-primary');
-            btn.classList.add('btn-success');
-            
-            setTimeout(() => {
-                btn.innerHTML = originalHTML;
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-primary');
-            }, 2000);
-            
-            console.log('✅ 页面地址已复制:', urlInput.value);
-        } catch (err) {
-            console.error('❌ 复制失败:', err);
-            alert('<?= __('复制失败，请手动复制') ?>');
-        }
-    };
-    
-    // 打开页面URL
-    window.openPageUrl = function() {
-        const urlInput = document.getElementById('pageUrlDisplay');
-        if (!urlInput || !urlInput.value) return;
-        
-        // 在新窗口打开
-        window.open(urlInput.value, '_blank');
-        console.log('🌐 打开页面:', urlInput.value);
-    };
-    
-    // 打开前端在线预览
-    window.openFrontendPreview = function() {
-        const handleInput = document.getElementById('handle');
-        const handle = handleInput ? handleInput.value.trim() : '';
-        
-        if (!handle) {
-            alert('<?= __('页面句柄不能为空，无法预览') ?>');
-            return;
-        }
-        
-        // 使用友好的重写URL格式：/handle?preview=1（不带语言、货币等参数）
-        const baseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
-        const previewUrl = baseUrl + '/' + handle + '?preview=1';
-        
-        // 在新窗口打开前端预览
-        window.open(previewUrl, '_blank');
-        
-        console.log('🌐 打开前端预览:', previewUrl);
-    };
-
-    // 打开可视化配置项翻译
-    window.openVisualConfigTranslation = function(configKey, configLabel, currentValue) {
-        if (!visualPageId || visualPageId === 'null') {
-            alert('<?= __('只有在编辑模式下才能翻译配置项') ?>');
-            return;
-        }
-        
-        // 转义特殊字符
-        currentValue = (currentValue || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-        
-        // 生成唯一ID
-        const translationId = `visual-config-translation-${configKey.replace(/\./g, '-')}`;
-        
-        // 检查是否已存在翻译界面
-        let existingOffcanvas = document.getElementById(translationId);
-        if (!existingOffcanvas) {
-            // 构建翻译界面的 URL
-            const translationUrl = '<?= $this->getBackendUrl('i18n/backend/taglib/local') ?>' +
-                '?model=<?= urlencode('GuoLaiRen\\PageBuilder\\Model\\Page\\LocalDescription') ?>' +
-                '&field=' + encodeURIComponent('config.' + configKey) +
-                '&id=' + visualPageId +
-                '&value=' + encodeURIComponent(currentValue);
-            
-            console.log('🌐 打开可视化配置翻译界面:', translationUrl);
-            
-            // 创建 Offcanvas HTML
-            const offcanvasHtml = `
-                <div class="offcanvas offcanvas-end w-75 h-100" tabindex="-1" id="${translationId}" 
-                     aria-labelledby="${translationId}Label">
-                    <div class="offcanvas-header">
-                        <h5 id="${translationId}Label">
-                            <?= __('翻译配置项') ?>: ${configLabel}
-                        </h5>
-                        <div class="d-flex gap-2 ms-auto">
-                            <button id="${translationId}SubmitBtn" type="button" class="btn btn-primary btn-sm">
-                                <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
-                            </button>
-                            <a id="${translationId}RefreshBtn" class="btn btn-info btn-sm" href="javascript:void(0)">
-                                <i class="mdi mdi-refresh me-1"></i><?= __('刷新') ?>
-                            </a>
-                            <button type="button" class="btn-close btn-sm" data-bs-dismiss="offcanvas"
-                                    aria-label="<?= __('关闭') ?>"></button>
-                        </div>
-                    </div>
-                    <div class="offcanvas-body">
-                        <div class="position-relative w-100 h-100">
-                            <iframe id="${translationId}Iframe" class="w-100 h-100"
-                                    data-src="${translationUrl}"
-                                    frameborder="0"></iframe>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // 添加到页面
-            document.body.insertAdjacentHTML('beforeend', offcanvasHtml);
-            existingOffcanvas = document.getElementById(translationId);
-            
-            // 绑定事件
-            const iframe = document.getElementById(`${translationId}Iframe`);
-            const submitBtn = document.getElementById(`${translationId}SubmitBtn`);
-            const refreshBtn = document.getElementById(`${translationId}RefreshBtn`);
-            
-            // 显示时加载 iframe
-            existingOffcanvas.addEventListener('show.bs.offcanvas', function() {
-                if (!iframe.src) {
-                    iframe.src = iframe.getAttribute('data-src');
-                }
-            });
-            
-            // 刷新按钮
-            refreshBtn.addEventListener('click', function() {
-                iframe.src = iframe.getAttribute('data-src');
-            });
-            
-            // 提交按钮
-            submitBtn.addEventListener('click', function() {
-                const iframeDoc = iframe.contentWindow?.document;
-                if (!iframeDoc) {
-                    console.error('❌ 无法访问 iframe 文档');
-                    return;
-                }
-                
-                const form = iframeDoc.querySelector('form');
-                if (form) {
-                    form.submit();
-                    console.log('✅ 翻译表单已提交');
-                } else {
-                    console.error('❌ 未找到翻译表单');
-                }
-            });
-        }
-        
-        // 显示 Offcanvas
-        const offcanvas = new bootstrap.Offcanvas(existingOffcanvas);
-        offcanvas.show();
-    };
-
-    // 切换配置区域
-    window.toggleSection = function(sectionId) {
-        const section = document.getElementById(sectionId);
-        if (section) {
-            section.classList.toggle('collapsed');
-        }
-    };
-
-    // 切换设备视图
-    window.switchDevice = function(device) {
-        // 更新按钮状态
-        document.querySelectorAll('.device-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-device') === device);
-        });
-        
-        // 更新预览容器
-        const container = document.getElementById('visualPreviewContainer');
-        container.className = 'preview-container device-' + device;
-    };
-
-    // 切换全屏模式
-    window.toggleFullscreen = function() {
-        const wrapper = document.getElementById('visualConfigWrapper');
-        const btn = document.getElementById('fullscreenBtn');
-        const icon = btn.querySelector('i');
-        const panel = document.getElementById('configPanel');
-        const floatingBtn = document.getElementById('floatingExpandBtn');
-        
-        wrapper.classList.toggle('fullscreen-mode');
-        btn.classList.toggle('active');
-        
-        // 切换图标
-        if (wrapper.classList.contains('fullscreen-mode')) {
-            icon.className = 'mdi mdi-fullscreen-exit';
-            btn.title = '<?= __('退出全屏') ?>';
-            // 进入全屏时立即收起配置面板
-            panel.classList.add('collapsed');
-            // 显示悬浮展开按钮
-            floatingBtn.style.display = 'block';
-            console.log('🖥️ 进入全屏模式 - 配置面板已自动收起');
-        } else {
-            icon.className = 'mdi mdi-fullscreen';
-            btn.title = '<?= __('全屏模式') ?>';
-            // 退出全屏时展开配置面板
-            panel.classList.remove('collapsed');
-            // 隐藏悬浮展开按钮
-            floatingBtn.style.display = 'none';
-            console.log('🖥️ 退出全屏模式 - 配置面板已展开');
-        }
-    };
-
-    // 切换配置面板（收起/展开）
-    window.toggleConfigPanel = function() {
-        const panel = document.getElementById('configPanel');
-        const btn = document.getElementById('configPanelToggle');
-        const floatingBtn = document.getElementById('floatingExpandBtn');
-        const wrapper = document.getElementById('visualConfigWrapper');
-        
-        panel.classList.toggle('collapsed');
-        
-        // 更新面板内的收起按钮图标
-        if (btn) {
-            const icon = btn.querySelector('i');
-            if (panel.classList.contains('collapsed')) {
-                icon.className = 'mdi mdi-chevron-right';
-                btn.title = '<?= __('展开面板') ?>';
-            } else {
-                icon.className = 'mdi mdi-chevron-left';
-                btn.title = '<?= __('收起面板') ?>';
-            }
-        }
-        
-        // 控制悬浮展开按钮的显示（仅全屏模式下）
-        if (wrapper.classList.contains('fullscreen-mode')) {
-            if (panel.classList.contains('collapsed')) {
-                floatingBtn.style.display = 'block';
-            } else {
-                floatingBtn.style.display = 'none';
-            }
-        }
-    };
-
-    // 切换语言
-    window.switchVisualLanguage = function(language) {
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🌐 语言切换开始');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('旧语言:', currentVisualLanguage);
-        console.log('新语言:', language);
-        
-        // 更新当前语言（同时更新全局变量）
-        currentVisualLanguage = language;
-        window.currentVisualLanguage = language;
-        console.log('✅ 当前语言已更新为:', currentVisualLanguage);
-        
-        // 显示加载提示
-        document.getElementById('visualConfigFields').innerHTML = 
-            '<div class="alert alert-info m-3"><i class="mdi mdi-loading mdi-spin"></i> 正在加载 ' + language + ' 语言配置...</div>';
-        
-        // 重新加载配置（加载指定语言的配置）
-        console.log('🔄 开始重新加载配置...');
-        loadVisualStyleConfig().then(() => {
-            console.log('✅ 配置加载完成');
-            // 刷新预览（传递语言参数）
-            console.log('🔄 开始刷新预览...');
-            refreshVisualPreview();
-            console.log('✅ 预览刷新完成');
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('🎉 语言切换完成！');
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        }).catch(error => {
-            console.error('❌ 语言切换失败:', error);
-        });
-    };
-
-    // 更新保存状态（暴露到全局作用域供其他函数使用）
-    window.updateVisualSaveStatus = function(status, text) {
-        const statusEl = document.getElementById('visualSaveStatus');
-        const textEl = document.getElementById('visualSaveStatusText');
-        
-        if (statusEl) {
-            statusEl.className = 'save-status ' + status;
-        }
-        if (textEl) {
-            textEl.textContent = text;
-        }
-    }
-    
-    // 为 IIFE 内部创建局部引用（保持兼容性）
-    const updateVisualSaveStatus = window.updateVisualSaveStatus;
-
-    // 立即触发保存（用于批量操作）
-    window.triggerVisualAutoSave = async function() {
-        updateVisualSaveStatus('saving', '<?= __('保存中...') ?>');
-        
-        try {
-            // 收集所有配置
-            const config = {};
-            document.querySelectorAll('#visualConfigFields .auto-save-field').forEach(field => {
-                const key = field.getAttribute('data-config-key');
-                config[key] = field.value;
-            });
-            
-            // 准备请求数据（包含样式代码和语言参数）
-            const styleCode = '<?= $page && $page->getData('style') ? $page->getData('style') : 'default' ?>';
-            const requestData = {
-                page_id: visualPageId,
-                style_code: styleCode,
-                style_config: config,
-                locale: currentVisualLanguage || defaultLanguage
-            };
-            
-            console.log('💾 批量保存配置', {
-                url: '<?= $this->getBackendUrl('pagebuilder/backend/preview/autoSave') ?>',
-                configKeys: Object.keys(config),
-                requestData: requestData
-            });
-            
-            // 发送保存请求
-            const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/preview/autoSave') ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(requestData)
-            });
-            
-            const result = await response.json();
-            
-            console.log('✅ 批量保存完成', result);
-            
-            if (result.success) {
-                updateVisualSaveStatus('saved', '<?= __('已保存') ?>');
-            } else {
-                updateVisualSaveStatus('error', '<?= __('保存失败') ?>: ' + result.message);
-                console.error('❌ 保存失败:', result);
-            }
-        } catch (error) {
-            updateVisualSaveStatus('error', '<?= __('保存失败') ?>');
-            console.error('保存异常:', error);
-        }
-    };
-
-    // 自动保存配置
-    function autoSaveVisualConfig() {
-        // 如果正在进行批量操作，跳过自动保存
-        if (window.isBatchResetting) {
-            console.log('⏸️ 批量操作中，跳过自动保存');
-            return;
-        }
-        
-        // 清除之前的定时器
-        if (visualAutoSaveTimer) {
-            clearTimeout(visualAutoSaveTimer);
-        }
-        
-        // 设置新的定时器
-        visualAutoSaveTimer = setTimeout(async () => {
-            updateVisualSaveStatus('saving', '<?= __('保存中...') ?>');
-            
-            try {
-                // 收集所有配置
-                const config = {};
-                document.querySelectorAll('#visualConfigFields .auto-save-field').forEach(field => {
-                    const key = field.getAttribute('data-config-key');
-                    config[key] = field.value;
-                });
-                
-                // 准备请求数据（包含样式代码和语言参数）
-                const styleCode = '<?= $page && $page->getData('style') ? $page->getData('style') : 'default' ?>';
-                const requestData = {
-                    page_id: visualPageId,
-                    style_code: styleCode, // 添加样式代码
-                    style_config: config,
-                    locale: currentVisualLanguage || defaultLanguage // 添加语言参数
-                };
-                
-                console.log('💾 自动保存配置', {
-                    url: '<?= $this->getBackendUrl('pagebuilder/backend/preview/autoSave') ?>',
-                    pageId: visualPageId,
-                    styleCode: styleCode,
-                    locale: currentVisualLanguage,
-                    configKeys: Object.keys(config),
-                    requestData: requestData
-                });
-                
-                // 发送保存请求
-                const response = await fetch('<?= $this->getBackendUrl('pagebuilder/backend/preview/autoSave') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const result = await response.json();
-                
-                console.log('✅ 保存响应', {
-                    success: result.success,
-                    message: result.message,
-                    debug: result.debug,
-                    fullResult: result
-                });
-                
-                if (result.success) {
-                    updateVisualSaveStatus('saved', '<?= __('已保存') ?>');
-                    
-                    // 自动刷新预览
-                    refreshVisualPreview();
-                } else {
-                    updateVisualSaveStatus('error', '<?= __('保存失败') ?>: ' + result.message);
-                    console.error('❌ 保存失败:', result);
-                }
-            } catch (error) {
-                updateVisualSaveStatus('error', '<?= __('保存失败') ?>');
-                console.error('保存异常:', error);
-            }
-        }, VISUAL_AUTO_SAVE_DELAY);
-    }
-
-    // 刷新预览
-    window.refreshVisualPreview = function() {
-        const loading = document.getElementById('visualPreviewLoading');
-        const iframe = document.getElementById('visualPreviewIframe');
-        
-        loading.classList.add('active');
-        
-        // 构建URL，包含语言参数
-        let url = iframe.src.split('?')[0] + '?page_id=' + visualPageId;
-        if (currentVisualLanguage) {
-            url += '&locale=' + currentVisualLanguage;
-        }
-        url += '&t=' + Date.now();
-        
-        console.log('🔄 刷新预览:', url);
-        
-        // 重新加载iframe
-        iframe.src = url;
-        
-        // 监听加载完成
-        iframe.onload = function() {
-            loading.classList.remove('active');
-        };
-    };
-
-    // 刷新样式配置（重新扫描模板）
-    window.refreshVisualStyleConfig = async function() {
-        const btn = event.target.closest('button');
-        const icon = btn.querySelector('i');
-        
-        // 禁用按钮并显示加载动画
-        btn.disabled = true;
-        icon.classList.remove('mdi-refresh');
-        icon.classList.add('mdi-loading', 'mdi-spin');
-        
-        try {
-            console.log('🔄 刷新样式配置...');
-            
-            // 重新加载配置（这会触发后端的forceScan）
-            await loadVisualStyleConfig();
-            
-            console.log('✅ 样式配置刷新成功');
-        } catch (error) {
-            console.error('❌ 刷新失败:', error);
-            alert('刷新失败：' + error.message);
-        } finally {
-            // 恢复按钮状态
-            btn.disabled = false;
-            icon.classList.remove('mdi-loading', 'mdi-spin');
-            icon.classList.add('mdi-refresh');
-        }
-    };
-
-    // 加载样式配置（暴露到全局作用域供其他函数使用）
-    window.loadVisualStyleConfig = async function() {
-        try {
-            const styleCode = '<?= $page && $page->getData('style') ? $page->getData('style') : 'default' ?>';
-            
-            if (!styleCode) {
-                console.error('样式代码为空');
-                document.getElementById('visualConfigFields').innerHTML = 
-                    '<div class="alert alert-warning m-3"><?= __('请先选择样式模板') ?></div>';
-                return;
-            }
-            
-            // 构建URL，包含 page_id 和 locale 参数
-            let url = '<?= $this->getBackendUrl('pagebuilder/backend/page/getStyleConfig') ?>?style_code=' + styleCode;
-            if (visualPageId) {
-                url += '&page_id=' + visualPageId;
-            }
-            if (currentVisualLanguage) {
-                url += '&locale=' + currentVisualLanguage;
-            }
-            
-            console.log('🔄 正在加载样式配置:', {
-                styleCode: styleCode,
-                pageId: visualPageId,
-                locale: currentVisualLanguage,
-                url: url
-            });
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            console.log('API响应状态:', response.status);
-            
-            const result = await response.json();
-            console.log('📦 API返回结果:', result);
-            
-            // 显示调试信息
-            if (result.debug) {
-                console.log('🐛 调试信息:', result.debug);
-                console.log('📊 数据结构:', {
-                    'all_settings': result.debug.all_settings_structure,
-                    'style_settings': result.debug.style_settings_structure,
-                    'page_settings_keys': result.debug.page_settings ? Object.keys(result.debug.page_settings) : []
-                });
-            }
-            
-            if (result.success && result.data) {
-                visualConfigGroups = result.data;
-                console.log('配置分组数量:', Object.keys(visualConfigGroups).length);
-                renderVisualConfig(visualConfigGroups);
-            } else {
-                console.error('配置加载失败:', result);
-                document.getElementById('visualConfigFields').innerHTML = 
-                    '<div class="alert alert-danger m-3"><?= __('加载配置失败') ?>: ' + (result.message || '未知错误') + '</div>';
-            }
-        } catch (error) {
-            console.error('加载配置异常:', error);
-            document.getElementById('visualConfigFields').innerHTML = 
-                '<div class="alert alert-danger m-3"><?= __('加载配置失败') ?>: ' + error.message + '</div>';
-        }
-    }
-    
-    // 为 IIFE 内部创建局部引用（保持兼容性）
-    const loadVisualStyleConfig = window.loadVisualStyleConfig;
-
-    // 检测页面是否有自定义内容
-    const hasCustomContent = <?= ($isEdit && $page && !empty($page->getData('content'))) ? 'true' : 'false' ?>;
-    
-    // 渲染配置表单（支持两级分组：文件 -> 分组）
-    function renderVisualConfig(configGroups) {
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🎨 开始渲染可视化配置表单');
-        console.log('当前语言:', currentVisualLanguage);
-        console.log('配置文件数量:', Object.keys(configGroups || {}).length);
-        console.log('📝 页面是否有自定义内容:', hasCustomContent);
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        
-        // 验证数据
-        if (!configGroups || typeof configGroups !== 'object') {
-            console.error('❌ 配置分组数据无效:', configGroups);
-            document.getElementById('visualConfigFields').innerHTML = 
-                '<div class="alert alert-danger m-3"><?= __('配置数据格式错误') ?></div>';
-            return;
-        }
-        
-        let html = '';
-        let configCount = 0;
-        
-        // 遍历文件级别（header, content, footer）
-        for (const fileKey in configGroups) {
-            const fileGroup = configGroups[fileKey];
-            
-            // 跳过没有分组的文件
-            if (!fileGroup || !fileGroup.groups || Object.keys(fileGroup.groups).length === 0) {
-                console.log('跳过空文件分组:', fileKey);
-                continue;
-            }
-            
-            const fileIcon = fileGroup.icon || 'mdi-file';
-            
-            // 检测是否为 content 文件且有自定义内容
-            const isContentFile = fileKey === 'content';
-            const isDisabled = hasCustomContent && isContentFile;
-            
-            // 文件级别的大区块（一级折叠）
-            // 如果是content且有自定义内容，则默认收起并添加灰色样式
-            html += `
-                <div class="config-file-section config-section ${isDisabled ? 'collapsed has-custom-content' : ''}" id="visual_${fileKey}_file">
-                    <div class="config-section-header ${isDisabled ? 'bg-secondary text-white-50' : 'bg-primary text-white'}" 
-                         onclick="toggleSection('visual_${fileKey}_file')">
-                        <div class="d-flex justify-content-between align-items-center w-100">
-                            <span><i class="mdi ${fileIcon}"></i> ${fileGroup.label || fileKey}`;
-            
-            // 如果有自定义内容，显示警告徽章
-            if (isDisabled) {
-                html += ` <span class="badge bg-warning text-dark ms-2" style="font-size: 0.8rem;">
-                            <i class="mdi mdi-alert"></i> <?= __('已使用自定义内容') ?>
-                          </span>`;
-            }
-            
-            html += `</span>
-                            <div class="d-flex align-items-center" style="gap: 0.5rem;">
-                                <a href="javascript:void(0)" 
-                                   class="text-warning" 
-                                   onclick="event.stopPropagation(); resetVisualConfigFile('visual_${fileKey}_file')"
-                                   title="<?= __('恢复此部件所有字段为默认值') ?>"
-                                   style="font-size: 1.1rem; line-height: 1;">
-                                    <i class="mdi mdi-restore"></i>
-                                </a>
-                                <i class="mdi mdi-chevron-down" style="font-size: 1.2rem;"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="config-section-body">`;
-            
-            // 如果是content且有自定义内容，显示醒目提示
-            if (isDisabled) {
-                html += `
-                    <div class="alert alert-warning m-3" role="alert">
-                        <h6 class="alert-heading">
-                            <i class="mdi mdi-alert-circle-outline"></i> <?= __('此区域配置已被自定义内容覆盖') ?>
-                        </h6>
-                        <p class="mb-2">
-                            <?= __('您已在"内容配置"中填写了自定义页面内容，该内容将替代此处的样式模板配置。') ?>
-                        </p>
-                        <p class="mb-0 small text-muted">
-                            <i class="mdi mdi-information-outline"></i> 
-                            <?= __('如果您想使用此处的样式模板配置，请清空"内容配置"中的自定义内容。') ?>
-                        </p>
-                    </div>
-                `;
-            }
-            
-            // 遍历该文件下的分组（layout, style, size等）
-            for (const groupKey in fileGroup.groups) {
-                const group = fileGroup.groups[groupKey];
-                
-                if (!group || !group.configs || Object.keys(group.configs).length === 0) {
-                    console.log('跳过空分组:', groupKey);
-                    continue;
-                }
-                
-                configCount++;
-                const icon = group.icon || 'mdi-cog';
-                
-                // 分组级别的二级折叠（默认收起）
-                // 使用 fileKey + groupKey 确保ID唯一性
-                html += `
-                    <div class="config-section collapsed ms-3" id="visual_${fileKey}_${groupKey}_config">
-                        <div class="config-section-header bg-light" onclick="toggleSection('visual_${fileKey}_${groupKey}_config')">
-                            <div class="d-flex justify-content-between align-items-center w-100">
-                                <span><i class="mdi ${icon}"></i> ${group.label || groupKey}`;
-                
-                // 如果分组有标记（如 MD, MTD），显示响应式徽章
-                if (group.tag) {
-                    let tagIcons = '';
-                    if (group.tag.includes('M')) tagIcons += '<i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i> ';
-                    if (group.tag.includes('T')) tagIcons += '<i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i> ';
-                    if (group.tag.includes('D')) tagIcons += '<i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i> ';
-                    
-                    html += ` <span class="badge bg-info ms-2" style="font-size: 0.65rem; vertical-align: middle;">
-                                ${tagIcons}
-                             </span>`;
-                }
-                
-                html += `</span>
-                                <div class="d-flex align-items-center" style="gap: 0.5rem;">
-                                    <a href="javascript:void(0)" 
-                                       class="link-warning" 
-                                       onclick="event.stopPropagation(); resetVisualConfigGroup('visual_${fileKey}_${groupKey}_config')"
-                                       title="<?= __('恢复此组所有字段为默认值') ?>"
-                                       style="font-size: 0.95rem; line-height: 1;">
-                                        <i class="mdi mdi-restore"></i>
-                                    </a>
-                                    <i class="mdi mdi-chevron-down" style="font-size: 1rem;"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="config-section-body">
-                `;
-                
-                // 如果有说明信息，直接显示（不折叠）
-                if (group.help_title || group.help_content) {
-                    // 处理帮助内容：保留换行符并转义HTML
-                    let helpContentText = group.help_content || '';
-                    helpContentText = escapeHtml(helpContentText);
-                    
-                    html += `
-                        <div class="alert alert-info mb-3" role="alert">
-                            <h6 class="alert-heading mb-2">
-                                <i class="mdi mdi-information-outline"></i> ${escapeHtml(group.help_title || '说明')}
-                            </h6>
-                            <div class="help-content-static">
-                                ${helpContentText}
-                            </div>
-                        </div>`;
-                }
-                
-                for (const configKey in group.configs) {
-                    const config = group.configs[configKey];
-                    // 优先使用 config.value（后端已合并的值），否则使用 config.default
-                    const rawValue = config.value !== undefined ? config.value : (config.default || '');
-                    const currentValue = escapeHtml(rawValue); // 转义 HTML 特殊字符
-                    const fieldId = `visual_config_${configKey.replace(/\./g, '_')}`;
-                    
-                    // 调试日志：显示配置值
-                    if (config.value !== undefined) {
-                        console.log(`✅ [${currentVisualLanguage}] ${configKey}: "${config.value}" (来自页面配置)`);
-                    } else if (config.default) {
-                        console.log(`⚪ [${currentVisualLanguage}] ${configKey}: "${config.default}" (使用模板默认值)`);
-                    } else {
-                        console.log(`❌ [${currentVisualLanguage}] ${configKey}: 无值`);
-                    }
-                    
-                    html += `<div class="mb-3">`;
-                    
-                    // 渲染标签和响应式徽章
-                    html += `<label for="${fieldId}" class="form-label">${escapeHtml(config.label)}`;
-                    
-                    // 添加响应式标记图标
-                    if (config.responsive) {
-                        html += ` <span class="badge bg-info ms-1" 
-                                        title="支持响应式配置（移动端/平板/PC端）" 
-                                        style="font-size: 0.75rem; vertical-align: middle;">
-                                    <i class="mdi mdi-cellphone" style="font-size: 0.85rem;"></i>
-                                    <i class="mdi mdi-tablet" style="font-size: 0.85rem;"></i>
-                                    <i class="mdi mdi-monitor" style="font-size: 0.85rem;"></i>
-                                 </span>`;
-                    }
-                    
-                    // 添加翻译按钮（仅在编辑模式下且不是颜色选择器）
-                    if (visualPageId && visualPageId !== 'null' && config.type !== 'color' && config.type !== 'select') {
-                        html += ` <a href="javascript:void(0)" 
-                                     class="link-info ms-1" 
-                                     onclick="openVisualConfigTranslation('${configKey}', '${escapeHtml(config.label)}', '${escapeHtml(rawValue)}')"
-                                     title="<?= __('翻译此配置项') ?>">
-                                    <i class="mdi mdi-translate"></i>
-                                 </a>`;
-                    }
-                    
-                    // 添加恢复默认按钮
-                    const escapedDefault = escapeHtml(config.default || '');
-                    html += ` <a href="javascript:void(0)" 
-                                 class="link-warning ms-1 visual-config-reset-btn" 
-                                 data-field-id="${fieldId}"
-                                 data-config-key="${configKey}"
-                                 data-config-type="${config.type}"
-                                 data-default-value="${escapedDefault}"
-                                 onclick="resetVisualConfigField(this)"
-                                 title="<?= __('恢复默认值') ?>">
-                                <i class="mdi mdi-restore"></i>
-                             </a>`;
-                    
-                    html += `</label>`;
-                    
-                    // 添加描述信息
-                    if (config.description) {
-                        html += `<div class="form-text text-muted mb-2" 
-                                      style="margin-top: -8px; font-size: 0.85rem;">
-                                    <i class="mdi mdi-information-outline"></i> 
-                                    ${escapeHtml(config.description)}
-                                 </div>`;
-                    }
-                    
-                    switch (config.type) {
-                        case 'color':
-                            // 处理颜色值：如果是 transparent 或空值，使用 #ffffff 作为默认显示
-                            let colorValue = currentValue;
-                            let displayValue = currentValue;
-                            if (!colorValue || colorValue === 'transparent' || colorValue === '') {
-                                displayValue = '#ffffff';
-                                colorValue = config.default || '';
-                            }
-                            // 确保颜色值是有效的hex格式（HTML color input要求）
-                            if (!displayValue.startsWith('#')) {
-                                displayValue = '#' + displayValue;
-                            }
-                            
-                            html += `
-                                <div class="input-group">
-                                    <input type="color" 
-                                           class="form-control form-control-color auto-save-field" 
-                                           id="${fieldId}_picker"
-                                           data-config-key="${configKey}"
-                                           data-linked-input="${fieldId}_text"
-                                           value="${displayValue}">
-                                    <input type="text" 
-                                           class="form-control auto-save-field" 
-                                           id="${fieldId}_text"
-                                           data-config-key="${configKey}"
-                                           data-linked-picker="${fieldId}_picker"
-                                           value="${escapeHtml(colorValue)}"
-                                           placeholder="${escapeHtml(config.default || '')}"
-                                           style="flex: 1;">
-                                </div>
-                            `;
-                            break;
-                            
-                        case 'select':
-                            html += `<select class="form-select auto-save-field" id="${fieldId}" data-config-key="${configKey}">`;
-                            if (config.options && config.options.length > 0) {
-                                config.options.forEach(opt => {
-                                    const selected = opt === rawValue ? 'selected' : '';
-                                    html += `<option value="${escapeHtml(opt)}" ${selected}>${escapeHtml(opt)}</option>`;
-                                });
-                            }
-                            html += `</select>`;
-                            break;
-                            
-                        case 'responsive':
-                            // 响应式配置：支持 60/80 或 60/70/80 格式，使用 text 输入框
-                            html += `
-                                <div class="input-group">
-                                    <input type="text" 
-                                           class="form-control auto-save-field" 
-                                           id="${fieldId}"
-                                           data-config-key="${configKey}"
-                                           value="${currentValue}"
-                                           placeholder="${escapeHtml(config.default || '')}"
-                                           title="<?= __('支持单一值(如: 80)或多端值(如: 60/80 或 60/70/80)') ?>">
-                                    ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit)}</span>` : ''}
-                                </div>
-                            `;
-                            break;
-                            
-                        case 'number':
-                            html += `
-                                <div class="input-group">
-                                    <input type="number" 
-                                           class="form-control auto-save-field" 
-                                           id="${fieldId}"
-                                           data-config-key="${configKey}"
-                                           value="${currentValue}"
-                                           placeholder="${escapeHtml(config.default)}">
-                                    ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit)}</span>` : ''}
-                                </div>
-                            `;
-                            break;
-                            
-                        case 'textarea':
-                            html += `
-                                <textarea class="form-control auto-save-field" 
-                                          id="${fieldId}"
-                                          data-config-key="${configKey}"
-                                          rows="3">${currentValue}</textarea>
-                            `;
-                            break;
-                            
-                        case 'text':
-                        default:
-                            // text 类型和其他类型，如果有单位则显示
-                            html += `
-                                <div class="input-group">
-                                    <input type="text" 
-                                           class="form-control auto-save-field" 
-                                           id="${fieldId}"
-                                           data-config-key="${configKey}"
-                                           value="${currentValue}"
-                                           placeholder="${escapeHtml(config.default || '')}">
-                                    ${config.unit ? `<span class="input-group-text">${escapeHtml(config.unit)}</span>` : ''}
-                                </div>
-                            `;
-                    }
-                    
-                    html += `</div>`;
-                }
-                
-                // 关闭分组
-                html += `
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // 关闭文件分组
-            html += `
-                    </div>
-                </div>
-            `;
-        }
-        
-        // 检查是否有配置
-        if (configCount === 0) {
-            console.warn('⚠️ 没有找到任何配置分组');
-            document.getElementById('visualConfigFields').innerHTML = 
-                '<div class="alert alert-warning m-3"><?= __('当前样式模板没有可配置项') ?></div>';
-            return;
-        }
-        
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`✅ 配置表单渲染完成`);
-        console.log(`   - 语言: ${currentVisualLanguage}`);
-        console.log(`   - 配置分组数: ${configCount}`);
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        document.getElementById('visualConfigFields').innerHTML = html;
-        
-        // 监听所有自动保存字段
-        document.querySelectorAll('#visualConfigFields .auto-save-field').forEach(field => {
-            // 颜色选择器和文本框的同步
-            if (field.type === 'color') {
-                field.addEventListener('input', function() {
-                    const linkedInput = this.getAttribute('data-linked-input');
-                    if (linkedInput) {
-                        const textField = document.getElementById(linkedInput);
-                        if (textField) {
-                            textField.value = this.value;
-                        }
-                    }
-                    updateVisualSaveStatus('', '<?= __('未保存') ?>');
-                    autoSaveVisualConfig();
-                });
-            } else if (field.type === 'text' && field.hasAttribute('data-linked-picker')) {
-                field.addEventListener('input', function() {
-                    const linkedPicker = this.getAttribute('data-linked-picker');
-                    if (linkedPicker && this.value.startsWith('#')) {
-                        const pickerField = document.getElementById(linkedPicker);
-                        if (pickerField) {
-                            pickerField.value = this.value;
-                        }
-                    }
-                    updateVisualSaveStatus('', '<?= __('未保存') ?>');
-                    autoSaveVisualConfig();
-                });
-            } else {
-                field.addEventListener('input', function() {
-                    updateVisualSaveStatus('', '<?= __('未保存') ?>');
-                    autoSaveVisualConfig();
-                });
-            }
-            
-            field.addEventListener('change', function() {
-                updateVisualSaveStatus('', '<?= __('未保存') ?>');
-                autoSaveVisualConfig();
-            });
-        });
-        
-        // 检查是否有重置标记，如果有则展开并定位到指定位置
-        const resetTarget = localStorage.getItem('pagebuilder_reset_target');
-        if (resetTarget) {
-            try {
-                const target = JSON.parse(resetTarget);
-                console.log('📍 发现重置标记:', target);
-                
-                // 清除标记
-                localStorage.removeItem('pagebuilder_reset_target');
-                
-                // 使用 setTimeout 确保 DOM 已完全渲染
-                setTimeout(() => {
-                    const targetElement = document.getElementById(target.id);
-                    
-                    if (targetElement) {
-                        console.log('✅ 找到目标元素:', target.id, targetElement);
-                        
-                        // 如果是组级别，需要先展开父部件
-                        if (target.type === 'group') {
-                            const parentFile = targetElement.closest('.config-file-section, .config-section');
-                            if (parentFile && parentFile.id !== target.id) {
-                                console.log('📂 展开父部件:', parentFile.id);
-                                if (parentFile.classList.contains('collapsed')) {
-                                    parentFile.classList.remove('collapsed');
-                                    
-                                    const parentIcon = parentFile.querySelector('.config-section-header i.mdi');
-                                    if (parentIcon) {
-                                        parentIcon.classList.remove('mdi-chevron-right');
-                                        parentIcon.classList.add('mdi-chevron-down');
-                                        console.log('  ↪ 更新父图标');
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // 展开目标元素（移除 collapsed 类）
-                        if (targetElement.classList.contains('collapsed')) {
-                            console.log('📂 展开目标元素:', target.id);
-                            targetElement.classList.remove('collapsed');
-                            
-                            const icon = targetElement.querySelector('.config-section-header i.mdi');
-                            if (icon) {
-                                icon.classList.remove('mdi-chevron-right');
-                                icon.classList.add('mdi-chevron-down');
-                                console.log('  ↪ 更新目标图标');
-                            }
-                        }
-                        
-                        // 滚动到可见区域
-                        setTimeout(() => {
-                            targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                            console.log('📍 滚动到目标位置');
-                        }, 50);
-                        
-                        // 添加临时高亮效果
-                        setTimeout(() => {
-                            targetElement.style.backgroundColor = '#fff3cd';
-                            console.log('✨ 添加高亮效果');
-                            
-                            setTimeout(() => {
-                                targetElement.style.transition = 'background-color 1s ease';
-                                targetElement.style.backgroundColor = '';
-                            }, 800);
-                        }, 100);
-                        
-                        // 如果标记了需要刷新预览，则刷新
-                        if (target.needRefreshPreview) {
-                            setTimeout(() => {
-                                if (typeof refreshStylePreview === 'function') {
-                                    console.log('🔄 自动刷新预览（延迟执行）...');
-                                    refreshStylePreview();
-                                } else {
-                                    console.warn('⚠️ refreshStylePreview 函数未定义');
-                                }
-                            }, 300);
-                        }
-                        
-                        console.log('✅ 已定位到重置的', target.type === 'file' ? '部件' : '配置组', ':', target.id);
-                    } else {
-                        console.warn('⚠️ 未找到目标元素:', target.id);
-                    }
-                }, 200);
-            } catch (e) {
-                console.error('❌ 解析重置标记失败:', e);
-                localStorage.removeItem('pagebuilder_reset_target');
-            }
-        }
-        
-    }
-
-    // 键盘快捷键
-    document.addEventListener('keydown', function(e) {
-        // ESC 退出全屏
-        if (e.key === 'Escape') {
-            const wrapper = document.getElementById('visualConfigWrapper');
-            if (wrapper.classList.contains('active')) {
-                closeVisualConfig();
-            }
-        }
-    });
-    
-    /**
-     * 切换页面关系树的展开/收起状态
-     */
-    window.toggleVisualPageTree = function() {
-        const treeBody = document.getElementById('visualPageTreeBody');
-        const icon = document.getElementById('visualPageTreeIcon');
-        const header = icon ? icon.parentElement : null;
-        
-        if (treeBody && icon && header) {
-            if (treeBody.style.display === 'none') {
-                // 展开
-                treeBody.style.display = 'block';
-                icon.classList.add('expanded');
-                header.classList.add('has-body');
-            } else {
-                // 收起
-                treeBody.style.display = 'none';
-                icon.classList.remove('expanded');
-                header.classList.remove('has-body');
-            }
-        }
-    };
-    
-    /**
-     * 初始化可视化编辑器中页面树的复制功能
-     */
-    window.initVisualPageTreeCopy = function() {
-        // ==================== 点击 Handle 文本复制（可视化编辑器） ====================
-        const visualHandles = document.querySelectorAll('.clickable-handle-visual');
-        visualHandles.forEach(function(element) {
-            // 移除旧的事件监听器（避免重复绑定）
-            const newElement = element.cloneNode(true);
-            element.parentNode.replaceChild(newElement, element);
-            
-            newElement.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const handle = this.getAttribute('data-handle');
-                const pageName = this.getAttribute('data-page-name');
-                const originalBg = this.style.backgroundColor || '#f8f9fa';
-                const originalText = this.textContent;
-                
-                // 添加 / 前缀
-                const handleWithSlash = '/' + handle;
-                
-                // 复制到剪贴板
-                copyTextToClipboard(handleWithSlash, '<?= __("Handle 已复制") ?>', 
-                    '<?= __("页面") ?>: ' + pageName + '<br><?= __("Handle") ?>: ' + handleWithSlash);
-                
-                // 视觉反馈
-                this.style.backgroundColor = '#d4edda';
-                this.style.color = '#155724';
-                this.textContent = '✓ ' + handleWithSlash;
-                setTimeout(() => {
-                    this.style.backgroundColor = originalBg;
-                    this.style.color = '';
-                    this.textContent = originalText;
-                }, 1500);
-            });
-        });
-        
-        // ==================== 点击链接文本复制（可视化编辑器） ====================
-        const visualUrls = document.querySelectorAll('.clickable-url-visual');
-        visualUrls.forEach(function(element) {
-            // 移除旧的事件监听器（避免重复绑定）
-            const newElement = element.cloneNode(true);
-            element.parentNode.replaceChild(newElement, element);
-            
-            newElement.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const url = this.getAttribute('data-url');
-                const pageName = this.getAttribute('data-page-name');
-                const originalColor = this.style.color || '#6c757d';
-                const originalContent = this.innerHTML;
-                
-                // 复制到剪贴板
-                copyTextToClipboard(url, '<?= __("链接已复制") ?>', 
-                    '<?= __("页面") ?>: ' + pageName + '<br><?= __("链接") ?>: ' + url);
-                
-                // 视觉反馈
-                this.style.color = '#155724';
-                this.style.fontWeight = 'bold';
-                this.innerHTML = '<small>✓ 已复制</small>';
-                setTimeout(() => {
-                    this.style.color = originalColor;
-                    this.style.fontWeight = '';
-                    this.innerHTML = originalContent;
-                }, 1500);
-            });
-        });
-        
-        console.log('✅ 可视化编辑器页面树复制功能已初始化');
-    };
-    
-    /**
-     * 复制文本到剪贴板（简化版）
-     */
-    function copyTextToClipboard(text, successTitle, successMessage) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text)
-                .then(() => {
-                    showVisualToast('success', successTitle, successMessage);
-                })
-                .catch(err => {
-                    console.error('复制失败:', err);
-                    fallbackCopyText(text, successTitle, successMessage);
-                });
-        } else {
-            fallbackCopyText(text, successTitle, successMessage);
-        }
-    }
-    
-    /**
-     * 降级复制方法
-     */
-    function fallbackCopyText(text, successTitle, successMessage) {
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        try {
-            document.execCommand('copy');
-            showVisualToast('success', successTitle, successMessage);
-        } catch (err) {
-            console.error('复制失败:', err);
-            prompt('<?= __("请手动复制") ?>:', text);
-        } finally {
-            document.body.removeChild(textArea);
-        }
-    }
-    
-    /**
-     * 显示 Toast 通知（可视化编辑器专用）
-     */
-    function showVisualToast(type, title, message) {
-        const toast = document.createElement('div');
-        toast.style.cssText = 'position:fixed;top:80px;right:20px;background:#28a745;color:white;padding:12px 20px;border-radius:5px;box-shadow:0 4px 8px rgba(0,0,0,0.2);z-index:99999;max-width:350px;font-size:14px;';
-        toast.innerHTML = '<strong>' + title + '</strong><br>' + (message || '');
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.style.transition = 'opacity 0.3s';
-            toast.style.opacity = '0';
-            setTimeout(() => document.body.removeChild(toast), 300);
-        }, 2000);
-    }
-})();
 
 /**
  * 打开预览图模态框（查看大图）
@@ -7118,7 +4086,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .nav-tabs-custom {
     border-bottom: 2px solid #dee2e6;
 }
-
 .nav-tabs-custom .nav-link {
     border: none;
     border-bottom: 2px solid transparent;
@@ -7185,7 +4152,7 @@ function showToast(type, title, message) {
         // 降级为简单的通知元素
         if (type === 'success') {
             const toast = document.createElement('div');
-            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 20px;border-radius:5px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:9999;max-width:400px;';
+            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 20px;border-radius:5px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:11000;max-width:400px;';
             toast.innerHTML = '<strong>' + title + '</strong><br>' + (message || '');
             document.body.appendChild(toast);
             
@@ -7199,6 +4166,7 @@ function showToast(type, title, message) {
         }
     }
 }
+
 </script>
 
 <!-- 页面关系树复制功能 -->
@@ -7365,38 +4333,4 @@ document.addEventListener('DOMContentLoaded', function() {
     // showToast 函数现在是全局函数，可以在任何地方调用
 });
 </script>
-
-<!-- 恢复默认值确认模态框 -->
-<div class="modal fade" id="resetConfigConfirmModal" tabindex="-1" aria-labelledby="resetConfigConfirmModalLabel" aria-hidden="true" style="z-index: 9999;">
-    <div class="modal-dialog modal-dialog-centered" style="z-index: 10000;">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="resetConfigConfirmModalLabel">
-                    <i class="mdi mdi-alert-circle-outline"></i> <?= __('确认恢复默认值') ?>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning" role="alert">
-                    <i class="mdi mdi-information-outline"></i> 
-                    <strong><?= __('此操作不可撤销！') ?></strong>
-                </div>
-                <p id="resetConfigMessage" class="mb-3"></p>
-                <div id="resetConfigDetails" class="text-muted small">
-                    <!-- 详细信息将通过JS动态填充 -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="mdi mdi-close"></i> <?= __('取消') ?>
-                </button>
-                <button type="button" class="btn btn-warning" id="confirmResetConfigBtn">
-                    <i class="mdi mdi-restore"></i> <?= __('确认恢复') ?>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
-

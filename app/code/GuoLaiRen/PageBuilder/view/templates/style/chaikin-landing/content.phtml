@@ -103,7 +103,7 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
     max-width: <?= $maxWidth ?>;
     margin: 0 auto <?= $marginBottom ?>;
     position: relative;
-    background-color: <?= htmlspecialchars($containerBg) ?>;
+    background-color: <?= htmlspecialchars($containerBg ?? '') ?>;
     border-radius: <?= $borderRadius ?>;
     overflow: hidden;
 }
@@ -112,7 +112,7 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
     position: relative;
     width: 100%;
     padding-bottom: <?= $aspectRatio === '16/9' ? '56.25%' : ($aspectRatio === '4/3' ? '75%' : '100%') ?>;
-    background: linear-gradient(135deg, <?= htmlspecialchars($containerBg) ?> 0%, #003366 100%);
+    background: linear-gradient(135deg, <?= htmlspecialchars($containerBg ?? '') ?> 0%, #003366 100%);
 }
 
 .chaikin-video-wrapper video,
@@ -148,7 +148,7 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
 }
 
 .chaikin-play-text {
-    color: <?= htmlspecialchars($playTextColor) ?>;
+    color: <?= htmlspecialchars($playTextColor ?? '') ?>;
     font-size: <?= $playTextSize ?>;
     font-weight: 700;
     margin-bottom: 20px;
@@ -164,14 +164,14 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
     left: 50%;
     width: 40px;
     height: 3px;
-    background: <?= htmlspecialchars($playTextColor) ?>;
+    background: <?= htmlspecialchars($playTextColor ?? '') ?>;
     transform: translateX(-50%) rotate(-10deg);
 }
 
 .chaikin-play-button {
     width: <?= $playButtonSize ?>;
     height: <?= $playButtonSize ?>;
-    background-color: <?= htmlspecialchars($playButtonColor) ?>;
+    background-color: <?= htmlspecialchars($playButtonColor ?? '') ?>;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -211,7 +211,7 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
                 <iframe 
                     id="chaikin-video"
                     src="" 
-                    data-src="<?= htmlspecialchars($videoUrl) ?>"
+                    data-src="<?= htmlspecialchars($videoUrl ?? '') ?>"
                     frameborder="0" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                     allowfullscreen>
@@ -220,10 +220,10 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
                 <!-- HTML5视频 -->
                 <video 
                     id="chaikin-video"
-                    <?php if ($videoPoster): ?>poster="<?= htmlspecialchars($videoPoster) ?>"<?php endif; ?>
+                    <?php if ($videoPoster): ?>poster="<?= htmlspecialchars($videoPoster ?? '') ?>"<?php endif; ?>
                     controls 
                     style="display: none;">
-                    <source src="<?= htmlspecialchars($videoUrl) ?>" type="video/mp4">
+                    <source src="<?= htmlspecialchars($videoUrl ?? '') ?>" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
             <?php endif; ?>
@@ -232,7 +232,7 @@ $borderRadius = getVideoConfig($styleSettings, 'video.border_radius', '8') . 'px
         <!-- 播放覆盖层 -->
         <div class="chaikin-video-overlay" id="chaikin-play-overlay">
             <div class="chaikin-play-text" style="position: relative;">
-                <?= htmlspecialchars($playText) ?>
+                <?= htmlspecialchars($playText ?? '') ?>
             </div>
             <div class="chaikin-play-button"></div>
         </div>
@@ -318,6 +318,17 @@ $popupButton2Color = $styleSettings['popup.button2_color'] ?? '#2c5aa0';
 $popupButton2TextColor = $styleSettings['popup.button2_text_color'] ?? '#ffffff';
 $popupCloseText = $styleSettings['popup.close_text'] ?? 'Close this message please';
 $popupCloseColor = $styleSettings['popup.close_color'] ?? '#0099cc';
+
+// 生成弹窗按钮事件名称
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+if ($pageDefaultCtaEvent !== '') {
+    $popupButton1EventName = $pageDefaultCtaEvent . '_primary';
+    $popupButton2EventName = $pageDefaultCtaEvent . '_secondary';
+} else {
+    $popupButton1EventName = 'cta_' . $pageHandleForEvent . '_popup_primary';
+    $popupButton2EventName = 'cta_' . $pageHandleForEvent . '_popup_secondary';
+}
 $popupMaxWidth = (int)($styleSettings['popup.max_width'] ?? 600);
 $popupPadding = parsePopupResponsive($styleSettings['popup.padding'] ?? '20/32/48');
 $popupBorderWidth = (int)($styleSettings['popup.border_width'] ?? 6);
@@ -329,37 +340,43 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 <div id="chaikin-popup-overlay" class="chaikin-popup-overlay" style="display: none;">
     <div class="chaikin-popup-box">
         <div class="chaikin-popup-content">
-            <h2 class="chaikin-popup-title"><?= nl2br(htmlspecialchars($popupTitle)) ?></h2>
-            <div class="chaikin-popup-text"><?= nl2br(htmlspecialchars($popupContent)) ?></div>
+            <h2 class="chaikin-popup-title"><?= nl2br(htmlspecialchars($popupTitle ?? '')) ?></h2>
+            <div class="chaikin-popup-text"><?= nl2br(htmlspecialchars($popupContent ?? '')) ?></div>
             <div class="chaikin-popup-buttons">
                 <?php if ($popupButton1Url): ?>
-                    <a href="<?= htmlspecialchars($popupButton1Url) ?>" 
-                       target="<?= htmlspecialchars($popupButton1Target) ?>"
+                    <a href="<?= htmlspecialchars($popupButton1Url ?? '') ?>" 
+                       target="<?= htmlspecialchars($popupButton1Target ?? '') ?>"
                        class="chaikin-popup-btn chaikin-popup-btn-primary" 
-                       onclick="closeChaikinPopup()">
-                        <?= htmlspecialchars($popupButton1Text) ?>
+                       onclick="closeChaikinPopup()"
+                       data-track-event="<?= htmlspecialchars($popupButton1EventName ?? '') ?>">
+                        <?= htmlspecialchars($popupButton1Text ?? '') ?>
                     </a>
                 <?php else: ?>
-                    <button class="chaikin-popup-btn chaikin-popup-btn-primary" onclick="closeChaikinPopup()">
-                        <?= htmlspecialchars($popupButton1Text) ?>
+                    <button class="chaikin-popup-btn chaikin-popup-btn-primary" 
+                            onclick="closeChaikinPopup()"
+                            data-track-event="<?= htmlspecialchars($popupButton1EventName ?? '') ?>">
+                        <?= htmlspecialchars($popupButton1Text ?? '') ?>
                     </button>
                 <?php endif; ?>
                 
                 <?php if ($popupButton2Url): ?>
-                    <a href="<?= htmlspecialchars($popupButton2Url) ?>" 
-                       target="<?= htmlspecialchars($popupButton2Target) ?>"
+                    <a href="<?= htmlspecialchars($popupButton2Url ?? '') ?>" 
+                       target="<?= htmlspecialchars($popupButton2Target ?? '') ?>"
                        class="chaikin-popup-btn chaikin-popup-btn-secondary" 
-                       onclick="closeChaikinPopup()">
-                        <?= htmlspecialchars($popupButton2Text) ?>
+                       onclick="closeChaikinPopup()"
+                       data-track-event="<?= htmlspecialchars($popupButton2EventName ?? '') ?>">
+                        <?= htmlspecialchars($popupButton2Text ?? '') ?>
                     </a>
                 <?php else: ?>
-                    <button class="chaikin-popup-btn chaikin-popup-btn-secondary" onclick="closeChaikinPopup()">
-                        <?= htmlspecialchars($popupButton2Text) ?>
+                    <button class="chaikin-popup-btn chaikin-popup-btn-secondary" 
+                            onclick="closeChaikinPopup()"
+                            data-track-event="<?= htmlspecialchars($popupButton2EventName ?? '') ?>">
+                        <?= htmlspecialchars($popupButton2Text ?? '') ?>
                     </button>
                 <?php endif; ?>
             </div>
             <a href="#" class="chaikin-popup-close-link" onclick="closeChaikinPopup(); return false;">
-                <?= htmlspecialchars($popupCloseText) ?>
+                <?= htmlspecialchars($popupCloseText ?? '') ?>
             </a>
         </div>
     </div>
@@ -382,7 +399,7 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 
 .chaikin-popup-box {
     background: white;
-    border: <?= $popupBorderWidth ?>px solid <?= htmlspecialchars($popupBorderColor) ?>;
+    border: <?= $popupBorderWidth ?>px solid <?= htmlspecialchars($popupBorderColor ?? '') ?>;
     max-width: <?= $popupMaxWidth ?>px;
     width: 100%;
     max-height: 90vh;
@@ -413,7 +430,7 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 }
 
 .chaikin-popup-title {
-    color: <?= htmlspecialchars($popupTitleColor) ?>;
+    color: <?= htmlspecialchars($popupTitleColor ?? '') ?>;
     font-size: <?= $popupTitleSize['mobile'] ?>;
     font-weight: 700;
     margin: 0 0 20px 0;
@@ -421,7 +438,7 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 }
 
 .chaikin-popup-text {
-    color: <?= htmlspecialchars($popupContentColor) ?>;
+    color: <?= htmlspecialchars($popupContentColor ?? '') ?>;
     font-size: <?= $popupContentSize['mobile'] ?>;
     line-height: 1.6;
     margin: 0 0 24px 0;
@@ -457,8 +474,8 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 }
 
 .chaikin-popup-btn-primary {
-    background-color: <?= htmlspecialchars($popupButton1Color) ?>;
-    color: <?= htmlspecialchars($popupButton1TextColor) ?>;
+    background-color: <?= htmlspecialchars($popupButton1Color ?? '') ?>;
+    color: <?= htmlspecialchars($popupButton1TextColor ?? '') ?>;
 }
 
 .chaikin-popup-btn-primary:hover {
@@ -468,8 +485,8 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 }
 
 .chaikin-popup-btn-secondary {
-    background-color: <?= htmlspecialchars($popupButton2Color) ?>;
-    color: <?= htmlspecialchars($popupButton2TextColor) ?>;
+    background-color: <?= htmlspecialchars($popupButton2Color ?? '') ?>;
+    color: <?= htmlspecialchars($popupButton2TextColor ?? '') ?>;
 }
 
 .chaikin-popup-btn-secondary:hover {
@@ -479,7 +496,7 @@ $popupBorderColor = $styleSettings['popup.border_color'] ?? '#ff0000';
 }
 
 .chaikin-popup-close-link {
-    color: <?= htmlspecialchars($popupCloseColor) ?>;
+    color: <?= htmlspecialchars($popupCloseColor ?? '') ?>;
     text-decoration: underline;
     font-size: 14px;
     cursor: pointer;
@@ -524,6 +541,8 @@ function closeChaikinPopup() {
         popup.style.display = 'none';
     }
 }
+
+});
 
 // 延迟显示弹窗
 (function() {

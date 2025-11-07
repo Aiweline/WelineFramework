@@ -312,7 +312,9 @@ class Template extends DataObject
             //如果缓存文件不存在则 编译 或者文件修改了也编译
             $content = file_get_contents($tplFile);
             $repContent = $this->tmp_replace($content, $comFileName);                   //得到模板文件 并替换占位符 并得到替换后的文件
-            if (DEV) {
+            // 检查是否显示模板位置注释（默认不显示，可通过配置 template.show_comments 控制）
+            $showTemplateComments = Env::getInstance()->getConfig('template.show_comments', false);
+            if ($showTemplateComments === true || $showTemplateComments === '1' || $showTemplateComments === 1) {
                 $tpl_pad_file_name = __('模板文件：%{1} START', $tplFile);
                 $tpl_str_len = strlen($tpl_pad_file_name);
                 $tpl_str_pad_all = str_pad('', $tpl_str_len, '=', STR_PAD_BOTH);
@@ -324,6 +326,9 @@ class Template extends DataObject
                 $repContent = "<!--" . PHP_EOL . "$tpl_str_pad_all " . PHP_EOL . $tpl_str_pad_file . PHP_EOL . $tpl_str_pad_all . PHP_EOL . ' -->'
                     . PHP_EOL . $repContent . PHP_EOL
                     . '<!--' . PHP_EOL . $com_str_pad_all . PHP_EOL . $com_str_pad_file . PHP_EOL . $com_str_pad_all . PHP_EOL . '-->';
+            } else {
+                // 当 template.show_comments 为 false 时，移除所有 HTML 注释
+                $repContent = preg_replace('/\<!--([\s\S]*?)-->/', '', $repContent);
             }
             file_put_contents($comFileName, $repContent);                               //将替换后的文件写入定义的缓存文件中
         }

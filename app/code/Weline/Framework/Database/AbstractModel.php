@@ -1174,8 +1174,9 @@ abstract class AbstractModel extends DataObject
         //        if (!$remove_force_check_fields&&$_model_fields=$this->_model_fields) {
         //            return array_unique(array_merge($_model_fields, array_values($this->force_check_fields)));
         //        }
+        # 模型字段缓存 可能在命令行模式下会未初始化__init()函数就调用$this->_cache，所以先判断$this->_cache是否存在
         $module__fields_cache_key = $this::class . '_module__fields_cache_key';
-        if (PROD && $_model_fields = $this->_cache->get($module__fields_cache_key)) {
+        if (PROD && $this->_cache && $_model_fields = $this->_cache->get($module__fields_cache_key)) {
             $this->_model_fields = $_model_fields;
             if (!$remove_force_check_fields) {
                 return array_unique(array_merge($_model_fields, array_values($this->force_check_fields)));
@@ -1204,7 +1205,7 @@ abstract class AbstractModel extends DataObject
             }
         }
         $this->_model_fields = $_fields;
-        if (PROD) {
+        if (PROD && $this->_cache) {
             $this->_cache->set($module__fields_cache_key, $_fields);
         }
         if (!$remove_force_check_fields) {

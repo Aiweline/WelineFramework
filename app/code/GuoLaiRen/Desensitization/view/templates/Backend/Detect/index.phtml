@@ -172,19 +172,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </div>
                                     </div>
                                     
-                                    <!-- 3. 新旧对比 -->
-                                    <div class="accordion-item">
-                                        <h2 class="accordion-header" id="headingCompare">
-                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCompare">
-                                                <i class="mdi mdi-compare me-2"></i>新旧对比
-                                            </button>
-                                        </h2>
-                                        <div id="collapseCompare" class="accordion-collapse collapse" data-bs-parent="#resultAccordion">
-                                            <div class="accordion-body" id="compareContent">
-                                                <div class="text-muted text-center py-4">等待对比...</div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <!-- 新旧对比 已移除 -->
                                     
                                     <!-- 4. 历史版本 -->
                                     <div class="accordion-item" id="historyAccordionItem" style="display: none;">
@@ -416,20 +404,8 @@ function initDetectModal() {
         backdrop: 'static'
     });
 
-    // 隐藏后仅在无其它可见弹窗时清理 body 状态，避免与 Bootstrap 的销毁流程冲突
-    detectLoadingModalEl.addEventListener('hidden.bs.modal', () => {
-        const anyModalShown = document.querySelector('.modal.show');
-        if (!anyModalShown) {
-            document.body.classList.remove('modal-open');
-            document.body.style.removeProperty('overflow');
-            document.body.style.removeProperty('padding-right');
-            // 若仍有遗留 backdrop 且没有可见弹窗，再做兜底清理
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            if (backdrops.length) {
-                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
-            }
-        }
-    });
+    // 交由 Bootstrap 自身处理销毁与 backdrop 清理，避免双重清理导致的空指针
+    detectLoadingModalEl.addEventListener('hidden.bs.modal', () => {});
 }
 
 function showLoadingModal() {
@@ -452,20 +428,8 @@ function showLoadingModal() {
 
 function hideLoadingModal() {
     if (!detectLoadingModalInstance) return;
+    // 仅调用 Bootstrap 的 hide，避免手动移除 backdrop 造成引用失效
     detectLoadingModalInstance.hide();
-    // 兜底：仅当没有其它弹窗时再清理 body 与遗留 backdrop
-    setTimeout(() => {
-        const anyModalShown = document.querySelector('.modal.show');
-        if (!anyModalShown) {
-            document.body.classList.remove('modal-open');
-            document.body.style.removeProperty('overflow');
-            document.body.style.removeProperty('padding-right');
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            if (backdrops.length) {
-                backdrops.forEach(b => b.parentNode && b.parentNode.removeChild(b));
-            }
-        }
-    }, 300);
 }
 
 function executeDetect() {
@@ -590,7 +554,8 @@ function displayDetectionResult(result) {
         
         // 在原文拷贝上进行高亮标记
         const originalCopy = result.original;
-        const markedContent = markSensitiveContent(originalCopy, result.detection.positions);
+        const terms = (result.detection && Array.isArray(result.detection.terms)) ? result.detection.terms : [];
+        const markedContent = markSensitiveContent(originalCopy, result.detection.positions, terms);
         html += `
             <div class="card mb-3">
                 <div class="card-header">
@@ -637,7 +602,7 @@ function displayDetectionResult(result) {
 }
 
 // 标记敏感内容
-function markSensitiveContent(content, positions) {
+function markSensitiveContent(content, positions, terms = []) {
     if (!positions || positions.length === 0) return content;
 
     // —————————— 通用偏移标注方案 ——————————
@@ -700,65 +665,84 @@ function markSensitiveContent(content, positions) {
             const newEndU = toU(absEndCu);
             return { ...p, start: newStartU, end: Math.max(newStartU + 1, newEndU) };
         }
-        // 路径2：忽略空白进行匹配（处理 AI 返回忽略空格/换行导致的偏移）
-        const stripWs = (s) => s.replace(/[\s\u00A0\u200B\u202F\u3000]+/g, '');
-        const windowUnits = Array.from(windowText);
-        const compactChars = [];
-        const compactMap = []; // 紧凑索引 -> 原窗口内 CU 起始
-        let cuOffset = 0;
-        for (let i = 0; i < windowUnits.length; i++) {
-            const ch = windowUnits[i];
-            const code = ch.codePointAt(0);
-            const cuLen = (code > 0xFFFF) ? 2 : 1;
-            const isWs = /[\s\u00A0\u200B\u202F\u3000]/.test(ch);
-            if (!isWs) {
-                compactChars.push(ch);
-                compactMap.push(cuOffset);
-            }
-            cuOffset += cuLen;
-        }
-        const compactWindow = compactChars.join('');
-        const compactMatch = stripWs(p.match);
-        const idxCompact = compactWindow.indexOf(compactMatch);
-        if (idxCompact >= 0) {
-            const baseCu = toCu(startU);
-            const startCuInWindow = compactMap[idxCompact] || 0;
-            // 估算结束 CU：累加紧凑匹配长度对应的 CU（取末尾映射或末尾）
-            const endIndexCompact = idxCompact + compactMatch.length;
-            const endCuInWindow = endIndexCompact < compactMap.length
-                ? compactMap[endIndexCompact]
-                : (windowText.length);
-            const absStartCu = baseCu + startCuInWindow;
-            const absEndCu = baseCu + endCuInWindow;
-            const toU = (cu) => {
-                let lo = 0, hi = uToCu.length - 1;
-                while (lo < hi) {
-                    const mid = (lo + hi) >> 1;
-                    if (uToCu[mid] <= cu) lo = mid + 1; else hi = mid;
-                }
-                return Math.max(0, lo - 1);
-            };
-            const newStartU = toU(absStartCu);
-            const newEndU = toU(absEndCu);
-            return { ...p, start: newStartU, end: Math.max(newStartU + 1, newEndU) };
-        }
+        // 不再进行空白忽略纠偏：要求AI返回的片段必须与原文逐字符一致
         return p;
     };
 
     let adjusted = norm.map(adjustByMatch);
 
-    // 3) 合并重叠/相邻区间（按开始升序）
-    adjusted.sort((a, b) => a.start - b.start || a.end - b.end);
-    const merged = [];
-    for (const cur of adjusted) {
-        if (!merged.length) { merged.push({ ...cur }); continue; }
-        const last = merged[merged.length - 1];
-        if (cur.start <= last.end) {
-            last.end = Math.max(last.end, cur.end);
-            // 类型优先保留风险更高的一类，或拼接
-            last.type = last.type || cur.type;
-        } else {
-            merged.push({ ...cur });
+    // 3) 位置校验与“片段优先”的回退：
+    // 若给定 pos 与原文不一致，则用片段在原文中搜索定位；
+    // 多次出现时，优先选择距离原 pos.start 最近且不与已选区间重叠的那个。
+    const taken = [];
+    const occIndexOfAll = (text, needle) => {
+        const out = [];
+        if (!needle) return out;
+        let from = 0;
+        while (from <= text.length) {
+            const idx = text.indexOf(needle, from);
+            if (idx === -1) break;
+            out.push({ start: idx, end: idx + needle.length });
+            from = idx + Math.max(1, needle.length);
+        }
+        return out;
+    };
+    const overlap = (a, b) => !(a.end <= b.start || b.end <= a.start);
+    const pickNearestFree = (candidates, hintStart) => {
+        // 先过滤与已占用区间重叠的
+        const free = candidates.filter(c => !taken.some(t => overlap(t, c)));
+        if (free.length === 0) return null;
+        // 选距离 hintStart 最近者
+        free.sort((x, y) => Math.abs(x.start - hintStart) - Math.abs(y.start - hintStart));
+        return free[0];
+    };
+
+    const resolved = [];
+    adjusted.forEach(seg => {
+        const expected = content.substring(toCu(seg.start), toCu(seg.end));
+        if (expected && seg.match && expected === seg.match) {
+            const startCu = toCu(seg.start);
+            const endCu = toCu(seg.end);
+            resolved.push({ startCu, endCu, type: seg.type, match: seg.match });
+            taken.push({ start: startCu, end: endCu });
+            return;
+        }
+        // 片段优先搜索
+        const all = occIndexOfAll(content, seg.match);
+        if (all.length) {
+            const hintCu = toCu(seg.start);
+            const pick = pickNearestFree(all, hintCu) || all[0];
+            if (pick) {
+                resolved.push({ startCu: pick.start, endCu: pick.end, type: seg.type, match: seg.match });
+                taken.push({ start: pick.start, end: pick.end });
+                return;
+            }
+        }
+        // 最后兜底：放弃该标记（保证不错误着色）
+    });
+
+    // 额外路径：若提供了 terms，则基于原文中“逐字匹配”的全部命中构造高亮区间
+    if (terms && terms.length > 0) {
+        const ranges = [];
+        const uniq = new Set();
+        terms.forEach(t => {
+            const term = String(t || '').trim();
+            if (!term) return;
+            let from = 0;
+            while (from <= content.length) {
+                const idx = content.indexOf(term, from);
+                if (idx === -1) break;
+                const key = idx + ':' + (idx + term.length);
+                if (!uniq.has(key)) {
+                    uniq.add(key);
+                    ranges.push({ startCu: idx, endCu: idx + term.length, type: 'term', match: term });
+                }
+                from = idx + Math.max(1, term.length);
+            }
+        });
+        if (ranges.length > 0) {
+            // 用 terms 的结果替换之前的 resolved
+            resolved = ranges;
         }
     }
 
@@ -767,11 +751,12 @@ function markSensitiveContent(content, positions) {
     const textNode = document.createTextNode(content);
     container.appendChild(textNode);
 
-    // 从后往前，依据 U 索引转换到 CU
-    for (let i = merged.length - 1; i >= 0; i--) {
-        const seg = merged[i];
-        const startCu = toCu(seg.start);
-        const endCu = toCu(seg.end);
+    // 从后往前，依据已解析的 CU 区间切分
+    resolved.sort((a, b) => b.startCu - a.startCu);
+    for (let i = 0; i < resolved.length; i++) {
+        const seg = resolved[i];
+        const startCu = seg.startCu;
+        const endCu = seg.endCu;
         if (startCu >= endCu || startCu < 0 || endCu > textNode.length) continue;
         const tail = textNode.splitText(endCu);
         const middle = textNode.splitText(startCu);
@@ -807,11 +792,24 @@ function startRewrite() {
     rewriteTextArea.value = '正在润色，请稍候...';
     rewriteTextArea.disabled = true;
     
-    // 展开润色手风琴
+    // 展开并保持润色手风琴不被收起
     const rewriteCollapseEl = document.getElementById('collapseRewrite');
-    const rewriteCollapse = new bootstrap.Collapse(rewriteCollapseEl, {
-        toggle: true
-    });
+    let isRewriting = true;
+    // 防止重入绑定多次
+    rewriteCollapseEl.removeEventListener('hide.bs.collapse', window.__preventRewriteHide);
+    window.__preventRewriteHide = function (e) {
+        if (isRewriting) {
+            e.preventDefault();
+        }
+    };
+    rewriteCollapseEl.addEventListener('hide.bs.collapse', window.__preventRewriteHide);
+    const rewriteCollapse = new bootstrap.Collapse(rewriteCollapseEl, { toggle: true });
+    // 确保显示
+    setTimeout(() => {
+        if (!rewriteCollapseEl.classList.contains('show')) {
+            rewriteCollapse.show();
+        }
+    }, 50);
     
     const formData = new FormData(document.getElementById('detectForm'));
     let modelCode = formData.get('model_code') || '';
@@ -821,10 +819,23 @@ function startRewrite() {
         modelCode = defaultModelCode;
     }
     
+    // 主语言探测（英文/中文占比）
+    const detectDominantLang = (text) => {
+        let en = 0, zh = 0;
+        for (const ch of text) {
+            const code = ch.codePointAt(0);
+            if ((code >= 0x0041 && code <= 0x007A) || (code >= 0x0030 && code <= 0x0039)) en++;
+            else if (code >= 0x4E00 && code <= 0x9FFF) zh++;
+        }
+        return zh > en ? 'zh-CN' : 'en';
+    };
+    const dominantLang = detectDominantLang(detectionData.original || '');
+
     const data = {
         content: detectionData.original,
         positions: detectionData.detection.positions,
-        model_code: modelCode
+        model_code: modelCode,
+        lang: dominantLang
     };
 
     fetch('<?= $this->getBackendUrl('*/backend/detect/rewrite') ?>', {
@@ -843,6 +854,8 @@ function startRewrite() {
             rewriteTextArea.value = rewriteData.content || '';
             rewriteTextArea.disabled = false;
             startRewriteBtn.style.display = 'none';
+
+            // 新旧对比功能已移除
         } else {
             rewriteTextArea.value = '润色失败: ' + data.message;
             rewriteTextArea.disabled = false;
@@ -851,6 +864,8 @@ function startRewrite() {
             showErrorInModal('润色失败: ' + data.message, data.message && data.message.includes('AI'));
             if (detectLoadingModalInstance) detectLoadingModalInstance.show();
         }
+        // 结束阶段允许手风琴关闭
+        isRewriting = false;
     })
     .catch(error => {
         startRewriteBtn.disabled = false;
@@ -861,6 +876,7 @@ function startRewrite() {
         initDetectModal();
         showErrorInModal('润色失败: ' + (error.message || '网络错误或服务器异常'), false);
         if (detectLoadingModalInstance) detectLoadingModalInstance.show();
+        isRewriting = false;
     });
 }
 
@@ -876,30 +892,7 @@ function displayRewriteResult() {
 }
 
 // 生成对比内容
-function generateComparisonContent() {
-    if (!detectionData || !rewriteData) {
-        return '<div class="text-muted">暂无对比数据</div>';
-    }
-    
-    const markedOriginal = markSensitiveContent(detectionData.original, detectionData.detection.positions);
-    
-    return `
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="text-danger"><i class="mdi mdi-alert me-1"></i>原内容（标记敏感部分）</h6>
-                <div class="border rounded p-3" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
-                    ${markedOriginal}
-                </div>
-            </div>
-            <div class="col-md-6">
-                <h6 class="text-success"><i class="mdi mdi-auto-fix me-1"></i>润色后内容</h6>
-                <div class="border rounded p-3" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
-                    ${rewriteData.content}
-                </div>
-            </div>
-        </div>
-    `;
-}
+// 新旧对比功能已移除
 
 // 历史记录数组
 let historyList = [];
@@ -1100,10 +1093,13 @@ function fallbackToRegexDetection() {
 
 // 在弹窗中显示错误
 function showErrorInModal(errorMessage, showFallbackOption = false) {
-    // 隐藏加载内容，显示错误内容
-    document.getElementById('detectLoadingContent').style.display = 'none';
-    document.getElementById('detectErrorContent').style.display = 'block';
-    document.getElementById('detectLoadingHeader').style.display = 'block';
+    // 隐藏加载内容，显示错误内容（容错：元素可能不存在）
+    var _lc = document.getElementById('detectLoadingContent');
+    if (_lc) _lc.style.display = 'none';
+    var _ec = document.getElementById('detectErrorContent');
+    if (_ec) _ec.style.display = 'block';
+    var _lh = document.getElementById('detectLoadingHeader');
+    if (_lh) _lh.style.display = 'block';
     
     // 构建错误内容
     let errorHtml = `
@@ -1129,13 +1125,15 @@ function showErrorInModal(errorMessage, showFallbackOption = false) {
     errorHtml += `</div>`;
     
     // 设置错误内容
-    document.getElementById('detectErrorContent').innerHTML = errorHtml;
+    if (_ec) _ec.innerHTML = errorHtml;
     
     // 允许通过ESC键或点击背景关闭弹窗
-    if (detectLoadingModalInstance) {
-        detectLoadingModalInstance._config.keyboard = true;
-        detectLoadingModalInstance._config.backdrop = true;
-    }
+    try {
+        if (detectLoadingModalInstance && detectLoadingModalInstance._config) {
+            detectLoadingModalInstance._config.keyboard = true;
+            detectLoadingModalInstance._config.backdrop = true;
+        }
+    } catch(e) {}
 }
 
 // 删除重复的 markSensitiveContent 函数定义，使用原有的更完善版本

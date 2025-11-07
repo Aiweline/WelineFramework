@@ -101,7 +101,8 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $spec .= "- 输出标题：标记列表（四个字）后紧随所有标记；\n";
         $spec .= "- 标记格式：[开始位置:结束位置:类型:片段:置信度:来源]，无空格；\n";
         $spec .= "- 位置为基于原文UTF-8的字符索引（首字符=0），结束位置为不包含自身的闭区间右端；\n";
-        $spec .= "- 片段必须与原文对应；\n";
+        $spec .= "- ‘片段’必须严格为原文中的逐字符子串：不允许改写/规范化/大小写变更，也不允许增删任何空白、换行或标点；\n";
+        $spec .= "- ‘片段’与给定位置必须一致：原文.substring(开始位置, 结束位置) === 片段；若无法保证，请不要猜测，直接返回‘未发现’或缩小到可严格匹配的最小范围；\n";
         $spec .= "- 类型必须使用以下配置的类型名称之一（直接从配置中读取，保持原样，不进行映射转换）：\n";
         $spec .= $this->getCategoryTaxonomy();
         $spec .= "- 检测到敏感内容时，直接归类到上述类型之一，使用配置中的原始类型名称（中文或英文均可）；\n";
@@ -109,6 +110,20 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $spec .= "- 对同一语义的相邻/重叠片段应合并成更完整的句子范围；\n";
         $spec .= "- 同时包含直接命中与‘可疑/描述涉及禁止范围’的片段；\n";
         $spec .= "- 标记必须覆盖完整的违规表达或上下文关键句，避免只截取词根；\n";
+        return $spec;
+    }
+
+    /**
+     * 词清单规范：用于前端基于原文做二次匹配与标注
+     */
+    private function getTermListSpecification(): string
+    {
+        $spec = "词清单规范（严格遵守）：\n";
+        $spec .= "- 输出标题：词清单（四个字）；\n";
+        $spec .= "- 每行一个词；\n";
+        $spec .= "- 该词必须是原文中的逐字符子串：保持原始大小写、空格、标点与换行位置；\n";
+        $spec .= "- 不要位置、不要解释、不要任何前后缀；\n";
+        $spec .= "- 若无任何可疑/敏感词，输出：词清单：无\n";
         return $spec;
     }
 
@@ -247,6 +262,8 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= "\n";
         $prompt .= $this->getMarkingSpecification();
         $prompt .= "\n";
+        $prompt .= $this->getTermListSpecification();
+        $prompt .= "\n";
         $prompt .= "需要标记的内容：\n{$content}";
         
         return $prompt;
@@ -275,6 +292,8 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= $this->getProhibitedContentRules();
         $prompt .= "\n";
         $prompt .= $this->getMarkingSpecification();
+        $prompt .= "\n";
+        $prompt .= $this->getTermListSpecification();
         $prompt .= "\n\n原文：\n{$content}";
         return $prompt;
     }
@@ -285,8 +304,15 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
     private function buildRewritePrompt(string $content, string $level, array $params): string
     {
         $style = $params['style'] ?? 'natural';
-        
-        $prompt = "请对以下内容进行脱敏润色处理：\n\n";
+        $lang  = $params['lang']  ?? 'auto'; // 由前端传入的主语言：en / zh-CN / auto
+
+        $prompt = "请对以下内容进行‘合规润色’：\n\n";
+        // 语言锁定：保持原文主语言输出，禁止跨语言翻译
+        $prompt .= "语言要求：\n";
+        $prompt .= "- 若传入 lang=en，则必须输出英文；\n";
+        $prompt .= "- 若传入 lang=zh-CN，则必须输出简体中文；\n";
+        $prompt .= "- 若传入 lang=auto，则以原文中占比最高的语言为准；\n";
+        $prompt .= "- 禁止擅自翻译到其它语言。\n\n";
         
         // 添加脱敏级别说明
         switch ($level) {
@@ -341,11 +367,22 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= "- 真实姓名\n";
         $prompt .= "- 具体地址\n";
         $prompt .= "\n";
-        $prompt .= "要求：\n";
-        $prompt .= "1. 识别并脱敏所有敏感信息\n";
-        $prompt .= "2. 对脱敏后的内容进行润色，使其更自然、流畅、可读\n";
-        $prompt .= "3. 保持文本的整体意思和上下文完整性\n\n";
-        $prompt .= "需要处理的内容：\n{$content}";
+        // 注入平台规则（Meta/Google）与‘禁止/敏感范围’，用于替换敏感表达
+        $enhancedRules = $this->getEnhancedSensitiveRules();
+        if (!empty($enhancedRules)) {
+            $prompt .= "【平台敏感规则】以下为从 Meta/Google 平台整理的敏感术语/类别，请据此评估与替换：\n";
+            $prompt .= $enhancedRules . "\n";
+        }
+        $prompt .= "【禁止/敏感范围】需避免或改写以下相关表达（包含描述/策划/意图）：\n";
+        $prompt .= $this->getProhibitedContentRules() . "\n";
+
+        $prompt .= "合规润色要求：\n";
+        $prompt .= "1. 仅对触犯上述规则的片段进行替换，非敏感部分尽量保持原句结构与含义；\n";
+        $prompt .= "2. 用中性、合规的替代表达替换敏感词（如涉证券/投资承诺/成人/仇恨/煽动等）；\n";
+        $prompt .= "3. 保持原文主语言（见参数 lang）与语气风格，不得改变语言；\n";
+        $prompt .= "4. 输出内容需完整可读，不得出现占位符或省略号代替；\n";
+        $prompt .= "5. 禁止出现股票/证券代码、收益承诺、投资建议等平台禁用信息；\n\n";
+        $prompt .= "需要处理的内容（lang=" . $lang . "):\n{$content}";
         
         return $prompt;
     }
@@ -541,7 +578,7 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     private function buildDetectPrompt(string $content, array $params = []): string
     {
-        $prompt = "请检测以下内容是否包含敏感信息与\"禁止/敏感范围\"，并全面识别：\n"
+        $prompt = "请检测以下内容是否包含敏感信息与\"禁止/敏感范围\"，并全面识别：\n" 
                 . "- 疑似/模糊匹配项（即使仅为描述、意图、暗示、变体、规避表达）；\n"
                 . "- 带有明显情绪化、煽动性、辱骂、威胁、仇恨、攻击性、极化倾向的表达；\n"
                 . "- 描述涉及禁止范围的文本；\n\n"
@@ -569,8 +606,11 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
         $prompt .= "\n输出要求：\n";
         $prompt .= "A) 问题清单：每行 格式= 类型 | 位置 | 内容 | 严重程度 | 直接/可疑/情绪化\n";
         $prompt .= "B) 紧接输出‘标记列表’（详见下方标记规范）；\n";
+        $prompt .= "C) 再输出‘词清单’（详见下方词清单规范）；\n";
         $prompt .= "C) 若未发现，输出：未发现敏感信息或违禁内容\n\n";
         $prompt .= $this->getMarkingSpecification();
+        $prompt .= "\n";
+        $prompt .= $this->getTermListSpecification();
         $prompt .= "\n";
         $prompt .= "需要检测的内容：\n{$content}";
         
@@ -582,15 +622,10 @@ class DesensitizationAdapter implements ScenarioAdapterInterface
      */
     public function processResponse(string $response, array $params = []): string
     {
-        // 归一化“标记列表”中的标记方括号，去除多余空白，便于下游解析
-        $response = preg_replace('/\s+/', ' ', (string)$response);
-        // 将中文全角方括号替换为半角
+        // 保留原文空白与片段空白，避免片段被“连起来”
+        $response = (string)$response;
+        // 仅规范方括号形态，避免多语言符号混用
         $response = str_replace(['【','】'], ['[',']'], $response);
-        // 去除标记内部的空格
-        $response = preg_replace_callback('/\[(.*?)\]/', function ($m) {
-            $inner = preg_replace('/\s+/', '', $m[1]);
-            return '[' . $inner . ']';
-        }, $response);
 
         // 保持AI返回的原始类型，不进行映射转换
         // 直接使用AI返回的类型标记，以便保持原文分类的准确性

@@ -39,9 +39,10 @@ class Server {
                 file_put_contents($vbsFile, $vbsContent);
                 
                 // 执行 VBS 脚本（cscript //nologo 不显示logo，立即返回）
+                // 使用 @exec 抑制错误，避免阻塞
                 $output = [];
                 $returnVar = 0;
-                exec('cscript //nologo "' . $vbsFile . '"', $output, $returnVar);
+                @exec('cscript //nologo "' . $vbsFile . '"', $output, $returnVar);
                 
                 // 等待进程启动
                 sleep(3); // 增加等待时间到3秒
@@ -156,14 +157,12 @@ class Server {
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             // Windows系统
-            $output = [];
-            exec("netstat -ano | findstr :{$port}", $output);
+            @exec('netstat -ano | findstr ":' . $port . '"', $output);
             
-            foreach ($output as $line) {
-                if (strpos($line, 'LISTENING') !== false) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    if (count($parts) >= 5) {
-                        $pid = (int)$parts[count($parts) - 1];
+            if (!empty($output)) {
+                foreach ($output as $line) {
+                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
+                        $pid = (int)$matches[1];
                         if ($pid > 0) {
                             return $pid;
                         }
@@ -173,7 +172,7 @@ class Server {
         } else {
             // Unix/Linux系统
             $output = [];
-            exec("lsof -ti:{$port}", $output);
+            @exec("lsof -ti:{$port} 2>/dev/null", $output);
             
             if (!empty($output)) {
                 $pid = (int)trim($output[0]);

@@ -149,7 +149,7 @@ $createTime = $page ? $page->getData('create_time') : '';
                             ?>
                             <a href="<?= $locale['url'] ?>" 
                                class="language-button <?= $isCurrent ? 'active' : '' ?>">
-                                <?= htmlspecialchars($locale['name']) ?>
+                                <?= htmlspecialchars($locale['name'] ?? '') ?>
                                 <?php if (!$hasTranslation): ?>
                                     <span title="<?= __('未翻译') ?>">⚠️</span>
                                 <?php endif; ?>
@@ -169,11 +169,11 @@ $createTime = $page ? $page->getData('create_time') : '';
     
     <style>
     .page-footer {
-        background: <?= htmlspecialchars($bgColor) ?>;
+        background: <?= htmlspecialchars($bgColor ?? '') ?>;
         padding: <?= $paddingResponsive ?> 0;
         margin-top: 0;
         <?php if ($borderTop === 'yes'): ?>
-        border-top: 2px solid <?= htmlspecialchars($borderColor) ?>;
+        border-top: 2px solid <?= htmlspecialchars($borderColor ?? '') ?>;
         <?php endif; ?>
         box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
     }
@@ -186,7 +186,7 @@ $createTime = $page ? $page->getData('create_time') : '';
     
     .footer-content {
         text-align: center;
-        color: <?= htmlspecialchars($textColor) ?>;
+        color: <?= htmlspecialchars($textColor ?? '') ?>;
         font-size: <?= $fontSizeResponsive ?>;
         line-height: <?= floatval($lineHeight) ?>;
     }
@@ -204,18 +204,18 @@ $createTime = $page ? $page->getData('create_time') : '';
     .footer-links {
         margin-top: 16px;
         padding-top: 16px;
-        border-top: 1px solid <?= htmlspecialchars($borderColor) ?>;
+        border-top: 1px solid <?= htmlspecialchars($borderColor ?? '') ?>;
     }
     
     .footer-link {
-        color: <?= htmlspecialchars($linkColor) ?>;
+        color: <?= htmlspecialchars($linkColor ?? '') ?>;
         text-decoration: none;
         margin: 0 12px;
         transition: color 0.3s ease;
     }
     
     .footer-link:hover {
-        color: <?= htmlspecialchars($linkHoverColor) ?>;
+        color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
     }
     </style>
     
@@ -225,7 +225,7 @@ $createTime = $page ? $page->getData('create_time') : '';
                 <?php if ($showCopyright === 'yes'): ?>
                     <p class="footer-copyright">
                         <?php if ($copyrightText): ?>
-                            <?= htmlspecialchars($copyrightText) ?>
+                            <?= htmlspecialchars($copyrightText ?? '') ?>
                         <?php else: ?>
                             &copy; <?= date('Y') ?> <?= htmlspecialchars($pageName ?: $pageTitle ?: 'Website') ?>. <?= __('保留所有权利。') ?>
                         <?php endif; ?>
@@ -234,7 +234,7 @@ $createTime = $page ? $page->getData('create_time') : '';
                 
                 <?php if ($showPublishTime === 'yes' && $createTime): ?>
                     <p class="footer-info">
-                        <?= __('发布时间：') ?><?= htmlspecialchars($createTime) ?>
+                        <?= __('发布时间：') ?><?= htmlspecialchars($createTime ?? '') ?>
                     </p>
                 <?php endif; ?>
                 

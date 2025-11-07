@@ -26,7 +26,7 @@ $localeName = $this->getData('locale_name');
                     </li>
                     <li class="breadcrumb-item">
                         <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $page->getId()]) ?>">
-                            <?= htmlspecialchars($page->getData('name')) ?>
+                            <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
                         </a>
                     </li>
                     <li class="breadcrumb-item active">
@@ -57,18 +57,18 @@ $localeName = $this->getData('locale_name');
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('页面名称') ?></h6>
-                        <p><?= htmlspecialchars($page->getData('name')) ?></p>
+                        <p><?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?></p>
                     </div>
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('页面标题') ?></h6>
-                        <p><?= htmlspecialchars($page->getData('title')) ?></p>
+                        <p><?= htmlspecialchars((($page->getData('title') ?? '')) ?? '') ?></p>
                     </div>
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('页面内容') ?></h6>
                         <div class="border p-3 bg-light" style="max-height: 300px; overflow-y: auto;">
-                            <?= nl2br(htmlspecialchars($page->getData('content'))) ?>
+                            <?= nl2br(htmlspecialchars((($page->getData('content') ?? '')) ?? '')) ?>
                         </div>
                     </div>
 
@@ -78,17 +78,17 @@ $localeName = $this->getData('locale_name');
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('SEO标题') ?></h6>
-                        <p><?= htmlspecialchars($page->getData('meta_title') ?: $page->getData('title')) ?></p>
+                        <p><?= htmlspecialchars(($page->getData('meta_title') ?? '') ?: $page->getData('title')) ?></p>
                     </div>
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('SEO描述') ?></h6>
-                        <p><?= htmlspecialchars($page->getData('meta_description')) ?></p>
+                        <p><?= htmlspecialchars((($page->getData('meta_description') ?? '')) ?? '') ?></p>
                     </div>
 
                     <div class="mb-4">
                         <h6 class="text-muted"><?= __('SEO关键词') ?></h6>
-                        <p><?= htmlspecialchars($page->getData('meta_keywords')) ?></p>
+                        <p><?= htmlspecialchars((($page->getData('meta_keywords') ?? '')) ?? '') ?></p>
                     </div>
                 </div>
             </div>
@@ -111,7 +111,7 @@ $localeName = $this->getData('locale_name');
                                class="form-control" 
                                id="name" 
                                name="name" 
-                               value="<?= htmlspecialchars($translation ? $translation->getData('name') : '') ?>"
+                               value="<?= htmlspecialchars(($translation ? $translation->getData('name') ?? '') : '') ?>"
                                placeholder="<?= __('输入翻译后的页面名称') ?>"
                                required>
                         <div class="invalid-feedback"><?= __('请输入翻译后的页面名称') ?></div>
@@ -126,7 +126,7 @@ $localeName = $this->getData('locale_name');
                                class="form-control" 
                                id="title" 
                                name="title" 
-                               value="<?= htmlspecialchars($translation ? $translation->getData('title') : '') ?>"
+                               value="<?= htmlspecialchars(($translation ? $translation->getData('title') ?? '') : '') ?>"
                                placeholder="<?= __('输入翻译后的页面标题') ?>"
                                required>
                         <div class="invalid-feedback"><?= __('请输入翻译后的页面标题') ?></div>
@@ -140,7 +140,7 @@ $localeName = $this->getData('locale_name');
                                   id="content" 
                                   name="content" 
                                   rows="10"
-                                  placeholder="<?= __('输入翻译后的页面内容') ?>"><?= htmlspecialchars($translation ? $translation->getData('content') : '') ?></textarea>
+                                  placeholder="<?= __('输入翻译后的页面内容') ?>"><?= htmlspecialchars(($translation ? $translation->getData('content') ?? '') : '') ?></textarea>
                         <div class="form-text"><?= __('使用所见即所得编辑器编辑翻译内容') ?></div>
                     </div>
 
@@ -155,7 +155,7 @@ $localeName = $this->getData('locale_name');
                                class="form-control" 
                                id="meta_title" 
                                name="meta_title" 
-                               value="<?= htmlspecialchars($translation ? $translation->getData('meta_title') : '') ?>"
+                               value="<?= htmlspecialchars(($translation ? $translation->getData('meta_title') ?? '') : '') ?>"
                                placeholder="<?= __('输入翻译后的SEO标题') ?>">
                         <div class="form-text"><?= __('留空则使用页面标题') ?></div>
                     </div>
@@ -167,7 +167,7 @@ $localeName = $this->getData('locale_name');
                                   id="meta_description" 
                                   name="meta_description" 
                                   rows="3"
-                                  placeholder="<?= __('输入翻译后的SEO描述') ?>"><?= htmlspecialchars($translation ? $translation->getData('meta_description') : '') ?></textarea>
+                                  placeholder="<?= __('输入翻译后的SEO描述') ?>"><?= htmlspecialchars(($translation ? $translation->getData('meta_description') ?? '') : '') ?></textarea>
                     </div>
 
                     <!-- 翻译SEO关键词 -->
@@ -177,7 +177,7 @@ $localeName = $this->getData('locale_name');
                                class="form-control" 
                                id="meta_keywords" 
                                name="meta_keywords" 
-                               value="<?= htmlspecialchars($translation ? $translation->getData('meta_keywords') : '') ?>"
+                               value="<?= htmlspecialchars(($translation ? $translation->getData('meta_keywords') ?? '') : '') ?>"
                                placeholder="<?= __('输入翻译后的关键词，用逗号分隔') ?>">
                     </div>
 
