@@ -253,12 +253,22 @@ class Cloudflare implements AdapterInterface
             
             // 获取现有 ruleset 的完整结构，保留除 rules 外的其他字段
             $existingRuleset = $getResponse['result'] ?? [];
-            $requestData = array_merge($existingRuleset, [
-                'rules' => $formattedRules
-            ]);
             
-            // 移除不需要的字段
-            unset($requestData['id'], $requestData['created_on'], $requestData['modified_on']);
+            // 构建请求数据，只包含必要的字段
+            $requestData = [
+                'rules' => $formattedRules
+            ];
+            
+            // 保留其他必要的字段（如果存在）
+            if (isset($existingRuleset['kind'])) {
+                $requestData['kind'] = $existingRuleset['kind'];
+            }
+            if (isset($existingRuleset['phase'])) {
+                $requestData['phase'] = $existingRuleset['phase'];
+            }
+            if (isset($existingRuleset['name'])) {
+                $requestData['name'] = $existingRuleset['name'];
+            }
             
             $response = $this->makeRequest('PUT', $updateUrl, $requestData, $credentials);
         } else {
@@ -314,25 +324,38 @@ class Cloudflare implements AdapterInterface
             
             // expression 字段（必需）
             if (isset($rule['expression'])) {
-                $formattedRule['expression'] = $rule['expression'];
+                $formattedRule['expression'] = (string)$rule['expression'];
+            } else {
+                // 没有 expression，跳过该规则
+                continue;
             }
             
             // action 字段处理
-            // Cloudflare Cache Rules API 要求 action 必须是对象，但格式需要正确
+            // Cloudflare Cache Rules API 要求 action 必须是对象
+            // 格式：{ "cache": {...} } 或 { "cache": false }
             if (isset($rule['action'])) {
                 $action = $rule['action'];
                 
                 if (is_array($action)) {
-                    // action 已经是数组/对象，直接使用
-                    // 但需要确保格式符合 Cloudflare API 要求
-                    // Cloudflare Cache Rules 的 action 格式应该是：
-                    // { "cache": {...} } 或 { "cache": false }
-                    $formattedRule['action'] = $action;
+                    // action 已经是数组/对象
+                    // 验证并规范化 action 结构
+                    $normalizedAction = $this->normalizeAction($action);
+                    if ($normalizedAction !== null) {
+                        $formattedRule['action'] = $normalizedAction;
+                    } else {
+                        // action 格式无效，跳过该规则
+                        continue;
+                    }
                 } elseif (is_string($action)) {
                     // 如果 action 是字符串，尝试解析为 JSON
                     $decoded = json_decode($action, true);
                     if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                        $formattedRule['action'] = $decoded;
+                        $normalizedAction = $this->normalizeAction($decoded);
+                        if ($normalizedAction !== null) {
+                            $formattedRule['action'] = $normalizedAction;
+                        } else {
+                            continue;
+                        }
                     } else {
                         // 如果解析失败，跳过该规则
                         continue;
@@ -351,9 +374,11 @@ class Cloudflare implements AdapterInterface
                 $formattedRule['description'] = (string)$rule['description'];
             }
             
-            // enabled 字段（可选）
+            // enabled 字段（可选，默认为 true）
             if (isset($rule['enabled'])) {
                 $formattedRule['enabled'] = (bool)$rule['enabled'];
+            } else {
+                $formattedRule['enabled'] = true;
             }
             
             // 确保至少包含 expression 和 action
@@ -363,6 +388,85 @@ class Cloudflare implements AdapterInterface
         }
         
         return $formattedRules;
+    }
+    
+    /**
+     * 规范化 action 结构以符合 Cloudflare API 要求
+     * 
+     * @param array $action 原始 action 数组
+     * @return array|null 规范化后的 action，如果格式无效则返回 null
+     */
+    private function normalizeAction(array $action): ?array
+    {
+        // Cloudflare Cache Rules API 的 action 格式：
+        // { "cache": {...} } 或 { "cache": false }
+        
+        // 如果 action 已经是正确的格式（包含 cache 键）
+        if (isset($action['cache'])) {
+            // 如果 cache 是 false，直接返回
+            if ($action['cache'] === false) {
+                return ['cache' => false];
+            }
+            
+            // 如果 cache 是数组/对象，验证并规范化
+            if (is_array($action['cache'])) {
+                $cacheConfig = [];
+                
+                // status_code 字段（可选）
+                if (isset($action['cache']['status_code'])) {
+                    $statusCode = $action['cache']['status_code'];
+                    if (is_array($statusCode)) {
+                        // 确保所有元素都是整数
+                        $cacheConfig['status_code'] = array_map('intval', $statusCode);
+                    } elseif (is_numeric($statusCode)) {
+                        $cacheConfig['status_code'] = [(int)$statusCode];
+                    }
+                }
+                
+                // ttl 字段（可选）
+                if (isset($action['cache']['ttl'])) {
+                    $ttl = $action['cache']['ttl'];
+                    if (is_numeric($ttl)) {
+                        $cacheConfig['ttl'] = (int)$ttl;
+                    }
+                }
+                
+                // edge_ttl 字段（可选）
+                if (isset($action['cache']['edge_ttl'])) {
+                    $edgeTtl = $action['cache']['edge_ttl'];
+                    if (is_numeric($edgeTtl)) {
+                        $cacheConfig['edge_ttl'] = (int)$edgeTtl;
+                    }
+                }
+                
+                // browser_ttl 字段（可选）
+                if (isset($action['cache']['browser_ttl'])) {
+                    $browserTtl = $action['cache']['browser_ttl'];
+                    if (is_numeric($browserTtl)) {
+                        $cacheConfig['browser_ttl'] = (int)$browserTtl;
+                    }
+                }
+                
+                // serve_stale 字段（可选）
+                if (isset($action['cache']['serve_stale'])) {
+                    $cacheConfig['serve_stale'] = (bool)$action['cache']['serve_stale'];
+                }
+                
+                // 如果 cacheConfig 不为空，返回规范化后的 action
+                if (!empty($cacheConfig)) {
+                    return ['cache' => $cacheConfig];
+                }
+                
+                // 如果 cacheConfig 为空，返回 cache: false
+                return ['cache' => false];
+            }
+            
+            // cache 不是数组也不是 false，格式无效
+            return null;
+        }
+        
+        // action 不包含 cache 键，格式无效
+        return null;
     }
 
     /**

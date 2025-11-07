@@ -2,6 +2,7 @@
 
 namespace Weline\Admin\Observer;
 
+use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
@@ -50,8 +51,13 @@ class ResponseRedirectBefore implements ObserverInterface
         foreach ($white_urls as &$white_url) {
             $white_url = $white_url['path'];
         }
-        if (!in_array(trim($this->request->getRouteUrlPath(), '/'), $white_urls)) {
-            ObjectManager::getInstance(Session::class)->setData('backend_login_referer', $this->request->getUrlBuilder()->getCurrentUrl());
+        $currentRoutePath = trim($this->request->getRouteUrlPath(), '/');
+        // 白名单跳过验证
+        if (!in_array($currentRoutePath, $white_urls)) {
+            // 只存储菜单链接
+            if (MenuUrlValidator::isMenuUrl($currentRoutePath)) {
+                ObjectManager::getInstance(Session::class)->setData('backend_login_referer', $this->request->getUrlBuilder()->getCurrentUrl());
+            }
         }
     }
 }

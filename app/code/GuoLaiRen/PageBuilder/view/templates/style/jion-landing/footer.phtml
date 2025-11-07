@@ -20,6 +20,7 @@
  * footer.whatsapp_url => WhatsApp链接地址:text:
  * footer.youtube_event_name => YouTube按钮事件名称:text:
  * footer.whatsapp_event_name => WhatsApp按钮事件名称:text:
+ * footer.floating_bar_enabled => 是否显示悬浮栏:bool:1
  * 
  * @fields_end
  */
@@ -99,7 +100,7 @@ $disclaimerText = getConfig($styleSettings, 'footer.disclaimer_text', 'Community
 $footerBg = $colors['footer_bg'] ?? ($colors['primary_bg'] ?? '#0b1220');
 $footerTextColor = $colors['text_primary'] ?? '#FFFFFF';
 $footerLinkColor = ($colors['footer_link_color'] ?? null) ?: ($colors['accent_blue'] ?? '#6699CC');
-$footerDisclaimerColor = '#000000';
+$footerDisclaimerColor = $footerTextColor; // 使用主文字颜色，确保在深色背景上可见
 $paddingV = genRespCSS(parseResp(getConfig($styleSettings, 'footer.padding_v', '20/40') . 'px'));
 $paddingH = genRespCSS(parseResp(getConfig($styleSettings, 'footer.padding_h', '16/40') . 'px'));
 ?>
@@ -152,11 +153,11 @@ $paddingH = genRespCSS(parseResp(getConfig($styleSettings, 'footer.padding_h', '
         text-align: left; /* 免责声明文本靠左 */
     }
     
-    /* 手机端样式（悬浮栏组件负责为 body 预留空间） */
+    /* 手机端样式 */
     @media (max-width: 767px) {
         .jion-footer {
             padding: <?= genRespCSS(parseResp('16/20' . 'px')) ?> <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
-            margin-bottom: 0;
+            margin-bottom: 0; /* 悬浮 bar 负责为 body 预留空间 */
         }
         
         .jion-footer-links {

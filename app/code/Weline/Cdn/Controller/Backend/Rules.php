@@ -360,9 +360,10 @@ class Rules extends BackendController
 
             $domainList = [];
             foreach ($domains as $domain) {
+                $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME);
                 $domainList[] = [
                     'domain_id' => $domain->getId(),
-                    'domain_name' => $domain->getData(DomainModel::fields_DOMAIN_NAME)
+                    'domain_name' => $domainName ? (string)$domainName : __('未知域名')
                 ];
             }
 
@@ -408,6 +409,13 @@ class Rules extends BackendController
             }
 
             $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME);
+            // 确保域名名称不为空
+            if (empty($domainName)) {
+                $domainName = __('未知域名');
+            } else {
+                $domainName = (string)$domainName;
+            }
+            
             $result = $this->getRuleManager()->pushRules($domain);
 
             if ($result['success']) {
@@ -426,10 +434,21 @@ class Rules extends BackendController
                 ]);
             }
         } catch (\Exception $e) {
+            // 尝试获取域名名称用于错误日志
+            $domainName = '';
+            try {
+                $domain = $this->getDomainModel()->reset()->load($id);
+                if ($domain->getId()) {
+                    $domainName = $domain->getData(DomainModel::fields_DOMAIN_NAME) ?: __('未知域名');
+                }
+            } catch (\Exception $ex) {
+                // 忽略获取域名名称的错误
+            }
+            
             return $this->jsonResponse([
                 'success' => false,
                 'domain_id' => $id,
-                'domain_name' => '',
+                'domain_name' => $domainName ? (string)$domainName : __('未知域名'),
                 'message' => __('推送失败：%{1}', $e->getMessage())
             ]);
         }

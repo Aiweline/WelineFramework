@@ -468,7 +468,6 @@ class Url implements UrlInterface
         # 初始化server
         if (empty(self::$parserServer)) {
             self::$parserServer = $_SERVER;
-            self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = self::$parserServer['REQUEST_URI'];
             self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
             self::$parserServer['WELINE_API_AREA'] = Env::get('api')?:'rest';
             self::$parserServer['WELINE_API_ADMIN_AREA'] = Env::get('api_admin');
@@ -488,7 +487,12 @@ class Url implements UrlInterface
             $uri = $path . $query;
         } else {
             $uri = $_SERVER['REQUEST_URI'];
-            $url = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . '/' . $_SERVER['REQUEST_URI'];
+            // 确保 REQUEST_URI 以 / 开头，避免拼接时出现双斜杠
+            $request_uri = $_SERVER['REQUEST_URI'];
+            if (!str_starts_with($request_uri, '/')) {
+                $request_uri = '/' . $request_uri;
+            }
+            $url = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . $request_uri;
         }
         # 静态文件不用再分析店铺
         if ($uri and str_contains($uri, '.')

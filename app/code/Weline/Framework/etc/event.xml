@@ -11,4 +11,24 @@
     <event name="Framework_Server::stop_after">
         <observer name="Weline_Framework_Server::stop_logger" instance="Weline\Framework\Console\Console\Server\Observer\ServerStopObserver" disabled="false" shared="true" sort="10"/>
     </event>
+    
+    <!-- 模块升级后扫描数据库适配器 -->
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_Framework_Database::module_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- 系统升级后扫描数据库适配器 -->
+    <event name="setup_upgrade_after">
+        <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- App 运行前检查全页缓存（URL 解析之前，仅做后端判断） -->
+    <event name="App::run_before">
+        <observer name="Weline_Framework_Router::check_full_page_cache" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- URL 解析后检查全页缓存（此时可以生成正确的缓存键） -->
+    <event name="App::url_parsed_after">
+        <observer name="Weline_Framework_Router::check_full_page_cache_after_parse" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
+    </event>
 </config>
