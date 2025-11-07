@@ -599,15 +599,8 @@ class Core
             $dispatch_class = $dispatch::class;
             throw new Exception("{$dispatch_class}: 控制器方法 {$method} 不存在!");
         }
-        // 捕获初始响应头（在控制器执行前）
-        $initialHeaders = headers_list();
-        
         // 开启输出缓冲区以捕获控制器输出
-        // 检查是否已有输出缓冲区（避免嵌套）
-        $obLevel = ob_get_level();
-        if ($obLevel === 0) {
-            ob_start();
-        }
+        ob_start();
         
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
@@ -617,18 +610,15 @@ class Core
             $eventManager->dispatch('Framework_Router::route_after', $eventData);
             
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
-            $output = '';
-            if ($obLevel === 0 && ob_get_level() > 0) {
-                $output = ob_get_clean();
-            }
+            $output = ob_get_clean();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
             $fpcHtml = !empty($result) ? (is_string($result) ? $result : $output) : $output;
             
-            // 捕获最终响应头（在控制器执行后）
+            // 捕获响应头（在控制器执行后）
             $responseHeaders = headers_list();
         } catch (\Exception $e) {
             // 异常情况下清理输出缓冲区
-            if ($obLevel === 0 && ob_get_level() > 0) {
+            if (ob_get_level() > 0) {
                 ob_end_clean();
             }
             throw $e;
