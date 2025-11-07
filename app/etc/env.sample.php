@@ -83,6 +83,11 @@ return [
     // PHP代码规范检查
     'php-cs' => false,  // 是否启用PHP代码规范检查
     
+    // 模板配置
+    'template' => [
+        'show_comments' => false,  // 是否在网页源码中显示模板位置注释（默认不显示，用于调试时定位模板文件）
+    ],
+    
     // 语言设置
     'lang' => 'zh_Hans_CN',  // 默认语言：zh_Hans_CN, en_US, zh_Hant_TW
     

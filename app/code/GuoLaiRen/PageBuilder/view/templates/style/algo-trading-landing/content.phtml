@@ -8,10 +8,12 @@
  * @fields_start
  * 
  * group:intro => 介绍部分
+ * intro.title => 标题:text:HERE'S WHAT OUR ALGORITHM HAS ALERTED TO IN THE LAST 30 DAYS…
  * intro.text1 => 段落1:textarea:You're about to discover how our proprietary algorithm has alerted to SIXTEEN 50%+ gainers in just one month alone.
  * intro.text2 => 段落2:textarea:Not only that… it finds these winners in any market condition… good or bad… bull or bear.
  * intro.text3 => 段落3:textarea:Over the course of this short letter\, you'll witness how this algorithm crushes it for people just like you (in a matter of minutes)\, and why now is the perfect time to access it completely FREE.
  * intro.margin => 下边距:responsive:40/60|px
+ * intro.image => 介绍图片:textarea:
  * 
  * group:stats => 算法统计
  * stats.title => 统计标题:textarea:HERE'S WHAT OUR ALGORITHM HAS ALERTED TO IN THE LAST 30 DAYS…
@@ -25,12 +27,14 @@
  * stats.text7 => 文字7:text:The best part?
  * stats.text8 => 文字8:textarea:We're sharing it with you today completely free of charge.
  * stats.margin => 下边距:responsive:40/60|px
+ * stats.image => 统计图片:textarea:
  * 
  * group:cta_middle => 中间CTA
  * cta_middle.enabled => 显示中间CTA:select:yes|yes,no
  * cta_middle.text => 按钮文字:text:CLICK HERE TO ACCESS THE ORACLE ALGORITHM FOR FREE
  * cta_middle.url => 按钮链接:textarea:#
  * cta_middle.margin => 下边距:responsive:40/60|px
+ * cta_middle.event_name => 事件名:text:
  * 
  * group:why => 为什么有效
  * why.title => 标题:text:WHY ALGORITHMIC TRADING WORKS AND HOW YOU CAN BENEFIT
@@ -51,12 +55,14 @@
  * why.point3_detail => 要点3详情:textarea:There's an intense feeling to overcome the loss as quickly as possible. And to do so\, you start taking random trades that can cause more harm than good.
  * why.point3_extra => 要点3补充:textarea:By using "Algorithmic Trading" you remove decisions based on emotion and can make trade decisions based on statistics.
  * why.margin => 下边距:responsive:40/60|px
+ * why.image => Why图片:textarea:
  * 
  * group:cta_why => Why区域后CTA
  * cta_why.enabled => 显示Why后CTA:select:yes|yes,no
  * cta_why.text => 按钮文字:text:YES! I WANT FREE ACCESS TO THE ORACLE ALGORITHM NOW!
  * cta_why.url => 按钮链接:textarea:#
  * cta_why.margin => 下边距:responsive:40/60|px
+ * cta_why.event_name => 事件名:text:
  * 
  * group:testimonials => 推荐评价
  * testimonials.enabled => 显示推荐:select:yes|yes,no
@@ -91,6 +97,9 @@
  * final_cta.text => 按钮文字:text:CLICK HERE TO GET FREE ACCESS TO THE ORACLE ALGORITHM
  * final_cta.url => 按钮链接:textarea:#
  * final_cta.target => 打开方式:select:_self|_self,_blank
+ * final_cta.event_name => 事件名:text:
+ * 
+ *
  * 
  * @fields_end
  */
@@ -129,20 +138,36 @@ function genAlgoContentCSS($parsed) {
 }
 
 // 介绍部分配置
+$introTitle = getAlgoContentConfig($styleSettings, 'intro.title', "HERE'S WHAT OUR ALGORITHM HAS ALERTED TO IN THE LAST 30 DAYS…");
 $introText1 = getAlgoContentConfig($styleSettings, 'intro.text1', 'It\'s no secret that Wall Street has rigged the stock market in their favor…');
 $introText2 = getAlgoContentConfig($styleSettings, 'intro.text2', 'It\'s why they rake in billions of dollars any given day while retail traders like you are left picking up the scraps.');
 $introText3 = getAlgoContentConfig($styleSettings, 'intro.text3', 'However, the main reason Wall Street institutions crush the markets day in and day out simply has to do with the fact that…');
 $introMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'intro.margin', '40/60') . 'px'));
+
+// 内容图片配置（按分组）
+$contentImage1 = getAlgoContentConfig($styleSettings, 'intro.image', '');
+$contentImage2 = getAlgoContentConfig($styleSettings, 'stats.image', '');
+$contentImage3 = getAlgoContentConfig($styleSettings, 'why.image', '');
 
 // 统计部分配置
 $statsTitle = getAlgoContentConfig($styleSettings, 'stats.title', 'Computer Algorithms Do Up To 75% Of All Stock Trades');
 $statsMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'stats.margin', '40/60') . 'px'));
 
 // 中间CTA配置
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
 $ctaMiddleEnabled = getAlgoContentConfig($styleSettings, 'cta_middle.enabled', 'yes');
 $ctaMiddleText = getAlgoContentConfig($styleSettings, 'cta_middle.text', 'Send Me ALGO Trade Alerts »');
 $ctaMiddleUrl = getAlgoContentConfig($styleSettings, 'cta_middle.url', '#');
 $ctaMiddleMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'cta_middle.margin', '40/60') . 'px'));
+$ctaMiddleEventRaw = trim(getAlgoContentConfig($styleSettings, 'cta_middle.event_name', ''));
+if ($ctaMiddleEventRaw !== '') {
+    $ctaMiddleHandle = 'cta_' . $pageHandleForEvent . '_' . $ctaMiddleEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $ctaMiddleHandle = $pageDefaultCtaEvent; // 使用页面默认名
+} else {
+    $ctaMiddleHandle = 'cta_' . $pageHandleForEvent . '_click';
+}
 
 // 为什么有效部分配置
 $whyTitle = getAlgoContentConfig($styleSettings, 'why.title', 'Why Do Our Algorithm\'s Trade Alerts Work So Well?');
@@ -155,6 +180,14 @@ $ctaWhyEnabled = getAlgoContentConfig($styleSettings, 'cta_why.enabled', 'yes');
 $ctaWhyText = getAlgoContentConfig($styleSettings, 'cta_why.text', 'Send Me ALGO Trade Alerts »');
 $ctaWhyUrl = getAlgoContentConfig($styleSettings, 'cta_why.url', '#');
 $ctaWhyMargin = genAlgoContentCSS(parseAlgoContentResponsive(getAlgoContentConfig($styleSettings, 'cta_why.margin', '40/60') . 'px'));
+$ctaWhyEventRaw = trim(getAlgoContentConfig($styleSettings, 'cta_why.event_name', ''));
+if ($ctaWhyEventRaw !== '') {
+    $ctaWhyHandle = 'cta_' . $pageHandleForEvent . '_' . $ctaWhyEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $ctaWhyHandle = $pageDefaultCtaEvent;
+} else {
+    $ctaWhyHandle = 'cta_' . $pageHandleForEvent . '_click';
+}
 
 // 推荐评价配置
 $testimonialsEnabled = getAlgoContentConfig($styleSettings, 'testimonials.enabled', 'yes');
@@ -165,6 +198,14 @@ $finalCtaEnabled = getAlgoContentConfig($styleSettings, 'final_cta.enabled', 'ye
 $finalCtaText = getAlgoContentConfig($styleSettings, 'final_cta.text', 'Send Me ALGO Trade Alerts »');
 $finalCtaUrl = getAlgoContentConfig($styleSettings, 'final_cta.url', '#');
 $finalCtaTarget = getAlgoContentConfig($styleSettings, 'final_cta.target', '_self');
+$finalCtaEventRaw = trim(getAlgoContentConfig($styleSettings, 'final_cta.event_name', ''));
+if ($finalCtaEventRaw !== '') {
+    $finalCtaHandle = 'cta_' . $pageHandleForEvent . '_' . $finalCtaEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $finalCtaHandle = $pageDefaultCtaEvent;
+} else {
+    $finalCtaHandle = 'cta_' . $pageHandleForEvent . '_click';
+}
 
 // 推荐人数据
 $testimonials = [
@@ -225,13 +266,30 @@ p, p * {
     margin-bottom: <?= $statsMargin ?>;
 }
 
-.algo-stats-title {
+/* 第一处主标题（保留现有较小尺寸） */
+.algo-stats-title-first {
     font-size: clamp(22px, calc(22px + 8 * ((100vw - 375px) / 905)), 30px);
     font-weight: 700;
     margin-bottom: 20px;
     margin-top: 20px;
     text-align: center;
     color: #000000;
+}
+
+/* 其余标题：移动端50，桌面端70，动态计算 */
+.algo-stats-title {
+    font-size: clamp(22px, calc(22px + 8 * ((100vw - 375px) / 905)), 30px);
+    margin-top: clamp(50px, calc(50px + 20 * ((100vw - 375px) / 905)), 70px);
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #000000;
+}
+
+/* 标题不受任何最大宽度限制 */
+.algo-stats-title,
+.algo-stats-title-first {
+    max-width: none;
 }
 
 .algo-stats-text {
@@ -403,6 +461,19 @@ p, p * {
     line-height: 1.4;
 }
 
+/* 内容图片容器与图片边距（不影响已有 .algo-chart-container） */
+.algo-content-image {
+    margin: 16px 0;
+}
+
+.algo-content-image img {
+    display: block;
+    width: 100%;
+    max-width: 600px; /* 三张内容图片最大宽度 600px */
+    height: auto;
+    margin: 8px auto;
+}
+
 /* 最终CTA */
 .algo-final-cta {
     text-align: center;
@@ -435,14 +506,20 @@ p, p * {
 </style>
 
 <!-- 介绍部分 -->
+<h2 class="algo-stats-title-first"><?= htmlspecialchars($introTitle ?? '') ?></h2>
 <div class="algo-intro-section">
-    <p class="algo-intro-text"><?= htmlspecialchars($introText1) ?></p>
-    <p class="algo-intro-text"><?= htmlspecialchars($introText2) ?></p>
-    <p class="algo-intro-text"><?= htmlspecialchars($introText3) ?></p>
+    <p class="algo-intro-text"><?= htmlspecialchars($introText1 ?? '') ?></p>
+    <p class="algo-intro-text"><?= htmlspecialchars($introText2 ?? '') ?></p>
+    <p class="algo-intro-text"><?= htmlspecialchars($introText3 ?? '') ?></p>
 </div>
-
+<?php if (!empty($contentImage1)): ?>
+<div class="algo-content-image">
+    <img data-src="<?= htmlspecialchars($contentImage1 ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="Chart" loading="lazy" decoding="async" fetchpriority="low" />
+    
+</div>
+<?php endif; ?>
 <!-- 统计部分 -->
-<h2 class="algo-stats-title"><?= htmlspecialchars($statsTitle) ?></h2>
+<h2 class="algo-stats-title"><?= htmlspecialchars($statsTitle ?? '') ?></h2>
 
 <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text1', 'That\'s right.')) ?></p>
 <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text2', 'It\'s not because they have superior strategies than you…')) ?></p>
@@ -453,23 +530,29 @@ p, p * {
 <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text6', 'But one that\'s already alerted sixteen 50%+ gainers within the last month alone.')) ?></p>
 <p><strong><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text7', 'The best part?')) ?></strong></p>
 <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'stats.text8', 'We\'re sharing it with you today completely free of charge.')) ?></p>
-
+<?php if (!empty($contentImage2)): ?>
+<div class="algo-content-image">
+    <img data-src="<?= htmlspecialchars($contentImage2 ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="Chart" loading="lazy" decoding="async" fetchpriority="low" />
+    
+</div>
+<?php endif; ?>
 <!-- 中间CTA -->
 <?php if ($ctaMiddleEnabled === 'yes'): ?>
 <div class="algo-cta-middle">
-    <a href="<?= htmlspecialchars($ctaMiddleUrl) ?>" 
+    <a href="<?= htmlspecialchars($ctaMiddleUrl ?? '') ?>" 
        target="_self"
-       class="algo-cta-button">
-        <?= htmlspecialchars($ctaMiddleText) ?>
+       class="algo-cta-button"
+       data-track-event="<?= htmlspecialchars($ctaMiddleHandle ?? '') ?>">
+        <?= htmlspecialchars($ctaMiddleText ?? '') ?>
     </a>
 </div>
 <?php endif; ?>
 
 <!-- 为什么有效部分 -->
 <div class="algo-why-section">
-    <h2 class="algo-why-title"><?= htmlspecialchars($whyTitle) ?></h2>
-    <p class="algo-why-intro"><?= htmlspecialchars($whyIntro) ?></p>
-    <p class="algo-why-benefit"><?= htmlspecialchars($whyBenefitText) ?></p>
+    <h2 class="algo-why-title"><?= htmlspecialchars($whyTitle ?? '') ?></h2>
+    <p class="algo-why-intro"><?= htmlspecialchars($whyIntro ?? '') ?></p>
+    <p class="algo-why-benefit"><?= htmlspecialchars($whyBenefitText ?? '') ?></p>
     
     <div class="algo-why-points">
         <!-- 要点1 -->
@@ -502,14 +585,20 @@ p, p * {
         <p><?= htmlspecialchars(getAlgoContentConfig($styleSettings, 'why.point3_extra', 'By using "Algorithmic Trading" you remove decisions based on emotion and can make trade decisions based on statistics.')) ?></p>
     </div>
 </div>
-
+<?php if (!empty($contentImage3)): ?>
+<div class="algo-content-image">
+    <img data-src="<?= htmlspecialchars($contentImage3 ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="Chart" loading="lazy" decoding="async" fetchpriority="low" />
+    
+</div>
+<?php endif; ?>
 <!-- Why后CTA -->
 <?php if ($ctaWhyEnabled === 'yes'): ?>
 <div class="algo-cta-why">
-    <a href="<?= htmlspecialchars($ctaWhyUrl) ?>" 
+    <a href="<?= htmlspecialchars($ctaWhyUrl ?? '') ?>" 
        target="_self"
-       class="algo-cta-button">
-        <?= htmlspecialchars($ctaWhyText) ?>
+       class="algo-cta-button"
+       data-track-event="<?= htmlspecialchars($ctaWhyHandle ?? '') ?>">
+        <?= htmlspecialchars($ctaWhyText ?? '') ?>
     </a>
 </div>
 <?php endif; ?>
@@ -517,21 +606,21 @@ p, p * {
 <!-- 推荐评价 -->
 <?php if ($testimonialsEnabled === 'yes'): ?>
 <div class="algo-testimonials-section">
-    <p class="algo-testimonials-title"><?= htmlspecialchars($testimonialsTitle) ?></p>
+    <p class="algo-testimonials-title"><?= htmlspecialchars($testimonialsTitle ?? '') ?></p>
     <div class="algo-testimonials-grid">
         <?php foreach ($testimonials as $person): ?>
             <?php if ($person['name']): ?>
             <div class="algo-testimonial-card">
                 <div class="algo-testimonial-avatar">
                     <?php if ($person['avatar']): ?>
-                        <img src="<?= htmlspecialchars($person['avatar']) ?>" alt="<?= htmlspecialchars($person['name']) ?>">
+                        <img data-src="<?= htmlspecialchars($person['avatar'] ?? '') ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="<?= htmlspecialchars($person['name'] ?? '') ?>" loading="lazy" decoding="async" fetchpriority="low">
                     <?php else: ?>
                         <?= strtoupper(substr($person['name'], 0, 1)) ?>
                     <?php endif; ?>
                 </div>
                 <div class="algo-testimonial-info">
-                    <div class="algo-testimonial-name"><?= htmlspecialchars($person['name']) ?></div>
-                    <div class="algo-testimonial-title"><?= htmlspecialchars($person['title']) ?></div>
+                    <div class="algo-testimonial-name"><?= htmlspecialchars($person['name'] ?? '') ?></div>
+                    <div class="algo-testimonial-title"><?= htmlspecialchars($person['title'] ?? '') ?></div>
                 </div>
             </div>
             <?php endif; ?>
@@ -543,12 +632,17 @@ p, p * {
 <!-- 最终CTA -->
 <?php if ($finalCtaEnabled === 'yes'): ?>
 <div class="algo-final-cta">
-    <a href="<?= htmlspecialchars($finalCtaUrl) ?>" 
-       target="<?= htmlspecialchars($finalCtaTarget) ?>"
-       class="algo-cta-button">
-        <?= htmlspecialchars($finalCtaText) ?>
+    <a href="<?= htmlspecialchars($finalCtaUrl ?? '') ?>" 
+       target="<?= htmlspecialchars($finalCtaTarget ?? '') ?>"
+       class="algo-cta-button"
+       data-track-event="<?= htmlspecialchars($finalCtaHandle ?? '') ?>">
+        <?= htmlspecialchars($finalCtaText ?? '') ?>
     </a>
 </div>
 <?php endif; ?>
 
+
+<!-- CTA 按钮事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
+
+<w:template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</w:template>
 

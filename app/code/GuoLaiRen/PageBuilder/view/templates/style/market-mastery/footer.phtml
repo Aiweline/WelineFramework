@@ -1,0 +1,202 @@
+<?php
+/**
+ * Market Mastery 模板 - Footer
+ * 底部版权信息和免责声明
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:footer => Footer设置
+ * footer.terms_text => 条款文本:text:Terms of Service
+ * footer.terms_url => 条款链接:text:#
+ * footer.privacy_text => 隐私文本:text:Privacy Policy
+ * footer.privacy_url => 隐私链接:text:#
+ * footer.copyright_text => 版权文本:text:© 2025 Slear noc Rights
+ * footer.disclaimer_text => 免责声明文本:textarea:
+ * footer.padding_v => 上下内边距:responsive:20/40|px
+ * footer.padding_h => 左右内边距:responsive:16/40|px
+ * footer.youtube_url => YouTube链接地址:text:
+ * footer.whatsapp_url => WhatsApp链接地址:text:
+ * footer.youtube_event_name => YouTube按钮事件名称:text:
+ * footer.whatsapp_event_name => WhatsApp按钮事件名称:text:
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'market-mastery';
+
+// 加载颜色配置：统一从 base/colors.phtml 引入（与 header 保持一致）
+$colors = [];
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// Helper functions
+if (!function_exists('getConfig')) {
+    function getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+if (!function_exists('parseResp')) {
+    function parseResp($value) {
+        if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+        $value = trim($value);
+        $unit = '';
+        if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+            $unit = $matches[1];
+            $value = preg_replace('/[a-z%]+$/i', '', $value);
+        }
+        $parts = explode('/', trim($value));
+        $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+        switch (count($parts)) {
+            case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+            case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('genRespCSS')) {
+    function genRespCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+// 配置值（颜色从色系配置中读取）
+$termsText = getConfig($styleSettings, 'footer.terms_text', 'Terms of Service');
+$termsUrl = getConfig($styleSettings, 'footer.terms_url', '#');
+$privacyText = getConfig($styleSettings, 'footer.privacy_text', 'Privacy Policy');
+$privacyUrl = getConfig($styleSettings, 'footer.privacy_url', '#');
+$copyrightText = getConfig($styleSettings, 'footer.copyright_text', '© 2025 Slear noc Rights');
+$disclaimerDefault = 'No trading strategy is risk free. Trading and investing involve substantial risk, and you may lose the entire amount of your principal investment or more. You should trade or invest only “risk capital” – money you can afford to lose. Trading and investing is not appropriate for everyone. We urge you to conduct your own research and due diligence and obtain professional advice from your personal financial adviser or investment broker before making any investment decision.';
+$disclaimerText = getConfig($styleSettings, 'footer.disclaimer_text', $disclaimerDefault);
+$footerBg = $colors['footer_bg'] ?? ($colors['primary_bg'] ?? '#FFFFFF');
+$footerTextColor = $colors['footer_link_color'] ?? ($colors['footer_copyright_text'] ?? '#6699CC');
+$footerDisclaimerColor = '#000000';
+$paddingV = genRespCSS(parseResp(getConfig($styleSettings, 'footer.padding_v', '20/40') . 'px'));
+$paddingH = genRespCSS(parseResp(getConfig($styleSettings, 'footer.padding_h', '16/40') . 'px'));
+?>
+
+<style>
+    .market-mastery-footer {
+        width: 100%;
+        background-color: <?= htmlspecialchars($footerBg ?? '') ?>;
+        color: <?= htmlspecialchars($footerTextColor ?? '') ?>;
+        padding: <?= $paddingV ?> <?= $paddingH ?>;
+        text-align: center; /* 文本居中显示 */
+    }
+    
+    .market-mastery-footer-container {
+        max-width: 880px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    
+    .market-mastery-footer-links {
+        font-size: <?= genRespCSS(parseResp('12/14' . 'px')) ?>;
+        line-height: 1.6;
+        color: <?= htmlspecialchars($colors['footer_link_color'] ?? '#6699CC') ?>;
+        text-align: center;
+    }
+    
+    .market-mastery-footer-links a {
+        color: <?= htmlspecialchars($colors['footer_link_color'] ?? '#6699CC') ?>;
+        text-decoration: underline;
+    }
+    
+    .market-mastery-footer-links a:hover {
+        text-decoration: underline;
+        opacity: 0.8;
+    }
+    .market-mastery-footer-links .sep {
+        display: inline-block;
+        margin: 0 4px;
+        color: <?= htmlspecialchars($colors['footer_link_color'] ?? '#6699CC') ?>;
+    }
+    
+    .market-mastery-footer-disclaimer {
+        font-size: <?= genRespCSS(parseResp('11/12' . 'px')) ?>;
+        line-height: 1.5;
+        color: <?= htmlspecialchars($footerDisclaimerColor ?? '') ?>;
+        margin-bottom: <?= genRespCSS(parseResp('10/14' . 'px')) ?>;
+        text-align: center;
+    }
+    
+    /* 手机端样式 */
+    @media (max-width: 767px) {
+        .market-mastery-footer {
+            padding: <?= genRespCSS(parseResp('16/20' . 'px')) ?> <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+            margin-bottom: 0; /* 悬浮 bar 负责为 body 预留空间 */
+        }
+        
+        .market-mastery-footer-links {
+            font-size: <?= genRespCSS(parseResp('11/12' . 'px')) ?>;
+        }
+        
+        .market-mastery-footer-disclaimer {
+            font-size: <?= genRespCSS(parseResp('10/11' . 'px')) ?>;
+        }
+    }
+</style>
+
+<footer class="market-mastery-footer">
+    <div class="market-mastery-footer-container">
+         <?php if ($disclaimerText): ?>
+         <div class="market-mastery-footer-disclaimer">
+             <?= htmlspecialchars($disclaimerText) ?>
+         </div>
+         <?php endif; ?>
+        
+        <div class="market-mastery-footer-links">
+            <?php if (!empty($termsText)): ?>
+                <a href="<?= htmlspecialchars($termsUrl ?? '#') ?>"><?= htmlspecialchars($termsText ?? '') ?></a>
+            <?php endif; ?>
+            <?php if (!empty($termsText) && !empty($privacyText)): ?>
+                <span class="sep">|</span>
+            <?php endif; ?>
+            <?php if (!empty($privacyText)): ?>
+                <a href="<?= htmlspecialchars($privacyUrl ?? '#') ?>"><?= htmlspecialchars($privacyText ?? '') ?></a>
+            <?php endif; ?>
+            <?php if (!empty($copyrightText)): ?>
+                <span class="copyright"> <?= htmlspecialchars($copyrightText ?? '') ?></span>
+            <?php endif; ?>
+        </div>
+    </div>
+</footer>
+
+<!-- 悬浮社交按钮 Bar -->
+<?php
+$floatingEnabledRaw = getConfig($styleSettings, 'footer.floating_bar_enabled', '1');
+$floatingEnabled = !in_array((string)$floatingEnabledRaw, ['0', 'false', 'False', 'FALSE'], true);
+?>
+<?php if ($floatingEnabled): ?>
+<?php
+// 传递配置变量给 floating-bar 组件
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+$this->assign('page', $page);
+?>
+<w:template>GuoLaiRen_PageBuilder::base/floating-bar.phtml</w:template>
+<?php endif; ?>
+
+</body>
+</html>
+

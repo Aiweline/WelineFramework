@@ -42,7 +42,7 @@ class FormSubmission extends Model
     public function getExtraFields(): array
     {
         $extra = $this->getData(self::fields_EXTRA_FIELDS);
-        return $extra ? json_decode($extra, true) : [];
+        return $extra ? json_decode($extra ?? '', true) : [];
     }
     
     /**
@@ -180,23 +180,23 @@ class FormSubmission extends Model
     public function upgrade(ModelSetup $setup, Context $context): void
     {
         // 添加status字段（如果不存在）
-        if ($setup->tableExist() && !$setup->getConn()->columnExist($setup->getTableName(), self::fields_STATUS)) {
-            $setup->getConn()->addColumn(
-                $setup->getTableName(),
+        if ($setup->tableExist() && !$setup->hasField(self::fields_STATUS)) {
+            // 新增字段（插入到 SUBMITTED_AT 之后，可按需调整顺序）
+            $setup->alterTable()->addColumn(
                 self::fields_STATUS,
+                self::fields_SUBMITTED_AT,
                 TableInterface::column_type_VARCHAR,
                 20,
                 "not null default 'new'",
                 '状态'
-            );
-            
+            )->alter();
+
             // 添加索引
-            $setup->getConn()->addIndex(
-                $setup->getTableName(),
+            $setup->alterTable()->addIndex(
                 TableInterface::index_type_KEY,
                 'idx_status',
                 [self::fields_STATUS]
-            );
+            )->alter();
         }
     }
 

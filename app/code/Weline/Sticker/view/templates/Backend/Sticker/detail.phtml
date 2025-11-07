@@ -1,0 +1,235 @@
+<?php
+/**
+ * Sticker 详情页
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$targetModule = $this->getData('target_module') ?: '';
+$targetFile = $this->getData('target_file') ?: '';
+$sourceModule = $this->getData('source_module') ?: '';
+$stickerFile = $this->getData('sticker_file') ?: '';
+$stickerRelativePath = $this->getData('sticker_relative_path') ?: '';
+$actions = $this->getData('actions') ?: [];
+$stickerContent = $this->getData('sticker_content') ?: '';
+$sourceContent = $this->getData('source_content') ?: '';
+$sourceFilePath = $this->getData('source_file_path') ?: '';
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Sticker详情') ?></title>
+    <style>
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .action-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .action-replace { background: #ffc107; color: #000; }
+        .action-before { background: #28a745; color: #fff; }
+        .action-after { background: #17a2b8; color: #fff; }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0">
+                                <i class="mdi mdi-sticker text-primary"></i> <?= __('Sticker详情') ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>"><?= __('Sticker管理') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('详情') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 返回按钮 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 基本信息 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('基本信息') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong><?= __('目标模块') ?>：</strong>
+                                            <span class="badge bg-info"><?= htmlspecialchars($targetModule) ?></span>
+                                        </p>
+                                        <p><strong><?= __('目标文件') ?>：</strong>
+                                            <code><?= htmlspecialchars($targetFile) ?></code>
+                                        </p>
+                                        <p><strong><?= __('来源模块') ?>：</strong>
+                                            <span class="badge bg-success"><?= htmlspecialchars($sourceModule) ?></span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong><?= __('Sticker文件') ?>：</strong>
+                                            <code><?= htmlspecialchars($stickerRelativePath) ?></code>
+                                        </p>
+                                        <p><strong><?= __('完整路径') ?>：</strong>
+                                            <code class="text-secondary"><?= htmlspecialchars($stickerFile) ?></code>
+                                        </p>
+                                        <p><strong><?= __('规则数量') ?>：</strong>
+                                            <span class="badge bg-warning"><?= count($actions) ?></span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 规则列表 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('修改规则') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($actions)): ?>
+                                    <p class="text-muted"><?= __('暂无规则') ?></p>
+                                <?php else: ?>
+                                    <div class="accordion" id="rulesAccordion">
+                                        <?php foreach ($actions as $index => $action): ?>
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header">
+                                                    <button class="accordion-button <?= $index !== 0 ? 'collapsed' : '' ?>" 
+                                                            type="button" 
+                                                            data-bs-toggle="collapse" 
+                                                            data-bs-target="#rule<?= $index ?>">
+                                                        <span class="action-badge action-<?= $action['type'] ?>">
+                                                            <?= strtoupper($action['type']) ?>
+                                                        </span>
+                                                        <span class="ms-2">
+                                                            <?= __('位置：%{1}', [$action['position'] ?? 'all']) ?>
+                                                        </span>
+                                                    </button>
+                                                </h2>
+                                                <div id="rule<?= $index ?>" 
+                                                     class="accordion-collapse collapse <?= $index === 0 ? 'show' : '' ?>" 
+                                                     data-bs-parent="#rulesAccordion">
+                                                    <div class="accordion-body">
+                                                        <div class="mb-3">
+                                                            <strong><?= __('目标代码') ?>：</strong>
+                                                            <div class="code-block mt-2">
+<?= htmlspecialchars(substr($action['target_original'] ?? $action['target'] ?? '', 0, 500)) ?>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <strong><?= __('修改代码') ?>：</strong>
+                                                            <div class="code-block mt-2">
+<?= htmlspecialchars(substr($action['code_original'] ?? $action['code'] ?? '', 0, 500)) ?>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sticker 文件内容 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('Sticker 文件内容') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($stickerContent)): ?>
+                                    <p class="text-muted"><?= __('文件不存在或为空') ?></p>
+                                <?php else: ?>
+                                    <div class="code-block">
+<?= htmlspecialchars($stickerContent) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 源文件内容 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('源文件内容') ?></h5>
+                                <?php if ($sourceFilePath): ?>
+                                    <small class="text-muted"><?= htmlspecialchars($sourceFilePath) ?></small>
+                                <?php endif; ?>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($sourceContent)): ?>
+                                    <p class="text-muted"><?= __('源文件不存在或为空') ?></p>
+                                <?php else: ?>
+                                    <div class="code-block">
+<?= htmlspecialchars($sourceContent) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

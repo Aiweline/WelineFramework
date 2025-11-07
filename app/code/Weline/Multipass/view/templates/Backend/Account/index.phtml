@@ -1,0 +1,465 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$userType = $this->getData('user_type') ?? 'backend';
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Multipass账户管理') ?></title>
+    <style>
+        .user-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .user-card:hover {
+            border-color: #0d6efd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .user-card.selected {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+        .token-result {
+            display: none;
+            margin-top: 20px;
+        }
+        .token-result.show {
+            display: block;
+        }
+        .token-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .login-url {
+            background: #e7f1ff;
+            border: 1px solid #0d6efd;
+            border-radius: 4px;
+            padding: 10px;
+            word-break: break-all;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('Multipass账户管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="@url('admin')"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><?= __('Multipass账户管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <!-- start page message -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- end message -->
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <!-- 用户类型切换 -->
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <ul class="nav nav-tabs" id="user-type-tabs" role="tablist">
+                                            <li class="nav-item" role="presentation">
+                                                <a class="nav-link <?= ($userType === 'backend') ? 'active' : '' ?>" 
+                                                   id="backend-tab"
+                                                   href="@url('multipass/backend/account/backend')"
+                                                   data-user-type="backend"
+                                                   aria-selected="<?= ($userType === 'backend') ? 'true' : 'false' ?>"
+                                                   aria-current="<?= ($userType === 'backend') ? 'page' : 'false' ?>">
+                                                    <i class="mdi mdi-account-cog"></i> <?= __('后端账户') ?>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <a class="nav-link <?= ($userType === 'frontend') ? 'active' : '' ?>" 
+                                                   id="frontend-tab"
+                                                   href="@url('multipass/backend/account/frontend')"
+                                                   data-user-type="frontend"
+                                                   aria-selected="<?= ($userType === 'frontend') ? 'true' : 'false' ?>"
+                                                   aria-current="<?= ($userType === 'frontend') ? 'page' : 'false' ?>">
+                                                    <i class="mdi mdi-account"></i> <?= __('前端账户') ?>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <!-- 左侧：用户列表 -->
+                                    <div class="col-md-6">
+                                        <h5 class="mb-3"><?= __('选择用户') ?></h5>
+                                        
+                                        <!-- 搜索框 -->
+                                        <div class="mb-3">
+                                            <div class="input-group">
+                                                <input type="text" 
+                                                       class="form-control" 
+                                                       id="user-search" 
+                                                       placeholder="<?= __('搜索用户名或邮箱...') ?>">
+                                                <button class="btn btn-primary" type="button" onclick="searchUsers()">
+                                                    <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 用户列表 -->
+                                        <div id="user-list" style="max-height: 600px; overflow-y: auto;">
+                                            <div class="text-center text-muted py-5">
+                                                <i class="mdi mdi-information-outline"></i>
+                                                <?= __('请输入搜索关键词查找用户') ?>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 右侧：站点选择和生成 -->
+                                    <div class="col-md-6">
+                                        <h5 class="mb-3"><?= __('生成登录令牌') ?></h5>
+                                        
+                                        <!-- 站点选择 -->
+                                        <div class="mb-3">
+                                            <label class="form-label"><?= __('选择站点') ?> <span class="text-danger">*</span></label>
+                                            <select class="form-select" id="site-select">
+                                                <option value=""><?= __('请先选择用户') ?></option>
+                                                <?php foreach ($this->getData('sites') as $site): ?>
+                                                    <option value="<?= $site->getData('site_id') ?>" 
+                                                            data-site-name="<?= htmlspecialchars($site->getData('site_name')) ?>">
+                                                        <?= htmlspecialchars($site->getData('site_name')) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <?php if (empty($this->getData('sites'))): ?>
+                                                <small class="form-text text-danger">
+                                                    <?= __('当前没有可用的') . ($userType === 'frontend' ? __('前端') : __('后端')) . __('站点，请先到站点管理中配置') ?>
+                                                </small>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <!-- 生成按钮 -->
+                                        <div class="mb-3">
+                                            <button type="button" 
+                                                    class="btn btn-primary btn-lg w-100" 
+                                                    id="generate-btn"
+                                                    onclick="generateToken()"
+                                                    disabled>
+                                                <i class="mdi mdi-key"></i> <?= __('生成登录令牌') ?>
+                                            </button>
+                                        </div>
+
+                                        <!-- Token结果 -->
+                                        <div id="token-result" class="token-result">
+                                            <div class="alert alert-success">
+                                                <h6><i class="mdi mdi-check-circle"></i> <?= __('令牌生成成功') ?></h6>
+                                                <hr>
+                                                <div class="mb-3">
+                                                    <label class="form-label"><strong><?= __('站点') ?>：</strong></label>
+                                                    <div id="result-site-name" class="text-primary"></div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label"><strong><?= __('用户') ?>：</strong></label>
+                                                    <div id="result-username" class="text-primary"></div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label"><strong><?= __('Token') ?>：</strong></label>
+                                                    <div class="token-display" id="result-token"></div>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="copyToken()">
+                                                        <i class="mdi mdi-content-copy"></i> <?= __('复制Token') ?>
+                                                    </button>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label"><strong><?= __('登录链接') ?>：</strong></label>
+                                                    <div class="login-url" id="result-login-url"></div>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="copyLoginUrl()">
+                                                        <i class="mdi mdi-content-copy"></i> <?= __('复制链接') ?>
+                                                    </button>
+                                                    <a href="#" id="open-login-url" target="_blank" class="btn btn-sm btn-success mt-2">
+                                                        <i class="mdi mdi-open-in-new"></i> <?= __('打开链接') ?>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<script>
+let selectedUserId = null;
+let selectedUserType = '<?= $userType ?>';
+
+// 页面加载时自动选中对应的 tab
+document.addEventListener('DOMContentLoaded', function() {
+    const currentUserType = '<?= $userType ?>';
+    const tabs = document.querySelectorAll('#user-type-tabs .nav-link');
+    
+    // 移除所有 active 类
+    tabs.forEach(tab => {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+        tab.setAttribute('aria-current', 'false');
+    });
+    
+    // 选中当前对应的 tab
+    tabs.forEach(tab => {
+        const userType = tab.getAttribute('data-user-type');
+        if (userType === currentUserType) {
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+            tab.setAttribute('aria-current', 'page');
+        }
+    });
+});
+
+function searchUsers() {
+    const search = document.getElementById('user-search').value.trim();
+    const userList = document.getElementById('user-list');
+    
+    if (!search) {
+        userList.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-information-outline"></i> <?= __('请输入搜索关键词查找用户') ?></div>';
+        return;
+    }
+    
+    showLoading();
+    
+    fetch('<?= $this->getUrlBuilder()->getBackendUrl('multipass/backend/account/get-user-list?user_type=' . $userType . '&search=') ?>' + encodeURIComponent(search))
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.code === 200) {
+                displayUsers(data.data.users);
+            } else {
+                showMessage('error', data.msg || '<?= __('获取用户列表失败') ?>');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showMessage('error', '<?= __('请求失败') ?>');
+        });
+}
+
+function displayUsers(users) {
+    const userList = document.getElementById('user-list');
+    
+    if (!users || users.length === 0) {
+        userList.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-account-off"></i> <?= __('未找到用户') ?></div>';
+        return;
+    }
+    
+    let html = '';
+    users.forEach(user => {
+        const username = (user.username || user.user_id || '').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const email = (user.email || '').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const avatar = (user.avatar || '').toString().replace(/"/g, '&quot;');
+        const userId = user.user_id || user.id;
+        const firstLetter = username ? username.charAt(0).toUpperCase() : '?';
+        
+        html += `
+            <div class="user-card" data-user-id="${userId}" onclick="selectUser(${userId}, '${username}', '${email}', this)">
+                <div class="d-flex align-items-center">
+                    ${avatar ? `<img src="${avatar}" class="rounded-circle me-2" width="40" height="40" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">` : ''}
+                    <div class="rounded-circle bg-primary text-white me-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;${avatar ? 'display:none;' : ''}">${firstLetter}</div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${username}</div>
+                        ${email ? '<div class="text-muted small">' + email + '</div>' : ''}
+                    </div>
+                    <i class="mdi mdi-check-circle text-primary" style="display:none;"></i>
+                </div>
+            </div>
+        `;
+    });
+    
+    userList.innerHTML = html;
+}
+
+function selectUser(userId, username, email, element) {
+    selectedUserId = userId;
+    
+    // 更新UI - 移除所有选中状态
+    document.querySelectorAll('.user-card').forEach(card => {
+        card.classList.remove('selected');
+        const checkIcon = card.querySelector('.mdi-check-circle');
+        if (checkIcon) {
+            checkIcon.style.display = 'none';
+        }
+    });
+    
+    // 设置当前选中状态
+    if (element) {
+        element.classList.add('selected');
+        const checkIcon = element.querySelector('.mdi-check-circle');
+        if (checkIcon) {
+            checkIcon.style.display = 'block';
+        }
+    }
+    
+    // 启用生成按钮
+    const siteSelect = document.getElementById('site-select');
+    const generateBtn = document.getElementById('generate-btn');
+    
+    if (siteSelect && siteSelect.value) {
+        generateBtn.disabled = false;
+    }
+    
+    // 隐藏之前的token结果
+    const tokenResult = document.getElementById('token-result');
+    if (tokenResult) {
+        tokenResult.classList.remove('show');
+    }
+}
+
+document.getElementById('site-select').addEventListener('change', function() {
+    const generateBtn = document.getElementById('generate-btn');
+    generateBtn.disabled = !this.value || !selectedUserId;
+});
+
+// 回车搜索
+document.getElementById('user-search').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchUsers();
+    }
+});
+
+function generateToken() {
+    const siteId = document.getElementById('site-select').value;
+    
+    if (!siteId || !selectedUserId) {
+        showMessage('error', '<?= __('请先选择用户和站点') ?>');
+        return;
+    }
+    
+    showLoading();
+    
+    const formData = new FormData();
+    formData.append('user_id', selectedUserId);
+    formData.append('site_id', siteId);
+    formData.append('user_type', selectedUserType);
+    
+    fetch('<?= $this->getUrlBuilder()->getBackendUrl('multipass/backend/account/generate-token') ?>', {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.code === 200) {
+                displayTokenResult(data.data);
+            } else {
+                showMessage('error', data.msg || '<?= __('生成令牌失败') ?>');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showMessage('error', '<?= __('请求失败') ?>');
+        });
+}
+
+function displayTokenResult(data) {
+    document.getElementById('result-site-name').textContent = data.site_name;
+    document.getElementById('result-username').textContent = data.username;
+    document.getElementById('result-token').textContent = data.token;
+    document.getElementById('result-login-url').textContent = data.login_url;
+    document.getElementById('open-login-url').href = data.login_url;
+    
+    document.getElementById('token-result').classList.add('show');
+    
+    // 滚动到结果区域
+    document.getElementById('token-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyToken() {
+    const token = document.getElementById('result-token').textContent;
+    copyToClipboard(token);
+    showMessage('success', '<?= __('Token已复制到剪贴板') ?>');
+}
+
+function copyLoginUrl() {
+    const url = document.getElementById('result-login-url').textContent;
+    copyToClipboard(url);
+    showMessage('success', '<?= __('登录链接已复制到剪贴板') ?>');
+}
+
+function copyToClipboard(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+}
+
+// 显示消息提示
+function showMessage(type, message) {
+    const alertClass = type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info';
+    const iconClass = type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : type === 'warning' ? 'mdi-alert' : 'mdi-information';
+    
+    const messageElement = document.createElement('div');
+    messageElement.className = `alert alert-${alertClass} alert-dismissible fade show`;
+    messageElement.setAttribute('role', 'alert');
+    messageElement.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    messageElement.innerHTML = `
+        <i class="mdi ${iconClass} me-2"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(messageElement);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        if (messageElement.parentNode) {
+            messageElement.classList.remove('show');
+            setTimeout(() => {
+                if (messageElement.parentNode) {
+                    messageElement.parentNode.removeChild(messageElement);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+</script>
+</body>
+</html>
+

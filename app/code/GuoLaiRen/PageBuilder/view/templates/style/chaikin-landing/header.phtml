@@ -149,10 +149,10 @@ $customCssEnabled = getChaikinConfig($styleSettings, 'custom_css.enabled', 'no')
 $customCssCode = getChaikinConfig($styleSettings, 'custom_css.code', '');
 
 // SEO信息
-$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : '');
-$metaDescription = $page ? $page->getData('meta_description') : '';
-$metaKeywords = $page ? $page->getData('meta_keywords') : '';
-$pageTitle = $page ? $page->getData('title') : '';
+$metaTitle = ($page && $page->getData('meta_title')) ? (string)$page->getData('meta_title') : (($page && $page->getData('title')) ? (string)$page->getData('title') : '');
+$metaDescription = ($page && $page->getData('meta_description')) ? (string)$page->getData('meta_description') : '';
+$metaKeywords = ($page && $page->getData('meta_keywords')) ? (string)$page->getData('meta_keywords') : '';
+$pageTitle = ($page && $page->getData('title')) ? (string)$page->getData('title') : '';
 
 // 处理高亮词汇
 function highlightText($text, $word, $style) {
@@ -163,23 +163,34 @@ function highlightText($text, $word, $style) {
     return str_replace($word, '<em style="' . $styleAttr . '">' . $word . '</em>', $text);
 }
 
-$mainTextHighlighted = highlightText(htmlspecialchars($mainText), htmlspecialchars($highlightWord), $highlightStyle);
-$desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($descHighlight), $descHighlightStyle);
+$mainTextHighlighted = highlightText(htmlspecialchars($mainText ?? ''), htmlspecialchars($highlightWord ?? ''), $highlightStyle);
+$desc1Highlighted = highlightText(htmlspecialchars($desc1 ?? ''), htmlspecialchars($descHighlight ?? ''), $descHighlightStyle);
 ?>
 <!DOCTYPE html>
-<html lang="<?= htmlspecialchars($this->getData('locale') ?: 'en_US') ?>">
+<html lang="<?= htmlspecialchars(($this->getData('locale') ?? '') ?: 'en_US') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($metaTitle ?: $pageTitle) ?></title>
     
     <?php if ($metaDescription): ?>
-    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
     <?php endif; ?>
     
     <?php if ($metaKeywords): ?>
-    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
     <?php endif; ?>
+    
+    <!-- Favicon -->
+    <?php $pageIcon = $page ? ($page->getData('icon') ?: '') : ''; ?>
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <?php endif; ?>
+    
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
     
     <style>
     * {
@@ -190,13 +201,13 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
     
     body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background-color: <?= htmlspecialchars($bodyBgColor) ?>;
+        background-color: <?= htmlspecialchars($bodyBgColor ?? '') ?>;
         <?php if ($bodyBgImage): ?>
-        background-image: url('<?= htmlspecialchars($bodyBgImage) ?>');
-        background-position: <?= htmlspecialchars($bodyBgPosition) ?>;
-        background-size: <?= htmlspecialchars($bodyBgSize) ?>;
-        background-repeat: <?= htmlspecialchars($bodyBgRepeat) ?>;
-        background-attachment: <?= htmlspecialchars($bodyBgAttachment) ?>;
+        background-image: url('<?= htmlspecialchars($bodyBgImage ?? '') ?>');
+        background-position: <?= htmlspecialchars($bodyBgPosition ?? '') ?>;
+        background-size: <?= htmlspecialchars($bodyBgSize ?? '') ?>;
+        background-repeat: <?= htmlspecialchars($bodyBgRepeat ?? '') ?>;
+        background-attachment: <?= htmlspecialchars($bodyBgAttachment ?? '') ?>;
         <?php endif; ?>
         color: #333;
         line-height: 1.6;
@@ -214,7 +225,7 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
     
     .chaikin-branding {
         text-align: center;
-        color: <?= htmlspecialchars($brandingColor) ?>;
+        color: <?= htmlspecialchars($brandingColor ?? '') ?>;
         font-size: <?= $brandingSize ?>;
         font-weight: 500;
         letter-spacing: 1.5px;
@@ -222,12 +233,27 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
         text-transform: uppercase;
     }
     
+    .chaikin-branding-logo {
+        display: inline-block;
+        margin-bottom: 12px;
+        max-height: 60px;
+        max-width: 200px;
+        vertical-align: middle;
+    }
+    
+    .chaikin-branding-logo img {
+        max-height: 60px;
+        max-width: 100%;
+        height: auto;
+        width: auto;
+    }
+    
     .chaikin-headline {
         text-align: center;
     }
     
     .chaikin-headline-pre {
-        color: <?= htmlspecialchars($preColor) ?>;
+        color: <?= htmlspecialchars($preColor ?? '') ?>;
         font-size: <?= $preSize ?>;
         font-weight: <?= $preWeight ?>;
         margin-bottom: <?= $preMargin ?>;
@@ -235,7 +261,7 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
     }
     
     .chaikin-headline-main {
-        color: <?= htmlspecialchars($mainColor) ?>;
+        color: <?= htmlspecialchars($mainColor ?? '') ?>;
         font-size: <?= $mainSize ?>;
         font-weight: <?= $mainWeight ?>;
         line-height: <?= $mainLineHeight ?>;
@@ -248,7 +274,7 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
     
     .chaikin-description {
         text-align: center;
-        color: <?= htmlspecialchars($descColor) ?>;
+        color: <?= htmlspecialchars($descColor ?? '') ?>;
         font-size: <?= $descSize ?>;
         line-height: <?= $descLineHeight ?>;
         margin-bottom: <?= $descMargin ?>;
@@ -276,13 +302,26 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
     <div class="chaikin-container">
         <!-- 品牌标识 -->
         <div class="chaikin-branding">
-            <?= htmlspecialchars($brandingText) ?>
+            <?php 
+            $pageLogo = ($page && $page->getData('logo')) ? (string)$page->getData('logo') : '';
+            $logoAlt = 'Logo';
+            if ($page && $page->getData('name')) {
+                $logoAlt = (string)$page->getData('name');
+            }
+            ?>
+            <?php if (!empty($pageLogo)): ?>
+            <div class="chaikin-branding-logo">
+                <img data-src="<?= htmlspecialchars($pageLogo) ?>" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" alt="<?= htmlspecialchars($logoAlt) ?>" loading="lazy" decoding="async" fetchpriority="low">
+            <template>GuoLaiRen_PageBuilder::base/lazy-loading.phtml</template>
+            </div>
+            <?php endif; ?>
+            <?= htmlspecialchars($brandingText ?? '') ?>
         </div>
         
         <!-- 标题区域 -->
         <div class="chaikin-headline">
             <div class="chaikin-headline-pre">
-                <?= htmlspecialchars($preText) ?>
+                <?= htmlspecialchars($preText ?? '') ?>
             </div>
             <h1 class="chaikin-headline-main">
                 <?= $mainTextHighlighted ?>
@@ -292,6 +331,6 @@ $desc1Highlighted = highlightText(htmlspecialchars($desc1), htmlspecialchars($de
         <!-- 描述文字 -->
         <div class="chaikin-description">
             <p><?= $desc1Highlighted ?></p>
-            <p><strong><?= htmlspecialchars($desc2) ?></strong></p>
+            <p><strong><?= htmlspecialchars($desc2 ?? '') ?></strong></p>
         </div>
 

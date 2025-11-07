@@ -9,6 +9,7 @@ use Weline\Framework\Console\Console\Deploy\Mode\Set;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\System\Process\Processer;
 
 class Start implements CommandInterface
 {
@@ -117,7 +118,7 @@ class Start implements CommandInterface
                         ['前端API', "http://{$host}:{$port}/api/rest"],
                         ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
                         ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
-                    ]);
+                    ], true, 0, false); // false 表示不截断URL，完整显示地址
                     echo "\n";
                     
                     // 如果是后台模式，显示后台运行信息
@@ -134,7 +135,7 @@ class Start implements CommandInterface
                         ['前端API', "http://{$host}:{$port}/api/rest"],
                         ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
                         ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
-                    ]);
+                    ], true, 0, false); // false 表示不截断URL，完整显示地址
                     echo "\n";
                     $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
                     return;
@@ -153,7 +154,7 @@ class Start implements CommandInterface
             ['前端API', "http://{$host}:{$port}/api/rest"],
             ['后端管理', "http://{$host}:{$port}/" . Env::get('admin') . "/admin/login"],
             ['后端API', "http://{$host}:{$port}/" . Env::get('api_admin') . "/rest"],
-        ]);
+        ], true, 0, false); // false 表示不截断URL，完整显示地址
         
         echo "\n";
         
@@ -164,7 +165,7 @@ class Start implements CommandInterface
             ['前端API', "http://{$localIp}:{$port}/api/rest"],
             ['后端管理', "http://{$localIp}:{$port}/" . Env::get('admin') . "/admin/login"],
             ['后端API', "http://{$localIp}:{$port}/" . Env::get('api_admin') . "/rest"],
-        ]);
+        ], true, 0, false); // false 表示不截断URL，完整显示地址
         
         echo "\n";
 
@@ -203,7 +204,7 @@ class Start implements CommandInterface
         // 如果后台模式下PID为null，尝试通过端口获取PID
         if ($backend && !$pid) {
             $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-            if (is_resource($connection)) {
+            if ($connection !== false) {
                 fclose($connection);
                 // 尝试获取占用端口的进程ID
                 $pid = $this->getProcessIdByPort($port);
@@ -216,7 +217,7 @@ class Start implements CommandInterface
         // 如果后台模式下仍然没有PID，但端口被占用，说明启动成功
         if ($backend && !$pid) {
             $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-            if (is_resource($connection)) {
+            if ($connection !== false) {
                 fclose($connection);
                 $this->printer->success(__('服务器已在后台启动成功！'));
                 $this->printer->note(__('使用 "php bin/w server:stop" 停止服务器'));
@@ -265,30 +266,18 @@ class Start implements CommandInterface
     {
         $env = Env::getInstance();
         $serverConfig = $env->get('server') ?? [];
-        
         if (isset($serverConfig['pid']) && $serverConfig['pid']) {
-            // 检查进程是否存在
-            if (function_exists('posix_kill')) {
-                $isRunning = posix_kill($serverConfig['pid'], 0);
-                return [
-                    'running' => $isRunning,
-                    'pid' => $isRunning ? $serverConfig['pid'] : null
-                ];
-            } else {
-                // Windows系统检查
-                $output = [];
-                exec("tasklist /FI \"PID eq {$serverConfig['pid']}\" 2>NUL", $output);
-                $isRunning = !empty($output) && count($output) > 1;
-                return [
-                    'running' => $isRunning,
-                    'pid' => $isRunning ? $serverConfig['pid'] : null
-                ];
-            }
+            $isRunning = Processer::isRunningByPid((int)$serverConfig['pid']);
+            return [
+                'running' => $isRunning,
+                'pid' => $isRunning ? (int)$serverConfig['pid'] : null
+            ];
         }
         
         // 检查端口是否被占用
         $connection = @fsockopen($host, $port, $errno, $errstr, 1);
-        if (is_resource($connection)) {
+        
+        if ($connection !== false) {
             fclose($connection);
             
             // 尝试获取占用端口的进程ID
@@ -313,14 +302,12 @@ class Start implements CommandInterface
     {
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             // Windows系统
-            $output = [];
-            exec("netstat -ano | findstr :{$port}", $output);
+            @exec('netstat -ano | findstr ":' . $port . '"', $output);
             
-            foreach ($output as $line) {
-                if (strpos($line, 'LISTENING') !== false) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    if (count($parts) >= 5) {
-                        $pid = (int)$parts[count($parts) - 1];
+            if (!empty($output)) {
+                foreach ($output as $line) {
+                    if (preg_match('/LISTENING\s+(\d+)/', $line, $matches)) {
+                        $pid = (int)$matches[1];
                         if ($pid > 0) {
                             return $pid;
                         }
@@ -330,7 +317,7 @@ class Start implements CommandInterface
         } else {
             // Unix/Linux系统
             $output = [];
-            exec("lsof -ti:{$port}", $output);
+            @exec("lsof -ti:{$port} 2>/dev/null", $output);
             
             if (!empty($output)) {
                 $pid = (int)trim($output[0]);
@@ -348,36 +335,9 @@ class Start implements CommandInterface
      */
     private function stopExistingServer(int $pid): bool
     {
-        if (function_exists('posix_kill')) {
-            // Linux/Unix系统
-            $killed = posix_kill($pid, SIGTERM);
-            sleep(2);
-            if ($this->isProcessRunning($pid)) {
-                $killed = posix_kill($pid, SIGKILL);
-                sleep(1);
-            }
-            return !$this->isProcessRunning($pid);
-        } else {
-            // Windows系统
-            $output = [];
-            exec("taskkill /PID {$pid} /F 2>NUL", $output, $returnCode);
-            sleep(2);
-            
-            // 如果进程还在运行，尝试通过进程名称停止
-            if ($this->isProcessRunning($pid)) {
-                $output = [];
-                exec("tasklist /FI \"PID eq {$pid}\" /FO CSV", $output);
-                if (!empty($output) && count($output) > 1) {
-                    if (preg_match('/"([^"]+)"/', $output[1], $matches)) {
-                        $processName = $matches[1];
-                        exec("taskkill /IM \"{$processName}\" /F 2>NUL", $output, $returnCode);
-                        sleep(2);
-                    }
-                }
-            }
-            
-            return !$this->isProcessRunning($pid);
-        }
+        Processer::killByPid($pid);
+        usleep(500000);
+        return !Processer::isRunningByPid($pid);
     }
 
     /**
@@ -385,14 +345,7 @@ class Start implements CommandInterface
      */
     private function isProcessRunning(int $pid): bool
     {
-        if (function_exists('posix_kill')) {
-            return posix_kill($pid, 0);
-        } else {
-            // Windows系统检查
-            $output = [];
-            exec("tasklist /FI \"PID eq {$pid}\" 2>NUL", $output);
-            return !empty($output) && count($output) > 1;
-        }
+        return Processer::isRunningByPid($pid);
     }
 
     /**

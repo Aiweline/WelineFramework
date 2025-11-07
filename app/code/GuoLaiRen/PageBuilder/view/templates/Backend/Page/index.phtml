@@ -130,11 +130,11 @@
                                             <div>
                                                 <h6 class="mb-0">
                                                     <i class="mdi mdi-file-document text-primary"></i>
-                                                    <?= htmlspecialchars($page->getData('name')) ?>
+                                                    <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
                                                 </h6>
                                                 <small class="text-muted">
                                                     <i class="mdi mdi-link-variant"></i>
-                                                    <?= htmlspecialchars($page->getData('handle')) ?>
+                                                    <?= htmlspecialchars((($page->getData('handle') ?? '')) ?? '') ?>
                                                 </small>
                                             </div>
                                             <div>
@@ -184,8 +184,8 @@
                                                 
                                                 <!-- 已发布：拷贝链接按钮 -->
                                                 <button class='btn btn-sm btn-outline-secondary copy-link-btn d-inline-flex align-items-center' 
-                                                        data-url="<?= htmlspecialchars($frontendUrl) ?>"
-                                                        data-page-name="<?= htmlspecialchars($page->getData('name')) ?>"
+                                                        data-url="<?= htmlspecialchars($frontendUrl ?? '') ?>"
+                                                        data-page-name="<?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>"
                                                         style="min-width: 85px; white-space: nowrap;"
                                                         title="<?= __('复制链接到剪贴板') ?>">
                                                     <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>
@@ -264,11 +264,11 @@
                                                                 <div>
                                                                     <h6 class="mb-0">
                                                                         <i class="mdi mdi-file-outline text-secondary"></i>
-                                                                        <?= htmlspecialchars($childPage->getData('name')) ?>
+                                                                        <?= htmlspecialchars((($childPage->getData('name') ?? '')) ?? '') ?>
                                                                     </h6>
                                                                     <small class="text-muted">
                                                                         <i class="mdi mdi-link-variant"></i>
-                                                                        <?= htmlspecialchars($childPage->getData('handle')) ?>
+                                                                        <?= htmlspecialchars((($childPage->getData('handle') ?? '')) ?? '') ?>
                                                                     </small>
                                                                 </div>
                                                                 <div>
@@ -310,8 +310,8 @@
                                                                     
                                                                     <!-- 已发布：拷贝链接按钮 -->
                                                                     <button class='btn btn-sm btn-outline-secondary copy-link-btn d-inline-flex align-items-center' 
-                                                                            data-url="<?= htmlspecialchars($childFrontendUrl) ?>"
-                                                                            data-page-name="<?= htmlspecialchars($childPage->getData('name')) ?>"
+                                                                            data-url="<?= htmlspecialchars($childFrontendUrl ?? '') ?>"
+                                                                            data-page-name="<?= htmlspecialchars((($childPage->getData('name') ?? '')) ?? '') ?>"
                                                                             style="min-width: 85px; white-space: nowrap;"
                                                                             title="<?= __('复制链接到剪贴板') ?>">
                                                                         <i class="mdi mdi-content-copy me-1"></i><?= __('拷贝') ?>

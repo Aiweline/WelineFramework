@@ -101,7 +101,7 @@ class Page extends Model
         if (empty($locales)) {
             return [];
         }
-        return json_decode($locales, true) ?: [];
+        return json_decode($locales ?? '', true) ?: [];
     }
     
     /**
@@ -149,7 +149,7 @@ class Page extends Model
         if (empty($setting)) {
             return [];
         }
-        return json_decode($setting, true) ?: [];
+        return json_decode($setting ?? '', true) ?: [];
     }
     
     /**
@@ -358,15 +358,27 @@ class Page extends Model
     public function upgrade(ModelSetup $setup, Context $context): void
     {
         // 添加 default_locale 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->getConnection()->fetchOne("SHOW COLUMNS FROM `{$setup->getTable()}` LIKE 'default_locale'")) {
-            $setup->getConnection()->addColumn(
-                $setup->getTable(),
+        if ($setup->tableExist() && !$setup->hasField('default_locale')) {
+            $setup->alterTable()->addColumn(
                 self::fields_DEFAULT_LOCALE,
+                '',
                 TableInterface::column_type_VARCHAR,
                 10,
                 '',
                 '默认语言代码'
-            );
+            )->alter();
+        }
+        
+        // 添加 cta_event_name 字段（如果不存在）
+        if ($setup->tableExist() && !$setup->hasField('cta_event_name')) {
+            $setup->alterTable()->addColumn(
+                self::fields_CTA_EVENT_NAME,
+                '',
+                TableInterface::column_type_VARCHAR,
+                100,
+                '',
+                'CTA转化事件名称'
+            )->alter();
         }
         
         // 添加 cta_event_name 字段（如果不存在）

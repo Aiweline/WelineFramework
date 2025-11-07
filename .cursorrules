@@ -1,0 +1,91 @@
+# Cursor AI 代码生成规则
+
+## 重要参考文档
+
+在生成代码前，**必须参考并遵循**以下文档中的规范：
+
+- **AI-常犯错误.md** - 记录常见错误及修复方法，包含：
+  - 模块注册文件（register.php）的正确写法
+  - 数据库表结构升级的正确方法（使用 hasField 而不是 tableColumnExist）
+  - 接口实现的正确签名（InstallInterface::setup 方法）
+  - 类属性访问级别和类型声明规范
+  - XML 配置文件的标准格式
+  - **PHP 8.2+ 兼容性规范**（重要）：函数参数不能传入 null
+
+## 代码生成规范
+
+### 模块注册文件（register.php）
+
+- **必须**使用 `Register::register()` 并包含所有必需参数
+- **必须**提供模块类型、模块名、目录路径（使用 `__DIR__`）
+- **必须**至少包含 `Weline_Framework` 作为依赖
+
+### 数据库升级方法
+
+- **必须**使用 `$setup->hasField()` 检查字段是否存在
+- **必须**先检查表是否存在：`$setup->tableExist()`
+- **必须**使用 `$setup->alterTable()->addColumn()->alter()` 流程
+- **禁止**使用 `tableColumnExist()` 方法（不存在）
+- **禁止**直接使用 `getConnection()->getTable()`
+
+### 接口实现
+
+- **必须**严格按照接口定义的方法签名实现
+- **必须**使用正确的参数类型（如 `Setup` 而不是 `DataInterface`）
+- **必须**使用正确的返回类型（如 `void` 而不是 `string`）
+
+### 类继承
+
+- **必须**确保子类属性的访问级别与父类一致或更宽松
+- **必须**确保子类属性的类型声明与父类完全一致
+- 即使子类型继承自父类型，属性声明也必须使用父类型
+
+### XML 配置文件
+
+- **必须**使用标准的命名空间：`xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"`
+- **必须**使用正确的 Schema 位置：`urn:Weline_Framework::Event/etc/xsd/event.xsd`
+- **必须**为 observer 添加所有必需属性：`disabled`, `shared`, `sort`
+- **必须**使用正确的命名格式：`Module::observer_name`
+
+### PHP 8.2+ 兼容性（重要）
+
+- **禁止**向以下函数传入 `null` 值，必须使用 `??` 运算符提供默认值：
+  - `htmlspecialchars()` → `htmlspecialchars($var ?? '')`
+  - `json_decode()` → `json_decode($var ?? '', true)`
+  - `strlen()`, `mb_strlen()` → `strlen($var ?? '')`
+  - `str_replace()`, `str_contains()` 等字符串函数 → `str_replace('old', 'new', $var ?? '')`
+  - `count()`, `sizeof()` → `count($var ?? [])`
+  - `array_merge()` → `array_merge($array1 ?? [], $array2 ?? [])`
+- **数据库字段定义**：
+  - `addColumn()` 的 `$options` 参数**必须是字符串**，不能是 `null`
+  - 可空字段使用 `''`（空字符串），非空字段使用 `'not null'`
+- **复杂表达式**：必须正确嵌套括号，确保 null 合并运算符优先级正确
+
+## 代码审查清单
+
+生成代码后，请自动检查：
+
+1. ✅ register.php 文件是否完整且参数正确
+2. ✅ 数据库升级方法是否使用 hasField()
+3. ✅ 接口方法签名是否完全匹配
+4. ✅ 类属性访问级别是否符合继承规则
+5. ✅ 类属性类型是否与父类完全一致
+6. ✅ XML 配置是否符合标准格式
+7. ✅ **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
+8. ✅ **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
+9. ✅ **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
+10. ✅ **PHP 8.2+ 兼容性**：所有可能接收 null 的字符串/数组函数是否已处理
+
+## 参考文档路径
+
+- `./AI-常犯错误.md` - 详细错误记录和修复方法
+- `./docs/dev/开发文档.md` - Weline Framework 开发文档
+- `./docs/WelineFramework模型开发最佳实践.md` - 模型开发最佳实践
+
+---
+
+**重要提示**：
+1. 生成代码前，请先阅读 `AI-常犯错误.md` 文件，避免重复常见错误
+2. **PHP 8.2+ 要求**：所有函数参数必须符合类型要求，不能传入 `null`。使用 `??` 运算符提供默认值
+3. 特别注意：`htmlspecialchars()`, `json_decode()`, `addColumn()` 等函数对 null 参数的限制
+
