@@ -380,18 +380,6 @@ class Page extends Model
                 'CTA转化事件名称'
             )->alter();
         }
-        
-        // 添加 cta_event_name 字段（如果不存在）
-        if ($setup->tableExist() && !$setup->getConnection()->fetchOne("SHOW COLUMNS FROM `{$setup->getTable()}` LIKE 'cta_event_name'")) {
-            $setup->getConnection()->addColumn(
-                $setup->getTable(),
-                self::fields_CTA_EVENT_NAME,
-                TableInterface::column_type_VARCHAR,
-                100,
-                '',
-                'CTA转化事件名称'
-            );
-        }
     }
 
     /**

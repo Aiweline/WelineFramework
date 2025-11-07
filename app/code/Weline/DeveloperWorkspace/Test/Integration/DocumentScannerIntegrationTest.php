@@ -134,7 +134,7 @@ class DocumentScannerIntegrationTest extends TestCase
             $doc = $this->documentModel->clear()
                 ->where(Document::fields_MODULE_NAME, 'Test_Module')
                 ->where(Document::fields_FILE_NAME, 'test-title.md')
-                ->fetchOne();
+                ->find()->fetch();
             
             if ($doc && $doc->getId()) {
                 // 验证标题被正确提取
@@ -180,7 +180,7 @@ class DocumentScannerIntegrationTest extends TestCase
             $doc = $this->documentModel->clear()
                 ->where(Document::fields_MODULE_NAME, 'Test_Module')
                 ->where(Document::fields_FILE_NAME, 'long-document.md')
-                ->fetchOne();
+                ->find()->fetch();
             
             if ($doc && $doc->getId()) {
                 $summary = $doc->getData(Document::fields_summary);

@@ -47,7 +47,7 @@ class ApiKeyMiddleware
         // 验证API密钥
         /** @var AiApiKey $apiKeyModel */
         $apiKeyModel = ObjectManager::getInstance(AiApiKey::class);
-        $apiKeyModel = $apiKeyModel->where('token', $apiKey)->fetchOne();
+        $apiKeyModel = $apiKeyModel->where('token', $apiKey)->find()->fetch();
         
         if (!$apiKeyModel || !$apiKeyModel->getId()) {
             return $this->errorResponse('无效的API密钥', 401);

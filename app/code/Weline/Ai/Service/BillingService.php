@@ -42,7 +42,7 @@ class BillingService
         $model = ObjectManager::getInstance(AiModel::class);
         $model = $model->where('code', $modelCode)
             ->orWhere('name', 'like', "%{$modelCode}%")
-            ->fetchOne();
+            ->find()->fetch();
         
         if (!$model || !$model->getId()) {
             throw new \Exception(__('模型不存在：%{1}', $modelCode));

@@ -387,7 +387,7 @@ class Assistant extends BackendController
             $adapter = $adapterModel->reset()
                 ->where('code', $adapterCode)
                 ->where('is_active', 1)
-                ->fetchOne();
+                ->find()->fetch();
             
             if (!$adapter || !$adapter->getId()) {
                 return $this->jsonResponse([
