@@ -2,6 +2,7 @@
 
 namespace Weline\Admin\Observer;
 
+use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Session\BackendSession;
@@ -75,8 +76,13 @@ class BackendControllerInitAfter implements ObserverInterface
         foreach ($white_urls as &$white_url) {
             $white_url = $white_url['path'];
         }
-        if (!in_array(trim($this->request->getRouteUrlPath(), '/'), $white_urls) and !$this->request->getParam('isIframe')) {
-            $this->getSession()->setData('referer', $this->request->getUrlBuilder()->getCurrentUrl());
+        $currentRoutePath = trim($this->request->getRouteUrlPath(), '/');
+        // 白名单跳过验证
+        if (!in_array($currentRoutePath, $white_urls) and !$this->request->getParam('isIframe')) {
+            // 只存储菜单链接
+            if (MenuUrlValidator::isMenuUrl($currentRoutePath)) {
+                $this->getSession()->setData('referer', $this->request->getUrlBuilder()->getCurrentUrl());
+            }
         }
     }
 }

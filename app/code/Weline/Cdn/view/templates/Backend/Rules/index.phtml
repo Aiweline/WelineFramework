@@ -227,22 +227,27 @@ async function pushRules() {
         document.getElementById('pushTotal').textContent = total;
         
         // 添加开始推送日志
-        addLog('info', `<?= __('开始推送规则到 %{1} 个域名...') ?>`.replace('%{1}', total));
+        const startMsg = '<?= __('开始推送规则到 %{1} 个域名...') ?>';
+        addLog('info', startMsg.replace(/%\{1\}/g, String(total || 0)));
         
-        // 2. 逐个推送域名
+        // 2. 逐个推送域名（串行推送，确保一个完成后再推送下一个）
         for (let index = 0; index < domains.length; index++) {
             const domain = domains[index];
             const currentIndex = index + 1;
             const progress = Math.round((currentIndex / total) * 100);
             
+            // 确保域名名称和ID都有值
+            const domainName = (domain.domain_name && String(domain.domain_name).trim()) || '未知域名';
+            const domainId = (domain.domain_id && String(domain.domain_id)) || '未知ID';
+            
             // 更新进度条
             updateProgressBar(progress);
             
-            // 添加开始推送日志
-            addLog('info', `[${currentIndex}/${total}] <?= __('正在推送域名: %{1} (ID: %{2})') ?>`.replace('%{1}', domain.domain_name).replace('%{2}', domain.domain_id));
+            // 添加开始推送日志 - 优先显示域名名称，ID作为补充信息
+            addLog('info', `[${currentIndex}/${total}] <?= __('正在推送域名') ?>: ${domainName} (ID: ${domainId})`);
             
             try {
-                // 推送单个域名
+                // 推送单个域名（使用 await 确保串行执行，一个完成后再推送下一个）
                 const formData = new FormData();
                 formData.append('id', domain.domain_id);
                 
@@ -253,12 +258,15 @@ async function pushRules() {
                 
                 const pushData = await pushResponse.json();
                 
+                // 如果后端返回了域名名称，优先使用后端的名称
+                const finalDomainName = (pushData.domain_name && String(pushData.domain_name).trim()) || domainName;
+                
                 if (pushData.success) {
                     successCount++;
-                    addLog('success', `[${currentIndex}/${total}] ✓ <?= __('推送成功: %{1}') ?> - ${pushData.message || '<?= __('推送成功') ?>'}`.replace('%{1}', domain.domain_name));
+                    addLog('success', `[${currentIndex}/${total}] ✓ <?= __('推送成功') ?>: ${finalDomainName} - ${pushData.message || '<?= __('推送成功') ?>'}`);
                 } else {
                     failCount++;
-                    addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败: %{1}') ?> - ${pushData.message || '<?= __('推送失败') ?>'}`.replace('%{1}', domain.domain_name));
+                    addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败') ?>: ${finalDomainName} - ${pushData.message || '<?= __('推送失败') ?>'}`);
                 }
                 
                 // 更新统计
@@ -267,7 +275,7 @@ async function pushRules() {
                 
             } catch (error) {
                 failCount++;
-                addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败: %{1}') ?> - <?= __('请求失败：') ?>${error.message}`.replace('%{1}', domain.domain_name));
+                addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败') ?>: ${domainName} - <?= __('请求失败：') ?>${error.message}`);
                 document.getElementById('pushFail').textContent = failCount;
             }
         }
@@ -278,7 +286,8 @@ async function pushRules() {
         closeBtn.disabled = false;
         
         const summaryType = failCount === 0 ? 'success' : 'warning';
-        addLog(summaryType, `<?= __('推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个') ?>`.replace('%{1}', total).replace('%{2}', successCount).replace('%{3}', failCount));
+        const summaryMsg = '<?= __('推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个') ?>';
+        addLog(summaryType, summaryMsg.replace(/%\{1\}/g, String(total || 0)).replace(/%\{2\}/g, String(successCount || 0)).replace(/%\{3\}/g, String(failCount || 0)));
         
     } catch (error) {
         addLog('error', `<?= __('获取域名列表失败：') ?>${error.message}`);

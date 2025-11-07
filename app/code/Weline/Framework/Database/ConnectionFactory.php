@@ -20,6 +20,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\LinkException;
+use Weline\Framework\Database\Service\DriverRegistry;
 use Weline\Framework\Manager\ObjectManager;
 
 class ConnectionFactory
@@ -111,6 +112,26 @@ class ConnectionFactory
     {
         $configProvider = $configProvider ?: $this->configProvider;
         $driver_type = $configProvider->getDbType();
+        
+        // 优先从驱动注册表加载
+        try {
+            $driverRegistry = ObjectManager::getInstance(DriverRegistry::class);
+            $driverClass = $driverRegistry->getDriverClass($driver_type);
+            
+            if ($driverClass && class_exists($driverClass, false)) {
+                try {
+                    return ObjectManager::make($driverClass, ['configProvider' => $configProvider]);
+                } catch (\Throwable $e) {
+                    // 如果实例化失败，回退到原有方式
+                    error_log("实例化适配器 {$driverClass} 失败: " . $e->getMessage());
+                }
+            }
+        } catch (\Throwable $e) {
+            // 如果驱动注册表加载失败，静默回退到原有方式
+            // 不记录错误日志，避免在正常回退时产生噪音
+        }
+        
+        // 回退到原有硬编码方式（向后兼容）
         $driverClass = "Weline\\Framework\\Database\\Connection\\Adapter\\" . ucfirst($driver_type) . '\\Connector';
         if (!class_exists($driverClass)) {
             throw new Exception(__("数据库驱动 %{1} 不存在", $driverClass));

@@ -44,7 +44,9 @@ class Router implements RouterInterface
         }
         
         // 4. 检查handle是否存在（使用缓存避免重复查询）
-        if (!self::handleExists($handle)) {
+        // 检查是否为预览模式
+        $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
+        if (!self::handleExists($handle, $isPreview)) {
             return;
         }
         
@@ -125,28 +127,55 @@ class Router implements RouterInterface
     
     /**
      * 检查handle是否存在于数据库
+     * 
+     * @param string $handle 页面句柄
+     * @param bool $isPreview 是否为预览模式
+     * @return bool
      */
-    private static function handleExists(string $handle): bool
+    private static function handleExists(string $handle, bool $isPreview = false): bool
     {
+        // 预览模式下，使用不同的缓存键，避免与正常模式冲突
+        $cacheKey = $handle . ($isPreview ? '_preview' : '');
+        
         // 使用静态缓存避免重复查询
-        if (isset(self::$handleCache[$handle])) {
-            return self::$handleCache[$handle];
+        if (isset(self::$handleCache[$cacheKey])) {
+            return self::$handleCache[$cacheKey];
         }
         
         try {
             /** @var Page $pageModel */
             $pageModel = ObjectManager::getInstance(Page::class);
             $page = clone $pageModel;
-            $page->clear()
-                ->where(Page::fields_HANDLE, $handle)
-                ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
-                ->find()
-                ->fetch();
+            
+            // 预览模式下，允许访问所有状态的页面
+            if ($isPreview) {
+                $page->clear()
+                    ->where(Page::fields_HANDLE, $handle)
+                    ->find()
+                    ->fetch();
+            } else {
+                // 非预览模式：允许访问已发布的页面，或者草稿状态的测试页面
+                // 先查询已发布的页面
+                $page->clear()
+                    ->where(Page::fields_HANDLE, $handle)
+                    ->where(Page::fields_STATUS, Page::STATUS_PUBLISHED)
+                    ->find()
+                    ->fetch();
+                
+                // 如果没找到已发布的页面，再查询测试页面（允许草稿状态）
+                if (!$page->getId()) {
+                    $page->clear()
+                        ->where(Page::fields_HANDLE, $handle)
+                        ->where(Page::fields_TYPE, 'test_page')
+                        ->find()
+                        ->fetch();
+                }
+            }
             
             $exists = (bool)$page->getId();
             
             // 缓存结果
-            self::$handleCache[$handle] = $exists;
+            self::$handleCache[$cacheKey] = $exists;
             
             return $exists;
         } catch (\Exception $e) {

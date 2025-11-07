@@ -4329,6 +4329,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // ==================== 页面URL相关函数 ====================
+    // 复制页面URL
+    window.copyPageUrl = function(event) {
+        const urlInput = document.getElementById('pageUrlDisplay');
+        if (!urlInput) return;
+        
+        const url = urlInput.value;
+        if (!url) return;
+        
+        // 获取按钮元素
+        const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrl"]');
+        
+        // 使用通用复制函数
+        copyToClipboard(url, button, null, null, 
+            '<?= __("地址已复制") ?>', 
+            '<?= __("页面地址") ?>: ' + url);
+    };
+    
+    // 打开页面URL
+    window.openPageUrl = function() {
+        const urlInput = document.getElementById('pageUrlDisplay');
+        if (!urlInput || !urlInput.value) return;
+        
+        // 在新窗口打开
+        window.open(urlInput.value, '_blank');
+        console.log('🌐 打开页面:', urlInput.value);
+    };
+    
     // ==================== Toast 通知函数（已在全局定义） ====================
     // showToast 函数现在是全局函数，可以在任何地方调用
 });

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Admin\Controller\System;
 
 use Weline\Admin\Controller\BaseController;
+use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Model\Menu;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
@@ -42,6 +43,8 @@ class Menus extends BaseController
                     throw new Exception(__('系统菜单无法删除！'));
                 }
                 $menu->delete();
+                // 清除菜单URL缓存，确保删除的菜单不再被识别
+                MenuUrlValidator::clearCache();
                 return $this->fetchJson(['code' => 200, 'msg' => __('删除成功！'), 'data' => []]);
             } else {
                 return $this->fetchJson(['code' => 403, 'msg' => __('关键参数ID不存在！'), 'data' => []]);
@@ -57,6 +60,8 @@ class Menus extends BaseController
             $data = json_decode($this->request->getBodyParams(), true);
             if ($data) {
                 $this->getMenu()->save($data);
+                // 清除菜单URL缓存，确保新菜单能被识别
+                MenuUrlValidator::clearCache();
             }
             return json_encode($this->success());
         } catch (\Exception $exception) {
