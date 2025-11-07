@@ -12,6 +12,8 @@
 - [类名冲突错误](#类名冲突错误)
 - [删除功能实现错误](#删除功能实现错误)
 - [PHP 8.2+ 兼容性错误](#php-82-兼容性错误)
+- [禁止使用 fetchOne() 方法](#禁止使用-fetchone-方法)
+- [ORM 查询使用规范](#orm-查询使用规范)
 
 ---
 
@@ -593,6 +595,527 @@ strlen($string ?? '');
 
 ---
 
+## 禁止使用 fetchOne() 方法
+
+**重要提示**：Weline Framework 中禁止使用 `fetchOne()` 方法。该方法在 `ConnectionFactory` 和 `ConnectorInterface` 中不存在，会导致运行时错误。
+
+### 错误信息
+```
+Call to undefined method Weline\Framework\Database\ConnectionFactory::fetchOne()
+Call to undefined method Weline\Framework\Database\Connection\Api\ConnectorInterface::fetchOne()
+```
+
+### 错误示例
+
+#### 在 Model 对象上使用 fetchOne()
+```php
+// ❌ 错误：禁止使用 fetchOne()
+$adapter = ObjectManager::getInstance(AiScenarioAdapter::class);
+$existing = $adapter->reset()->where('code', 'default')->fetchOne();
+
+$config = $this->clear()
+    ->where(self::fields_USER_ID, $userId)
+    ->where(self::fields_CONFIG_KEY, $key)
+    ->fetchOne();
+```
+
+#### 在 ConnectionFactory 上使用 fetchOne()
+```php
+// ❌ 错误：ConnectionFactory 没有 fetchOne() 方法
+$setup->getConnection()->fetchOne("SHOW COLUMNS FROM `{$table}` LIKE 'field_name'");
+
+$connection->fetchOne("SELECT COUNT(*) FROM users");
+```
+
+### 正确写法
+
+#### 对于 Model 对象：使用 find()->fetch()
+```php
+// ✅ 正确：使用 find()->fetch() 获取单条记录
+$adapter = ObjectManager::getInstance(AiScenarioAdapter::class);
+$existing = $adapter->reset()->where('code', 'default')->find()->fetch();
+
+if ($existing && $existing->getId()) {
+    // 处理已存在的记录
+}
+
+// ✅ 正确：查询用户配置
+$config = $this->clear()
+    ->where(self::fields_USER_ID, $userId)
+    ->where(self::fields_CONFIG_KEY, $key)
+    ->find()->fetch();
+
+if ($config && $config->getId()) {
+    return $config->getData(self::fields_CONFIG_VALUE);
+}
+```
+
+#### 对于 ConnectionFactory：使用 query()->fetch()
+```php
+// ✅ 正确：使用 query()->fetch() 执行 SQL 查询
+$result = $setup->getConnection()->query("SHOW COLUMNS FROM `{$table}` LIKE 'field_name'")->fetch();
+$exists = !empty($result);
+
+// ✅ 正确：查询记录数
+$result = $connection->query("SELECT COUNT(*) as count FROM users")->fetch();
+$count = $result[0]['count'] ?? 0;
+
+// ✅ 正确：查询单条记录
+$result = $connection->query("SELECT * FROM users WHERE id = 1")->fetch();
+$user = $result[0] ?? null;
+```
+
+#### 使用 ModelSetup 的 hasField() 方法（推荐）
+```php
+// ✅ 正确：使用 hasField() 检查字段是否存在（推荐方式）
+if ($setup->tableExist() && !$setup->hasField('field_name')) {
+    $setup->alterTable()->addColumn(
+        'field_name',
+        '',
+        TableInterface::column_type_VARCHAR,
+        100,
+        '',
+        '字段注释'
+    )->alter();
+}
+```
+
+### 常见场景和正确用法
+
+#### 场景1：检查记录是否存在
+```php
+// ❌ 错误
+$user = $model->where('username', $username)->fetchOne();
+
+// ✅ 正确
+$user = $model->where('username', $username)->find()->fetch();
+if ($user && $user->getId()) {
+    // 记录存在
+}
+```
+
+#### 场景2：获取单条记录
+```php
+// ❌ 错误
+$adapter = $adapterModel->reset()
+    ->where('code', $code)
+    ->where('is_active', 1)
+    ->fetchOne();
+
+// ✅ 正确
+$adapter = $adapterModel->reset()
+    ->where('code', $code)
+    ->where('is_active', 1)
+    ->find()->fetch();
+```
+
+#### 场景3：执行原生 SQL 查询
+```php
+// ❌ 错误
+$count = $connection->fetchOne("SELECT COUNT(*) FROM users");
+
+// ✅ 正确
+$result = $connection->query("SELECT COUNT(*) as count FROM users")->fetch();
+$count = $result[0]['count'] ?? 0;
+```
+
+#### 场景4：检查字段是否存在
+```php
+// ❌ 错误
+if (!$setup->getConnection()->fetchOne("SHOW COLUMNS FROM `{$table}` LIKE 'field_name'")) {
+    // 添加字段
+}
+
+// ✅ 正确方式1：使用 hasField()（推荐）
+if (!$setup->hasField('field_name')) {
+    // 添加字段
+}
+
+// ✅ 正确方式2：使用 query()->fetch()
+$result = $setup->getConnection()->query("SHOW COLUMNS FROM `{$table}` LIKE 'field_name'")->fetch();
+if (empty($result)) {
+    // 添加字段
+}
+```
+
+### 要点总结
+
+1. **Model 对象查询**：
+   - ❌ 禁止：`->fetchOne()`
+   - ✅ 正确：`->find()->fetch()`
+   - 返回类型：Model 对象或数组
+
+2. **ConnectionFactory 查询**：
+   - ❌ 禁止：`->fetchOne()`
+   - ✅ 正确：`->query($sql)->fetch()`
+   - 返回类型：数组（二维数组，每行是一个关联数组）
+
+3. **字段检查**：
+   - ❌ 禁止：使用 `fetchOne()` 执行 `SHOW COLUMNS`
+   - ✅ 推荐：使用 `$setup->hasField($fieldName)`
+   - ✅ 备选：使用 `query()->fetch()` 执行 SQL
+
+4. **返回值处理**：
+   - `find()->fetch()` 返回 Model 对象，可以直接调用 `getId()` 等方法
+   - `query()->fetch()` 返回数组，需要从数组中提取数据：`$result[0]['field_name']`
+
+5. **空值检查**：
+   - Model 查询：检查 `$model && $model->getId()`
+   - SQL 查询：检查 `!empty($result)` 或使用 `$result[0] ?? null`
+
+### 迁移指南
+
+如果代码中使用了 `fetchOne()`，按以下步骤迁移：
+
+1. **查找所有使用**：搜索 `->fetchOne(` 或 `fetchOne(`
+2. **判断上下文**：
+   - 如果是 Model 对象：替换为 `->find()->fetch()`
+   - 如果是 ConnectionFactory：替换为 `->query($sql)->fetch()`
+3. **调整返回值处理**：
+   - Model 查询：保持原有逻辑（返回 Model 对象）
+   - SQL 查询：从数组结果中提取数据
+4. **测试验证**：确保功能正常
+
+---
+
+## ORM 查询使用规范
+
+**重要提示**：Weline Framework 提供了强大的 ORM 系统，所有数据库查询必须使用 ORM 方法，禁止在业务逻辑中直接使用原生 SQL 查询。
+
+### 核心原则
+
+1. **必须使用 ORM 方法**：所有数据查询、更新、删除操作必须使用 ORM 方法
+2. **必须调用 fetch()**：ORM 使用惰性执行机制，必须调用 `fetch()` 或 `fetchArray()` 才会真正执行
+3. **禁止直接 SQL**：在 Model 和 Controller 的业务逻辑中，禁止直接使用 `query()` 执行 SELECT 查询
+4. **DDL 操作例外**：表结构变更（ALTER TABLE、CREATE TABLE 等）可以在 `setup()` 和 `upgrade()` 方法中使用原生 SQL
+
+### 错误示例
+
+#### 错误1：直接使用 query() 执行 SELECT 查询
+```php
+// ❌ 错误：在业务逻辑中直接使用 SQL 查询
+public function getUserList()
+{
+    $result = $this->query("SELECT * FROM users WHERE status = 1")->fetch();
+    return $result;
+}
+
+// ❌ 错误：使用 ConnectionFactory 直接执行 SELECT
+$connection = $this->getConnection();
+$users = $connection->query("SELECT * FROM users")->fetch();
+```
+
+#### 错误2：缺少 fetch() 调用
+```php
+// ❌ 错误：缺少 fetch()，查询不会执行
+$users = $this->where('status', 1)->select();
+// $users 是查询构建器对象，不是查询结果
+
+// ❌ 错误：删除操作缺少 fetch()
+$this->where('id', $id)->delete();
+// 删除不会执行
+
+// ❌ 错误：更新操作缺少 fetch()
+$this->where('status', 0)->update(['is_active' => 1]);
+// 更新不会执行
+```
+
+#### 错误3：错误的链式调用
+```php
+// ❌ 错误：在 find() 后直接调用 getData()
+$user = $this->where('id', 1)->find()->getData('name');
+// find() 返回查询构建器，需要先 fetch()
+
+// ❌ 错误：在 select() 后直接遍历
+foreach ($this->where('status', 1)->select() as $user) {
+    // 不会执行，select() 返回查询构建器
+}
+```
+
+### 正确写法
+
+#### 正确1：使用 ORM 方法查询
+```php
+// ✅ 正确：使用 ORM 方法查询单条记录
+public function getUser($id)
+{
+    $user = $this->where('id', $id)->find()->fetch();
+    if ($user && $user->getId()) {
+        return $user;
+    }
+    return null;
+}
+
+// ✅ 正确：使用 ORM 方法查询多条记录
+public function getActiveUsers()
+{
+    $users = $this->where('status', 1)
+        ->order('create_time', 'DESC')
+        ->select()
+        ->fetch()
+        ->getItems();
+    return $users;
+}
+
+// ✅ 正确：使用 ORM 方法统计
+public function getUserCount()
+{
+    return $this->where('status', 1)->total();
+}
+```
+
+#### 正确2：必须调用 fetch() 或 fetchArray()
+```php
+// ✅ 正确：查询必须调用 fetch() 或 fetchArray()
+$users = $this->where('status', 1)->select()->fetch();
+
+// ✅ 正确：获取数组结果（推荐，直接返回数组）
+$users = $this->where('status', 1)->select()->fetchArray();
+// $users 是二维数组，每行是一个关联数组
+
+// ✅ 正确：删除必须调用 fetch()
+$this->where('id', $id)->delete()->fetch();
+
+// ✅ 正确：更新必须调用 fetch()
+$this->where('status', 0)
+    ->update(['is_active' => 1])
+    ->fetch();
+
+// ✅ 正确：单条记录也可以使用 fetchArray()
+$user = $this->where('id', 1)->find()->fetchArray();
+// $user 是单个关联数组，如果没有记录返回空数组
+```
+
+#### 正确3：正确的链式调用
+```php
+// ✅ 正确：find() 后必须 fetch()
+$user = $this->where('id', 1)->find()->fetch();
+if ($user && $user->getId()) {
+    $name = $user->getData('name');
+}
+
+// ✅ 正确：select() 后必须 fetch() 再 getItems()
+$users = $this->where('status', 1)
+    ->select()
+    ->fetch()
+    ->getItems();
+foreach ($users as $user) {
+    // 处理每条记录
+}
+```
+
+### ORM 查询方法详解
+
+#### 基础查询方法
+
+```php
+// 单条记录查询（返回 Model 对象）
+$user = $model->where('id', 1)->find()->fetch();
+// 返回：Model 对象或 false
+
+// 单条记录查询（返回数组）
+$user = $model->where('id', 1)->find()->fetchArray();
+// 返回：单个关联数组，如果没有记录返回空数组 []
+
+// 多条记录查询（返回 Model 对象数组）
+$users = $model->where('status', 1)->select()->fetch()->getItems();
+// 返回：Model 对象数组
+
+// 多条记录查询（返回数组，推荐）
+$users = $model->where('status', 1)->select()->fetchArray();
+// 返回：二维数组，每行是一个关联数组
+
+// 统计记录数
+$count = $model->where('status', 1)->total();
+
+// 按主键加载（返回 Model 对象）
+$user = $model->load(1);
+```
+
+#### 条件查询
+
+```php
+// 等值查询
+$users = $model->where('username', 'john')->select()->fetch();
+
+// 比较查询
+$users = $model->where('age', 18, '>=')->select()->fetch();
+
+// 模糊查询
+$users = $model->where('username', '%admin%', 'like')->select()->fetch();
+
+// IN 查询
+$users = $model->where('id', [1, 2, 3], 'in')->select()->fetch();
+
+// 多条件组合
+$users = $model->where('status', 1)
+    ->where('age', 18, '>=', 'AND')
+    ->where('username', '%admin%', 'like', 'OR')
+    ->select()
+    ->fetch();
+```
+
+#### 排序和分页
+
+```php
+// 排序
+$users = $model->order('create_time', 'DESC')->select()->fetch();
+
+// 多字段排序
+$users = $model->order('status', 'ASC')
+    ->order('create_time', 'DESC')
+    ->select()
+    ->fetch();
+
+// 分页查询
+$users = $model->pagination(1, 20)
+    ->where('status', 1)
+    ->select()
+    ->fetch();
+```
+
+#### 更新和删除
+
+```php
+// 更新单条记录（已加载的模型）
+$user = $model->load(1);
+$user->setData('name', 'New Name');
+$user->save();
+
+// 批量更新（必须调用 fetch()）
+$model->where('status', 0)
+    ->update(['is_active' => 1])
+    ->fetch();
+
+// 删除单条记录（已加载的模型）
+$user = $model->load(1);
+$user->delete()->fetch();
+
+// 批量删除（必须调用 fetch()）
+$model->where('status', 0)->delete()->fetch();
+```
+
+### 何时可以使用原生 SQL
+
+以下情况可以使用原生 SQL：
+
+1. **表结构变更（DDL）**：在 `setup()` 和 `upgrade()` 方法中
+   ```php
+   public function upgrade(ModelSetup $setup, Context $context): void
+   {
+       // ✅ 正确：表结构变更可以使用原生 SQL
+       if (!$setup->hasField('new_field')) {
+           $setup->query("ALTER TABLE {$this->getTable()} ADD new_field VARCHAR(100)");
+       }
+   }
+   ```
+
+2. **复杂统计查询**：当 ORM 无法表达复杂查询时
+   ```php
+   // ✅ 正确：复杂统计可以使用原生 SQL
+   $result = $this->query("
+       SELECT 
+           DATE(create_time) as date,
+           COUNT(*) as count
+       FROM users
+       WHERE create_time >= '2024-01-01'
+       GROUP BY DATE(create_time)
+   ")->fetchArray();
+   ```
+
+3. **数据库管理操作**：TRUNCATE、DROP 等
+   ```php
+   // ✅ 正确：数据库管理操作可以使用原生 SQL
+   $setup->query('TRUNCATE TABLE ' . $this->getTable());
+   ```
+
+### 常见错误场景
+
+#### 场景1：忘记调用 fetch() 或 fetchArray()
+```php
+// ❌ 错误
+$users = $model->where('status', 1)->select();
+foreach ($users as $user) {  // 不会执行
+    // ...
+}
+
+// ✅ 正确方式1：使用 fetch() 获取 Model 对象数组
+$users = $model->where('status', 1)->select()->fetch()->getItems();
+foreach ($users as $user) {
+    // $user 是 Model 对象
+    $name = $user->getData('name');
+}
+
+// ✅ 正确方式2：使用 fetchArray() 获取数组（推荐）
+$users = $model->where('status', 1)->select()->fetchArray();
+foreach ($users as $user) {
+    // $user 是关联数组
+    $name = $user['name'] ?? '';
+}
+```
+
+#### 场景2：在业务逻辑中使用原生 SQL
+```php
+// ❌ 错误
+public function getUserByEmail($email)
+{
+    return $this->query("SELECT * FROM users WHERE email = '{$email}'")->fetch();
+}
+
+// ✅ 正确
+public function getUserByEmail($email)
+{
+    return $this->where('email', $email)->find()->fetch();
+}
+```
+
+#### 场景3：错误的返回值处理
+```php
+// ❌ 错误
+$user = $model->where('id', 1)->find();
+$name = $user->getData('name');  // 错误：$user 是查询构建器
+
+// ✅ 正确方式1：使用 fetch() 返回 Model 对象
+$user = $model->where('id', 1)->find()->fetch();
+if ($user && $user->getId()) {
+    $name = $user->getData('name');
+}
+
+// ✅ 正确方式2：使用 fetchArray() 返回数组（推荐）
+$user = $model->where('id', 1)->find()->fetchArray();
+if (!empty($user)) {
+    $name = $user['name'] ?? '';
+}
+```
+
+### 要点总结
+
+1. **必须使用 ORM 方法**：
+   - ✅ 使用 `where()->select()->fetch()` 或 `where()->select()->fetchArray()` 查询多条记录
+   - ✅ 使用 `where()->find()->fetch()` 或 `where()->find()->fetchArray()` 查询单条记录
+   - ✅ 使用 `where()->update()->fetch()` 批量更新
+   - ✅ 使用 `where()->delete()->fetch()` 批量删除
+   - ✅ **推荐使用 `fetchArray()`**：当不需要 Model 对象的方法时，使用 `fetchArray()` 更高效
+   - ❌ 禁止在业务逻辑中使用 `query("SELECT ...")`
+
+2. **必须调用 fetch()**：
+   - ORM 使用惰性执行，必须调用 `fetch()` 或 `fetchArray()` 才会执行
+   - `select()`, `find()`, `update()`, `delete()` 都返回查询构建器，不是结果
+
+3. **返回值处理**：
+   - `find()->fetch()` 返回 Model 对象或 false
+   - `find()->fetchArray()` 返回单个关联数组，没有记录返回空数组 `[]`
+   - `select()->fetch()` 返回 Model 对象，调用 `getItems()` 获取 Model 对象数组
+   - `select()->fetchArray()` 直接返回二维数组（推荐），每行是一个关联数组
+   - **推荐使用 `fetchArray()`**：当不需要 Model 对象的方法时，使用 `fetchArray()` 更高效
+
+4. **例外情况**：
+   - 表结构变更（`setup()`, `upgrade()` 方法中）可以使用原生 SQL
+   - 复杂统计查询可以使用原生 SQL
+   - 数据库管理操作可以使用原生 SQL
+
+---
+
 ## 快速检查清单
 
 生成代码时，请检查以下事项：
@@ -610,6 +1133,13 @@ strlen($string ?? '');
 - [ ] **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
 - [ ] **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
 - [ ] **PHP 8.2+ 兼容性**：所有字符串函数参数是否处理了可能的 null 值
+- [ ] **禁止使用 fetchOne()**：所有 Model 查询是否使用 `->find()->fetch()` 而不是 `->fetchOne()`
+- [ ] **禁止使用 fetchOne()**：所有 ConnectionFactory 查询是否使用 `->query()->fetch()` 而不是 `->fetchOne()`
+- [ ] **禁止使用 fetchOne()**：字段检查是否使用 `hasField()` 或 `query()->fetch()` 而不是 `fetchOne()`
+- [ ] **ORM 使用规范**：所有业务逻辑查询是否使用 ORM 方法而不是直接 SQL
+- [ ] **ORM 使用规范**：所有 ORM 查询是否调用了 `fetch()` 或 `fetchArray()`
+- [ ] **ORM 使用规范**：批量更新和删除是否调用了 `fetch()`
+- [ ] **ORM 使用规范**：是否在业务逻辑中直接使用 `query("SELECT ...")`（禁止）
 
 ---
 

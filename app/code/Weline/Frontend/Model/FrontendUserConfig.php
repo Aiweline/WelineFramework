@@ -69,7 +69,7 @@ class FrontendUserConfig extends Model
         $config = $this->clear()
             ->where(self::fields_USER_ID, $userId)
             ->where(self::fields_CONFIG_KEY, $key)
-            ->fetchOne();
+            ->find()->fetch();
         
         if ($config && $config->getId()) {
             return $config->getData(self::fields_CONFIG_VALUE);
@@ -92,7 +92,7 @@ class FrontendUserConfig extends Model
             $config = $this->clear()
                 ->where(self::fields_USER_ID, $userId)
                 ->where(self::fields_CONFIG_KEY, $key)
-                ->fetchOne();
+                ->find()->fetch();
             
             if ($config && $config->getId()) {
                 // 更新现有配置
