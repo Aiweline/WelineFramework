@@ -14,6 +14,7 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Uninstall implements CommandInterface
 {
+
     private MigrationService $migrationService;
     private Printing $printing;
     

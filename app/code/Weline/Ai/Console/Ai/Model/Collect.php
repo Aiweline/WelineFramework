@@ -25,6 +25,7 @@ use Weline\Framework\Console\CommandInterface;
  */
 class Collect implements CommandInterface
 {
+
     /**
      * @var ModelCollector
      */

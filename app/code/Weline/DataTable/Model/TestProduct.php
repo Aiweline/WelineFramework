@@ -1,130 +1,52 @@
 <?php
 
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
 namespace Weline\DataTable\Model;
 
+use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Setup\Db\ModelSetup;
 
 class TestProduct extends Model
 {
-    /**
-     * 指定表名，避免与其他模块冲突
-     */
-    public string $table = 'datatable_test_products';
+    public const table = 'datatable_test_products';
+
+    public const fields_ID = 'id';
+    public const fields_name = 'name';
+    public const fields_sku = 'sku';
+    public const fields_description = 'description';
+    public const fields_price = 'price';
+    public const fields_cost = 'cost';
+    public const fields_stock = 'stock';
+    public const fields_category_id = 'category_id';
+    public const fields_brand = 'brand';
+    public const fields_weight = 'weight';
+    public const fields_dimensions = 'dimensions';
+    public const fields_status = 'status';
+    public const fields_featured = 'featured';
+    public const fields_image = 'image';
+    public const fields_created_at = 'created_at';
+    public const fields_updated_at = 'updated_at';
 
     /**
-     * 主键
+     * @inheritDoc
      */
-    protected string $primary_key = 'id';
-
-    /**
-     * 字段定义
-     */
-    protected array $fields = [
-        'id' => [
-            'type' => 'int',
-            'length' => 11,
-            'auto_increment' => true,
-            'primary_key' => true,
-            'comment' => '产品ID'
-        ],
-        'name' => [
-            'type' => 'varchar',
-            'length' => 200,
-            'not_null' => true,
-            'comment' => '产品名称'
-        ],
-        'sku' => [
-            'type' => 'varchar',
-            'length' => 100,
-            'not_null' => true,
-            'unique' => true,
-            'comment' => '产品SKU'
-        ],
-        'description' => [
-            'type' => 'text',
-            'comment' => '产品描述'
-        ],
-        'price' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '产品价格'
-        ],
-        'cost' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '产品成本'
-        ],
-        'stock' => [
-            'type' => 'int',
-            'length' => 11,
-            'default' => 0,
-            'comment' => '库存数量'
-        ],
-        'category_id' => [
-            'type' => 'int',
-            'length' => 11,
-            'default' => 0,
-            'comment' => '分类ID'
-        ],
-        'brand' => [
-            'type' => 'varchar',
-            'length' => 100,
-            'comment' => '品牌'
-        ],
-        'weight' => [
-            'type' => 'decimal',
-            'length' => '8,2',
-            'default' => '0.00',
-            'comment' => '重量(kg)'
-        ],
-        'dimensions' => [
-            'type' => 'varchar',
-            'length' => 50,
-            'comment' => '尺寸(长x宽x高)'
-        ],
-        'status' => [
-            'type' => 'tinyint',
-            'length' => 1,
-            'default' => 1,
-            'comment' => '状态：1-上架，0-下架'
-        ],
-        'featured' => [
-            'type' => 'tinyint',
-            'length' => 1,
-            'default' => 0,
-            'comment' => '是否推荐：1-是，0-否'
-        ],
-        'image' => [
-            'type' => 'varchar',
-            'length' => 255,
-            'comment' => '产品图片'
-        ],
-        'created_at' => [
-            'type' => 'datetime',
-            'default' => 'CURRENT_TIMESTAMP',
-            'comment' => '创建时间'
-        ],
-        'updated_at' => [
-            'type' => 'datetime',
-            'default' => 'CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-            'comment' => '更新时间'
-        ]
-    ];
-
-    /**
-     * 安装方法
-     */
-    public function install(ModelSetup $setup, Context $context): void
+    public function setup(ModelSetup $setup, Context $context): void
     {
-        $this->createTable();
+        $this->install($setup, $context);
     }
 
     /**
-     * 升级方法
+     * @inheritDoc
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
@@ -132,11 +54,30 @@ class TestProduct extends Model
     }
 
     /**
-     * 设置方法
+     * @inheritDoc
      */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function install(ModelSetup $setup, Context $context): void
     {
-        $this->createTable();
+        if (!$setup->tableExist()) {
+            $setup->createTable('测试产品表')
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '产品ID')
+                ->addColumn(self::fields_name, TableInterface::column_type_VARCHAR, 200, 'not null', '产品名称')
+                ->addColumn(self::fields_sku, TableInterface::column_type_VARCHAR, 100, 'not null unique', '产品SKU')
+                ->addColumn(self::fields_description, TableInterface::column_type_TEXT, 0, '', '产品描述')
+                ->addColumn(self::fields_price, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '产品价格')
+                ->addColumn(self::fields_cost, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '产品成本')
+                ->addColumn(self::fields_stock, TableInterface::column_type_INTEGER, 0, 'default 0', '库存数量')
+                ->addColumn(self::fields_category_id, TableInterface::column_type_INTEGER, 0, 'default 0', '分类ID')
+                ->addColumn(self::fields_brand, TableInterface::column_type_VARCHAR, 100, '', '品牌')
+                ->addColumn(self::fields_weight, TableInterface::column_type_DECIMAL, '8,2', 'default 0.00', '重量(kg)')
+                ->addColumn(self::fields_dimensions, TableInterface::column_type_VARCHAR, 50, '', '尺寸(长x宽x高)')
+                ->addColumn(self::fields_status, TableInterface::column_type_INTEGER, 1, 'default 1', '状态：1-上架，0-下架')
+                ->addColumn(self::fields_featured, TableInterface::column_type_INTEGER, 1, 'default 0', '是否推荐：1-是，0-否')
+                ->addColumn(self::fields_image, TableInterface::column_type_VARCHAR, 255, '', '产品图片')
+                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
+                ->create();
+        }
     }
 
     /**

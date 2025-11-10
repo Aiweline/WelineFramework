@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Cache\Console\Cache;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\Cache\CacheFactory;
 use Weline\Framework\Cache\CacheFactoryInterface;
 use Weline\Framework\Cache\CacheInterface;

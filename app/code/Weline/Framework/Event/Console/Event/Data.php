@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Event\Console\Event;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\Output\Cli\Printing;
 

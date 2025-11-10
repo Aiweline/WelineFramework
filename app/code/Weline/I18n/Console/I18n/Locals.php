@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Console\I18n;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\Output\Cli\Printing;
 use Weline\I18n\Model\I18n;
 

@@ -121,13 +121,19 @@
 - 数据库迁移和版本管理
 
 ### 路由和API
-- 路由配置和自定义
+- **路由自动注册机制**：框架自动扫描 Controller 目录并注册路由，**禁止使用 routes.xml 文件**
+- **路由生成规则**：`{模块router}/{控制器目录}/{控制器名}/{方法名}`
+  - `Controller/Frontend/Test/Index.php` → `{模块router}/frontend/test/index`
+  - `Controller/Backend/User/List.php` → `{模块router}/backend/user/list`
+- **路由注册命令**：`php bin/w setup:upgrade` 自动注册所有路由
+- **路由配置方式**：在 `etc/env.php` 中配置 `router` 别名，不要使用 `routes.xml`
 - RESTful API开发
 - 控制器方法命名规则：HTTP方法前缀解析
 - 路由映射机制：getData->/data(GET), postData->/data(POST)
 - 双重路由支持：getData同时支持/data和/getdata两种路由
 - index方法特殊处理：可省略index后缀
 - 方法名解析：按大写字母拆分，提取HTTP方法限制
+- **重要**：`routes.xml` 不是框架的规约文件，禁止使用。路由通过控制器位置自动注册
 
 ### ACL权限控制
 - PHP8注解权限控制：使用#[\Weline\Framework\Acl\Acl()]注解

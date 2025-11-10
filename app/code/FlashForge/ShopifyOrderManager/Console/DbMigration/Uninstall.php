@@ -14,6 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Uninstall implements CommandInterface
 {
+
     private ConnectionFactory $connectionFactory;
 
     public function __construct(ConnectionFactory $connectionFactory)

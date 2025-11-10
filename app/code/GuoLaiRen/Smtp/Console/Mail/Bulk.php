@@ -20,6 +20,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class Bulk implements CommandInterface
 {
+
     private Printing $printer;
     private string $baseDir;
 

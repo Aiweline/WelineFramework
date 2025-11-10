@@ -388,29 +388,33 @@ class TableContext
             }
 
             $model = \Weline\Framework\Manager\ObjectManager::getInstance($modelClass);
-            $columns = $model->getColumns();
+            $columns = $model->columns();
 
             $fields = [];
             foreach ($columns as $column) {
-                $fields[$column['Field']] = [
-                    'name' => $column['Field'],
-                    'label' => $column['Comment'] ?: $column['Field'],
-                    'type' => self::getFieldType($column['Type']),
-                    'db_type' => $column['Type'],
+                $fieldName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? '') : $column;
+                if (empty($fieldName)) {
+                    continue;
+                }
+                $fields[$fieldName] = [
+                    'name' => $fieldName,
+                    'label' => (is_array($column) && isset($column['Comment'])) ? ($column['Comment'] ?: $fieldName) : $fieldName,
+                    'type' => is_array($column) && isset($column['Type']) ? self::getFieldType($column['Type']) : 'string',
+                    'db_type' => is_array($column) && isset($column['Type']) ? $column['Type'] : 'varchar',
                     'sortable' => true,
                     'searchable' => true,
-                    'editable' => $column['Key'] !== 'PRI', // 主键不可编辑
+                    'editable' => !(is_array($column) && isset($column['Key']) && $column['Key'] === 'PRI'), // 主键不可编辑
                     'visible' => true,
-                    'width' => self::getDefaultWidth($column['Type']),
+                    'width' => is_array($column) && isset($column['Type']) ? self::getDefaultWidth($column['Type']) : '150px',
                     'min_width' => '80px',
                     'max_width' => '300px',
                     'resizable' => true,
                     'formatter' => '',
                     'validator' => '',
-                    'default' => $column['Default'] ?? '',
-                    'nullable' => $column['Null'] === 'YES',
-                    'key' => $column['Key'],
-                    'extra' => $column['Extra']
+                    'default' => is_array($column) && isset($column['Default']) ? $column['Default'] : '',
+                    'nullable' => is_array($column) && isset($column['Null']) ? ($column['Null'] === 'YES') : true,
+                    'key' => is_array($column) && isset($column['Key']) ? $column['Key'] : '',
+                    'extra' => is_array($column) && isset($column['Extra']) ? $column['Extra'] : ''
                 ];
             }
 

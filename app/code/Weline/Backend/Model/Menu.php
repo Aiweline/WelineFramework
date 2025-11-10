@@ -267,9 +267,26 @@ class Menu extends \Weline\Framework\Database\Model
      */
     public function getMenuTreeByRole(Role $role): array
     {
+        // 先查询所有菜单类型的权限（type='menus'）的 source_id
+        $menuSources = self::Acl()
+            ->reset()
+            ->where(Acl::fields_TYPE, 'menus')
+            ->where(Acl::fields_IS_ENABLE, 1)
+            ->select()
+            ->fetchArray();
+        $menuSourceIds = array_column($menuSources, Acl::fields_SOURCE_ID);
+        
+        if (empty($menuSourceIds)) {
+            return [];
+        }
+        
         if ($role->getId() !== 1) {
             $roleAccessSources = $this->getRoleAccessSources($role);
-//            p($roleAccessSources);//Jhll_Center::data_config
+            // 只保留角色有权限且是菜单类型的 source
+            $allowedSources = array_intersect($roleAccessSources, $menuSourceIds);
+            if (empty($allowedSources)) {
+                return [];
+            }
             $aclTree = self::Acl()
                 ->getTree(
                     Acl::fields_PARENT_SOURCE,
@@ -277,10 +294,11 @@ class Menu extends \Weline\Framework\Database\Model
                     Acl::fields_ORDER,
                     'asc',
                     Acl::fields_SOURCE_ID,
-                    $roleAccessSources,
+                    $allowedSources,
                     'source_name'
                 );
         } else {
+            // 管理员角色，只查询菜单类型的权限
             $aclTree = self::Acl()
                 ->getTree(
                     Acl::fields_PARENT_SOURCE,
@@ -288,11 +306,35 @@ class Menu extends \Weline\Framework\Database\Model
                     Acl::fields_ORDER,
                     'asc',
                     Acl::fields_SOURCE_ID,
-                    [],
+                    $menuSourceIds,
                     'source_name'
                 );
         }
-        return $aclTree;
+        
+        // 过滤结果，确保只返回菜单类型的记录（双重保险）
+        return $this->filterMenuTree($aclTree);
+    }
+    
+    /**
+     * 过滤菜单树，只保留 type='menus' 的记录
+     * 
+     * @param array $tree
+     * @return array
+     */
+    private function filterMenuTree(array $tree): array
+    {
+        $filtered = [];
+        foreach ($tree as $node) {
+            // 只保留菜单类型的记录
+            if (isset($node['type']) && $node['type'] === 'menus') {
+                // 递归过滤子节点
+                if (isset($node['nodes']) && is_array($node['nodes'])) {
+                    $node['nodes'] = $this->filterMenuTree($node['nodes']);
+                }
+                $filtered[] = $node;
+            }
+        }
+        return $filtered;
     }
 
     /**

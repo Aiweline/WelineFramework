@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Plugin\Console\Plugin\Di;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Manager\ObjectManager;

@@ -16,6 +16,7 @@ use Weline\Framework\Database\ConnectionFactory;
  */
 class SeedData implements CommandInterface
 {
+
     public function execute(array $args = [], array $data = [])
     {
         $this->output->writeln('=== Seeding AI Module Test Data ===');

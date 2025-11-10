@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Event\Console\Event\Cache;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\Event\Cache\EventCache;
 use Weline\Framework\Output\Cli\Printing;
 

@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Console\Queue;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Cron\Helper\Process;
 use Weline\Framework\App\System;
 use Weline\Framework\Manager\ObjectManager;

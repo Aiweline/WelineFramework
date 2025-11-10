@@ -130,6 +130,21 @@ class Upgrade extends CommandAbstract
             $module_handle = ObjectManager::getInstance(Handle::class);
             $modules = $module_handle->getModules();
             $this->printer->note(__('指定注册路由信息'));
+            
+            // 如果指定了模块，先清除指定模块的旧路由
+            if ($argsModule) {
+                /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+                $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+                $this->printer->note(__('清除指定模块的旧路由...'));
+                foreach (Env::router_files_PATH as $routerFilePath) {
+                    try {
+                        $routerHelper->clearModuleRouters($routerFilePath, $argsModule);
+                    } catch (\Exception $e) {
+                        $this->printer->warning(__('清除路由文件 %{1} 时出错：%{2}', [$routerFilePath, $e->getMessage()]));
+                    }
+                }
+            }
+            
             foreach ($modules as $module_name => $module) {
                 if ($argsModule and !in_array($module_name, $argsModule)) {
                     continue;
@@ -169,13 +184,13 @@ class Upgrade extends CommandAbstract
             $commandManagerConsole->execute();
 
             $this->printer->note($i . '、事件清理...');
-            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
+            /**@var \Weline\Framework\Event\Console\Event\Cache\Clear $cacheManagerConsole */
             $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Event\Console\Event\Cache\Clear::class);
             $cacheManagerConsole->execute();
 
             $i += 1;
             $this->printer->note($i . '、插件编译...');
-            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
+            /**@var \Weline\Framework\Plugin\Console\Plugin\Di\Compile $cacheManagerConsole */
             $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
             $cacheManagerConsole->execute();
             $i += 1;
@@ -201,10 +216,31 @@ class Upgrade extends CommandAbstract
         if (!$argsModule) {
             $i += 1;
             $this->printer->note($i . '、清理缓存...');
-            /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Flush */
+            /**@var \Weline\Framework\Cache\Console\Cache\Flush $cacheManagerConsole */
             $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Flush::class);
             $cacheManagerConsole->execute();
             $this->system->exec('rm -rf ' . BP . 'var' . DS . 'cache');
+        } elseif ($argsModule) {
+            // 指定模块时，清理指定模块的缓存
+            $i += 1;
+            $this->printer->note($i . '、清理指定模块缓存...');
+            foreach ($argsModule as $moduleName) {
+                $this->printer->note(__('清理模块 %{1} 的缓存...', [$moduleName]));
+                // 清理模块特定的缓存目录
+                $moduleCacheDirs = [
+                    BP . 'var' . DS . 'cache' . DS . strtolower(str_replace('_', DS, $moduleName)),
+                    BP . 'generated' . DS . 'code' . DS . str_replace('_', '\\', $moduleName),
+                    BP . 'generated' . DS . 'metadata' . DS . str_replace('_', '\\', $moduleName),
+                ];
+                foreach ($moduleCacheDirs as $cacheDir) {
+                    if (is_dir($cacheDir)) {
+                        $this->system->exec('rm -rf ' . $cacheDir);
+                        $this->printer->success(__('已清理：%{1}', [$cacheDir]));
+                    }
+                }
+            }
+            // 清理模板缓存（已在前面处理，这里只是确保）
+            $this->printer->note(__('指定模块缓存清理完成'));
         }
 
         $this->printer->note($i . '、module模块更新...');
@@ -305,6 +341,21 @@ class Upgrade extends CommandAbstract
 
         // 注册路由信息
         $this->printer->note(__('3)注册路由信息'));
+        
+        // 如果指定了模块，先清除指定模块的旧路由
+        if ($argsModule) {
+            /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+            $this->printer->note(__('清除指定模块的旧路由...'));
+            foreach (Env::router_files_PATH as $routerFilePath) {
+                try {
+                    $routerHelper->clearModuleRouters($routerFilePath, $argsModule);
+                } catch (\Exception $e) {
+                    $this->printer->warning(__('清除路由文件 %{1} 时出错：%{2}', [$routerFilePath, $e->getMessage()]));
+                }
+            }
+        }
+        
         foreach ($modules as $module_name => $module) {
             if ($argsModule and !in_array($module_name, $argsModule)) {
                 continue;
@@ -321,32 +372,69 @@ class Upgrade extends CommandAbstract
         # 加载module中的助手函数
         $modules = Env::getInstance()->getActiveModules();
         $function_files_content = '';
+        
+        // 文件头部：必须包含 <?php 和 declare(strict_types=1);
+        $file_header = "<?php" . PHP_EOL . "declare(strict_types=1);" . PHP_EOL;
+        
+        // 如果指定了模块，先读取现有文件内容（保留其他模块的函数）
+        $existing_content = '';
+        if ($argsModule && is_file(Env::path_FUNCTIONS_FILE)) {
+            $existing_content = file_get_contents(Env::path_FUNCTIONS_FILE);
+            // 移除文件头部（如果存在），保留实际内容
+            $existing_content = preg_replace('/^<\?php\s*declare\(strict_types=1\);\s*/i', '', $existing_content);
+            // 尝试移除指定模块的旧函数（通过注释标记识别）
+            // 注意：这是一个简化的实现，假设函数文件中有模块标记注释
+            foreach ($argsModule as $moduleName) {
+                // 移除以 "// Module: $moduleName" 开头的块直到下一个 "// Module:" 或文件结束
+                $pattern = '/\/\/\s*Module:\s*' . preg_quote($moduleName, '/') . '.*?(?=\/\/\s*Module:|$)/s';
+                $existing_content = preg_replace($pattern, '', $existing_content);
+            }
+            // 清理多余的空行
+            $existing_content = preg_replace('/\n{3,}/', "\n\n", $existing_content);
+            $existing_content = trim($existing_content);
+        }
+        
         foreach ($modules as $module) {
             if ($argsModule and !in_array($module['name'], $argsModule)) {
                 continue;
             }
             $global_file_pattern = $module['base_path'] . 'Global' . DS . '*.php';
             $global_files = glob($global_file_pattern);
-            foreach ($global_files as $global_file) {
-                # 读取文件内容 去除注释以及每个文件末尾的 '\?\>'结束符
-                $function_files_content .= str_replace('?>', '', file_get_contents($global_file)) . PHP_EOL;
+            if (!empty($global_files)) {
+                // 添加模块标记注释（放在 declare 之后）
+                $function_files_content .= PHP_EOL . '// Module: ' . $module['name'] . PHP_EOL;
+                foreach ($global_files as $global_file) {
+                    # 读取文件内容 去除注释以及每个文件末尾的 '\?\>'结束符
+                    $file_content = file_get_contents($global_file);
+                    // 移除文件中的 <?php 和 declare 语句（如果存在），因为已经在文件头部统一处理
+                    $file_content = preg_replace('/^<\?php\s*/i', '', $file_content);
+                    $file_content = preg_replace('/declare\(strict_types=1\);\s*/i', '', $file_content);
+                    $file_content = str_replace('?>', '', $file_content);
+                    $function_files_content .= trim($file_content) . PHP_EOL;
+                }
             }
         }
         
-        // 只有在指定模块时才有条件地写入文件（避免清空全局函数文件）
+        // 写入文件
         if ($argsModule && $function_files_content) {
-            # 写入文件
+            # 合并现有内容和新内容，确保文件头部正确
+            $final_content = $file_header;
+            if ($existing_content) {
+                $final_content .= $existing_content . PHP_EOL;
+            }
+            $final_content .= trim($function_files_content);
             $this->printer->warning('写入文件：');
             $this->printer->warning(Env::path_FUNCTIONS_FILE);
-            // 注意：指定模块时，应该追加而不是覆盖，但这需要更复杂的逻辑
-            // 暂时保持原有逻辑，但添加警告
-            $this->printer->warning(__('警告：指定模块升级时，全局函数文件可能不完整，建议之后运行一次完整的 setup:upgrade'));
-            file_put_contents(Env::path_FUNCTIONS_FILE, $function_files_content);
+            file_put_contents(Env::path_FUNCTIONS_FILE, $final_content);
         } elseif (!$argsModule) {
-            # 写入文件
+            # 写入文件（完整升级，覆盖所有内容），确保文件头部正确
+            $final_content = $file_header;
+            if ($function_files_content) {
+                $final_content .= trim($function_files_content);
+            }
             $this->printer->warning('写入文件：');
             $this->printer->warning(Env::path_FUNCTIONS_FILE);
-            file_put_contents(Env::path_FUNCTIONS_FILE, $function_files_content);
+            file_put_contents(Env::path_FUNCTIONS_FILE, $final_content);
         }
 
         $i += 1;

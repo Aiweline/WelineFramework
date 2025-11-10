@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace Weline\Maintenance\Console\Maintenance;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 

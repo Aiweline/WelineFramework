@@ -179,6 +179,32 @@ class UpgradeMenu implements ObserverInterface
         }
         // 更新菜单到权限表
         $all_menus = $this->menu->reset()->order('order', 'ASC')->select()->fetchArray();
+        
+        // 先收集所有应该存在的菜单 source，用于清理权限表中不存在的菜单权限
+        $collected_menu_sources = [];
+        foreach ($all_menus as $menu) {
+            $collected_menu_sources[] = $menu['source'];
+        }
+        
+        // 删除权限表中不在收集列表中的菜单权限（type='menus'）
+        /**@var \Weline\Acl\Model\Acl $alcModel */
+        $alcModel = ObjectManager::getInstance(Acl::class);
+        if (!empty($collected_menu_sources)) {
+            // 删除所有不在收集列表中的菜单权限
+            $alcModel->reset()
+                ->where(Acl::fields_TYPE, 'menus')
+                ->where(Acl::fields_SOURCE_ID, $collected_menu_sources, 'not in')
+                ->delete()
+                ->fetch();
+        } else {
+            // 如果没有收集到任何菜单，删除所有菜单权限
+            $alcModel->reset()
+                ->where(Acl::fields_TYPE, 'menus')
+                ->delete()
+                ->fetch();
+        }
+        
+        // 插入或更新菜单权限
         $acl_items = [];
         foreach ($all_menus as $menu) {
             $acl_items[] = [
@@ -201,9 +227,7 @@ class UpgradeMenu implements ObserverInterface
         }
 
         if ($acl_items) {
-            /**@var \Weline\Acl\Model\Acl $alcModel */
-            $alcModel = ObjectManager::getInstance(Acl::class);
-            $alcModel->insert($acl_items, 'source_id')
+            $alcModel->reset()->insert($acl_items, 'source_id')
                 ->fetch();
         }
         return array($menus, $menu, $modules_info);

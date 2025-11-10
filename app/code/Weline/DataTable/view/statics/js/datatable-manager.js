@@ -14,7 +14,8 @@ if (typeof __ === 'undefined') {
  */
 
 // 添加手风琴式筛选工具栏的CSS样式
-const filterToolbarStyles = `
+if (typeof filterToolbarStyles === 'undefined') {
+    var filterToolbarStyles = `
 <style>
 .filter-toolbar-item {
     display: inline-block;
@@ -97,6 +98,7 @@ const filterToolbarStyles = `
 }
 </style>
 `;
+}
 
 // 将样式添加到页面
 if (!document.querySelector('#datatable-filter-toolbar-styles')) {
@@ -106,13 +108,21 @@ if (!document.querySelector('#datatable-filter-toolbar-styles')) {
     document.head.appendChild(styleElement);
 }
 
-var DataTableManager = {
+// 确保 DataTableManager 暴露到 window 上（单例模式）
+// 如果已经存在且完整，直接使用；否则创建新实例
+if (typeof window === 'undefined' || !window.DataTableManager || typeof window.DataTableManager.initTable !== 'function') {
+    // 创建新的 DataTableManager 实例
+    var DataTableManager = {
     // 表格实例缓存
     instances: {},
 
     // 配置选项
     config: {
-        apiUrl: '/api/rest/v1/datatable',
+        apiUrl: (typeof window !== 'undefined' && typeof window.api === 'function') 
+            ? window.api('datatable/rest/v1/data-table') 
+            : (typeof window !== 'undefined' && window.site && window.site.api_host)
+                ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table'
+                : '/api/rest/v1/datatable/data-table',
         defaultPageSize: 20,
         maxPageSize: 100,
         debounceDelay: 300,
@@ -120,13 +130,7 @@ var DataTableManager = {
         confirmDelete: true
     },
 
-    // 当前编辑状态
-    editingState: {
-        isEditing: false,
-        currentCell: null,
-        originalValue: null,
-        editingRow: null
-    },
+    // 注意：editingState 已移到每个实例中，确保实例隔离
 
     /**
      * 初始化下拉菜单功?
@@ -948,7 +952,12 @@ var DataTableManager = {
             $('.w-export-status-text').text(`正在获取第 ${currentPage} 页数据...`);
 
             // 使用流式导出API
-            fetch('/datatable/rest/v1/data-table/stream-export', {
+            const streamExportUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
+                ? window.api('datatable/rest/v1/data-table/stream-export') 
+                : (typeof window !== 'undefined' && window.site && window.site.api_host)
+                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table/stream-export'
+                    : '/api/rest/v1/datatable/data-table/stream-export';
+            fetch(streamExportUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1119,22 +1128,91 @@ var DataTableManager = {
     ],
 
     /**
-     * 初始化表?
+     * 初始化表格（实例隔离）
      */
     initTable: function (selector, options) {
         const container = document.querySelector(selector);
-        const tableId = container.getAttribute('id');
-        if (this.instances[tableId]) {
-            return this.instances[tableId];
+        if (!container) {
+            console.error('DataTable container not found:', selector);
+            return null;
+        }
+        
+        // 检查是否设置了隔离标志
+        const isolate = options.isolate === true;
+        
+        let tableId = container.getAttribute('id');
+        let instanceKey = tableId; // 用于存储实例的键
+        
+        // 如果设置了隔离标志，使用 scope 作为实例标识符
+        if (isolate) {
+            if (!options.scope) {
+                console.error('DataTable: isolate flag is set but scope is not provided');
+                return null;
+            }
+            // 使用 scope 作为实例标识符
+            instanceKey = 'scope-' + options.scope;
+            
+            // 如果容器没有 ID，使用 scope 生成 ID
+            if (!tableId) {
+                tableId = 'datatable-scope-' + options.scope;
+                container.setAttribute('id', tableId);
+            } else {
+                // 如果已有 ID，但设置了隔离标志，确保 ID 与 scope 一致
+                const expectedId = 'datatable-scope-' + options.scope;
+                if (tableId !== expectedId) {
+                    console.warn('DataTable: isolate flag is set, but container ID does not match scope. Expected:', expectedId, 'Got:', tableId);
+                    // 更新容器 ID 以匹配 scope
+                    container.setAttribute('id', expectedId);
+                    tableId = expectedId;
+                }
+            }
+            
+            // 检查是否已存在相同 scope 的实例
+            if (this.instances[instanceKey]) {
+                console.warn('DataTable instance with scope already exists:', options.scope, 'Reusing existing instance.');
+                // 更新容器的引用（可能同一个 scope 有多个容器）
+                this.instances[instanceKey].container = container;
+                return this.instances[instanceKey];
+            }
+        } else {
+            // 未设置隔离标志，使用 tableId 作为实例标识符
+            if (!tableId) {
+                // 如果没有 ID，自动生成一个唯一的 ID
+                tableId = 'datatable-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                container.setAttribute('id', tableId);
+            }
+            instanceKey = tableId;
+            
+            // 如果实例已存在，返回现有实例
+            if (this.instances[instanceKey]) {
+                console.warn('DataTable instance already exists for:', tableId);
+                return this.instances[instanceKey];
+            }
+            
+            // 确保 scope 的唯一性（如果未提供或已存在，添加 tableId 后缀）
+            if (options.scope) {
+                const existingScope = this.getInstanceByScope(options.scope);
+                if (existingScope && existingScope.id !== tableId) {
+                    options.scope = options.scope + '-' + tableId;
+                    console.warn('Scope conflict detected, using:', options.scope);
+                }
+            }
         }
         // 自动推断API基础路径
         let apiUrl = options.apiUrl;
-        if (!apiUrl && typeof window.api === 'function') {
+        if (!apiUrl && typeof window !== 'undefined' && typeof window.api === 'function') {
             apiUrl = window.api('datatable/rest/v1/data-table');
+        } else if (!apiUrl && typeof window !== 'undefined' && window.site && window.site.api_host) {
+            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
+            apiUrl = apiHost + 'datatable/rest/v1/data-table';
         } else if (!apiUrl) {
-            apiUrl = '/datatable/rest/v1/data-table';
+            apiUrl = '/api/rest/v1/datatable/data-table';
         }
         const instance = {
+            id: tableId, // 容器ID
+            instanceKey: instanceKey, // 实例存储键（可能是 tableId 或 scope）
+            scope: options.scope, // scope 值
+            isolate: isolate, // 隔离标志
             container: container,
             options: options,
             currentPage: 1,
@@ -1150,9 +1228,21 @@ var DataTableManager = {
             apiUrl: apiUrl,
             allFields: [],
             displayFields: [],
-            filterFields: []
+            filterFields: [],
+            // 每个实例独立的编辑状态，确保实例隔离
+            editingState: {
+                isEditing: false,
+                currentCell: null,
+                originalValue: null,
+                editingRow: null
+            },
+            // 事件处理器存储，用于清理
+            eventHandlers: {},
+            // 实例特定的命名空间
+            namespace: isolate ? 'datatable-scope-' + options.scope : 'datatable-' + tableId
         };
-        this.instances[tableId] = instance;
+        // 使用 instanceKey 存储实例（可能是 tableId 或 scope）
+        this.instances[instanceKey] = instance;
 
         // 初始化主题
         this.initTheme();
@@ -1162,7 +1252,85 @@ var DataTableManager = {
 
         // 初始化时加载字段配置
         this.loadFieldsOnInit(instance);
+        
+        // 在容器上添加实例标记，便于查找
+        container.setAttribute('data-datatable-instance', tableId);
+        
         return instance;
+    },
+    
+    /**
+     * 销毁表格实例（清理所有事件和资源，确保实例隔离）
+     * @param {string} identifier - 实例标识符（tableId 或 scope，取决于是否设置了隔离标志）
+     */
+    destroyInstance: function (identifier) {
+        // 尝试直接查找
+        let instance = this.instances[identifier];
+        let instanceKey = identifier;
+        
+        // 如果未找到，尝试通过 scope 查找
+        if (!instance) {
+            const scopeKey = 'scope-' + identifier;
+            instance = this.instances[scopeKey];
+            if (instance) {
+                instanceKey = scopeKey; // 更新为正确的键
+            }
+        }
+        
+        // 如果仍未找到，尝试通过 tableId 查找
+        if (!instance) {
+            for (const key in this.instances) {
+                if (this.instances[key].id === identifier) {
+                    instance = this.instances[key];
+                    instanceKey = key; // 更新为正确的键
+                    break;
+                }
+            }
+        }
+        
+        if (!instance) {
+            console.warn('DataTable instance not found:', identifier);
+            return;
+        }
+        
+        // 清理所有事件处理器
+        if (instance.eventHandlers) {
+            // 清理批量操作事件
+            if (instance.eventHandlers.batchActions) {
+                instance.eventHandlers.batchActions.forEach(({ element, event, handler }) => {
+                    if (element && handler) {
+                        element.removeEventListener(event, handler);
+                    }
+                });
+            }
+            
+            // 清理其他事件
+            if (instance.eventHandlers.dblclick) {
+                const table = document.getElementById(instance.id);
+                if (table) {
+                    table.removeEventListener('dblclick', instance.eventHandlers.dblclick);
+                }
+            }
+            
+            if (instance.eventHandlers.keydown) {
+                document.removeEventListener('keydown', instance.eventHandlers.keydown);
+            }
+        }
+        
+        // 清理编辑状态
+        if (instance.editingState && instance.editingState.isEditing) {
+            this.cancelCellEdit(instance.id);
+        }
+        
+        // 从容器上移除实例标记
+        if (instance.container) {
+            instance.container.removeAttribute('data-datatable-instance');
+        }
+        
+        // 从实例列表中移除（使用正确的键）
+        delete this.instances[instanceKey];
+        
+        console.log('DataTable instance destroyed:', instanceKey, instance.isolate ? '(isolated by scope: ' + instance.scope + ')' : '');
     },
 
     /**
@@ -1224,51 +1392,73 @@ var DataTableManager = {
     },
 
     /**
-     * 绑定批量操作事件
+     * 绑定批量操作事件（实例隔离）
      */
     bindBatchActionEvents: function (instance, toolbar) {
+        if (!toolbar) {
+            console.warn('批量操作工具栏不存在，跳过事件绑定');
+            return;
+        }
         const tableId = instance.container.getAttribute('id');
+        
+        // 初始化事件处理器存储
+        if (!instance.eventHandlers) instance.eventHandlers = {};
+        if (!instance.eventHandlers.batchActions) instance.eventHandlers.batchActions = [];
 
         // 删除选中项
-        toolbar.querySelector('.batch-delete-btn')?.addEventListener('click', () => {
+        const deleteHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.batchDelete(instance, selectedIds, { softDelete: false });
-        });
+        };
+        toolbar.querySelector('.batch-delete-btn')?.addEventListener('click', deleteHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-delete-btn'), event: 'click', handler: deleteHandler });
 
         // 软删除选中项
-        toolbar.querySelector('.batch-soft-delete-btn')?.addEventListener('click', () => {
+        const softDeleteHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.batchDelete(instance, selectedIds, { softDelete: true });
-        });
+        };
+        toolbar.querySelector('.batch-soft-delete-btn')?.addEventListener('click', softDeleteHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-soft-delete-btn'), event: 'click', handler: softDeleteHandler });
 
         // 取消选择
-        toolbar.querySelector('.batch-clear-btn')?.addEventListener('click', () => {
+        const clearHandler = () => {
             this.clearSelection(instance);
-        });
+        };
+        toolbar.querySelector('.batch-clear-btn')?.addEventListener('click', clearHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-clear-btn'), event: 'click', handler: clearHandler });
 
         // 导出功能
-        toolbar.querySelector('.batch-export-btn')?.addEventListener('click', () => {
+        const exportHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
             this.exportData(instance, selectedIds, 'excel');
-        });
+        };
+        toolbar.querySelector('.batch-export-btn')?.addEventListener('click', exportHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-export-btn'), event: 'click', handler: exportHandler });
 
-        toolbar.querySelector('.export-excel-btn')?.addEventListener('click', (e) => {
+        const exportExcelHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
             this.exportData(instance, selectedIds, 'excel');
-        });
+        };
+        toolbar.querySelector('.export-excel-btn')?.addEventListener('click', exportExcelHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-excel-btn'), event: 'click', handler: exportExcelHandler });
 
-        toolbar.querySelector('.export-csv-btn')?.addEventListener('click', (e) => {
+        const exportCsvHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
             this.exportData(instance, selectedIds, 'csv');
-        });
+        };
+        toolbar.querySelector('.export-csv-btn')?.addEventListener('click', exportCsvHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-csv-btn'), event: 'click', handler: exportCsvHandler });
 
-        toolbar.querySelector('.export-json-btn')?.addEventListener('click', (e) => {
+        const exportJsonHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
             this.exportData(instance, selectedIds, 'json');
-        });
+        };
+        toolbar.querySelector('.export-json-btn')?.addEventListener('click', exportJsonHandler);
+        instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-json-btn'), event: 'click', handler: exportJsonHandler });
 
         // 全选/取消全选
         const selectAllCheckbox = instance.container.querySelector(`#select-all-${tableId}`);
@@ -2929,9 +3119,17 @@ var DataTableManager = {
      * 根据scope获取实例
      */
     getInstanceByScope: function (scope) {
-        for (const tableId in this.instances) {
-            if (this.instances[tableId].options.scope === scope) {
-                return this.instances[tableId];
+        // 首先尝试通过 scope 键直接查找（如果设置了隔离标志）
+        const scopeKey = 'scope-' + scope;
+        if (this.instances[scopeKey] && this.instances[scopeKey].isolate) {
+            return this.instances[scopeKey];
+        }
+        
+        // 否则遍历所有实例查找匹配的 scope
+        for (const instanceKey in this.instances) {
+            const instance = this.instances[instanceKey];
+            if (instance.scope === scope || (instance.options && instance.options.scope === scope)) {
+                return instance;
             }
         }
         return null;
@@ -5765,48 +5963,71 @@ var DataTableManager = {
     },
 
     /**
-     * 初始化实时编辑功能
+     * 初始化实时编辑功能（实例隔离）
      */
     initInlineEdit: function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) return;
+        
         const table = document.getElementById(tableId);
         if (!table) return;
 
-        // 绑定单元格双击事件
-        table.addEventListener('dblclick', (e) => {
+        // 绑定单元格双击事件（使用实例命名空间）
+        const dblClickHandler = (e) => {
             const cell = e.target.closest('td[data-editable="true"]');
-            if (cell && !this.editingState.isEditing) {
-                this.startCellEdit(cell);
+            if (cell && !instance.editingState.isEditing) {
+                this.startCellEdit(cell, tableId);
             }
-        });
+        };
+        table.addEventListener('dblclick', dblClickHandler);
+        // 存储事件处理器，用于清理
+        if (!instance.eventHandlers) instance.eventHandlers = {};
+        instance.eventHandlers['dblclick'] = dblClickHandler;
 
-        // 绑定键盘事件
-        document.addEventListener('keydown', (e) => {
-            if (this.editingState.isEditing) {
+        // 绑定键盘事件（使用实例命名空间，确保只处理当前实例的编辑）
+        const keydownHandler = (e) => {
+            if (instance.editingState.isEditing) {
                 if (e.key === 'Enter') {
-                    this.saveCellEdit();
+                    this.saveCellEdit(tableId);
                 } else if (e.key === 'Escape') {
-                    this.cancelCellEdit();
+                    this.cancelCellEdit(tableId);
                 }
             }
-        });
+        };
+        document.addEventListener('keydown', keydownHandler);
+        instance.eventHandlers['keydown'] = keydownHandler;
     },
 
     /**
-     * 开始单元格编辑
+     * 开始单元格编辑（实例隔离）
      */
-    startCellEdit: function (cell) {
-        if (this.editingState.isEditing) return;
+    startCellEdit: function (cell, tableId) {
+        // 通过 cell 找到 tableId（如果未提供）
+        if (!tableId) {
+            const table = cell.closest('table, .w-datatable');
+            if (table) {
+                tableId = table.id || table.closest('[id]')?.id;
+            }
+        }
+        
+        const instance = this.instances[tableId];
+        if (!instance) {
+            console.warn('DataTable instance not found for tableId:', tableId);
+            return;
+        }
+        
+        if (instance.editingState.isEditing) return;
 
-        this.editingState.isEditing = true;
-        this.editingState.currentCell = cell;
-        this.editingState.originalValue = cell.textContent.trim();
-        this.editingState.editingRow = cell.closest('tr');
+        instance.editingState.isEditing = true;
+        instance.editingState.currentCell = cell;
+        instance.editingState.originalValue = cell.textContent.trim();
+        instance.editingState.editingRow = cell.closest('tr');
 
         const fieldType = cell.getAttribute('data-field-type') || 'text';
         const fieldName = cell.getAttribute('data-field');
 
         // 创建编辑器
-        const editor = this.createCellEditor(fieldType, this.editingState.originalValue);
+        const editor = this.createCellEditor(fieldType, instance.editingState.originalValue);
 
         // 替换单元格内容
         cell.innerHTML = '';
@@ -5868,35 +6089,60 @@ var DataTableManager = {
     },
 
     /**
-     * 保存单元格编辑
+     * 保存单元格编辑（实例隔离）
      */
-    saveCellEdit: function () {
-        if (!this.editingState.isEditing) return;
+    saveCellEdit: function (tableId) {
+        // 通过当前编辑状态找到 tableId（如果未提供）
+        if (!tableId) {
+            for (const id in this.instances) {
+                if (this.instances[id].editingState.isEditing) {
+                    tableId = id;
+                    break;
+                }
+            }
+        }
+        
+        const instance = this.instances[tableId];
+        if (!instance || !instance.editingState.isEditing) return;
 
-        const cell = this.editingState.currentCell;
+        const cell = instance.editingState.currentCell;
+        if (!cell) return;
+        
         const editor = cell.querySelector('input, select, textarea');
         const newValue = editor ? editor.value : '';
 
-        if (newValue !== this.editingState.originalValue) {
+        if (newValue !== instance.editingState.originalValue) {
             // 发送保存请求
-            this.saveCellValue(cell, newValue);
+            this.saveCellValue(cell, newValue, tableId);
         } else {
             // 值未改变，直接恢复
-            this.restoreCellContent(cell, this.editingState.originalValue);
+            this.restoreCellContent(cell, instance.editingState.originalValue);
         }
-
-        this.resetEditingState();
+        this.resetEditingState(tableId);
     },
 
     /**
-     * 取消单元格编辑
+     * 取消单元格编辑（实例隔离）
      */
-    cancelCellEdit: function () {
-        if (!this.editingState.isEditing) return;
+    cancelCellEdit: function (tableId) {
+        // 通过当前编辑状态找到 tableId（如果未提供）
+        if (!tableId) {
+            for (const id in this.instances) {
+                if (this.instances[id].editingState.isEditing) {
+                    tableId = id;
+                    break;
+                }
+            }
+        }
+        
+        const instance = this.instances[tableId];
+        if (!instance || !instance.editingState.isEditing) return;
 
-        const cell = this.editingState.currentCell;
-        this.restoreCellContent(cell, this.editingState.originalValue);
-        this.resetEditingState();
+        const cell = instance.editingState.currentCell;
+        if (!cell) return;
+        
+        this.restoreCellContent(cell, instance.editingState.originalValue);
+        this.resetEditingState(tableId);
     },
 
     /**
@@ -5908,31 +6154,46 @@ var DataTableManager = {
     },
 
     /**
-     * 重置编辑状态
+     * 重置编辑状态（实例隔离）
      */
-    resetEditingState: function () {
-        this.editingState.isEditing = false;
-        this.editingState.currentCell = null;
-        this.editingState.originalValue = null;
-        this.editingState.editingRow = null;
+    resetEditingState: function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) return;
+        
+        instance.editingState.isEditing = false;
+        instance.editingState.currentCell = null;
+        instance.editingState.originalValue = null;
+        instance.editingState.editingRow = null;
     },
 
     /**
-     * 保存单元格值到服务器
+     * 保存单元格值到服务器（实例隔离）
      */
-    saveCellValue: function (cell, newValue) {
-        const table = cell.closest('.w-datatable');
-        const tableId = table.id;
+    saveCellValue: function (cell, newValue, tableId) {
+        // 通过 cell 找到 tableId（如果未提供）
+        if (!tableId) {
+            const table = cell.closest('.w-datatable');
+            if (table) {
+                tableId = table.id;
+            }
+        }
+        
+        const instance = this.instances[tableId];
+        if (!instance) {
+            console.warn('DataTable instance not found for tableId:', tableId);
+            return;
+        }
+        
         const row = cell.closest('tr');
         const recordId = row.getAttribute('data-id');
         const fieldName = cell.getAttribute('data-field');
-        const model = table.getAttribute('data-model');
+        const model = instance.options.model || instance.container.getAttribute('data-model');
 
         // 显示保存状态
         cell.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-        // 发送保存请求
-        fetch(this.config.apiUrl + '/update', {
+        // 发送保存请求（使用实例的 API URL）
+        fetch(instance.apiUrl + '/update', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -5955,42 +6216,53 @@ var DataTableManager = {
                     setTimeout(() => cell.classList.remove('save-success'), 2000);
                 } else {
                     // 保存失败
-                    this.restoreCellContent(cell, this.editingState.originalValue);
+                    this.restoreCellContent(cell, instance.editingState.originalValue);
                     this.showError(tableId, data.message || __('保存失败'));
                 }
             })
             .catch(error => {
                 // 网络错误
-                this.restoreCellContent(cell, this.editingState.originalValue);
+                this.restoreCellContent(cell, instance.editingState.originalValue);
                 this.showError(tableId, __('网络错误：%{1}', error.message));
             });
     }
-};
+    };
+    
+    // 将 DataTableManager 暴露到 window 上
+    if (typeof window !== 'undefined') {
+        window.DataTableManager = DataTableManager;
+    }
+}
 
 // 全局事件委托，支持动态插入的字段设置按钮
 document.addEventListener('click', function (e) {
     const btn = e.target.closest('.w-btn[data-w-action="field-config"]');
-    if (btn) {
+    if (btn && window.DataTableManager) {
         const tableId = btn.getAttribute('data-table');
         if (tableId) {
-            DataTableManager.openFieldConfig(tableId);
+            window.DataTableManager.openFieldConfig(tableId);
         }
     }
 });
 
-// 初始化下拉菜单功能
-document.addEventListener('DOMContentLoaded', function () {
-    DataTableManager.initDropdowns();
-    DataTableManager.initTheme();
-    DataTableManager.initThemeConfig();
-    DataTableManager.initImportantFlags();
-    DataTableManager.loadThemeConfig();
+// 初始化下拉菜单功能（只在单例模式下执行一次）
+if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTableManager._initialized) {
+    window.DataTableManager._initialized = true;
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.DataTableManager) {
+            window.DataTableManager.initDropdowns();
+            window.DataTableManager.initTheme();
+            window.DataTableManager.initThemeConfig();
+            window.DataTableManager.initImportantFlags();
+            window.DataTableManager.loadThemeConfig();
 
-    // 初始化所有表格的实时编辑功能
-    document.querySelectorAll('.w-datatable[data-editable="true"]').forEach(table => {
-        DataTableManager.initInlineEdit(table.id);
+            // 初始化所有表格的实时编辑功能
+            document.querySelectorAll('.w-datatable[data-editable="true"]').forEach(table => {
+                window.DataTableManager.initInlineEdit(table.id);
+            });
+        }
     });
-});
+}
 
 // 自动翻译所有带data-w-i18n的元素
 function applyI18n() {
