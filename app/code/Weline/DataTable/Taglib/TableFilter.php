@@ -69,6 +69,17 @@ class TableFilter implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 检查是否为后端请求
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            if (!$request->isBackend() && !$request->isApiBackend()) {
+                // 前端请求直接返回空（开发环境返回注释说明）
+                if (defined('DEV') && DEV) {
+                    return '<!-- DataTable 过滤器标签只能在后端使用，当前为前端请求 -->';
+                }
+                return '';
+            }
+            
             // 属性继承与校验
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
@@ -156,33 +167,74 @@ class TableFilter implements TaglibInterface
             $modelInstance = w_obj($model);
             $fields = [];
 
-            // 尝试多种方式获取字段信息
-            if (method_exists($modelInstance, 'getColumns')) {
-                $columns = $modelInstance->getColumns();
+            // 获取字段信息
+            $columns = $modelInstance->columns();
+            if (!empty($columns) && is_array($columns)) {
+                $modelFields = [];
                 foreach ($columns as $column) {
-                    $fieldName = $column['Field'];
-                    // 只为主要字段生成过滤器
-                    if (in_array($fieldName, ['name', 'title', 'username', 'email', 'status', 'type'])) {
-                        $label = $column['Comment'] ?: $fieldName;
-                        $fields[] = [
-                            'name' => $fieldName,
-                            'label' => $label,
-                            'type' => self::getFilterType($fieldName, $column['Type']),
-                            'placeholder' => "搜索{$label}"
-                        ];
+                    $fieldName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? '') : $column;
+                    if (!empty($fieldName)) {
+                        $modelFields[] = $fieldName;
+                    }
+                }
+                
+                // 优先字段列表（按优先级排序）
+                $priorityFields = ['name', 'title', 'username', 'email', 'status', 'type', 'id', 'create_time', 'update_time'];
+                
+                // 只为主要字段生成过滤器，但必须确保字段在模型中存在
+                foreach ($priorityFields as $fieldName) {
+                    if (in_array($fieldName, $modelFields)) {
+                        $column = null;
+                        foreach ($columns as $col) {
+                            $colFieldName = is_array($col) ? ($col['Field'] ?? $col['field'] ?? '') : $col;
+                            if ($colFieldName === $fieldName) {
+                                $column = $col;
+                                break;
+                            }
+                        }
+                        
+                        if ($column) {
+                            $label = (is_array($column) && isset($column['Comment'])) ? $column['Comment'] : $fieldName;
+                            $type = is_array($column) ? ($column['Type'] ?? '') : '';
+                            $fields[] = [
+                                'name' => $fieldName,
+                                'label' => $label,
+                                'type' => self::getFilterType($fieldName, $type),
+                                'placeholder' => "搜索{$label}"
+                            ];
+                        }
                     }
                 }
             } else {
-                // 使用默认字段
-                $defaultFields = [
-                    ['name' => 'name', 'type' => 'text', 'placeholder' => '搜索名称'],
-                    ['name' => 'status', 'type' => 'select', 'placeholder' => '选择状态']
-                ];
-                $fields = $defaultFields;
+                // 如果无法获取字段信息，尝试使用 getModelFields
+                try {
+                    if (method_exists($modelInstance, 'getModelFields')) {
+                        $modelFields = $modelInstance->getModelFields();
+                        // 只使用前几个字段
+                        $priorityFields = ['id', 'create_time', 'update_time'];
+                        foreach ($priorityFields as $fieldName) {
+                            if (in_array($fieldName, $modelFields)) {
+                                $fields[] = [
+                                    'name' => $fieldName,
+                                    'label' => $fieldName,
+                                    'type' => self::getFilterType($fieldName, ''),
+                                    'placeholder' => "搜索{$fieldName}"
+                                ];
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    error_log("TableFilter: getModelFields()失败: " . $e->getMessage());
+                }
             }
 
             // 限制字段数量
             $fields = array_slice($fields, 0, 3);
+
+            // 如果没有找到任何字段，返回空字符串（不生成任何字段）
+            if (empty($fields)) {
+                return '';
+            }
 
             // 生成字段HTML
             $fieldsHtml = '';
@@ -203,7 +255,8 @@ class TableFilter implements TaglibInterface
 
         } catch (\Exception $e) {
             error_log("TableFilter: 自动生成字段失败: " . $e->getMessage());
-            return '<w:field belong="t-filter" name="name" type="text" placeholder="搜索名称"></w:field>';
+            // 如果自动生成失败，返回空字符串（不生成任何字段，避免使用不存在的默认字段）
+            return '';
         }
     }
 
@@ -222,11 +275,15 @@ class TableFilter implements TaglibInterface
         $collapsibleJs = $context['collapsible'] ? 'true' : 'false';
 
         $collapsibleClass = $context['collapsible'] ? 'datatable-filter-collapsible' : '';
+        
+        // HTML 属性转义
+        $modelHtml = htmlspecialchars($model ?? '', ENT_QUOTES, 'UTF-8');
+        $scopeHtml = htmlspecialchars($scope ?? '', ENT_QUOTES, 'UTF-8');
 
         return <<<HTML
 <div class="datatable-filter-container {$collapsibleClass}"
-     data-model="{$model}"
-     data-scope="{$scope}"
+     data-model="{$modelHtml}"
+     data-scope="{$scopeHtml}"
      data-searchable="{$searchableJs}"
      data-advanced="{$advancedJs}"
      data-collapsible="{$collapsibleJs}">

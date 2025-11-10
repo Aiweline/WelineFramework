@@ -12,6 +12,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class VerifyInstallation implements CommandInterface
 {
+
     public function execute(array $args = [], array $data = [])
     {
         echo "\n=== Weline_Ai 安装验证 ===\n\n";

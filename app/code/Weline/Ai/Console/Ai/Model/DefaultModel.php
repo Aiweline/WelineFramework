@@ -26,6 +26,7 @@ use Weline\Framework\Console\CommandInterface;
  */
 class DefaultModel implements CommandInterface
 {
+
     /**
      * @var DefaultModelManager
      */

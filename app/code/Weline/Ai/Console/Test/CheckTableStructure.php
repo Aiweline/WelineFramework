@@ -12,6 +12,7 @@ use Weline\Framework\Database\ConnectionFactory;
  */
 class CheckTableStructure implements CommandInterface
 {
+
     private ConnectionFactory $connectionFactory;
 
     public function __construct(ConnectionFactory $connectionFactory)

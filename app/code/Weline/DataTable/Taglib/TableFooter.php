@@ -47,6 +47,17 @@ class TableFooter implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 检查是否为后端请求
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            if (!$request->isBackend() && !$request->isApiBackend()) {
+                // 前端请求直接返回空（开发环境返回注释说明）
+                if (defined('DEV') && DEV) {
+                    return '<!-- DataTable 表尾标签只能在后端使用，当前为前端请求 -->';
+                }
+                return '';
+            }
+            
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
             $showPagination = filter_var($attributes['show-pagination'] ?? true, FILTER_VALIDATE_BOOLEAN);
@@ -67,9 +78,13 @@ class TableFooter implements TaglibInterface
 
             $showSummaryDisplay = $showSummary ? 'block' : 'none';
             $showPaginationDisplay = $showPagination ? 'block' : 'none';
+            
+            // HTML 属性转义
+            $modelHtml = htmlspecialchars($model ?? '', ENT_QUOTES, 'UTF-8');
+            $scopeHtml = htmlspecialchars($scope ?? '', ENT_QUOTES, 'UTF-8');
 
             $result = <<<HTML
-<tfoot class="datatable-footer" data-model="{$model}" data-scope="{$scope}">
+<tfoot class="datatable-footer" data-model="{$modelHtml}" data-scope="{$scopeHtml}">
     <tr>
         <td colspan="100%">
             <div class="datatable-footer-content">

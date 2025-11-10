@@ -28,6 +28,7 @@ use Weline\Framework\System\OS\Win;
 
 class Run implements CommandInterface
 {
+
     /**
      * @var \Weline\Cron\Model\CronTask
      */

@@ -18,6 +18,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 
 class DbMigration implements CommandInterface
 {
+
     private ConnectionFactory $connectionFactory;
 
     public function __construct(ConnectionFactory $connectionFactory)

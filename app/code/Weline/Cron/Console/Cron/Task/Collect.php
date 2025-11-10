@@ -23,6 +23,7 @@ use Weline\Framework\System\File\Scan;
 
 class Collect implements CommandInterface
 {
+
     /**
      * @var \Weline\Framework\System\File\Scan
      */

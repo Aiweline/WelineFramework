@@ -25,6 +25,7 @@ use Weline\Framework\Database\Service\AdapterScanner;
  */
 class Scan implements CommandInterface
 {
+
     /**
      * @var AdapterScanner
      */

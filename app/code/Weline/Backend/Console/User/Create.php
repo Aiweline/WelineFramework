@@ -20,6 +20,7 @@ use Weline\Framework\Output\Cli\Printing;
 class Create implements CommandInterface
 {
 
+
     /**
      * @inheritDoc
      */

@@ -82,6 +82,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
+     * @inheritDoc
+     */
+    public function aliases(): array
+    {
+        return [];
+    }
+
+    /**
      * 检查系统是否已安装
      * @return bool
      */

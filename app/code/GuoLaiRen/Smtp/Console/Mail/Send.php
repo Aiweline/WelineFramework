@@ -21,6 +21,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class Send implements CommandInterface
 {
+
     private Printing $printer;
     private SmtpMailer $mailer;
     private string $baseDir;

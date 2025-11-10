@@ -19,6 +19,7 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Test implements CommandInterface
 {
+
     private Printing $printer;
     private SmtpMailer $mailer;
 

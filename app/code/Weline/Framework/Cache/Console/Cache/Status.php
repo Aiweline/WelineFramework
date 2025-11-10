@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Console\Cache;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Cache\Scanner;

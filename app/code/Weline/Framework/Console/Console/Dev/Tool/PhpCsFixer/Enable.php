@@ -8,6 +8,8 @@
 
 namespace Weline\Framework\Console\Console\Dev\Tool\PhpCsFixer;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 

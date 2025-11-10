@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Console\I18n\Collect;
 
+use Weline\Framework\Console\CommandInterface;
+
 class RealTime implements \Weline\Framework\Console\CommandInterface
 {
+
     /**
      * @inheritDoc
      */

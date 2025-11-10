@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\UnitTest\Console\PhpUnit;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
@@ -358,53 +360,46 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 检测操作系统
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         
-        # 使用多层降级策略启动服务器
+        # 查找可用端口，如果被占用则先停止占用端口的进程
+        $originalPort = $port;
+        if (Processer::isPortInUse($port)) {
+            $this->printing->note(__('端口 %{1} 被占用，尝试停止占用该端口的进程...', (string)$port));
+            Processer::killProcessByPort($port);
+            sleep(1); // 等待进程完全停止
+            # 再次检查端口是否可用
+            if (Processer::isPortInUse($port)) {
+                # 如果仍然被占用，查找新端口
+                $port = Processer::findAvailablePort($port);
+                $this->printing->note(__('端口 %{1} 仍被占用，自动选择端口 %{2}', [(string)$originalPort, (string)$port]));
+            } else {
+                $this->printing->success(__('已停止占用端口 %{1} 的进程', (string)$port));
+            }
+        }
+        
+        # 简化启动：使用 Processer::startBuiltInServer 统一处理启动与 PID 获取
         $pid = 0;
         $method = '';
-        
-        # 方案1：popen/pclose (Windows) 或 exec (Linux) - 仅在函数可用时尝试
-        if ($isWindows && \function_exists('popen') && \function_exists('pclose') && \function_exists('exec')) {
-            $this->printing->note(__('尝试方案1：使用 popen/exec 启动服务器...'));
-            $pid = $this->startServerMethod1($reportPath, $port, $logFile, $isWindows);
-            if ($pid > 0) {
-                $method = 'popen/exec';
-                $this->printing->success(__('方案1成功！'));
+        $this->printing->note(__('使用统一启动方案启动内置 PHP 服务器...'));
+        $pid = Processer::startBuiltInServer($reportPath, $port, $logFile);
+        if ($pid > 0) {
+            $method = 'built_in';
+            $this->printing->success(__('服务器已启动 (PID: %{1})', (string)$pid));
+        } elseif (Processer::isPortInUse($port)) {
+            # 端口被占，但没有拿到 PID：尝试短时间重试查 PID
+            for ($i = 0; $i < 10 && $pid === 0; $i++) {
+                $pid = Processer::findPhpProcessPid("localhost:$port");
+                if ($pid > 0) {
+                    $method = 'built_in';
+                    $this->printing->success(__('延迟确认服务器已启动 (PID: %{1})', (string)$pid));
+                    break;
+                }
+                usleep(150000);
             }
-        } elseif (!$isWindows && \function_exists('exec')) {
-            $this->printing->note(__('尝试方案1：使用 exec 启动服务器...'));
-            $pid = $this->startServerMethod1($reportPath, $port, $logFile, $isWindows);
-            if ($pid > 0) {
-                $method = 'exec';
-                $this->printing->success(__('方案1成功！'));
+            if ($pid === 0) {
+                $this->printing->success(__('服务器已在端口 %{1} 监听（无法立即获取 PID），继续运行', (string)$port));
             }
-        }
-        
-        # 方案2：proc_open/proc_close
-        if ($pid === 0 && \function_exists('proc_open') && \function_exists('proc_close')) {
-            if ($method === '') {
-                $this->printing->note(__('尝试方案2：使用 proc_open 启动服务器...'));
-            } else {
-                $this->printing->warning(__('方案1失败，尝试方案2：使用 proc_open 启动服务器...'));
-            }
-            $pid = $this->startServerMethod2($reportPath, $port, $logFile, $isWindows);
-            if ($pid > 0) {
-                $method = 'proc_open';
-                $this->printing->success(__('方案2成功！'));
-            }
-        }
-        
-        # 方案3：shell_exec - 仅在函数可用时尝试
-        if ($pid === 0 && \function_exists('shell_exec')) {
-            if ($method === '') {
-                $this->printing->note(__('尝试方案3：使用 shell_exec 启动服务器...'));
-            } else {
-                $this->printing->warning(__('方案2失败，尝试方案3：使用 shell_exec 启动服务器...'));
-            }
-            $pid = $this->startServerMethod3($reportPath, $port, $logFile, $isWindows);
-            if ($pid > 0) {
-                $method = 'shell_exec';
-                $this->printing->success(__('方案3成功！'));
-            }
+        } else {
+            $this->printing->warning(__('统一启动方案失败，无法启动服务器'));
         }
         
         # 如果所有后台启动方案都失败
@@ -416,8 +411,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('3. 端口 %{1} 已被占用', (string)$port));
         }
         
+        # 保存PID并更新服务器信息
         if (!empty($pid) && $pid > 0) {
-            file_put_contents($pidFile, $pid);
+            # 确保PID文件正确保存
+            $pidSaved = file_put_contents($pidFile, $pid);
+            if ($pidSaved === false) {
+                $this->printing->warning(__('保存PID文件失败，但服务器已启动 (PID: %{1})', [(string)$pid]));
+            }
             
             # 更新env.php中的服务器信息
             $this->updateServerInfo($pid, 'running', $port);
@@ -535,34 +535,23 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $pid = 0;
         
         if ($isWindows) {
-            # Windows系统使用VBScript启动隐藏窗口
-            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
-            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
+            # Windows系统使用cmd启动后台服务器
+            $command = "cmd /c start /min \"PHPUnit Server\" php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1";
+            \exec($command, $output, $exitCode);
             
-            # 创建批处理文件
-            $batContent = "@echo off\n";
-            $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
-            file_put_contents($batFile, $batContent);
-            
-            # 创建VBScript文件来隐藏窗口启动
-            $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
-            $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
-            file_put_contents($vbsFile, $vbsContent);
-            
-            # 执行VBScript（不等待返回）
-            \pclose(\popen("start /B cscript //nologo \"$vbsFile\"", "r"));
-            
-            # 等待服务器启动
-            sleep(1);
-            
-            # 查找PHP进程ID
-            $output = [];
-            \exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
-            foreach ($output as $line) {
-                $line = trim($line);
-                if (is_numeric($line) && $line > 0) {
-                    $pid = (int)$line;
-                    break;
+            if ($exitCode === 0) {
+                # 等待服务器启动
+                sleep(2);
+                
+                # 查找PHP进程ID
+                $output = [];
+                \exec("wmic process where \"commandline like '%php%$port%'\" get processid", $output);
+                foreach ($output as $line) {
+                    $line = trim($line);
+                    if (is_numeric($line) && $line > 0) {
+                        $pid = (int)$line;
+                        break;
+                    }
                 }
             }
         } else {
@@ -663,25 +652,26 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $pid = 0;
         
         if ($isWindows) {
-            # Windows系统
-            $vbsFile = BP . 'var' . DS . 'start_phpunit_server.vbs';
-            $batFile = BP . 'var' . DS . 'start_phpunit_server.bat';
+            # 创建批处理文件来启动服务器
+            $batFile = BP . 'var' . DS . 'start_phpunit_server_' . $port . '.bat';
+            $vbsFile = BP . 'var' . DS . 'start_phpunit_server_' . $port . '.vbs';
             
-            # 创建批处理文件
+            # 创建批处理文件内容
             $batContent = "@echo off\n";
             $batContent .= "php -S localhost:$port -t \"$reportPath\" > \"$logFile\" 2>&1\n";
+            $batContent .= "exit\n";
             file_put_contents($batFile, $batContent);
             
-            # 创建VBScript文件
+            # 创建VBScript文件来隐藏窗口启动
             $vbsContent = "Set WshShell = CreateObject(\"WScript.Shell\")\n";
             $vbsContent .= "WshShell.Run \"\"\"$batFile\"\"\", 0, False\n";
             file_put_contents($vbsFile, $vbsContent);
             
-            # 使用shell_exec执行
-            \shell_exec("start /B cscript //nologo \"$vbsFile\"");
+            # 使用VBScript启动（真正的后台启动）
+            exec("cscript //nologo \"$vbsFile\"");
             
             # 等待服务器启动
-            sleep(1);
+            sleep(2);
             
             # 尝试查找进程ID
             if ($this->checkRequiredFunctions(['exec'], true)) {
@@ -2809,4 +2799,117 @@ class Run implements \Weline\Framework\Console\CommandInterface
         return 'Unknown';
     }
     
+    /**
+     * 备用服务器启动方案
+     * 
+     * @param string $reportPath 报告路径
+     * @param int $port 端口
+     * @param string $logFile 日志文件
+     * @param bool $isWindows 是否为Windows系统
+     * @return int 进程ID，失败返回0
+     */
+    private function startServerMethodBackup(string $reportPath, int $port, string $logFile, bool $isWindows): int
+    {
+        if (!\function_exists('exec')) {
+            return 0;
+        }
+        
+        $pid = 0;
+        
+        if ($isWindows) {
+            # Windows下使用start /B后台启动
+            # 使用唯一的日志文件名避免文件被占用（基于端口）
+            $uniqueLogFile = str_replace('.log', '_' . $port . '.log', $logFile);
+            
+            # 确保日志目录存在
+            $logDir = dirname($uniqueLogFile);
+            if (!is_dir($logDir)) {
+                mkdir($logDir, 0755, true);
+            }
+            
+            // 优先尝试使用 PowerShell Start-Process 返回 PID（避免先用 start /B 导致后面再用 Start-Process 重复启动）
+            $pid = 0;
+            if (\function_exists('exec')) {
+                $psCmd = "powershell -NoProfile -Command \"(Start-Process -FilePath 'php' -ArgumentList '-S','localhost:{$port}','-t','" . addslashes($reportPath) . "' -PassThru).Id\"";
+                $psOut = [];
+                $psCode = null;
+                exec($psCmd, $psOut, $psCode);
+                if ($psCode === 0 && !empty($psOut[0]) && is_numeric(trim($psOut[0]))) {
+                    $pid = (int)trim($psOut[0]);
+                }
+            }
+
+            // 如果 PowerShell 启动失败（例如没有权限或不可用），回退为 start /B 启动并轮询端口
+            if ($pid === 0) {
+                $command = sprintf('start /B "" php -S localhost:%d -t "%s" > "%s" 2>&1', $port, addslashes($reportPath), addslashes($uniqueLogFile));
+                exec($command, $output, $exitCode);
+            }
+
+            // 如果 PowerShell 方法失败，再使用短轮询 netstat+tasklist 确认 PID
+            if ($pid === 0) {
+                $attempts = 8;
+                for ($i = 0; $i < $attempts; $i++) {
+                
+                    $checkOutput = [];
+                    exec("netstat -ano | findstr :$port 2>NUL", $checkOutput);
+                    
+                    foreach ($checkOutput as $checkLine) {
+                        $checkLineTrim = trim($checkLine);
+                        
+                        if (preg_match('/\s+(\d+)$/', $checkLineTrim, $m)) {
+                            $candidatePid = (int)$m[1];
+                            
+                            if ($candidatePid > 0) {
+                                $tl = [];
+                                exec("tasklist /FI \"PID eq $candidatePid\" /FO CSV 2>NUL", $tl);
+                                
+                                foreach ($tl as $tlLine) {
+                                    
+                                    if (stripos($tlLine, 'php.exe') !== false) {
+                                        $pid = $candidatePid;
+                                        break 3;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    usleep(300000); // 300ms
+                }
+            }
+
+            // 最后回退到 Processer 的查找方法
+            if ($pid === 0) {
+                
+                $pid = Processer::findPhpProcessPid("localhost:$port");
+                
+            }
+
+            if ($pid > 0) {
+                
+            } else {
+                
+            }
+        } else {
+            # Linux/Mac下使用nohup后台启动
+            $command = sprintf('nohup php -S localhost:%d -t %s > %s 2>&1 &', $port, addslashes($reportPath), addslashes($logFile));
+            exec($command);
+            sleep(2);
+            
+            # 查找进程
+            $output = [];
+            exec("ps aux | grep -v grep | grep \"php.*localhost:$port\" | awk '{print $2}' 2>/dev/null", $output);
+            if (!empty($output) && is_numeric($output[0])) {
+                $pid = (int)$output[0];
+            }
+        }
+        
+        return $pid;
+    }
+
+    /**
+     * 查找可用端口
+     * 
+     * @param int $startPort 起始端口
+     * @return int 可用端口
+     */
 }

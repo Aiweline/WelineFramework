@@ -2,7 +2,9 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--开发工具-->
-    <add source="Weline_DataTable::datatable" name="datatable" title="数据表格" action="*/backend/test/index"
-         parent="Weline_Component::component" icon="mdi mdi-table" order="1"/>
+    <!--DataTable模块菜单-->
+    <add source="Weline_DataTable::datatable_module" name="datatable_module" title="DataTable" action=""
+         parent="Weline_Backend::system_module" icon="mdi mdi-table" order="20001"/>
+    <add source="Weline_DataTable::datatable_test_comprehensive" name="datatable_test_comprehensive" title="综合测试" 
+         action="datatable/backend/test/comprehensive/index" parent="Weline_DataTable::datatable_module" icon="mdi mdi-test-tube" order="20003"/>
 </menus>

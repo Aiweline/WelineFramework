@@ -70,6 +70,17 @@ class TableHeader implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 检查是否为后端请求
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            if (!$request->isBackend() && !$request->isApiBackend()) {
+                // 前端请求直接返回空（开发环境返回注释说明）
+                if (defined('DEV') && DEV) {
+                    return '<!-- DataTable 表头标签只能在后端使用，当前为前端请求 -->';
+                }
+                return '';
+            }
+            
             // 属性继承与校验
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
@@ -159,16 +170,20 @@ class TableHeader implements TaglibInterface
             $modelInstance = w_obj($model);
             $fields = [];
 
-            // 尝试多种方式获取字段信息
-            if (method_exists($modelInstance, 'getColumns')) {
-                $columns = $modelInstance->getColumns();
+            // 获取字段信息
+            $columns = $modelInstance->columns();
+            if (!empty($columns) && is_array($columns)) {
                 foreach ($columns as $column) {
+                    $fieldName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? '') : $column;
+                    if (empty($fieldName)) {
+                        continue;
+                    }
                     $fields[] = [
-                        'name' => $column['Field'],
-                        'label' => $column['Comment'] ?: $column['Field'],
-                        'type' => $column['Type'],
+                        'name' => $fieldName,
+                        'label' => (is_array($column) && isset($column['Comment'])) ? $column['Comment'] : $fieldName,
+                        'type' => (is_array($column) && isset($column['Type'])) ? $column['Type'] : 'string',
                         'sortable' => true,
-                        'width' => self::getDefaultWidth($column['Field'])
+                        'width' => self::getDefaultWidth($fieldName)
                     ];
                 }
             } else {
@@ -216,11 +231,15 @@ class TableHeader implements TaglibInterface
         $draggableJs = $context['draggable'] ? 'true' : 'false';
         $configurableJs = $context['configurable'] ? 'true' : 'false';
         $resizableJs = $context['resizable'] ? 'true' : 'false';
+        
+        // HTML 属性转义
+        $modelHtml = htmlspecialchars($model ?? '', ENT_QUOTES, 'UTF-8');
+        $scopeHtml = htmlspecialchars($scope ?? '', ENT_QUOTES, 'UTF-8');
 
         return <<<HTML
 <thead class="datatable-header"
-       data-model="{$model}"
-       data-scope="{$scope}"
+       data-model="{$modelHtml}"
+       data-scope="{$scopeHtml}"
        data-sortable="{$sortableJs}"
        data-draggable="{$draggableJs}"
        data-configurable="{$configurableJs}"

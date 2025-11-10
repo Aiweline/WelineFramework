@@ -1,150 +1,57 @@
 <?php
 
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
 namespace Weline\DataTable\Model;
 
+use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
-use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\Data\Context;
+use Weline\Framework\Setup\Db\ModelSetup;
 
 class TestOrder extends Model
 {
-    /**
-     * 指定表名，避免与其他模块冲突
-     */
-    public string $table = 'datatable_test_orders';
+    public const table = 'datatable_test_orders';
+
+    public const fields_ID = 'id';
+    public const fields_order_no = 'order_no';
+    public const fields_user_id = 'user_id';
+    public const fields_total_amount = 'total_amount';
+    public const fields_discount_amount = 'discount_amount';
+    public const fields_shipping_fee = 'shipping_fee';
+    public const fields_final_amount = 'final_amount';
+    public const fields_payment_method = 'payment_method';
+    public const fields_payment_status = 'payment_status';
+    public const fields_order_status = 'order_status';
+    public const fields_shipping_address = 'shipping_address';
+    public const fields_shipping_phone = 'shipping_phone';
+    public const fields_shipping_name = 'shipping_name';
+    public const fields_shipping_company = 'shipping_company';
+    public const fields_tracking_number = 'tracking_number';
+    public const fields_notes = 'notes';
+    public const fields_created_at = 'created_at';
+    public const fields_updated_at = 'updated_at';
+    public const fields_paid_at = 'paid_at';
+    public const fields_shipped_at = 'shipped_at';
+    public const fields_completed_at = 'completed_at';
 
     /**
-     * 主键
+     * @inheritDoc
      */
-    protected string $primary_key = 'id';
-
-    /**
-     * 字段定义
-     */
-    protected array $fields = [
-        'id' => [
-            'type' => 'int',
-            'length' => 11,
-            'auto_increment' => true,
-            'primary_key' => true,
-            'comment' => '订单ID'
-        ],
-        'order_no' => [
-            'type' => 'varchar',
-            'length' => 50,
-            'not_null' => true,
-            'unique' => true,
-            'comment' => '订单号'
-        ],
-        'user_id' => [
-            'type' => 'int',
-            'length' => 11,
-            'not_null' => true,
-            'comment' => '用户ID'
-        ],
-        'total_amount' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '订单总金额'
-        ],
-        'discount_amount' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '优惠金额'
-        ],
-        'shipping_fee' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '运费'
-        ],
-        'final_amount' => [
-            'type' => 'decimal',
-            'length' => '10,2',
-            'default' => '0.00',
-            'comment' => '最终金额'
-        ],
-        'payment_method' => [
-            'type' => 'varchar',
-            'length' => 50,
-            'comment' => '支付方式'
-        ],
-        'payment_status' => [
-            'type' => 'tinyint',
-            'length' => 1,
-            'default' => 0,
-            'comment' => '支付状态：0-未支付，1-已支付，2-已退款'
-        ],
-        'order_status' => [
-            'type' => 'tinyint',
-            'length' => 1,
-            'default' => 0,
-            'comment' => '订单状态：0-待确认，1-已确认，2-已发货，3-已完成，4-已取消'
-        ],
-        'shipping_address' => [
-            'type' => 'text',
-            'comment' => '收货地址'
-        ],
-        'shipping_phone' => [
-            'type' => 'varchar',
-            'length' => 20,
-            'comment' => '收货电话'
-        ],
-        'shipping_name' => [
-            'type' => 'varchar',
-            'length' => 100,
-            'comment' => '收货人姓名'
-        ],
-        'shipping_company' => [
-            'type' => 'varchar',
-            'length' => 100,
-            'comment' => '快递公司'
-        ],
-        'tracking_number' => [
-            'type' => 'varchar',
-            'length' => 100,
-            'comment' => '快递单号'
-        ],
-        'notes' => [
-            'type' => 'text',
-            'comment' => '订单备注'
-        ],
-        'created_at' => [
-            'type' => 'datetime',
-            'default' => 'CURRENT_TIMESTAMP',
-            'comment' => '创建时间'
-        ],
-        'updated_at' => [
-            'type' => 'datetime',
-            'default' => 'CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-            'comment' => '更新时间'
-        ],
-        'paid_at' => [
-            'type' => 'datetime',
-            'comment' => '支付时间'
-        ],
-        'shipped_at' => [
-            'type' => 'datetime',
-            'comment' => '发货时间'
-        ],
-        'completed_at' => [
-            'type' => 'datetime',
-            'comment' => '完成时间'
-        ]
-    ];
-
-    /**
-     * 安装方法
-     */
-    public function install(ModelSetup $setup, Context $context): void
+    public function setup(ModelSetup $setup, Context $context): void
     {
-        $this->createTable();
+        $this->install($setup, $context);
     }
 
     /**
-     * 升级方法
+     * @inheritDoc
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
@@ -152,11 +59,35 @@ class TestOrder extends Model
     }
 
     /**
-     * 设置方法
+     * @inheritDoc
      */
-    public function setup(ModelSetup $setup, Context $context): void
+    public function install(ModelSetup $setup, Context $context): void
     {
-        $this->createTable();
+        if (!$setup->tableExist()) {
+            $setup->createTable('测试订单表')
+                ->addColumn(self::fields_ID, TableInterface::column_type_INTEGER, 0, 'auto_increment primary key', '订单ID')
+                ->addColumn(self::fields_order_no, TableInterface::column_type_VARCHAR, 50, 'not null unique', '订单号')
+                ->addColumn(self::fields_user_id, TableInterface::column_type_INTEGER, 0, 'not null', '用户ID')
+                ->addColumn(self::fields_total_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '订单总金额')
+                ->addColumn(self::fields_discount_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '优惠金额')
+                ->addColumn(self::fields_shipping_fee, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '运费')
+                ->addColumn(self::fields_final_amount, TableInterface::column_type_DECIMAL, '10,2', 'default 0.00', '最终金额')
+                ->addColumn(self::fields_payment_method, TableInterface::column_type_VARCHAR, 50, '', '支付方式')
+                ->addColumn(self::fields_payment_status, TableInterface::column_type_INTEGER, 1, 'default 0', '支付状态：0-未支付，1-已支付，2-已退款')
+                ->addColumn(self::fields_order_status, TableInterface::column_type_INTEGER, 1, 'default 0', '订单状态：0-待确认，1-已确认，2-已发货，3-已完成，4-已取消')
+                ->addColumn(self::fields_shipping_address, TableInterface::column_type_TEXT, 0, '', '收货地址')
+                ->addColumn(self::fields_shipping_phone, TableInterface::column_type_VARCHAR, 20, '', '收货电话')
+                ->addColumn(self::fields_shipping_name, TableInterface::column_type_VARCHAR, 100, '', '收货人姓名')
+                ->addColumn(self::fields_shipping_company, TableInterface::column_type_VARCHAR, 100, '', '快递公司')
+                ->addColumn(self::fields_tracking_number, TableInterface::column_type_VARCHAR, 100, '', '快递单号')
+                ->addColumn(self::fields_notes, TableInterface::column_type_TEXT, 0, '', '订单备注')
+                ->addColumn(self::fields_created_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->addColumn(self::fields_updated_at, TableInterface::column_type_DATETIME, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
+                ->addColumn(self::fields_paid_at, TableInterface::column_type_DATETIME, 0, '', '支付时间')
+                ->addColumn(self::fields_shipped_at, TableInterface::column_type_DATETIME, 0, '', '发货时间')
+                ->addColumn(self::fields_completed_at, TableInterface::column_type_DATETIME, 0, '', '完成时间')
+                ->create();
+        }
     }
 
     /**

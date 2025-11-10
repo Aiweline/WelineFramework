@@ -20,7 +20,6 @@ use Weline\Queue\Observer\QueueCollect;
 
 class Collect implements CommandInterface
 {
-
     private Helper $helper;
     private Printing $printing;
 

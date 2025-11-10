@@ -14,6 +14,7 @@ use FlashForge\ShopifyOrderManager\Model\Shop;
  */
 class OrderSyncCommand implements CommandInterface
 {
+
     private OrderSync $orderSync;
     private FeishuNotify $feishuNotify;
     private Shop $shopModel;

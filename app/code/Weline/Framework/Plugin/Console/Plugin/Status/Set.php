@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Plugin\Console\Plugin\Status;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 

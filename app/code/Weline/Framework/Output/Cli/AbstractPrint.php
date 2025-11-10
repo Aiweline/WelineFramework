@@ -1092,9 +1092,61 @@ COMMAND_LIST;
     private function reorganizeByCommandPrefix(array $recommendations): array
     {
         $prefixGroups = [];
+        $classCommandMap = []; // 用于存储每个类的主命令和别名
         
+        // 第一遍：收集所有命令，建立类到主命令和别名的映射
         foreach ($recommendations as $group => $commands) {
             foreach ($commands as $cmd => $data) {
+                if (!isset($data['class'])) {
+                    continue;
+                }
+                
+                $class = $data['class'];
+                
+                // 获取别名列表
+                $aliases = [];
+                if (defined($class . '::ALIASES')) {
+                    $aliases = $class::ALIASES;
+                }
+                
+                // 判断当前命令是别名还是主命令
+                $isAlias = in_array($cmd, $aliases, true);
+                
+                if (!isset($classCommandMap[$class])) {
+                    $classCommandMap[$class] = [
+                        'main' => null,
+                        'aliases' => []
+                    ];
+                }
+                
+                if ($isAlias) {
+                    // 这是别名
+                    $classCommandMap[$class]['aliases'][] = $cmd;
+                } else {
+                    // 这是主命令（通过类名解析出来的）
+                    // 如果还没有主命令，或者当前命令更长（更完整），则使用当前命令作为主命令
+                    if ($classCommandMap[$class]['main'] === null || strlen($cmd) > strlen($classCommandMap[$class]['main'])) {
+                        // 如果之前有主命令，将其移到别名列表
+                        if ($classCommandMap[$class]['main'] !== null) {
+                            $classCommandMap[$class]['aliases'][] = $classCommandMap[$class]['main'];
+                        }
+                        $classCommandMap[$class]['main'] = $cmd;
+                    } else {
+                        // 当前命令可能是别名，但不在 ALIASES 中（可能是通过其他方式注册的）
+                        $classCommandMap[$class]['aliases'][] = $cmd;
+                    }
+                }
+            }
+        }
+        
+        // 第二遍：重新组织命令，合并别名和主命令
+        foreach ($recommendations as $group => $commands) {
+            foreach ($commands as $cmd => $data) {
+                if (!isset($data['class'])) {
+                    continue;
+                }
+                
+                $class = $data['class'];
                 $parts = explode(':', $cmd);
                 $prefix = $parts[0]; // 取命令的第一个部分作为前缀
                 
@@ -1102,7 +1154,36 @@ COMMAND_LIST;
                     $prefixGroups[$prefix] = [];
                 }
                 
-                $prefixGroups[$prefix][$cmd] = $data;
+                // 获取主命令和别名信息
+                $mainCommand = $classCommandMap[$class]['main'] ?? null;
+                $aliases = $classCommandMap[$class]['aliases'] ?? [];
+                
+                // 判断当前命令是主命令还是别名
+                $isAlias = in_array($cmd, $aliases, true);
+                $isMain = ($mainCommand === $cmd);
+                
+                if ($isAlias) {
+                    // 这是别名，只显示别名（并在后面标注主命令）
+                    if ($mainCommand) {
+                        $data['_is_alias'] = true;
+                        $data['_main_command'] = $mainCommand;
+                        // 使用别名作为键
+                        $prefixGroups[$prefix][$cmd] = $data;
+                    } else {
+                        // 没有主命令，直接添加
+                        $prefixGroups[$prefix][$cmd] = $data;
+                    }
+                } elseif ($isMain) {
+                    // 这是主命令，如果有别名，不显示主命令（因为别名会显示）
+                    if (empty($aliases)) {
+                        // 没有别名，显示主命令
+                        $prefixGroups[$prefix][$cmd] = $data;
+                    }
+                    // 如果有别名，不显示主命令，因为别名会显示
+                } else {
+                    // 既不是主命令也不是别名，直接添加
+                    $prefixGroups[$prefix][$cmd] = $data;
+                }
             }
         }
         
@@ -1193,8 +1274,19 @@ COMMAND_LIST;
                 // 这是一个叶子节点（完整命令）
                 $command = $node['full_command'];
                 $description = $node['data']['tip'] ?? '';
+                $data = $node['data'];
                 
-                $coloredCommand = $this->colorize($command, self::SUCCESS);
+                // 处理别名和主命令的显示
+                $displayCommand = $command;
+                $isAlias = $data['_is_alias'] ?? false;
+                $mainCommand = $data['_main_command'] ?? null;
+                
+                // 如果是别名，显示为：别名 [原命令: 主命令]
+                if ($isAlias && $mainCommand) {
+                    $displayCommand = $command . ' [' . __('原命令') . ': ' . $mainCommand . ']';
+                }
+                
+                $coloredCommand = $this->colorize($displayCommand, self::SUCCESS);
                 $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
                 
                 $this->printing($prefix . $connector . $coloredCommand . $coloredDescription . PHP_EOL);
