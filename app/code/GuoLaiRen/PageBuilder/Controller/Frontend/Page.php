@@ -37,7 +37,6 @@ class Page extends FrontendController
     {
         $handle = $this->request->getGet('handle');
         if (!$handle) {
-            $this->getMessageManager()->addError(__('页面不存在！'));
             $this->redirect(404);
             return;
         }
@@ -69,7 +68,6 @@ class Page extends FrontendController
 
 
         if (!$page->getId()) {
-            $this->getMessageManager()->addError(__('页面不存在！'));
             $this->redirect(404);
             return;
         }

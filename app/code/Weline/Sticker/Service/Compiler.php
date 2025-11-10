@@ -44,9 +44,11 @@ class Compiler
      * @param string $targetModule 目标模块
      * @param string $targetFile 目标文件路径（相对路径，如：Weline/Demo/view/templates/Backend/index.phtml）
      * @param string $sourceFilePath 源文件完整路径
+     * @param string|null $type 类型 (module/theme)
+     * @param string|null $themeName 主题名（如果是主题类型）
      * @return string|null 编译后的文件路径，失败返回 null
      */
-    public function compile(string $targetModule, string $targetFile, string $sourceFilePath): ?string
+    public function compile(string $targetModule, string $targetFile, string $sourceFilePath, ?string $type = null, ?string $themeName = null): ?string
     {
         if (!file_exists($sourceFilePath)) {
             return null;
@@ -136,8 +138,15 @@ class Compiler
             );
         }
 
+        // 确定类型和主题名（从第一个 sticker 获取）
+        if ($type === null && !empty($fileStickers)) {
+            $firstSticker = reset($fileStickers);
+            $type = $firstSticker['type'] ?? 'module';
+            $themeName = $firstSticker['theme_name'] ?? null;
+        }
+
         // 输出编译文件
-        $outputPath = $this->getOutputPath($targetModule, $targetFile);
+        $outputPath = $this->getOutputPath($targetModule, $targetFile, $type, $themeName);
         $outputDir = dirname($outputPath);
         if (!is_dir($outputDir)) {
             mkdir($outputDir, 0755, true);
@@ -183,12 +192,64 @@ class Compiler
      *
      * @param string $targetModule 目标模块
      * @param string $targetFile 目标文件路径
+     * @param string $type 类型 (module/theme)
+     * @param string|null $themeName 主题名（如果是主题类型）
      * @return string
      */
-    private function getOutputPath(string $targetModule, string $targetFile): string
+    private function getOutputPath(string $targetModule, string $targetFile, string $type = 'module', ?string $themeName = null): string
     {
-        $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR;
+        $modules = Env::getInstance()->getModuleList();
+        $module = $modules[$targetModule] ?? null;
+        $modulePath = $this->extractModulePathFromBasePath($module['base_path'] ?? '');
+
+        if ($type === 'theme' && $themeName) {
+            // 主题 Sticker 输出: generated/extends/theme/Weline_Sticker/{主题名}/{模块名}/{文件路径}
+            $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'theme' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR . $themeName . DIRECTORY_SEPARATOR;
+            if ($modulePath) {
+                $basePath .= str_replace('/', DIRECTORY_SEPARATOR, $modulePath) . DIRECTORY_SEPARATOR;
+            }
+        } else {
+            // 模块 Sticker 输出: generated/extends/module/Weline_Sticker/{模块名}/{文件路径}
+            $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'module' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR;
+            if ($modulePath) {
+                $basePath .= str_replace('/', DIRECTORY_SEPARATOR, $modulePath) . DIRECTORY_SEPARATOR;
+            }
+        }
+
         return $basePath . str_replace('/', DIRECTORY_SEPARATOR, $targetFile);
+    }
+
+    /**
+     * 从模块 base_path 提取模块路径名
+     * 例如: app/code/Weline/Sticker -> Weline/Sticker
+     *
+     * @param string $basePath 模块基础路径
+     * @return string
+     */
+    private function extractModulePathFromBasePath(string $basePath): string
+    {
+        if (empty($basePath)) {
+            return '';
+        }
+
+        // 标准化路径
+        $basePath = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, rtrim($basePath, '/\\'));
+
+        // 查找 app/code 或 vendor 目录
+        $appCodePos = strpos($basePath, DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
+        $vendorPos = strpos($basePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR);
+
+        if ($appCodePos !== false) {
+            // app/code/Weline/Sticker -> Weline/Sticker
+            $relativePath = substr($basePath, $appCodePos + strlen(DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR));
+            return str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+        } elseif ($vendorPos !== false) {
+            // vendor/Weline/Sticker -> Weline/Sticker
+            $relativePath = substr($basePath, $vendorPos + strlen(DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR));
+            return str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+        }
+
+        return '';
     }
 
     /**
@@ -289,7 +350,16 @@ class Compiler
                     continue;
                 }
 
-                $compiledPath = $this->compile($targetModule, $targetFile, $sourceFilePath);
+                // 从注册表获取类型信息
+                $type = 'module';
+                $themeName = null;
+                if (!empty($stickers)) {
+                    $firstSticker = reset($stickers);
+                    $type = $firstSticker['type'] ?? 'module';
+                    $themeName = $firstSticker['theme_name'] ?? null;
+                }
+
+                $compiledPath = $this->compile($targetModule, $targetFile, $sourceFilePath, $type, $themeName);
                 if ($compiledPath !== null) {
                     $result['success']++;
                 } else {

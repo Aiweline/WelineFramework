@@ -10,11 +10,11 @@
 namespace Weline\Database\Observer;
 
 use Weline\Database\Service\MigrationService;
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Event\Observer\ObserverAbstract;
 use Weline\Framework\Output\Cli\Printing;
 
-class SetupUpgradeObserver extends ObserverAbstract implements ObserverInterface
+class SetupUpgradeObserver implements ObserverInterface
 {
     private MigrationService $migrationService;
     private Printing $printing;
@@ -30,11 +30,10 @@ class SetupUpgradeObserver extends ObserverAbstract implements ObserverInterface
     /**
      * 处理系统升级事件
      * 
-     * @param \Weline\Framework\Event\Observer\ObserverAbstract $observer
-     * @param array $data
+     * @param Event &$event
      * @return void
      */
-    public function execute(\Weline\Framework\Event\Observer\ObserverAbstract $observer, array $data = []): void
+    public function execute(Event &$event): void
     {
         $this->printing->info("系统升级事件触发，开始检查所有模块的迁移");
         
