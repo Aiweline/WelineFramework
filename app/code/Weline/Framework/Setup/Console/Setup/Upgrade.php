@@ -16,6 +16,7 @@ namespace Weline\Framework\Setup\Console\Setup;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\Console\Server\Server;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Text;
@@ -48,6 +49,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
         $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
         $moduleUpdate->execute($args, $data);
+        
+        # 触发系统升级后事件
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Framework_Setup::upgrade_after');
     }
 
     /**
@@ -240,6 +246,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
         $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
         $moduleUpdate->execute([], []);
+        
+        # 触发系统升级后事件
+        /**@var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Framework_Setup::upgrade_after');
         
         $this->printing->success(__('系统识别到您初次安装！已为您初始化安装参数。'), __('安装'));
         $this->printing->success(__('您的后台入口地址密钥：%{1} ', Env::get('admin')), __('安装'));

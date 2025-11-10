@@ -79,14 +79,24 @@ class TemplateFetchFile implements ObserverInterface
             return; // 该文件没有 Sticker，直接返回
         }
 
+        // 获取 Sticker 信息以确定类型
+        $fileStickers = $this->stickerRegistry->getFileStickers($targetModule, $targetFile);
+        $type = 'module';
+        $themeName = null;
+        if (!empty($fileStickers)) {
+            $firstSticker = reset($fileStickers);
+            $type = $firstSticker['type'] ?? 'module';
+            $themeName = $firstSticker['theme_name'] ?? null;
+        }
+
         // 检查编译文件是否存在（使用缓存）
-        $compiledPath = $this->getCompiledPath($targetModule, $targetFile);
+        $compiledPath = $this->getCompiledPath($targetModule, $targetFile, $type, $themeName);
         
         if (!$this->checkFileExists($compiledPath)) {
             // 编译文件不存在，需要编译
             $sourcePath = $this->getSourcePath($filename, $targetModule, $targetFile);
             if ($sourcePath && file_exists($sourcePath)) {
-                $this->compiler->compile($targetModule, $targetFile, $sourcePath);
+                $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
                 // 重新检查编译文件
                 if (!$this->checkFileExists($compiledPath)) {
                     return; // 编译失败，使用原始文件
@@ -105,7 +115,7 @@ class TemplateFetchFile implements ObserverInterface
 
                 // 如果源文件更新，重新编译
                 if ($sourceMtime > $compiledMtime) {
-                    $this->compiler->compile($targetModule, $targetFile, $sourcePath);
+                    $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
                 }
             }
         }
@@ -205,13 +215,65 @@ class TemplateFetchFile implements ObserverInterface
      * 获取编译文件路径
      *
      * @param string $targetModule 目标模块
-     * @param string $targetFile 目标文件
+     * @param string $targetFile 目标文件路径
+     * @param string $type 类型 (module/theme)
+     * @param string|null $themeName 主题名（如果是主题类型）
      * @return string
      */
-    private function getCompiledPath(string $targetModule, string $targetFile): string
+    private function getCompiledPath(string $targetModule, string $targetFile, string $type = 'module', ?string $themeName = null): string
     {
-        $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR;
+        $modules = Env::getInstance()->getModuleList();
+        $module = $modules[$targetModule] ?? null;
+        $modulePath = $this->extractModulePathFromBasePath($module['base_path'] ?? '');
+
+        if ($type === 'theme' && $themeName) {
+            // 主题 Sticker 输出: generated/extends/theme/Weline_Sticker/{主题名}/{模块名}/{文件路径}
+            $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'theme' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR . $themeName . DIRECTORY_SEPARATOR;
+            if ($modulePath) {
+                $basePath .= str_replace('/', DIRECTORY_SEPARATOR, $modulePath) . DIRECTORY_SEPARATOR;
+            }
+        } else {
+            // 模块 Sticker 输出: generated/extends/module/Weline_Sticker/{模块名}/{文件路径}
+            $basePath = BP . 'generated' . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'module' . DIRECTORY_SEPARATOR . 'Weline_Sticker' . DIRECTORY_SEPARATOR;
+            if ($modulePath) {
+                $basePath .= str_replace('/', DIRECTORY_SEPARATOR, $modulePath) . DIRECTORY_SEPARATOR;
+            }
+        }
+
         return $basePath . str_replace('/', DIRECTORY_SEPARATOR, $targetFile);
+    }
+
+    /**
+     * 从模块 base_path 提取模块路径名
+     * 例如: app/code/Weline/Sticker -> Weline/Sticker
+     *
+     * @param string $basePath 模块基础路径
+     * @return string
+     */
+    private function extractModulePathFromBasePath(string $basePath): string
+    {
+        if (empty($basePath)) {
+            return '';
+        }
+
+        // 标准化路径
+        $basePath = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, rtrim($basePath, '/\\'));
+
+        // 查找 app/code 或 vendor 目录
+        $appCodePos = strpos($basePath, DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR);
+        $vendorPos = strpos($basePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR);
+
+        if ($appCodePos !== false) {
+            // app/code/Weline/Sticker -> Weline/Sticker
+            $relativePath = substr($basePath, $appCodePos + strlen(DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR));
+            return str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+        } elseif ($vendorPos !== false) {
+            // vendor/Weline/Sticker -> Weline/Sticker
+            $relativePath = substr($basePath, $vendorPos + strlen(DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR));
+            return str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+        }
+
+        return '';
     }
 
     /**
