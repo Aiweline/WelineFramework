@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Console\I18n;
 
+use Weline\Framework\Console\CommandInterface;
+
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use Weline\Framework\App\Env;

@@ -107,6 +107,8 @@ class Upgrade extends CommandAbstract
         }
 
         $commands = $this->scan();
+        // 注册命令别名
+        $commands = $this->registerAliases($commands);
         /**@var $file \Weline\Framework\System\File\Io\File */
         $file = ObjectManager::getInstance(\Weline\Framework\System\File\Io\File::class);
         $file->open(Env::path_COMMANDS_FILE, $file::mode_w_add);
@@ -233,6 +235,23 @@ class Upgrade extends CommandAbstract
                                 'type' => 'module',
                                 'module' => $module['name']
                             ];
+                            // 处理命令别名（从类常量读取）
+                            $aliases = [];
+                            if (defined($declaredClass . '::ALIASES')) {
+                                $aliases = $declaredClass::ALIASES;
+                            }
+                            if (!empty($aliases) && is_array($aliases)) {
+                                foreach ($aliases as $alias) {
+                                    if (is_string($alias) && !empty($alias)) {
+                                        $commands[$command_prefix . '#' . $module_name][$alias] = [
+                                            'tip' => $command_class->tip(),
+                                            'class' => $declaredClass,
+                                            'type' => 'module',
+                                            'module' => $module['name']
+                                        ];
+                                    }
+                                }
+                            }
                             $processedClasses[$declaredClass] = true;
                         }
                     } catch (\Throwable $exception) {
@@ -292,6 +311,23 @@ class Upgrade extends CommandAbstract
                         'type' => 'framework',
                         'module' => 'Weline_Framework'
                     ];
+                    // 处理命令别名（从类常量读取）
+                    $aliases = [];
+                    if (defined($class . '::ALIASES')) {
+                        $aliases = $class::ALIASES;
+                    }
+                    if (!empty($aliases) && is_array($aliases)) {
+                        foreach ($aliases as $alias) {
+                            if (is_string($alias) && !empty($alias)) {
+                                $commands[$command_prefix . '#Weline_Framework_' . $framework_module][$alias] = [
+                                    'tip' => $command_class->tip(),
+                                    'class' => $class,
+                                    'type' => 'framework',
+                                    'module' => 'Weline_Framework'
+                                ];
+                            }
+                        }
+                    }
                     $processedClasses[$class] = true;
                 } else {
                     if (DEV && CLI) {
@@ -306,6 +342,61 @@ class Upgrade extends CommandAbstract
             }
         }
 
+        return $commands;
+    }
+
+    /**
+     * @DESC         |注册命令别名
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 扫描所有命令，如果命令类实现了 aliases() 方法，则注册别名
+     *
+     * 参数区：
+     *
+     * @param array $commands 命令数组
+     * @return array 返回包含别名的命令数组
+     */
+    private function registerAliases(array $commands): array
+    {
+        foreach ($commands as $group => $group_commands) {
+            foreach ($group_commands as $command => $command_data) {
+                if (!isset($command_data['class'])) {
+                    continue;
+                }
+                
+                try {
+                    $command_class = ObjectManager::getInstance($command_data['class']);
+                    if ($command_class instanceof CommandInterface) {
+                        // 检查命令类是否实现了 aliases() 方法
+                        if (method_exists($command_class, 'aliases')) {
+                            $aliases = $command_class->aliases();
+                            if (is_array($aliases) && !empty($aliases)) {
+                                // 为每个别名注册命令
+                                foreach ($aliases as $alias) {
+                                    if (is_string($alias) && !empty($alias)) {
+                                        // 确保别名不存在，避免覆盖已有命令
+                                        if (!isset($commands[$group][$alias])) {
+                                            $commands[$group][$alias] = $command_data;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $exception) {
+                    // 如果无法实例化命令类，跳过别名注册
+                    if (DEV && CLI) {
+                        $this->printer->warning(__('无法注册命令别名：%{1} - %{2}', [$command_data['class'], $exception->getMessage()]));
+                    }
+                    continue;
+                }
+            }
+        }
+        
         return $commands;
     }
 }

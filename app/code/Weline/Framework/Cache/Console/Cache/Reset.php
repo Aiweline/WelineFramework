@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Cache\Console\Cache;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\System;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Output\Cli\Printing;

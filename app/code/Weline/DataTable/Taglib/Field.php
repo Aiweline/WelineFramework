@@ -63,8 +63,17 @@ class Field implements TaglibInterface
     static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attrs) {
+            // 检查是否为后端请求
             /** @var Request $req */
             $req = ObjectManager::getInstance(Request::class);
+            if (!$req->isBackend() && !$req->isApiBackend()) {
+                // 前端请求直接返回空（开发环境返回注释说明）
+                if (defined('DEV') && DEV) {
+                    $name = $attrs['name'] ?? 'unknown';
+                    return "<!-- DataTable 字段标签只能在后端使用，当前为前端请求（字段：{$name}） -->";
+                }
+                return '';
+            }
 
             $name = $attrs['name'] ?? '';
             $belong = $attrs['belong'] ?? '';

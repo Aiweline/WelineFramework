@@ -18,6 +18,7 @@ use Weline\Framework\Output\Cli\Printing;
  */
 class CreateTables implements CommandInterface
 {
+
     public function execute(array $args = [], array $data = [])
     {
         echo "\n=== Creating AI Module Tables ===\n\n";

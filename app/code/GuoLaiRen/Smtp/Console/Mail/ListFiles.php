@@ -17,6 +17,7 @@ use Weline\Framework\Output\Cli\Printing;
 
 class ListFiles implements CommandInterface
 {
+
     private Printing $printer;
     private string $baseDir;
 

@@ -26,6 +26,7 @@ use Weline\Framework\Console\CommandInterface;
  */
 class Scan implements CommandInterface
 {
+
     /**
      * @var AdapterScanner
      */

@@ -15,6 +15,7 @@
 - [禁止使用 fetchOne() 方法](#禁止使用-fetchone-方法)
 - [ORM 查询使用规范](#orm-查询使用规范)
 - [环境配置读取错误](#环境配置读取错误)
+- [禁止使用 routes.xml 文件](#禁止使用-routesxml-文件)
 
 ---
 
@@ -1277,6 +1278,161 @@ $dbHost = Env::get('db.master.hostname', '127.0.0.1');
 
 ---
 
+## 禁止使用 routes.xml 文件
+
+**重要提示**：Weline Framework 的路由系统是自动扫描和注册的，**禁止使用 `routes.xml` 文件进行路由配置**。`routes.xml` 不是框架的规约文件，使用它会导致路由无法正确注册。
+
+### 错误示例
+
+#### 错误1：创建 routes.xml 文件配置路由
+```xml
+<!-- ❌ 错误：禁止使用 routes.xml 文件 -->
+<!-- app/code/Weline/YourModule/etc/frontend/routes.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+    <route path="/yourmodule/test" method="GET">
+        <controller>Weline\YourModule\Controller\Test\Index::index</controller>
+    </route>
+</routes>
+```
+
+#### 错误2：认为需要手动配置路由
+```php
+// ❌ 错误：认为需要创建 routes.xml 才能访问控制器
+// 实际上框架会自动扫描 Controller 目录并注册路由
+```
+
+### 正确做法
+
+#### 正确1：路由自动注册机制
+Weline Framework 的路由系统会自动扫描 `Controller/` 目录下的控制器，并根据控制器位置和方法名自动生成路由。
+
+**路由生成规则**：
+- `Controller/Frontend/Test/Index.php` → `{模块router}/frontend/test/index`
+- `Controller/Backend/User/List.php` → `{模块router}/backend/user/list`
+- `Controller/Api/Rest/V1/User.php` → `rest/v1/{模块router}/user`
+
+**控制器方法解析**：
+- `index()` → `/` 或 `/index`
+- `getData()` → `/data` (GET请求)
+- `postSave()` → `/save` (POST请求)
+
+#### 正确2：路由注册流程
+```bash
+# ✅ 正确：运行 setup:upgrade 命令自动注册路由
+php bin/w setup:upgrade
+
+# ✅ 正确：升级指定模块并注册路由
+php bin/w setup:upgrade -m YourModule
+```
+
+#### 正确3：控制器位置规范
+```php
+// ✅ 正确：将控制器放在正确的目录下，框架会自动注册路由
+
+// 前端控制器：Controller/Frontend/Test/Index.php
+namespace Weline\YourModule\Controller\Frontend\Test;
+class Index extends FrontendController
+{
+    public function index() { /* 路由：yourmodule/frontend/test/index */ }
+}
+
+// 后端控制器：Controller/Backend/User/List.php
+namespace Weline\YourModule\Controller\Backend\User;
+class List extends BackendController
+{
+    public function index() { /* 路由：yourmodule/backend/user/list */ }
+}
+```
+
+### 路由配置方式
+
+#### 方式1：模块路由别名（推荐）
+```php
+// ✅ 正确：在 etc/env.php 中配置路由别名
+<?php
+return [
+    'router' => 'yourmodule'  // 设置路由别名，默认为模块名
+];
+```
+
+#### 方式2：控制器自动注册
+```php
+// ✅ 正确：框架自动扫描 Controller 目录并注册路由
+// 无需任何配置文件，只需将控制器放在正确位置
+```
+
+### 常见错误场景
+
+#### 场景1：创建 routes.xml 文件
+```xml
+<!-- ❌ 错误：不要创建 routes.xml 文件 -->
+<routes>
+    <route path="/test" method="GET">
+        <controller>Test::index</controller>
+    </route>
+</routes>
+```
+
+**正确做法**：
+- 删除 `routes.xml` 文件
+- 将控制器放在 `Controller/Frontend/Test/Index.php`
+- 运行 `php bin/w setup:upgrade` 注册路由
+
+#### 场景2：认为路由需要手动配置
+```php
+// ❌ 错误：认为需要手动配置路由才能访问
+// 实际上框架会自动注册
+```
+
+**正确做法**：
+- 理解框架的路由自动注册机制
+- 将控制器放在正确的目录结构下
+- 运行 `setup:upgrade` 命令注册路由
+
+#### 场景3：路由无法访问时创建 routes.xml
+```php
+// ❌ 错误：路由无法访问时，不应该创建 routes.xml
+// 应该检查：
+// 1. 控制器位置是否正确
+// 2. 是否运行了 setup:upgrade
+// 3. 路由路径是否正确
+```
+
+**正确排查步骤**：
+1. 检查控制器是否在正确的目录（`Controller/Frontend/` 或 `Controller/Backend/`）
+2. 运行 `php bin/w setup:upgrade -m YourModule` 注册路由
+3. 检查路由列表：`php bin/w route:list | Select-String -Pattern "yourmodule"`
+4. 验证控制器方法名是否正确
+
+### 要点总结
+
+1. **禁止使用 routes.xml**：
+   - ❌ 不要创建 `etc/frontend/routes.xml` 或 `etc/backend/routes.xml`
+   - ❌ `routes.xml` 不是框架的规约文件
+   - ✅ 框架会自动扫描 Controller 目录并注册路由
+
+2. **路由自动注册**：
+   - ✅ 将控制器放在 `Controller/Frontend/` 或 `Controller/Backend/` 目录
+   - ✅ 运行 `php bin/w setup:upgrade` 自动注册路由
+   - ✅ 路由格式：`{模块router}/{控制器目录}/{控制器名}/{方法名}`
+
+3. **路由配置方式**：
+   - ✅ 在 `etc/env.php` 中配置 `router` 别名
+   - ✅ 通过控制器位置和方法名自动生成路由
+   - ❌ 不要使用 `routes.xml` 手动配置
+
+4. **路由调试**：
+   - 使用 `php bin/w route:list` 查看所有注册的路由
+   - 使用 `php bin/w setup:upgrade` 重新注册路由
+   - 检查控制器位置和方法名是否正确
+
+5. **特殊路由需求**：
+   - 如果需要自定义路由，应该通过 `Controller/Router.php` 实现 `RouterInterface` 接口
+   - 而不是使用 `routes.xml` 文件
+
+---
+
 ## 快速检查清单
 
 生成代码时，请检查以下事项：
@@ -1304,6 +1460,9 @@ $dbHost = Env::get('db.master.hostname', '127.0.0.1');
 - [ ] **环境配置读取**：是否使用 `Env::get()` 静态方法而不是 `getInstance()->getConfig()`
 - [ ] **环境配置读取**：是否使用点号（`.`）分隔符而不是斜杠（`/`）
 - [ ] **环境配置读取**：是否提供了默认值作为第二个参数
+- [ ] **禁止使用 routes.xml**：是否创建了 `routes.xml` 文件（禁止使用）
+- [ ] **禁止使用 routes.xml**：是否理解路由自动注册机制
+- [ ] **禁止使用 routes.xml**：是否通过控制器位置自动生成路由
 
 ---
 

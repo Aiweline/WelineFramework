@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\UnitTest\Console\PhpUnit;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;

@@ -102,6 +102,23 @@ abstract class CliAbstract implements CommandInterface
     }
 
     /**
+     * @DESC         |命令别名（默认实现）
+     *
+     * @Author       秋枫雁飞
+     * @Email        aiweline@qq.com
+     * @Forum        https://bbs.aiweline.com
+     * @Description  此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+     *
+     * 参数区：
+     *
+     * @return array 默认返回空数组，子类可以重写此方法返回别名
+     */
+    public function aliases(): array
+    {
+        return [];
+    }
+
+    /**
      * @DESC         |方法描述
      *
      * @Author       秋枫雁飞

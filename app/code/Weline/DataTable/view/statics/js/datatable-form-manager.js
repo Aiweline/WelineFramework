@@ -14,14 +14,35 @@ if (typeof __ === 'undefined') {
     }
 }
 
-window.DataTableFormManager = {
-    // 表单实例存储
-    instances: {},
+// DataTableFormManager 单例模式
+(function() {
+    'use strict';
+    
+    // 如果已经存在实例，直接返回
+    if (window.DataTableFormManager && window.DataTableFormManager._instance) {
+        return window.DataTableFormManager;
+    }
 
-    // 配置选项
-    config: {
-        apiUrl: '/api/rest/v1/datatable',
-        fieldApiUrl: '/api/rest/v1/datatable/fields',
+    // 创建单例实例
+    const DataTableFormManagerInstance = {
+        _instance: true, // 标记为单例实例
+        _initialized: false,
+        
+        // 表单实例存储
+        instances: {},
+
+        // 配置选项
+        config: {
+        apiUrl: (typeof window !== 'undefined' && typeof window.api === 'function') 
+            ? window.api('datatable/rest/v1') 
+            : (typeof window !== 'undefined' && window.site && window.site.api_host)
+                ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1'
+                : '/api/rest/v1/datatable',
+        fieldApiUrl: (typeof window !== 'undefined' && typeof window.api === 'function') 
+            ? window.api('datatable/rest/v1/form/fields') 
+            : (typeof window !== 'undefined' && window.site && window.site.api_host)
+                ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1/form/fields'
+                : '/api/rest/v1/datatable/form/fields',
         validateOnChange: true,
         autoSave: false,
         showValidationErrors: true,
@@ -103,7 +124,10 @@ window.DataTableFormManager = {
         };
 
         // 发送请求获取字段信息
-        fetch('/datatable/api/form/fields', {
+        const apiUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
+            ? window.api('datatable/rest/v1/form/fields') 
+            : this.config.fieldApiUrl;
+        fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -296,7 +320,12 @@ window.DataTableFormManager = {
         const instance = this.instances[formId];
         if (!instance) return;
 
-        fetch('/datatable/api/form/record', {
+        const recordApiUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
+            ? window.api('datatable/rest/v1/form/record') 
+            : (typeof window !== 'undefined' && window.site && window.site.api_host)
+                ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/rest/v1/form/record'
+                : '/api/rest/v1/datatable/form/record';
+        fetch(recordApiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1320,11 +1349,16 @@ window.DataTableFormManager = {
             this.addEditButtonToTable(tableSelector, formId);
         });
     }
-};
+    };
 
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('DataTableFormManager 已加载');
+    // 将实例暴露到全局
+    window.DataTableFormManager = DataTableFormManagerInstance;
+    
+    // 页面加载完成后初始化
+    if (!DataTableFormManagerInstance._initialized) {
+        DataTableFormManagerInstance._initialized = true;
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('DataTableFormManager 已加载');
 
     // 自动初始化页面上的所有表单
     const forms = document.querySelectorAll('.w-form-modal');
@@ -1351,43 +1385,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // 自动为表格添加编辑按钮
-    setTimeout(() => {
-        DataTableFormManager.autoAddEditButtons();
-    }, 500);
-});
-
-// 监听表格内容变化，自动添加编辑按钮
-if (typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(function (mutations) {
-        let shouldUpdate = false;
-        mutations.forEach(function (mutation) {
-            if (mutation.type === 'childList') {
-                mutation.addedNodes.forEach(function (node) {
-                    if (node.nodeType === 1) { // Element node
-                        if (node.tagName === 'TR' || node.querySelector('tr')) {
-                            shouldUpdate = true;
-                        }
-                    }
-                });
-            }
-        });
-
-        if (shouldUpdate) {
+            // 自动为表格添加编辑按钮
             setTimeout(() => {
                 DataTableFormManager.autoAddEditButtons();
-            }, 100);
-        }
-    });
+            }, 500);
+            
+            // 监听表格内容变化，自动添加编辑按钮
+            if (typeof MutationObserver !== 'undefined') {
+                const observer = new MutationObserver(function (mutations) {
+                    let shouldUpdate = false;
+                    mutations.forEach(function (mutation) {
+                        if (mutation.type === 'childList') {
+                            mutation.addedNodes.forEach(function (node) {
+                                if (node.nodeType === 1) { // Element node
+                                    if (node.tagName === 'TR' || node.querySelector('tr')) {
+                                        shouldUpdate = true;
+                                    }
+                                }
+                            });
+                        }
+                    });
 
-    // 观察表格容器的变化
-    setTimeout(() => {
-        const tableContainers = document.querySelectorAll('.w-datatable, .datatable-container, table');
-        tableContainers.forEach(container => {
-            observer.observe(container, {
-                childList: true,
-                subtree: true
-            });
+                    if (shouldUpdate) {
+                        setTimeout(() => {
+                            DataTableFormManager.autoAddEditButtons();
+                        }, 100);
+                    }
+                });
+
+                // 观察表格容器的变化
+                setTimeout(() => {
+                    const tableContainers = document.querySelectorAll('.w-datatable, .datatable-container, table');
+                    tableContainers.forEach(container => {
+                        observer.observe(container, {
+                            childList: true,
+                            subtree: true
+                        });
+                    });
+                }, 1000);
+            }
         });
-    }, 1000);
-}
+    }
+    
+    return window.DataTableFormManager;
+})();

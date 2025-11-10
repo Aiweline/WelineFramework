@@ -14,6 +14,7 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Rollback implements CommandInterface
 {
+
     private MigrationService $migrationService;
     private Printing $printing;
     

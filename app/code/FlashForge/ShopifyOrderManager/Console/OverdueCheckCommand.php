@@ -12,6 +12,7 @@ use FlashForge\ShopifyOrderManager\Helper\OrderSync;
  */
 class OverdueCheckCommand implements CommandInterface
 {
+
     private OrderSync $orderSync;
 
     public function __construct()

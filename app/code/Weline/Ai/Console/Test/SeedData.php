@@ -14,6 +14,7 @@ use Weline\Ai\Service\AiApiKeyService;
  */
 class SeedData implements CommandInterface
 {
+
     private AiModel $aiModel;
     private AiTenant $aiTenant;
     private AiApiKeyService $apiKeyService;

@@ -9,6 +9,8 @@
 
 namespace Weline\Framework\Plugin\Console\Plugin\Cache;
 
+use Weline\Framework\Console\CommandInterface;
+
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Plugin\Cache\PluginCache;

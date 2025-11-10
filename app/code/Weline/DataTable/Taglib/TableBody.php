@@ -74,6 +74,17 @@ class TableBody implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            // 检查是否为后端请求
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            if (!$request->isBackend() && !$request->isApiBackend()) {
+                // 前端请求直接返回空（开发环境返回注释说明）
+                if (defined('DEV') && DEV) {
+                    return '<!-- DataTable 表体标签只能在后端使用，当前为前端请求 -->';
+                }
+                return '';
+            }
+            
             $scope = $attributes['scope'] ?? '';
             $model = $attributes['model'] ?? '';
             $editable = filter_var($attributes['editable'] ?? true, FILTER_VALIDATE_BOOLEAN);
@@ -87,8 +98,13 @@ class TableBody implements TaglibInterface
             $scope = $scope . '-body';
             TableContext::pushChildTag('t-body', $scope, $inheritedAttributes);
             $content = $tag_data[2] ?? '';
+            
+            // HTML 属性转义
+            $modelHtml = htmlspecialchars($model ?? '', ENT_QUOTES, 'UTF-8');
+            $scopeHtml = htmlspecialchars($scope ?? '', ENT_QUOTES, 'UTF-8');
+            
             $result = <<<HTML
-<tbody class="datatable-body" data-model="{$model}" data-scope="{$scope}">
+<tbody class="datatable-body" data-model="{$modelHtml}" data-scope="{$scopeHtml}">
     {$content}
 </tbody>
 HTML;

@@ -17,7 +17,6 @@ use Weline\Queue\Model\Queue;
 
 class Listing implements CommandInterface
 {
-
     private \Weline\Framework\Output\Cli\Printing $printing;
     private Queue\Type $type;
 

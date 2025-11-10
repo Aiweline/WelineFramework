@@ -112,28 +112,7 @@ class DataTable extends BackendRestController
             $modelInstance = w_obj($model);
             
             // 获取模型字段信息
-            $modelFields = [];
-
-            // 尝试多种方式获取字段信息
-            try {
-                if (method_exists($modelInstance, 'getColumns')) {
-                    $columns = $modelInstance->getColumns();
-                    foreach ($columns as $column) {
-                        $modelFields[] = $column['Field'];
-                    }
-                } elseif (method_exists($modelInstance, 'columns')) {
-                    $modelFields = $modelInstance->columns();
-                } elseif (method_exists($modelInstance, 'getFields')) {
-                    $fields = $modelInstance->getFields();
-                    if (is_array($fields)) {
-                        $modelFields = array_keys($fields);
-                    }
-                }
-            } catch (\Exception $e) {
-                error_log("DataTable API: 获取字段信息失败: " . $e->getMessage());
-                // 使用默认字段
-                $modelFields = ['id', 'name', 'status', 'created_at', 'updated_at'];
-            }
+            $columns = $modelInstance->columns();
 
             $primaryKey = method_exists($modelInstance, 'getPrimaryKey') ?
                 $modelInstance->getPrimaryKey() : 'id';
@@ -143,16 +122,26 @@ class DataTable extends BackendRestController
             $displayFields = [];
             $filterFields = [];
             
-            foreach ($modelFields as $fieldName) {
-                // 确保字段名是字符串
-                if (!is_string($fieldName)) {
+            // columns() 返回的是 SHOW FULL COLUMNS 的结果数组
+            foreach ($columns as $column) {
+                // 提取字段名
+                $fieldName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? '') : $column;
+                if (empty($fieldName) || !is_string($fieldName)) {
                     continue;
                 }
 
+                // 获取字段类型
+                $fieldType = is_array($column) && isset($column['Type']) ? $column['Type'] : '';
+                
+                // 从数据库字段信息中获取标签和类型
+                $fieldLabel = is_array($column) && isset($column['Comment']) && !empty($column['Comment']) 
+                    ? $column['Comment'] 
+                    : $this->getFieldLabel($fieldName);
+                
                 $fieldInfo = [
                     'name' => $fieldName,
-                    'label' => $this->getFieldLabel($fieldName),
-                    'type' => $this->getFieldType($fieldName),
+                    'label' => $fieldLabel,
+                    'type' => $this->getFieldType($fieldName, $fieldType),
                     'sortable' => true,
                     'searchable' => true,
                     'visible' => true,
@@ -160,8 +149,8 @@ class DataTable extends BackendRestController
                     'is_primary' => $fieldName === $primaryKey,
                     'primary_key' => $fieldName === $primaryKey,
                     'required' => $fieldName === $primaryKey,
-                    'placeholder' => '请输入' . $this->getFieldLabel($fieldName),
-                    'width' => $this->getFieldWidth($fieldName),
+                    'placeholder' => '请输入' . $fieldLabel,
+                    'width' => $this->getFieldWidth($fieldName, $fieldType),
                     'min_width' => null,
                     'max_width' => null,
                     'resizable' => true,
@@ -724,7 +713,7 @@ class DataTable extends BackendRestController
             $modelInstance = new $model();
             
             // 获取模型字段信息
-            $fields = $modelInstance->getFields();
+            $fields = $modelInstance->columns();
             
             // 获取字段选项（如果有的话）
             $options = [];
@@ -772,11 +761,27 @@ class DataTable extends BackendRestController
     /**
      * 获取字段类型
      */
-    private function getFieldType($fieldName)
+    private function getFieldType($fieldName, $dbType = '')
     {
         // 确保字段名是字符串
         if (!is_string($fieldName)) {
             return 'text';
+        }
+
+        // 如果提供了数据库类型，根据数据库类型推断
+        if (!empty($dbType)) {
+            $dbType = strtolower($dbType);
+            if (strpos($dbType, 'int') !== false) {
+                return 'number';
+            } elseif (strpos($dbType, 'decimal') !== false || strpos($dbType, 'float') !== false || strpos($dbType, 'double') !== false) {
+                return 'number';
+            } elseif (strpos($dbType, 'date') !== false || strpos($dbType, 'time') !== false) {
+                return 'datetime';
+            } elseif (strpos($dbType, 'text') !== false) {
+                return 'textarea';
+            } elseif (strpos($dbType, 'enum') !== false || strpos($dbType, 'set') !== false) {
+                return 'select';
+            }
         }
 
         $types = [
@@ -798,11 +803,23 @@ class DataTable extends BackendRestController
     /**
      * 获取字段宽度
      */
-    private function getFieldWidth($fieldName)
+    private function getFieldWidth($fieldName, $dbType = '')
     {
         // 确保字段名是字符串
         if (!is_string($fieldName)) {
-            return 120;
+            return '120px';
+        }
+
+        // 如果提供了数据库类型，根据类型推断宽度
+        if (!empty($dbType)) {
+            $dbType = strtolower($dbType);
+            if (strpos($dbType, 'int') !== false) {
+                return '100px';
+            } elseif (strpos($dbType, 'date') !== false || strpos($dbType, 'time') !== false) {
+                return '180px';
+            } elseif (strpos($dbType, 'text') !== false) {
+                return '300px';
+            }
         }
 
         $widths = [
@@ -1223,12 +1240,10 @@ class DataTable extends BackendRestController
             $validatedData = [];
 
             // 获取模型字段信息
+            $columns = $modelInstance->columns();
             $fields = [];
-            if (method_exists($modelInstance, 'getColumns')) {
-                $columns = $modelInstance->getColumns();
-                foreach ($columns as $column) {
-                    $fields[$column['Field']] = $column;
-                }
+            foreach ($columns as $fieldName) {
+                $fields[$fieldName] = ['Field' => $fieldName];
             }
 
             // 验证每个字段
@@ -1460,19 +1475,8 @@ class DataTable extends BackendRestController
                 try {
                     $modelInstance = w_obj($modelClass);
                     
-                    // 尝试获取字段列表
-                    $fields = [];
-                    if (method_exists($modelInstance, 'getColumns')) {
-                        $columns = $modelInstance->getColumns();
-                        foreach ($columns as $column) {
-                            $fields[] = $column['Field'];
-                        }
-                    } elseif (method_exists($modelInstance, 'getFields')) {
-                        $fieldDefs = $modelInstance->getFields();
-                        if (is_array($fieldDefs)) {
-                            $fields = array_keys($fieldDefs);
-                        }
-                    }
+                    // 获取字段列表
+                    $fields = $modelInstance->columns();
                     
                     // 添加别名前缀
                     foreach ($fields as $field) {
