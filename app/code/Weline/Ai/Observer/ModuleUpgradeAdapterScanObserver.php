@@ -7,15 +7,15 @@ declare(strict_types=1);
  * 邮箱：aiweline@qq.com
  * 网址：aiweline.com
  * 论坛：https://bbs.aiweline.com
- * 日期：<?= date('Y/m/d H:i:s') ?>
+ * 日期：2025/01/XX
 
  */
 
 namespace Weline\Ai\Observer;
 
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Event\Observer\ObserverAbstract;
 use Weline\Framework\Output\Cli\Printing;
 
 /**
@@ -27,7 +27,7 @@ use Weline\Framework\Output\Cli\Printing;
  * - 注册新发现的适配器
  * - 更新适配器信息
  */
-class ModuleUpgradeAdapterScanObserver extends ObserverAbstract implements ObserverInterface
+class ModuleUpgradeAdapterScanObserver implements ObserverInterface
 {
     /**
      * @var AdapterScanner
@@ -56,50 +56,35 @@ class ModuleUpgradeAdapterScanObserver extends ObserverAbstract implements Obser
     /**
      * 执行 Observer 逻辑
      * 
-     * @param ObserverAbstract $observer
-     * @param array $data
+     * @param Event $event
      * @return void
      */
-    public function execute(ObserverAbstract $observer, array $data = []): void
+    public function execute(Event &$event): void
     {
         try {
-            $moduleName = $data['module_name'] ?? '';
+            // 从事件中获取数据
+            $eventData = $event->getData('data');
+            if (is_array($eventData)) {
+                $moduleName = $eventData['module_name'] ?? '';
+            } elseif (is_object($eventData) && method_exists($eventData, 'getData')) {
+                $moduleName = $eventData->getData('module_name') ?? '';
+            } else {
+                $moduleName = '';
+            }
             
-            $this->printing->info(__('开始扫描场景适配器...'));
-            
+            // 静默扫描，不输出信息，避免干扰升级流程
             // 扫描所有适配器
             $scannedAdapters = $this->adapterScanner->scanAllAdapters();
             
-            if (empty($scannedAdapters)) {
-                $this->printing->info(__('未找到任何适配器'));
-            } else {
-                $this->printing->success(__('成功扫描并注册 %{count} 个适配器', ['count' => count($scannedAdapters)]));
-                
-                // 显示扫描到的适配器
-                foreach ($scannedAdapters as $adapter) {
-                    $this->printing->println(sprintf(
-                        "  • %s (%s) v%s - %s",
-                        $adapter->getName(),
-                        $adapter->getCode(),
-                        $adapter->getVersion(),
-                        $adapter->getDescription()
-                    ));
-                }
+            // 只在有结果时输出
+            if (!empty($scannedAdapters)) {
+                $this->printing->note(__('扫描到 %{count} 个场景适配器', ['count' => count($scannedAdapters)]));
             }
             
-            // 显示统计信息
-            $stats = $this->adapterScanner->getAdapterStats();
-            $this->printing->info(__("\n适配器统计:"));
-            $this->printing->info(__('总数：%{total}', ['total' => $stats['total']]));
-            $this->printing->info(__('激活：%{active}', ['active' => $stats['active']]));
-            $this->printing->info(__('未激活：%{inactive}', ['inactive' => $stats['inactive']]));
-            
-            $this->printing->success(__("\n场景适配器扫描完成！"));
-            
-        } catch (\Exception $e) {
-            $this->printing->error(__('场景适配器扫描失败: %{error}', ['error' => $e->getMessage()]));
-            error_log("场景适配器扫描失败: " . $e->getMessage());
-            // 不抛出异常，避免影响模块升级流程
+        } catch (\Throwable $e) {
+            // 捕获所有异常，静默处理，避免影响模块升级流程
+            error_log("场景适配器扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            // 不输出错误信息，避免干扰升级流程
         }
     }
 }

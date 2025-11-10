@@ -241,6 +241,7 @@ class Multipass extends BackendController
 ```
 
 ### 要点
+- **事件配置文件名称**：**必须**使用 `etc/event.xml`（单数），**禁止**使用 `events.xml`（复数）
 - 命名空间前缀使用 `xmlns:xs` 而不是 `xmlns:xsi`
 - Schema 位置必须是 `urn:Weline_Framework::Event/etc/xsd/event.xsd`
 - 必须添加 `xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd"` 属性
@@ -250,6 +251,7 @@ class Multipass extends BackendController
   - `disabled="false"`: 是否禁用
   - `shared="true"`: 是否共享实例
   - `sort="0"`: 执行顺序
+- **框架不兼容**：框架只扫描 `event.xml`，不会扫描 `events.xml`，不要使用复数形式
 
 ---
 
@@ -1443,6 +1445,7 @@ return [
 - [ ] 子类属性的访问级别是否与父类一致或更宽松
 - [ ] 子类属性的类型声明是否与父类完全一致
 - [ ] XML 配置文件是否使用正确的命名空间和属性格式
+- [ ] **事件配置文件名称**：是否使用 `etc/event.xml`（单数）而不是 `etc/events.xml`（复数）
 - [ ] 是否存在类名冲突（控制器类名与导入的模型类名相同），如有则使用别名
 - [ ] 删除功能是否使用 `w-delete` 组件而不是自定义 JavaScript
 - [ ] 后端删除方法是否使用 `getParams()` 支持 JSON 和表单数据

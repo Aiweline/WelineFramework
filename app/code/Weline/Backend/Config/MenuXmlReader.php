@@ -37,6 +37,11 @@ class MenuXmlReader extends XmlReader
         $has_orders = [];
         $data = [];
         foreach ($configs as $module_and_file => $config) {
+            // 跳过没有正确格式的配置
+            if (!isset($config['menus']) || !is_array($config['menus'])) {
+                error_log(__('跳过格式不正确的菜单配置文件：%{1}', [$module_and_file]));
+                continue;
+            }
             $m_a_f_arr = explode('::', $module_and_file);
             $module = array_shift($m_a_f_arr);
             $module_menu_file = array_pop($m_a_f_arr);

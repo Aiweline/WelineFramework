@@ -173,6 +173,8 @@ class StickerRegistry
                 'source_module' => $sourceModule,
                 'sticker_file' => $stickerFile,
                 'sticker_relative_path' => $sticker['sticker_relative_path'] ?? '',
+                'type' => $sticker['type'] ?? 'module', // module 或 theme
+                'theme_name' => $sticker['theme_name'] ?? null, // 主题名（如果是主题类型）
                 'actions' => $rules
             ];
         }
