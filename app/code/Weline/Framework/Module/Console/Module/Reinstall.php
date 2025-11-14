@@ -19,6 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Config\ModuleFileReader;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Model\Module;
+use Weline\Framework\Register\Register;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Db\ModelSetup;
 
@@ -44,6 +45,11 @@ class Reinstall extends CommandAbstract
      * @var string 统一的备份批次时间戳
      */
     private string $backupTimestamp = '';
+    
+    /**
+     * @var array 命令参数
+     */
+    private array $args = [];
 
     public function __construct(
         Printing         $printer,
@@ -69,6 +75,9 @@ class Reinstall extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 保存参数供后续使用
+        $this->args = $args;
+        
         // 1. 检查是否在开发模式
         $deploy_mode = Env::get('deploy', 'prod');
         if ($deploy_mode !== 'dev' && $deploy_mode !== 'development') {
@@ -102,38 +111,45 @@ class Reinstall extends CommandAbstract
             }
         }
 
-        // 4. 显示警告信息并要求确认
-        $this->printer->error('');
-        $this->printer->error('╔════════════════════════════════════════════════════════════════╗');
-        $this->printer->error('║                      ⚠️  危险操作警告 ⚠️                        ║');
-        $this->printer->error('╚════════════════════════════════════════════════════════════════╝');
-        $this->printer->error('');
-        $this->printer->warning(__('您即将重新安装以下模块：'));
-        foreach ($moduleNames as $moduleName) {
-            $this->printer->warning('  - ' . $moduleName);
-        }
-        $this->printer->error('');
-        $this->printer->warning(__('此操作将执行以下步骤：'));
-        $this->printer->note(__('1. 备份模块的所有数据库表（备份到 var/backup/db/ 目录）'));
-        $this->printer->note(__('2. 复制数据库表并添加时间戳（如：demo → demo_backup_2025_10_27_14_30_00）'));
-        $this->printer->note(__('3. 删除模块的所有数据库表'));
-        $this->printer->note(__('4. 从 app/etc/modules.php 中删除模块注册信息'));
-        $this->printer->note(__('5. 从 app/etc/module_dependencies.php 中删除模块依赖信息'));
-        $this->printer->note(__('6. 重新安装指定的模块'));
-        $this->printer->note(__('7. 询问是否清理历史备份表'));
-        $this->printer->error('');
-        $this->printer->error(__('⚠️  警告：此操作不可逆！所有模块数据将被永久删除！'));
-        $this->printer->error(__('⚠️  警告：虽然会自动备份，但请确保您已手动备份重要数据！'));
-        $this->printer->error(__('⚠️  警告：如果有其他模块依赖于这些模块，可能会导致系统错误！'));
-        $this->printer->error('');
+        // 4. 检查是否强制模式（-f 或 --force）
+        $force = isset($args['f']) || isset($args['force']);
         
-        // 5. 要求用户输入确认
-        $this->printer->setup(__('请输入 "yes" 或 "y" 确认继续，输入其他任何内容取消：'));
-        $confirm = strtolower(trim($this->system->input()));
-        
-        if ($confirm !== 'yes' && $confirm !== 'y') {
-            $this->printer->note(__('操作已取消。'));
-            exit(0);
+        // 5. 显示警告信息并要求确认（除非是强制模式）
+        if (!$force) {
+            $this->printer->error('');
+            $this->printer->error('╔════════════════════════════════════════════════════════════════╗');
+            $this->printer->error('║                      ⚠️  危险操作警告 ⚠️                        ║');
+            $this->printer->error('╚════════════════════════════════════════════════════════════════╝');
+            $this->printer->error('');
+            $this->printer->warning(__('您即将重新安装以下模块：'));
+            foreach ($moduleNames as $moduleName) {
+                $this->printer->warning('  - ' . $moduleName);
+            }
+            $this->printer->error('');
+            $this->printer->warning(__('此操作将执行以下步骤：'));
+            $this->printer->note(__('1. 备份模块的所有数据库表（备份到 var/backup/db/ 目录）'));
+            $this->printer->note(__('2. 复制数据库表并添加时间戳（如：demo → demo_backup_2025_10_27_14_30_00）'));
+            $this->printer->note(__('3. 删除模块的所有数据库表'));
+            $this->printer->note(__('4. 从 app/etc/modules.php 中删除模块注册信息'));
+            $this->printer->note(__('5. 从 app/etc/module_dependencies.php 中删除模块依赖信息'));
+            $this->printer->note(__('6. 重新安装指定的模块'));
+            $this->printer->note(__('7. 询问是否清理历史备份表'));
+            $this->printer->error('');
+            $this->printer->error(__('⚠️  警告：此操作不可逆！所有模块数据将被永久删除！'));
+            $this->printer->error(__('⚠️  警告：虽然会自动备份，但请确保您已手动备份重要数据！'));
+            $this->printer->error(__('⚠️  警告：如果有其他模块依赖于这些模块，可能会导致系统错误！'));
+            $this->printer->error('');
+            
+            // 要求用户输入确认
+            $this->printer->setup(__('请输入 "yes" 或 "y" 确认继续，输入其他任何内容取消：'));
+            $confirm = strtolower(trim($this->system->input()));
+            
+            if ($confirm !== 'yes' && $confirm !== 'y') {
+                $this->printer->note(__('操作已取消。'));
+                exit(0);
+            }
+        } else {
+            $this->printer->note(__('强制模式：跳过确认，直接执行重装...'));
         }
 
         // 6. 生成统一的备份批次时间戳
@@ -154,9 +170,82 @@ class Reinstall extends CommandAbstract
         // 7. 执行 module:upgrade 重新安装模块
         $this->printer->note('');
         $this->printer->setup(__('开始重新安装模块...'));
-        /**@var Upgrade $upgradeCommand */
-        $upgradeCommand = ObjectManager::getInstance(Upgrade::class);
-        $upgradeCommand->execute(['module' => $moduleNames]);
+        
+        // 确保模块被标记为安装状态（reinstallModule已经删除了，这里再次确认）
+        $modulesFile = Env::path_MODULES_FILE;
+        if (is_file($modulesFile)) {
+            $modules = require $modulesFile;
+            $needUpdate = false;
+            foreach ($moduleNames as $moduleName) {
+                if (isset($modules[$moduleName])) {
+                    // 删除模块，让系统重新识别为全新安装
+                    unset($modules[$moduleName]);
+                    $needUpdate = true;
+                }
+            }
+            if ($needUpdate) {
+                $content = '<?php return ' . var_export($modules, true) . ';';
+                file_put_contents($modulesFile, $content);
+                $this->printer->note(__('已清除模块注册信息，准备重新安装...'));
+            }
+        }
+        
+        // 清除模块缓存，确保 Handle 重新加载模块列表
+        $this->printer->note(__('清除模块缓存，确保重新加载模块列表...'));
+        $this->system->exec(PHP_BINARY . ' php bin/w cache:clear -f');
+        
+        // 等待一下，确保文件系统同步
+        usleep(100000); // 0.1秒
+        
+        // 重新注册模块
+        $this->printer->note('');
+        $this->printer->setup(__('重新注册并安装模块...'));
+        list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+        foreach ($moduleNames as $moduleName) {
+            if (isset($dependencyModules[$moduleName])) {
+                // 执行 register.php 文件
+                if (is_file($dependencyModules[$moduleName]['register'])) {
+                    require $dependencyModules[$moduleName]['register'];
+                }
+            }
+        }
+        
+        // 等待一下，确保 modules.php 被更新
+        usleep(200000); // 0.2秒
+        
+        // 重新加载模块列表
+        $modules = Env::getInstance()->getModuleList();
+        
+        // 直接执行 Setup/Install.php 和 Model install，完全自己控制
+        foreach ($moduleNames as $moduleName) {
+            if (!isset($modules[$moduleName])) {
+                $this->printer->warning(__('模块 %{1} 未找到，跳过安装。', [$moduleName]));
+                continue;
+            }
+            
+            $moduleData = $modules[$moduleName];
+            $module = new Module($moduleData);
+            
+            $this->printer->note('');
+            $this->printer->note('───────────────────────────────────────────────────────────────');
+            $this->printer->setup(__('安装模块：%{1}', [$moduleName]));
+            $this->printer->note('───────────────────────────────────────────────────────────────');
+            
+            try {
+                // 1. 执行 Setup/Install.php
+                $this->executeSetupInstall($module);
+                
+                // 2. 执行 Model install
+                $this->executeModelInstall($module);
+                
+                // 3. 更新模块注册信息（标记为已安装）
+                $this->updateModuleRegistration($moduleName, $moduleData);
+                
+                $this->printer->success(__('模块 %{1} 安装完成！', [$moduleName]));
+            } catch (\Exception $e) {
+                $this->printer->error(__('安装模块 %{1} 时出错：%{2}', [$moduleName, $e->getMessage()]));
+            }
+        }
 
         $this->printer->note('');
         $this->printer->success('═══════════════════════════════════════════════════════════════');
@@ -238,6 +327,9 @@ class Reinstall extends CommandAbstract
                     continue;
                 }
 
+                // 确保模型已初始化连接，这样才能正确获取带前缀的表名
+                $model->getConnection();
+                
                 $tableName = $model->getTable();
                 $originTableName = $model->getOriginTableName();
                 
@@ -245,11 +337,37 @@ class Reinstall extends CommandAbstract
                     continue;
                 }
 
-                // 检查表是否存在
-                if (!$model->getConnection()->getConnector()->tableExist($originTableName)) {
-                    $this->printer->warning(__('  表 %{1} 不存在，跳过。', [$originTableName]));
+                // 检查表是否存在（使用 PDO 直接查询，确保正确检查带前缀的表名）
+                $connector = $model->getConnection()->getConnector();
+                $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
+                $fullTableName = $prefix . $originTableName;
+                
+                // 使用 PDO 直接查询表是否存在
+                if (method_exists($connector, 'getLink')) {
+                    /** @var \PDO $pdo */
+                    $pdo = call_user_func([$connector, 'getLink']);
+                    $dbName = $model->getConnection()->getConfigProvider()->getDatabase();
+                    $checkSql = "SHOW TABLES LIKE '{$fullTableName}'";
+                    if ($dbName) {
+                        $checkSql = "SHOW TABLES FROM `{$dbName}` LIKE '{$fullTableName}'";
+                    }
+                    $stmt = $pdo->query($checkSql);
+                    $tableExists = $stmt->rowCount() > 0;
+                } else {
+                    // 降级方案：使用 tableExist 方法
+                    $tableExists = $connector->tableExist($originTableName);
+                    if ($tableExists) {
+                        $fullTableName = $prefix . $originTableName;
+                    }
+                }
+                
+                if (!$tableExists) {
+                    $this->printer->warning(__('  表 %{1} (完整名: %{2}) 不存在，跳过。', [$originTableName, $fullTableName]));
                     continue;
                 }
+                
+                // 使用带前缀的完整表名
+                $tableName = $fullTableName;
 
                 // 备份表到文件（使用原始表名，不带数据库前缀）
                 $this->printer->note(__('  备份表到文件：%{1}...', [$originTableName]));
@@ -271,25 +389,36 @@ class Reinstall extends CommandAbstract
                 }
 
                 // 复制表（使用统一的批次时间戳）
+                // 备份表名使用原始表名（不带前缀），因为备份表也不应该带前缀
                 $backupTableName = $originTableName . '_backup_' . $this->backupTimestamp;
-                $this->printer->note(__('  复制表：%{1} → %{2}...', [$originTableName, $backupTableName]));
+                $this->printer->note(__('  复制表：%{1} → %{2}...', [$tableName, $backupTableName]));
                 
                 try {
-                    $pdo = $model->getConnection()->getConnector()->getLink();
+                    // 通过 Connector 获取 PDO 连接
+                    $connector = $model->getConnection()->getConnector();
+                    // getLink() 方法在具体的 Connector 实现类中存在（Mysql/Connector, Pgsql/Connector 等）
+                    // 使用 call_user_func 来避免 linter 错误
+                    if (method_exists($connector, 'getLink')) {
+                        /** @var \PDO $pdo */
+                        $pdo = call_user_func([$connector, 'getLink']);
+                    } else {
+                        throw new \Exception(__('无法获取数据库连接'));
+                    }
                     
                     // 复制表结构和数据（不删除旧备份，支持多次备份）
-                    $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$originTableName}`";
+                    // 使用实际存在的表名（$tableName）进行复制
+                    $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$tableName}`";
                     $pdo->exec($createBackupSql);
                     
-                    $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$originTableName}`";
+                    $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$tableName}`";
                     $pdo->exec($insertBackupSql);
                     
-                    // 记录备份表信息
+                    // 记录备份表信息（保存 connector 以便后续使用）
                     $this->backupTables[] = [
                         'original' => $originTableName,
                         'backup' => $backupTableName,
                         'module' => $moduleName,
-                        'pdo' => $pdo
+                        'connector' => $connector
                     ];
                     
                     $this->printer->success(__('  ✓ 表已复制：%{1} (包含所有数据)', [$backupTableName]));
@@ -297,12 +426,13 @@ class Reinstall extends CommandAbstract
                     $this->printer->warning(__('  表复制失败：%{1}', [$copyException->getMessage()]));
                 }
 
-                // 删除原表
-                $this->printer->note(__('  删除原表：%{1}...', [$originTableName]));
+                // 删除原表（使用带前缀的完整表名）
+                $this->printer->note(__('  删除原表：%{1}...', [$tableName]));
                 $modelSetup = ObjectManager::make(ModelSetup::class);
                 $modelSetup->putModel($model);
-                $modelSetup->dropTable($originTableName);
-                $this->printer->success(__('  ✓ 原表已删除：%{1}', [$originTableName]));
+                // 使用完整表名（带前缀）删除表
+                $modelSetup->dropTable($tableName);
+                $this->printer->success(__('  ✓ 原表已删除：%{1}', [$tableName]));
 
             } catch (\Exception $e) {
                 $this->printer->error(__('  错误：处理 %{1} 时发生异常：%{2}', [$modelClass, $e->getMessage()]));
@@ -479,11 +609,16 @@ class Reinstall extends CommandAbstract
 
         // 收集所有相关的备份表（包括历史备份）
         $allBackupTables = [];
-        $pdo = null;
+        $connector = null;
         
         foreach ($this->backupTables as $backupInfo) {
-            $pdo = $backupInfo['pdo'];
+            $connector = $backupInfo['connector'];
             $originalTable = $backupInfo['original'];
+            /** @var \PDO $pdo */
+            $pdo = method_exists($connector, 'getLink') ? call_user_func([$connector, 'getLink']) : null;
+            if (!$pdo) {
+                continue;
+            }
             
             // 查找该表的所有备份表
             $pattern = $originalTable . '_backup_%';
@@ -553,6 +688,13 @@ class Reinstall extends CommandAbstract
         $this->printer->note(__('如果您需要恢复数据，请选择保留。'));
         $this->printer->note(__('提示：备份表按时间戳分批次，相同时间戳的表属于同一批次。'));
         $this->printer->note('');
+        // 检查是否强制模式，强制模式下不询问，直接保留备份表
+        $force = isset($this->args['f']) || isset($this->args['force']);
+        if ($force) {
+            $this->printer->note(__('强制模式：保留所有备份表。'));
+            return;
+        }
+
         $this->printer->setup(__('是否删除所有备份表？(yes/y=删除, no/n=保留)：'));
         
         $confirm = strtolower(trim($this->system->input()));
@@ -564,8 +706,23 @@ class Reinstall extends CommandAbstract
             
             foreach ($allBackupTables as $table) {
                 try {
-                    $pdo->exec("DROP TABLE IF EXISTS `{$table['backup']}`");
-                    $this->printer->success(__('  ✓ 已删除：%{1}', [$table['backup']]));
+                    // 获取对应的 connector 对象
+                    $connector = null;
+                    foreach ($this->backupTables as $backupInfo) {
+                        if ($backupInfo['backup'] === $table['backup'] || $backupInfo['original'] === $table['original']) {
+                            $connector = $backupInfo['connector'];
+                            break;
+                        }
+                    }
+                    if (!$connector && !empty($this->backupTables)) {
+                        $connector = $this->backupTables[0]['connector'];
+                    }
+                    if ($connector && method_exists($connector, 'getLink')) {
+                        /** @var \PDO $pdo */
+                        $pdo = call_user_func([$connector, 'getLink']);
+                        $pdo->exec("DROP TABLE IF EXISTS `{$table['backup']}`");
+                        $this->printer->success(__('  ✓ 已删除：%{1}', [$table['backup']]));
+                    }
                 } catch (\Exception $e) {
                     $this->printer->error(__('  ✗ 删除失败：%{1} - %{2}', [$table['backup'], $e->getMessage()]));
                 }
@@ -590,6 +747,146 @@ class Reinstall extends CommandAbstract
     public function tip(): string
     {
         return __('重新安装模块（危险操作，仅限开发模式）。此命令将删除模块的所有数据并重新安装。');
+    }
+
+    /**
+     * 执行 Setup/Install.php
+     */
+    private function executeSetupInstall(Module $module): void
+    {
+        $moduleName = $module->getName();
+        $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
+        
+        if (!is_dir($setup_dir)) {
+            $this->printer->warning(__('模块 %{1} 没有 Setup 目录，跳过 Setup 安装。', [$moduleName]));
+            return;
+        }
+        
+        // 先删除所有可能存在的表（包括没有 Model 的表）
+        $this->dropAllModuleTables($module);
+        
+        $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
+        $setup_context = new \Weline\Framework\Setup\Data\Context(
+            $module->getName(),
+            $module->getVersion() ?? '1.0.0',
+            $module->getDescription() ?? ''
+        );
+        $setup_data = ObjectManager::getInstance(\Weline\Framework\Setup\Data\Setup::class);
+        
+        // 执行 Setup/Install.php
+        foreach (\Weline\Framework\Setup\Data\DataInterface::install_FILES as $install_FILE) {
+            $setup_file = $setup_dir . DS . $install_FILE . '.php';
+            if (file_exists($setup_file)) {
+                $this->printer->note(__('执行安装文件：%{1}', [$setup_file]));
+                $setup = ObjectManager::getInstance($setup_namespace . $install_FILE);
+                $setup_data->setModuleContext($setup_context);
+                $setup->setup($setup_data, $setup_context);
+                $this->printer->success(__('安装文件执行完成：%{1}', [$install_FILE]));
+            }
+        }
+    }
+    
+    /**
+     * 删除模块的所有表（包括没有 Model 的表）
+     * 通过读取 Setup/Install.php 中创建的表名来删除
+     */
+    private function dropAllModuleTables(Module $module): void
+    {
+        $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
+        $install_file = $setup_dir . DS . 'Install.php';
+        
+        if (!file_exists($install_file)) {
+            return;
+        }
+        
+        // 读取 Install.php 文件，提取所有 createTable 的表名
+        $content = file_get_contents($install_file);
+        preg_match_all("/createTable\(['\"]([^'\"]+)['\"]/", $content, $matches);
+        
+        if (empty($matches[1])) {
+            return;
+        }
+        
+        $this->printer->note(__('删除模块的所有表（包括 Setup 中定义的表）...'));
+        
+        // 获取第一个 Model 的连接（所有 Model 应该使用同一个连接）
+        $modelClasses = $this->moduleFileReader->readClass($module, 'Model');
+        if (empty($modelClasses)) {
+            return;
+        }
+        
+        $firstModelClass = $modelClasses[0];
+        if (!class_exists($firstModelClass)) {
+            return;
+        }
+        
+        try {
+            $model = ObjectManager::getInstance($firstModelClass);
+            if (!$model instanceof \Weline\Framework\Database\AbstractModel) {
+                return;
+            }
+            
+            $connector = $model->getConnection()->getConnector();
+            $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
+            
+            if (method_exists($connector, 'getLink')) {
+                /** @var \PDO $pdo */
+                $pdo = call_user_func([$connector, 'getLink']);
+                
+                foreach ($matches[1] as $tableName) {
+                    $fullTableName = $prefix . $tableName;
+                    // 检查表是否存在
+                    $checkSql = "SHOW TABLES LIKE '{$fullTableName}'";
+                    $stmt = $pdo->query($checkSql);
+                    if ($stmt->rowCount() > 0) {
+                        $pdo->exec("DROP TABLE IF EXISTS `{$fullTableName}`");
+                        $this->printer->success(__('  ✓ 已删除表：%{1}', [$fullTableName]));
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            $this->printer->warning(__('删除表时出错：%{1}', [$e->getMessage()]));
+        }
+    }
+    
+    /**
+     * 执行 Model install
+     */
+    private function executeModelInstall(Module $module): void
+    {
+        $this->printer->note(__('执行 Model 安装...'));
+        $setup_context = new \Weline\Framework\Setup\Data\Context(
+            $module->getName(),
+            $module->getVersion() ?? '1.0.0',
+            $module->getDescription() ?? ''
+        );
+        
+        /** @var ModelManager $modelManager */
+        $modelManager = ObjectManager::getInstance(ModelManager::class);
+        $modelManager->update($module, $setup_context, 'install');
+        $this->printer->success(__('Model 安装完成'));
+    }
+    
+    /**
+     * 更新模块注册信息（标记为已安装）
+     */
+    private function updateModuleRegistration(string $moduleName, array $moduleData): void
+    {
+        $modulesFile = Env::path_MODULES_FILE;
+        if (!is_file($modulesFile)) {
+            return;
+        }
+        
+        $modules = require $modulesFile;
+        if (isset($modules[$moduleName])) {
+            // 移除 installing 标志，标记为已安装
+            unset($modules[$moduleName]['installing']);
+            $modules[$moduleName]['installed'] = true;
+            
+            $content = '<?php return ' . var_export($modules, true) . ';';
+            file_put_contents($modulesFile, $content);
+            $this->printer->note(__('已更新模块注册信息：%{1}', [$moduleName]));
+        }
     }
 
     public function help(): array|string

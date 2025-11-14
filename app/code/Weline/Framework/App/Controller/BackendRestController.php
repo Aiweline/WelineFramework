@@ -22,6 +22,7 @@ class BackendRestController extends AbstractRestController
         BackendApiSession $backendApiSession,
     )
     {
+        parent::__construct();
         $this->session = $backendApiSession;
         
         // 检查是否已登录

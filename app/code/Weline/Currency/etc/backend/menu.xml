@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--货币管理父级菜单-->
+    <add source="Weline_Currency::currency_management" name="currency_management" title="货币管理" action=""
+         parent="Weline_Backend::system_menu" icon="mdi mdi-currency-usd" order="50"/>
+    
+    <!--货币列表-->
+    <add source="Weline_Currency::currency_list" name="currency_list" title="货币列表" 
+         action="currency/backend/currency/index" parent="Weline_Currency::currency_management" 
+         icon="mdi mdi-format-list-bulleted" order="1"/>
+    
+    <!--添加货币-->
+    <add source="Weline_Currency::currency_add" name="currency_add" title="添加货币" 
+         action="currency/backend/currency/getAdd" parent="Weline_Currency::currency_management" 
+         icon="mdi mdi-plus-circle" order="2"/>
+    
+    <!--货币配置-->
+    <add source="Weline_Currency::currency_config" name="currency_config" title="货币配置" 
+         action="currency/backend/config/index" parent="Weline_Currency::currency_management" 
+         icon="mdi mdi-cog" order="3"/>
+</menus>
+

@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Model;
 
+use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
@@ -19,6 +20,10 @@ class WhiteAclSource extends \Weline\Framework\Database\Model
 {
     public const fields_ID   = 'path';
     public const fields_PATH = 'path';
+    public const fields_TYPE = 'type';
+    
+    public const type_PC = 'pc';
+    public const type_API = 'api';
 
     /**
      * @inheritDoc
@@ -33,7 +38,19 @@ class WhiteAclSource extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 添加type字段（如果不存在）
+        if ($setup->tableExist() && !$setup->hasField(self::fields_TYPE)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_TYPE,
+                    self::fields_PATH,
+                    TableInterface::column_type_VARCHAR,
+                    10,
+                    'not null default \'pc\'',
+                    '类型：pc或api'
+                )
+                ->alter();
+        }
     }
 
     /**
@@ -50,7 +67,32 @@ class WhiteAclSource extends \Weline\Framework\Database\Model
                       255,
                       'primary key',
                       '白名单链接路径')
+                  ->addColumn(
+                      self::fields_TYPE,
+                      'varchar',
+                      10,
+                      'not null default \'pc\'',
+                      '类型：pc或api')
                   ->create();
+        } else {
+            // 如果表已存在，检查是否需要添加type字段
+            $this->upgrade($setup, $context);
         }
+    }
+    
+    /**
+     * 获取类型
+     */
+    public function getType(): string
+    {
+        return (string)($this->getData(self::fields_TYPE) ?? self::type_PC);
+    }
+    
+    /**
+     * 设置类型
+     */
+    public function setType(string $type): self
+    {
+        return $this->setData(self::fields_TYPE, $type);
     }
 }

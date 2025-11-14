@@ -36,11 +36,9 @@ class ApiControllerInitBefore implements ObserverInterface
             'backend/api/auth/refresh',
             'backend/api/auth/token-info'
         ];
-        
         if (in_array($currentUrl, $authUrls)) {
             return;
         }
-
         // 检查是否已登录
         if (!$apiSession->isLogin()) {
             // 返回401未授权错误

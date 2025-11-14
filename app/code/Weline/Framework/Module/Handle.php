@@ -160,6 +160,9 @@ class Handle implements HandleInterface, RegisterInterface
      */
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = '', array $dependencies = []): mixed
     {
+        // 重新加载模块列表，确保获取最新的模块状态（特别是在重装场景下）
+        $this->modules = Env::getInstance()->getModuleList(true); // 强制重新加载
+        
         // 检测依赖
         foreach ($dependencies as $dependency) {
             if (!Checker::hasDependency($dependency)) {
@@ -356,6 +359,21 @@ class Handle implements HandleInterface, RegisterInterface
      */
     public function setupInstall(Module $module): Module
     {
+        // 重新加载模块列表，确保获取最新的模块状态
+        $this->modules = Env::getInstance()->getModuleList();
+        
+        // 从重新加载的模块列表中获取最新的模块数据
+        if (isset($this->modules[$module->getName()])) {
+            $latestModuleData = $this->modules[$module->getName()];
+            // 更新模块数据，保留 installing/upgrading 标志
+            if (isset($latestModuleData['installing'])) {
+                $module['installing'] = $latestModuleData['installing'];
+            }
+            if (isset($latestModuleData['upgrading'])) {
+                $module['upgrading'] = $latestModuleData['upgrading'];
+            }
+        }
+        
         $setup_context = ObjectManager::make(SetupContext::class, [
             'module_name' => $module->getName(),
             'module_version' => $module->getVersion(),
@@ -405,9 +423,13 @@ class Handle implements HandleInterface, RegisterInterface
             foreach (\Weline\Framework\Setup\Data\DataInterface::install_FILES as $install_FILE) {
                 $setup_file = $setup_dir . DS . $install_FILE . '.php';
                 if (file_exists($setup_file)) {
+                    $this->printer->note(__('执行安装文件：%{1}', [$setup_file]));
                     $setup = ObjectManager::getInstance($setup_namespace . $install_FILE);
                     $this->setup_data->setModuleContext($setup_context);
                     $setup->setup($this->setup_data, $setup_context);
+                    $this->printer->success(__('安装文件执行完成：%{1}', [$install_FILE]));
+                } else {
+                    $this->printer->warning(__('安装文件不存在：%{1}', [$setup_file]));
                 }
             }
             # 扫描Model
@@ -416,6 +438,14 @@ class Handle implements HandleInterface, RegisterInterface
             $modelManager->update($module, $setup_context, 'install');
             $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
             $module->unsetData('installing');
+        } else {
+            // 调试：如果没有 installing 标志，输出调试信息
+            if (DEV) {
+                $this->printer->warning(__('模块 %{1} 没有 installing 标志，跳过安装。模块数据：%{2}', [
+                    $module->getName(),
+                    json_encode($module->getData(), JSON_UNESCAPED_UNICODE)
+                ]));
+            }
         }
 //        // 更新模块
         $this->helper->updateModules($this->modules); #FIXME 解决重复刷新modules文件导致更新不成功问题

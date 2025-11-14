@@ -4,6 +4,6 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--开发工具-->
     <add source="Weline_Component::component" name="component" title="组件库"
-         action="component/backend/components/index"
+         action="*/backend/components"
          parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="30001"/>
 </menus>
