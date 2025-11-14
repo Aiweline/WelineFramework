@@ -152,6 +152,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function handleSystemNotInstalled(): void
     {
         $this->printing->warning(__('检测到系统尚未安装！'), __('警告'));
+        
+        // 检查是否在交互式环境中
+        $isInteractive = $this->isInteractive();
+        
+        if (!$isInteractive) {
+            // 非交互式环境，自动使用默认开发环境快速安装
+            $this->printing->note(__('检测到非交互式环境，自动使用默认开发环境快速安装模式...'));
+            $this->printing->warning(__('此模式将使用默认的 SQLite 数据库，仅适合开发测试使用。'));
+            $this->printing->warning(__('生产环境强烈建议使用命令行安装并配置 MySQL 数据库！'));
+            $this->printing->note(__('开始使用开发环境快速安装...'));
+            $this->executeDevelopmentInstall();
+            return;
+        }
+        
+        // 交互式环境，显示选项
         $this->printing->note(__('请选择安装方式：'));
         $this->printing->note(__('1. 使用命令行安装（推荐生产环境）'));
         $this->printing->note(__('2. 使用默认开发环境快速安装（仅建议开发者使用，生产环境慎用）'));
@@ -159,20 +174,29 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 获取用户输入
         $system = ObjectManager::getInstance(\Weline\Framework\App\System::class);
-        $input = trim($system->input());
+        $input = trim($system->input() ?? '');
         
         if ($input === '1') {
             // 显示 system:install 命令的帮助信息
             $this->showSystemInstallHelp();
-        } elseif ($input === '2') {
+        } elseif ($input === '2' || empty($input)) {
+            // 如果输入为空，默认选择选项2
+            if (empty($input)) {
+                $this->printing->note(__('未输入选项，使用默认开发环境快速安装模式...'));
+            } else {
+                $this->printing->warning(__('您选择了开发环境快速安装模式。'));
+            }
             // 确认是否继续使用开发环境安装
-            $this->printing->warning(__('您选择了开发环境快速安装模式。'));
             $this->printing->warning(__('此模式将使用默认的 SQLite 数据库，仅适合开发测试使用。'));
             $this->printing->warning(__('生产环境强烈建议使用命令行安装并配置 MySQL 数据库！'));
             $this->printing->setup(__('是否继续？(y/n)：'));
             
-            $confirm = strtolower(trim($system->input()));
-            if ($confirm === 'y' || $confirm === 'yes') {
+            $confirm = strtolower(trim($system->input() ?? ''));
+            if ($confirm === 'y' || $confirm === 'yes' || empty($confirm)) {
+                // 如果确认输入为空，默认继续
+                if (empty($confirm)) {
+                    $this->printing->note(__('未输入确认，默认继续安装...'));
+                }
                 $this->printing->note(__('开始使用开发环境快速安装...'));
                 // 继续执行原来的安装逻辑
                 $this->executeDevelopmentInstall();
@@ -184,6 +208,31 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->error(__('无效的选项！请重新运行命令。'));
             exit(1);
         }
+    }
+    
+    /**
+     * 检查是否在交互式环境中
+     * @return bool
+     */
+    private function isInteractive(): bool
+    {
+        // 检查 STDIN 是否是终端（TTY）
+        if (function_exists('stream_isatty') && defined('STDIN')) {
+            return stream_isatty(STDIN);
+        }
+        
+        // 备用检查：尝试读取 STDIN 是否可用
+        if (defined('STDIN') && is_resource(STDIN)) {
+            // 检查 STDIN 是否可读
+            $read = [STDIN];
+            $write = [];
+            $except = [];
+            $result = @stream_select($read, $write, $except, 0);
+            return $result !== false;
+        }
+        
+        // 如果无法确定，假设是非交互式环境
+        return false;
     }
 
     /**
