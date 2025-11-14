@@ -221,6 +221,11 @@
         }
 
         function detectCurrentMode(themeConfig) {
+            // 优先使用新的 theme-mode-switch 配置
+            if (themeConfig && themeConfig['theme-mode-switch']) {
+                return themeConfig['theme-mode-switch'] === 'dark';
+            }
+            // 兼容旧的配置方式
             return resolveBoolean(themeConfig ? themeConfig['dark-mode-switch'] : false, false);
         }
 
@@ -264,17 +269,18 @@
                     themeConfig.layouts = {};
                 }
                 themeConfig.layouts['data-topbar'] = isDark ? 'dark' : 'light';
-                themeConfig.layouts['data-sidebar'] = isDark ? 'dark' : 'dark';
+                themeConfig.layouts['data-sidebar'] = isDark ? 'dark' : 'light';
+                themeConfig['theme-mode-switch'] = isDark ? 'dark' : 'light';
+                // 兼容旧的配置方式
                 themeConfig['dark-mode-switch'] = isDark;
                 themeConfig['light-mode-switch'] = !isDark;
                 if (typeof window.setThemeConfig === 'function') {
                     window.setThemeConfig({
                         layouts: {
                             'data-topbar': isDark ? 'dark' : 'light',
-                            'data-sidebar': isDark ? 'dark' : 'dark'
+                            'data-sidebar': isDark ? 'dark' : 'light'
                         },
-                        'light-mode-switch': !isDark,
-                        'dark-mode-switch': isDark,
+                        'theme-mode-switch': isDark ? 'dark' : 'light',
                         'rtl-mode-switch': !!themeConfig['rtl-mode-switch']
                     });
                 }

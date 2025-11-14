@@ -17,12 +17,12 @@ if ($document && $document->getId()) {
     <title><?=__('WelineFramework 开发文档')?></title>
     <!-- Favicon -->
     <!-- Markdown 渲染库 -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="@static(Weline_DeveloperWorkspace::libs/marked/11.1.1/marked.min.js)"></script>
     <link rel="shortcut icon" href="@static(Weline_Frontend::img/favicon.png)" type="image/png">
     <link rel="icon" href="@static(Weline_Frontend::img/favicon.png)" type="image/png">
     <link rel="apple-touch-icon" href="@static(Weline_Frontend::img/favicon.png)">
     <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="@static(Weline_Backend::backend/lib/jquery/3.6.0/jquery.js)"></script>
     <!-- jstree -->
     <link rel="stylesheet" href="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)" />
     <script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
@@ -421,6 +421,91 @@ if ($document && $document->getId()) {
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        
+        /* 语言和货币切换器（开发文档） */
+        .doc-i18n-switcher {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 8px 20px;
+            border-right: 1px solid var(--border-color);
+            margin-right: 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(102, 126, 234, 0.02) 100%);
+            border-radius: 8px;
+        }
+        
+        .doc-i18n-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+        }
+        
+        .doc-i18n-item label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .doc-i18n-item label::before {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+        
+        .doc-i18n-select {
+            padding: 8px 32px 8px 12px;
+            border: 1.5px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 12px;
+        }
+        
+        .doc-i18n-select option {
+            background: var(--card-bg);
+            color: var(--text-color);
+            padding: 8px;
+        }
+        
+        .doc-i18n-select:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(102, 126, 234, 0.05);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+        }
+        
+        .doc-i18n-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+            background-color: rgba(102, 126, 234, 0.08);
+        }
+        
+        [data-theme="dark"] .doc-i18n-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ccc' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        }
+        
+        [data-theme="dark"] .doc-i18n-select option {
+            background: #2d3748;
+            color: #e2e8f0;
         }
         
         .search-box {
@@ -1219,9 +1304,80 @@ if ($document && $document->getId()) {
             background-color: rgba(11, 177, 151, 0.3);
             color: #ffffff;
         }
+        
+        /* i18n信息提示条 */
+        .i18n-info-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 10px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .i18n-info-bar-content {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .i18n-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .i18n-info-label {
+            opacity: 0.9;
+            font-weight: 500;
+        }
+        
+        .i18n-info-value {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .i18n-info-separator {
+            opacity: 0.5;
+            margin: 0 5px;
+        }
+        
+        [data-theme="dark"] .i18n-info-bar {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        }
     </style>
 </head>
 <body data-theme="light">
+    <!-- i18n信息提示条 -->
+    <div class="i18n-info-bar">
+        <div class="i18n-info-bar-content">
+            <div class="i18n-info-item">
+                <span class="i18n-info-label"><?=__('当前货币')?>:</span>
+                <span class="i18n-info-value"><?= htmlspecialchars($currentCurrency ?? 'CNY') ?></span>
+            </div>
+            <span class="i18n-info-separator">|</span>
+            <div class="i18n-info-item">
+                <span class="i18n-info-label"><?=__('当前语言')?>:</span>
+                <span class="i18n-info-value"><?= htmlspecialchars($currentLanguage ?? 'zh_Hans_CN') ?></span>
+            </div>
+            <span class="i18n-info-separator">|</span>
+            <div class="i18n-info-item">
+                <span class="i18n-info-label"><?=__('默认货币')?>:</span>
+                <span class="i18n-info-value"><?= htmlspecialchars($defaultCurrency ?? 'CNY') ?></span>
+            </div>
+            <span class="i18n-info-separator">|</span>
+            <div class="i18n-info-item">
+                <span class="i18n-info-label"><?=__('默认语言')?>:</span>
+                <span class="i18n-info-value"><?= htmlspecialchars($defaultLanguage ?? 'zh_Hans_CN') ?></span>
+            </div>
+        </div>
+    </div>
     <div class="doc-container">
         <!-- 左侧分类树 -->
         <div class="doc-sidebar">
@@ -1254,6 +1410,25 @@ if ($document && $document->getId()) {
                     <span class="search-icon">🔍</span>
                 </div>
                 <div class="content-header-actions">
+                    <!-- 语言和货币切换器 -->
+                    <div class="doc-i18n-switcher">
+                        <div class="doc-i18n-item">
+                            <label><?=__('语言')?>:</label>
+                            <select id="doc-locale-select" class="doc-i18n-select" onchange="switchDocLocale(this.value)">
+                                <option value="zh_Hans_CN">中文</option>
+                                <option value="en_US">English</option>
+                            </select>
+                        </div>
+                        <div class="doc-i18n-item">
+                            <label><?=__('货币')?>:</label>
+                            <select id="doc-currency-select" class="doc-i18n-select" onchange="switchDocCurrency(this.value)">
+                                <option value="CNY">CNY</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="JPY">JPY</option>
+                            </select>
+                        </div>
+                    </div>
                     <?php if ($document && $document->getId()): ?>
                     <a href="javascript:void(0)" class="document-back-button" onclick="backToDocumentList()" id="document-back-button">
                         <span>←</span>
@@ -1376,6 +1551,126 @@ if ($document && $document->getId()) {
     
     <script>
         (function() {
+            // 语言和货币切换相关常量
+            const DOC_LOCALE_KEY = 'doc_locale';
+            const DOC_CURRENCY_KEY = 'doc_currency';
+            
+            // 获取当前语言和货币（从URL、localStorage或默认值）
+            function getDocCurrentLocale() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pathParts = window.location.pathname.split('/').filter(p => p);
+                // 尝试从路径中提取locale（格式：zh_Hans_CN）
+                for (let i = 0; i < pathParts.length; i++) {
+                    if (pathParts[i].match(/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/)) {
+                        return pathParts[i];
+                    }
+                }
+                // 尝试从URL参数获取
+                if (urlParams.has('locale')) {
+                    return urlParams.get('locale');
+                }
+                // 从localStorage获取
+                return localStorage.getItem(DOC_LOCALE_KEY) || '<?= htmlspecialchars($currentLanguage ?? 'zh_Hans_CN') ?>';
+            }
+            
+            function getDocCurrentCurrency() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pathParts = window.location.pathname.split('/').filter(p => p);
+                // 尝试从路径中提取currency（格式：CNY，3位大写字母）
+                for (let i = 0; i < pathParts.length; i++) {
+                    if (pathParts[i].match(/^[A-Z]{3}$/)) {
+                        return pathParts[i];
+                    }
+                }
+                // 尝试从URL参数获取
+                if (urlParams.has('currency')) {
+                    return urlParams.get('currency');
+                }
+                // 从localStorage获取
+                return localStorage.getItem(DOC_CURRENCY_KEY) || '<?= htmlspecialchars($currentCurrency ?? 'CNY') ?>';
+            }
+            
+            // 初始化语言和货币
+            let docCurrentLocale = getDocCurrentLocale();
+            let docCurrentCurrency = getDocCurrentCurrency();
+            
+            // 设置语言和货币选择器的值
+            document.addEventListener('DOMContentLoaded', function() {
+                const localeSelect = document.getElementById('doc-locale-select');
+                const currencySelect = document.getElementById('doc-currency-select');
+                if (localeSelect) {
+                    localeSelect.value = docCurrentLocale;
+                }
+                if (currencySelect) {
+                    currencySelect.value = docCurrentCurrency;
+                }
+            });
+            
+            // 切换语言
+            window.switchDocLocale = function(locale) {
+                docCurrentLocale = locale;
+                localStorage.setItem(DOC_LOCALE_KEY, locale);
+                
+                // 更新页面URL（路径切换模式）
+                updateDocPageUrl();
+            };
+            
+            // 切换货币
+            window.switchDocCurrency = function(currency) {
+                docCurrentCurrency = currency;
+                localStorage.setItem(DOC_CURRENCY_KEY, currency);
+                
+                // 更新页面URL（路径切换模式）
+                updateDocPageUrl();
+            };
+            
+            // 更新页面URL（路径切换模式，不刷新页面）
+            function updateDocPageUrl() {
+                const currentPath = window.location.pathname;
+                const pathParts = currentPath.split('/').filter(p => p);
+                
+                // 移除旧的locale和currency（支持多种格式）
+                const cleanedParts = pathParts.filter(p => {
+                    // 匹配currency格式：3位大写字母（如 USD, CNY）
+                    if (p.match(/^[A-Z]{3}$/)) {
+                        return false;
+                    }
+                    // 匹配locale格式：zh_Hans_CN, en_US, en_US_XX 等
+                    if (p.match(/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/)) {
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // 添加新的currency和locale
+                const newPath = '/' + docCurrentCurrency + '/' + docCurrentLocale + '/' + cleanedParts.join('/');
+                const newUrl = window.location.origin + newPath + window.location.search;
+                
+                // 更新URL（不刷新页面）
+                window.history.pushState({}, '', newUrl);
+                
+                // 更新顶部信息提示条中的显示
+                updateDocI18nInfoBar();
+            }
+            
+            // 更新开发文档的i18n信息提示条
+            function updateDocI18nInfoBar() {
+                const infoBar = document.querySelector('.i18n-info-bar');
+                if (!infoBar) return;
+                
+                // 更新当前货币显示
+                const currencyValue = infoBar.querySelector('.i18n-info-item:nth-child(1) .i18n-info-value');
+                if (currencyValue) {
+                    currencyValue.textContent = docCurrentCurrency;
+                }
+                
+                // 更新当前语言显示
+                const languageValue = infoBar.querySelector('.i18n-info-item:nth-child(2) .i18n-info-value');
+                if (languageValue) {
+                    languageValue.textContent = docCurrentLocale;
+                }
+            }
+            
             let currentCatalogId = <?= $catalogId ? (int)$catalogId : 'null' ?>;
             let currentDocumentId = <?= $documentId ? (int)$documentId : 'null' ?>;
             let catalogTree = null;

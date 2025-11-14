@@ -19,14 +19,17 @@ class Test extends FrontendRestController
      * 
      * 这是一个测试接口，用于验证API文档导入功能是否正常工作
      * 
-     * @param string $name 测试名称（可选，默认"test"）
-     * @param int $count 测试数量（可选，默认1）
+     * @param string $name 测试名称（可选，默认"test"，通过方法签名参数获取）
+     * @param int $count 测试数量（可选，默认1，通过方法签名参数获取）
      * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"name": "test", "count": 1, "timestamp": 1234567890}}
      * @throws \Exception 参数错误时抛出异常
      * @Document(summary='获取测试信息', description='这是一个测试接口，用于验证API文档导入功能是否正常工作。返回测试名称、数量和当前时间戳。', tags=['测试', 'API文档'], category='测试接口')
      * @example
      * Method: GET
      * Path: /api/rest/v1/weline-api/test/getInfo
+     * Request Parameters:
+     * - name: test (可选，默认"test")
+     * - count: 1 (可选，默认1)
      * Response:
      * {
      *   "code": 0,
@@ -115,15 +118,19 @@ class Test extends FrontendRestController
      * 
      * 用于测试分页查询的API文档导入功能
      * 
-     * @param int $page 页码（可选，默认1）
-     * @param int $pageSize 每页数量（可选，默认20）
-     * @param string $keyword 搜索关键词（可选）
+     * @param int $page 页码（可选，默认1，通过GET参数获取）
+     * @param int $pageSize 每页数量（可选，默认20，通过GET参数获取）
+     * @param string $keyword 搜索关键词（可选，通过GET参数获取）
      * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"list": [], "total": 0, "page": 1, "pageSize": 20}}
      * @throws \Exception 查询失败时抛出异常
      * @Document(summary='获取测试列表', description='用于测试分页查询的API文档导入功能。支持分页和关键词搜索。', tags=['测试', 'API文档', '列表'], category='测试接口')
      * @example
      * Method: GET
-     * Path: /api/rest/v1/weline-api/test/getList?page=1&pageSize=20&keyword=test
+     * Path: /api/rest/v1/weline-api/test/getList
+     * Request Parameters:
+     * - page: 1 (可选，默认1)
+     * - pageSize: 20 (可选，默认20)
+     * - keyword: test (可选)
      * Response:
      * {
      *   "code": 0,

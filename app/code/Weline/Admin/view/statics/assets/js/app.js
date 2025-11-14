@@ -333,7 +333,12 @@ File: Main Js File
 
     function initSettings() {
         // 主题颜色设置
-        $("#light-mode-switch, #dark-mode-switch, #rtl-mode-switch,#dark-mode-radio,#light-mode-radio,#reset-theme").on("change", function (e) {
+        $("#theme-mode-switch, #rtl-mode-switch,#dark-mode-radio,#light-mode-radio,#reset-theme").on("change", function (e) {
+            updateThemeSetting(e.target.id);
+        });
+
+        // 兼容旧的 checkbox 方式（向后兼容）
+        $("#light-mode-switch, #dark-mode-switch").on("change", function (e) {
             updateThemeSetting(e.target.id);
         });
 
@@ -382,8 +387,7 @@ File: Main Js File
                     'data-topbar': 'light',
                     'data-sidebar': 'light',
                 },
-                'light-mode-switch': true,
-                'dark-mode-switch': false,
+                'theme-mode-switch': 'light',
                 'rtl-mode-switch': false,
             })
         } else if (id === 'light-mode-radio') {
@@ -392,8 +396,7 @@ File: Main Js File
                     'data-topbar': 'light',
                     'data-sidebar': 'light',
                 },
-                'light-mode-switch': true,
-                'dark-mode-switch': false,
+                'theme-mode-switch': 'light',
                 'rtl-mode-switch': false,
             })
         } else if (id === 'dark-mode-radio') {
@@ -402,18 +405,30 @@ File: Main Js File
                     'data-topbar': 'dark',
                     'data-sidebar': 'dark',
                 },
-                'light-mode-switch': false,
-                'dark-mode-switch': true,
+                'theme-mode-switch': 'dark',
                 'rtl-mode-switch': false,
             })
         }
-        // ajax请求设置主题模式
+        // 新的统一主题模式选择器
+        else if (id === "theme-mode-switch") {
+            const themeMode = $("#theme-mode-switch").val();
+            setThemeConfig({
+                layouts: {
+                    'data-topbar': themeMode === 'dark' ? 'dark' : 'light',
+                    'data-sidebar': themeMode === 'dark' ? 'dark' : 'light',
+                },
+                'theme-mode-switch': themeMode,
+                'rtl-mode-switch': $("#rtl-mode-switch").prop("checked") === true,
+            })
+        }
+        // 兼容旧的 checkbox 方式（向后兼容）
         else if (id === "light-mode-switch") {
             setThemeConfig({
                 layouts: {
                     'data-topbar': 'light',
                     'data-sidebar': 'light',
                 },
+                'theme-mode-switch': 'light',
                 'light-mode-switch': $("#light-mode-switch").prop("checked") === true,
                 'dark-mode-switch': false,
                 'rtl-mode-switch': false,
@@ -424,14 +439,16 @@ File: Main Js File
                     'data-topbar': 'dark',
                     'data-sidebar': 'dark',
                 },
+                'theme-mode-switch': 'dark',
                 'light-mode-switch': false,
                 'dark-mode-switch': $("#dark-mode-switch").prop("checked") === true,
                 'rtl-mode-switch': false,
             })
         } else if (id === "rtl-mode-switch") {
+            // 保持当前主题模式
+            const currentThemeMode = $("#theme-mode-switch").val() || 'light';
             setThemeConfig({
-                'light-mode-switch': false,
-                'dark-mode-switch': false,
+                'theme-mode-switch': currentThemeMode,
                 'rtl-mode-switch': $("#rtl-mode-switch").prop("checked") === true,
             })
         }

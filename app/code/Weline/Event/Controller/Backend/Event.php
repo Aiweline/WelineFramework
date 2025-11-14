@@ -133,14 +133,14 @@ class Event extends BaseController
             $this->assign('sort_order', $sortOrder);
             $this->assign('quick_search', $quickSearch);
             $this->assign('title', __('事件管理'));
-            return $this->fetch();
+            return $this->fetchBase();
         } catch (\Exception $e) {
             $this->getMessageManager()->addError(__('加载事件列表失败: %{1}', $e->getMessage()));
             $this->assign('events', []);
             $this->assign('stats', []);
             $this->assign('all_modules', []);
             $this->assign('title', __('事件管理'));
-            return $this->fetch();
+            return $this->fetchBase();
         }
     }
 
