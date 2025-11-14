@@ -1,5 +1,0 @@
----
-description: tpl目录禁止任何操作，这是编辑缓存目录，无需操作，只做编译参考。
-globs:
-alwaysApply: true
----

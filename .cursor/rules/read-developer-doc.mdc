@@ -1,5 +1,0 @@
----
-description: 阅读“开发文档.md”，这个是框架的开发使用文档，如果学习到新的和本框架相关的知识后，需要向“开发文档.md”文档内写入笔记，纪录改如何使用。如果需要后台操作，开发超管账户默认为:admin/admin。框架前后台地址可以查阅：php bin/w server:status
-globs: 
-alwaysApply: true
----
