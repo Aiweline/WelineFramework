@@ -48,6 +48,20 @@ class Docs extends FrontendController
      */
     public function index()
     {
+        // 获取当前货币和语言
+        $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+        $currentLanguage = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+        
+        // 获取网站默认货币和语言
+        $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
+        $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+        
+        // 传递给模板
+        $this->assign('currentCurrency', $currentCurrency);
+        $this->assign('currentLanguage', $currentLanguage);
+        $this->assign('defaultCurrency', $defaultCurrency);
+        $this->assign('defaultLanguage', $defaultLanguage);
+        
         // 获取文档ID（如果有）
         $documentId = $this->request->getParam('id');
         $catalogId = $this->request->getParam('catalog_id');
@@ -564,6 +578,20 @@ class Docs extends FrontendController
     public function api()
     {
         try {
+            // 获取当前货币和语言
+            $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+            $currentLanguage = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            
+            // 获取网站默认货币和语言
+            $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
+            $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+            
+            // 传递给模板
+            $this->assign('currentCurrency', $currentCurrency);
+            $this->assign('currentLanguage', $currentLanguage);
+            $this->assign('defaultCurrency', $defaultCurrency);
+            $this->assign('defaultLanguage', $defaultLanguage);
+            
             // 获取API文档数据
             /** @var \Weline\Api\Service\ApiDocService $apiDocService */
             $apiDocService = ObjectManager::getInstance(\Weline\Api\Service\ApiDocService::class);

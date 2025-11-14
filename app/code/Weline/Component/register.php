@@ -14,5 +14,6 @@ Register::register(
     'Weline_Component',
     __DIR__,
     '1.0.0',
-    '<a href="https://bbs.aiweline.com">系统组件模块</a>'
+    '<a href="https://bbs.aiweline.com">系统组件模块</a>',
+    ['Weline_Framework', 'Weline_Admin']
 );

@@ -363,8 +363,8 @@ class ApiDocImporter
         $sortOrder = $sortKey['sortOrder'];
         
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_name, $displayName)
-            ->where(Catalog::fields_parent_id, $parentCatalog->getId())
+            ->where(Catalog::fields_NAME, $displayName)
+            ->where(Catalog::fields_PID, $parentCatalog->getId())
             ->where(Catalog::fields_is_system, 1)
             ->find()
             ->fetch();
@@ -388,8 +388,8 @@ class ApiDocImporter
     private function ensureVersionCatalog(string $version, Catalog $parentCatalog): Catalog
     {
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_name, $version)
-            ->where(Catalog::fields_parent_id, $parentCatalog->getId())
+            ->where(Catalog::fields_NAME, $version)
+            ->where(Catalog::fields_PID, $parentCatalog->getId())
             ->where(Catalog::fields_is_system, 1)
             ->find()
             ->fetch();
@@ -415,8 +415,8 @@ class ApiDocImporter
         $category = $apiInfo['document']['category'] ?? $shortClassName;
         
         $catalog = $this->catalogModel->clear()
-            ->where(Catalog::fields_name, $category)
-            ->where(Catalog::fields_parent_id, $parentCatalog->getId())
+            ->where(Catalog::fields_NAME, $category)
+            ->where(Catalog::fields_PID, $parentCatalog->getId())
             ->where(Catalog::fields_is_system, 1)
             ->find()
             ->fetch();

@@ -1,0 +1,513 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+$backendUrlPrefix = $request->getUrlBuilder()->getBackendUrl('/');
+$backendUrlPrefix = rtrim($backendUrlPrefix, '/');
+?>
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="page-title">
+        <h1><?= $this->getData('title') ?? __('组件库') ?></h1>
+    </div>
+
+    <!-- 统计卡片 -->
+    <?php
+    $stats = $this->getData('stats') ?? [];
+    ?>
+    <div class="stats-cards">
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title"><?= __('总组件数') ?></div>
+                <div class="card-value"><?= $stats['total'] ?? 0 ?></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title"><?= __('当前显示') ?></div>
+                <div class="card-value" style="color: var(--primary-color, #0bb197);"><?= $stats['filtered'] ?? 0 ?></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title"><?= __('模块数') ?></div>
+                <div class="card-value" style="color: var(--info-color, #4aa3ff);"><?= $stats['modules'] ?? 0 ?></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-content">
+                <div class="card-title"><?= __('分类数') ?></div>
+                <div class="card-value" style="color: var(--success-color, #0ac074);"><?= $stats['categories'] ?? 0 ?></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 筛选和搜索工具栏 -->
+    <div class="filter-toolbar">
+        <form method="get" action="*/backend/components/index" class="filter-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="q"><?= __('快速搜索') ?>：</label>
+                    <input type="text" 
+                           id="q" 
+                           name="q" 
+                           value="<?= htmlspecialchars($this->getData('search_keyword') ?? '') ?>" 
+                           placeholder="<?= __('输入组件名、模块名、分类...') ?>"
+                           class="form-control form-control-sm">
+                </div>
+                <div class="filter-group">
+                    <label for="module"><?= __('模块筛选') ?>：</label>
+                    <select id="module" name="module" class="form-control form-control-sm">
+                        <option value=""><?= __('全部模块') ?></option>
+                        <?php foreach ($this->getData('all_modules') ?? [] as $module): ?>
+                            <option value="<?= htmlspecialchars($module) ?>" 
+                                    <?= ($this->getData('filter_module') ?? '') === $module ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($module) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="category"><?= __('分类筛选') ?>：</label>
+                    <select id="category" name="category" class="form-control form-control-sm">
+                        <option value=""><?= __('全部分类') ?></option>
+                        <?php foreach ($this->getData('all_categories') ?? [] as $category): ?>
+                            <option value="<?= htmlspecialchars($category) ?>" 
+                                    <?= ($this->getData('filter_category') ?? '') === $category ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($category) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-sm" style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);">
+                        <i class="mdi mdi-filter"></i> <?= __('应用筛选') ?>
+                    </button>
+                    <a href="*/backend/components/index" class="btn btn-sm" style="background-color: var(--secondary-color, #74788d); color: white; border-color: var(--secondary-color, #74788d);">
+                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 组件列表 -->
+    <?php
+    $components = $this->getData('components') ?? [];
+    $totalCount = count($components ?? []);
+    ?>
+    <div class="components-list">
+        <div class="list-header">
+            <div class="list-info">
+                <span><?= __('共找到') ?> <strong><?= $totalCount ?></strong> <?= __('个组件') ?></span>
+            </div>
+        </div>
+        <?php if (empty($components)): ?>
+            <div class="empty-state">
+                <i class="mdi mdi-puzzle-outline" style="font-size: 64px; color: var(--text-secondary, #74788d);"></i>
+                <h3><?= __('暂无组件信息') ?></h3>
+                <p><?= __('系统中还没有找到任何实现了 ComponentInterface 的组件。') ?></p>
+            </div>
+        <?php else: ?>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th><?= __('组件名称') ?></th>
+                            <th><?= __('模块') ?></th>
+                            <th><?= __('分类') ?></th>
+                            <th><?= __('命名空间') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($components as $fullClass => $component): ?>
+                            <tr>
+                                <td>
+                                    <div class="component-name">
+                                        <code style="color: var(--primary-color, #0bb197);"><?= htmlspecialchars($component['class'] ?? '') ?></code>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="component-module">
+                                        <span class="badge" style="background-color: var(--info-color, #4aa3ff); color: white;"><?= htmlspecialchars($component['module'] ?? '') ?></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="component-category">
+                                        <span class="badge" style="background-color: var(--success-color, #0ac074); color: white;"><?= htmlspecialchars($component['category'] ?? __('其他')) ?></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="component-namespace">
+                                        <small style="color: var(--text-secondary, #74788d);"><?= htmlspecialchars($component['namespace'] ?? '') ?></small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="actions">
+                                        <button type="button" 
+                                                class="btn btn-sm btn-view-detail" 
+                                                data-component-class="<?= htmlspecialchars($fullClass) ?>"
+                                                style="background-color: var(--primary-color, #0bb197); color: white; border-color: var(--primary-color, #0bb197);"
+                                                title="<?= __('查看详情') ?>">
+                                            <i class="mdi mdi-eye"></i> <?= __('详情') ?>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+/* 统计卡片样式 */
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stats-cards .card {
+    background-color: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #eff2f7);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: var(--transition, all 0.3s ease);
+    box-shadow: var(--shadow, 0 2px 4px rgba(0,0,0,0.05));
+}
+
+.stats-cards .card:hover {
+    box-shadow: var(--shadow-lg, 0 4px 12px rgba(11, 177, 151, 0.15));
+    transform: translateY(-2px);
+}
+
+.stats-cards .card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-cards .card-title {
+    font-size: 0.875rem;
+    color: var(--text-secondary, #74788d);
+    margin-bottom: 0.5rem;
+}
+
+.stats-cards .card-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--text-color, #212529);
+}
+
+/* 筛选工具栏样式 */
+.filter-toolbar {
+    background-color: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #eff2f7);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-form .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 150px;
+}
+
+.filter-group label {
+    font-size: 0.875rem;
+    color: var(--text-color, #212529);
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter-actions .btn {
+    padding: 0.375rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: var(--transition, all 0.3s ease);
+    font-size: 0.875rem;
+}
+
+.filter-actions .btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* 列表样式 */
+.components-list {
+    background-color: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #eff2f7);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color, #eff2f7);
+}
+
+.list-info {
+    color: var(--text-color, #212529);
+    font-size: 0.875rem;
+}
+
+.list-info strong {
+    color: var(--primary-color, #0bb197);
+    font-weight: 600;
+}
+
+/* 空状态样式 */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary, #74788d);
+}
+
+.empty-state h3 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-color, #212529);
+}
+
+.empty-state p {
+    color: var(--text-secondary, #74788d);
+}
+
+/* 表格样式 */
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--card-bg, #ffffff);
+}
+
+.table thead {
+    background-color: var(--bg-color, #f8f9fa);
+}
+
+.table th {
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-color, #212529);
+    border-bottom: 2px solid var(--border-color, #eff2f7);
+    font-size: 0.875rem;
+}
+
+.table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color, #eff2f7);
+    color: var(--text-color, #212529);
+}
+
+.table tbody tr:hover {
+    background-color: var(--bg-color, #f8f9fa);
+}
+
+.table code {
+    background-color: var(--bg-color, #f8f9fa);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+/* Badge样式 */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* 按钮样式 */
+.actions .btn {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.actions .btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* 滚动条样式 */
+.table-container::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 3px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .filter-form .filter-row {
+        flex-direction: column;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+    
+    .stats-cards {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 组件详情查看功能
+    const detailButtons = document.querySelectorAll('.btn-view-detail');
+    
+    detailButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const componentClass = this.getAttribute('data-component-class');
+            if (!componentClass) {
+                return;
+            }
+            
+            // 使用 OffCanvas 或 Modal 显示详情
+            // 这里可以使用框架的 OffCanvas 组件
+            fetch('*/backend/components/detail?class=' + encodeURIComponent(componentClass), {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 显示组件详情
+                    showComponentDetail(data.component);
+                } else {
+                    alert(data.message || '<?= __('加载详情失败') ?>');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('<?= __('加载详情失败') ?>');
+            });
+        });
+    });
+    
+    function showComponentDetail(component) {
+        // 创建详情弹窗
+        const modal = document.createElement('div');
+        modal.className = 'component-detail-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background-color: var(--card-bg, #ffffff);
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg, 0 4px 12px rgba(11, 177, 151, 0.15));
+            color: var(--text-color, #212529);
+        `;
+        
+        const docHtml = component.doc || '<p><?= __('暂无文档') ?></p>';
+        
+        content.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color, #eff2f7); padding-bottom: 1rem;">
+                <h2 style="margin: 0; color: var(--text-color, #212529);">${component.class || ''}</h2>
+                <button class="close-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary, #74788d);">&times;</button>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <strong><?= __('模块') ?>：</strong>
+                <span class="badge" style="background-color: var(--info-color, #4aa3ff); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.module || ''}</span>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <strong><?= __('分类') ?>：</strong>
+                <span class="badge" style="background-color: var(--success-color, #0ac074); color: white; padding: 0.25rem 0.5rem; border-radius: 4px;">${component.category || '<?= __('其他') ?>'}</span>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <strong><?= __('完整类名') ?>：</strong>
+                <code style="background-color: var(--bg-color, #f8f9fa); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--primary-color, #0bb197);">${component.full_class || ''}</code>
+            </div>
+            <div style="margin-top: 1.5rem;">
+                <strong><?= __('使用文档') ?>：</strong>
+                <div style="margin-top: 0.5rem; padding: 1rem; background-color: var(--bg-color, #f8f9fa); border-radius: 4px; border: 1px solid var(--border-color, #eff2f7);">
+                    ${docHtml}
+                </div>
+            </div>
+        `;
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // 关闭按钮事件
+        const closeBtn = content.querySelector('.close-modal');
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // 点击背景关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+});
+</script>
+

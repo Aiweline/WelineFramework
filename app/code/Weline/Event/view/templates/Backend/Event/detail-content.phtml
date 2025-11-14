@@ -85,7 +85,7 @@ $eventName = $this->getData('event_name') ?? '';
             </div>
             <div class="detail-item">
                 <label>定义模块：</label>
-                <span class="badge badge-info"><?= htmlspecialchars($event['module'] ?? '') ?></span>
+                <span class="module-name"><?= htmlspecialchars($event['module'] ?? '') ?></span>
             </div>
             <?php if (!empty($event['description'])): ?>
                 <div class="detail-item">
@@ -176,11 +176,18 @@ $eventName = $this->getData('event_name') ?? '';
 
 <style>
 .event-overview {
-    background: white;
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     padding: 30px;
     margin-bottom: 20px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-overview {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .event-header {
@@ -191,12 +198,16 @@ $eventName = $this->getData('event_name') ?? '';
 
 .event-icon {
     font-size: 48px;
-    color: #ffc107;
+    color: #fcb92c;
 }
 
 .event-info h2 {
     margin: 0 0 10px 0;
-    color: #333;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .event-info h2 {
+    color: #e9ecef;
 }
 
 .event-code {
@@ -207,28 +218,45 @@ $eventName = $this->getData('event_name') ?? '';
 }
 
 .event-code code {
-    background-color: #f4f4f4;
+    background-color: #f8f9fa;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 14px;
-    color: #e83e8c;
+    color: #0bb197;
     flex: 1;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-code code {
+    background-color: #1e2125;
+    border-color: #2d3448;
 }
 
 .btn-copy {
     background: #f8f9fa;
-    border: 1px solid #ddd;
+    border: 1px solid #eff2f7;
     border-radius: 4px;
     padding: 4px 8px;
     cursor: pointer;
     font-size: 14px;
-    color: #666;
-    transition: all 0.3s;
+    color: #74788d;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .btn-copy {
+    background: #1e2125;
+    border-color: #2d3448;
+    color: #8590a5;
 }
 
 .btn-copy:hover {
     background: #e9ecef;
-    color: #333;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .btn-copy:hover {
+    background: #2d3448;
+    color: #e9ecef;
 }
 
 .btn-copy i {
@@ -250,18 +278,25 @@ $eventName = $this->getData('event_name') ?? '';
 }
 
 .stat-card {
-    background: white;
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     padding: 20px;
     display: flex;
     align-items: center;
     gap: 15px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .stat-card {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .stat-icon {
     font-size: 32px;
-    color: #007bff;
+    color: #4aa3ff;
 }
 
 .stat-content {
@@ -271,20 +306,35 @@ $eventName = $this->getData('event_name') ?? '';
 .stat-value {
     font-size: 24px;
     font-weight: bold;
-    color: #333;
+    color: #212529;
     margin-bottom: 4px;
+}
+
+[data-theme-mode="dark"] .stat-value {
+    color: #e9ecef;
 }
 
 .stat-label {
     font-size: 12px;
-    color: #666;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .stat-label {
+    color: #8590a5;
 }
 
 .event-details {
-    background: white;
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     padding: 30px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-details {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .detail-section {
@@ -298,11 +348,16 @@ $eventName = $this->getData('event_name') ?? '';
 .detail-section h3 {
     margin: 0 0 20px 0;
     padding-bottom: 10px;
-    border-bottom: 2px solid #eee;
-    color: #333;
+    border-bottom: 2px solid #eff2f7;
+    color: #212529;
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+[data-theme-mode="dark"] .detail-section h3 {
+    border-bottom-color: #2d3448;
+    color: #e9ecef;
 }
 
 .detail-content {
@@ -319,13 +374,21 @@ $eventName = $this->getData('event_name') ?? '';
 
 .detail-item label {
     font-weight: 600;
-    color: #666;
+    color: #74788d;
     min-width: 100px;
+}
+
+[data-theme-mode="dark"] .detail-item label {
+    color: #8590a5;
 }
 
 .detail-item span {
     flex: 1;
-    color: #333;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .detail-item span {
+    color: #e9ecef;
 }
 
 .observers-list {
@@ -335,9 +398,13 @@ $eventName = $this->getData('event_name') ?? '';
 }
 
 .observer-module-group {
-    border: 1px solid #eee;
+    border: 1px solid #eff2f7;
     border-radius: 8px;
     padding: 20px;
+}
+
+[data-theme-mode="dark"] .observer-module-group {
+    border-color: #2d3448;
 }
 
 .observer-module-group h4 {
@@ -345,7 +412,11 @@ $eventName = $this->getData('event_name') ?? '';
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #333;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .observer-module-group h4 {
+    color: #e9ecef;
 }
 
 .observers-table {
@@ -361,7 +432,12 @@ $eventName = $this->getData('event_name') ?? '';
 .table td {
     padding: 10px;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .table th,
+[data-theme-mode="dark"] .table td {
+    border-bottom-color: #2d3448;
 }
 
 .table th {
@@ -370,16 +446,29 @@ $eventName = $this->getData('event_name') ?? '';
     font-size: 12px;
 }
 
+[data-theme-mode="dark"] .table th {
+    background-color: #1e2125;
+}
+
 .empty-state {
     text-align: center;
     padding: 40px 20px;
-    color: #666;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .empty-state {
+    color: #8590a5;
 }
 
 .empty-state i {
     font-size: 48px;
-    color: #ddd;
+    color: #eff2f7;
     margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+[data-theme-mode="dark"] .empty-state i {
+    color: #2d3448;
 }
 
 .badge {
@@ -390,23 +479,38 @@ $eventName = $this->getData('event_name') ?? '';
     border-radius: 12px;
 }
 
-.badge-primary { background-color: #007bff; color: white; }
-.badge-info { background-color: #17a2b8; color: white; }
-.badge-success { background-color: #28a745; color: white; }
-.badge-warning { background-color: #ffc107; color: #212529; }
-.badge-danger { background-color: #dc3545; color: white; }
-.badge-secondary { background-color: #6c757d; color: white; }
+.badge-primary { background-color: #0bb197; color: white; }
+.badge-info { background-color: #4aa3ff; color: white; }
+.badge-success { background-color: #0ac074; color: white; }
+.badge-warning { background-color: #fcb92c; color: #212529; }
+.badge-danger { background-color: #ff3d60; color: white; }
+.badge-secondary { background-color: #74788d; color: white; }
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
 
 code {
-    background-color: #f4f4f4;
+    background-color: #f8f9fa;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-    color: #e83e8c;
+    color: #0bb197;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] code {
+    background-color: #1e2125;
+    border-color: #2d3448;
 }
 
 .text-primary {
-    color: #007bff;
+    color: #0bb197;
+}
+
+.module-name {
+    color: #4aa3ff;
+    font-weight: 500;
 }
 </style>
 
