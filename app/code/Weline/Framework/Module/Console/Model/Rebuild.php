@@ -495,10 +495,10 @@ class Rebuild extends CommandAbstract
                 '  - 命名空间：Page\\LocalDescription',
             ],
             [
-                '查看模块中所有模型' => 'php bin/w model:rebuild -m GuoLaiRen_PageBuilder',
-                '重建指定模型（简写）' => 'php bin/w model:rebuild -m GuoLaiRen_PageBuilder -n Page',
-                '重建指定模型（完整路径）' => 'php bin/w model:rebuild -m GuoLaiRen_PageBuilder -n Page/LocalDescription',
-                '使用长选项' => 'php bin/w model:rebuild --module=GuoLaiRen_PageBuilder --name=Page',
+                '查看模块中所有模型' => 'php bin/w model:rebuild -m Weline_Demo',
+                '重建指定模型（简写）' => 'php bin/w model:rebuild -m Weline_Demo -n Page',
+                '重建指定模型（完整路径）' => 'php bin/w model:rebuild -m Weline_Demo -n Page/LocalDescription',
+                '使用长选项' => 'php bin/w model:rebuild --module=Weline_Demo --name=Page',
             ],
             'php bin/w model:rebuild -m <模块名> [-n <模型名>]'
         );

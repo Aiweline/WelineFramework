@@ -45,15 +45,40 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return;
         }
         
-        # 系统已安装，执行正常的升级流程
-        /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
-        $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
-        $moduleUpdate->execute($args, $data);
-        
-        # 触发系统升级后事件
-        /**@var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Setup::upgrade_after');
+        # 系统已安装，在升级开始前启用维护模式
+        try {
+            # 启用维护模式
+            Env::getInstance()->setConfig('maintenance', true);
+            $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
+            
+            # 执行正常的升级流程
+            /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
+            $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
+            $moduleUpdate->execute($args, $data);
+            
+            # 触发系统升级后事件
+            /**@var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Framework_Setup::upgrade_after');
+            
+            $this->printing->success(__('系统升级完成！'));
+        } catch (\Exception $e) {
+            $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
+            throw $e;
+        } finally {
+            # 升级完成后自动关闭维护模式
+            try {
+                $result = Env::getInstance()->setConfig('maintenance', false);
+                if ($result) {
+                    $this->printing->note(__('维护模式已关闭。'));
+                } else {
+                    $this->printing->warning(__('关闭维护模式失败，配置可能未保存。请手动运行 php bin/w maintenance:disable 关闭维护模式。'));
+                }
+            } catch (\Exception $e) {
+                # 如果关闭维护模式失败，输出警告但不影响主流程
+                $this->printing->warning(__('关闭维护模式时发生错误：%{1}。请手动运行 php bin/w maintenance:disable 关闭维护模式。', [$e->getMessage()]));
+            }
+        }
     }
 
     /**

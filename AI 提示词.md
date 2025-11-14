@@ -72,10 +72,26 @@
 
 ## 回答原则
 
+### 0. 框架方法验证原则（最重要）
+- **禁止自己创造方法**：所有使用的方法必须是框架实际存在和支持的，禁止自己想象或创造不存在的方法
+- **必须验证方法存在**：在使用任何框架方法前，必须通过代码搜索、文档查阅等方式确认该方法确实存在于框架中
+- **禁止使用不存在的方法**：如 `fetchOne()`、`tableColumnExist()` 等不存在的方法，使用前必须验证
+- **查询框架支持**：每一步查询操作都要确认框架是否支持该方法，如果不确定，必须先搜索框架代码或文档
+- **遵循框架规范**：严格按照框架提供的API使用，不要自己"改进"或"优化"框架方法
+- **错误示例**：
+  - ❌ `$model->where('id', 1)->fetchOne()` - fetchOne() 方法不存在
+  - ❌ `$setup->tableColumnExist('field')` - tableColumnExist() 方法不存在
+  - ❌ `$connection->beginTransaction()` - 如果框架不支持，不能使用
+- **正确做法**：
+  - ✅ 先搜索框架代码确认方法存在：`grep -r "function fetchOne" app/code/Weline/Framework`
+  - ✅ 查阅开发文档确认方法签名和用法
+  - ✅ 使用框架实际提供的方法：`$model->where('id', 1)->find()->fetch()`
+
 ### 1. 准确性
 - 基于WelineFramework的实际代码结构和功能
 - 提供经过验证的代码示例和配置
 - 确保建议的解决方案符合框架设计理念
+- **必须验证所有方法确实存在于框架中**
 
 ### 2. 完整性
 - 提供完整的代码示例，包括必要的命名空间和引用
@@ -108,17 +124,25 @@
 - 模块间的依赖和通信
 
 ### 数据库操作
+- **重要**：所有方法必须验证框架是否支持，禁止使用不存在的方法
+- **核心规则**：所有ORM查询操作后必须调用`fetch()`或`fetchArray()`才会真正执行，查询才会生效
 - ORM模型的定义和使用
 - 复杂查询的构建（内置预执行，直接填写值）
-- 丰富的查询方法：find()->fetch(), select()->fetch(), fetchArray(), total()
+- **必须使用的方法**：find()->fetch(), select()->fetch(), fetchArray(), total()
+- **禁止使用的方法**：fetchOne()（不存在）
+- **查询执行机制**：
+  - `select()`、`find()` 只是构建查询，不会执行，必须调用 `fetch()` 或 `fetchArray()` 才会执行
+  - `update()`、`delete()`、`insert()` 只是构建操作，必须调用 `fetch()` 才会执行
+  - 不调用 `fetch()` 的查询不会生效，数据库不会有任何变化
 - 条件查询：where(), order(), group(), having(), limit(), page(), pagination()
 - 字段操作：fields(), concat(), concat_like(), group_concat()
 - 时间查询：period() 支持多种时间段
-- 数据操作：insert(), update(), delete(), inc(), dec()
+- 数据操作：insert(), update(), delete(), inc(), dec()（都需要调用fetch()才会执行）
 - 批量插入：支持二维数组批量插入多行数据
-- 事务操作：beginTransaction(), commit(), rollBack()
+- 事务操作：使用前必须验证框架是否支持 beginTransaction(), commit(), rollBack()
 - 表操作：truncate(), backup(), query()
 - 数据库迁移和版本管理
+- **字段检查方法**：使用 hasField()，禁止使用 tableColumnExist()（不存在）
 
 ### 路由和API
 - **路由自动注册机制**：框架自动扫描 Controller 目录并注册路由，**禁止使用 routes.xml 文件**
@@ -146,12 +170,147 @@
 ### 主题和前端
 - 主题开发和继承
 - 静态资源管理
-- **w-delete 删除组件**：使用框架提供的 `w-delete` 组件实现删除确认功能，支持智能定位和自适应弹出方向
-  - 必须使用 `<js:part name="w-delete"/>` 引入组件
-  - 删除按钮使用 `w-delete="true"` 或 `w-delete="1"` 属性
-  - 支持 `w-url`、`w-method`、`w-msg`、`w-var-*` 等属性配置
-  - 后端控制器需要使用 `$this->request->getParams()` 支持 JSON 和表单数据
-  - 删除成功后组件会自动移除表格行，无需手动刷新页面
+- **主题色系规范（重要）**：
+  - **必须遵循主题色系**：所有开发必须使用 Weline Framework 主题规范的颜色变量，禁止自定义颜色值
+  - **严格禁止自定义颜色**：
+    - ❌ **绝对禁止**在代码中直接设置任何颜色值（如 `color: #667eea`、`background: #764ba2`、`border-color: #ff0000` 等）
+    - ❌ **绝对禁止**在CSS、SCSS、JavaScript、HTML内联样式中硬编码颜色值
+    - ❌ **绝对禁止**使用任何非主题规范的颜色值，即使看起来"更好看"也不允许
+    - ✅ **必须使用**主题提供的CSS变量来设置所有颜色
+    - ✅ **必须遵循**主题色系规范，所有颜色设置必须通过CSS变量实现
+  - **主题色系变量**：
+    - 主色（Primary）：`#0bb197` - 用于主要操作按钮、链接等
+    - 次要色（Secondary）：`#74788d` - 用于次要元素
+    - 成功色（Success）：`#0ac074` - 用于成功提示、确认按钮
+    - 危险色（Danger）：`#ff3d60` - 用于删除、警告、错误提示
+    - 警告色（Warning）：`#fcb92c` - 用于警告提示
+    - 信息色（Info）：`#4aa3ff` - 用于信息提示
+  - **CSS变量定义**：
+    ```css
+    :root {
+        --primary-color: #0bb197;
+        --secondary-color: #74788d;
+        --success-color: #0ac074;
+        --danger-color: #ff3d60;
+        --warning-color: #fcb92c;
+        --info-color: #4aa3ff;
+    }
+    ```
+  - **暗色主题支持**：必须同时支持明暗主题切换，使用 `[data-theme="dark"]` 选择器
+  - **滚动条样式规范**：
+    - 滚动条宽度：6px（Webkit）或 thin（Firefox）
+    - 滚动条颜色：浅色主题 `#a2adb7`，暗色主题 `#8590a5`
+    - 滚动条轨道：透明（transparent）
+    - 必须使用CSS变量：`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`
+    - 示例代码：
+      ```css
+      /* Webkit浏览器滚动条 */
+      *::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+      }
+      *::-webkit-scrollbar-track {
+          background: var(--scrollbar-track);
+          border-radius: 3px;
+      }
+      *::-webkit-scrollbar-thumb {
+          background: var(--scrollbar-thumb);
+          border-radius: 3px;
+          transition: background 0.2s ease;
+      }
+      *::-webkit-scrollbar-thumb:hover {
+          background: var(--scrollbar-thumb-hover);
+      }
+      /* Firefox滚动条 */
+      * {
+          scrollbar-width: thin;
+          scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      }
+      ```
+  - **按钮样式规范**：
+    - 主要按钮：使用 `var(--primary-color)` 或 `var(--success-color)`
+    - 危险按钮：使用 `var(--danger-color)`
+    - 警告按钮：使用 `var(--warning-color)`
+    - 禁止硬编码颜色值，必须使用CSS变量
+  - **背景色系规范**：
+    - 浅色主题背景：`#f8f9fa`（主背景）、`#ffffff`（卡片背景）
+    - 暗色主题背景：`#1e2125`（主背景）、`#252b3b`（卡片背景）
+    - 必须使用CSS变量：`--bg-color`、`--card-bg`、`--sidebar-bg`
+  - **文本色系规范**：
+    - 浅色主题：`#212529`（主文本）、`#74788d`（次要文本）
+    - 暗色主题：`#e9ecef`（主文本）、`#8590a5`（次要文本）
+    - 必须使用CSS变量：`--text-color`、`--text-secondary`
+  - **边框色系规范**：
+    - 浅色主题：`#eff2f7`
+    - 暗色主题：`#2d3448`
+    - 必须使用CSS变量：`--border-color`
+  - **开发要求**：
+    - ✅ 所有颜色必须使用CSS变量，禁止硬编码
+    - ✅ 必须同时支持明暗主题
+    - ✅ 滚动条必须遵循主题规范
+    - ✅ 按钮、背景、文本、边框都必须使用主题变量
+    - ❌ **绝对禁止**使用自定义颜色值（如 `#667eea`、`#764ba2`、`#ff0000` 等任何非主题规范的颜色）
+    - ❌ **绝对禁止**在CSS、SCSS、JavaScript、HTML中直接设置颜色值
+    - ❌ 禁止忽略暗色主题支持
+    - ❌ 禁止使用浏览器默认滚动条样式
+  - **颜色使用示例**：
+    ```css
+    /* ✅ 正确：使用CSS变量 */
+    .my-button {
+        background-color: var(--primary-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+    }
+    
+    /* ❌ 错误：硬编码颜色值 */
+    .my-button {
+        background-color: #667eea;  /* 禁止！必须使用 var(--primary-color) */
+        color: #333333;              /* 禁止！必须使用 var(--text-color) */
+        border: 1px solid #e0e0e0;   /* 禁止！必须使用 var(--border-color) */
+    }
+    ```
+- **w-delete 删除组件（重要）**：
+  - **必须使用**：所有删除功能必须使用框架提供的 `w-delete` 组件，禁止使用自定义 JavaScript 或 `confirm()` 实现删除确认
+  - **引入组件**：必须在页面底部使用 `<js:part name="w-delete"/>` 引入组件
+  - **删除按钮属性**：
+    - 必须添加 `w-delete="true"` 或 `w-delete="1"` 属性启用删除功能
+    - `w-url`：删除请求的URL（必需，必须是完整的URL字符串，不能使用模板函数）
+    - `w-method`：HTTP方法，默认为"DELETE"，POST请求使用 `w-method="POST"`
+    - `w-msg`：自定义确认消息
+    - `w-var-*`：额外的POST参数，如 `w-var-id="123"` 会作为 `id: 123` 发送
+  - **URL 配置**：
+    - 在 JavaScript 模板字符串中，URL 必须在 PHP 中预先定义：`const deleteUrl = '<?= $this->getBackendUrl("path") ?>';`
+    - 不能直接在模板字符串中使用 `@admin-url()` 等模板函数
+  - **后端控制器要求**：
+    - 必须使用 `$this->request->getParams()` 同时支持 JSON 和表单数据（因为 w-delete 组件 POST 请求时发送 JSON）
+    - 返回格式：`['success' => true/false, 'message' => '消息', 'msg' => '消息']`（同时包含 message 和 msg 字段）
+  - **删除成功处理**：
+    - 组件会自动显示成功/失败消息
+    - 如果删除按钮在 `<tr>` 中，组件会自动移除该行
+    - 其他情况需要监听删除成功事件，手动刷新数据
+  - **事件委托**：组件使用事件委托，支持动态添加的元素，无需手动绑定事件
+  - **禁止使用**：
+    - ❌ 禁止使用 `confirm()` 实现删除确认
+    - ❌ 禁止使用自定义 JavaScript 实现删除功能
+    - ❌ 禁止使用 `alert()` 显示删除结果
+  - **示例代码**：
+    ```html
+    <!-- 在页面底部引入组件 -->
+    <js:part name="w-delete"/>
+    
+    <!-- 删除按钮 -->
+    <button type="button" 
+            class="btn btn-danger" 
+            w-delete="true"
+            w-url="/admin/path/to/delete"
+            w-method="POST"
+            w-var-id="123"
+            w-msg="确定要删除这个项目吗？此操作不可恢复！">
+        <i class="mdi mdi-delete"></i> 删除
+    </button>
+    ```
+  - **后端控制器必须继承 `Weline\Admin\Controller\BaseController` 以使用 Weline_Admin 布局**
+  - **详情或小型信息查看必须使用 Block Offcanvas，禁止创建独立的详情页面**
 
 ### 自定义标签系统 (Taglib)
 - 自定义标签创建：实现TaglibInterface接口
@@ -205,16 +364,74 @@
 - 学以致用原则：学习知识后要主动运用去检查和修复相关问题，不能只学不用
 - 知识记录原则：学到新的技术要点如果开发文档没提到就自动记录到提示词中，持续完善知识库
 - 文档参考原则：开发过程中必须同时参阅"开发文档.md"和"AI 测试.md"，确保使用正确的API和测试方法
-- 翻译规范要求：所有用户界面文本必须使用翻译函数，Message对象使用静态调用，占位符格式必须使用%{1}而不是%1
-- 翻译函数使用规范：
-  - 必须使用翻译函数：所有用户界面文本、Message对象中的文本、错误消息、成功消息、警告消息、按钮文本、标签文本、提示文本都必须翻译
-  - 占位符格式：必须使用%{1}、%{2}、%{3}等，禁止使用%1、%2、%3等
-  - Message对象静态调用：使用Message::success()、Message::error()、Message::warning()、Message::notes()，禁止使用$this->messageManager->addSuccess()等实例方法
-  - 参数传递格式：单参数使用__('文本 %{1}', [$param])，多参数使用__('文本 %{1} %{2}', [$param1, $param2])
-  - 禁止使用error_log()进行日志记录，必须使用Message对象的静态方法
+- **功能校验原则（重要）**：在提交代码给用户之前，必须自己先校验功能是否正常工作。校验包括但不限于：
+  - 检查代码语法错误（使用 read_lints 工具）
+  - 验证功能逻辑是否正确（检查关键代码路径）
+  - 确认文件路径和引用是否正确
+  - 验证数据流和参数传递是否正确
+  - 检查是否有明显的运行时错误
+  - **颜色使用检查（必须）**：所有涉及前端样式的代码必须检查颜色使用：
+    - ✅ 检查CSS/SCSS文件中所有颜色是否使用CSS变量（`var(--xxx-color)`）
+    - ✅ 检查JavaScript中动态设置的颜色是否使用CSS变量
+    - ✅ 检查HTML内联样式中的颜色是否使用CSS变量
+    - ❌ 禁止任何硬编码颜色值（如 `#667eea`、`rgb(255,0,0)`、`red` 等）
+    - ❌ 如果发现硬编码颜色，必须立即修复为CSS变量
+  - **PC路由浏览器验证（必须）**：如果开发的功能涉及PC路由（前端页面），必须使用浏览器工具（MCP browser extension）进行实际验证：
+    - 使用 `mcp_cursor-browser-extension_browser_navigate` 导航到页面URL
+    - 使用 `mcp_cursor-browser-extension_browser_snapshot` 检查页面是否正确加载
+    - 使用 `mcp_cursor-browser-extension_browser_click` 测试交互功能（按钮点击、链接跳转等）
+    - 验证页面元素是否正确显示（标题、按钮、内容等）
+    - 验证页面之间的导航和切换功能是否正常
+    - **只有通过浏览器验证后，才能确认阶段性工程完成**
+  - 只有在确认功能基本可用后，才能提交给用户
+  - 如果发现错误，必须修复后再提交，不能将明显有问题的代码提交给用户
+- **i18n国际化支持规范（重要）**：
+  - **必须支持i18n**：所有模块必须支持国际化翻译，默认支持中英文（zh_Hans_CN 和 en_US）
+  - **基础语言是中文**：所有提示信息、错误消息、成功消息、警告消息、按钮文本、标签文本、提示文本等用户可见文本的**基础语言必须是中文**
+  - **模块翻译文件结构**：每个模块在 `i18n/` 目录下只需要创建 CSV 翻译文件，**不需要 register.php**：
+    - `i18n/zh_Hans_CN.csv` 或 `i18n/zh_CN.csv` - 中文翻译词条文件
+    - `i18n/en_US.csv` - 英文翻译词条文件
+  - **独立翻译包模块**：只有独立的翻译包模块（位于 `app/i18n/` 目录下）才需要 `register.php` 注册文件，使用 `Register::register(Register::I18N, __DIR__, '1.0.1', '简体中文翻译包')` 注册
+  - **必须使用翻译函数**：所有用户界面文本必须使用 `__()` 翻译函数，禁止硬编码中文或英文文本
+  - **代码中的文本必须是中文**：在代码中使用 `__('中文文本')` 格式，翻译文件中的中文列保持原样，英文列提供英文翻译
+  - **占位符格式**：必须使用 `%{1}`、`%{2}`、`%{name}` 等命名占位符，禁止使用 `%1`、`%2` 等
+  - **Message对象翻译**：使用 `Message::success(__('操作成功'))`、`Message::error(__('操作失败：%{1}', [$error]))` 等格式
+  - **参数传递格式**：单参数使用 `__('文本 %{1}', [$param])`，多参数使用 `__('文本 %{1} %{2}', [$param1, $param2])`，命名参数使用 `__('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count])`
+  - **禁止硬编码文本**：禁止在代码中直接写 `'操作成功'`、`'操作失败'` 等文本，必须使用 `__('操作成功')`、`__('操作失败')` 等格式
+  - **翻译文件格式**：CSV文件格式为 `"源文本","翻译文本"`，中文翻译文件中源文本和翻译文本相同，英文翻译文件中提供英文翻译
+  - **示例**：
+    ```php
+    // ✅ 正确：代码中使用中文作为基础语言
+    $this->progress(__('正在清理旧的自动导入文档和分类...'), 'warning');
+    Message::success(__('操作成功！'));
+    echo __('用户 %{name} 有 %{count} 条消息', ['name' => $username, 'count' => $count]);
+    
+    // ❌ 错误：硬编码文本
+    $this->progress('正在清理旧的自动导入文档和分类...', 'warning');
+    Message::success('操作成功！');
+    
+    // ❌ 错误：代码中使用英文作为基础语言
+    $this->progress(__('Cleaning up old auto-imported documents...'), 'warning');
+    ```
 - 框架升级机制：WelineFramework采用基于版本控制的升级机制，仅修改模型代码不会自动修改数据库结构，必须更新模块版本号并执行upgrade()方法才能触发数据库变更。升级流程：1)修改模型代码添加字段常量，2)在upgrade()方法中实现数据库变更逻辑，3)更新register.php中的版本号，4)执行php bin/w setup:upgrade --model命令触发升级
 - 框架加载方法：优先使用框架自带的showLoading()和hideLoading()方法，避免自定义复杂的加载动画
-- ORM链式调用：`save()`方法内部已包含数据库执行逻辑，直接调用即可，**不需要**链式调用`fetch()`。但`delete()`、`update()`、`insert()`等方法需要链式调用`->fetch()`来执行操作，如$model->delete()->fetch()、$model->update()->fetch()、$model->insert()->fetch()
+- **ORM操作必须使用fetch或fetchArray（重要）**：
+  - **核心规则**：所有ORM查询操作（`select()`、`find()`、`update()`、`delete()`、`insert()`等）**必须**链式调用`->fetch()`或`->fetchArray()`才会真正执行。ORM使用惰性执行机制，**不调用fetch不会执行查询，查询不会生效**。
+  - **查询后必须调用fetch()**：`select()`、`find()`等方法只是构建查询，不会真正执行，必须调用`fetch()`或`fetchArray()`才会执行查询并返回结果。
+  - **更新/删除后必须调用fetch()**：`update()`、`delete()`、`insert()`等方法也只是构建操作，必须调用`fetch()`才会真正执行数据库操作。
+  - **禁止使用不存在的方法**：如 `fetchOne()` 方法不存在，必须使用 `find()->fetch()` 替代
+  - **使用前必须验证**：在使用任何ORM方法前，必须确认该方法在框架中确实存在
+  - 示例：
+    - ✅ 正确：`$model->where('id', 1)->find()->fetch()` 或 `->fetchArray()`（查询会执行）
+    - ✅ 正确：`$model->where('status', 1)->select()->fetch()` 或 `->fetchArray()`（查询会执行）
+    - ✅ 正确：`$model->where('id', 1)->delete()->fetch()`（删除会执行）
+    - ✅ 正确：`$model->where('id', 1)->update(['name' => 'test'])->fetch()`（更新会执行）
+    - ✅ 正确：`$model->insert(['name' => 'test'])->fetch()`（插入会执行）
+    - ✅ 正确：`$model->setData('name', 'test')->save()`（save()不需要fetch，内部已执行）
+    - ❌ 错误：`$model->where('id', 1)->find()`（缺少fetch，查询不会执行，不会生效）
+    - ❌ 错误：`$model->where('id', 1)->delete()`（缺少fetch，删除不会执行，不会生效）
+    - ❌ 错误：`$model->where('id', 1)->update(['name' => 'test'])`（缺少fetch，更新不会执行，不会生效）
+    - ❌ 错误：`$model->where('id', 1)->fetchOne()`（fetchOne()方法不存在，必须使用find()->fetch()）
 - ACL权限控制：模板中使用<acl source="Module::permission">标签控制按钮显示，Controller中使用#[\Weline\Framework\Acl\Acl()]注解控制方法访问
 - 系统性能调优
 
@@ -928,6 +1145,13 @@ return [
 
 ## 注意事项
 
+0. **框架方法验证（最重要）**：
+   - **禁止创造方法**：所有使用的方法必须是框架实际存在的，禁止自己想象或创造
+   - **必须验证方法存在**：使用任何方法前，必须通过代码搜索、文档查阅等方式确认方法存在
+   - **使用 codebase_search 或 grep 验证**：如果不确定方法是否存在，必须先用工具搜索框架代码
+   - **禁止使用不存在的方法**：如 `fetchOne()`、`tableColumnExist()` 等，使用前必须验证
+   - **遵循框架API**：严格按照框架提供的API使用，不要自己"改进"或"优化"
+
 1. **版本兼容性**: 确保提供的代码适用于当前框架版本
 2. **安全性**: 在代码示例中包含必要的安全措施
 3. **性能**: 考虑代码的性能影响和优化建议
@@ -935,11 +1159,22 @@ return [
 5. **文档更新**: 当框架更新时，及时更新相关建议
 6. **学以致用**: 学习新知识后，要主动运用去检查和修复相关问题，不能只学不用
 7. **边开发边验证**: 开发过程中要持续测试和验证，参考`AI 测试.md`中的测试方法
-8. **代码修改限制**: 
+8. **颜色使用规范（重要）**：
+   - **必须检查**：所有生成的CSS、SCSS、JavaScript、HTML代码中是否包含硬编码的颜色值
+   - **必须验证**：所有颜色设置是否使用了主题CSS变量（如 `var(--primary-color)`、`var(--text-color)` 等）
+   - **必须禁止**：任何形式的颜色硬编码（如 `#667eea`、`rgb(255,0,0)`、`red` 等）
+   - **必须支持**：明暗主题切换，确保所有颜色变量在暗色主题下也能正常工作
+   - **检查清单**：
+     - ✅ 检查CSS/SCSS文件中是否使用了 `var(--xxx-color)` 变量
+     - ✅ 检查JavaScript中动态设置颜色时是否使用了CSS变量
+     - ✅ 检查HTML内联样式中是否使用了CSS变量
+     - ❌ 禁止任何 `color: #xxx`、`background: #xxx` 等硬编码颜色
+     - ❌ 禁止任何 `style="color: #xxx"` 等内联硬编码颜色
+9. **代码修改限制**: 
    - 禁止对app/code/Weline目录进行修改，除非用户明确指定
    - 禁止对app/code/目录以外的代码进行修改，除非用户明确提到需要修改的文件，如果必要修改可以提醒用户
-9. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
-10. **Git工作流程规则**: 
+10. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
+11. **Git工作流程规则**: 
     - **核心原则**: 绝对禁止直接使用 `git push --force` 强推！
     - **标准推送流程**: 
       1. 先执行 `git pull origin <branch-name>` 拉取远程最新代码

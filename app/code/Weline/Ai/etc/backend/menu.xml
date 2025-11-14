@@ -8,7 +8,7 @@
          name="ai_main" 
          title="AI助手" 
          action="" 
-         parent=""
+         parent="Weline_Backend::system_module"
          icon="mdi mdi-robot"
          order="15000"/>
     

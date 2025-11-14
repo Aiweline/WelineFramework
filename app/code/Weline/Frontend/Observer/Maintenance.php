@@ -26,10 +26,15 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
     {
         /**@var Request $req */
         $req = ObjectManager::getInstance(Request::class);
+
+        if ($req->isApiFrontend() || $req->isApiBackend()) {
+            return;
+        }
+
         $block = Block::getInstance();
         /**@var DataObject $data */
         $data = $event->getData('data');
-        $white_urls = $data->getData('white_urls');
+        $white_urls = $data->getData('white_urls') ?? [];
         $white_urls[] = 'img/favicon.png';
         $white_urls[] = 'assets/css/bootstrap.min.css';
         $white_urls[] = 'assets/css/icons.min.css';

@@ -69,63 +69,63 @@ class Comprehensive extends BackendController
             [
                 'name' => '基本表格',
                 'description' => '测试基本的表格显示功能，包括数据展示、表头、分页等',
-                'url' => $this->getUrl('datatable/test/comprehensive/basic'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/basic'),
                 'icon' => 'table',
                 'category' => '基础功能'
             ],
             [
                 'name' => '表单功能',
                 'description' => '测试表单的增删改查功能，包括字段验证、数据提交等',
-                'url' => $this->getUrl('datatable/test/comprehensive/form'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/form'),
                 'icon' => 'form',
                 'category' => '基础功能'
             ],
             [
                 'name' => '字段类型',
                 'description' => '测试各种字段类型的显示和编辑，包括文本、数字、日期、选择等',
-                'url' => $this->getUrl('datatable/test/comprehensive/fieldTypes'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/fieldTypes'),
                 'icon' => 'field',
                 'category' => '高级功能'
             ],
             [
                 'name' => '多模型查询',
                 'description' => '测试多表JOIN查询功能，包括LEFT JOIN、INNER JOIN等',
-                'url' => $this->getUrl('datatable/test/comprehensive/multiModel'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/multiModel'),
                 'icon' => 'join',
                 'category' => '高级功能'
             ],
             [
                 'name' => '自动生成',
                 'description' => '测试自动生成表头和过滤器功能',
-                'url' => $this->getUrl('datatable/test/comprehensive/autoGeneration'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/autoGeneration'),
                 'icon' => 'auto',
                 'category' => '高级功能'
             ],
             [
                 'name' => '属性继承',
                 'description' => '测试子标签从父标签继承属性的机制',
-                'url' => $this->getUrl('datatable/test/comprehensive/inheritance'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/inheritance'),
                 'icon' => 'inherit',
                 'category' => '高级功能'
             ],
             [
                 'name' => '过滤搜索',
                 'description' => '测试表格的过滤和搜索功能',
-                'url' => $this->getUrl('datatable/test/comprehensive/filter'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/filter'),
                 'icon' => 'search',
                 'category' => '基础功能'
             ],
             [
                 'name' => '排序分页',
                 'description' => '测试表格的排序和分页功能',
-                'url' => $this->getUrl('datatable/test/comprehensive/sorting'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/sorting'),
                 'icon' => 'sort',
                 'category' => '基础功能'
             ],
             [
                 'name' => 'CRUD操作',
                 'description' => '测试完整的增删改查操作流程',
-                'url' => $this->getUrl('datatable/test/comprehensive/crud'),
+                'url' => $this->_url->getUrl('datatable/test/comprehensive/crud'),
                 'icon' => 'crud',
                 'category' => '完整功能'
             ]
@@ -134,7 +134,7 @@ class Comprehensive extends BackendController
         $this->assign('testCases', $testCases);
         $this->assign('models', $this->getTestModels());
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/index');
     }
     
     /**
@@ -147,7 +147,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '基本表格功能测试');
         $this->assign('description', '测试DataTable的基本表格显示功能，包括数据展示、表头、分页等');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/basic');
+
     }
     
     /**
@@ -160,7 +161,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '表单功能测试');
         $this->assign('description', '测试DataTable的表单功能，包括字段验证、数据提交等');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/form');
+
     }
     
     /**
@@ -173,7 +175,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '字段类型测试');
         $this->assign('description', '测试DataTable支持的各种字段类型');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/fieldTypes');
+
     }
     
     /**
@@ -185,7 +188,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '多模型查询测试');
         $this->assign('description', '测试DataTable的多表JOIN查询功能');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/multiModel');
+
     }
     
     /**
@@ -198,7 +202,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '自动生成功能测试');
         $this->assign('description', '测试DataTable的自动生成表头和过滤器功能');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/autoGeneration');
+
     }
     
     /**
@@ -211,7 +216,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '属性继承功能测试');
         $this->assign('description', '测试DataTable的子标签从父标签继承属性的机制');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/inheritance');
+
     }
     
     /**
@@ -224,7 +230,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '过滤和搜索功能测试');
         $this->assign('description', '测试DataTable的过滤和搜索功能');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/filter');
+
     }
     
     /**
@@ -237,7 +244,8 @@ class Comprehensive extends BackendController
         $this->assign('title', '排序和分页功能测试');
         $this->assign('description', '测试DataTable的排序和分页功能');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/sorting');
+
     }
     
     /**
@@ -250,7 +258,8 @@ class Comprehensive extends BackendController
         $this->assign('title', 'CRUD操作测试');
         $this->assign('description', '测试完整的增删改查操作流程');
         
-        return $this->fetch();
+        return $this->fetch('Weline_DataTable::templates/Test/Comprehensive/crud');
+
     }
     
     /**

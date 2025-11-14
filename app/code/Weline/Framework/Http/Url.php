@@ -737,6 +737,39 @@ class Url implements UrlInterface
                 }
             }
         }
+        // 优先级：Path Level > URL Parameters > Cookie/Default values
+        // 如果路径级别没有找到，尝试从URL查询参数获取
+        if (empty($data['currency']) || empty($data['language'])) {
+            $parsed_url = self::parse_url($url);
+            $query_params = [];
+            if (isset($parsed_url['query'])) {
+                parse_str($parsed_url['query'], $query_params);
+            }
+            
+            // 从URL参数获取currency（如果路径级别没有）
+            if (empty($data['currency']) && isset($query_params['currency'])) {
+                $currency = trim($query_params['currency'] ?? '');
+                if (!empty($currency) && strlen($currency) === 3) {
+                    // 验证是否为有效的货币代码（3位大写字母）
+                    if (ctype_upper($currency)) {
+                        $data['currency'] = $currency;
+                    }
+                }
+            }
+            
+            // 从URL参数获取locale（如果路径级别没有）
+            if (empty($data['language']) && isset($query_params['locale'])) {
+                $locale = trim($query_params['locale'] ?? '');
+                if (!empty($locale) && strlen($locale) >= 5 && strlen($locale) <= 10) {
+                    // 验证是否为有效的locale格式（如：zh_Hans_CN）
+                    if (preg_match('/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/', $locale)) {
+                        $data['language'] = $locale;
+                    }
+                }
+            }
+        }
+        
+        // 如果还是没有找到，使用Cookie或默认值
         if (empty($data['currency'])) {
             $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'] ?? $data['website']['default_currency'] ?? 'CNY';
         }

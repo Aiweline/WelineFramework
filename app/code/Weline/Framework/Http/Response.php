@@ -135,6 +135,41 @@ class Response implements ResponseInterface
         return json_encode($data);
     }
 
+    /**
+     * 设置HTTP响应状态码
+     * 
+     * @param int $code HTTP状态码
+     * @return static
+     */
+    public function setHttpResponseCode(int $code): static
+    {
+        http_response_code($code);
+        return $this;
+    }
+
+    /**
+     * 设置响应体内容
+     * 
+     * @param string $body 响应体内容
+     * @return static
+     */
+    public function setBody(string $body): static
+    {
+        echo $body;
+        return $this;
+    }
+
+    /**
+     * 发送响应并退出
+     * 
+     * @return void
+     */
+    #[NoReturn]
+    public function sendResponse(): void
+    {
+        exit;
+    }
+
     /*下载*/
     public function download(string $file, string $name = '', bool $is_delete = false, bool $exit = true): void
     {

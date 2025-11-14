@@ -123,6 +123,156 @@ $permission->save();
 4. 定期检查操作日志
 5. 及时更新安全补丁
 
+## 系统消息通知机制
+
+### 概述
+
+Weline Admin 模块提供了系统消息通知机制，允许其他模块通过事件系统发送系统消息到后台管理界面。该机制基于事件观察者模式实现，实现了模块间的解耦通信。
+
+### 工作原理
+
+1. **事件触发**：其他模块通过触发 `Weline_Framework::msg` 事件来发送系统消息
+2. **事件监听**：Admin 模块的 `SystemNotificationObserver` 观察者监听该事件
+3. **消息保存**：观察者接收到事件后，将消息保存到系统消息表中
+4. **界面显示**：后台管理界面自动显示未读的系统消息
+
+### 使用方法
+
+#### 基本用法
+
+在任何模块中，通过事件管理器触发 `Weline_Framework::msg` 事件即可发送系统消息：
+
+```php
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
+
+// 获取事件管理器
+/** @var EventsManager $eventsManager */
+$eventsManager = ObjectManager::getInstance(EventsManager::class);
+
+// 发送系统消息
+$eventsManager->dispatch('Weline_Framework::msg', [
+    'data' => [
+        'title' => '系统通知',
+        'content' => '这是一条系统消息内容',
+        'is_read' => false,  // 是否已读，默认为 false（未读）
+        'is_icon' => 1,      // 使用图标头像，1=图标，0=不使用
+        'is_img' => 0,       // 使用图片头像，1=图片，0=不使用
+        'avatar' => 'ri-notification-line'  // 头像内容（图标名称或图片路径）
+    ]
+]);
+```
+
+#### 消息数据格式
+
+发送消息时，需要提供以下数据格式：
+
+| 字段 | 类型 | 必填 | 说明 | 默认值 |
+|------|------|------|------|--------|
+| `title` | string | 是 | 消息标题，最大长度120字符 | - |
+| `content` | string | 是 | 消息内容，支持多行文本 | - |
+| `is_read` | bool | 否 | 是否已读，false=未读，true=已读 | false |
+| `is_icon` | int | 否 | 是否使用图标头像，1=使用，0=不使用 | 1 |
+| `is_img` | int | 否 | 是否使用图片头像，1=使用，0=不使用 | 0 |
+| `avatar` | string | 否 | 头像内容，图标名称（如 'ri-notification-line'）或图片路径 | 'ri-notification-line' |
+
+#### 使用图标头像
+
+```php
+$eventsManager->dispatch('Weline_Framework::msg', [
+    'data' => [
+        'title' => '订单通知',
+        'content' => '您有新的订单需要处理',
+        'is_icon' => 1,
+        'is_img' => 0,
+        'avatar' => 'ri-shopping-cart-line'  // RemixIcon 图标名称
+    ]
+]);
+```
+
+#### 使用图片头像
+
+```php
+$eventsManager->dispatch('Weline_Framework::msg', [
+    'data' => [
+        'title' => '用户消息',
+        'content' => '用户提交了新的反馈',
+        'is_icon' => 0,
+        'is_img' => 1,
+        'avatar' => 'assets/images/users/avatar-1.jpg'  // 图片路径
+    ]
+]);
+```
+
+#### 完整示例
+
+```php
+<?php
+
+namespace Your\Module\Controller;
+
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
+
+class YourController
+{
+    /**
+     * 发送系统消息示例
+     */
+    public function sendNotification(): void
+    {
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        
+        // 发送订单通知
+        $eventsManager->dispatch('Weline_Framework::msg', [
+            'data' => [
+                'title' => '新订单提醒',
+                'content' => '订单编号：ORD-20241219-001 已创建，请及时处理。',
+                'is_read' => false,
+                'is_icon' => 1,
+                'avatar' => 'ri-shopping-bag-line'
+            ]
+        ]);
+        
+        // 发送系统警告
+        $eventsManager->dispatch('Weline_Framework::msg', [
+            'data' => [
+                'title' => '系统警告',
+                'content' => '服务器磁盘使用率已达到 85%，请及时清理。',
+                'is_read' => false,
+                'is_icon' => 1,
+                'avatar' => 'ri-alert-line'
+            ]
+        ]);
+    }
+}
+```
+
+### 注意事项
+
+1. **必需字段**：`title` 和 `content` 是必需字段，如果缺少这些字段，消息将不会被保存
+2. **头像类型**：`is_icon` 和 `is_img` 不能同时为 1，如果同时设置，优先使用 `is_icon`
+3. **默认行为**：如果不指定头像类型，默认使用图标头像（`is_icon=1`）
+4. **错误处理**：消息保存失败不会影响主流程，错误会被静默处理（开发模式下会记录到错误日志）
+5. **事件名称**：必须使用 `Weline_Framework::msg` 作为事件名称
+
+### 技术实现
+
+- **观察者类**：`Weline\Admin\Observer\SystemNotificationObserver`
+- **事件名称**：`Weline_Framework::msg`
+- **数据模型**：`Weline\Admin\Model\System\SystemNotification`
+- **配置文件**：`app/code/Weline/Admin/etc/event.xml`
+
+### 扩展开发
+
+如果需要扩展系统消息功能，可以：
+
+1. **自定义观察者**：创建新的观察者类来处理特定类型的消息
+2. **消息分类**：在消息数据中添加 `type` 字段来区分不同类型的消息
+3. **消息优先级**：添加 `priority` 字段来设置消息优先级
+4. **消息过期**：添加 `expire_time` 字段来设置消息过期时间
+
 ## 常见问题
 
 ### Q: 忘记管理员密码怎么办？
@@ -132,4 +282,10 @@ A: 可以通过数据库直接重置密码，或使用命令行工具重置。
 A: 在模块的配置文件中添加菜单配置，并确保有相应的权限设置。
 
 ### Q: 后台访问速度慢怎么办？
-A: 检查缓存配置，清理系统缓存，优化数据库查询。 
+A: 检查缓存配置，清理系统缓存，优化数据库查询。
+
+### Q: 如何发送系统消息？
+A: 使用事件管理器触发 `Weline_Framework::msg` 事件，传入包含 `title` 和 `content` 的数据数组即可。详细用法请参考"系统消息通知机制"章节。
+
+### Q: 系统消息发送失败怎么办？
+A: 检查消息数据格式是否正确，确保 `title` 和 `content` 字段存在且不为空。开发模式下可以查看错误日志获取详细错误信息。 

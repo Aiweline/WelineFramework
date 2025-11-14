@@ -11,15 +11,55 @@ declare(strict_types=1);
 
 namespace Weline\Sticker\Service;
 
-use Weline\Admin\Model\System\SystemNotification;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 通知服务
- * 发送系统通知
+ * 发送系统通知（使用 Weline_Framework::msg 事件）
  */
 class NotificationService
 {
+    private ?EventsManager $eventsManager = null;
+    
+    /**
+     * 获取事件管理器实例（延迟加载）
+     *
+     * @return EventsManager
+     */
+    private function getEventsManager(): EventsManager
+    {
+        if ($this->eventsManager === null) {
+            $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
+        }
+        return $this->eventsManager;
+    }
+    
+    /**
+     * 发送系统消息通知
+     *
+     * @param string $title 标题
+     * @param string $content 内容
+     * @param string $icon 图标名称
+     * @return void
+     */
+    private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
+    {
+        try {
+            $this->getEventsManager()->dispatch('Weline_Framework::msg', [
+                'data' => [
+                    'title' => $title,
+                    'content' => $content,
+                    'is_read' => false,
+                    'is_icon' => 1,
+                    'is_img' => 0,
+                    'avatar' => $icon
+                ]
+            ]);
+        } catch (\Exception $e) {
+            error_log("发送 Sticker 系统消息失败: " . $e->getMessage());
+        }
+    }
     /**
      * 发送 Sticker 规则失效通知
      *
@@ -37,19 +77,16 @@ class NotificationService
         string $stickerFile,
         string $reason
     ): void {
-        try {
-            /** @var SystemNotification $notification */
-            $notification = ObjectManager::getInstance(SystemNotification::class);
-            $notification->setTitle('Sticker 规则失效警告')
-                ->setContent("Sticker 规则已失效\n\n目标模块: {$targetModule}\n目标文件: {$targetFile}\n来源模块: {$sourceModule}\nSticker 文件: {$stickerFile}\n原因: {$reason}")
-                ->setIsRead(false)
-                ->setIsIcon(1)
-                ->setIsImg(0)
-                ->setAvatar('ri-error-warning-line')
-                ->save();
-        } catch (\Exception $e) {
-            error_log("发送 Sticker 通知失败: " . $e->getMessage());
-        }
+        $this->sendSystemMessage(
+            __('Sticker 规则失效警告'),
+            __('Sticker 规则已失效') . "\n\n" . 
+            __('目标模块') . ": {$targetModule}\n" . 
+            __('目标文件') . ": {$targetFile}\n" . 
+            __('来源模块') . ": {$sourceModule}\n" . 
+            __('Sticker 文件') . ": {$stickerFile}\n" . 
+            __('原因') . ": {$reason}",
+            'ri-error-warning-line'
+        );
     }
 
     /**
@@ -69,19 +106,17 @@ class NotificationService
         string $stickerFile,
         string $targetCode
     ): void {
-        try {
-            /** @var SystemNotification $notification */
-            $notification = ObjectManager::getInstance(SystemNotification::class);
-            $notification->setTitle('Sticker 目标代码未找到')
-                ->setContent("Sticker 规则无法找到目标代码\n\n目标模块: {$targetModule}\n目标文件: {$targetFile}\n来源模块: {$sourceModule}\nSticker 文件: {$stickerFile}\n目标代码: " . substr($targetCode, 0, 200))
-                ->setIsRead(false)
-                ->setIsIcon(1)
-                ->setIsImg(0)
-                ->setAvatar('ri-search-line')
-                ->save();
-        } catch (\Exception $e) {
-            error_log("发送 Sticker 通知失败: " . $e->getMessage());
-        }
+        $targetCodePreview = substr($targetCode ?? '', 0, 200);
+        $this->sendSystemMessage(
+            __('Sticker 目标代码未找到'),
+            __('Sticker 规则无法找到目标代码') . "\n\n" . 
+            __('目标模块') . ": {$targetModule}\n" . 
+            __('目标文件') . ": {$targetFile}\n" . 
+            __('来源模块') . ": {$sourceModule}\n" . 
+            __('Sticker 文件') . ": {$stickerFile}\n" . 
+            __('目标代码') . ": " . ($targetCodePreview ?: __('（空）')),
+            'ri-search-line'
+        );
     }
 
     /**
@@ -97,29 +132,24 @@ class NotificationService
         string $targetFile,
         array $conflicts
     ): void {
-        try {
-            $conflictDetails = [];
-            foreach ($conflicts as $conflict) {
-                $conflictDetails[] = sprintf(
-                    "来源模块: %s, Sticker 文件: %s, 位置: %s",
-                    $conflict['source_module'] ?? 'unknown',
-                    $conflict['sticker_file'] ?? 'unknown',
-                    $conflict['position'] ?? 'unknown'
-                );
-            }
-
-            /** @var SystemNotification $notification */
-            $notification = ObjectManager::getInstance(SystemNotification::class);
-            $notification->setTitle('Sticker 冲突检测')
-                ->setContent("检测到 Sticker 规则冲突\n\n目标模块: {$targetModule}\n目标文件: {$targetFile}\n\n冲突详情:\n" . implode("\n", $conflictDetails))
-                ->setIsRead(false)
-                ->setIsIcon(1)
-                ->setIsImg(0)
-                ->setAvatar('ri-alert-line')
-                ->save();
-        } catch (\Exception $e) {
-            error_log("发送 Sticker 通知失败: " . $e->getMessage());
+        $conflictDetails = [];
+        foreach ($conflicts as $conflict) {
+            $conflictDetails[] = sprintf(
+                __('来源模块') . ": %s, " . __('Sticker 文件') . ": %s, " . __('位置') . ": %s",
+                $conflict['source_module'] ?? __('未知'),
+                $conflict['sticker_file'] ?? __('未知'),
+                $conflict['position'] ?? __('未知')
+            );
         }
+
+        $this->sendSystemMessage(
+            __('Sticker 冲突检测'),
+            __('检测到 Sticker 规则冲突') . "\n\n" . 
+            __('目标模块') . ": {$targetModule}\n" . 
+            __('目标文件') . ": {$targetFile}\n\n" . 
+            __('冲突详情') . ":\n" . implode("\n", $conflictDetails),
+            'ri-alert-line'
+        );
     }
 }
 

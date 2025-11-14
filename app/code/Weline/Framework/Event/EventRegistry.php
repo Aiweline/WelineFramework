@@ -1,0 +1,536 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\Framework\Event;
+
+/**
+ * 事件注册表管理
+ * 管理 generated/events.php 文件的读取和写入
+ */
+class EventRegistry
+{
+    private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'events.php';
+
+    private ?array $cachedRegistry = null;
+    private ?int $cachedFileMtime = null;
+    private EventScanner $scanner;
+
+    public function __construct(
+        EventScanner $scanner
+    ) {
+        $this->scanner = $scanner;
+    }
+
+    /**
+     * 获取注册表内容
+     *
+     * @param bool $forceReload 强制重新加载
+     * @return array
+     */
+    public function getRegistry(bool $forceReload = false): array
+    {
+        // 内存缓存机制
+        if (!$forceReload && $this->cachedRegistry !== null) {
+            $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            if ($currentMtime === $this->cachedFileMtime) {
+                return $this->cachedRegistry;
+            }
+        }
+
+        if (!file_exists(self::REGISTRY_FILE)) {
+            $this->cachedRegistry = ['events' => [], 'event_to_module' => []];
+            $this->cachedFileMtime = 0;
+            return $this->cachedRegistry;
+        }
+
+        $registry = include self::REGISTRY_FILE;
+        if (!is_array($registry)) {
+            $registry = ['events' => [], 'event_to_module' => []];
+        }
+
+        // 兼容旧格式（如果没有 event_to_module，则从 events 中提取）
+        if (!isset($registry['event_to_module']) && isset($registry['events'])) {
+            $eventToModule = [];
+            foreach ($registry['events'] as $eventName => $eventInfo) {
+                if (isset($eventInfo['module'])) {
+                    $eventToModule[$eventName] = $eventInfo['module'];
+                }
+            }
+            $registry['event_to_module'] = $eventToModule;
+        } elseif (!isset($registry['events'])) {
+            // 兼容旧格式（如果直接是事件数组）
+            $events = $registry;
+            $eventToModule = [];
+            foreach ($events as $eventName => $eventInfo) {
+                if (isset($eventInfo['module'])) {
+                    $eventToModule[$eventName] = $eventInfo['module'];
+                }
+            }
+            $registry = ['events' => $events, 'event_to_module' => $eventToModule];
+        }
+        
+        // 确保 dynamic_patterns 存在
+        if (!isset($registry['dynamic_patterns'])) {
+            $registry['dynamic_patterns'] = [];
+        }
+
+        $this->cachedRegistry = $registry;
+        $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+
+        return $registry;
+    }
+
+    /**
+     * 刷新注册表（重新扫描并保存）
+     *
+     * @return bool
+     * @throws \RuntimeException 如果多个模块定义了相同的事件名
+     */
+    public function refresh(): bool
+    {
+        // 扫描所有事件规约
+        $scannedData = $this->scanner->scanAllEvents();
+
+        // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
+        $registry = $this->organizeRegistryData($scannedData);
+
+        // 保存注册表
+        return $this->saveRegistry($registry);
+    }
+
+    /**
+     * 组织注册表数据
+     * 将模块级别的事件信息转换为事件名索引的结构
+     *
+     * @param array $scannedData 扫描的数据
+     * @return array
+     * @throws \RuntimeException 如果多个模块定义了相同的事件名
+     */
+    private function organizeRegistryData(array $scannedData): array
+    {
+        $registry = [];
+        // 快速查询：事件名到模块名的映射（用于性能优化）
+        $eventToModuleMap = [];
+        // 动态事件模式列表（用于匹配动态事件）
+        $dynamicEventPatterns = [];
+
+        foreach ($scannedData as $moduleName => $events) {
+            foreach ($events as $eventName => $eventInfo) {
+                // 检查是否是动态事件模式（包含 {}）
+                if ($this->isDynamicEventPattern($eventName)) {
+                    // 动态事件模式，存储到 patterns 中
+                    $dynamicEventPatterns[$eventName] = [
+                        'name' => $eventInfo['name'] ?? $eventName,
+                        'description' => $eventInfo['description'] ?? '',
+                        'doc' => $eventInfo['doc'] ?? '',
+                        'doc_path' => $eventInfo['doc_path'] ?? '',
+                        'has_spec' => $eventInfo['has_spec'] ?? false,
+                        'has_doc' => $eventInfo['has_doc'] ?? false,
+                        'module' => $moduleName,
+                        'pattern' => $eventName, // 存储原始模式
+                    ];
+                    continue; // 动态事件模式不添加到普通事件列表
+                }
+
+                // 检查事件名是否已被其他模块定义
+                if (isset($registry[$eventName])) {
+                    $existingModule = $eventToModuleMap[$eventName];
+                    $existingEventInfo = $registry[$eventName];
+                    
+                    // 构建详细的错误信息和解决方案
+                    $errorMessage = $this->buildConflictErrorMessage(
+                        $eventName,
+                        $existingModule,
+                        $moduleName,
+                        $existingEventInfo,
+                        $eventInfo
+                    );
+                    
+                    throw new \RuntimeException($errorMessage);
+                }
+
+                // 添加新事件
+                $registry[$eventName] = [
+                    'name' => $eventInfo['name'] ?? $eventName,
+                    'description' => $eventInfo['description'] ?? '',
+                    'doc' => $eventInfo['doc'] ?? '',
+                    'doc_path' => $eventInfo['doc_path'] ?? '',
+                    'has_spec' => $eventInfo['has_spec'] ?? false,
+                    'has_doc' => $eventInfo['has_doc'] ?? false,
+                    'module' => $moduleName, // 定义该事件的模块
+                    'modules' => []
+                ];
+                // 添加到快速查询映射
+                $eventToModuleMap[$eventName] = $moduleName;
+
+                // 添加提供该事件的模块信息（当前只有一个模块）
+                $registry[$eventName]['modules'][$moduleName] = [
+                    'module' => $moduleName,
+                    'doc_path' => $eventInfo['doc_path'] ?? '',
+                    'has_doc' => $eventInfo['has_doc'] ?? false
+                ];
+            }
+        }
+
+        // 返回包含快速查询映射的数据结构
+        return [
+            'events' => $registry,
+            'event_to_module' => $eventToModuleMap, // 快速查询：事件名 => 模块名
+            'dynamic_patterns' => $dynamicEventPatterns // 动态事件模式
+        ];
+    }
+
+    /**
+     * 检查是否是动态事件模式
+     *
+     * @param string $eventName 事件名
+     * @return bool
+     */
+    private function isDynamicEventPattern(string $eventName): bool
+    {
+        return str_contains($eventName, '{') && str_contains($eventName, '}');
+    }
+
+    /**
+     * 保存注册表
+     *
+     * @param array $registry 注册表数据
+     * @return bool
+     */
+    public function saveRegistry(array $registry): bool
+    {
+        $content = "<?php return " . w_var_export($registry, true) . ";\n";
+
+        // 确保目录存在
+        $dir = dirname(self::REGISTRY_FILE);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
+
+        if ($result !== false) {
+            $this->cachedRegistry = $registry;
+            $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 构建事件冲突错误信息
+     *
+     * @param string $eventName 冲突的事件名
+     * @param string $existingModule 已定义该事件的模块
+     * @param string $conflictModule 冲突的模块
+     * @param array $existingEventInfo 已定义事件的信息
+     * @param array $conflictEventInfo 冲突事件的信息
+     * @return string
+     */
+    private function buildConflictErrorMessage(
+        string $eventName,
+        string $existingModule,
+        string $conflictModule,
+        array $existingEventInfo,
+        array $conflictEventInfo
+    ): string {
+        // 获取模块路径
+        $existingModulePath = $this->getModulePath($existingModule);
+        $conflictModulePath = $this->getModulePath($conflictModule);
+        
+        // 生成建议的新事件名（使用模块名作为前缀）
+        $suggestedEventName = $this->suggestEventName($conflictModule, $eventName);
+        
+        $message = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "【致命错误】事件名冲突检测\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        
+        $message .= "❌ 冲突事件名：{$eventName}\n\n";
+        
+        $message .= "📦 已注册模块信息：\n";
+        $message .= "   模块名称：{$existingModule}\n";
+        if ($existingModulePath) {
+            $message .= "   模块路径：{$existingModulePath}\n";
+        }
+        $message .= "   规约文件：{$existingModulePath}/event.php\n";
+        if (!empty($existingEventInfo['name'])) {
+            $message .= "   事件显示名：{$existingEventInfo['name']}\n";
+        }
+        if (!empty($existingEventInfo['doc_path'])) {
+            $message .= "   文档路径：{$existingModulePath}/{$existingEventInfo['doc_path']}\n";
+        }
+        $message .= "\n";
+        
+        $message .= "⚠️  冲突模块信息：\n";
+        $message .= "   模块名称：{$conflictModule}\n";
+        if ($conflictModulePath) {
+            $message .= "   模块路径：{$conflictModulePath}\n";
+        }
+        $message .= "   规约文件：{$conflictModulePath}/event.php\n";
+        if (!empty($conflictEventInfo['name'])) {
+            $message .= "   事件显示名：{$conflictEventInfo['name']}\n";
+        }
+        if (!empty($conflictEventInfo['doc_path'])) {
+            $message .= "   文档路径：{$conflictModulePath}/{$conflictEventInfo['doc_path']}\n";
+        }
+        $message .= "\n";
+        
+        $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "💡 解决方案\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        
+        $message .= "方案 1：修改冲突模块的事件名（推荐）\n";
+        $message .= "   1. 打开文件：{$conflictModulePath}/event.php\n";
+        $message .= "   2. 将事件名 '{$eventName}' 修改为：'{$suggestedEventName}'\n";
+        $message .= "   3. 如果存在文档文件，重命名文档文件以匹配新事件名\n";
+        $message .= "   4. 更新所有使用该事件的代码，将事件名改为 '{$suggestedEventName}'\n";
+        $message .= "   5. 运行 'php bin/w event:rebuild' 重建事件注册表\n\n";
+        
+        $message .= "方案 2：删除冲突模块的事件定义\n";
+        $message .= "   如果 {$conflictModule} 模块不需要定义此事件，可以：\n";
+        $message .= "   1. 删除或注释掉 {$conflictModulePath}/event.php 中的事件定义\n";
+        $message .= "   2. 如果存在文档文件，可以删除或保留（不影响功能）\n";
+        $message .= "   3. 运行 'php bin/w event:rebuild' 重建事件注册表\n\n";
+        
+        $message .= "方案 3：联系已注册模块的维护者\n";
+        $message .= "   如果 {$conflictModule} 模块确实需要使用此事件名，可以：\n";
+        $message .= "   1. 联系 {$existingModule} 模块的维护者，协商事件名的使用\n";
+        $message .= "   2. 或者考虑使用不同的事件名来避免冲突\n\n";
+        
+        $message .= "📝 事件命名规范建议：\n";
+        $message .= "   推荐格式：{模块名}::{事件功能名}\n";
+        $message .= "   示例：Weline_Admin::user_login, Weline_Order::order_created\n";
+        $message .= "   这样可以有效避免事件名冲突\n\n";
+        
+        $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        
+        return $message;
+    }
+
+    /**
+     * 获取模块路径
+     *
+     * @param string $moduleName 模块名
+     * @return string
+     */
+    private function getModulePath(string $moduleName): string
+    {
+        try {
+            $env = \Weline\Framework\App\Env::getInstance();
+            $moduleInfo = $env->getModuleInfo($moduleName);
+            return $moduleInfo['base_path'] ?? '';
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+
+    /**
+     * 建议新的事件名（使用模块名作为前缀）
+     *
+     * @param string $moduleName 模块名
+     * @param string $originalEventName 原始事件名
+     * @return string
+     */
+    private function suggestEventName(string $moduleName, string $originalEventName): string
+    {
+        // 如果事件名已经包含模块名，尝试提取功能名
+        if (str_contains($originalEventName, '::')) {
+            $parts = explode('::', $originalEventName, 2);
+            $functionName = $parts[1] ?? $originalEventName;
+        } else {
+            $functionName = $originalEventName;
+        }
+        
+        // 生成新的事件名：模块名::功能名
+        return $moduleName . '::' . $functionName;
+    }
+
+    /**
+     * 获取事件列表
+     *
+     * @return array
+     */
+    public function getEvents(): array
+    {
+        $registry = $this->getRegistry();
+        return $registry['events'] ?? [];
+    }
+
+    /**
+     * 获取动态事件模式列表
+     *
+     * @return array
+     */
+    public function getDynamicPatterns(): array
+    {
+        $registry = $this->getRegistry();
+        return $registry['dynamic_patterns'] ?? [];
+    }
+
+    /**
+     * 获取事件名到模块名的映射（快速查询）
+     *
+     * @return array
+     */
+    public function getEventToModuleMap(): array
+    {
+        $registry = $this->getRegistry();
+        return $registry['event_to_module'] ?? [];
+    }
+
+    /**
+     * 检查事件是否有规约
+     *
+     * @param string $eventName 事件名
+     * @return bool
+     */
+    public function hasSpec(string $eventName): bool
+    {
+        $events = $this->getEvents();
+        
+        // 先检查精确匹配
+        if (isset($events[$eventName]) && ($events[$eventName]['has_spec'] ?? false)) {
+            return true;
+        }
+        
+        // 检查动态事件模式匹配
+        $matchedPattern = $this->matchDynamicEventPattern($eventName);
+        if ($matchedPattern && ($matchedPattern['has_spec'] ?? false)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * 检查事件是否有文档
+     *
+     * @param string $eventName 事件名
+     * @return bool
+     */
+    public function hasDoc(string $eventName): bool
+    {
+        $events = $this->getEvents();
+        
+        // 先检查精确匹配
+        if (isset($events[$eventName]) && ($events[$eventName]['has_doc'] ?? false)) {
+            return true;
+        }
+        
+        // 检查动态事件模式匹配
+        $matchedPattern = $this->matchDynamicEventPattern($eventName);
+        if ($matchedPattern && ($matchedPattern['has_doc'] ?? false)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * 获取事件信息
+     *
+     * @param string $eventName 事件名
+     * @return array|null
+     */
+    public function getEventInfo(string $eventName): ?array
+    {
+        $events = $this->getEvents();
+        
+        // 先检查精确匹配
+        if (isset($events[$eventName])) {
+            return $events[$eventName];
+        }
+        
+        // 检查动态事件模式匹配
+        $matchedPattern = $this->matchDynamicEventPattern($eventName);
+        if ($matchedPattern) {
+            return $matchedPattern;
+        }
+        
+        return null;
+    }
+
+    /**
+     * 获取事件所属的模块名
+     *
+     * @param string $eventName 事件名
+     * @return string|null
+     */
+    public function getEventModule(string $eventName): ?string
+    {
+        $eventToModule = $this->getEventToModuleMap();
+        
+        // 先检查精确匹配
+        if (isset($eventToModule[$eventName])) {
+            return $eventToModule[$eventName];
+        }
+        
+        // 检查动态事件模式匹配
+        $matchedPattern = $this->matchDynamicEventPattern($eventName);
+        if ($matchedPattern && isset($matchedPattern['module'])) {
+            return $matchedPattern['module'];
+        }
+        
+        return null;
+    }
+
+    /**
+     * 匹配动态事件模式
+     * 将实际事件名与动态事件模式进行匹配
+     * 
+     * @param string $eventName 实际事件名，如 "Framework_View::head"
+     * @return array|null 匹配到的模式信息，如果不匹配返回 null
+     */
+    private function matchDynamicEventPattern(string $eventName): ?array
+    {
+        $registry = $this->getRegistry();
+        $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
+        
+        foreach ($dynamicPatterns as $pattern => $patternInfo) {
+            if ($this->matchPattern($pattern, $eventName)) {
+                return $patternInfo;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * 匹配事件名与模式
+     * 例如：模式 "Framework_View::{position}" 可以匹配 "Framework_View::head"
+     * 
+     * @param string $pattern 模式，如 "Framework_View::{position}"
+     * @param string $eventName 实际事件名，如 "Framework_View::head"
+     * @return bool
+     */
+    private function matchPattern(string $pattern, string $eventName): bool
+    {
+        // 将模式转换为正则表达式
+        // 例如：Framework_View::{position} -> Framework_View::(.+)
+        // 例如：{table_name}_model_load_before -> (.+)_model_load_before
+        
+        // 先转义特殊字符
+        $regex = preg_quote($pattern, '/');
+        
+        // 将转义后的 {变量名} 替换为正则表达式的 (.+)
+        // preg_quote 会将 { 转义为 \{，} 转义为 \}
+        // 在正则表达式中，要匹配 \{，需要使用 \\\{
+        // 在字符串中，\\\\\\{ 表示正则表达式中的 \\\{
+        $regex = preg_replace('/\\\\\\{[^}]+\\\\\\}/', '(.+)', $regex);
+        
+        // 匹配整个字符串
+        $regex = '/^' . $regex . '$/';
+        
+        return (bool) preg_match($regex, $eventName);
+    }
+}
+

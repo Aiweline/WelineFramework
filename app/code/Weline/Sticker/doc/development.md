@@ -6,9 +6,9 @@
 
 - 事件：`Framework_View::fetch_file`（模板加载时优先使用编译产物）
 - 注册表：`generated/sticker.php`（内存缓存 + mtime 校验）
-- 规则扫描：`extends/Weline_Sticker` 目录递归
+- 规则扫描：`extends/module/Weline_Sticker` 目录递归
 - 规则解析：`w:sticker` 标签（`action`、`position`、`w:sticker:target`、`w:sticker:code`）
-- 编译输出：`generated/extends/Weline_Sticker/`
+- 编译输出：`generated/extends/module/Weline_Sticker/`
 - 冲突检测：同一目标代码的相同位置索引视为冲突
 - 通知与日志：`SystemNotification` + `StickerLog`
 - 不使用 `module.xml`，不使用插件（Plugin），仅用事件
@@ -17,7 +17,7 @@
 
 ```
 app/code/Weline/Sticker/
-  ├─ extends/Weline_Sticker/               # 源 Sticker 规则
+  ├─ extends/module/Weline_Sticker/          # 源 Sticker 规则
   ├─ Service/Compiler.php                  # 编译器
   ├─ Service/RuleScanner.php               # 扫描器
   ├─ Service/RuleParser.php                # 解析器
@@ -54,11 +54,11 @@ app/code/Weline/Sticker/
 
 ### 编译流程
 
-1. 扫描 `extends/Weline_Sticker` 找到所有 Sticker 文件
+1. 扫描 `extends/module/Weline_Sticker` 找到所有 Sticker 文件
 2. 解析文件内 `w:sticker` 规则
 3. 找到对应目标源文件并进行最小化（与规则一致的方式）
 4. 按 `position` 与 `action` 应用修改，生成合并后的内容
-5. 写入 `generated/extends/Weline_Sticker/<同路径>`
+5. 写入 `generated/extends/module/Weline_Sticker/<同路径>`
 6. 更新 `generated/sticker.php`
 
 ### 冲突检测
@@ -79,7 +79,7 @@ app/code/Weline/Sticker/
 ### CLI 工作流
 
 - 收集：扫描 → 解析 → 构表 → 写注册表 → 冲突检测
-- 刷新：按注册表/扫描结果执行编译，产物落在 `generated/extends/Weline_Sticker/`
+- 刷新：按注册表/扫描结果执行编译，产物落在 `generated/extends/module/Weline_Sticker/`
 
 ### PHP 8.2+ 兼容要点（重要）
 

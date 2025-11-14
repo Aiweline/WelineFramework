@@ -6,6 +6,7 @@ namespace Weline\Ai\Service;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
+use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Env;
 
@@ -201,11 +202,13 @@ class ConfigResolver
     private function validateConfig(array $config, string $modelCode): void
     {
         if (empty($config['api_key'])) {
-            throw new \Exception(__('模型 %{code} 缺少API密钥配置', ['code' => $modelCode]));
+            $message = __('模型 %{code} 缺少API密钥配置', ['code' => $modelCode]);
+            throw new \Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['model_code' => $modelCode]));
         }
         
         if (empty($config['base_url'])) {
-            throw new \Exception(__('模型 %{code} 缺少API基础URL配置', ['code' => $modelCode]));
+            $message = __('模型 %{code} 缺少API基础URL配置', ['code' => $modelCode]);
+            throw new \Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['model_code' => $modelCode]));
         }
     }
     

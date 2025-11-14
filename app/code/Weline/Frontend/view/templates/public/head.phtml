@@ -42,6 +42,13 @@ endif;
 <?php if (DEV): ?>
     <!--        <script src="@static(Weline_Frontend::/libs/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>
+<script>
+    window.WelineApiConfig = window.WelineApiConfig || {};
+    window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '@static(Weline_Frontend::js/weline-api-worker.js)';
+    window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+    window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+</script>
+<js>Weline_Frontend::js/weline-api.js</js>
 <!--加载配置页头-->
 <?php
 echo $this->getHeader()->getHtml();

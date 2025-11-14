@@ -1,0 +1,8 @@
+访客像素标签,访客像素标签
+"在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。","在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。"
+Pixel沙箱环境,Pixel沙箱环境
+"事件' + this.initData.eventName + '需要指定value值所在位置，请用weline-pixel::' + this.initData.eventName + ':value类名指定值所在的元素，如果指定的元素有value属性，则将使用value属性的值，如果没有则使用innerText","事件' + this.initData.eventName + '需要指定value值所在位置，请用weline-pixel::' + this.initData.eventName + ':value类名指定值所在的元素，如果指定的元素有value属性，则将使用value属性的值，如果没有则使用innerText"
+"Weline Pixel: 不允许重复加载像素，同一个页面只允许一个像素加载，要添加事件请使用像素hook方式添加事件","Weline Pixel: 不允许重复加载像素，同一个页面只允许一个像素加载，要添加事件请使用像素hook方式添加事件"
+"Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base","Weline Pixel: 请先加载前端 block块:Weline\\Frontend\\Block\\Header\\Base"
+系统级别事件,系统级别事件
+自定义事件,自定义事件

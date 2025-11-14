@@ -1,0 +1,171 @@
+<?php
+$events = $this->getData('events') ?? [];
+$totalCount = count($events);
+$currentSort = $this->getData('sort_by') ?? 'name';
+$currentOrder = $this->getData('sort_order') ?? 'asc';
+$quickSearch = $this->getData('quick_search') ?? '';
+$filterModule = $this->getData('filter_module') ?? '';
+$filterSpec = $this->getData('filter_spec') ?? '';
+$filterDoc = $this->getData('filter_doc') ?? '';
+$filterObserver = $this->getData('filter_observer') ?? '';
+?>
+<div class="list-header">
+    <div class="list-info">
+        <span>共找到 <strong><?= $totalCount ?></strong> 个事件</span>
+    </div>
+    <div class="list-actions">
+        <a href="*/backend/event/refresh" class="btn btn-sm btn-warning">
+            <i class="mdi mdi-refresh"></i> 刷新注册表
+        </a>
+    </div>
+</div>
+<?php if (empty($events)): ?>
+    <div class="empty-state">
+        <i class="mdi mdi-lightning-bolt-outline"></i>
+        <h3>暂无事件信息</h3>
+        <p>系统中还没有定义任何事件。请运行 'php bin/w event:rebuild' 重建事件注册表。</p>
+    </div>
+<?php else: ?>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'name' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'q' => $quickSearch,
+                            'module' => $filterModule,
+                            'spec' => $filterSpec,
+                            'doc' => $filterDoc,
+                            'observer' => $filterObserver,
+                            'sort' => 'name',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
+                            事件名
+                            <?php if ($currentSort === 'name'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>显示名</th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'module' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'q' => $quickSearch,
+                            'module' => $filterModule,
+                            'spec' => $filterSpec,
+                            'doc' => $filterDoc,
+                            'observer' => $filterObserver,
+                            'sort' => 'module',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="module" data-order="<?= $newOrder ?>">
+                            定义模块
+                            <?php if ($currentSort === 'module'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>规约/文档</th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'observers' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'q' => $quickSearch,
+                            'module' => $filterModule,
+                            'spec' => $filterSpec,
+                            'doc' => $filterDoc,
+                            'observer' => $filterObserver,
+                            'sort' => 'observers',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="observers" data-order="<?= $newOrder ?>">
+                            观察者
+                            <?php if ($currentSort === 'observers'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($events as $eventName => $eventInfo): ?>
+                    <tr>
+                        <td>
+                            <div class="event-name">
+                                <code><?= htmlspecialchars($eventName ?? '') ?></code>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="event-display-name">
+                                <strong><?= htmlspecialchars($eventInfo['name'] ?? $eventName) ?></strong>
+                            </div>
+                            <?php if (!empty($eventInfo['description'])): ?>
+                                <div class="event-description">
+                                    <small class="text-muted"><?= htmlspecialchars(mb_substr($eventInfo['description'] ?? '', 0, 100)) ?><?= mb_strlen($eventInfo['description'] ?? '') > 100 ? '...' : '' ?></small>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div class="event-module">
+                                <span class="badge badge-info"><?= htmlspecialchars($eventInfo['module'] ?? '') ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="event-spec-doc">
+                                <?php if ($eventInfo['has_spec'] ?? false): ?>
+                                    <span class="badge badge-success" title="有规约文件">规约</span>
+                                <?php else: ?>
+                                    <span class="badge badge-danger" title="缺少规约文件">无规约</span>
+                                <?php endif; ?>
+                                <?php if ($eventInfo['has_doc'] ?? false): ?>
+                                    <span class="badge badge-info" title="有文档文件">文档</span>
+                                <?php else: ?>
+                                    <span class="badge badge-warning" title="缺少文档文件">无文档</span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="event-observers">
+                                <?php
+                                $observerCount = $eventInfo['observer_count'] ?? 0;
+                                $observerModules = $eventInfo['observer_modules'] ?? [];
+                                ?>
+                                <?php if ($observerCount > 0): ?>
+                                    <span class="badge badge-primary">
+                                        <i class="mdi mdi-eye"></i> <?= $observerCount ?> 个观察者
+                                    </span>
+                                    <div class="observer-modules">
+                                        <small class="text-muted">
+                                            来自 <?= count($observerModules) ?> 个模块
+                                        </small>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted">无观察者</span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-primary btn-view-detail" 
+                                        data-event-name="<?= htmlspecialchars($eventName) ?>"
+                                        title="查看详情">
+                                    <i class="mdi mdi-eye"></i> 详情
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>
+

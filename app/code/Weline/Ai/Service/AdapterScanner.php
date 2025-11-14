@@ -18,6 +18,7 @@ use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
+use Weline\Framework\Extends\ExtendsData;
 
 /**
  * 场景适配器扫描器服务
@@ -98,7 +99,7 @@ class AdapterScanner
             }
         }
         
-        // 2. 扫描其他模块的 Ai/Adapter 目录
+        // 2. 扫描其他模块的 extends/Weline_Ai/Adapter 目录
         $otherModulesAdapters = $this->scanOtherModulesAdapters();
         foreach ($otherModulesAdapters as $adapter) {
             try {
@@ -114,7 +115,7 @@ class AdapterScanner
     
     /**
      * 扫描其他模块的适配器
-     * 扫描位置：extends/Weline_Ai/Adapter/
+     * 使用 ExtendsData 读取 Weline_Ai 模块的 Adapter 扩展点文件
      * 
      * @return array
      */
@@ -123,34 +124,55 @@ class AdapterScanner
         $adapters = [];
         
         try {
-            // 扫描 extends/Weline_Ai/Adapter/ 目录
-            $adapterDir = BP . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Ai' . DIRECTORY_SEPARATOR . 'Adapter' . DIRECTORY_SEPARATOR;
+            // 从 ExtendsData 获取 Weline_Ai 模块的扩展信息
+            $extendedBy = ExtendsData::getExtendedBy('Weline_Ai');
             
-            if (!is_dir($adapterDir)) {
+            if (empty($extendedBy)) {
                 return $adapters;
             }
             
-            // 扫描适配器文件（以 Adapter.php 结尾或直接以 .php 结尾）
-            $adapterFiles = $this->fileScanner->globFile($adapterDir . '*' . self::ADAPTER_SUFFIX);
-            // 也扫描直接以 .php 结尾的文件（如 Desensitization.php）
-            $phpFiles = glob($adapterDir . '*.php');
-            
-            // 合并并去重
-            $allFiles = array_unique(array_merge($adapterFiles, $phpFiles ?: []));
-            
-            foreach ($allFiles as $adapterFile) {
-                try {
-                    // 从文件内容中解析命名空间
-                    $adapter = $this->loadAdapter($adapterFile);
-                    if ($adapter) {
-                        $adapters[] = $adapter;
+            // 遍历所有扩展该模块的源模块
+            foreach ($extendedBy as $sourceModule => $extensions) {
+                foreach ($extensions as $extension) {
+                    // 检查是否是 Adapter 扩展点的文件
+                    // Adapter 扩展点的 path 是 'extends/module/Weline_Ai/Adapter'
+                    // relative_path 应该是 'extends/module/Weline_Ai/Adapter/...'
+                    // file_path 是相对于扩展点路径的部分，例如 'SomeAdapter.php' 或 'SubDir/SomeAdapter.php'
+                    $filePath = $extension['file_path'] ?? '';
+                    $relativePath = $extension['relative_path'] ?? '';
+                    
+                    // 检查路径是否匹配 Adapter 扩展点
+                    // 方式1: 检查 relative_path 是否以 Adapter 扩展点路径开头
+                    // 方式2: 检查 file_path 是 PHP 文件（因为 Adapter 扩展点下都是 PHP 文件）
+                    $isAdapterFile = str_starts_with($relativePath, 'extends/module/Weline_Ai/Adapter/')
+                        || (str_contains($relativePath, '/Adapter/') && str_ends_with($filePath ?? '', '.php'));
+                    
+                    if ($isAdapterFile) {
+                        
+                        // 获取源文件路径
+                        $sourceFile = $extension['source_file'] ?? '';
+                        if (empty($sourceFile) || !file_exists($sourceFile)) {
+                            continue;
+                        }
+                        
+                        // 只处理 PHP 文件
+                        if (!str_ends_with($sourceFile, '.php')) {
+                            continue;
+                        }
+                        
+                        try {
+                            $adapter = $this->loadAdapter($sourceFile, $sourceModule);
+                            if ($adapter) {
+                                $adapters[] = $adapter;
+                            }
+                        } catch (\Exception $e) {
+                            error_log("加载其他模块适配器失败: {$sourceFile}, 错误: " . $e->getMessage());
+                        }
                     }
-                } catch (\Exception $e) {
-                    error_log("加载其他模块适配器失败: {$adapterFile}, 错误: " . $e->getMessage());
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描其他模块适配器失败: " . $e->getMessage());
+            error_log("从 ExtendsData 扫描其他模块适配器失败: " . $e->getMessage());
         }
         
         return $adapters;
@@ -201,14 +223,15 @@ class AdapterScanner
      * 从文件路径获取类名
      * 
      * @param string $filePath
-     * @param string|null $moduleName
+     * @param string|null $moduleName 源模块名（用于 extends 目录下的文件）
      * @param array|null $module
      * @return string|null
      */
     private function getClassNameFromFile(string $filePath, ?string $moduleName = null, ?array $module = null): ?string
     {
-        // 如果是 extends/Weline_Ai/Adapter/ 目录下的文件，从文件内容中解析命名空间
-        if (strpos($filePath, DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'Weline_Ai' . DIRECTORY_SEPARATOR . 'Adapter' . DIRECTORY_SEPARATOR) !== false) {
+        // 如果是 extends 目录下的文件（来自其他模块的扩展），从文件内容中解析命名空间
+        if (str_contains($filePath, DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR) 
+            || str_contains($filePath, '/extends/')) {
             // 读取文件内容，解析命名空间和类名
             $content = file_get_contents($filePath);
             if ($content === false) {

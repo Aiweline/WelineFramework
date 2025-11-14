@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试jstree原生代码</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        #output { border: 1px solid #ccc; padding: 10px; margin-top: 20px; background: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <h1>jstree原生代码测试页面</h1>
+    
+    <div id="test-results"></div>
+    <div id="output"></div>
+
+    <script>
+        // 输出函数
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            document.getElementById('test-results').appendChild(div);
+        }
+        
+        function addOutput(message) {
+            const div = document.getElementById('output');
+            div.innerHTML += '<pre>' + message + '</pre>';
+        }
+
+        // 测试函数存在性
+        function testFunctionExists() {
+            addOutput('=== 测试函数存在性 ===');
+            
+            // 检查jstree原生函数
+            const functions = [
+                'handleEditNode',
+                'handleDeleteNode', 
+                'handleAddChildNode',
+                'performDelete',
+                'showNotification',
+                'saveCatalog',
+                'showAddCatalogModal'
+            ];
+            
+            functions.forEach(funcName => {
+                if (typeof window[funcName] === 'function' || 
+                    // 检查局部作用域的函数
+                    eval(`typeof ${funcName}`) !== 'undefined') {
+                    addResult(`✅ ${funcName} 函数存在`, 'success');
+                    addOutput(`${funcName}: ✓`);
+                } else {
+                    addResult(`❌ ${funcName} 函数不存在`, 'error');
+                    addOutput(`${funcName}: ✗`);
+                }
+            });
+        }
+
+        // 测试HTML结构
+        function testHTMLStructure() {
+            addOutput('\n=== 测试HTML结构 ===');
+            
+            // 检查必要的DOM元素
+            const elements = [
+                { selector: '#catalog-tree-container', name: '分类树容器' },
+                { selector: '#catalogModal', name: '编辑模态框' },
+                { selector: '#catalogForm', name: '分类表单' },
+                { selector: '#w-delete-catalog-btn', name: '删除按钮' }
+            ];
+            
+            elements.forEach(({selector, name}) => {
+                const element = $(selector);
+                if (element.length > 0) {
+                    addResult(`✅ ${name} 存在`, 'success');
+                    addOutput(`${name}: ✓`);
+                } else {
+                    addResult(`❌ ${name} 不存在`, 'error');
+                    addOutput(`${name}: ✗`);
+                }
+            });
+        }
+
+        // 模拟jstree数据结构
+        function testDataStructure() {
+            addOutput('\n=== 测试数据结构 ===');
+            
+            // 模拟jstree节点数据
+            const mockNodeData = {
+                id: '1',
+                text: '测试分类 <small class="text-muted ms-2">(这是一个测试分类)</small> <span class="badge bg-primary system-badge ms-2"><i class="mdi mdi-shield-check me-1"></i>系统分类</span>',
+                data: {
+                    id: 1,
+                    name: '测试分类',
+                    description: '这是一个测试分类',
+                    pid: 0,
+                    level: 1,
+                    is_active: 1,
+                    is_system: 0
+                },
+                original: {
+                    data: {
+                        id: 1,
+                        name: '测试分类',
+                        description: '这是一个测试分类',
+                        pid: 0,
+                        level: 1,
+                        is_active: 1,
+                        is_system: 0
+                    }
+                }
+            };
+            
+            // 测试系统分类检查
+            const isSystem = mockNodeData.original && mockNodeData.original.data && mockNodeData.original.data.is_system == 1;
+            if (!isSystem) {
+                addResult('✅ 非系统分类测试通过', 'success');
+                addOutput('非系统分类: ✓');
+            } else {
+                addResult('❌ 系统分类测试失败', 'error');
+                addOutput('非系统分类: ✗');
+            }
+        }
+
+        // 测试事件绑定
+        function testEventBinding() {
+            addOutput('\n=== 测试事件绑定 ===');
+            
+            // 模拟jstree contextmenu事件
+            const mockContextMenuData = {
+                reference: 'mock-node-id'
+            };
+            
+            // 测试右键菜单项目创建
+            const items = {};
+            
+            // 编辑项
+            items['edit'] = {
+                'label': '<i class="mdi mdi-pencil"></i> 编辑',
+                'action': function(data) {
+                    // 模拟调用handleEditNode
+                    if (typeof handleEditNode === 'function') {
+                        addResult('✅ 编辑事件绑定成功', 'success');
+                        addOutput('编辑事件: ✓');
+                    } else {
+                        addResult('❌ 编辑事件绑定失败', 'error');
+                        addOutput('编辑事件: ✗');
+                    }
+                }
+            };
+            
+            // 删除项
+            items['delete'] = {
+                'label': '<i class="mdi mdi-delete"></i> 删除',
+                'action': function(data) {
+                    // 模拟调用handleDeleteNode
+                    if (typeof handleDeleteNode === 'function') {
+                        addResult('✅ 删除事件绑定成功', 'success');
+                        addOutput('删除事件: ✓');
+                    } else {
+                        addResult('❌ 删除事件绑定失败', 'error');
+                        addOutput('删除事件: ✗');
+                    }
+                }
+            };
+            
+            // 添加子分类项
+            items['add_child'] = {
+                'label': '<i class="mdi mdi-plus"></i> 添加子分类',
+                'action': function(data) {
+                    // 模拟调用handleAddChildNode
+                    if (typeof handleAddChildNode === 'function') {
+                        addResult('✅ 添加子分类事件绑定成功', 'success');
+                        addOutput('添加子分类事件: ✓');
+                    } else {
+                        addResult('❌ 添加子分类事件绑定失败', 'error');
+                        addOutput('添加子分类事件: ✗');
+                    }
+                }
+            };
+            
+            addResult('✅ 右键菜单项目创建测试完成', 'info');
+        }
+
+        // 运行所有测试
+        $(document).ready(function() {
+            addResult('开始jstree原生代码测试...', 'info');
+            
+            testFunctionExists();
+            testHTMLStructure();
+            testDataStructure();
+            testEventBinding();
+            
+            addResult('测试完成！', 'info');
+        });
+    </script>
+</body>
+</html>

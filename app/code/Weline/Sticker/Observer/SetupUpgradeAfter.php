@@ -18,29 +18,26 @@ use Weline\Sticker\Model\StickerLog;
 use Weline\Sticker\Service\ConflictDetector;
 use Weline\Sticker\Service\NotificationService;
 use Weline\Sticker\Service\RuleParser;
-use Weline\Sticker\Service\RuleScanner;
 use Weline\Sticker\Service\StickerRegistry;
 
 /**
  * setup:upgrade 后观察者
  * 检测冲突、更新注册表、记录日志
+ * 现在从 ExtendsData 读取数据，不再扫描文件系统
  */
 class SetupUpgradeAfter implements ObserverInterface
 {
-    private RuleScanner $ruleScanner;
     private RuleParser $ruleParser;
     private StickerRegistry $stickerRegistry;
     private ConflictDetector $conflictDetector;
     private NotificationService $notificationService;
 
     public function __construct(
-        RuleScanner $ruleScanner,
         RuleParser $ruleParser,
         StickerRegistry $stickerRegistry,
         ConflictDetector $conflictDetector,
         NotificationService $notificationService
     ) {
-        $this->ruleScanner = $ruleScanner;
         $this->ruleParser = $ruleParser;
         $this->stickerRegistry = $stickerRegistry;
         $this->conflictDetector = $conflictDetector;
@@ -53,15 +50,12 @@ class SetupUpgradeAfter implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
-            // 1. 扫描所有 Sticker 文件
-            $scannedStickers = $this->ruleScanner->scanAllStickers();
+            // 1. 从 ExtendsData 读取注册表（会自动解析 actions）
+            $registry = $this->stickerRegistry->buildRegistryFromScanned([], $this->ruleParser);
 
-            if (empty($scannedStickers)) {
+            if (empty($registry)) {
                 return; // 没有 Sticker，无需处理
             }
-
-            // 2. 构建注册表
-            $registry = $this->stickerRegistry->buildRegistryFromScanned($scannedStickers, $this->ruleParser);
 
             // 3. 检测冲突
             $conflicts = $this->conflictDetector->detectConflicts($registry);
@@ -105,8 +99,8 @@ class SetupUpgradeAfter implements ObserverInterface
                 throw new \Exception($message);
             }
 
-            // 4. 保存注册表
-            $this->stickerRegistry->saveRegistry($registry);
+            // 4. 清除缓存（数据由 ExtendsRegistry 统一管理，这里只需要清除缓存）
+            $this->stickerRegistry->clearCache();
 
         } catch (\Exception $e) {
             // 如果是冲突异常，直接抛出

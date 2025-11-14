@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <menu>
+        <item id="extends" sort="80" icon="mdi-puzzle-outline" title="扩展管理" url="*/backend/extends/index">
+            <submenu>
+                <item id="extends_index" sort="10" icon="mdi-view-list" title="扩展列表" url="*/backend/extends/index"/>
+                <item id="extends_circular" sort="20" icon="mdi-alert-circle" title="循环依赖检测" url="*/backend/extends/checkCircular"/>
+                <item id="extends_refresh" sort="30" icon="mdi-refresh" title="刷新注册表" url="*/backend/extends/refresh"/>
+            </submenu>
+        </item>
+    </menu>
+</config>
