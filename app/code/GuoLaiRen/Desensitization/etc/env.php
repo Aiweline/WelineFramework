@@ -63,15 +63,8 @@ return [
             ],
             'name' => [
                 'pattern' => '/[\x{4e00}-\x{9fa5}]{2,4}/u',
-                'replacement' => function($matches) {
-                    $name = $matches[0];
-                    $length = mb_strlen($name);
-                    if ($length <= 2) {
-                        return $name[0] . '*';
-                    } else {
-                        return mb_substr($name, 0, 1) . str_repeat('*', $length - 2) . mb_substr($name, -1);
-                    }
-                },
+                // 禁止在配置文件中直接写闭包，将脱敏用的替换规则用字符串标记
+                'replacement' => 'mask_chinese_name',
                 'type' => 'name',
                 'description' => '姓名脱敏：2字显示第1字+*，3字及以上显示首字+*+尾字'
             ],

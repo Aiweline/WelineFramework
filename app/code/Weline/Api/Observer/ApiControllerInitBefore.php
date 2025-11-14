@@ -70,17 +70,29 @@ class ApiControllerInitBefore implements ObserverInterface
         
         // 认证接口路径白名单（只匹配路径部分，不包含模块前缀）
         $authPathPatterns = [
-            'auth/login',
-            'auth/exchange',
-            'auth/refresh',
-            'auth/token-info',
-            'auth/logout',
-            'auth/me',
+            // 前端API认证接口
+            'api/rest/v1/auth/login',
+            'api/rest/v1/auth/exchange',
+            'api/rest/v1/auth/refresh',
+            'api/rest/v1/auth/token-info',
+            'api/rest/v1/auth/logout',
+            'api/rest/v1/auth/me',
+            // 后端API认证接口
+            'api/rest/v1/backend/auth/login',
+            'api/rest/v1/backend/auth/refresh',
+            'api/rest/v1/backend/auth/logout',
+            'api/rest/v1/backend/auth/me',
+            'api/rest/v1/backend/auth/token-info',
         ];
         
         // 认证控制器和方法白名单
         $authControllers = ['Auth'];
-        $authActions = ['postLogin', 'postExchange', 'postRefresh', 'getTokenInfo', 'postLogout', 'getMe'];
+        // 前端API方法名
+        $frontendAuthActions = ['postLogin', 'postExchange', 'postRefresh', 'getTokenInfo', 'postLogout', 'getMe'];
+        // 后端API方法名（后端API使用不同的方法名）
+        $backendAuthActions = ['login', 'refresh', 'logout', 'me', 'tokenInfo'];
+        // 合并所有方法名
+        $authActions = array_merge($frontendAuthActions, $backendAuthActions);
 
         // 检查是否匹配白名单（只检查路径部分）
         $isAuthUrl = false;

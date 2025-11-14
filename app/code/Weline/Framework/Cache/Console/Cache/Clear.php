@@ -303,3 +303,4 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         );
     }
 }
+

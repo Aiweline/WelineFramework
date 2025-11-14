@@ -29,6 +29,8 @@ class ApiUserToken extends \Weline\Framework\Database\Model
 
     public array $_unit_primary_keys = ['id'];
     public array $_index_sort_keys = ['user_id', 'token', 'type'];
+    
+    public string $table = 'm_api_user_token';
 
     /**
      * @inheritDoc

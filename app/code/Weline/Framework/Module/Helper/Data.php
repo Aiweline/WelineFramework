@@ -114,7 +114,11 @@ class Data extends AbstractHelper
                         $backend = true;
                     }
                     $router = $register_module->getRouter($backend);
+                    // API路由按照PC路由的方式生成，只包含模块路由和路径
+                    // area 前缀会在 URL 生成时添加（在 getFrontendApiUrl() 中）
                     $baseRouter = trim($router . $baseRouter, '/');
+                    // 清理双斜杠（处理所有连续斜杠）
+                    $baseRouter = preg_replace('#/+#', '/', $baseRouter);
                     foreach ($ctl_methods as $method => $attributes) {
                         // 分析请求方法
                         $request_method = null;
@@ -148,6 +152,8 @@ class Data extends AbstractHelper
                         }
                         $rule_router = implode('/', $rule_rule_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
                         $rule_router = trim($rule_router, '/');
+                        // 再次清理双斜杠，确保最终路由格式正确
+                        $rule_router = preg_replace('#/+#', '/', $rule_router);
 
                         $request_method = $request_method ?? RequestInterface::GET;
                         # 模块路由解析

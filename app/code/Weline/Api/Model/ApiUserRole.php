@@ -24,6 +24,8 @@ class ApiUserRole extends \Weline\Framework\Database\Model
     public array $_unit_primary_keys = ['id'];
     public array $_index_sort_keys = ['user_id', 'role_id'];
 
+    public string $table = 'm_api_user_role';
+
     /**
      * @inheritDoc
      */

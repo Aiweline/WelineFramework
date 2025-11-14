@@ -75,11 +75,15 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private function validateBackendAccess(Request $request, Event &$event): void
     {
-        // 绕过白名单URL
+        // 绕过白名单URL（只读取PC类型的白名单）
         $white_acl_cache_key = 'backend_white_acl_sources';
         $white_lists = $this->aclCache->get($white_acl_cache_key);
         if (empty($white_lists)) {
-            $white_lists = $this->whiteAclSource->fields('path')->select()->fetchArray();
+            $white_lists = $this->whiteAclSource
+                ->fields('path')
+                ->where('type', \Weline\Acl\Model\WhiteAclSource::type_PC)
+                ->select()
+                ->fetchArray();
             foreach ($white_lists as $key => $white_list) {
                 unset($white_lists[$key]);
                 $white_lists[] = $white_list['path'];
@@ -361,6 +365,29 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private function validateFrontendApiAccess(Request $request, Event &$event): void
     {
+        // 绕过白名单URL（从数据库读取API类型的白名单）
+        $white_acl_cache_key = 'frontend_api_white_acl_sources';
+        $white_lists = $this->aclCache->get($white_acl_cache_key);
+        if (empty($white_lists)) {
+            $white_lists = $this->whiteAclSource
+                ->fields('path')
+                ->where('type', \Weline\Acl\Model\WhiteAclSource::type_API)
+                ->select()
+                ->fetchArray();
+            foreach ($white_lists as $key => $white_list) {
+                unset($white_lists[$key]);
+                $white_lists[] = $white_list['path'];
+            }
+            $this->aclCache->set($white_acl_cache_key, $white_lists);
+        }
+        
+        // 检查是否在白名单内
+        $uri = trim($request->getRouteUrlPath(), '/');
+        if (in_array(strtolower($uri), $white_lists)) {
+            // 在白名单内，跳过登录验证
+            return;
+        }
+        
         // 获取用户和角色（支持多种认证方式）
         $user = null;
         $role = null;

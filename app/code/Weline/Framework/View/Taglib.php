@@ -653,10 +653,51 @@ class Taglib
                 'tag' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
-                        return match ($tag_key) {
-                            'tag' => __($tag_data[2]),
-                            default => __($tag_data[1])
+                        // 处理 @lang() 和 @lang{} 格式的参数
+                        if ($tag_key === '@tag()' || $tag_key === '@tag{}') {
+                            $content = trim($tag_data[1] ?? '');
+                            
+                            // 检查是否包含逗号（可能是参数分隔符）
+                            // 注意：需要处理字符串中的逗号，不能简单按逗号分割
+                            // 先尝试解析：可能是 "文本, 参数" 或 "文本" 格式
+                            $word = $content;
+                            $args_code = null;
+                            
+                            // 尝试解析参数（如果内容以引号开始，可能是字符串参数）
+                            // 否则检查是否有逗号分隔的参数
+                            if (preg_match('/^([^,]+?)\s*,\s*(.+)$/', $content, $matches)) {
+                                // 有逗号，可能是参数格式：@lang(文本, 参数)
+                                $word = trim($matches[1]);
+                                $args_code = trim($matches[2]);
+                                
+                                // 移除可能的引号
+                                $word = trim($word, '\'"');
+                                
+                                // 返回带参数的 PHP 代码
+                                return "<?=__('" . addslashes($word) . "', {$args_code})?>";
+                            } else {
+                                // 无参数，直接翻译
+                                $word = trim($content, '\'"');
+                                return __($word);
+                            }
+                        }
+                        
+                        // 处理 <lang> 标签格式
+                        $word = match ($tag_key) {
+                            'tag' => $tag_data[2] ?? '',
+                            default => $tag_data[1] ?? ''
                         };
+                        $word = trim($word);
+                        
+                        // 处理 args 属性
+                        if (isset($attributes['args']) && !empty($attributes['args'])) {
+                            // 如果有 args 属性，传递给 __() 函数
+                            $args_code = $attributes['args'];
+                            return "<?=__('" . addslashes($word) . "', {$args_code})?>";
+                        } else {
+                            // 没有 args 属性，直接调用 __() 函数
+                            return __($word);
+                        }
                     }
             ],
             'url' => [

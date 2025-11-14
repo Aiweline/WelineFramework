@@ -1,14 +1,3 @@
 {
-    "mcpServers": {
-        "filesystem": {
-            "command": "cmd",
-            "args": [
-                "/c",
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "E:\\WelineFramework\\DEV-workspace"
-            ]
-        }
-    }
+    "mcpServers": {}
 }

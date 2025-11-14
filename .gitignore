@@ -45,3 +45,7 @@ response_*.html
 # 不再追踪的业务模块
 app/code/GuoLaiRen/Center/
 app/code/GuoLaiRen/Smtp/
+
+# Windows-MCP 目录（不应该提交）
+Windows-MCP/
+Windows-MCP使用说明.md

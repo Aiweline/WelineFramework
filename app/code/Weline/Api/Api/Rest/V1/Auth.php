@@ -75,9 +75,10 @@ class Auth extends FrontendRestController
     public function postLogin()
     {
         try {
-            $username = trim($this->request->getPost('username') ?? '');
-            $password = trim($this->request->getPost('password') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            // 优先从请求体获取（支持JSON），如果没有则从POST获取
+            $username = trim($this->request->getBodyParam('username') ?? $this->request->getPost('username') ?? '');
+            $password = trim($this->request->getBodyParam('password') ?? $this->request->getPost('password') ?? '');
+            $expireTime = (int)($this->request->getBodyParam('expire_time') ?? $this->request->getPost('expire_time') ?? 0);
 
             if (empty($username) || empty($password)) {
                 return $this->error(__('用户名和密码不能为空'), '', 400);
@@ -166,9 +167,10 @@ class Auth extends FrontendRestController
     public function postExchange()
     {
         try {
-            $apiKey = trim($this->request->getPost('api_key') ?? '');
-            $apiSecret = trim($this->request->getPost('api_secret') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            // 优先从请求体获取（支持JSON），如果没有则从POST获取
+            $apiKey = trim($this->request->getBodyParam('api_key') ?? $this->request->getPost('api_key') ?? '');
+            $apiSecret = trim($this->request->getBodyParam('api_secret') ?? $this->request->getPost('api_secret') ?? '');
+            $expireTime = (int)($this->request->getBodyParam('expire_time') ?? $this->request->getPost('expire_time') ?? 0);
 
             if (empty($apiKey) || empty($apiSecret)) {
                 return $this->error(__('API Key和API Secret不能为空'), '', 400);
@@ -225,9 +227,10 @@ class Auth extends FrontendRestController
     public function postRefresh()
     {
         try {
-            $accessToken = trim($this->request->getPost('access_token') ?? '');
-            $passToken = trim($this->request->getPost('pass_token') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            // 优先从请求体获取（支持JSON），如果没有则从POST获取
+            $accessToken = trim($this->request->getBodyParam('access_token') ?? $this->request->getPost('access_token') ?? '');
+            $passToken = trim($this->request->getBodyParam('pass_token') ?? $this->request->getPost('pass_token') ?? '');
+            $expireTime = (int)($this->request->getBodyParam('expire_time') ?? $this->request->getPost('expire_time') ?? 0);
 
             if (empty($accessToken) || empty($passToken)) {
                 return $this->error(__('访问令牌和通行令牌不能为空'), '', 400);
