@@ -1,4 +1,0 @@
----
-description: 文档都要写到对应的模块的doc目录下，按照特定的分类创建目录，然后放入文档。
-alwaysApply: true
----

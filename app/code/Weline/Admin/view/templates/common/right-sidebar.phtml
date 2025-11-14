@@ -47,22 +47,12 @@ $layoutClass = $currentLayouts['class'] ?? '';
         <hr class="mt-0"/>
         <h6 class="text-center mb-0"><?= __('主题颜色') ?></h6>
         <div class="p-4">
-            <div class="mb-2">
-                <img src="@static(Weline_Admin::assets/images/layouts/layout-1.png)" class="img-thumbnail" alt="layout-1">
-            </div>
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input theme-choice" type="checkbox" id="light-mode-switch"
-                    <?= $themeConfig->getThemeConfig('light-mode-switch') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="light-mode-switch"><?= __('明亮模式') ?></label>
-            </div>
-
-            <div class="mb-2">
-                <img src="@static(Weline_Admin::assets/images/layouts/layout-2.png)" class="img-thumbnail" alt="layout-2">
-            </div>
-            <div class="form-check form-switch mb-3">
-                <input class="form-check-input theme-choice" type="checkbox" id="dark-mode-switch"
-                    <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="dark-mode-switch"><?= __('暗黑模式') ?></label>
+            <div class="mb-3">
+                <label class="form-label"><?= __('选择主题模式') ?></label>
+                <select class="form-select theme-choice" id="theme-mode-switch">
+                    <option value="light" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'light' || (empty($themeConfig->getThemeConfig('theme-mode-switch')) && $themeConfig->getThemeConfig('light-mode-switch'))) ? 'selected' : '' ?>><?= __('明亮模式') ?></option>
+                    <option value="dark" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'dark' || $themeConfig->getThemeConfig('dark-mode-switch')) ? 'selected' : '' ?>><?= __('暗黑模式') ?></option>
+                </select>
             </div>
 
             <div class="mb-2">

@@ -8,11 +8,6 @@ $backendUrlPrefix = rtrim($backendUrlPrefix, '/');
     <!-- 页面标题 -->
     <div class="page-title">
     <h1><?= $title ?? '事件管理' ?></h1>
-    <div class="page-actions">
-        <a href="*/backend/event/search" class="btn btn-secondary">
-            <i class="mdi mdi-magnify"></i> 搜索事件
-        </a>
-    </div>
 </div>
 
 <!-- 统计卡片 -->
@@ -304,17 +299,35 @@ $totalCount = count($events);
 </div>
 
 <style>
+/* 页面标题样式 */
 .page-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    color: #505d69;
+}
+
+[data-theme-mode="dark"] .page-title {
+    color: #79859c;
+}
+
+.page-title h1 {
+    color: #505d69;
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+[data-theme-mode="dark"] .page-title h1 {
+    color: #79859c;
 }
 
 .page-actions .btn {
     margin-left: 10px;
 }
 
+/* 统计卡片样式 */
 .stats-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -323,10 +336,27 @@ $totalCount = count($events);
 }
 
 .card {
-    background: var(--card-bg, #fff);
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     padding: 20px;
+    border: 1px solid #eff2f7;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .card {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.card:hover {
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+[data-theme-mode="dark"] .card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
 .card-content {
@@ -334,28 +364,47 @@ $totalCount = count($events);
 }
 
 .card-title {
-    color: #666;
+    color: #74788d;
     font-size: 14px;
     margin-bottom: 10px;
+    font-weight: 500;
+}
+
+[data-theme-mode="dark"] .card-title {
+    color: #8590a5;
 }
 
 .card-value {
     font-size: 32px;
     font-weight: bold;
-    color: #333;
+    color: #212529;
+    line-height: 1.2;
 }
 
-.card-value.text-primary { color: #007bff; }
-.card-value.text-success { color: #28a745; }
-.card-value.text-info { color: #17a2b8; }
-.card-value.text-warning { color: #ffc107; }
-.card-value.text-muted { color: #6c757d; }
+[data-theme-mode="dark"] .card-value {
+    color: #e9ecef;
+}
+
+.card-value.text-primary { color: #0bb197; }
+.card-value.text-success { color: #0ac074; }
+.card-value.text-info { color: #4aa3ff; }
+.card-value.text-warning { color: #fcb92c; }
+.card-value.text-muted { color: #74788d; }
+
+[data-theme-mode="dark"] .card-value.text-muted {
+    color: #8590a5;
+}
 
 .events-list {
-    background: var(--card-bg, #fff);
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     overflow: hidden;
+}
+
+[data-theme-mode="dark"] .events-list {
+    background: #252b3b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .table-container {
@@ -365,26 +414,66 @@ $totalCount = count($events);
 .table {
     width: 100%;
     border-collapse: collapse;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .table {
+    color: #e9ecef;
 }
 
 .table th,
 .table td {
     padding: 12px;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #eff2f7;
+    vertical-align: middle;
+}
+
+[data-theme-mode="dark"] .table th,
+[data-theme-mode="dark"] .table td {
+    border-bottom-color: #2d3448;
 }
 
 .table th {
     background-color: #f8f9fa;
     font-weight: 600;
+    color: #212529;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
+[data-theme-mode="dark"] .table th {
+    background-color: #1e2125;
+    color: #e9ecef;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease-in-out;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+[data-theme-mode="dark"] .table tbody tr:hover {
+    background-color: #1e2125;
+}
+
+/* 事件名称代码样式 */
 .event-name code {
-    background-color: #f4f4f4;
+    background-color: #f8f9fa;
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-    color: #e83e8c;
+    color: #0bb197;
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-name code {
+    background-color: #1e2125;
+    border-color: #2d3448;
 }
 
 .event-display-name {
@@ -416,33 +505,94 @@ $totalCount = count($events);
     gap: 4px;
 }
 
+/* 空状态样式 */
 .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #666;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .empty-state {
+    color: #8590a5;
 }
 
 .empty-state i {
     font-size: 64px;
-    color: #ddd;
+    color: #eff2f7;
     margin-bottom: 20px;
+    opacity: 0.5;
 }
 
+[data-theme-mode="dark"] .empty-state i {
+    color: #2d3448;
+}
+
+.empty-state h3 {
+    color: #212529;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+[data-theme-mode="dark"] .empty-state h3 {
+    color: #e9ecef;
+}
+
+.empty-state p {
+    color: #74788d;
+    margin: 0;
+    line-height: 1.6;
+}
+
+[data-theme-mode="dark"] .empty-state p {
+    color: #8590a5;
+}
+
+/* Badge 样式 */
 .badge {
     display: inline-block;
     padding: 2px 8px;
     font-size: 12px;
     font-weight: 500;
     border-radius: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
 }
 
-.badge-primary { background-color: #007bff; color: white; }
-.badge-info { background-color: #17a2b8; color: white; }
-.badge-success { background-color: #28a745; color: white; }
-.badge-warning { background-color: #ffc107; color: #212529; }
-.badge-danger { background-color: #dc3545; color: white; }
-.badge-secondary { background-color: #6c757d; color: white; }
+.badge-primary { 
+    background-color: #0bb197; 
+    color: white; 
+}
 
+.badge-info { 
+    background-color: #4aa3ff; 
+    color: white; 
+}
+
+.badge-success { 
+    background-color: #0ac074; 
+    color: white; 
+}
+
+.badge-warning { 
+    background-color: #fcb92c; 
+    color: #212529; 
+}
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
+
+.badge-danger { 
+    background-color: #ff3d60; 
+    color: white; 
+}
+
+.badge-secondary { 
+    background-color: #74788d; 
+    color: white; 
+}
+
+/* 按钮样式 */
 .btn {
     display: inline-block;
     padding: 6px 12px;
@@ -451,7 +601,11 @@ $totalCount = count($events);
     font-size: 14px;
     cursor: pointer;
     border: 1px solid transparent;
-    transition: all 0.3s;
+    transition: all 0.2s ease-in-out;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .btn-sm {
@@ -459,46 +613,84 @@ $totalCount = count($events);
     font-size: 12px;
 }
 
+.btn-primary {
+    background: #0bb197;
+    color: white;
+    border: 1px solid #0bb197;
+}
+
+.btn-primary:hover {
+    background: #0bb197;
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+}
+
 .btn-outline-primary {
-    color: #007bff;
-    border-color: #007bff;
+    color: #0bb197;
+    border-color: #0bb197;
     background: transparent;
 }
 
 .btn-outline-primary:hover {
-    background: #007bff;
+    background: #0bb197;
     color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
 .btn-secondary {
-    background: #6c757d;
+    background: #74788d;
     color: white;
+    border: 1px solid #74788d;
 }
 
 .btn-secondary:hover {
-    background: #5a6268;
+    background: #74788d;
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
 .btn-warning {
-    background: #ffc107;
+    background: #fcb92c;
     color: #212529;
+    border: 1px solid #fcb92c;
+}
+
+[data-theme-mode="dark"] .btn-warning {
+    color: #e9ecef;
 }
 
 .btn-warning:hover {
-    background: #e0a800;
+    background: #fcb92c;
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
 .text-muted {
-    color: #6c757d;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .text-muted {
+    color: #8590a5;
 }
 
 /* 筛选工具栏样式 */
 .filter-toolbar {
-    background: var(--card-bg, #fff);
+    background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     padding: 20px;
     margin-bottom: 20px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .filter-toolbar {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .filter-form {
@@ -522,7 +714,12 @@ $totalCount = count($events);
     margin-bottom: 5px;
     font-size: 12px;
     font-weight: 600;
-    color: #666;
+    color: #74788d;
+    line-height: 1.5;
+}
+
+[data-theme-mode="dark"] .filter-group label {
+    color: #8590a5;
 }
 
 .filter-actions {
@@ -531,32 +728,102 @@ $totalCount = count($events);
     align-items: flex-end;
 }
 
+/* 表单控件样式 */
 .form-control-sm {
     padding: 6px 10px;
     font-size: 13px;
-    border: 1px solid #ddd;
+    border: 1px solid #eff2f7;
     border-radius: 4px;
     width: 100%;
+    background-color: #fff;
+    color: #212529;
+    transition: all 0.2s ease-in-out;
+    line-height: 1.5;
+}
+
+[data-theme-mode="dark"] .form-control-sm {
+    border-color: #8590a5;
+    background-color: #252b3b;
+    color: #e9ecef;
+}
+
+.form-control-sm::placeholder {
+    color: #74788d;
+    opacity: 0.6;
+}
+
+[data-theme-mode="dark"] .form-control-sm::placeholder {
+    color: #8590a5;
+}
+
+.form-control-sm:hover {
+    border-color: #74788d;
+}
+
+[data-theme-mode="dark"] .form-control-sm:hover {
+    border-color: #8590a5;
 }
 
 .form-control-sm:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+    border-color: #0bb197;
+    border-width: 2px;
+    background-color: #fff;
 }
 
+[data-theme-mode="dark"] .form-control-sm:focus {
+    background-color: #252b3b;
+}
+
+.form-control-sm:disabled {
+    background-color: #f8f9fa;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+[data-theme-mode="dark"] .form-control-sm:disabled {
+    background-color: #1e2125;
+}
+
+/* 选择框样式 */
+select.form-control-sm {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%2374788d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px 12px;
+    padding-right: 30px;
+}
+
+[data-theme-mode="dark"] select.form-control-sm {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%238590a5' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+
+/* 列表头部样式 */
 .list-header {
     padding: 15px 20px;
     background: #f8f9fa;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #eff2f7;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
+[data-theme-mode="dark"] .list-header {
+    background: #1e2125;
+    border-bottom-color: #2d3448;
+}
+
 .list-info {
     font-size: 14px;
-    color: #666;
+    color: #74788d;
+    line-height: 1.5;
+}
+
+[data-theme-mode="dark"] .list-info {
+    color: #8590a5;
 }
 
 .list-actions {
@@ -566,35 +833,37 @@ $totalCount = count($events);
 }
 
 .list-info strong {
-    color: #333;
+    color: #212529;
     font-weight: 600;
 }
 
+[data-theme-mode="dark"] .list-info strong {
+    color: #e9ecef;
+}
+
+/* 排序链接样式 */
 .sort-link {
-    color: #333;
+    color: #212529;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 4px;
     font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .sort-link {
+    color: #e9ecef;
 }
 
 .sort-link:hover {
-    color: #007bff;
+    color: #0bb197;
+    text-decoration: none;
 }
 
 .sort-link i {
     font-size: 14px;
-}
-
-.btn-primary {
-    background: #007bff;
-    color: white;
-    border: none;
-}
-
-.btn-primary:hover {
-    background: #0056b3;
+    color: #0bb197;
 }
 
 @media (max-width: 768px) {
@@ -638,9 +907,14 @@ $totalCount = count($events);
 }
 
 .alert-danger {
-    color: #721c24;
-    background-color: #f8d7da;
-    border-color: #f5c6cb;
+    color: #ff3d60;
+    background-color: #fff;
+    border: 1px solid #ff3d60;
+    border-left-width: 4px;
+}
+
+[data-theme-mode="dark"] .alert-danger {
+    background-color: #252b3b;
 }
 </style>
 
@@ -978,6 +1252,44 @@ $totalCount = count($events);
 #eventDetailOffcanvas {
     width: 75% !important;
     max-width: 75% !important;
+    background-color: #fff;
+    border-right: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] #eventDetailOffcanvas {
+    background-color: #252b3b;
+    border-right-color: #2d3448;
+}
+
+#eventDetailOffcanvas .offcanvas-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eff2f7;
+    padding: 1rem 1.25rem;
+}
+
+[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-header {
+    background-color: #1e2125;
+    border-bottom-color: #2d3448;
+}
+
+#eventDetailOffcanvas .offcanvas-title {
+    color: #212529;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-title {
+    color: #e9ecef;
+}
+
+#eventDetailOffcanvas .btn-close {
+    filter: invert(1);
+    opacity: 0.5;
+}
+
+[data-theme-mode="dark"] #eventDetailOffcanvas .btn-close {
+    filter: none;
+    opacity: 0.8;
 }
 
 @media (max-width: 768px) {
@@ -989,6 +1301,43 @@ $totalCount = count($events);
 
 #eventDetailOffcanvas .offcanvas-body {
     padding: 1rem;
+    color: #212529;
+    background-color: #fff;
+    /* 滚动条样式 - Webkit浏览器 */
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
+}
+
+#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-track {
+    background: var(--scrollbar-track, transparent);
+}
+
+#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb, #a2adb7);
+    border-radius: 3px;
+}
+
+#eventDetailOffcanvas .offcanvas-body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover, #8590a5);
+}
+
+[data-theme-mode="dark"] #eventDetailOffcanvas .offcanvas-body {
+    color: #e9ecef;
+    background-color: #252b3b;
+    scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent);
+}
+
+/* Offcanvas 背景遮罩 */
+.offcanvas-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme-mode="dark"] .offcanvas-backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
 }
 </style>
 

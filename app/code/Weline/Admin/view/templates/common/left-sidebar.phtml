@@ -343,7 +343,8 @@ if ($dataLayout !== 'horizontal'):
                      * @param string $backend_url_prefix 后台URL前缀
                      * @param string $frontend_url_prefix 前台URL前缀
                      */
-                    function renderMenu($menus, $backend_url_prefix, $frontend_url_prefix) {
+                    if (!function_exists('renderMenu')) {
+                        function renderMenu($menus, $backend_url_prefix, $frontend_url_prefix) {
                         foreach ($menus as $menu) {
                             if (!isset($menu['is_enable']) || !$menu['is_enable']) {
                                 continue;
@@ -359,6 +360,7 @@ if ($dataLayout !== 'horizontal'):
                                 renderSubMenu($menu['nodes'], $backend_url_prefix, $frontend_url_prefix);
                             }
                         }
+                        }
                     }
 
                     /**
@@ -367,7 +369,8 @@ if ($dataLayout !== 'horizontal'):
                      * @param string $backend_url_prefix 后台URL前缀
                      * @param string $frontend_url_prefix 前台URL前缀
                      */
-                    function renderSubMenu(array $submenus, string $backend_url_prefix, string $frontend_url_prefix) {
+                    if (!function_exists('renderSubMenu')) {
+                        function renderSubMenu(array $submenus, string $backend_url_prefix, string $frontend_url_prefix) {
                         foreach ($submenus as $submenu) {
                             if ($submenu['type'] !== 'menus') {
                                 continue;
@@ -413,6 +416,7 @@ if ($dataLayout !== 'horizontal'):
                                 echo "</ul>";
                                 echo "</li>";
                             }
+                        }
                         }
                     }
 
