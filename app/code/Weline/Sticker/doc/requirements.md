@@ -2,13 +2,13 @@
 
 ### 背景与目标
 
-提供“非侵入式”的方式修改其他模块的文件，通过 Sticker 规则在编译阶段与源文件合并，输出到生成目录，运行时优先加载编译产物，避免直接改动上游模块代码。
+提供"非侵入式"的方式修改其他模块的文件，通过 Sticker 规则在编译阶段与源文件合并，输出到生成目录，运行时优先加载编译产物，避免直接改动上游模块代码。
 
 ### 核心需求
 
 - 规则载体：直接在同路径的文件内使用 `w:sticker` 标签（不再使用独立 XML）
 - 匹配机制：去除多余空白的代码匹配，支持 `position`（all、N、N-M）
-- 输出目录：`generated/extends/Weline_Sticker/`
+- 输出目录：`generated/extends/module/Weline_Sticker/`
 - 注册表：`generated/sticker.php`，开发模式自动更新，生产模式用命令更新
 - 加载拦截：事件 `Framework_View::fetch_file`，优先使用编译产物
 - 冲突检测：同一目标代码在相同索引的多处修改视作冲突
@@ -20,7 +20,7 @@
 
 - 不使用 `module.xml`
 - 不使用 Plugin（插件），通过事件实现拦截
-- Sticker 源目录：`extends/Weline_Sticker`
+- Sticker 源目录：`extends/module/Weline_Sticker`
 - 规则路径与目标文件路径保持一致（模块前缀 + 相对路径）
 
 ### 事件与命令
@@ -56,6 +56,5 @@
 ### 验收清单
 
 - 规则扫描/解析/编译/注册表/冲突检测/通知/后台 UI/测试 全部可用
-- 生成优先级：`TemplateFetchFile` 能正确替换为 `generated/extends/Weline_Sticker/...`
+- 生成优先级：`TemplateFetchFile` 能正确替换为 `generated/extends/module/Weline_Sticker/...`
 - 注册表在开发环境能自动刷新；生产可通过命令刷新
-

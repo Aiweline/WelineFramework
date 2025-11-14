@@ -37,4 +37,8 @@
         <observer name="Weline_Admin::menu_access_log" instance="Weline\Admin\Observer\MenuAccessLogObserver" disabled="false"
                   shared="true" sort="10"/>
     </event>
+    <!--系统消息通知-->
+    <event name="Weline_Framework::msg">
+        <observer name="Weline_Admin::system_notification" instance="Weline\Admin\Observer\SystemNotificationObserver" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>

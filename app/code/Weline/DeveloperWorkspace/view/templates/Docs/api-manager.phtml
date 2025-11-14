@@ -1,0 +1,2767 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+$apis = $this->getData('apis') ?? [];
+$error = $this->getData('error') ?? null;
+$selectedApi = $this->getData('selectedApi') ?? null;
+$apiId = $this->request->getParam('api_id');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?=__('API文档管理')?></title>
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="@static(Weline_Frontend::img/favicon.png)" type="image/png">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- jstree -->
+    <link rel="stylesheet" href="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)" />
+    <script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
+    <!-- Prism.js for code highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Material Design Icons (alternative) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            /* 主题色系 - 遵循 Weline Framework 主题规范 */
+            --primary-color: #0bb197;      /* 主题主色 */
+            --secondary-color: #74788d;    /* 次要色 */
+            --success-color: #0ac074;      /* 成功色 */
+            --danger-color: #ff3d60;       /* 危险色 */
+            --warning-color: #fcb92c;      /* 警告色 */
+            --info-color: #4aa3ff;         /* 信息色 */
+            
+            /* 背景色系 - 浅色主题 */
+            --bg-color: #f8f9fa;
+            --sidebar-bg: #ffffff;
+            --card-bg: #ffffff;
+            --text-color: #212529;
+            --text-secondary: #74788d;
+            --border-color: #eff2f7;
+            --shadow: 0 2px 4px rgba(0,0,0,0.05);
+            --shadow-lg: 0 4px 12px rgba(11, 177, 151, 0.15);
+            --transition: all 0.3s ease;
+            
+            /* 滚动条色系 - 浅色主题 */
+            --scrollbar-thumb: #a2adb7;
+            --scrollbar-thumb-hover: #8590a5;
+            --scrollbar-track: transparent;
+        }
+        
+        /* 暗色主题 */
+        [data-theme="dark"] {
+            /* 背景色系 - 暗色主题 */
+            --bg-color: #1e2125;
+            --sidebar-bg: #252b3b;
+            --card-bg: #252b3b;
+            --text-color: #e9ecef;
+            --text-secondary: #8590a5;
+            --border-color: #2d3448;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            
+            /* 滚动条色系 - 暗色主题 */
+            --scrollbar-thumb: #8590a5;
+            --scrollbar-thumb-hover: #a2adb7;
+            --scrollbar-track: transparent;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            transition: var(--transition);
+        }
+        
+        .api-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 左侧API列表 */
+        .api-sidebar {
+            width: 400px;
+            min-width: 300px;
+            max-width: 600px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease;
+        }
+        
+        .api-sidebar.collapsed {
+            width: 50px;
+            min-width: 50px;
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--sidebar-bg);
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition);
+        }
+        
+        .api-sidebar.collapsed .sidebar-header {
+            padding: 10px;
+            justify-content: center;
+        }
+        
+        .sidebar-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-color);
+            transition: var(--transition);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        .sidebar-header p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+            transition: var(--transition);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        .sidebar-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sidebar-toggle {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+            transform: scale(1.05);
+        }
+        
+        .api-sidebar.collapsed .sidebar-header h2,
+        .api-sidebar.collapsed .sidebar-header p {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            overflow: hidden;
+            margin: 0;
+        }
+        
+        .api-sidebar.collapsed .api-tree {
+            display: none;
+        }
+        
+        .api-tree {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 15px;
+            user-select: none;
+            position: relative;
+        }
+        
+        /* 拖拽调整宽度区域 */
+        .api-tree::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 8px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 10;
+            background: transparent;
+        }
+        
+        .api-tree.dragging {
+            cursor: col-resize !important;
+        }
+        
+        .api-tree.dragging::before {
+            background: var(--primary-color);
+            opacity: 0.3;
+        }
+        
+        /* jstree 样式定制 */
+        #api-tree {
+            background: transparent;
+            font-size: 13px;
+        }
+        
+        /* 启用连接线和层级显示 */
+        #api-tree .jstree-container-ul {
+            padding-left: 0;
+        }
+        
+        #api-tree .jstree-node {
+            margin: 2px 0;
+            min-height: 28px;
+            line-height: 28px;
+            border-radius: 4px;
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        /* 层级1：模块 - 最大字体，加粗 */
+        #api-tree .jstree-node[aria-level="1"] {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 4px 0;
+        }
+        
+        /* 层级2：版本 - 中等字体 */
+        #api-tree .jstree-node[aria-level="2"] {
+            font-size: 13px;
+            font-weight: 500;
+            margin: 3px 0;
+        }
+        
+        /* 层级3：类 - 正常字体 */
+        #api-tree .jstree-node[aria-level="3"] {
+            font-size: 12px;
+            font-weight: 400;
+            margin: 2px 0;
+        }
+        
+        /* 层级4：API接口 - 小字体 */
+        #api-tree .jstree-node[aria-level="4"] {
+            font-size: 12px;
+            font-weight: 400;
+            margin: 1px 0;
+        }
+        
+        /* 连接线样式 */
+        #api-tree .jstree-wholerow {
+            border-radius: 4px;
+        }
+        
+        #api-tree .jstree-wholerow-hovered {
+            background: rgba(102, 126, 234, 0.08) !important;
+        }
+        
+        #api-tree .jstree-anchor {
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            color: var(--text-color);
+            min-height: 28px;
+            white-space: nowrap;
+            width: 100%;
+        }
+        
+        [data-theme="dark"] #api-tree .jstree-anchor {
+            color: var(--text-color);
+        }
+        
+        #api-tree .jstree-clicked {
+            background: var(--primary-color) !important;
+            color: #fff !important;
+        }
+        
+        #api-tree .jstree-hovered {
+            background: rgba(102, 126, 234, 0.1) !important;
+        }
+        
+        /* 层级标识 - 在节点文本前添加层级标记 */
+        #api-tree .jstree-node[aria-level="1"] > .jstree-anchor::before {
+            content: "\F1B3"; /* Material Design Icons mdi-package-variant */
+            font-family: "Material Design Icons";
+            font-size: 16px;
+            margin-right: 6px;
+            opacity: 0.8;
+            color: var(--primary-color);
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        #api-tree .jstree-node[aria-level="2"] > .jstree-anchor::before {
+            content: "\F02E"; /* Material Design Icons mdi-tag */
+            font-family: "Material Design Icons";
+            font-size: 14px;
+            margin-right: 6px;
+            opacity: 0.7;
+            color: var(--secondary-color);
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        #api-tree .jstree-node[aria-level="3"] > .jstree-anchor::before {
+            content: "\F024B"; /* Material Design Icons mdi-folder */
+            font-family: "Material Design Icons";
+            font-size: 14px;
+            margin-right: 6px;
+            opacity: 0.6;
+            color: var(--text-secondary);
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        /* 如果Material Design Icons未加载，使用Font Awesome作为备选 */
+        #api-tree .jstree-node[aria-level="1"] > .jstree-anchor.fa-fallback::before {
+            content: "\f466"; /* Font Awesome fa-cube */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+        }
+        
+        #api-tree .jstree-node[aria-level="2"] > .jstree-anchor.fa-fallback::before {
+            content: "\f02b"; /* Font Awesome fa-tag */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+        }
+        
+        #api-tree .jstree-node[aria-level="3"] > .jstree-anchor.fa-fallback::before {
+            content: "\f07b"; /* Font Awesome fa-folder */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+        }
+        
+        /* 层级缩进增强 - 不同层级使用不同的缩进 */
+        #api-tree .jstree-children {
+            padding-left: 24px;
+        }
+        
+        /* 层级1的子节点 */
+        #api-tree .jstree-node[aria-level="1"] > .jstree-children {
+            padding-left: 20px;
+        }
+        
+        /* 层级2的子节点 */
+        #api-tree .jstree-node[aria-level="2"] > .jstree-children {
+            padding-left: 20px;
+        }
+        
+        /* 层级3的子节点 */
+        #api-tree .jstree-node[aria-level="3"] > .jstree-children {
+            padding-left: 18px;
+        }
+        
+        /* 不同层级的背景色区分（可选） */
+        #api-tree .jstree-node[aria-level="1"] {
+            border-left: 3px solid var(--primary-color);
+            padding-left: 8px;
+        }
+        
+        #api-tree .jstree-node[aria-level="2"] {
+            border-left: 2px solid rgba(102, 126, 234, 0.5);
+            padding-left: 6px;
+        }
+        
+        #api-tree .jstree-node[aria-level="3"] {
+            border-left: 1px solid rgba(102, 126, 234, 0.3);
+            padding-left: 4px;
+        }
+        
+        /* API方法样式 */
+        #api-tree .api-method-get {
+            color: #61affe;
+            font-weight: 700;
+        }
+        
+        #api-tree .api-method-post {
+            color: #49cc90;
+            font-weight: 700;
+        }
+        
+        #api-tree .api-method-put {
+            color: #fca130;
+            font-weight: 700;
+        }
+        
+        #api-tree .api-method-delete {
+            color: #f93e3e;
+            font-weight: 700;
+        }
+        
+        #api-tree .api-method-patch {
+            color: #50e3c2;
+            font-weight: 700;
+        }
+        
+        /* API路径code样式 */
+        #api-tree .api-path-code {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            margin-left: 8px;
+        }
+        
+        [data-theme="dark"] #api-tree .api-path-code {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }
+        
+        /* 路由图标样式 - 使用Font Awesome或Material Design Icons */
+        #api-tree .jstree-icon.jstree-route-icon {
+            background-image: none !important;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        /* 优先使用Material Design Icons的routes图标（十字路口） */
+        #api-tree .jstree-icon.jstree-route-icon::before {
+            content: "\F4D7"; /* Material Design Icons mdi-routes (十字路口图标) */
+            font-family: "Material Design Icons", "Font Awesome 6 Free";
+            font-size: 16px;
+            line-height: 1;
+            color: var(--primary-color);
+            display: block;
+        }
+        
+        /* 如果Material Design Icons未加载，使用Font Awesome的directions图标作为备选 */
+        #api-tree .jstree-icon.jstree-route-icon.fa-fallback::before {
+            content: "\f5eb"; /* Font Awesome fa-directions (方向/十字路口图标) */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            font-size: 14px;
+        }
+        
+        /* 暗色主题下的图标颜色 */
+        [data-theme="dark"] #api-tree .jstree-icon.jstree-route-icon::before {
+            color: #667eea;
+        }
+        
+        /* 右侧内容区 */
+        .api-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--card-bg);
+        }
+        
+        .content-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .content-header-left h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-color);
+        }
+        
+        .content-header-left p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+        
+        .content-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* 正式环境调试开关 */
+        .production-mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+        }
+        
+        .production-mode-toggle.active {
+            background: rgba(255, 61, 96, 0.1);
+            border-color: var(--danger-color);
+        }
+        
+        .production-mode-label {
+            font-size: 14px;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+        
+        .production-mode-toggle.active .production-mode-label {
+            color: var(--danger-color);
+            font-weight: 600;
+        }
+        
+        /* 开关样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--danger-color);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* 正式环境警告提示 - 使用主题危险色 */
+        .production-warning {
+            background: var(--danger-color);
+            color: #fff;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(255, 61, 96, 0.3);
+            animation: warningPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes warningPulse {
+            0%, 100% {
+                box-shadow: 0 4px 12px rgba(255, 61, 96, 0.3);
+            }
+            50% {
+                box-shadow: 0 4px 16px rgba(255, 61, 96, 0.5);
+            }
+        }
+        
+        .production-warning-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .production-warning-content {
+            flex: 1;
+        }
+        
+        .production-warning-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        
+        .production-warning-text {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0a9d82;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(11, 177, 151, 0.4);
+        }
+        
+        .btn-light {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+        
+        .btn-light:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            opacity: 0.9;
+        }
+        
+        .content-body {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            gap: 0;
+            padding: 0;
+        }
+        
+        /* 分栏布局：左侧API详情，右侧在线测试 */
+        .api-detail-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            border-right: 1px solid var(--border-color);
+            min-width: 400px;
+        }
+        
+        .api-test-panel {
+            width: 50%;
+            min-width: 500px;
+            max-width: 800px;
+            overflow-y: auto;
+            padding: 30px;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        /* 悬浮在线测试面板 */
+        .api-test-panel.sticky {
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+        
+        /* 可调整分栏大小的分隔线 */
+        .panel-divider {
+            width: 4px;
+            background: var(--border-color);
+            cursor: col-resize;
+            flex-shrink: 0;
+            position: relative;
+        }
+        
+        .panel-divider:hover {
+            background: var(--primary-color);
+        }
+        
+        .panel-divider::before {
+            content: '';
+            position: absolute;
+            left: -2px;
+            right: -2px;
+            top: 0;
+            bottom: 0;
+        }
+        
+        /* API详情卡片 */
+        .api-detail-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+        
+        .api-detail-header {
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .api-method-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            margin-right: 10px;
+        }
+        
+        .api-method-badge.get {
+            background: #61affe;
+        }
+        
+        .api-method-badge.post {
+            background: #49cc90;
+        }
+        
+        .api-method-badge.put {
+            background: #fca130;
+        }
+        
+        .api-method-badge.delete {
+            background: #f93e3e;
+        }
+        
+        .api-path {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            color: var(--text-color);
+            margin: 10px 0;
+        }
+        
+        .api-summary {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+        }
+        
+        .api-section {
+            margin-bottom: 30px;
+        }
+        
+        .api-section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .api-param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .api-param-table th,
+        .api-param-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .api-param-table th {
+            background: var(--bg-color);
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .api-param-table td {
+            color: var(--text-secondary);
+        }
+        
+        /* 必填参数标记 */
+        .required-mark {
+            color: var(--danger-color);
+            font-weight: bold;
+            margin-right: 4px;
+            font-size: 14px;
+        }
+        
+        .code-block {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            overflow-x: auto;
+        }
+        
+        .code-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+        
+        /* JSON代码块背景跟随色系 */
+        .code-block pre code.language-json {
+            background: transparent;
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .code-block pre code.language-json {
+            background: transparent;
+            color: var(--text-color);
+        }
+        
+        /* Prism.js 主题覆盖 */
+        .code-block pre[class*="language-"] {
+            background: var(--bg-color) !important;
+        }
+        
+        [data-theme="dark"] .code-block pre[class*="language-"] {
+            background: var(--bg-color) !important;
+        }
+        
+        .code-block pre code[class*="language-"] {
+            background: transparent !important;
+            color: var(--text-color) !important;
+        }
+        
+        [data-theme="dark"] .code-block pre code[class*="language-"] {
+            background: transparent !important;
+            color: var(--text-color) !important;
+        }
+        
+        /* 滚动条样式 - 遵循主题规范 */
+        /* Webkit浏览器滚动条 */
+        *::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        *::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+            border-radius: 3px;
+        }
+        
+        *::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 3px;
+            transition: background 0.2s ease;
+        }
+        
+        *::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
+        }
+        
+        /* Firefox滚动条 */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+        }
+        
+        /* 登录模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 14px;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        /* 在线测试面板样式 */
+        .test-panel-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .test-panel-header-left {
+            flex: 1;
+        }
+        
+        .test-panel-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0 0 10px 0;
+        }
+        
+        .test-panel-header p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        
+        /* 请求配置区域 */
+        .test-request-section {
+            margin-bottom: 25px;
+        }
+        
+        .test-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .test-section-title::before {
+            content: '';
+            width: 3px;
+            height: 16px;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* 请求方法选择 */
+        .method-select-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .method-select-group .form-group {
+            flex: 0 0 120px;
+            margin-bottom: 0;
+        }
+        
+        .method-select-group .form-group:last-child {
+            flex: 1;
+        }
+        
+        /* 请求头编辑 */
+        .headers-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .header-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .header-row input {
+            flex: 1;
+        }
+        
+        .header-row .btn-remove {
+            flex: 0 0 32px;
+            height: 38px;
+            padding: 0;
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+        
+        .header-row .btn-remove:hover {
+            background: #e63950;
+        }
+        
+        .btn-add-header {
+            padding: 8px 12px;
+            background: var(--card-bg);
+            border: 1px dashed var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: var(--transition);
+        }
+        
+        .btn-add-header:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        /* 发送按钮 - 使用主题成功色 */
+        .test-send-btn {
+            padding: 10px 20px;
+            background: var(--success-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .test-send-btn:hover {
+            background: #0a9d82;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(10, 192, 116, 0.4);
+        }
+        
+        .test-send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* 导入示例按钮 */
+        .btn-import-example {
+            padding: 6px 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 8px;
+        }
+        
+        .btn-import-example:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        
+        .section-header-with-action {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        /* 示例操作按钮组 */
+        .example-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-copy-example {
+            padding: 8px 16px;
+            background: var(--card-bg);
+            border: 2px solid var(--primary-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 4px rgba(11, 177, 151, 0.1);
+        }
+        
+        .btn-copy-example:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 8px rgba(11, 177, 151, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-copy-example:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(11, 177, 151, 0.2);
+        }
+        
+        /* 示例内容区域 */
+        .example-content {
+            margin-top: 15px;
+        }
+        
+        .example-item {
+            margin-bottom: 20px;
+        }
+        
+        .example-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .example-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 8px;
+        }
+        
+        .example-value {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: var(--text-color);
+            padding: 8px 12px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        
+        .code-inline {
+            display: inline-block;
+            padding: 4px 8px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        /* 响应区域 */
+        .test-response-section {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 2px solid var(--border-color);
+        }
+        
+        .response-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: var(--card-bg);
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .response-info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        
+        .response-info-item label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .response-info-item span {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        
+        .response-status-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .response-status-badge.success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .response-status-badge.error {
+            background: var(--danger-color);
+            color: white;
+        }
+        
+        .response-status-badge.info {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        /* 响应头显示 */
+        .response-headers {
+            margin-bottom: 15px;
+        }
+        
+        .response-headers-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        
+        .response-headers-table th,
+        .response-headers-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .response-headers-table th {
+            background: var(--bg-color);
+            font-weight: 600;
+            color: var(--text-color);
+            width: 30%;
+        }
+        
+        .response-headers-table td {
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+        
+        /* 响应体显示 */
+        .response-body {
+            margin-top: 15px;
+        }
+        
+        .response-body-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .response-body-header h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+        
+        .response-body-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-icon {
+            padding: 6px 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: var(--transition);
+        }
+        
+        .btn-icon:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        
+        /* 空状态 */
+        .test-empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .test-empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+        
+        .test-empty-state h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--text-color);
+        }
+        
+        .test-empty-state p {
+            font-size: 13px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            font-size: 14px;
+        }
+        
+        /* 主题切换按钮 */
+        .theme-toggle {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+        
+        .theme-toggle:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="api-container">
+        <!-- 左侧API列表 -->
+        <div class="api-sidebar" id="api-sidebar">
+            <div class="sidebar-header">
+                <div>
+                    <h2><?=__('API接口')?></h2>
+                    <p><?=__('选择接口查看详情')?></p>
+                </div>
+                <div class="sidebar-controls">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()" title="<?=__('收起/展开')?>">
+                        <span>◀</span>
+                    </button>
+                </div>
+            </div>
+            <div class="api-tree">
+                <div id="api-tree"></div>
+            </div>
+        </div>
+        
+        <!-- 右侧内容区 -->
+        <div class="api-content">
+            <div class="content-header">
+                <div class="content-header-left">
+                    <h1><?=__('API文档管理')?></h1>
+                    <p><?=__('Weline Framework API接口文档和测试工具')?></p>
+                </div>
+                <div class="content-header-actions">
+                    <div class="production-mode-toggle" id="production-mode-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="production-mode-switch" onchange="toggleProductionMode()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="production-mode-label" id="production-mode-label"><?=__('正式环境调试')?></span>
+                    </div>
+                    <button class="btn btn-primary" onclick="showLoginModal()" id="login-btn">
+                        <span>🔐</span>
+                        <span><?=__('登录')?></span>
+                    </button>
+                    <button class="btn btn-light" onclick="toggleTheme()" title="<?=__('切换主题')?>">
+                        <span id="theme-icon">🌙</span>
+                    </button>
+                    <a href="<?= $this->getUrl('dev/tool/docs') ?>" class="btn btn-light">
+                        <span>📚</span>
+                        <span><?=__('开发文档')?></span>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="content-body" id="content-body">
+                <?php if (!empty($error)): ?>
+                    <div class="api-detail-panel">
+                        <div class="api-detail-card">
+                            <div class="alert alert-danger">
+                                <strong><?=__('错误')?>:</strong> <?= htmlspecialchars($error ?? '') ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-divider"></div>
+                    <div class="api-test-panel"></div>
+                <?php elseif (empty($apis)): ?>
+                    <div class="api-detail-panel">
+                        <div class="empty-state">
+                            <h3><?=__('暂无API文档')?></h3>
+                            <p><?=__('请运行文档扫描命令导入API文档: php bin/w doc:import')?></p>
+                        </div>
+                    </div>
+                    <div class="panel-divider"></div>
+                    <div class="api-test-panel"></div>
+                <?php elseif (empty($selectedApi)): ?>
+                    <div class="api-detail-panel">
+                        <div class="empty-state">
+                            <h3><?=__('请选择API接口')?></h3>
+                            <p><?=__('从左侧列表中选择一个API接口查看详细信息')?></p>
+                        </div>
+                    </div>
+                    <div class="panel-divider"></div>
+                    <div class="api-test-panel">
+                        <div class="test-empty-state">
+                            <div class="test-empty-state-icon">🚀</div>
+                            <h3><?=__('等待选择API')?></h3>
+                            <p><?=__('请从左侧选择一个API接口开始测试')?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <!-- API详情面板 -->
+                    <div class="api-detail-panel" id="api-detail-panel">
+                        <!-- 内容由JavaScript动态加载 -->
+                    </div>
+                    <div class="panel-divider" id="panel-divider"></div>
+                    <!-- 在线测试面板 -->
+                    <div class="api-test-panel" id="api-test-panel">
+                        <!-- 内容由JavaScript动态加载 -->
+                    </div>
+                    <script>
+                        // 页面加载时如果有selectedApi，立即加载
+                        if (selectedApi) {
+                            loadApiDetail(selectedApi);
+                        }
+                    </script>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 登录模态框 -->
+    <div class="modal" id="login-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?=__('API用户登录')?></h3>
+            </div>
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label><?=__('用户名')?></label>
+                    <input type="text" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label><?=__('密码')?></label>
+                    <input type="password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        <?=__('登录')?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // API数据
+        const apiData = <?= json_encode($apis ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const moduleDisplayNames = <?= json_encode($this->getData('moduleDisplayNames') ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const selectedApiId = '<?= htmlspecialchars($apiId ?? '') ?>';
+        const selectedApi = <?= json_encode($selectedApi ?? null, JSON_UNESCAPED_UNICODE) ?>;
+        
+        // 将selectedApi存储到全局变量
+        window.selectedApi = selectedApi;
+        
+        // 存储token到localStorage
+        const TOKEN_KEY = 'api_doc_access_token';
+        const REFRESH_TOKEN_KEY = 'api_doc_refresh_token';
+        const USER_KEY = 'api_doc_user';
+        const SANDBOX_KEY = 'api_doc_sandbox_key';
+        const PRODUCTION_MODE_KEY = 'api_doc_production_mode';
+        
+        // 获取沙盒密钥（从后端获取或使用默认值）
+        const sandboxKey = '<?= \Weline\Framework\App\Env::getInstance()->getConfig('sandbox_key') ?? 'dev_sandbox_2024' ?>';
+        
+        // 正式环境调试模式
+        let productionMode = localStorage.getItem(PRODUCTION_MODE_KEY) === 'true';
+        
+        // 初始化正式环境模式开关
+        function initProductionMode() {
+            const switchEl = document.getElementById('production-mode-switch');
+            const toggleEl = document.getElementById('production-mode-toggle');
+            if (switchEl && toggleEl) {
+                switchEl.checked = productionMode;
+                if (productionMode) {
+                    toggleEl.classList.add('active');
+                }
+            }
+        }
+        
+        // 切换正式环境模式
+        function toggleProductionMode() {
+            const switchEl = document.getElementById('production-mode-switch');
+            const toggleEl = document.getElementById('production-mode-toggle');
+            
+            if (!switchEl || !toggleEl) {
+                return;
+            }
+            
+            if (switchEl.checked && !productionMode) {
+                // 开启正式环境模式 - 显示警告
+                if (confirm('⚠️ 警告：您即将开启正式环境调试模式！\n\n' +
+                    '开启后，所有API请求将直接发送到正式环境，可能会：\n' +
+                    '• 修改正式环境的数据\n' +
+                    '• 影响正式环境的业务\n' +
+                    '• 造成不可逆的数据损失\n\n' +
+                    '请确认您已充分了解风险，并谨慎操作！\n\n' +
+                    '是否继续开启？')) {
+                    productionMode = true;
+                    localStorage.setItem(PRODUCTION_MODE_KEY, 'true');
+                    toggleEl.classList.add('active');
+                    // 如果当前有选中的API，重新加载详情以显示警告
+                    if (window.selectedApi) {
+                        loadApiDetail(window.selectedApi);
+                    }
+                } else {
+                    // 用户取消，恢复开关状态
+                    switchEl.checked = false;
+                }
+            } else if (!switchEl.checked && productionMode) {
+                // 关闭正式环境模式
+                productionMode = false;
+                localStorage.setItem(PRODUCTION_MODE_KEY, 'false');
+                toggleEl.classList.remove('active');
+                // 如果当前有选中的API，重新加载详情以移除警告
+                if (window.selectedApi) {
+                    loadApiDetail(window.selectedApi);
+                }
+            }
+        }
+        
+        // 初始化jstree
+        $(function() {
+            if (Object.keys(apiData).length === 0) {
+                $('#api-tree').html('<div class="empty-state"><p><?=__('暂无API文档')?></p></div>');
+                return;
+            }
+            
+            const treeData = buildTreeData(apiData);
+            $('#api-tree').jstree({
+                'core': {
+                    'data': treeData,
+                    'themes': {
+                        'name': 'default',
+                        'responsive': true,
+                        'dots': true,  // 显示连接点
+                        'stripes': false,  // 不显示条纹
+                        'variant': 'large'  // 使用大尺寸变体
+                    },
+                    'animation': 200  // 展开/收起动画
+                },
+                'plugins': []  // 可以添加其他插件
+            }).on('select_node.jstree', function(e, data) {
+                const node = data.node;
+                // 检查是否是API节点（有api属性）
+                // jstree会将数据存储在node.original中，但我们的api是直接存储的
+                const api = node.api || (node.original && (node.original.api || (node.original.original && node.original.original.api)));
+                if (api) {
+                    // 直接更新右侧内容，不跳转页面
+                    console.log('Loading API detail:', api);
+                    loadApiDetail(api);
+                    
+                    // 更新URL（不刷新页面）
+                    const apiId = api.id || node.id || (node.a_attr && node.a_attr['data-api-id']);
+                    if (apiId) {
+                        const url = new URL(window.location);
+                        url.searchParams.set('api_id', apiId);
+                        window.history.pushState({}, '', url);
+                    }
+                } else {
+                    console.log('Node does not have API data:', node, 'original:', node.original);
+                }
+            }).on('ready.jstree', function() {
+                // 渲染HTML内容到jstree节点
+                $('#api-tree').find('.jstree-anchor').each(function() {
+                    const $anchor = $(this);
+                    const $node = $anchor.closest('.jstree-node');
+                    const nodeId = $node.attr('id');
+                    if (nodeId) {
+                        const node = $('#api-tree').jstree('get_node', nodeId);
+                        if (node && node.text) {
+                            // 如果text包含HTML，直接设置HTML
+                            if (node.text.indexOf('<') !== -1) {
+                                $anchor.html(node.text);
+                            }
+                        }
+                    }
+                });
+                
+                // 如果有选中的API，展开并选中，并加载详情
+                if (selectedApiId) {
+                    const node = $('#api-tree').jstree('get_node', selectedApiId);
+                    const api = node ? (node.api || (node.original && (node.original.api || (node.original.original && node.original.original.api)))) : null;
+                    if (api) {
+                        // 加载API详情
+                        loadApiDetail(api);
+                        // 选中节点
+                        $('#api-tree').jstree('select_node', selectedApiId);
+                        // 展开所有父节点
+                        const parents = $('#api-tree').jstree('get_path', selectedApiId, true);
+                        parents.forEach(function(parentId) {
+                            $('#api-tree').jstree('open_node', parentId);
+                        });
+                    }
+                }
+            });
+            
+        });
+        
+        // 构建树形数据
+        function buildTreeData(apis) {
+            const tree = [];
+            for (const [moduleName, versions] of Object.entries(apis)) {
+                // 使用display_name显示模块名称（去掉排序号）
+                const displayName = moduleDisplayNames[moduleName] || moduleName;
+                const moduleNode = {
+                    id: 'module_' + moduleName,
+                    text: displayName, // 使用display_name显示
+                    icon: 'jstree-folder', // 模块使用文件夹图标
+                    children: [],
+                    state: { opened: true }
+                };
+                
+                for (const [version, classes] of Object.entries(versions)) {
+                    const versionNode = {
+                        id: 'version_' + moduleName + '_' + version,
+                        text: version,
+                        icon: 'jstree-folder', // 版本使用文件夹图标
+                        children: [],
+                        state: { opened: true }
+                    };
+                    
+                    for (const [className, methods] of Object.entries(classes)) {
+                        // 提取类名（只显示最后一部分，去掉命名空间）
+                        const classDisplayName = className.split('\\').pop() || className;
+                        const classNode = {
+                            id: 'class_' + moduleName + '_' + version + '_' + className,
+                            text: classDisplayName,
+                            icon: 'jstree-folder', // 类使用文件夹图标
+                            children: [],
+                            state: { opened: true }
+                        };
+                        
+                        for (const api of methods) {
+                            const apiId = 'api_' + moduleName + '_' + version + '_' + className + '_' + (api.method || '');
+                            // 构建显示文本：请求方法（重点标记）+ 接口名称 + 地址（code样式）
+                            const method = (api.route?.method || 'GET').toUpperCase();
+                            const path = api.route?.path || '';
+                            const summary = api.document?.summary || api.method || '';
+                            // 使用HTML格式显示
+                            const displayText = `<strong class="api-method-${method.toLowerCase()}">${method}</strong> ${summary} <code class="api-path-code">${path}</code>`;
+                            classNode.children.push({
+                                id: apiId,
+                                text: displayText,
+                                icon: 'jstree-route-icon', // 接口使用路由图标（十字路口图标）
+                                api: api, // 直接存储api数据
+                                a_attr: { 'data-api-id': apiId }
+                            });
+                        }
+                        
+                        versionNode.children.push(classNode);
+                    }
+                    
+                    moduleNode.children.push(versionNode);
+                }
+                
+                tree.push(moduleNode);
+            }
+            
+            return tree;
+        }
+        
+        // 加载API详情到左侧面板
+        function loadApiDetail(api) {
+            const detailPanel = document.getElementById('api-detail-panel') || document.querySelector('.api-detail-panel');
+            const testPanel = document.getElementById('api-test-panel') || document.querySelector('.api-test-panel');
+            
+            if (!detailPanel || !testPanel) {
+                console.error('找不到面板元素');
+                return;
+            }
+            
+            // 更新全局selectedApi变量
+            window.selectedApi = api;
+            
+            // 构建API详情HTML（左侧面板）
+            let detailHtml = '<div class="api-detail-card">';
+            
+            // 正式环境警告提示
+            if (productionMode) {
+                detailHtml += '<div class="production-warning">';
+                detailHtml += '<div class="production-warning-icon">⚠️</div>';
+                detailHtml += '<div class="production-warning-content">';
+                detailHtml += '<div class="production-warning-title"><?=__('正式环境调试模式已开启')?></div>';
+                detailHtml += '<div class="production-warning-text"><?=__('目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。')?></div>';
+                detailHtml += '</div>';
+                detailHtml += '</div>';
+            }
+            
+            // API头部
+            detailHtml += '<div class="api-detail-header">';
+            detailHtml += '<div>';
+            const method = (api.route?.method || 'GET').toUpperCase();
+            detailHtml += `<span class="api-method-badge ${method.toLowerCase()}">${method}</span>`;
+            detailHtml += `<span class="api-path">${escapeHtml(api.route?.path || '')}</span>`;
+            detailHtml += '</div>';
+            if (api.document?.summary) {
+                detailHtml += `<div class="api-summary">${escapeHtml(api.document.summary)}</div>`;
+            }
+            detailHtml += '</div>';
+            
+            // 接口描述
+            if (api.document?.description) {
+                detailHtml += '<div class="api-section">';
+                detailHtml += '<h3 class="api-section-title"><?=__('接口描述')?></h3>';
+                detailHtml += `<p>${escapeHtml(api.document.description).replace(/\n/g, '<br>')}</p>`;
+                detailHtml += '</div>';
+            }
+            
+            // 请求参数
+            if (api.parameters && api.parameters.length > 0) {
+                detailHtml += '<div class="api-section">';
+                detailHtml += '<h3 class="api-section-title"><?=__('请求参数')?></h3>';
+                detailHtml += '<table class="api-param-table">';
+                detailHtml += '<thead><tr><th><?=__('参数名')?></th><th><?=__('类型')?></th><th><?=__('必填')?></th><th><?=__('说明')?></th></tr></thead>';
+                detailHtml += '<tbody>';
+                api.parameters.forEach(param => {
+                    detailHtml += '<tr>';
+                    // 必填参数前面添加红色星号
+                    const paramName = escapeHtml(param.name || '');
+                    const requiredMark = param.required ? '<span class="required-mark">*</span>' : '';
+                    detailHtml += `<td><code>${requiredMark}${paramName}</code></td>`;
+                    detailHtml += `<td>${escapeHtml(param.type || '')}</td>`;
+                    detailHtml += `<td>${(param.required ? '<?=__('是')?>' : '<?=__('否')?>')}</td>`;
+                    detailHtml += `<td>${escapeHtml(param.description || '')}</td>`;
+                    detailHtml += '</tr>';
+                });
+                detailHtml += '</tbody></table>';
+                detailHtml += '</div>';
+            }
+            
+            // 请求示例
+            if (api.example) {
+                detailHtml += '<div class="api-section">';
+                detailHtml += '<div class="section-header-with-action">';
+                detailHtml += '<h3 class="api-section-title"><?=__('请求示例')?></h3>';
+                detailHtml += '<div class="example-actions">';
+                
+                // 复制路径按钮
+                if (api.example.path || api.route?.path) {
+                    const path = api.example.path || api.route?.path || '';
+                    // 转义单引号，避免JavaScript错误
+                    const escapedPath = path.replace(/'/g, "\\'").replace(/\n/g, ' ').replace(/\r/g, '');
+                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExamplePath('${escapedPath}')" title="<?=__('复制路径')?>">`;
+                    detailHtml += '<span>📋</span>';
+                    detailHtml += '<span><?=__('复制路径')?></span>';
+                    detailHtml += '</button>';
+                }
+                
+                // 复制请求体按钮
+                if (api.example.body || api.example.Body) {
+                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExampleBody()" title="<?=__('复制请求体')?>">`;
+                    detailHtml += '<span>📋</span>';
+                    detailHtml += '<span><?=__('复制请求体')?></span>';
+                    detailHtml += '</button>';
+                }
+                
+                // 复制响应体按钮
+                if (api.example.response || api.example.Response) {
+                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExampleResponse()" title="<?=__('复制响应体')?>">`;
+                    detailHtml += '<span>📋</span>';
+                    detailHtml += '<span><?=__('复制响应体')?></span>';
+                    detailHtml += '</button>';
+                }
+                
+                detailHtml += '</div>';
+                detailHtml += '</div>';
+                
+                // 显示示例内容
+                detailHtml += '<div class="example-content">';
+                
+                // 显示路径
+                if (api.example.path || api.route?.path) {
+                    const path = api.example.path || api.route?.path || '';
+                    detailHtml += '<div class="example-item">';
+                    detailHtml += '<div class="example-label"><?=__('路径')?>:</div>';
+                    detailHtml += `<div class="example-value code-inline">${escapeHtml(path)}</div>`;
+                    detailHtml += '</div>';
+                }
+                
+                // 显示请求体
+                if (api.example.body || api.example.Body) {
+                    let bodyData = api.example.body || api.example.Body;
+                    let formattedBody = '';
+                    try {
+                        if (typeof bodyData === 'string') {
+                            try {
+                                const parsed = JSON.parse(bodyData);
+                                formattedBody = JSON.stringify(parsed, null, 2)
+                                    .replace(/\\r\\n/g, '\n')
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\t/g, '\t')
+                                    .replace(/\\"/g, '"');
+                            } catch (e) {
+                                formattedBody = bodyData
+                                    .replace(/\\r\\n/g, '\n')
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\t/g, '\t');
+                            }
+                        } else {
+                            formattedBody = JSON.stringify(bodyData, null, 2)
+                                .replace(/\\r\\n/g, '\n')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '\t')
+                                .replace(/\\"/g, '"');
+                        }
+                    } catch (e) {
+                        formattedBody = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
+                    }
+                    
+                    detailHtml += '<div class="example-item">';
+                    detailHtml += '<div class="example-label"><?=__('请求体')?>:</div>';
+                    detailHtml += '<div class="code-block">';
+                    detailHtml += `<pre><code class="language-json" id="example-body-content">${escapeHtml(formattedBody)}</code></pre>`;
+                    detailHtml += '</div>';
+                    detailHtml += '</div>';
+                }
+                
+                // 显示响应体
+                if (api.example.response || api.example.Response) {
+                    let responseData = api.example.response || api.example.Response;
+                    let formattedResponse = '';
+                    try {
+                        if (typeof responseData === 'string') {
+                            try {
+                                const parsed = JSON.parse(responseData);
+                                formattedResponse = JSON.stringify(parsed, null, 2)
+                                    .replace(/\\r\\n/g, '\n')
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\t/g, '\t')
+                                    .replace(/\\"/g, '"');
+                            } catch (e) {
+                                formattedResponse = responseData
+                                    .replace(/\\r\\n/g, '\n')
+                                    .replace(/\\n/g, '\n')
+                                    .replace(/\\t/g, '\t');
+                            }
+                        } else {
+                            formattedResponse = JSON.stringify(responseData, null, 2)
+                                .replace(/\\r\\n/g, '\n')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '\t')
+                                .replace(/\\"/g, '"');
+                        }
+                    } catch (e) {
+                        formattedResponse = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+                    }
+                    
+                    detailHtml += '<div class="example-item">';
+                    detailHtml += '<div class="example-label"><?=__('响应体')?>:</div>';
+                    detailHtml += '<div class="code-block">';
+                    detailHtml += `<pre><code class="language-json" id="example-response-content">${escapeHtml(formattedResponse)}</code></pre>`;
+                    detailHtml += '</div>';
+                    detailHtml += '</div>';
+                }
+                
+                detailHtml += '</div>';
+                detailHtml += '</div>';
+            }
+            
+            detailHtml += '</div>';
+            detailPanel.innerHTML = detailHtml;
+            
+            // 构建测试面板HTML（右侧面板）
+            loadTestPanel(api);
+            
+            // 高亮代码（延迟执行，确保DOM已更新）
+            setTimeout(() => {
+                if (typeof Prism !== 'undefined') {
+                    Prism.highlightAllUnder(detailPanel);
+                }
+            }, 100);
+        }
+        
+        // 加载测试面板
+        function loadTestPanel(api) {
+            const testPanel = document.getElementById('api-test-panel') || document.querySelector('.api-test-panel');
+            if (!testPanel) return;
+            
+            const method = (api.route?.method || 'GET').toUpperCase();
+            const path = api.route?.path || '';
+            const baseUrl = window.location.origin;
+            const fullUrl = path.startsWith('http') ? path : baseUrl + path;
+            
+            // 默认请求头
+            const defaultHeaders = [
+                { key: 'Content-Type', value: 'application/json' }
+            ];
+            
+            // 如果有token，添加Authorization头
+            const token = localStorage.getItem(TOKEN_KEY);
+            if (token) {
+                defaultHeaders.push({ key: 'Authorization', value: 'Bearer ' + token });
+            }
+            
+            // 默认请求体（美化处理）
+            let defaultBody = '{}';
+            let exampleBody = null;
+            // 存储示例数据到全局，供导入函数使用
+            window.currentApiExample = api.example || null;
+            if (api.example && api.example.Body) {
+                exampleBody = api.example.Body;
+                try {
+                    if (typeof api.example.Body === 'string') {
+                        // 尝试解析JSON字符串
+                        try {
+                            const parsed = JSON.parse(api.example.Body);
+                            defaultBody = JSON.stringify(parsed, null, 2)
+                                .replace(/\\r\\n/g, '\n')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '\t')
+                                .replace(/\\"/g, '"');
+                        } catch (e) {
+                            // 不是JSON，直接使用字符串，处理转义字符
+                            defaultBody = api.example.Body
+                                .replace(/\\r\\n/g, '\n')
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '\t');
+                        }
+                    } else {
+                        defaultBody = JSON.stringify(api.example.Body, null, 2)
+                            .replace(/\\r\\n/g, '\n')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"');
+                    }
+                } catch (e) {
+                    defaultBody = JSON.stringify(api.example.Body, null, 2);
+                }
+            }
+            
+            let testHtml = '<div class="test-panel-header">';
+            testHtml += '<div class="test-panel-header-left">';
+            testHtml += '<h2><?=__('在线测试')?></h2>';
+            testHtml += '<p><?=__('编辑请求参数并发送测试请求')?></p>';
+            testHtml += '</div>';
+            testHtml += '<button type="button" class="test-send-btn" onclick="sendTestRequest()">';
+            testHtml += '<span>▶</span>';
+            testHtml += '<span><?=__('发送请求')?></span>';
+            testHtml += '</button>';
+            testHtml += '</div>';
+            
+            // 请求配置区域
+            testHtml += '<div class="test-request-section">';
+            
+            // 请求方法和URL
+            testHtml += '<div class="test-section-title"><?=__('请求配置')?></div>';
+            testHtml += '<div class="method-select-group">';
+            testHtml += '<div class="form-group">';
+            testHtml += '<label><?=__('方法')?></label>';
+            testHtml += `<select id="test-method" class="form-control">`;
+            ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].forEach(m => {
+                testHtml += `<option value="${m}" ${m === method ? 'selected' : ''}>${m}</option>`;
+            });
+            testHtml += '</select>';
+            testHtml += '</div>';
+            testHtml += '<div class="form-group">';
+            testHtml += '<label><?=__('请求URL')?></label>';
+            testHtml += `<input type="text" id="test-url" value="${escapeHtml(fullUrl)}" placeholder="<?=__('请输入请求URL')?>">`;
+            testHtml += '</div>';
+            testHtml += '</div>';
+            
+            // 请求头
+            testHtml += '<div class="form-group" style="margin-top: 15px;">';
+            testHtml += '<div class="section-header-with-action">';
+            testHtml += '<div class="test-section-title"><?=__('请求头')?></div>';
+            // 获取示例请求头
+            let exampleHeaders = [];
+            if (window.currentApiExample && window.currentApiExample.Headers) {
+                if (typeof window.currentApiExample.Headers === 'object') {
+                    exampleHeaders = Object.entries(window.currentApiExample.Headers).map(([key, value]) => ({ key, value: String(value) }));
+                }
+            }
+            if (exampleHeaders.length > 0) {
+                testHtml += `<button type="button" class="btn-import-example" onclick="importExampleHeaders()" title="<?=__('导入示例请求头')?>">`;
+                testHtml += '<span>📥</span>';
+                testHtml += '<span><?=__('导入示例')?></span>';
+                testHtml += '</button>';
+            }
+            testHtml += '</div>';
+            testHtml += '<div class="headers-editor" id="headers-editor">';
+            defaultHeaders.forEach((header, index) => {
+                testHtml += '<div class="header-row">';
+                testHtml += `<input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtml(header.key)}">`;
+                testHtml += `<input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtml(header.value)}">`;
+                testHtml += `<button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>`;
+                testHtml += '</div>';
+            });
+            testHtml += '</div>';
+            testHtml += '<button type="button" class="btn-add-header" onclick="addHeader()">+ <?=__('添加请求头')?></button>';
+            testHtml += '</div>';
+            
+            // 请求体（仅POST/PUT/PATCH）
+            if (['POST', 'PUT', 'PATCH'].includes(method)) {
+                testHtml += '<div class="form-group">';
+                testHtml += '<div class="section-header-with-action">';
+                testHtml += '<div class="test-section-title"><?=__('请求体')?></div>';
+                if (exampleBody) {
+                    testHtml += `<button type="button" class="btn-import-example" onclick="importExampleBody()" title="<?=__('导入示例请求体')?>">`;
+                    testHtml += '<span>📥</span>';
+                    testHtml += '<span><?=__('导入示例')?></span>';
+                    testHtml += '</button>';
+                }
+                testHtml += '</div>';
+                testHtml += `<textarea id="test-body" placeholder='<?=__('请输入JSON格式的请求体')?>' rows="10">${escapeHtml(defaultBody)}</textarea>`;
+                testHtml += '</div>';
+            }
+            
+            testHtml += '</div>';
+            
+            // 响应区域
+            testHtml += '<div class="test-response-section" id="test-response-section" style="display: none;">';
+            testHtml += '<div class="test-section-title"><?=__('响应信息')?></div>';
+            
+            // 响应基本信息
+            testHtml += '<div class="response-info" id="response-info"></div>';
+            
+            // 响应头
+            testHtml += '<div class="response-headers">';
+            testHtml += '<div class="test-section-title"><?=__('响应头')?></div>';
+            testHtml += '<table class="response-headers-table" id="response-headers-table">';
+            testHtml += '<thead><tr><th><?=__('Header名称')?></th><th><?=__('Header值')?></th></tr></thead>';
+            testHtml += '<tbody id="response-headers-body"></tbody>';
+            testHtml += '</table>';
+            testHtml += '</div>';
+            
+            // 响应体
+            testHtml += '<div class="response-body">';
+            testHtml += '<div class="response-body-header">';
+            testHtml += '<h4><?=__('响应体')?></h4>';
+            testHtml += '<div class="response-body-actions">';
+            testHtml += '<button type="button" class="btn-icon" onclick="copyResponseBody()"><?=__('复制')?></button>';
+            testHtml += '<button type="button" class="btn-icon" onclick="formatResponseBody()"><?=__('格式化')?></button>';
+            testHtml += '</div>';
+            testHtml += '</div>';
+            testHtml += '<div class="code-block">';
+            testHtml += '<pre><code class="language-json" id="response-body-content"></code></pre>';
+            testHtml += '</div>';
+            testHtml += '</div>';
+            
+            testHtml += '</div>';
+            
+            testPanel.innerHTML = testHtml;
+            
+            // 初始化悬浮面板
+            initStickyTestPanel();
+        }
+        
+        // 添加请求头
+        function addHeader() {
+            const editor = document.getElementById('headers-editor');
+            if (!editor) return;
+            
+            const row = document.createElement('div');
+            row.className = 'header-row';
+            row.innerHTML = `
+                <input type="text" class="header-key" placeholder="<?=__('Header名称')?>">
+                <input type="text" class="header-value" placeholder="<?=__('Header值')?>">
+                <button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>
+            `;
+            editor.appendChild(row);
+        }
+        
+        // 删除请求头
+        function removeHeader(btn) {
+            btn.closest('.header-row').remove();
+        }
+        
+        // 发送测试请求
+        async function sendTestRequest() {
+            const api = window.selectedApi;
+            if (!api) {
+                alert('<?=__('请先选择一个API接口')?>');
+                return;
+            }
+            
+            // 获取请求配置
+            const method = document.getElementById('test-method').value;
+            const url = document.getElementById('test-url').value;
+            
+            // 获取请求头
+            const headers = {};
+            document.querySelectorAll('.header-row').forEach(row => {
+                const key = row.querySelector('.header-key').value.trim();
+                const value = row.querySelector('.header-value').value.trim();
+                if (key && value) {
+                    headers[key] = value;
+                }
+            });
+            
+            // 获取请求体
+            let body = null;
+            const bodyEl = document.getElementById('test-body');
+            if (bodyEl && ['POST', 'PUT', 'PATCH'].includes(method)) {
+                const bodyText = bodyEl.value.trim();
+                if (bodyText) {
+                    try {
+                        // 验证JSON格式
+                        JSON.parse(bodyText);
+                        body = bodyText;
+                    } catch (e) {
+                        alert('<?=__('请求体格式错误，请输入有效的JSON')?>');
+                        return;
+                    }
+                }
+            }
+            
+            // 添加沙盒参数（仅在非正式环境模式下）
+            const requestUrl = new URL(url);
+            if (!productionMode && sandboxKey) {
+                requestUrl.searchParams.set('sandbox', sandboxKey);
+            }
+            
+            // 显示响应区域
+            const responseSection = document.getElementById('test-response-section');
+            if (responseSection) {
+                responseSection.style.display = 'block';
+            }
+            
+            // 显示加载状态
+            const responseInfo = document.getElementById('response-info');
+            const responseHeadersBody = document.getElementById('response-headers-body');
+            const responseBodyContent = document.getElementById('response-body-content');
+            
+            if (responseInfo) {
+                responseInfo.innerHTML = '<div class="response-info-item"><label><?=__('状态')?>:</label><span>请求中...</span></div>';
+            }
+            if (responseHeadersBody) {
+                responseHeadersBody.innerHTML = '';
+            }
+            if (responseBodyContent) {
+                responseBodyContent.textContent = '';
+            }
+            
+            // 禁用发送按钮
+            const sendBtn = document.querySelector('.test-send-btn');
+            if (sendBtn) {
+                sendBtn.disabled = true;
+            }
+            
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch(requestUrl.toString(), {
+                    method: method,
+                    headers: headers,
+                    body: body
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                // 获取响应头
+                const responseHeaders = {};
+                response.headers.forEach((value, key) => {
+                    responseHeaders[key] = value;
+                });
+                
+                // 获取响应体
+                const responseText = await response.text();
+                
+                // 更新响应信息
+                if (responseInfo) {
+                    const statusClass = response.ok ? 'success' : 'error';
+                    responseInfo.innerHTML = `
+                        <div class="response-info-item">
+                            <label><?=__('状态码')?>:</label>
+                            <span class="response-status-badge ${statusClass}">${response.status} ${response.statusText}</span>
+                        </div>
+                        <div class="response-info-item">
+                            <label><?=__('请求时间')?>:</label>
+                            <span>${duration}ms</span>
+                        </div>
+                        <div class="response-info-item">
+                            <label><?=__('响应大小')?>:</label>
+                            <span>${formatBytes(responseText.length)}</span>
+                        </div>
+                    `;
+                }
+                
+                // 更新响应头
+                if (responseHeadersBody) {
+                    responseHeadersBody.innerHTML = '';
+                    Object.entries(responseHeaders).forEach(([key, value]) => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `<td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td>`;
+                        responseHeadersBody.appendChild(row);
+                    });
+                }
+                
+                // 更新响应体（美化处理）
+                if (responseBodyContent) {
+                    let formattedResponse = responseText;
+                    try {
+                        const jsonData = JSON.parse(responseText);
+                        formattedResponse = JSON.stringify(jsonData, null, 2)
+                            .replace(/\\r\\n/g, '\n')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"');
+                    } catch (e) {
+                        // 不是JSON，直接显示，但处理转义字符
+                        formattedResponse = responseText
+                            .replace(/\\r\\n/g, '\n')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t');
+                    }
+                    responseBodyContent.textContent = formattedResponse;
+                    
+                    // 高亮代码
+                    if (typeof Prism !== 'undefined') {
+                        Prism.highlightElement(responseBodyContent);
+                    }
+                }
+                
+            } catch (error) {
+                if (responseInfo) {
+                    responseInfo.innerHTML = `
+                        <div class="response-info-item">
+                            <label><?=__('状态')?>:</label>
+                            <span class="response-status-badge error"><?=__('请求失败')?></span>
+                        </div>
+                        <div class="response-info-item">
+                            <label><?=__('错误')?>:</label>
+                            <span>${escapeHtml(error.message)}</span>
+                        </div>
+                    `;
+                }
+                if (responseBodyContent) {
+                    responseBodyContent.textContent = '错误：' + error.message;
+                }
+            } finally {
+                // 恢复发送按钮
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                }
+            }
+        }
+        
+        // 格式化字节大小
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        // 复制响应体
+        function copyResponseBody() {
+            const content = document.getElementById('response-body-content');
+            if (content) {
+                navigator.clipboard.writeText(content.textContent).then(() => {
+                    alert('<?=__('已复制到剪贴板')?>');
+                });
+            }
+        }
+        
+        // 复制示例路径
+        function copyExamplePath(path) {
+            if (path) {
+                navigator.clipboard.writeText(path).then(() => {
+                    alert('<?=__('路径已复制到剪贴板')?>');
+                }).catch(() => {
+                    // 降级方案
+                    const textarea = document.createElement('textarea');
+                    textarea.value = path;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('<?=__('路径已复制到剪贴板')?>');
+                });
+            }
+        }
+        
+        // 复制示例请求体
+        function copyExampleBody() {
+            const content = document.getElementById('example-body-content');
+            if (content) {
+                const text = content.textContent || content.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('<?=__('请求体已复制到剪贴板')?>');
+                }).catch(() => {
+                    // 降级方案
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('<?=__('请求体已复制到剪贴板')?>');
+                });
+            }
+        }
+        
+        // 复制示例响应体
+        function copyExampleResponse() {
+            const content = document.getElementById('example-response-content');
+            if (content) {
+                const text = content.textContent || content.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('<?=__('响应体已复制到剪贴板')?>');
+                }).catch(() => {
+                    // 降级方案
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('<?=__('响应体已复制到剪贴板')?>');
+                });
+            }
+        }
+        
+        // 格式化响应体
+        function formatResponseBody() {
+            const content = document.getElementById('response-body-content');
+            if (!content) return;
+            
+            try {
+                const jsonData = JSON.parse(content.textContent);
+                const formatted = JSON.stringify(jsonData, null, 2)
+                    .replace(/\\r\\n/g, '\n')
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\t/g, '\t')
+                    .replace(/\\"/g, '"');
+                content.textContent = formatted;
+                if (typeof Prism !== 'undefined') {
+                    Prism.highlightElement(content);
+                }
+            } catch (e) {
+                alert('<?=__('无法格式化，内容不是有效的JSON')?>');
+            }
+        }
+        
+        // 导入示例请求头
+        function importExampleHeaders() {
+            const example = window.currentApiExample;
+            if (!example || !example.Headers) {
+                return;
+            }
+            
+            const headers = example.Headers;
+            const headersEditor = document.getElementById('headers-editor');
+            if (!headersEditor) return;
+            
+            // 清空现有请求头
+            headersEditor.innerHTML = '';
+            
+            // 添加示例请求头
+            if (typeof headers === 'object') {
+                Object.entries(headers).forEach(([key, value]) => {
+                    const row = document.createElement('div');
+                    row.className = 'header-row';
+                    row.innerHTML = `
+                        <input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtml(key)}">
+                        <input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtml(String(value))}">
+                        <button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>
+                    `;
+                    headersEditor.appendChild(row);
+                });
+            }
+        }
+        
+        // 导入示例请求体
+        function importExampleBody() {
+            const example = window.currentApiExample;
+            if (!example || !example.Body) {
+                return;
+            }
+            
+            const bodyEl = document.getElementById('test-body');
+            if (!bodyEl) return;
+            
+            let bodyText = '';
+            try {
+                if (typeof example.Body === 'string') {
+                    try {
+                        const parsed = JSON.parse(example.Body);
+                        bodyText = JSON.stringify(parsed, null, 2)
+                            .replace(/\\r\\n/g, '\n')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"');
+                    } catch (e) {
+                        bodyText = example.Body
+                            .replace(/\\r\\n/g, '\n')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\t/g, '\t');
+                    }
+                } else {
+                    bodyText = JSON.stringify(example.Body, null, 2)
+                        .replace(/\\r\\n/g, '\n')
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\t/g, '\t')
+                        .replace(/\\"/g, '"');
+                }
+            } catch (e) {
+                bodyText = JSON.stringify(example.Body, null, 2);
+            }
+            
+            bodyEl.value = bodyText;
+        }
+        
+        // 让在线测试面板在滚动时悬浮
+        function initStickyTestPanel() {
+            const testPanel = document.getElementById('api-test-panel');
+            if (!testPanel) return;
+            
+            // 添加悬浮类
+            testPanel.classList.add('sticky');
+        }
+        
+        // HTML转义函数
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 切换侧边栏
+        function toggleSidebar() {
+            const sidebar = document.getElementById('api-sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+        
+        // 初始化侧边栏拖拽调整宽度功能
+        function initSidebarResize() {
+            const sidebar = document.getElementById('api-sidebar');
+            const apiTree = document.querySelector('.api-tree');
+            if (!sidebar || !apiTree) return;
+            
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+            
+            // 鼠标按下事件
+            const handleMouseDown = (e) => {
+                // 检查是否点击在空白区域（不是节点）
+                const target = e.target;
+                
+                // 如果点击的是jstree节点、链接或其他交互元素，不触发拖拽
+                if (target.closest('.jstree-node') || 
+                    target.closest('.jstree-anchor') ||
+                    target.closest('a') ||
+                    target.closest('button') ||
+                    target.closest('.jstree-icon')) {
+                    return;
+                }
+                
+                // 检查是否在右侧边缘8px范围内
+                const rect = apiTree.getBoundingClientRect();
+                const isNearRightEdge = e.clientX >= rect.right - 8;
+                
+                // 检查是否点击在空白区域（树容器本身或空白处）
+                const isBlankArea = target === apiTree || 
+                                   target.closest('.api-tree') === apiTree ||
+                                   (!target.closest('.jstree-node') && 
+                                    !target.closest('.jstree-anchor') &&
+                                    !target.closest('a') &&
+                                    !target.closest('button') &&
+                                    !target.closest('.jstree-icon'));
+                
+                // 在右侧边缘或空白区域都可以拖拽
+                if (isNearRightEdge || isBlankArea) {
+                    isResizing = true;
+                    startX = e.clientX;
+                    startWidth = sidebar.offsetWidth;
+                    apiTree.classList.add('dragging');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            };
+            
+            // 鼠标移动事件
+            const handleMouseMove = (e) => {
+                if (!isResizing) return;
+                
+                const diff = e.clientX - startX;
+                let newWidth = startWidth + diff;
+                
+                // 限制最小和最大宽度
+                const minWidth = 300;
+                const maxWidth = 800;
+                newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+                
+                sidebar.style.width = newWidth + 'px';
+                sidebar.style.transition = 'none'; // 拖拽时禁用过渡动画
+                e.preventDefault();
+            };
+            
+            // 鼠标释放事件
+            const handleMouseUp = () => {
+                if (isResizing) {
+                    isResizing = false;
+                    apiTree.classList.remove('dragging');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    sidebar.style.transition = 'width 0.3s ease'; // 恢复过渡动画
+                    
+                    // 保存宽度到localStorage
+                    localStorage.setItem('api-sidebar-width', sidebar.offsetWidth + 'px');
+                }
+            };
+            
+            // 绑定事件
+            apiTree.addEventListener('mousedown', handleMouseDown);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            
+            // 恢复保存的宽度
+            const savedWidth = localStorage.getItem('api-sidebar-width');
+            if (savedWidth && !sidebar.classList.contains('collapsed')) {
+                sidebar.style.width = savedWidth;
+            }
+        }
+        
+        // 切换主题
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('api-doc-theme', newTheme);
+            
+            const icon = document.getElementById('theme-icon');
+            icon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+        
+        // 初始化主题
+        (function() {
+            const savedTheme = localStorage.getItem('api-doc-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const icon = document.getElementById('theme-icon');
+            icon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        })();
+        
+        // 显示登录模态框
+        function showLoginModal() {
+            document.getElementById('login-modal').classList.add('active');
+        }
+        
+        // 处理登录
+        async function handleLogin(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = {
+                username: formData.get('username'),
+                password: formData.get('password')
+            };
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data) {
+                    // 保存token和用户信息
+                    localStorage.setItem(TOKEN_KEY, result.data.access_token || '');
+                    localStorage.setItem(REFRESH_TOKEN_KEY, result.data.refresh_token || '');
+                    localStorage.setItem(USER_KEY, JSON.stringify(result.data.user || {}));
+                    
+                    // 关闭登录模态框
+                    document.getElementById('login-modal').classList.remove('active');
+                    
+                    // 更新登录状态显示
+                    updateLoginStatus();
+                    
+                    alert('登录成功！');
+                } else {
+                    alert('登录失败：' + (result.msg || '未知错误'));
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('登录失败：' + error.message);
+            }
+        }
+        
+        // 更新登录状态显示
+        function updateLoginStatus() {
+            const user = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+            const token = localStorage.getItem(TOKEN_KEY);
+            const loginBtn = document.querySelector('.btn-primary');
+            
+            if (token && user.username) {
+                if (loginBtn) {
+                    loginBtn.innerHTML = `<span>👤</span><span>${user.username}</span>`;
+                    loginBtn.onclick = handleLogout;
+                    loginBtn.title = '点击退出登录';
+                }
+            } else {
+                if (loginBtn) {
+                    loginBtn.innerHTML = `<span>🔐</span><span><?=__('登录')?></span>`;
+                    loginBtn.onclick = showLoginModal;
+                    loginBtn.title = '点击登录';
+                }
+            }
+        }
+        
+        // 退出登录
+        function handleLogout() {
+            if (confirm('确定要退出登录吗？')) {
+                localStorage.removeItem(TOKEN_KEY);
+                localStorage.removeItem(REFRESH_TOKEN_KEY);
+                localStorage.removeItem(USER_KEY);
+                updateLoginStatus();
+                alert('已退出登录');
+            }
+        }
+        
+        
+        // 页面加载时更新登录状态和正式环境模式
+        $(function() {
+            updateLoginStatus();
+            initProductionMode();
+            initSidebarResize(); // 初始化侧边栏拖拽调整宽度功能
+        });
+    </script>
+</body>
+</html>
+

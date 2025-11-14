@@ -43,6 +43,30 @@ class UpgradeMenu implements ObserverInterface
     }
 
     /**
+     * 递归收集子菜单的 source
+     * 
+     * @param string $parentSource 父菜单的 source
+     * @param array &$sourcesToDelete 要删除的菜单 source 数组（引用传递）
+     * @return void
+     */
+    private function collectChildMenuSources(string $parentSource, array &$sourcesToDelete): void
+    {
+        $childMenus = $this->menu->reset()
+            ->where(Menu::fields_PARENT_SOURCE, $parentSource)
+            ->select()
+            ->fetchArray();
+        
+        foreach ($childMenus as $childMenu) {
+            $childSource = $childMenu[Menu::fields_SOURCE];
+            if (!in_array($childSource, $sourcesToDelete)) {
+                $sourcesToDelete[] = $childSource;
+                // 递归查找子菜单的子菜单
+                $this->collectChildMenuSources($childSource, $sourcesToDelete);
+            }
+        }
+    }
+
+    /**
      * @DESC          # 如果动作路径有*号，替换为路由所指模块的路由
      *
      * @AUTH  秋枫雁飞
@@ -85,11 +109,12 @@ class UpgradeMenu implements ObserverInterface
     public function collectMenus(): array
     {
         $update_items = [];
-        # 清空表
-        $this->menu->query("TRUNCATE TABLE {$this->menu->getTable()}")->fetch();
         # 读取菜单配置
         $modules_xml_menus = $this->menuReader->read();
         $modules_info = [];
+        
+        # 收集所有文件中的菜单 source，用于后续删除不在文件中的菜单
+        $file_menu_sources = [];
         # 先更新顶层菜单
         foreach ($modules_xml_menus as $module => &$menus) {
             foreach ($menus['data'] as $key => $menu) {
@@ -103,6 +128,8 @@ class UpgradeMenu implements ObserverInterface
                     $menu[Menu::fields_ACTION] = trim($menu[Menu::fields_ACTION], '/');
                     # 如果动作路径有*号，替换为路由所指模块的路由
                     $menu = $this->replaceModuleAction($menu, $modules_info, $module);
+                    # 收集文件中的菜单 source
+                    $file_menu_sources[] = $menu[Menu::fields_SOURCE];
                     # 先查询一遍
                     /**@var Menu $menuModel */
                     $this->menu->clear();
@@ -129,6 +156,8 @@ class UpgradeMenu implements ObserverInterface
                 $menu[Menu::fields_PARENT_SOURCE] = $menu['parent'] ?? '';
                 $menu[Menu::fields_ACTION] = trim($menu[Menu::fields_ACTION], '/');
                 $menu = $this->replaceModuleAction($menu, $modules_info);
+                # 收集文件中的菜单 source
+                $file_menu_sources[] = $menu[Menu::fields_SOURCE];
                 unset($menu['parent']);
                 # 1 存在父资源 检查父资源的 ID
                 $parent = clone $this->menu->where(Menu::fields_SOURCE, $menu[Menu::fields_PARENT_SOURCE])->find()->fetch();
@@ -177,6 +206,35 @@ class UpgradeMenu implements ObserverInterface
                 }
             }
         }
+        // 删除数据库中不在文件中的菜单项（以文件为准）
+        // 需要递归删除：如果父菜单被删除，子菜单也应该被删除
+        if (!empty($file_menu_sources)) {
+            // 先找出所有需要删除的菜单（不在文件中的）
+            $menusToDelete = $this->menu->reset()
+                ->where(Menu::fields_SOURCE, $file_menu_sources, 'not in')
+                ->select()
+                ->fetchArray();
+            
+            // 收集所有需要删除的菜单 source（包括子菜单）
+            $sourcesToDelete = [];
+            foreach ($menusToDelete as $menu) {
+                $sourcesToDelete[] = $menu[Menu::fields_SOURCE];
+                // 递归查找所有子菜单
+                $this->collectChildMenuSources($menu[Menu::fields_SOURCE], $sourcesToDelete);
+            }
+            
+            // 删除所有需要删除的菜单（包括子菜单）
+            if (!empty($sourcesToDelete)) {
+                $this->menu->reset()
+                    ->where(Menu::fields_SOURCE, $sourcesToDelete, 'in')
+                    ->delete()
+                    ->fetch();
+            }
+        } else {
+            // 如果文件中没有任何菜单，删除所有菜单
+            $this->menu->reset()->delete()->fetch();
+        }
+        
         // 更新菜单到权限表
         $all_menus = $this->menu->reset()->order('order', 'ASC')->select()->fetchArray();
         

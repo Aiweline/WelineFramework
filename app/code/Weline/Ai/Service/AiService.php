@@ -23,6 +23,7 @@ use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
+use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 
@@ -418,7 +419,7 @@ class AiService
             // 2. 获取该供应商的账户列表（用于回退重试）
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
             if (empty($allAccounts)) {
-                throw new Exception("没有可用的{$providerCode}供应商账户");
+                throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
             // 测试模式放宽筛选：仅要求激活；非测试模式要求激活+连通成功+余额>0
@@ -433,10 +434,10 @@ class AiService
                 return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
-                throw new Exception($isTestMode 
-                    ? "没有满足条件的{$providerCode}供应商账户（需激活）"
-                    : "没有满足条件的{$providerCode}供应商账户（需激活、连通成功且余额>0）"
-                );
+                $message = $isTestMode 
+                    ? __("没有满足条件的%{provider}供应商账户（需激活）", ['provider' => $providerCode])
+                    : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]);
+                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
             }
             usort($candidateAccounts, function ($a, $b) {
                 $d1 = (int)($a['is_default'] ?? 0);
@@ -557,7 +558,7 @@ class AiService
             // 2. 获取可用的供应商账户
             $account = $this->accountService->getAvailableAccount($providerCode);
             if (!$account) {
-                throw new Exception("没有可用的{$providerCode}供应商账户");
+                throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
             
             // 3. 将账户配置注入到模型中

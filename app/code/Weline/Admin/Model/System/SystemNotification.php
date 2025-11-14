@@ -114,4 +114,37 @@ class SystemNotification extends \Weline\Framework\Database\Model
         $this->setData(self::fields_is_read, (int)$is_read);
         return $this;
     }
+
+    public function getIsImg(): int
+    {
+        return (int)($this->getData(self::fields_is_img) ?? 0);
+    }
+
+    public function setIsImg(int $is_img = 0): static
+    {
+        $this->setData(self::fields_is_img, $is_img);
+        return $this;
+    }
+
+    public function getIsIcon(): int
+    {
+        return (int)($this->getData(self::fields_is_icon) ?? 0);
+    }
+
+    public function setIsIcon(int $is_icon = 0): static
+    {
+        $this->setData(self::fields_is_icon, $is_icon);
+        return $this;
+    }
+
+    public function getAvatar(): string
+    {
+        return $this->getData(self::fields_avatar) ?? '';
+    }
+
+    public function setAvatar(string $avatar): static
+    {
+        $this->setData(self::fields_avatar, $avatar);
+        return $this;
+    }
 }

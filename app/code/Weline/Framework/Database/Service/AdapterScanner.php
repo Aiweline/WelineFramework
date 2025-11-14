@@ -15,6 +15,7 @@ namespace Weline\Framework\Database\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Service\DriverRegistry;
+use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\System\File\Scan;
 
 /**
@@ -139,6 +140,7 @@ class AdapterScanner
     
     /**
      * 扫描扩展适配器
+     * 使用 ExtendsData 读取 Weline_Framework 模块的 Connection/Adapter 扩展点文件
      * 
      * @return array
      */
@@ -147,36 +149,63 @@ class AdapterScanner
         $adapters = [];
         
         try {
-            $adapterDir = BP . DIRECTORY_SEPARATOR . self::EXTENDS_ADAPTER_DIR;
+            // 从 ExtendsData 获取 Weline_Framework 模块的扩展信息
+            // 注意：如果 Weline_Framework 模块没有定义 extends.php，这里会返回空数组
+            $extendedBy = ExtendsData::getExtendedBy('Weline_Framework');
             
-            if (!is_dir($adapterDir)) {
+            if (empty($extendedBy)) {
                 return $adapters;
             }
             
-            // 扫描所有子目录（每个子目录代表一个驱动类型）
-            $subDirs = glob($adapterDir . '*', GLOB_ONLYDIR);
-            
-            foreach ($subDirs ?? [] as $subDir) {
-                try {
-                    $driverType = basename($subDir);
-                    $connectorFile = $subDir . DIRECTORY_SEPARATOR . self::CONNECTOR_FILE;
+            // 遍历所有扩展该模块的源模块
+            foreach ($extendedBy as $sourceModule => $extensions) {
+                foreach ($extensions as $extension) {
+                    // 检查是否是 Connection/Adapter 扩展点的文件
+                    // 扩展点路径应该是 'extends/module/Weline_Framework/Connection/Adapter'
+                    // 所以 relative_path 应该以 'extends/module/Weline_Framework/Connection/Adapter/' 开头
+                    $filePath = $extension['file_path'] ?? '';
+                    $relativePath = $extension['relative_path'] ?? '';
                     
-                    if (file_exists($connectorFile)) {
-                        $className = $this->getClassNameFromExtendsFile($connectorFile);
+                    // 检查路径是否匹配 Connection/Adapter 扩展点
+                    $isAdapterFile = str_starts_with($relativePath, 'extends/module/Weline_Framework/Connection/Adapter/')
+                        || (str_contains($relativePath, '/Connection/Adapter/') && str_ends_with($filePath ?? '', 'Connector.php'));
+                    
+                    if ($isAdapterFile) {
+                        // 获取源文件路径
+                        $sourceFile = $extension['source_file'] ?? '';
+                        if (empty($sourceFile) || !file_exists($sourceFile)) {
+                            continue;
+                        }
                         
-                        if ($className && $this->validateAdapter($className)) {
-                            // 扩展适配器优先级更高，覆盖 Framework 内置适配器
-                            $adapters[strtolower($driverType)] = $className;
+                        // 只处理 Connector.php 文件
+                        if (!str_ends_with($sourceFile, 'Connector.php')) {
+                            continue;
+                        }
+                        
+                        // 从文件路径中提取驱动类型（目录名）
+                        // 例如：extends/module/Weline_Framework/Connection/Adapter/Mysql/Connector.php
+                        // driverType 应该是 'Mysql'
+                        $pathParts = explode('/', str_replace('\\', '/', $relativePath));
+                        $adapterIndex = array_search('Adapter', $pathParts);
+                        if ($adapterIndex !== false && isset($pathParts[$adapterIndex + 1])) {
+                            $driverType = $pathParts[$adapterIndex + 1];
+                            
+                            try {
+                                $className = $this->getClassNameFromExtendsFile($sourceFile);
+                                
+                                if ($className && $this->validateAdapter($className)) {
+                                    // 扩展适配器优先级更高，覆盖 Framework 内置适配器
+                                    $adapters[strtolower($driverType)] = $className;
+                                }
+                            } catch (\Throwable $e) {
+                                error_log("加载扩展适配器失败: {$sourceFile}, 错误: " . $e->getMessage());
+                            }
                         }
                     }
-                } catch (\Throwable $e) {
-                    // 单个适配器扫描失败不影响其他适配器
-                    error_log("扫描扩展适配器 {$subDir} 失败: " . $e->getMessage());
-                    continue;
                 }
             }
         } catch (\Exception $e) {
-            error_log("扫描扩展适配器失败: " . $e->getMessage());
+            error_log("从 ExtendsData 扫描扩展适配器失败: " . $e->getMessage());
         }
         
         return $adapters;

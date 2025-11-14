@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>jstree节点数据调试</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.14/jstree.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.14/themes/default/style.min.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        #debug-output { background: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; margin: 10px 0; }
+        #jstree { background: white; border: 1px solid #ddd; min-height: 200px; padding: 10px; }
+        button { margin: 5px; padding: 8px 15px; }
+    </style>
+</head>
+<body>
+    <h1>jstree节点数据调试工具</h1>
+    
+    <div class="debug-section info">
+        <h3>操作说明</h3>
+        <ol>
+            <li>点击"加载测试数据"按钮</li>
+            <li>右键点击任意节点测试右键菜单</li>
+            <li>查看下方调试输出了解节点数据结构</li>
+        </ol>
+    </div>
+    
+    <div>
+        <button onclick="loadTestData()">加载测试数据</button>
+        <button onclick="clearOutput()">清空输出</button>
+    </div>
+    
+    <div id="jstree"></div>
+    
+    <div class="debug-section">
+        <h3>调试输出</h3>
+        <div id="debug-output"></div>
+    </div>
+
+    <script>
+        let testTree = null;
+        
+        function addDebug(message, type = 'info') {
+            const output = document.getElementById('debug-output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : 'success';
+            output.innerHTML += `<div class="${className}" style="padding: 5px; margin: 2px 0;">
+                [${timestamp}] ${message}
+            </div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('debug-output').innerHTML = '';
+        }
+        
+        function loadTestData() {
+            // 模拟从服务器返回的数据
+            const testData = [
+                {
+                    id: 1,
+                    text: '用户创建分类 <small class="text-muted ms-2">(这是一个测试分类)</small>',
+                    data: {
+                        id: 1,
+                        name: '用户创建分类',
+                        description: '这是一个测试分类',
+                        pid: 0,
+                        level: 1,
+                        is_active: 1,
+                        is_system: 0
+                    },
+                    state: { opened: true }
+                },
+                {
+                    id: 2,
+                    text: '系统分类 <span class="badge bg-primary system-badge ms-2"><i class="mdi mdi-shield-check me-1"></i>系统分类</span>',
+                    data: {
+                        id: 2,
+                        name: '系统分类',
+                        description: '这是一个系统分类',
+                        pid: 0,
+                        level: 1,
+                        is_active: 1,
+                        is_system: 1
+                    },
+                    state: { opened: true }
+                }
+            ];
+            
+            addDebug('开始初始化jstree...', 'info');
+            
+            // 销毁已存在的实例
+            if (testTree) {
+                testTree.destroy();
+                addDebug('销毁已存在的jstree实例', 'info');
+            }
+            
+            // 创建新的jstree实例
+            testTree = $('#jstree').jstree({
+                'core': {
+                    'data': testData,
+                    'themes': {
+                        'responsive': true,
+                        'variant': 'large',
+                        'stripes': false
+                    }
+                },
+                'plugins': ['contextmenu'],
+                'contextmenu': {
+                    'items': function(node) {
+                        addDebug('右键菜单被触发，节点ID: ' + node.id, 'info');
+                        addDebug('节点数据结构: ' + JSON.stringify(node, null, 2), 'info');
+                        
+                        const nodeData = node.data || (node.original && node.original.data);
+                        if (nodeData) {
+                            addDebug('节点自定义数据: ' + JSON.stringify(nodeData, null, 2), 'success');
+                            addDebug('是否是系统分类: ' + (nodeData.is_system == 1 ? '是' : '否'), 'info');
+                        } else {
+                            addDebug('❌ 未找到节点自定义数据!', 'error');
+                        }
+                        
+                        const items = {
+                            'edit': {
+                                'label': '编辑',
+                                'action': function() {
+                                    addDebug('执行编辑操作', 'info');
+                                    handleEditNode(node.id);
+                                }
+                            },
+                            'delete': {
+                                'label': '删除',
+                                'action': function() {
+                                    addDebug('执行删除操作', 'info');
+                                    handleDeleteNode(node.id);
+                                }
+                            },
+                            'add_child': {
+                                'label': '添加子分类',
+                                'action': function() {
+                                    addDebug('执行添加子分类操作', 'info');
+                                    handleAddChildNode(node.id);
+                                }
+                            }
+                        };
+                        
+                        return items;
+                    }
+                }
+            }).on('ready.jstree', function() {
+                addDebug('✅ jstree初始化完成', 'success');
+            }).on('error.jstree', function(e, data) {
+                addDebug('❌ jstree错误: ' + data.error, 'error');
+            });
+        }
+        
+        // 模拟jstree原生处理函数
+        function handleEditNode(nodeId) {
+            try {
+                addDebug('handleEditNode被调用，nodeId: ' + nodeId, 'info');
+                
+                if (!testTree) {
+                    addDebug('❌ jstree实例不存在', 'error');
+                    return;
+                }
+                
+                const node = testTree.jstree('get_node', nodeId);
+                if (!node) {
+                    addDebug('❌ 节点不存在，ID: ' + nodeId, 'error');
+                    return;
+                }
+                
+                addDebug('获取到的节点: ' + JSON.stringify(node, null, 2), 'success');
+                
+                // 检查节点数据结构
+                let nodeData = null;
+                if (node.original && node.original.data) {
+                    nodeData = node.original.data;
+                    addDebug('从node.original.data获取数据', 'success');
+                } else if (node.data) {
+                    nodeData = node.data;
+                    addDebug('从node.data获取数据', 'success');
+                } else {
+                    addDebug('❌ 节点数据不存在', 'error');
+                    addDebug('节点结构: ' + JSON.stringify(node, null, 2), 'error');
+                    return;
+                }
+                
+                addDebug('最终获取的节点数据: ' + JSON.stringify(nodeData, null, 2), 'success');
+                
+                // 检查是否是系统分类
+                if (nodeData.is_system == 1) {
+                    addDebug('⚠️ 系统分类不允许编辑', 'error');
+                    alert('系统分类不允许编辑');
+                    return;
+                }
+                
+                addDebug('✅ 编辑操作成功执行!', 'success');
+                alert('编辑分类: ' + (nodeData.name || '未命名'));
+                
+            } catch(e) {
+                addDebug('❌ 编辑节点失败: ' + e.message, 'error');
+                console.error('编辑节点失败:', e);
+            }
+        }
+        
+        function handleDeleteNode(nodeId) {
+            addDebug('handleDeleteNode被调用，nodeId: ' + nodeId, 'info');
+            alert('删除功能测试成功! 节点ID: ' + nodeId);
+        }
+        
+        function handleAddChildNode(nodeId) {
+            addDebug('handleAddChildNode被调用，nodeId: ' + nodeId, 'info');
+            alert('添加子分类功能测试成功! 节点ID: ' + nodeId);
+        }
+    </script>
+</body>
+</html>

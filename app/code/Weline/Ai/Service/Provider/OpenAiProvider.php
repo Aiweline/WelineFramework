@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Service\Provider;
 
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\App\Exception;
 
 /**
@@ -66,7 +67,7 @@ class OpenAiProvider implements ProviderInterface
         $apiKey = $this->getApiKey($config);
         
         if (empty($apiKey)) {
-            throw new Exception('OpenAI API密钥未配置');
+            throw new Exception(ErrorMessageHelper::getMissingApiKeyMessage());
         }
 
         $messages = $this->buildMessages($prompt, $params);
@@ -146,7 +147,7 @@ class OpenAiProvider implements ProviderInterface
         $apiKey = $this->getApiKey($config);
         
         if (empty($apiKey)) {
-            throw new Exception('OpenAI API密钥未配置');
+            throw new Exception(ErrorMessageHelper::getMissingApiKeyMessage());
         }
 
         $messages = $this->buildMessages($prompt, $params);

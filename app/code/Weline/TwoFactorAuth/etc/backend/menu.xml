@@ -8,7 +8,7 @@
          name="2fa_main" 
          title="双因素认证" 
          action="" 
-         parent=""
+         parent="Weline_Backend::system_module"
          icon="mdi mdi-shield-lock"
          order="20000"/>
     

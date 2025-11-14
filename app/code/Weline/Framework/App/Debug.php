@@ -22,7 +22,7 @@ class Debug
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
             $file = str_replace(BP, '', $backtrace[0]['file']);
             $line = $backtrace[0]['line'];
-            $value = __('调试位置：') . "{$file}({$line})";
+            $value =  "{$file}({$line})";
         }
         $_ENV['w-debug'][$env_key] = $value;
         $_ENV['w-debug'][$env_key . '_target_stop'] = $target_stop;
@@ -64,9 +64,13 @@ class Debug
                 exit();
             }
         }
+        
         # 无值看看是否有键名
         if('debug::skip' === $value){
             $value = null;
+        }
+        if (!empty($_ENV['w-debug'][$env_key . '_target_stop'])) {
+            exit();
         }
         if (!$value) {
             if (array_key_exists($env_key, $_ENV['w-debug'])) {

@@ -83,6 +83,14 @@
                 </div>
             </div>
 
+            <button type="button"
+                    class="btn header-item noti-icon waves-effect ms-1"
+                    id="theme-mode-toggle"
+                    title="<?= __('主题色系切换') ?>"
+                    aria-label="<?= __('主题色系切换') ?>">
+                <i class="ri-sun-line"></i>
+            </button>
+
             <div class="dropdown d-none d-lg-inline-block ms-1">
                 <button type="button" class="btn header-item noti-icon waves-effect"
                         data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -185,3 +193,108 @@
         </div>
     </div>
 </header>
+<script>
+    (function () {
+        function getThemeConfig() {
+            var site = window.site || {};
+            var rawThemeConfig = site.themeConfig;
+            if (rawThemeConfig && typeof rawThemeConfig === 'object') {
+                return rawThemeConfig;
+            }
+            return {};
+        }
+
+        function resolveBoolean(value, fallback) {
+            if (value === undefined || value === null) {
+                return typeof fallback === 'boolean' ? fallback : !!fallback;
+            }
+            if (typeof value === 'string') {
+                var normalized = value.trim().toLowerCase();
+                if (['true', '1', 'on', 'yes'].indexOf(normalized) !== -1) {
+                    return true;
+                }
+                if (['false', '0', 'off', 'no'].indexOf(normalized) !== -1) {
+                    return false;
+                }
+            }
+            return !!value;
+        }
+
+        function detectCurrentMode(themeConfig) {
+            return resolveBoolean(themeConfig ? themeConfig['dark-mode-switch'] : false, false);
+        }
+
+        function translate(text) {
+            if (typeof window.lang === 'function') {
+                return window.lang(text);
+            }
+            if (typeof window.phrase === 'function') {
+                return window.phrase(text);
+            }
+            return text;
+        }
+
+        function applyState(button, icon, isDark) {
+            button.setAttribute('data-mode', isDark ? 'dark' : 'light');
+            button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+            button.setAttribute('title', isDark ? translate('切换到亮色模式') : translate('切换到暗色模式'));
+            button.classList.toggle('theme-toggle-dark', isDark);
+            button.classList.toggle('theme-toggle-light', !isDark);
+            if (icon) {
+                icon.classList.remove('ri-sun-line', 'ri-moon-line', 'text-warning', 'text-info');
+                if (isDark) {
+                    icon.classList.add('ri-moon-line', 'text-info');
+                } else {
+                    icon.classList.add('ri-sun-line', 'text-warning');
+                }
+            }
+        }
+
+        function handleToggle(button) {
+            var icon = button.querySelector('i');
+            var themeConfig = getThemeConfig();
+            var isDark = detectCurrentMode(themeConfig);
+
+            applyState(button, icon, isDark);
+
+            button.addEventListener('click', function () {
+                isDark = !isDark;
+                applyState(button, icon, isDark);
+                if (!themeConfig.layouts) {
+                    themeConfig.layouts = {};
+                }
+                themeConfig.layouts['data-topbar'] = isDark ? 'dark' : 'light';
+                themeConfig.layouts['data-sidebar'] = isDark ? 'dark' : 'dark';
+                themeConfig['dark-mode-switch'] = isDark;
+                themeConfig['light-mode-switch'] = !isDark;
+                if (typeof window.setThemeConfig === 'function') {
+                    window.setThemeConfig({
+                        layouts: {
+                            'data-topbar': isDark ? 'dark' : 'light',
+                            'data-sidebar': isDark ? 'dark' : 'dark'
+                        },
+                        'light-mode-switch': !isDark,
+                        'dark-mode-switch': isDark,
+                        'rtl-mode-switch': !!themeConfig['rtl-mode-switch']
+                    });
+                }
+            });
+        }
+
+        function initPaletteToggle() {
+            var button = document.getElementById('theme-mode-toggle');
+            if (!button) {
+                return;
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                    handleToggle(button);
+                });
+            } else {
+                handleToggle(button);
+            }
+        }
+
+        initPaletteToggle();
+    })();
+</script>

@@ -74,13 +74,14 @@ class TemplateFetchFile implements ObserverInterface
             return;
         }
 
-        // 检查文件是否有 Sticker
+        // 检查文件是否有 Sticker（需要传入RuleParser以解析actions）
+        $ruleParser = ObjectManager::getInstance(\Weline\Sticker\Service\RuleParser::class);
         if (!$this->stickerRegistry->hasSticker($targetModule, $targetFile)) {
             return; // 该文件没有 Sticker，直接返回
         }
 
-        // 获取 Sticker 信息以确定类型
-        $fileStickers = $this->stickerRegistry->getFileStickers($targetModule, $targetFile);
+        // 获取 Sticker 信息以确定类型（自动解析actions）
+        $fileStickers = $this->stickerRegistry->getFileStickers($targetModule, $targetFile, $ruleParser);
         $type = 'module';
         $themeName = null;
         if (!empty($fileStickers)) {
@@ -106,17 +107,40 @@ class TemplateFetchFile implements ObserverInterface
             }
         }
 
-        // 开发环境：检查源文件是否更新
+        // 开发环境：检查源文件和Sticker源文件是否更新
         if (defined('DEV') && DEV) {
             $sourcePath = $this->getSourcePath($filename, $targetModule, $targetFile);
+            $needsRecompile = false;
+            
+            // 检查目标源文件是否更新
             if ($sourcePath && file_exists($sourcePath)) {
                 $sourceMtime = filemtime($sourcePath);
                 $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
-
-                // 如果源文件更新，重新编译
+                
                 if ($sourceMtime > $compiledMtime) {
-                    $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
+                    $needsRecompile = true;
                 }
+            }
+            
+            // 检查Sticker源文件是否更新
+            if (!$needsRecompile && !empty($fileStickers)) {
+                foreach ($fileStickers as $stickerInfo) {
+                    $stickerFile = $stickerInfo['sticker_file'] ?? '';
+                    if (!empty($stickerFile) && file_exists($stickerFile)) {
+                        $stickerMtime = filemtime($stickerFile);
+                        $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
+                        
+                        if ($stickerMtime > $compiledMtime) {
+                            $needsRecompile = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // 如果需要重新编译
+            if ($needsRecompile && $sourcePath && file_exists($sourcePath)) {
+                $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
             }
         }
 

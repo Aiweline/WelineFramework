@@ -60,7 +60,11 @@ trait TraitTemplate
         }
         $eventData = ['position' => $position, 'is_backend' => $is_backend, 'class' => ''];
         $this->eventsManager->dispatch("Framework_View::{$position}", $eventData);
-        $class = $this->eventsManager->getEventData("Framework_View::{$position}")->getData('class');
+        $eventDataObj = $this->eventsManager->getEventData("Framework_View::{$position}");
+        if (!$eventDataObj) {
+            return '';
+        }
+        $class = $eventDataObj->getData('class');
         if (empty($class) || !class_exists($class)) {
             return '';
         }

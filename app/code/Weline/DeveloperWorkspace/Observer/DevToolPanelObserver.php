@@ -38,7 +38,23 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
+        // 如果是 AJAX 请求或接口请求，不显示面板
+        if ($this->request->isAjax() || 
+            $this->request->isApiFrontend() || 
+            $this->request->isApiBackend()) {
+            return;
+        }
+
         try {
+            // 检查已发送的 headers 中是否有 Content-Type: application/json
+            $headers = headers_list();
+            foreach ($headers as $header) {
+                if (stripos($header, 'Content-Type:') !== false && 
+                    stripos($header, 'application/json') !== false) {
+                    return;
+                }
+            }
+            
             // 获取页面输出结果
             $result = $event->getData('result');
             
@@ -46,7 +62,7 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
             
-            // 检查是否是 HTML 响应
+            // 检查是否是 HTML 响应（包含 JSON 检测）
             if (!$this->isHtmlResponse($result)) {
                 return;
             }
@@ -120,6 +136,25 @@ class DevToolPanelObserver implements ObserverInterface
      */
     private function isHtmlResponse(string $output): bool
     {
+        // 首先检查是否是 JSON 响应（JSON 响应不应该注入面板）
+        $trimmed = trim($output);
+        if (($trimmed[0] ?? '') === '{' || ($trimmed[0] ?? '') === '[') {
+            // 尝试解析 JSON，如果成功则不是 HTML
+            json_decode($trimmed);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return false;
+            }
+        }
+        
+        // 检查是否是纯文本响应（Content-Type 可能不是 HTML）
+        // 如果输出很短且不包含 HTML 标签，可能不是 HTML
+        if (strlen($trimmed) < 100 && 
+            stripos($trimmed, '<html') === false && 
+            stripos($trimmed, '<!doctype') === false &&
+            stripos($trimmed, '<body') === false) {
+            return false;
+        }
+        
         // 简单检查：是否包含 HTML 标签
         return (stripos($output, '<html') !== false || 
                 stripos($output, '<!doctype') !== false ||
