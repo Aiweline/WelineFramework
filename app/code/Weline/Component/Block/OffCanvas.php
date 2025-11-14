@@ -82,7 +82,7 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
         }
         // $data['id']只留下字母和下划线
         $data['id'] = preg_replace('/[^\w]+/', '', $data['id']);
-        $data['id'] = $data['id'] . md5(json_encode($data));
+        $data['id'] = $data['id'] . md5(json_encode($data ?? []));
         $this->setData($data);
         $this->assign($data);
     }

@@ -64,12 +64,27 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function getThemeModel()
     {
         $data = '';
-        if ($this->getThemeConfig('dark-mode-switch')) {
-            $data = 'dark';
+        // 优先检查 theme-mode-switch（新的统一配置方式）
+        $themeMode = $this->getThemeConfig('theme-mode-switch');
+        if (!empty($themeMode)) {
+            // light 模式返回空字符串，用于加载 app.css 而不是 app-light.css
+            // dark 模式返回 'dark'，用于加载 app-dark.css
+            // 其他模式返回对应的值，用于加载 app-{mode}.css
+            if ($themeMode === 'light') {
+                $data = '';
+            } else {
+                $data = $themeMode;
+            }
         } elseif ($this->getThemeConfig('rtl-mode-switch')) {
             $data = 'rtl';
-        } elseif ($this->getThemeConfig('light-mode-switch')) {
-            $data = '';
+        }
+        // 兼容旧的配置方式（向后兼容）
+        if (empty($data)) {
+            if ($this->getThemeConfig('dark-mode-switch')) {
+                $data = 'dark';
+            } elseif ($this->getThemeConfig('light-mode-switch')) {
+                $data = '';
+            }
         }
         return $data;
     }
@@ -107,6 +122,22 @@ class ThemeConfig extends \Weline\Framework\View\Block
         $body_attributes_str = '';
         $class_value = '';
         
+        // 自动添加 data-theme-mode 属性
+        // 如果配置中没有明确设置 data-theme-mode，则根据主题色系配置自动设置
+        if (!isset($body_attributes['data-theme-mode'])) {
+            // 从配置中动态获取主题模式
+            $themeConfig = $this->getOriginThemeConfig();
+            $themeMode = $themeConfig['theme-mode-switch'] ?? '';
+            
+            // 如果配置了主题模式，设置 data-theme-mode 属性
+            // 主题模式可以是 'dark'、'light' 或任何其他主题名称
+            if (!empty($themeMode)) {
+                $body_attributes['data-theme-mode'] = $themeMode;
+            }
+            // 如果没有配置主题模式，不添加 data-theme-mode 属性，让浏览器使用默认主题
+        }
+        // 如果配置中已经设置了 data-theme-mode，则使用配置的值（不覆盖）
+        
         foreach ($body_attributes as $attribute => $value) {
             // 跳过空字符串值
             if ($value === '' || $value === null) {
@@ -119,7 +150,7 @@ class ThemeConfig extends \Weline\Framework\View\Block
                 continue;
             }
             
-            // 处理 data- 属性
+            // 处理 data- 属性和其他属性
             if (is_string($value)) {
                 $body_attributes_str .= "$attribute=\"$value\" ";
             }

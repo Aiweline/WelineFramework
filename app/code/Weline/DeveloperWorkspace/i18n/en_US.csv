@@ -327,4 +327,7 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 默认布局,DefaultLayout
 "📊 扫描统计:","📊 ScanStatistics:"
 "📚 开始扫描模块文档...","📚 StartScanModule documents..."
-"📚 开始扫描模块文档...","📚 StartScanModule documents..."
+"📦 模块详情:","📦 Module Details:"
+"登录后发起请求","Login to Send Request"
+"此接口需要登录，请先登录","This API requires login, please login first"
+"此接口需要登录，请先登录后再发起请求","This API requires login, please login first before sending request"

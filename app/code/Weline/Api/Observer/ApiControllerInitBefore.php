@@ -62,18 +62,75 @@ class ApiControllerInitBefore implements ObserverInterface
 
         // 如果是API认证相关的接口，不需要验证登录状态和安全限制
         $currentUrl = $this->request->getRouteUrlPath();
-        $authUrls = [
-            'backend/api/auth/login',
-            'backend/api/auth/exchange',
-            'backend/api/auth/refresh',
-            'backend/api/auth/token-info',
-            'api/auth/login',
-            'api/auth/exchange',
-            'api/auth/refresh',
-            'api/auth/token-info'
+        $currentPath = $this->request->getPath();
+        $modulePath = $this->request->getRouterData('module_path') ?? '';
+        $controller = $this->request->getController();
+        $action = $this->request->getAction();
+        $controllerClass = $this->request->getRouterData('controller') ?? '';
+        
+        // 认证接口路径白名单（只匹配路径部分，不包含模块前缀）
+        $authPathPatterns = [
+            'auth/login',
+            'auth/exchange',
+            'auth/refresh',
+            'auth/token-info',
+            'auth/logout',
+            'auth/me',
         ];
+        
+        // 认证控制器和方法白名单
+        $authControllers = ['Auth'];
+        $authActions = ['postLogin', 'postExchange', 'postRefresh', 'getTokenInfo', 'postLogout', 'getMe'];
 
-        if (in_array($currentUrl, $authUrls)) {
+        // 检查是否匹配白名单（只检查路径部分）
+        $isAuthUrl = false;
+        
+        // 方法1: 检查控制器和方法名（支持短名称和完整类名）
+        if (!empty($controller) && !empty($action)) {
+            // 检查短名称
+            if (in_array($controller, $authControllers) && in_array($action, $authActions)) {
+                $isAuthUrl = true;
+            }
+            // 检查完整类名（如 Weline\Api\Api\Rest\V1\Auth）
+            if (!$isAuthUrl && !empty($controllerClass)) {
+                // 检查类名是否包含 Auth（支持多种格式）
+                if ((str_contains($controllerClass, '\\Auth') || str_ends_with($controllerClass, '\\Auth')) && in_array($action, $authActions)) {
+                    $isAuthUrl = true;
+                }
+            }
+            // 检查控制器名是否包含 Auth（不区分大小写）
+            if (!$isAuthUrl && stripos($controller, 'auth') !== false && in_array($action, $authActions)) {
+                $isAuthUrl = true;
+            }
+        }
+        
+        // 方法2: 检查路径（只检查路径部分，不包含模块前缀）
+        if (!$isAuthUrl) {
+            $checkPaths = array_filter([$currentUrl, $currentPath, $modulePath]);
+            foreach ($checkPaths as $path) {
+                if (empty($path)) {
+                    continue;
+                }
+                // 标准化路径（移除开头的斜杠，统一格式）
+                $normalizedPath = ltrim($path, '/');
+                
+                foreach ($authPathPatterns as $pattern) {
+                    // 检查路径是否包含认证路径（支持多种格式）
+                    // 例如：weline-api/auth/login, rest/v1/weline_api/auth/login 等都能匹配 auth/login
+                    if ($normalizedPath === $pattern || 
+                        str_ends_with($normalizedPath, '/' . $pattern) ||
+                        str_ends_with($normalizedPath, $pattern) ||
+                        str_contains($normalizedPath, '/' . $pattern . '/') ||
+                        str_contains($normalizedPath, '/' . $pattern) ||
+                        preg_match('/[\/\-_]' . preg_quote($pattern, '/') . '(\/|$)/', $normalizedPath)) {
+                        $isAuthUrl = true;
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        if ($isAuthUrl) {
             return;
         }
 

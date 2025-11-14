@@ -16,14 +16,48 @@ Weline Framework 提供了统一的API接口开发规范，确保所有API接口
 
 ### 2.1 必填要求
 
+**重要**：所有API接口必须包含完整的信息，参考 `app\code\Weline\Api\Api\Rest\V1\Test.php` 的注释格式。不符合规范的接口会在路由注册时被拦截，无法正常访问。
+
 API接口必须同时满足以下要求：
 
 1. ✅ **PHPDoc注释**：方法必须有完整的PHPDoc注释
 2. ✅ **@Document注释**：必须使用 `@Document` 标签提供API文档信息
-3. ✅ **参数注释**：所有方法参数必须有 `@param` 注释
-4. ✅ **返回值注释**：必须有 `@return` 注释
-5. ⭐ **示例注释**：建议提供 `@example` 注释（可选但推荐）
+3. ✅ **参数注释**：所有方法参数必须有 `@param` 注释，**必须明确说明参数是否必填、获取方式等**
+4. ✅ **返回值注释**：必须有 `@return` 注释，**必须包含返回数据格式说明**
+5. ✅ **示例注释**：**必须提供 `@example` 注释**，包含完整的请求和响应示例（参考 Test.php 格式）
 6. ⚠️ **Acl权限注释**：后台API接口必须使用 `#[\Weline\Framework\Acl\Acl]` Attribute标记权限（公开接口和前端接口不需要）
+
+**完整注释格式要求**（参考 `app\code\Weline\Api\Api\Rest\V1\Test.php`）：
+
+```php
+/**
+ * 方法描述
+ * 
+ * 详细描述（可选）
+ * 
+ * @param 类型 $参数名 参数描述（必填/可选，获取方式等）
+ * @return 类型 返回数据格式：{"code": 0, "msg": "success", "data": {}}
+ * @throws \Exception 异常情况说明
+ * @Document(summary='接口摘要', description='接口详细描述', tags=['标签'], category='分类')
+ * @example
+ * Method: GET|POST|PUT|DELETE|PATCH
+ * Path: /api/rest/v1/resource/path
+ * Header:
+ * - Authorization: Bearer token_here
+ * - Content-Type: application/json
+ * Body:
+ * {
+ *   "key": "value"
+ * }
+ * Response:
+ * {
+ *   "code": 0,
+ *   "msg": "success",
+ *   "data": {}
+ * }
+ * @example-end
+ */
+```
 
 ### 2.2 验证机制
 
@@ -359,18 +393,146 @@ public function getCurrentUser(): array
 **格式**：`@param 类型 $参数名 参数描述`
 
 **要求**：
-- 所有方法参数必须有 `@param` 注释
-- 参数类型必须与方法参数类型声明匹配（如果提供了类型）
-- 可选参数需要在描述中说明
+- ✅ **所有方法参数必须有 `@param` 注释**（包括方法签名参数和通过request获取的参数）
+- ✅ **参数类型必须与方法参数类型声明匹配**（如果提供了类型）
+- ✅ **参数描述必须明确说明**：
+  - 是否必填（必填/可选）
+  - 默认值（如果有）
+  - **参数获取方式**（通过方法签名、POST参数、GET参数、URL参数、请求头等）
+  - 参数格式要求（如：邮箱格式、长度限制等）
+- ⚠️ **【严重错误】需要登录的API（有ACL注解）必须明确说明所有请求参数**，包括通过 `request->getPost()`, `request->getParam()`, `request->getGet()`, `request->getBodyParam()` 等方法获取的参数
+- ⚠️ **如果API需要登录但使用了请求参数却没有在@param注释中说明，验证器会报严重错误并阻止路由注册**
 
-**示例**：
+**参数获取方式说明**：
+
+| 获取方式 | 说明 | 示例 |
+|---------|------|------|
+| 方法签名参数 | 通过方法参数直接传递 | `@param int $id 用户ID（必填）` |
+| POST参数 | 通过 `request->getPost()` 获取 | `@param string $username 用户名（必填，通过POST参数获取）` |
+| GET参数 | 通过 `request->getGet()` 获取 | `@param int $page 页码（可选，默认1，通过GET参数获取）` |
+| URL参数 | 通过 `request->getParam()` 获取 | `@param string $token 访问令牌（必填，通过URL参数获取）` |
+| 请求头 | 通过 `request->getHeader()` 或 `request->getAuth()` 获取 | `@param string $token 访问令牌（必填，通过Authorization头、X-API-Token头、URL参数或POST参数获取）` |
+| Body参数 | 通过 `request->getBodyParam()` 获取 | `@param string $content 内容（必填，通过Body参数获取）` |
+
+**标准示例**（参考 `app\code\Weline\Api\Api\Rest\V1\Test.php`）：
+
 ```php
 /**
- * @param int $id 用户ID（必填）
- * @param string $name 用户名（可选，默认空）
- * @param array $roles 角色列表（可选，默认空数组）
+ * 获取测试信息
+ * 
+ * @param string $name 测试名称（可选，默认"test"，通过方法签名参数获取）
+ * @param int $count 测试数量（可选，默认1，通过方法签名参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"name": "test", "count": 1, "timestamp": 1234567890}}
  */
-public function getUser(int $id, string $name = '', array $roles = []): array
+public function getInfo(string $name = 'test', int $count = 1): array
+{
+    // 实现代码...
+}
+```
+
+```php
+/**
+ * 创建测试数据
+ * 
+ * @param string $title 测试标题（必填，通过POST参数获取）
+ * @param string $content 测试内容（必填，通过POST参数获取）
+ * @param array $tags 标签列表（可选，默认空数组，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "创建成功", "data": {"id": 1, "title": "测试标题", "content": "测试内容"}}
+ */
+public function postCreate(string $title, string $content, array $tags = []): array
+{
+    $title = trim($this->request->getPost('title') ?? '');
+    $content = trim($this->request->getPost('content') ?? '');
+    $tags = $this->request->getPost('tags') ?? [];
+    // 实现代码...
+}
+```
+
+```php
+/**
+ * 获取测试列表
+ * 
+ * @param int $page 页码（可选，默认1，通过GET参数获取）
+ * @param int $pageSize 每页数量（可选，默认20，通过GET参数获取）
+ * @param string $keyword 搜索关键词（可选，通过GET参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"list": [], "total": 0, "page": 1, "pageSize": 20}}
+ */
+public function getList(int $page = 1, int $pageSize = 20, string $keyword = ''): array
+{
+    $page = (int)($this->request->getGet('page') ?? 1);
+    $pageSize = (int)($this->request->getGet('pageSize') ?? 20);
+    $keyword = trim($this->request->getGet('keyword') ?? '');
+    // 实现代码...
+}
+```
+
+```php
+/**
+ * 登录并获取token
+ * 
+ * @param string $username 用户名（必填，通过POST参数获取）
+ * @param string $password 密码（必填，通过POST参数获取）
+ * @param int $expire_time 令牌过期时间（可选，秒数，通过POST参数获取，默认使用用户配置的过期时间）
+ * @return array 返回数据格式：{"code": 200, "msg": "登录成功", "data": {"access_token": "...", "refresh_token": "...", "expire_time": 1234567890, "user": {...}}}
+ */
+public function postLogin()
+{
+    $username = trim($this->request->getPost('username') ?? '');
+    $password = trim($this->request->getPost('password') ?? '');
+    $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+    // 实现代码...
+}
+```
+
+```php
+/**
+ * 获取当前用户信息
+ * 
+ * @param string $token 访问令牌（必填，通过Authorization头、X-API-Token头、URL参数或POST参数获取）
+ * @return array 返回数据格式：{"code": 200, "msg": "获取用户信息成功", "data": {"user": {"id": 1, "username": "...", "email": "...", "is_enabled": true}}}
+ */
+public function getMe()
+{
+    // 从请求中获取token（通过私有方法 getTokenFromRequest()）
+    $token = $this->getTokenFromRequest();
+    // 实现代码...
+}
+```
+
+**错误示例**：
+
+```php
+// ❌ 错误：缺少参数说明
+/**
+ * 登录并获取token
+ * 
+ * @return array 返回数据
+ */
+public function postLogin()
+{
+    $username = trim($this->request->getPost('username') ?? '');
+    $password = trim($this->request->getPost('password') ?? '');
+    // 缺少 @param 注释说明 username 和 password 参数
+}
+```
+
+**正确示例**：
+
+```php
+// ✅ 正确：明确说明所有参数
+/**
+ * 登录并获取token
+ * 
+ * @param string $username 用户名（必填，通过POST参数获取）
+ * @param string $password 密码（必填，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 200, "msg": "登录成功", "data": {...}}
+ */
+public function postLogin()
+{
+    $username = trim($this->request->getPost('username') ?? '');
+    $password = trim($this->request->getPost('password') ?? '');
+    // 实现代码...
+}
 ```
 
 ### 5.3 @return 注释规范
@@ -412,10 +574,50 @@ public function getUser(int $id): array
 **格式**：`@example` 和 `@example-end` 之间包含完整的请求和响应示例
 
 **要求**：
-- 建议提供 `@example` 注释
-- 必须使用 `@example` 开始，`@example-end` 结束
-- 包含完整的请求信息（Path、Method、Header、Cookie、Body等）和响应示例
-- 使用标准格式，便于自动解析
+- ✅ **必须提供 `@example` 注释**（必填）
+- ✅ **必须使用 `@example` 开始，`@example-end` 结束**
+- ✅ **必须包含完整的请求信息**（Method、Path、Header、Body等）和响应示例
+- ✅ **使用标准格式，便于自动解析**
+- ⚠️ **【严重错误】缺少 @example 注释或格式不完整会导致验证失败，阻止路由注册**
+
+**参考示例**（`app\code\Weline\Api\Api\Rest\V1\Test.php`）：
+
+```php
+/**
+ * 创建测试数据
+ * 
+ * @param string $title 测试标题（必填）
+ * @param string $content 测试内容（必填）
+ * @param array $tags 标签列表（可选）
+ * @return array 返回数据格式：{"code": 0, "msg": "创建成功", "data": {"id": 1, "title": "测试标题", "content": "测试内容"}}
+ * @throws \Exception 创建失败时抛出异常
+ * @Document(summary='创建测试数据', description='用于测试POST请求的API文档导入功能。需要提供测试标题和内容，可选标签列表。', tags=['测试', 'API文档', '创建'], category='测试接口')
+ * @example
+ * Method: POST
+ * Path: /api/rest/v1/weline-api/test/create
+ * Header:
+ * - Content-Type: application/json
+ * - Authorization: Bearer token_here
+ * Body:
+ * {
+ *   "title": "测试标题",
+ *   "content": "测试内容",
+ *   "tags": ["测试", "API"]
+ * }
+ * Response:
+ * {
+ *   "code": 0,
+ *   "msg": "创建成功",
+ *   "data": {
+ *     "id": 1,
+ *     "title": "测试标题",
+ *     "content": "测试内容",
+ *     "tags": ["测试", "API"]
+ *   }
+ * }
+ * @example-end
+ */
+```
 
 **标准格式**：
 ```
@@ -426,6 +628,10 @@ Header:
   - Authorization: Bearer {token}
   - Content-Type: application/json
   - X-Custom-Header: value
+Request Parameters:
+  - page: 1 (可选，默认1)
+  - pageSize: 20 (可选，默认20)
+  - keyword: test (可选)
 Cookie:
   - session_id: abc123
   - user_pref: dark
@@ -448,10 +654,17 @@ Response:
 |------|------|------|------|
 | `Method` | ✅ | HTTP方法 | `GET`, `POST`, `PUT`, `DELETE`, `PATCH` |
 | `Path` | ✅ | API路径 | `/api/v1/user/1` |
-| `Header` | ❌ | 请求头（可选，多行） | `Authorization: Bearer token` |
-| `Cookie` | ❌ | Cookie信息（可选，多行） | `session_id: abc123` |
-| `Body` | ❌ | 请求体（POST/PUT/PATCH时使用） | JSON格式 |
-| `Response` | ✅ | 响应示例 | JSON格式 |
+| `Header` | ❌ | 请求头（可选，多行格式：`- HeaderName: value`） | `- Authorization: Bearer token` |
+| `Request Parameters` | ⚠️ | GET请求的URL参数（GET请求如果有参数建议提供，多行格式：`- param_name: value (description)`） | `- page: 1 (可选，默认1)` |
+| `Cookie` | ❌ | Cookie信息（可选，多行格式：`- cookie_name: value`） | `- session_id: abc123` |
+| `Body` | ⚠️ | 请求体（**POST/PUT/PATCH方法必填**，GET/DELETE不需要，JSON格式，如果没有请求体可以为空对象 `{}`） | `{"key": "value"}` 或 `{}` |
+| `Response` | ✅ | 响应示例（JSON格式） | `{"code": 0, "msg": "success", "data": {}}` |
+
+**重要要求**：
+- ✅ **POST/PUT/PATCH方法必须包含Body字段**（即使为空对象：`Body: {}`）
+- ✅ **GET请求如果有参数，建议提供Request Parameters字段**，方便开发者理解和使用
+- ✅ **所有字段必须使用标准格式**，便于自动解析和加载到测试面板
+- ✅ **请求体和请求参数会自动加载到测试面板**，方便开发者测试
 
 **简化格式**（仅Path和Response）：
 ```
@@ -952,8 +1165,8 @@ public function get(int $id): array
  * @Document(
  *   summary="获取用户信息"
  * )
- * @param int $id 用户ID
- * @return array 返回数据
+ * @param int $id 用户ID（必填，通过方法签名参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"id": 1}}
  */
 public function get(int $id): array
 {
@@ -961,7 +1174,53 @@ public function get(int $id): array
 }
 ```
 
-### 7.4 ❌ 缺少@return注释
+### 7.3.1 ❌ 需要登录的API缺少请求参数说明（严重错误）
+
+```php
+/**
+ * 登录并获取token
+ * 
+ * @Document(
+ *   summary="用户登录"
+ * )
+ * @return array 返回数据
+ */
+// ❌ 严重错误：需要登录的API（有ACL注解），使用了请求参数却没有在@param注释中说明
+public function postLogin()
+{
+    $username = trim($this->request->getPost('username') ?? '');
+    $password = trim($this->request->getPost('password') ?? '');
+    // 缺少 @param 注释说明 username 和 password 参数
+}
+```
+
+**验证器会报错**：
+```
+【严重错误】方法 postLogin 需要登录（有ACL注解），但使用了请求参数 'username'（通过request->getPOST获取）却没有在@param注释中说明。请添加 @param 注释说明此参数。
+【严重错误】方法 postLogin 需要登录（有ACL注解），但使用了请求参数 'password'（通过request->getPOST获取）却没有在@param注释中说明。请添加 @param 注释说明此参数。
+```
+
+**修复**：
+```php
+/**
+ * 登录并获取token
+ * 
+ * @Document(
+ *   summary="用户登录"
+ * )
+ * @param string $username 用户名（必填，通过POST参数获取）
+ * @param string $password 密码（必填，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 200, "msg": "登录成功", "data": {"access_token": "...", "refresh_token": "..."}}
+ */
+public function postLogin()
+{
+    $username = trim($this->request->getPost('username') ?? '');
+    $password = trim($this->request->getPost('password') ?? '');
+    // 实现代码...
+}
+```
+
+### 7.4 ❌ 缺少@return注释或返回数据格式说明
 
 ```php
 /**
@@ -970,7 +1229,7 @@ public function get(int $id): array
  * @Document(
  *   summary="获取用户信息"
  * )
- * @param int $id 用户ID
+ * @param int $id 用户ID（必填，通过方法签名参数获取）
  */
 // ❌ 错误：缺少 @return 注释
 public function get(int $id): array
@@ -987,8 +1246,8 @@ public function get(int $id): array
  * @Document(
  *   summary="获取用户信息"
  * )
- * @param int $id 用户ID
- * @return array 返回数据
+ * @param int $id 用户ID（必填，通过方法签名参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"id": 1, "name": "张三", "email": "zhangsan@example.com"}}
  */
 public function get(int $id): array
 {
@@ -996,7 +1255,98 @@ public function get(int $id): array
 }
 ```
 
-### 7.5 ❌ 类型不匹配
+### 7.5 ❌ 缺少@example注释（严重错误）
+
+```php
+/**
+ * 创建用户
+ * 
+ * @Document(
+ *   summary="创建用户"
+ * )
+ * @param string $name 用户名（必填，通过POST参数获取）
+ * @param string $email 邮箱（必填，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "创建成功", "data": {"id": 1}}
+ */
+// ❌ 严重错误：缺少 @example 注释
+public function post(string $name, string $email): array
+{
+    return $this->success(['id' => 1]);
+}
+```
+
+**验证器会报错**：
+```
+【严重错误】方法 post 缺少 @example 注释。必须包含完整的请求和响应示例，参考 Test.php 的注释格式。
+```
+
+**修复**（参考 `app\code\Weline\Api\Api\Rest\V1\Test.php`）：
+
+```php
+/**
+ * 创建用户
+ * 
+ * @Document(
+ *   summary="创建用户"
+ * )
+ * @param string $name 用户名（必填，通过POST参数获取）
+ * @param string $email 邮箱（必填，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "创建成功", "data": {"id": 1}}
+ * @throws \Exception 创建失败时抛出异常
+ * @example
+ * Method: POST
+ * Path: /api/rest/v1/user
+ * Header:
+ * - Content-Type: application/json
+ * - Authorization: Bearer token_here
+ * Body:
+ * {
+ *   "name": "张三",
+ *   "email": "zhangsan@example.com"
+ * }
+ * Response:
+ * {
+ *   "code": 0,
+ *   "msg": "创建成功",
+ *   "data": {
+ *     "id": 1
+ *   }
+ * }
+ * @example-end
+ */
+public function post(string $name, string $email): array
+{
+    return $this->success(['id' => 1]);
+}
+```
+
+### 7.6 ❌ @example注释格式不完整（严重错误）
+
+```php
+/**
+ * 创建用户
+ * 
+ * @example
+ * Method: POST
+ * Response: {"code": 0}
+ * @example-end
+ */
+// ❌ 严重错误：@example 注释缺少 Path 和 Body 字段
+public function post(string $name, string $email): array
+{
+    return $this->success(['id' => 1]);
+}
+```
+
+**验证器会报错**：
+```
+【严重错误】方法 post 的 @example 注释缺少 Path 字段。必须包含 API 路径，例如：Path: /api/rest/v1/test/create
+【严重错误】方法 post 是 POST/PUT/PATCH 方法，@example 注释必须包含 Body 字段。必须包含请求体示例，例如：Body: {"key": "value"}
+```
+
+**修复**：参考上面的完整示例格式。
+
+### 7.7 ❌ 类型不匹配
 
 ```php
 /**
@@ -1138,9 +1488,94 @@ php bin/w router:list
 
 1. **summary要简洁明了**：一句话概括接口功能
 2. **description要详细**：说明接口的用途、使用场景、注意事项
-3. **参数描述要完整**：说明参数类型、是否必填、取值范围、默认值
-4. **返回值描述要清晰**：说明返回数据的结构和格式
-5. **提供示例**：建议提供请求和响应示例
+3. **参数描述要完整**：说明参数类型、是否必填、取值范围、默认值、**参数获取方式**
+4. **返回值描述要清晰**：说明返回数据的结构和格式，建议使用JSON格式示例
+5. **提供示例**：建议提供请求和响应示例（使用 `@example` 注释）
+6. **【重要】需要登录的API必须明确说明所有请求参数**：
+   - 所有通过 `request->getPost()`, `request->getParam()`, `request->getGet()`, `request->getBodyParam()` 等方法获取的参数
+   - 所有通过 `request->getHeader()`, `request->getAuth()` 等方法获取的请求头参数
+   - 必须在 `@param` 注释中明确说明参数名称、类型、是否必填、获取方式
+   - 参考 `app\code\Weline\Api\Api\Rest\V1\Test.php` 的写法
+
+**参考示例**（`app\code\Weline\Api\Api\Rest\V1\Test.php`）：
+
+```php
+/**
+ * 获取测试信息
+ * 
+ * 这是一个测试接口，用于验证API文档导入功能是否正常工作
+ * 
+ * @param string $name 测试名称（可选，默认"test"，通过方法签名参数获取）
+ * @param int $count 测试数量（可选，默认1，通过方法签名参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "success", "data": {"name": "test", "count": 1, "timestamp": 1234567890}}
+ * @throws \Exception 参数错误时抛出异常
+ * @Document(summary='获取测试信息', description='这是一个测试接口，用于验证API文档导入功能是否正常工作。返回测试名称、数量和当前时间戳。', tags=['测试', 'API文档'], category='测试接口')
+ * @example
+ * Method: GET
+ * Path: /api/rest/v1/weline-api/test/getInfo
+ * Response:
+ * {
+ *   "code": 0,
+ *   "msg": "success",
+ *   "data": {
+ *     "name": "test",
+ *     "count": 1,
+ *     "timestamp": 1234567890
+ *   }
+ * }
+ * @example-end
+ */
+public function getInfo(string $name = 'test', int $count = 1): array
+{
+    // 实现代码...
+}
+```
+
+```php
+/**
+ * 创建测试数据
+ * 
+ * 用于测试POST请求的API文档导入功能
+ * 
+ * @param string $title 测试标题（必填，通过POST参数获取）
+ * @param string $content 测试内容（必填，通过POST参数获取）
+ * @param array $tags 标签列表（可选，默认空数组，通过POST参数获取）
+ * @return array 返回数据格式：{"code": 0, "msg": "创建成功", "data": {"id": 1, "title": "测试标题", "content": "测试内容"}}
+ * @throws \Exception 创建失败时抛出异常
+ * @Document(summary='创建测试数据', description='用于测试POST请求的API文档导入功能。需要提供测试标题和内容，可选标签列表。', tags=['测试', 'API文档', '创建'], category='测试接口')
+ * @example
+ * Method: POST
+ * Path: /api/rest/v1/weline-api/test/create
+ * Header:
+ * - Content-Type: application/json
+ * - Authorization: Bearer token_here
+ * Body:
+ * {
+ *   "title": "测试标题",
+ *   "content": "测试内容",
+ *   "tags": ["测试", "API"]
+ * }
+ * Response:
+ * {
+ *   "code": 0,
+ *   "msg": "创建成功",
+ *   "data": {
+ *     "id": 1,
+ *     "title": "测试标题",
+ *     "content": "测试内容",
+ *     "tags": ["测试", "API"]
+ *   }
+ * }
+ * @example-end
+ */
+public function postCreate(string $title, string $content, array $tags = []): array
+{
+    $title = trim($this->request->getPost('title') ?? '');
+    $content = trim($this->request->getPost('content') ?? '');
+    $tags = $this->request->getPost('tags') ?? [];
+    // 实现代码...
+}
+```
 
 ### 9.2 版本管理
 

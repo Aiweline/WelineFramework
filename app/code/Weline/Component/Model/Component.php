@@ -56,7 +56,7 @@ class Component extends Model
             ->addColumn(
                 self::fields_DOC,
                 TableInterface::column_type_TEXT,
-                null,
+                0,
                 'not null',
                 '组件说明'
             )
