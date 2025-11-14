@@ -1,0 +1,274 @@
+<!-- 页面标题 -->
+<div class="page-title">
+    <h1><?= $title ?? '循环依赖检测' ?></h1>
+    <div class="page-actions">
+        <a href="*/backend/extends/index" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> 返回列表
+        </a>
+        <a href="*/backend/extends/refresh" class="btn btn-warning">
+            <i class="mdi mdi-refresh"></i> 刷新注册表
+        </a>
+    </div>
+</div>
+
+<!-- 检测结果 -->
+<?php
+$cycles = $this->getData('cycles') ?? [];
+?>
+<div class="detection-result">
+    <?php if (empty($cycles)): ?>
+        <div class="success-message">
+            <div class="icon">
+                <i class="mdi mdi-check-circle"></i>
+            </div>
+            <h2>未检测到循环依赖</h2>
+            <p>所有模块的扩展关系都是正常的，没有发现循环依赖问题。</p>
+        </div>
+    <?php else: ?>
+        <div class="error-message">
+            <div class="icon">
+                <i class="mdi mdi-alert-circle"></i>
+            </div>
+            <h2>检测到 <?= count($cycles) ?> 个循环依赖</h2>
+            <p>以下模块之间存在循环依赖关系，请检查并修复：</p>
+        </div>
+        
+        <div class="cycles-list">
+            <?php foreach ($cycles as $index => $cycle): ?>
+                <div class="cycle-item">
+                    <div class="cycle-header">
+                        <h3>循环依赖 #<?= $index + 1 ?></h3>
+                        <span class="cycle-length"><?= count($cycle) ?> 个模块</span>
+                    </div>
+                    <div class="cycle-path">
+                        <?php
+                        $cyclePath = [];
+                        foreach ($cycle as $module) {
+                            $cyclePath[] = '<strong>' . htmlspecialchars($module) . '</strong>';
+                        }
+                        // 形成循环路径
+                        $cyclePath[] = '<strong>' . htmlspecialchars($cycle[0]) . '</strong>';
+                        ?>
+                        <div class="path">
+                            <?= implode(' <i class="mdi mdi-arrow-right"></i> ', $cyclePath) ?>
+                        </div>
+                    </div>
+                    <div class="cycle-details">
+                        <h4>详细说明：</h4>
+                        <ul>
+                            <?php for ($i = 0; $i < count($cycle); $i++): ?>
+                                <?php
+                                $current = $cycle[$i];
+                                $next = $cycle[($i + 1) % count($cycle)];
+                                ?>
+                                <li>
+                                    <strong><?= htmlspecialchars($current) ?></strong> 
+                                    扩展了 
+                                    <strong><?= htmlspecialchars($next) ?></strong>
+                                    <a href="*/backend/extends/moduleDetail/module/<?= urlencode($next) ?>" 
+                                       class="btn btn-sm btn-outline-primary">查看详情</a>
+                                </li>
+                            <?php endfor; ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        
+        <div class="warning-box">
+            <h4><i class="mdi mdi-information"></i> 如何解决循环依赖？</h4>
+            <ol>
+                <li>检查循环依赖链中的每个模块，找出不必要的扩展关系</li>
+                <li>考虑将共同的功能提取到一个独立的模块中</li>
+                <li>重新设计模块间的依赖关系，避免相互依赖</li>
+                <li>如果确实需要相互扩展，考虑使用事件机制或观察者模式</li>
+            </ol>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.page-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.detection-result {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 30px;
+}
+
+.success-message,
+.error-message {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.success-message .icon,
+.error-message .icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.success-message .icon {
+    color: #28a745;
+}
+
+.error-message .icon {
+    color: #dc3545;
+}
+
+.success-message h2,
+.error-message h2 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.success-message p,
+.error-message p {
+    color: #666;
+    margin: 0;
+}
+
+.cycles-list {
+    margin-top: 30px;
+}
+
+.cycle-item {
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    background: #fff5f5;
+}
+
+.cycle-header {
+    background: #dc3545;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cycle-header h3 {
+    margin: 0;
+    color: white;
+}
+
+.cycle-length {
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.cycle-path {
+    padding: 20px;
+    background: white;
+}
+
+.path {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 16px;
+    color: #333;
+}
+
+.path i {
+    color: #dc3545;
+    font-size: 20px;
+}
+
+.cycle-details {
+    padding: 20px;
+    background: #f9f9f9;
+    border-top: 1px solid #dee2e6;
+}
+
+.cycle-details h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.cycle-details ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.cycle-details li {
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.warning-box {
+    margin-top: 30px;
+    padding: 20px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+}
+
+.warning-box h4 {
+    margin-top: 0;
+    color: #856404;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.warning-box ol {
+    margin: 10px 0 0 0;
+    padding-left: 20px;
+    color: #856404;
+}
+
+.warning-box li {
+    margin-bottom: 8px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.btn-outline-primary {
+    background-color: transparent;
+    color: #007bff;
+    border: 1px solid #007bff;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+</style>

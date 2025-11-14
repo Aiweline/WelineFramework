@@ -172,7 +172,8 @@ class Document extends \Weline\Framework\Database\Model
     {
         /**@var Url $url */
         $url = ObjectManager::getInstance(Url::class);
-        return $url->getUrl('/dev/tool/document', ['id' => $this->getId()]);
+        // 返回前端文档浏览页面的URL
+        return $url->getUrl('/dev/tool/', ['id' => $this->getId()]);
     }
 
     /**

@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Sticker\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Event\EventsManager;
 use Weline\Sticker\Helper\CodeMinifier;
 use Weline\Sticker\Model\StickerLog;
 
@@ -25,6 +26,7 @@ class Compiler
     private StickerRegistry $stickerRegistry;
     private RuleParser $ruleParser;
     private NotificationService $notificationService;
+    private ?EventsManager $eventsManager = null;
 
     public function __construct(
         CodeMinifier $codeMinifier,
@@ -36,6 +38,45 @@ class Compiler
         $this->stickerRegistry = $stickerRegistry;
         $this->ruleParser = $ruleParser;
         $this->notificationService = $notificationService;
+    }
+    
+    /**
+     * 获取事件管理器实例（延迟加载）
+     *
+     * @return EventsManager
+     */
+    private function getEventsManager(): EventsManager
+    {
+        if ($this->eventsManager === null) {
+            $this->eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(EventsManager::class);
+        }
+        return $this->eventsManager;
+    }
+    
+    /**
+     * 发送系统消息通知
+     *
+     * @param string $title 标题
+     * @param string $content 内容
+     * @param string $icon 图标名称
+     * @return void
+     */
+    private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
+    {
+        try {
+            $this->getEventsManager()->dispatch('Weline_Framework::msg', [
+                'data' => [
+                    'title' => $title,
+                    'content' => $content,
+                    'is_read' => false,
+                    'is_icon' => 1,
+                    'is_img' => 0,
+                    'avatar' => $icon
+                ]
+            ]);
+        } catch (\Exception $e) {
+            error_log("发送 Sticker 系统消息失败: " . $e->getMessage());
+        }
     }
 
     /**
@@ -69,8 +110,49 @@ class Compiler
         $minifiedSource = $this->codeMinifier->minify($sourceContent);
         $resultContent = $minifiedSource;
 
-        // 获取该文件的所有 Sticker 规则
-        $fileStickers = $this->stickerRegistry->getFileStickers($targetModule, $targetFile);
+        // 获取该文件的所有 Sticker 规则（传入 ruleParser 以解析 actions）
+        $fileStickers = $this->stickerRegistry->getFileStickers($targetModule, $targetFile, $this->ruleParser);
+        
+        // 如果没有 Sticker 规则，直接返回
+        if (empty($fileStickers)) {
+            $this->sendSystemMessage(
+                __('Sticker 编译失败'),
+                __('未找到 Sticker 规则') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}",
+                'ri-error-warning-line'
+            );
+            return null;
+        }
+        
+        // 确保所有 actions 都已解析（双重保险）
+        foreach ($fileStickers as &$stickerInfo) {
+            $actions = $stickerInfo['actions'] ?? [];
+            if (empty($actions)) {
+                $stickerFile = $stickerInfo['sticker_file'] ?? '';
+                if (!empty($stickerFile) && file_exists($stickerFile)) {
+                    $stickerInfo['actions'] = $this->ruleParser->parseStickerFile($stickerFile);
+                }
+            }
+        }
+        unset($stickerInfo);
+        
+        // 检查是否有有效的 actions
+        $hasValidActions = false;
+        foreach ($fileStickers as $stickerInfo) {
+            $actions = $stickerInfo['actions'] ?? [];
+            if (!empty($actions)) {
+                $hasValidActions = true;
+                break;
+            }
+        }
+        
+        if (!$hasValidActions) {
+            $this->sendSystemMessage(
+                __('Sticker 编译失败'),
+                __('没有有效的 actions') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('可能原因') . ": " . __('Sticker 文件解析失败或 actions 为空'),
+                'ri-error-warning-line'
+            );
+            return null;
+        }
 
         // 按从后往前的顺序应用规则（避免位置偏移）
         $allReplacements = [];
@@ -79,9 +161,19 @@ class Compiler
             $sourceModule = $stickerInfo['source_module'];
             $stickerFile = $stickerInfo['sticker_file'];
             $actions = $stickerInfo['actions'] ?? [];
+            
+            // 如果 actions 仍然为空，跳过（应该已经在前面解析过了）
+            if (empty($actions)) {
+                $this->sendSystemMessage(
+                    __('Sticker 编译警告'),
+                    __('actions 为空，跳过该 Sticker') . "\n\n" . __('Sticker 文件') . ": {$stickerFile}\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}",
+                    'ri-alert-line'
+                );
+                continue;
+            }
 
             foreach ($actions as $action) {
-                $type = $action['type'] ?? 'replace';
+                $actionType = $action['type'] ?? 'replace';
                 $target = $action['target'] ?? '';
                 $code = $action['code'] ?? '';
                 $position = $action['position'] ?? 'all';
@@ -113,7 +205,7 @@ class Compiler
                         $allReplacements[] = [
                             'start' => $match['start'],
                             'end' => $match['end'],
-                            'type' => $type,
+                            'type' => $actionType,
                             'code' => $code,
                             'index' => $match['index']
                         ];
@@ -275,13 +367,17 @@ class Compiler
                 ['target' => substr($action['target_original'] ?? '', 0, 200)]
             );
 
-            // 发送通知
-            $this->notificationService->notifyTargetCodeNotFound(
-                $targetModule,
-                $targetFile,
-                $sourceModule,
-                $stickerFile,
-                $action['target_original'] ?? ''
+            // 发送系统消息通知
+            $targetCode = substr($action['target_original'] ?? '', 0, 200);
+            $this->sendSystemMessage(
+                __('Sticker 目标代码未找到'),
+                __('Sticker 规则无法找到目标代码') . "\n\n" . 
+                __('目标模块') . ": {$targetModule}\n" . 
+                __('目标文件') . ": {$targetFile}\n" . 
+                __('来源模块') . ": {$sourceModule}\n" . 
+                __('Sticker 文件') . ": {$stickerFile}\n" . 
+                __('目标代码') . ": " . ($targetCode ?: __('（空）')),
+                'ri-search-line'
             );
         } catch (\Exception $e) {
             error_log("记录 Sticker 日志失败: " . $e->getMessage());
@@ -310,6 +406,19 @@ class Compiler
                 $stickerFile,
                 "位置参数无效：{$position}，实际匹配数：{$totalMatches}",
                 ['position' => $position, 'total_matches' => $totalMatches]
+            );
+            
+            // 发送系统消息通知
+            $this->sendSystemMessage(
+                __('Sticker 位置参数无效'),
+                __('位置参数无效') . "\n\n" . 
+                __('目标模块') . ": {$targetModule}\n" . 
+                __('目标文件') . ": {$targetFile}\n" . 
+                __('来源模块') . ": {$sourceModule}\n" . 
+                __('Sticker 文件') . ": {$stickerFile}\n" . 
+                __('位置参数') . ": {$position}\n" . 
+                __('实际匹配数') . ": {$totalMatches}",
+                'ri-alert-line'
             );
         } catch (\Exception $e) {
             error_log("记录 Sticker 日志失败: " . $e->getMessage());
@@ -346,7 +455,13 @@ class Compiler
 
                 if (!file_exists($sourceFilePath)) {
                     $result['failed']++;
-                    $result['errors'][] = "源文件不存在: {$sourceFilePath}";
+                    $errorMsg = "源文件不存在: {$sourceFilePath}";
+                    $result['errors'][] = $errorMsg;
+                    $this->sendSystemMessage(
+                        __('Sticker 编译失败'),
+                        __('源文件不存在') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('源文件路径') . ": {$sourceFilePath}",
+                        'ri-error-warning-line'
+                    );
                     continue;
                 }
 
@@ -359,12 +474,25 @@ class Compiler
                     $themeName = $firstSticker['theme_name'] ?? null;
                 }
 
-                $compiledPath = $this->compile($targetModule, $targetFile, $sourceFilePath, $type, $themeName);
-                if ($compiledPath !== null) {
-                    $result['success']++;
-                } else {
+                try {
+                    $compiledPath = $this->compile($targetModule, $targetFile, $sourceFilePath, $type, $themeName);
+                    if ($compiledPath !== null) {
+                        $result['success']++;
+                    } else {
+                        $result['failed']++;
+                        $errorMsg = "编译失败: {$targetModule}::{$targetFile} (可能原因：无 Sticker 规则、actions 解析失败、匹配失败等)";
+                        $result['errors'][] = $errorMsg;
+                        // 注意：具体的错误信息已经在 compile() 方法中通过 sendSystemMessage 发送了
+                    }
+                } catch (\Exception $e) {
                     $result['failed']++;
-                    $result['errors'][] = "编译失败: {$targetModule}::{$targetFile}";
+                    $errorMsg = "编译异常: {$targetModule}::{$targetFile} - " . $e->getMessage();
+                    $result['errors'][] = $errorMsg;
+                    $this->sendSystemMessage(
+                        __('Sticker 编译异常'),
+                        __('编译过程中发生异常') . "\n\n" . __('目标模块') . ": {$targetModule}\n" . __('目标文件') . ": {$targetFile}\n" . __('异常信息') . ": " . $e->getMessage(),
+                        'ri-error-warning-line'
+                    );
                 }
             }
         }

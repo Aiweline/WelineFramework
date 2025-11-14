@@ -61,10 +61,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('调试 - 所有参数: %{1}', [json_encode($args)]));
         }
         
-        # 检查是否是后台运行（默认后台运行，除非明确指定前台）
-        # 如果用户指定了 -f 或 --foreground，则前台运行；否则默认后台运行
-        $isForeground = isset($args['f']) || isset($args['foreground']);
-        $isBackground = !$isForeground; // 默认后台运行
+        # 运行模式：仅保留后台运行，去除 -f/--foreground 前台模式
+        $isForeground = false;
+        $isBackground = true;
         
         # 检查模块参数（只从用户明确指定的参数中获取）
         $moduleName = $args['--module'] ?? $args['module'] ?? null;
@@ -296,7 +295,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         if ($isQuickTest && !$isBackground) {
             $this->printing->separator('─', 0, 'SUCCESS');
             $this->printing->success(__('✓ 测试完成！'));
-            $this->printing->note(__('提示：测试已完成，如需详细HTML报告请移除 -f 参数（默认后台运行并生成报告）'));
+            $this->printing->note(__('提示：测试已完成。'));
             return;
         }
         
@@ -923,7 +922,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 添加Framework模块测试
         $app_code_weline_framework_dir = APP_CODE_PATH . 'Weline' . DS . 'Framework' . DS;
+        # 兼容 Weline\Framework\*\test 与 Weline\Framework\*\Test
         $code_framework_modules = glob($app_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
+        $code_framework_modules_uc = glob($app_code_weline_framework_dir . '*' . DS . 'Test', GLOB_ONLYDIR);
+        if (is_array($code_framework_modules_uc) and !empty($code_framework_modules_uc)) {
+            $code_framework_modules = array_merge($code_framework_modules ?: [], $code_framework_modules_uc);
+        }
         foreach ($code_framework_modules as $key => $test_dir) {
             $key_new = str_replace($app_code_weline_framework_dir, '', $test_dir);
             $key_new = explode(DS, $key_new);
@@ -933,7 +937,12 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $code_framework_modules[$key_new] = $test_dir;
         }
         $vendor_code_weline_framework_dir = APP_CODE_PATH . 'weline' . DS . 'framework' . DS;
+        # 兼容 vendor/weline/framework/*/test 与 vendor/weline/framework/*/Test
         $vendor_framework_modules = glob($vendor_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
+        $vendor_framework_modules_uc = glob($vendor_code_weline_framework_dir . '*' . DS . 'Test', GLOB_ONLYDIR);
+        if (is_array($vendor_framework_modules_uc) and !empty($vendor_framework_modules_uc)) {
+            $vendor_framework_modules = array_merge($vendor_framework_modules ?: [], $vendor_framework_modules_uc);
+        }
         foreach ($vendor_framework_modules as $key => $test_dir) {
             $key_new = str_replace($vendor_code_weline_framework_dir, '', $test_dir);
             $key_new = explode(DS, $key_new);
@@ -1150,12 +1159,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
         # 检查是否是测试方法名（包含::）
         $isTestMethod = str_contains($fileName, '::');
         $actualFileName = $isTestMethod ? explode('::', $fileName)[0] : $fileName;
+        # 支持使用 \ 或 / 指定子目录，例如 Extends\Unit\ExtendsScannerTest
+        $normalizedName = str_replace(['\\', '/'], DS, $actualFileName);
         
         # 调试信息
         if ($debug) {
             $this->printing->note(__('调试 - 查找文件: %{1}', [$fileName]));
             $this->printing->note(__('调试 - 是否测试方法: %{1}', [$isTestMethod ? '是' : '否']));
             $this->printing->note(__('调试 - 实际文件名: %{1}', [$actualFileName]));
+            $this->printing->note(__('调试 - 规范化名称: %{1}', [$normalizedName]));
             $this->printing->note(__('调试 - 活跃模块数: %{1}', [count($modules)]));
         }
         
@@ -1225,42 +1237,54 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 也检查Framework模块
         $app_code_weline_framework_dir = APP_CODE_PATH . 'Weline' . DS . 'Framework' . DS;
+        # 兼容小写 test 与 大写 Test
         $code_framework_modules = glob($app_code_weline_framework_dir . '*' . DS . 'test', GLOB_ONLYDIR);
+        $code_framework_modules_uc = glob($app_code_weline_framework_dir . '*' . DS . 'Test', GLOB_ONLYDIR);
+        if (is_array($code_framework_modules_uc) and !empty($code_framework_modules_uc)) {
+            $code_framework_modules = array_merge($code_framework_modules ?: [], $code_framework_modules_uc);
+        }
         foreach ($code_framework_modules as $test_dir) {
-            # 尝试直接文件名
-            $possibleFile = $test_dir . DS . $actualFileName;
+            $submodule = basename(dirname($test_dir)); # 如 Extends
+            $relName = $normalizedName;
+            if ($submodule && str_starts_with($relName, $submodule . DS)) {
+                $relName = substr($relName, strlen($submodule . DS));
+            }
+            # 尝试直接相对路径
+            $possibleFile = $test_dir . DS . $relName;
             if (file_exists($possibleFile)) {
                 return $possibleFile;
             }
             
             # 如果文件名不包含.php，尝试添加
-            if (!str_ends_with($actualFileName, '.php')) {
-                $possibleFile = $test_dir . DS . $actualFileName . '.php';
+            if (!str_ends_with($relName, '.php')) {
+                $possibleFile = $test_dir . DS . $relName . '.php';
                 if (file_exists($possibleFile)) {
                     return $possibleFile;
                 }
             }
             
             # 如果文件名不包含Test.php，尝试添加
-            if (!str_ends_with($actualFileName, 'Test.php')) {
-                $possibleFile = $test_dir . DS . $actualFileName . 'Test.php';
+            $lastSeg = basename($relName);
+            $dirPrefix = rtrim(substr($relName, 0, -strlen($lastSeg)), DS);
+            if (!str_ends_with($lastSeg, 'Test.php')) {
+                $possibleFile = $test_dir . DS . ($dirPrefix ? $dirPrefix . DS : '') . $lastSeg . 'Test.php';
                 if (file_exists($possibleFile)) {
                     return $possibleFile;
                 }
             }
             
             # 如果文件名不包含Test，尝试添加Test
-            if (!str_ends_with($actualFileName, 'Test')) {
-                $possibleFile = $test_dir . DS . $actualFileName . 'Test.php';
+            if (!str_ends_with($lastSeg, 'Test')) {
+                $possibleFile = $test_dir . DS . ($dirPrefix ? $dirPrefix . DS : '') . $lastSeg . 'Test.php';
                 if (file_exists($possibleFile)) {
                     return $possibleFile;
                 }
             }
             
             # 如果文件名以Test开头，尝试去掉Test前缀
-            if (str_starts_with($actualFileName, 'Test')) {
-                $withoutTest = substr($actualFileName, 4); // 去掉 "Test" 前缀
-                $possibleFile = $test_dir . DS . $withoutTest . 'Test.php';
+            if (str_starts_with($lastSeg, 'Test')) {
+                $withoutTest = substr($lastSeg, 4); // 去掉 "Test" 前缀
+                $possibleFile = $test_dir . DS . ($dirPrefix ? $dirPrefix . DS : '') . $withoutTest . 'Test.php';
                 if (file_exists($possibleFile)) {
                     return $possibleFile;
                 }
@@ -1283,48 +1307,53 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 检查是否是测试方法名（包含::）
         $actualFileName = str_contains($fileName, '::') ? explode('::', $fileName)[0] : $fileName;
+        $normalizedName = str_replace(['\\', '/'], DS, $actualFileName);
         
         foreach ($modules as $module) {
             if (str_contains($module['name'], $moduleName)) {
-                $test_path = $module['base_path'] . 'test' . DS;
-                if (is_dir($test_path)) {
-                    # 尝试直接文件名
-                    $possibleFile = $test_path . $actualFileName;
-                    if (file_exists($possibleFile)) {
-                        return $possibleFile;
+                # 候选测试根目录：test、Test、以及子模块下的 test/Test
+                $candidateRoots = [];
+                $base = $module['base_path'];
+                if (is_dir($base . 'test' . DS)) $candidateRoots[] = $base . 'test' . DS;
+                if (is_dir($base . 'Test' . DS)) $candidateRoots[] = $base . 'Test' . DS;
+                $subTests = glob($base . '*' . DS . 'test', GLOB_ONLYDIR) ?: [];
+                $subTestsUc = glob($base . '*' . DS . 'Test', GLOB_ONLYDIR) ?: [];
+                foreach (array_merge($subTests, $subTestsUc) as $root) {
+                    $candidateRoots[] = rtrim($root, DS) . DS;
+                }
+                
+                foreach ($candidateRoots as $root) {
+                    $submodule = basename(dirname(rtrim($root, DS)));
+                    $relName = $normalizedName;
+                    if ($submodule && str_starts_with($relName, $submodule . DS)) {
+                        $relName = substr($relName, strlen($submodule . DS));
                     }
                     
-                    # 如果文件名不包含.php，尝试添加
-                    if (!str_ends_with($actualFileName, '.php')) {
-                        $possibleFile = $test_path . $actualFileName . '.php';
-                        if (file_exists($possibleFile)) {
-                            return $possibleFile;
-                        }
+                    # 直接相对路径
+                    $possibleFile = $root . $relName;
+                    if (file_exists($possibleFile)) return $possibleFile;
+                    
+                    # 尝试添加 .php
+                    if (!str_ends_with($relName, '.php')) {
+                        $possibleFile = $root . $relName . '.php';
+                        if (file_exists($possibleFile)) return $possibleFile;
                     }
                     
-                    # 如果文件名不包含Test.php，尝试添加
-                    if (!str_ends_with($actualFileName, 'Test.php')) {
-                        $possibleFile = $test_path . $actualFileName . 'Test.php';
-                        if (file_exists($possibleFile)) {
-                            return $possibleFile;
-                        }
+                    # 针对最后段名处理 Test.php
+                    $lastSeg = basename($relName);
+                    $dirPrefix = rtrim(substr($relName, 0, -strlen($lastSeg)), DS);
+                    if (!str_ends_with($lastSeg, 'Test.php')) {
+                        $possibleFile = $root . ($dirPrefix ? $dirPrefix . DS : '') . $lastSeg . 'Test.php';
+                        if (file_exists($possibleFile)) return $possibleFile;
                     }
-                    
-                    # 如果文件名不包含Test，尝试添加Test
-                    if (!str_ends_with($actualFileName, 'Test')) {
-                        $possibleFile = $test_path . $actualFileName . 'Test.php';
-                        if (file_exists($possibleFile)) {
-                            return $possibleFile;
-                        }
+                    if (!str_ends_with($lastSeg, 'Test')) {
+                        $possibleFile = $root . ($dirPrefix ? $dirPrefix . DS : '') . $lastSeg . 'Test.php';
+                        if (file_exists($possibleFile)) return $possibleFile;
                     }
-                    
-                    # 如果文件名以Test开头，尝试去掉Test前缀
-                    if (str_starts_with($actualFileName, 'Test')) {
-                        $withoutTest = substr($actualFileName, 4); // 去掉 "Test" 前缀
-                        $possibleFile = $test_path . $withoutTest . 'Test.php';
-                        if (file_exists($possibleFile)) {
-                            return $possibleFile;
-                        }
+                    if (str_starts_with($lastSeg, 'Test')) {
+                        $withoutTest = substr($lastSeg, 4);
+                        $possibleFile = $root . ($dirPrefix ? $dirPrefix . DS : '') . $withoutTest . 'Test.php';
+                        if (file_exists($possibleFile)) return $possibleFile;
                     }
                 }
                 break;
@@ -1457,13 +1486,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
     
     ⚡ 重要变更：
     现在默认后台运行并生成HTML报告！
-    如需前台运行，请使用 -f 或 --foreground 参数
 
 🎯 基本语法：
     php bin/w phpunit:run [选项] [套件名]
 
 🔧 常用选项：
-    -f, --foreground        前台运行（不启动报告服务器，直接输出结果）
     -p, --port=<端口>       指定报告服务器端口（默认：9980）
     --debug                 显示详细的调试信息
     --module=<模块名>       指定要测试的模块
@@ -1481,19 +1508,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
     php bin/w phpunit:run --module=Weline_Ai       # 测试整个模块
     php bin/w phpunit:run                          # 运行默认套件
 
-2️⃣ 快速测试（前台直接输出结果）：
-    php bin/w phpunit:run -f --name=Eav            # 前台运行，直接看结果
-    php bin/w phpunit:run -f --name=Eav::testMethod
-
 3️⃣ 指定套件测试：
     php bin/w phpunit:run                          # 运行默认套件（后台）
     php bin/w phpunit:run unit                     # 运行指定套件（后台）
-    php bin/w phpunit:run -f unit                  # 前台运行指定套件
 
 4️⃣ 指定模块测试：
     php bin/w phpunit:run --module=Weline_Eav        # 后台运行
     php bin/w phpunit:run --module=Weline_Database   # 后台运行
-    php bin/w phpunit:run -f --module=Weline_Eav     # 前台运行
 
 5️⃣ 自定义端口：
     php bin/w phpunit:run --port=8080 --module=Weline_Ai
@@ -1507,14 +1528,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
 🚀 最佳实践：
     · 日常测试：直接运行（默认后台），访问浏览器查看报告
-    · 快速调试：添加 -f 参数前台运行，直接查看结果
-    · CI/CD集成：使用 -f 参数，将结果输出到日志
-    · 调试时添加 --debug 参数查看详细信息
+    · CI/CD集成：结合 --debug 参数查看详细信息
 
 💡 提示：
     现在默认后台运行，测试完成后会自动启动报告服务器
     报告地址会在命令行显示（默认 http://localhost:9980）
-    如需前台运行直接看结果，添加 -f 或 --foreground 参数
 
 ════════════════════════════════════════════════════════════════════════════════
 ';

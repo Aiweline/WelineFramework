@@ -9,55 +9,89 @@
                 <ul class='navbar-nav'>
                     <foreach name="menus" item="top_menu">
                         <!--顶级菜单-->
-                        <li class='nav-item @if{top_menu.sub_menu=>"dropdown"}'>
+                        <php>
+                            // 获取菜单数据
+                            $menuSourceId = $top_menu['source_id'] ?? '';
+                            $menuRoute = $top_menu['route'] ?? '';
+                            $menuTitle = $top_menu['source_name'] ?? '';
+                            $menuIcon = $top_menu['icon'] ?? '';
+                            $isBackend = $top_menu['is_backend'] ?? true;
+                            $subMenus = $top_menu['nodes'] ?? [];
+                            
+                            // 构建URL
+                            $req = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+                            $url_prefix = $isBackend ? rtrim($req->getUrlBuilder()->getBackendUrl('/'), '/') : '/';
+                            $menuUrl = $url_prefix . '/' . ltrim($menuRoute, '/');
+                            
+                            // 判断是否有子菜单
+                            $hasSubMenu = !empty($subMenus) && is_array($subMenus);
+                        </php>
+                        <li class='nav-item @if{top_menu.nodes=>"dropdown"}'>
                             <php>
-                                $action = $top_menu['action'];
-                                $id = $top_menu['source'];
-                            </php>
-                            <if condition="top_menu.sub_menu">
-                                <php>
+                                // 只有没有子菜单的菜单项才能点击
+                                if ($hasSubMenu) {
                                     $href = '#';
-                                    $dropdown_addition = "id='{$id}' role='button'";
+                                    $dropdown_addition = "id='{$menuSourceId}' role='button' data-bs-toggle='dropdown'";
                                     $dropdown_addition_class = 'arrow-none';
-                                </php>
-                                <else/>
-                                <php>
-                                    $href = $top_menu->getUrl();
-                                    $dropdown_addition ='';
+                                } else {
+                                    $href = $menuUrl;
+                                    $dropdown_addition = '';
                                     $dropdown_addition_class = '';
-                                </php>
-                            </if>
+                                }
+                            </php>
                             <a class='nav-link @var{$dropdown_addition_class}' href='@var{$href}'
                                @var{$dropdown_addition}>
-                                <i class='@var{top_menu.icon}'></i>
-                                <var>top_menu.title</var>
-                                <if condition="top_menu.sub_menu">
+                                <i class='@var{$menuIcon}'></i>
+                                <var>$menuTitle</var>
+                                <if condition="top_menu.nodes">
                                     <div class='arrow-down'></div>
                                 </if>
                             </a>
-                            <if condition='top_menu.sub_menu'>
-                                <div class='dropdown-menu' aria-labelledby='@var($id)'>
+                            <if condition="top_menu.nodes">
+                                <div class='dropdown-menu' aria-labelledby='@var{$menuSourceId}'>
                                     <!--二级菜单-->
-                                    <foreach name="top_menu.sub_menu" item='sub_menu'>
-                                        <if condition='sub_menu.sub_menu'>
+                                    <foreach name="top_menu.nodes" item='sub_menu'>
+                                        <php>
+                                            $subMenuSourceId = $sub_menu['source_id'] ?? '';
+                                            $subMenuRoute = $sub_menu['route'] ?? '';
+                                            $subMenuTitle = $sub_menu['source_name'] ?? '';
+                                            $subIsBackend = $sub_menu['is_backend'] ?? true;
+                                            $subSubMenus = $sub_menu['nodes'] ?? [];
+                                            
+                                            $subUrlPrefix = $subIsBackend ? rtrim($req->getUrlBuilder()->getBackendUrl('/'), '/') : '/';
+                                            $subMenuUrl = $subUrlPrefix . '/' . ltrim($subMenuRoute, '/');
+                                            
+                                            $hasSubSubMenu = !empty($subSubMenus) && is_array($subSubMenus);
+                                        </php>
+                                        <if condition="sub_menu.nodes">
+                                            <!--二级菜单有子菜单，不能点击，只能展开-->
                                             <div class='dropdown'>
                                                 <a class='dropdown-item arrow-none' href='#'
-                                                   id='@var{$id}'
-                                                   role='button'>
-                                                    <var>sub_menu.title</var>
+                                                   id='@var{$subMenuSourceId}'
+                                                   role='button'
+                                                   data-bs-toggle='dropdown'>
+                                                    <var>$subMenuTitle</var>
                                                     <div class='arrow-down'></div>
                                                 </a>
-                                                <div class='dropdown-menu' aria-labelledby='@var{sub_menu.source}'>
-                                                    <!--三级菜单-->
-                                                    <foreach name="sub_menu.sub_menu" item="third_menu">
-                                                        <a href="@var{third_menu->getUrl()}"
-                                                           class='dropdown-item'><var>third_menu.title</var></a>
+                                                <div class='dropdown-menu' aria-labelledby='@var{$subMenuSourceId}'>
+                                                    <!--三级菜单（最后一级，可点击）-->
+                                                    <foreach name="sub_menu.nodes" item="third_menu">
+                                                        <php>
+                                                            $thirdMenuRoute = $third_menu['route'] ?? '';
+                                                            $thirdMenuTitle = $third_menu['source_name'] ?? '';
+                                                            $thirdIsBackend = $third_menu['is_backend'] ?? true;
+                                                            
+                                                            $thirdUrlPrefix = $thirdIsBackend ? rtrim($req->getUrlBuilder()->getBackendUrl('/'), '/') : '/';
+                                                            $thirdMenuUrl = $thirdUrlPrefix . '/' . ltrim($thirdMenuRoute, '/');
+                                                        </php>
+                                                        <a href="@var{$thirdMenuUrl}"
+                                                           class='dropdown-item'><var>$thirdMenuTitle</var></a>
                                                     </foreach>
                                                 </div>
                                             </div>
                                             <else/>
-                                            <!--二级菜单如果没有子菜单则直接显示菜单-->
-                                            <a href="@var{sub_menu->getUrl()}" class='dropdown-item'><var>sub_menu.title</var></a>
+                                            <!--二级菜单如果没有子菜单（最后一级），可点击-->
+                                            <a href="@var{$subMenuUrl}" class='dropdown-item'><var>$subMenuTitle</var></a>
                                         </if>
                                     </foreach>
                                 </div>

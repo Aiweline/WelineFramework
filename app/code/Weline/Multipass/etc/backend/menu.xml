@@ -8,7 +8,7 @@
          name="multipass_management" 
          title="Multipass管理" 
          action=""
-         parent="" 
+         parent="Weline_Backend::system_module" 
          icon="mdi mdi-key-link" 
          order="60"/>
     

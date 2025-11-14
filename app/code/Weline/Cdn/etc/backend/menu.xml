@@ -8,7 +8,7 @@
          name="cdn_manager" 
          title="CDN管理" 
          action=""
-         parent="" 
+         parent="Weline_Backend::system_module" 
          icon="mdi mdi-cloud" 
          order="50000"/>
     

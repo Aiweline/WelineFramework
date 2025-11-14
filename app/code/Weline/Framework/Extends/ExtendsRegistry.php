@@ -89,6 +89,7 @@ class ExtendsRegistry
 
     /**
      * 组织注册表数据
+     * 简化数据结构，只保留模块级别的核心信息
      *
      * @param array $scannedData 扫描的数据
      * @param array $completenessReport 完备性检查报告
@@ -99,25 +100,256 @@ class ExtendsRegistry
         $registry = [];
 
         foreach ($scannedData as $moduleName => $data) {
+            // 验证模块名格式，只保留有效的模块名
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*_[A-Za-z][A-Za-z0-9_]*$/', $moduleName)) {
+                continue; // 跳过无效的模块名（如 DEV-workspace）
+            }
+            
             $registry[$moduleName] = [
                 'extends' => $data['extends'] ?? [],
                 'extended_by' => []
             ];
 
-            // 组织扩展信息
+            // 组织扩展信息，只保留核心字段
             if (!empty($data['extended_by'])) {
                 foreach ($data['extended_by'] as $sourceModule => $extendList) {
-                    $registry[$moduleName]['extended_by'][$sourceModule] = $extendList;
+                    // 验证源模块名格式
+                    if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*_[A-Za-z][A-Za-z0-9_]*$/', $sourceModule)) {
+                        continue; // 跳过无效的源模块名
+                    }
+                    
+                    // 初始化类型分组
+                    if (!isset($registry[$moduleName]['extended_by'][$sourceModule])) {
+                        $registry[$moduleName]['extended_by'][$sourceModule] = [];
+                    }
+                    
+                    foreach ($extendList as $extendInfo) {
+                        // 只保留核心字段，移除冗余信息
+                        $coreInfo = [
+                            'type' => $extendInfo['type'] ?? 'module',
+                            'source_module' => $sourceModule,
+                            'source_file' => $extendInfo['source_file'] ?? '',
+                            'file_path' => $extendInfo['file_path'] ?? '',
+                            'relative_path' => $extendInfo['relative_path'] ?? ''
+                        ];
+                        
+                        // 如果是 Sticker 扩展，添加特殊标记
+                        if (($extendInfo['is_sticker_extension'] ?? false) === true) {
+                            $coreInfo['is_sticker_extension'] = true;
+                            $coreInfo['sticker_type'] = $extendInfo['sticker_type'] ?? $extendInfo['type'] ?? 'module';
+                            if (isset($extendInfo['theme_name'])) {
+                                $coreInfo['theme_name'] = $extendInfo['theme_name'];
+                            }
+                        }
+                        
+                        $registry[$moduleName]['extended_by'][$sourceModule][] = $coreInfo;
+                    }
                 }
             }
 
-            // 添加完备性检查信息
+            // 添加完备性检查信息（简化版，只保留关键信息）
             if (isset($completenessReport[$moduleName])) {
-                $registry[$moduleName]['completeness'] = $completenessReport[$moduleName];
+                $completeness = $completenessReport[$moduleName];
+                $registry[$moduleName]['completeness'] = [
+                    'has_extends_php' => $completeness['has_extends_php'] ?? false,
+                    'has_extends_md' => $completeness['has_extends_md'] ?? false,
+                    'has_errors' => !empty($completeness['errors'] ?? []),
+                    'error_count' => count($completeness['errors'] ?? []),
+                    'warning_count' => count($completeness['warnings'] ?? [])
+                ];
             }
         }
 
         return $registry;
+    }
+
+    /**
+     * 增强 Sticker 扩展的元数据（已废弃，不再使用）
+     * 
+     * @deprecated 数据结构已简化，不再需要增强元数据
+     * @param array &$moduleData 模块数据
+     * @return void
+     */
+    private function enhanceStickerMetadata(array &$moduleData): void
+    {
+        // 不再增强元数据，保持数据结构简洁
+    }
+
+    /**
+     * 增强单个扩展的元数据
+     *
+     * @param array $extension 扩展信息
+     * @return array 增强后的扩展信息
+     */
+    private function enhanceExtensionMetadata(array $extension): array
+    {
+        $enhanced = $extension;
+        
+        // 添加文件类型信息
+        $filePath = $extension['file_path'] ?? '';
+        $enhanced['file_type'] = $this->getFileType($filePath);
+        
+        // 添加扩展复杂度评级
+        $enhanced['complexity'] = $this->calculateExtensionComplexity($extension);
+        
+        // 添加最后修改时间（如果可获取）
+        $sourceFile = $extension['source_file'] ?? '';
+        if (!empty($sourceFile) && file_exists($sourceFile)) {
+            $enhanced['last_modified'] = date('Y-m-d H:i:s', filemtime($sourceFile));
+        }
+        
+        // 添加扩展影响范围评估
+        $enhanced['impact_scope'] = $this->assessExtensionImpact($extension);
+        
+        return $enhanced;
+    }
+
+    /**
+     * 获取文件类型
+     *
+     * @param string $filePath 文件路径
+     * @return string
+     */
+    private function getFileType(string $filePath): string
+    {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        
+        $typeMap = [
+            'php' => 'PHP',
+            'phtml' => 'Template',
+            'html' => 'HTML',
+            'js' => 'JavaScript',
+            'css' => 'CSS',
+            'scss' => 'SCSS',
+            'less' => 'LESS',
+            'xml' => 'XML',
+            'json' => 'JSON',
+            'yaml' => 'YAML',
+            'yml' => 'YAML',
+            'md' => 'Markdown'
+        ];
+        
+        return $typeMap[$extension] ?? 'Unknown';
+    }
+
+    /**
+     * 计算扩展复杂度
+     *
+     * @param array $extension 扩展信息
+     * @return string 复杂度等级：simple, medium, complex
+     */
+    private function calculateExtensionComplexity(array $extension): string
+    {
+        $filePath = $extension['file_path'] ?? '';
+        $fileType = $this->getFileType($filePath);
+        
+        // 模板文件通常复杂度较高
+        if ($fileType === 'Template') {
+            return 'complex';
+        }
+        
+        // 配置文件通常复杂度中等
+        if (in_array($fileType, ['XML', 'JSON', 'YAML'])) {
+            return 'medium';
+        }
+        
+        // 静态文件通常复杂度较低
+        if (in_array($fileType, ['CSS', 'JavaScript'])) {
+            return 'medium';
+        }
+        
+        return 'simple';
+    }
+
+    /**
+     * 评估扩展影响范围
+     *
+     * @param array $extension 扩展信息
+     * @return string 影响范围：local, global, critical
+     */
+    private function assessExtensionImpact(array $extension): string
+    {
+        $filePath = $extension['file_path'] ?? '';
+        $pathParts = explode('/', $filePath);
+        
+        // 核心文件路径通常影响范围更大
+        $criticalPaths = ['config', 'etc', 'di.xml', 'module.xml'];
+        foreach ($criticalPaths as $criticalPath) {
+            if (in_array($criticalPath, $pathParts)) {
+                return 'critical';
+            }
+        }
+        
+        // 模板文件通常影响范围中等
+        if (strpos($filePath, 'templates') !== false || strpos($filePath, 'view') !== false) {
+            return 'global';
+        }
+        
+        return 'local';
+    }
+
+    /**
+     * 计算模块统计信息
+     *
+     * @param array $moduleData 模块数据
+     * @return array 统计信息
+     */
+    private function calculateModuleStats(array $moduleData): array
+    {
+        $stats = [
+            'total_extensions' => 0,
+            'sticker_count' => 0,
+            'module_count' => 0,
+            'theme_count' => 0,
+            'complexity_distribution' => [
+                'simple' => 0,
+                'medium' => 0,
+                'complex' => 0
+            ],
+            'impact_distribution' => [
+                'local' => 0,
+                'global' => 0,
+                'critical' => 0
+            ],
+            'file_type_distribution' => []
+        ];
+        
+        $extendedBy = $moduleData['extended_by'] ?? [];
+        
+        foreach ($extendedBy as $sourceModule => $extensions) {
+            foreach ($extensions as $extension) {
+                $stats['total_extensions']++;
+                
+                if (($extension['is_sticker_extension'] ?? false) === true) {
+                    $stats['sticker_count']++;
+                } elseif (($extension['type'] ?? '') === 'module') {
+                    $stats['module_count']++;
+                } elseif (($extension['type'] ?? '') === 'theme') {
+                    $stats['theme_count']++;
+                }
+                
+                // 复杂度分布
+                $complexity = $extension['complexity'] ?? 'simple';
+                if (isset($stats['complexity_distribution'][$complexity])) {
+                    $stats['complexity_distribution'][$complexity]++;
+                }
+                
+                // 影响范围分布
+                $impact = $extension['impact_scope'] ?? 'local';
+                if (isset($stats['impact_distribution'][$impact])) {
+                    $stats['impact_distribution'][$impact]++;
+                }
+                
+                // 文件类型分布
+                $fileType = $extension['file_type'] ?? 'Unknown';
+                if (!isset($stats['file_type_distribution'][$fileType])) {
+                    $stats['file_type_distribution'][$fileType] = 0;
+                }
+                $stats['file_type_distribution'][$fileType]++;
+            }
+        }
+        
+        return $stats;
     }
 
     /**
@@ -128,11 +360,7 @@ class ExtendsRegistry
      */
     public function saveRegistry(array $registry): bool
     {
-        $content = "<?php\n";
-        $content .= "// Extends 注册表\n";
-        $content .= "// 自动生成，请勿手动修改\n";
-        $content .= "// 生成时间: " . date('Y-m-d H:i:s') . "\n\n";
-        $content .= "return " . var_export($registry, true) . ";\n";
+        $content = "<?php return " . w_var_export($registry, true) . ";\n";
 
         // 确保目录存在
         $dir = dirname(self::REGISTRY_FILE);
@@ -197,6 +425,208 @@ class ExtendsRegistry
     {
         $registry = $this->getRegistry();
         return $registry[$moduleName]['extended_by'] ?? [];
+    }
+
+    /**
+     * 获取扩展某模块的所有模块（快速查询）
+     *
+     * @param string $moduleName 目标模块名
+     * @return array 返回格式：['Weline_MyModule' => [...扩展信息...]]
+     */
+    public function getModuleExtendedBy(string $moduleName): array
+    {
+        $registry = $this->getRegistry();
+        $extendedBy = $registry[$moduleName]['extended_by'] ?? [];
+        
+        // 按扩展类型分组
+        $result = [
+            'module_extensions' => [],
+            'theme_extensions' => [],
+            'sticker_extensions' => []
+        ];
+        
+        foreach ($extendedBy as $sourceModule => $extensions) {
+            foreach ($extensions as $extension) {
+                $type = $extension['type'] ?? 'unknown';
+                if (($extension['is_sticker_extension'] ?? false) === true) {
+                    $result['sticker_extensions'][$sourceModule][] = $extension;
+                } elseif ($type === 'module') {
+                    $result['module_extensions'][$sourceModule][] = $extension;
+                } elseif ($type === 'theme') {
+                    $result['theme_extensions'][$sourceModule][] = $extension;
+                } else {
+                    // 未知类型，放到 module_extensions 中
+                    $result['module_extensions'][$sourceModule][] = $extension;
+                }
+            }
+        }
+        
+        return $result;
+    }
+
+    /**
+     * 获取扩展类型
+     *
+     * @param string $moduleName 模块名
+     * @param string $extendName 扩展点名
+     * @return string|null
+     */
+    public function getExtendType(string $moduleName, string $extendName): ?string
+    {
+        $registry = $this->getRegistry();
+        $extends = $registry[$moduleName]['extends'] ?? [];
+        
+        if (isset($extends['extends'][$extendName]['type'])) {
+            $type = $extends['extends'][$extendName]['type'];
+            if (is_array($type)) {
+                return implode(',', $type);
+            }
+            return $type;
+        }
+        
+        return null;
+    }
+
+    /**
+     * 检查是否有特定类型的扩展
+     *
+     * @param string $moduleName 模块名
+     * @param string $extendType 扩展类型 (module/theme/sticker)
+     * @return bool
+     */
+    public function hasExtendType(string $moduleName, string $extendType): bool
+    {
+        $registry = $this->getRegistry();
+        
+        // 检查定义的扩展点
+        $extends = $registry[$moduleName]['extends'] ?? [];
+        if (isset($extends['extends'])) {
+            foreach ($extends['extends'] as $extendConfig) {
+                $type = $extendConfig['type'] ?? '';
+                if (is_array($type)) {
+                    if (in_array($extendType, $type)) {
+                        return true;
+                    }
+                } elseif ($type === $extendType) {
+                    return true;
+                }
+            }
+        }
+        
+        // 检查被扩展的情况
+        $extendedBy = $registry[$moduleName]['extended_by'] ?? [];
+        foreach ($extendedBy as $extensions) {
+            foreach ($extensions as $extension) {
+                if (($extension['is_sticker_extension'] ?? false) && $extendType === 'sticker') {
+                    return true;
+                }
+                if (($extension['type'] ?? '') === $extendType) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * 获取所有 Sticker 扩展信息
+     *
+     * @return array
+     */
+    public function getAllStickerExtensions(): array
+    {
+        $registry = $this->getRegistry();
+        $stickerExtensions = [];
+        
+        foreach ($registry as $moduleName => $data) {
+            $extendedBy = $data['extended_by'] ?? [];
+            foreach ($extendedBy as $sourceModule => $extensions) {
+                foreach ($extensions as $extension) {
+                    if (($extension['is_sticker_extension'] ?? false) === true) {
+                        if (!isset($stickerExtensions[$sourceModule])) {
+                            $stickerExtensions[$sourceModule] = [];
+                        }
+                        $stickerExtensions[$sourceModule][] = array_merge($extension, [
+                            'target_module' => $moduleName
+                        ]);
+                    }
+                }
+            }
+        }
+        
+        return $stickerExtensions;
+    }
+
+    /**
+     * 获取模块的 Sticker 扩展信息
+     *
+     * @param string $moduleName 模块名
+     * @return array
+     */
+    public function getModuleStickerExtensions(string $moduleName): array
+    {
+        $extendedBy = $this->getModuleExtendedBy($moduleName);
+        return $extendedBy['sticker_extensions'] ?? [];
+    }
+
+    /**
+     * 检查模块是否被 Sticker 扩展
+     *
+     * @param string $moduleName 模块名
+     * @return bool
+     */
+    public function isStickerExtended(string $moduleName): bool
+    {
+        $stickerExtensions = $this->getModuleStickerExtensions($moduleName);
+        return !empty($stickerExtensions);
+    }
+
+    /**
+     * 获取扩展统计信息
+     *
+     * @return array
+     */
+    public function getExtensionStats(): array
+    {
+        $registry = $this->getRegistry();
+        $stats = [
+            'total_modules' => count($registry),
+            'modules_with_extends' => 0,
+            'modules_extended_by_others' => 0,
+            'sticker_extensions_count' => 0,
+            'module_extensions_count' => 0,
+            'theme_extensions_count' => 0,
+            'extension_types' => []
+        ];
+        
+        foreach ($registry as $moduleName => $data) {
+            // 统计有扩展定义的模块
+            if (!empty($data['extends'])) {
+                $stats['modules_with_extends']++;
+            }
+            
+            // 统计被扩展的模块
+            if (!empty($data['extended_by'])) {
+                $stats['modules_extended_by_others']++;
+            }
+            
+            // 统计扩展类型
+            $extendedBy = $data['extended_by'] ?? [];
+            foreach ($extendedBy as $extensions) {
+                foreach ($extensions as $extension) {
+                    if (($extension['is_sticker_extension'] ?? false) === true) {
+                        $stats['sticker_extensions_count']++;
+                    } elseif (($extension['type'] ?? '') === 'module') {
+                        $stats['module_extensions_count']++;
+                    } elseif (($extension['type'] ?? '') === 'theme') {
+                        $stats['theme_extensions_count']++;
+                    }
+                }
+            }
+        }
+        
+        return $stats;
     }
 }
 

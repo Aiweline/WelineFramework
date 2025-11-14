@@ -38,21 +38,41 @@ class Document extends \Weline\Framework\App\Controller\BackendController
         $this->url = $url;
     }
 
-    #[
-        Acl('Weline_DeveloperWorkspace::dev-document-manager', '文档列表', 'fa fa-list-alt'),
-    ]
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager', '文档列表', 'fa fa-list-alt')]
     public function index()
     {
+        // 获取分类树（只获取激活的分类）
+        /**@var Catalog $catalogModel */
+        $catalogModel = ObjectManager::getInstance(Catalog::class);
+        $catalogs = $catalogModel->getTree('pid');
+        
+        // 确保返回数组格式
+        if (!is_array($catalogs)) {
+            $catalogs = [];
+        }
+        
+        $this->assign('catalogs', $catalogs);
+        
+        // 获取选中的分类ID
+        $categoryId = $this->request->getParam('category_id');
+        
         $documentModel = ModelService::getDocumentModel();
-        $documents     = $documentModel->joinModel(Catalog::class, 'catalog', 'main_table.category_id=catalog.id')
-                                       ->fields('main_table.*,main_table.id as doc_id,catalog.*,catalog.id as c_id,catalog.name as c_name')
-                                       ->pagination(
-                                           intval($this->request->getParam('page', 1)),
-                                           intval($this->request->getParam('pageSize', 10)),
-                                           $this->request->getParams()
-                                       )->order('doc_id', 'desc')->select()->fetch();
+        $query = $documentModel->joinModel(Catalog::class, 'catalog', 'main_table.category_id=catalog.id')
+                               ->fields('main_table.*,main_table.id as doc_id,catalog.*,catalog.id as c_id,catalog.name as c_name');
+        
+        // 如果指定了分类，则过滤
+        if ($categoryId) {
+            $query->where('main_table.category_id', $categoryId);
+        }
+        
+        $documents = $query->pagination(
+                           intval($this->request->getParam('page', 1)),
+                           intval($this->request->getParam('pageSize', 10)),
+                           $this->request->getParams()
+                       )->order('doc_id', 'desc')->select()->fetch();
         $this->assign('documents', $documents->getItems());
         $this->assign('pagination', $documentModel->getPagination());
+        $this->assign('selectedCategoryId', $categoryId);
         return $this->fetch();
     }
 
@@ -77,7 +97,7 @@ class Document extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_DeveloperWorkspace::dev-document-manager-add', '文档添加', 'fa fa-plus')]
     public function add()
     {
-        // 分类
+        // 分类（只获取激活的分类）
         /**@var Catalog $catalogModel */
         $catalogModel = ObjectManager::getInstance(Catalog::class);
         $catalogs     = $catalogModel->getTree('pid');
@@ -123,5 +143,154 @@ class Document extends \Weline\Framework\App\Controller\BackendController
             throw new Exception(__('文件上传失败！'));
         }
         return $this->fetchJson(['location' => $paths[0]]);
+    }
+
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-view', '文档查看', 'fa fa-eye')]
+    public function getView()
+    {
+        $id = $this->request->getParam('id');
+        if (!$id) {
+            return $this->fetchJson($this->error(__('文档ID不能为空')));
+        }
+        try {
+            $document = ModelService::getDocumentModel()->load($id);
+            if (!$document->getId()) {
+                return $this->fetchJson($this->error(__('文档不存在')));
+            }
+            // 获取分类信息
+            $catalog = ObjectManager::getInstance(Catalog::class)->load($document->getCategoryId());
+            // 获取作者信息
+            // 如果是自动导入的文档，优先使用模块名作为作者
+            $authorName = __('未知');
+            if ($document->isAutoImported() && $document->getModuleName()) {
+                $authorName = $document->getModuleName();
+            } else {
+                $author = null;
+                if ($document->getAuthorId()) {
+                    $author = ObjectManager::getInstance(BackendUser::class)->load($document->getAuthorId());
+                    if ($author && $author->getId()) {
+                        $authorName = $author->getData('username');
+                    }
+                }
+            }
+            // 获取文档内容并清理HTML注释
+            $content = $document->getDecodeContent() ?? '';
+            $content = $this->cleanHtmlComments($content);
+            
+            return $this->fetchJson($this->success(__('获取成功'), [
+                'id' => $document->getId(),
+                'title' => $document->getTitle(),
+                'summary' => $document->getData('summary'),
+                'content' => $content,
+                'category' => $catalog->getName(),
+                'author' => $authorName,
+                'create_time' => $document->getData('create_time'),
+                'update_time' => $document->getData('update_time'),
+                'module_name' => $document->getModuleName(),
+                'file_path' => $document->getFilePath(),
+                'file_name' => $document->getFileName(),
+                'is_auto_imported' => $document->isAutoImported(),
+            ]));
+        } catch (\Exception $exception) {
+            return $this->fetchJson($this->exception($exception));
+        }
+    }
+
+    #[Acl('Weline_DeveloperWorkspace::dev-document-manager-list', '文档列表API', 'fa fa-list')]
+    public function getList()
+    {
+        $categoryId = $this->request->getParam('category_id');
+        $page = intval($this->request->getParam('page', 1));
+        $pageSize = intval($this->request->getParam('pageSize', 10));
+        
+        try {
+            $documentModel = ModelService::getDocumentModel();
+            $query = $documentModel->joinModel(Catalog::class, 'catalog', 'main_table.category_id=catalog.id')
+                                   ->fields('main_table.*,main_table.id as doc_id,catalog.*,catalog.id as c_id,catalog.name as c_name');
+            
+            // 如果指定了分类，则过滤
+            if ($categoryId) {
+                $query->where('main_table.category_id', $categoryId);
+            }
+            
+            $documents = $query->pagination($page, $pageSize, $this->request->getParams())
+                               ->order('doc_id', 'desc')
+                               ->select()
+                               ->fetch();
+            
+            $items = [];
+            foreach ($documents->getItems() as $doc) {
+                // 如果是自动导入的文档，使用模块名作为作者
+                $authorName = '';
+                $isAutoImported = (bool)$doc->getData('is_auto_imported');
+                if ($isAutoImported && $doc->getData('module_name')) {
+                    $authorName = $doc->getData('module_name');
+                } else {
+                    $authorId = $doc->getData('author_id');
+                    if ($authorId) {
+                        $author = ObjectManager::getInstance(BackendUser::class)->load($authorId);
+                        if ($author && $author->getId()) {
+                            $authorName = $author->getData('username');
+                        }
+                    }
+                }
+                
+                $items[] = [
+                    'doc_id' => $doc->getData('doc_id'),
+                    'title' => $doc->getData('title'),
+                    'summary' => $doc->getData('summary'),
+                    'c_name' => $doc->getData('c_name'),
+                    'c_id' => $doc->getData('c_id'),
+                    'author_id' => $doc->getData('author_id'),
+                    'author' => $authorName ?: __('未知'),
+                    'create_time' => $doc->getData('create_time'),
+                    'update_time' => $doc->getData('update_time'),
+                    'module_name' => $doc->getData('module_name'),
+                    'is_auto_imported' => $isAutoImported,
+                ];
+            }
+            
+            return $this->fetchJson($this->success(__('获取成功'), [
+                'items' => $items,
+                'pagination' => $documentModel->getPagination(),
+            ]));
+        } catch (\Exception $exception) {
+            return $this->fetchJson($this->exception($exception));
+        }
+    }
+    
+    /**
+     * 清理HTML注释
+     * 
+     * @param string|null $content 原始内容
+     * @return string 清理后的内容
+     */
+    private function cleanHtmlComments(?string $content): string
+    {
+        if (empty($content)) {
+            return '';
+        }
+        
+        // 清理HTML注释（包括单行和多行注释）
+        // 匹配格式：<!-- ... --> 或 <!-- ... \n ... -->
+        $cleanedContent = preg_replace('/<!--[\s\S]*?-->/', '', $content ?? '');
+        
+        // preg_replace 可能返回 null，需要处理
+        if ($cleanedContent === null) {
+            $cleanedContent = $content ?? '';
+        }
+        
+        // 清理后可能产生多余的空行，移除连续的空行（保留单个空行）
+        $cleanedContent = preg_replace('/\n{3,}/', "\n\n", $cleanedContent ?? '');
+        
+        // preg_replace 可能返回 null，需要处理
+        if ($cleanedContent === null) {
+            $cleanedContent = '';
+        }
+        
+        // 清理首尾空白
+        $cleanedContent = trim($cleanedContent ?? '');
+        
+        return $cleanedContent;
     }
 }

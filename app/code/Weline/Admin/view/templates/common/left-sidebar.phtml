@@ -6,7 +6,10 @@ use Weline\Framework\Manager\ObjectManager;
 ?>
 <?php
 $themeConfig = ObjectManager::getInstance('\Weline\Backend\Block\ThemeConfig');
-if (!$themeConfig->getThemeConfig('topnav')):
+// 检查是否为水平布局，水平布局时不显示左侧菜单
+$currentLayouts = $themeConfig->getOriginThemeConfig('layouts') ?? [];
+$dataLayout = $currentLayouts['data-layout'] ?? '';
+if ($dataLayout !== 'horizontal'):
     // 提前获取常用菜单数据，确保在整个模板中都可以访问
     $hasFrequentMenus = false;
     $recentMenus = [];
@@ -192,7 +195,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
                 <!-- 悬浮区域结束 -->
 
                 <!-- Left Menu Start -->
-                <ul class="metismenu list-unstyled" id="side-menu">
+                <ul class="metismenu list-unstyled" id="sidebar-menu">
                     <!-- 搜索菜单项（以菜单形式实现，折叠状态下hover展开） -->
                     <li class="menu-search-item" id="menu-search-item" data-source="menu-search">
                         <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-search-link">
@@ -424,8 +427,6 @@ if (!$themeConfig->getThemeConfig('topnav')):
 
     <style>
         /* 悬浮搜索和常用菜单容器 */
-        /* 注意：这个容器插入在 #sidebar-menu 和 #side-menu 之间 */
-        /* 原生CSS使用 #sidebar-menu > ul 选择器，所以需要确保 #side-menu 仍然是直接子元素 */
         .sticky-menu-section {
             position: sticky;
             top: 0;
@@ -642,6 +643,27 @@ if (!$themeConfig->getThemeConfig('topnav')):
             background-color: #1b2c3f;
             border-color: rgba(255, 255, 255, 0.1);
             color: #fff;
+        }
+        
+        /* 正常状态下菜单搜索输入框的暗色主题适配 */
+        body[data-sidebar="dark"] #menu-search-input-menu,
+        body[data-sidebar="dark"] .search-menu-input-wrapper .form-control {
+            background-color: #1b2c3f !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            color: #fff !important;
+        }
+        
+        body[data-sidebar="dark"] #menu-search-input-menu::placeholder,
+        body[data-sidebar="dark"] .search-menu-input-wrapper .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5) !important;
+        }
+        
+        body[data-sidebar="dark"] #menu-search-input-menu:focus,
+        body[data-sidebar="dark"] .search-menu-input-wrapper .form-control:focus {
+            background-color: #1b2c3f !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
+            color: #fff !important;
+            box-shadow: 0 0 0 0.2rem rgba(215, 228, 236, 0.25) !important;
         }
         
         /* 确保menu-search-content始终可见，即使有搜索结果 */
@@ -934,14 +956,23 @@ if (!$themeConfig->getThemeConfig('topnav')):
         
         body[data-sidebar="dark"] .search-tab-input {
             color: #fff;
+            background-color: transparent !important;
+        }
+        
+        /* 确保 form-control 类不会覆盖暗色主题样式 */
+        body[data-sidebar="dark"] #menu-search-input,
+        body[data-sidebar="dark"] .search-tab-input-wrapper .form-control {
+            background-color: transparent !important;
+            color: #fff !important;
         }
         
         .search-tab-input::placeholder {
             color: #adb5bd;
         }
         
-        body[data-sidebar="dark"] .search-tab-input::placeholder {
-            color: rgba(255, 255, 255, 0.5);
+        body[data-sidebar="dark"] .search-tab-input::placeholder,
+        body[data-sidebar="dark"] #menu-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.5) !important;
         }
         
         .search-tab-input:focus {
@@ -949,9 +980,12 @@ if (!$themeConfig->getThemeConfig('topnav')):
             box-shadow: 0 0 0 0.2rem rgba(11, 177, 151, 0.25);
         }
         
-        body[data-sidebar="dark"] .search-tab-input:focus {
+        body[data-sidebar="dark"] .search-tab-input:focus,
+        body[data-sidebar="dark"] #menu-search-input:focus {
             border-color: #d7e4ec;
             box-shadow: 0 0 0 0.2rem rgba(215, 228, 236, 0.25);
+            background-color: transparent !important;
+            color: #fff !important;
         }
         
         /* 搜索Tab关闭图标 */
@@ -1279,6 +1313,22 @@ if (!$themeConfig->getThemeConfig('topnav')):
             background-color: #1b2c3f !important;
         }
         
+        /* 修复hover菜单显示 - 使用与原CSS相同的选择器格式 */
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul {
+            display: block !important;
+            position: absolute !important;
+            right: 70px !important;
+            width: 190px !important;
+            z-index: 9999 !important;
+        }
+        
+        /* 三级菜单hover显示 */
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li:hover > ul ul {
+            display: block !important;
+            position: absolute !important;
+            left: 190px !important;
+            z-index: 10000 !important;
+        }
     </style>
 
     <script>
@@ -1312,7 +1362,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
                 function initElements() {
                     $searchTabContainer = $('#search-tab-container');
                     $searchInput = $('#menu-search-input');
-                    $menuItems = $('#side-menu li');
+                    $menuItems = $('#sidebar-menu li');
                     $frequentMenusSection = $('#frequent-menus-section');
                     $searchResultsContainer = $('#search-results-container');
                     $stickySection = $('#sticky-menu-section');
@@ -1412,7 +1462,7 @@ if (!$themeConfig->getThemeConfig('topnav')):
                 // 重置菜单显示（修复null检查）
                 function resetMenuDisplay() {
                     if (!$menuItems || !$menuItems.length) {
-                        $menuItems = $('#side-menu li');
+                        $menuItems = $('#sidebar-menu li');
                     }
                     if (!$frequentMenusSection || !$frequentMenusSection.length) {
                         $frequentMenusSection = $('#frequent-menus-section');

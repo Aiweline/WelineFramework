@@ -22,6 +22,11 @@
         <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
         <observer name="Weline_Framework_Extends::setup_upgrade_after" instance="Weline\Framework\Extends\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="200"/>
     </event>
+
+    <!-- 维护模式：API 请求统一JSON 响应 -->
+    <event name="Weline_Framework::maintenance">
+        <observer name="Weline_Framework_Api::maintenance_response" instance="Weline\Framework\Api\Observer\Maintenance" disabled="false" shared="true" sort="-100"/>
+    </event>
     
     <!-- App 运行前检查全页缓存（URL 解析之前，仅做后端判断） -->
     <event name="App::run_before">
@@ -31,5 +36,10 @@
     <!-- URL 解析后检查全页缓存（此时可以生成正确的缓存键） -->
     <event name="App::url_parsed_after">
         <observer name="Weline_Framework_Router::check_full_page_cache_after_parse" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- 控制器属性事件：API规范验证 -->
+    <event name="Weline_Module::controller_attributes">
+        <observer name="Weline_Framework_Api::validate_api_spec" instance="Weline\Framework\Api\Observer\ControllerAttributes" disabled="false" shared="true" sort="10"/>
     </event>
 </config>

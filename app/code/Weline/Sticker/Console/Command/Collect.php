@@ -16,25 +16,23 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Sticker\Service\ConflictDetector;
 use Weline\Sticker\Service\RuleParser;
-use Weline\Sticker\Service\RuleScanner;
 use Weline\Sticker\Service\StickerRegistry;
 
 /**
  * Sticker 收集命令
- * 收集 Sticker 信息到注册表并检测冲突
+ * 从 ExtendsData 读取 Sticker 信息并检测冲突
+ * 注意：数据现在由 ExtendsRegistry 统一管理，此命令主要用于检测冲突
  * 
  * 用法：php bin/w sticker:collect
  */
 class Collect extends CommandAbstract implements CommandInterface
 {
-    private RuleScanner $ruleScanner;
     private RuleParser $ruleParser;
     private StickerRegistry $stickerRegistry;
     private ConflictDetector $conflictDetector;
 
     public function __construct()
     {
-        $this->ruleScanner = ObjectManager::getInstance(RuleScanner::class);
         $this->ruleParser = ObjectManager::getInstance(RuleParser::class);
         $this->stickerRegistry = ObjectManager::getInstance(StickerRegistry::class);
         $this->conflictDetector = ObjectManager::getInstance(ConflictDetector::class);
@@ -78,23 +76,26 @@ class Collect extends CommandAbstract implements CommandInterface
         try {
             $this->printer->note(__('开始收集 Sticker 信息...'));
 
-            // 1. 扫描所有 Sticker 文件
-            $this->printer->info(__('扫描 Sticker 文件...'));
-            $scannedStickers = $this->ruleScanner->scanAllStickers();
+            // 1. 从 ExtendsData 读取注册表（会自动解析 actions）
+            $this->printer->info(__('从 ExtendsData 读取 Sticker 信息...'));
+            $registry = $this->stickerRegistry->buildRegistryFromScanned([], $this->ruleParser);
             
-            $this->printer->success(__('发现 %{1} 个 Sticker 文件', [count($scannedStickers)]));
+            // 统计 Sticker 文件数量
+            $stickerCount = 0;
+            foreach ($registry as $files) {
+                foreach ($files as $stickers) {
+                    $stickerCount += count($stickers);
+                }
+            }
+            
+            $this->printer->success(__('发现 %{1} 个 Sticker 文件', [$stickerCount]));
 
-            if (empty($scannedStickers)) {
-                $this->printer->note(__('没有发现 Sticker 文件，清空注册表'));
-                $this->stickerRegistry->saveRegistry([]);
+            if (empty($registry)) {
+                $this->printer->note(__('没有发现 Sticker 文件'));
                 return;
             }
 
-            // 2. 构建注册表
-            $this->printer->info(__('构建注册表...'));
-            $registry = $this->stickerRegistry->buildRegistryFromScanned($scannedStickers, $this->ruleParser);
-            
-            $this->printer->success(__('注册表构建完成'));
+            $this->printer->success(__('注册表读取完成'));
 
             // 3. 检测冲突
             $this->printer->info(__('检测冲突...'));
@@ -114,15 +115,10 @@ class Collect extends CommandAbstract implements CommandInterface
 
             $this->printer->success(__('未检测到冲突'));
 
-            // 4. 保存注册表
-            $this->printer->info(__('保存注册表...'));
-            $result = $this->stickerRegistry->saveRegistry($registry);
-
-            if ($result) {
-                $this->printer->success(__('注册表保存成功'));
-            } else {
-                $this->printer->error(__('注册表保存失败'));
-            }
+            // 4. 清除缓存（数据由 ExtendsRegistry 统一管理）
+            $this->printer->info(__('清除缓存...'));
+            $this->stickerRegistry->clearCache();
+            $this->printer->success(__('缓存清除完成'));
 
         } catch (\Exception $e) {
             $this->printer->error(__('执行失败：%{1}', [$e->getMessage()]));

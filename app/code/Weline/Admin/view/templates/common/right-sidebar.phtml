@@ -2,266 +2,53 @@
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+// 获取当前布局配置
+$currentLayouts = $themeConfig->getOriginThemeConfig('layouts') ?? [];
+$dataLayout = $currentLayouts['data-layout'] ?? '';
+$dataTopbar = $currentLayouts['data-topbar'] ?? '';
+$dataSidebar = $currentLayouts['data-sidebar'] ?? '';
+$dataSidebarSize = $currentLayouts['data-sidebar-size'] ?? '';
+$dataLayoutSize = $currentLayouts['data-layout-size'] ?? '';
+$dataKeepEnlarged = $currentLayouts['data-keep-enlarged'] ?? '';
+$layoutClass = $currentLayouts['class'] ?? '';
 ?>
 <!-- Right Sidebar -->
 <div class='right-bar'>
     <div data-simplebar class='h-100'>
         <div class='rightbar-title d-flex align-items-center px-3 py-4'>
-
             <h5 class='m-0 me-2'><?= __('设置') ?></h5>
-
             <a href="javascript:void(0);" class="right-bar-toggle ms-auto">
                 <i class="mdi mdi-close noti-icon"></i>
             </a>
         </div>
 
-        <!-- Settings -->
+        <!-- 布局预设配置包 -->
         <hr class='mt-0'/>
-        <h6 class='text-center mb-0'>
-            <lang>系统配置</lang>
-        </h6>
+        <h6 class='text-center mb-0'><?= __('布局预设配置包') ?></h6>
         <div class='p-4'>
             <div class='mb-3'>
-                <div class='mt-4 mt-lg-0'>
-                    <h5 class='font-size-14 mb-3'>
-                        <lang>全局 默认/还原</lang>
-                    </h5>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio'
-                               id='reset-theme'
-                               value=''>
-                        <label class='form-check-label' for='data-topbar-light'>
-                            <lang>还原</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio'
-                               id='light-mode-radio'
-                               value='light' <?= $themeConfig->getThemeConfig('light-mode-switch') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-topbar-light'>
-                            <lang>明亮</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio'
-                               id='dark-mode-radio'
-                               value='dark' <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-topbar-light'>
-                            <lang>暗黑</lang>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <hr class='mt-0'/>
-        <h6 class='text-center mb-0'><?= __('布局元素') ?></h6>
-        <div class='p-4'>
-            <div class='mb-3'>
-                <div class='mt-4 mt-lg-0'>
-                    <h5 class='font-size-14 mb-3'>
-                        <lang>导航栏</lang>
-                    </h5>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-topbar'
-                               id='data-topbar-light'
-                               value='light' <?= ($themeConfig->getThemeConfig('data-topbar') === 'light') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-topbar-light'>
-                            <lang>明亮</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-topbar'
-                               id='data-topbar-colored'
-                               value='colored' <?= ($themeConfig->getThemeConfig('data-topbar') === 'colored') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-topbar-colored'>
-                            <lang>有色</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-topbar'
-                               id='data-topbar-dark'
-                               value='dark' <?= ($themeConfig->getThemeConfig('data-topbar') === 'dark') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-topbar-dark'>
-                            <lang>暗黑</lang>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class='mb-3'>
-                <div class='mt-4 mt-lg-0'>
-                    <h5 class='font-size-14 mb-3'>
-                        <lang>侧边栏</lang>
-                    </h5>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-sidebar'
-                               id='data-sidebar-light'
-                               value='light' <?= ($themeConfig->getThemeConfig('data-sidebar') === 'light') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-sidebar-light'>
-                            <lang>明亮</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-sidebar'
-                               id='data-sidebar-dark'
-                               value='dark' <?= ($themeConfig->getThemeConfig('data-sidebar') === 'dark') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-sidebar-dark'>
-                            <lang>暗黑</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-sidebar-size'
-                               id='data-sidebar-size-default'
-                               value='' <?= ($themeConfig->getThemeConfig('data-sidebar-size') === '') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-sidebar-size-default'>
-                            <lang>默认尺寸</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-sidebar-size'
-                               id='data-sidebar-size-small'
-                               value='small' <?= ($themeConfig->getThemeConfig('data-sidebar-size') === 'small') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-sidebar-size-small'>
-                            <lang>小尺寸</lang>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class='mb-3'>
-                <div class='mt-4 mt-lg-0'>
-                    <h5 class='font-size-14 mb-3'>
-                        <lang>布局尺寸</lang>
-                    </h5>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-layout-size'
-                               id='data-layout-size-default'
-                               value='' <?= ($themeConfig->getThemeConfig('data-layout-size') === '') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-layout-size-default'>
-                            <lang>默认</lang>
-                        </label>
-                    </div>
-                    <div class='form-check form-check-inline'>
-                        <input class='form-check-input' type='radio' name='data-layout-size'
-                               id='data-layout-size-boxed'
-                               value='boxed' <?= ($themeConfig->getThemeConfig('data-layout-size') === 'boxed') ? 'checked' : '' ?>>
-                        <label class='form-check-label' for='data-layout-size-boxed'>
-                            <lang>盒子</lang>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='data-layout'
-                    <?= $themeConfig->getThemeConfig('data-layout') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="data-layout"
-                       title='@lang("默认无布局：开启后，设置水平布局，关闭后，设置垂直布局")'><?= __('水平布局') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='data-keep-enlarged'
-                    <?= $themeConfig->getThemeConfig('data-keep-enlarged') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="data-keep-enlarged"
-                       title='@lang("开启后，保持内容最大化")'><?= __('保持最大化') ?></label>
-            </div>
-
-            <div class='mb-3'>
-                <h5 class='font-size-14 mb-3'>
-                    <lang>布局类</lang>
-                </h5>
-                <div class='form-check form-check-inline'>
-                    <input class='form-check-input' type='radio' name='layout-class'
-                           id='layout-class-default'
-                           value='' <?= ($themeConfig->getThemeConfig('layout-class') === '') ? 'checked' : '' ?>>
-                    <label class='form-check-label' for='layout-class-default'>
-                        <lang>默认</lang>
-                    </label>
-                </div>
-                <div class='form-check form-check-inline'>
-                    <input class='form-check-input' type='radio' name='layout-class'
-                           id='layout-class-vertical-collpsed'
-                           value='vertical-collpsed' <?= ($themeConfig->getThemeConfig('layout-class') === 'vertical-collpsed') ? 'checked' : '' ?>>
-                    <label class='form-check-label' for='layout-class-vertical-collpsed'>
-                        <lang>垂直塌陷</lang>
-                    </label>
-                </div>
-            </div>
-        </div>
-        <hr class="mt-0"/>
-        <h6 class='text-center mb-0'><?= __('菜单布局') ?></h6>
-        <div class='p-4'>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='light-sidebar'
-                    <?= $themeConfig->getThemeConfig('light-sidebar') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="light-sidebar"><?= __('菜单明亮') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='topnav'
-                    <?= $themeConfig->getThemeConfig('topnav') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="topnav"><?= __('页顶菜单') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='icon-sidebar'
-                    <?= $themeConfig->getThemeConfig('icon-sidebar') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="icon-sidebar"><?= __('图标菜单') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='layouts-compact-sidebar'
-                    <?= $themeConfig->getThemeConfig('layouts-compact-sidebar') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="layouts-compact-sidebar"><?= __('图文菜单') ?></label>
+                <label class='form-label'><?= __('选择布局预设') ?></label>
+                <select class='form-select' id='layout-preset'>
+                    <option value='default' <?= ($dataLayout === '' && $dataLayoutSize === '' && $layoutClass === '' && $dataTopbar !== 'colored' && $dataSidebarSize !== 'small') ? 'selected' : '' ?>><?= __('默认布局') ?></option>
+                    <option value='light-sidebar' <?= ($dataTopbar === 'colored' && $dataLayout === '' && $dataSidebar === 'light' && $dataLayoutSize === '' && $dataSidebarSize === '' && $layoutClass === '') ? 'selected' : '' ?>><?= __('浅色侧边栏') ?></option>
+                    <option value='icon-sidebar' <?= ($dataSidebar === 'dark' && $dataKeepEnlarged === 'true' && $layoutClass === 'vertical-collpsed' && $dataLayout === '' && $dataLayoutSize === '' && $dataSidebarSize === '') ? 'selected' : '' ?>><?= __('图标侧边栏') ?></option>
+                    <option value='compact-sidebar' <?= ($dataSidebar === 'dark' && $dataSidebarSize === 'small' && $dataLayout === '' && $dataLayoutSize === '' && $dataKeepEnlarged !== 'true' && $layoutClass === '') ? 'selected' : '' ?>><?= __('紧凑侧边栏') ?></option>
+                    <option value='horizontal' <?= ($dataLayout === 'horizontal' && $dataTopbar === 'light' && $dataLayoutSize === '' && $dataSidebar === '') ? 'selected' : '' ?>><?= __('水平布局') ?></option>
+                    <option value='horizontal-dark' <?= ($dataLayout === 'horizontal' && $dataTopbar === 'dark' && $dataLayoutSize === '' && $dataSidebar === '') ? 'selected' : '' ?>><?= __('水平布局（深色顶部栏）') ?></option>
+                    <option value='horizontal-boxed' <?= ($dataLayout === 'horizontal' && $dataLayoutSize === 'boxed' && $dataTopbar === 'light') ? 'selected' : '' ?>><?= __('水平布局（盒装宽度）') ?></option>
+                    <option value='boxed' <?= ($dataSidebar === 'dark' && $dataKeepEnlarged === 'true' && $layoutClass === 'vertical-collpsed' && $dataLayoutSize === 'boxed' && $dataLayout === '' && $dataSidebarSize === '') ? 'selected' : '' ?>><?= __('盒装布局') ?></option>
+                </select>
+                <small class="form-text text-muted d-block mt-2"><?= __('选择预设后，将自动配置所有相关布局选项') ?></small>
             </div>
         </div>
 
-        <hr class="mt-0"/>
-        <h6 class='text-center mb-0'><?= __('主题布局') ?></h6>
-        <div class='p-4'>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='horizontal_menu_top'
-                    <?= $themeConfig->getThemeConfig('horizontal_menu_top') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="horizontal_menu_top"><?= __('水平菜单置顶') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='boxed'
-                    <?= $themeConfig->getThemeConfig('boxed') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="boxed"><?= __('紧凑布局') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='horizontal-boxed'
-                    <?= $themeConfig->getThemeConfig('horizontal-boxed') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="horizontal-boxed"><?= __('水平紧凑布局') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='horizontal'
-                    <?= $themeConfig->getThemeConfig('horizontal') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="horizontal"><?= __('水平布局') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='layouts-hori-topbar-dark'
-                    <?= $themeConfig->getThemeConfig('layouts-hori-topbar-dark') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="layouts-hori-topbar-dark"><?= __('水平顶黑') ?></label>
-            </div>
-            <div class='form-check form-switch mb-3'>
-                <input class='form-check-input' type='checkbox'
-                       id='layouts-hori-boxed-width'
-                    <?= $themeConfig->getThemeConfig('layouts-hori-boxed-width') ? 'checked' : '' ?>>
-                <label class="form-check-label" for="layouts-hori-boxed-width"><?= __('水平盒子') ?></label>
-            </div>
-        </div>
+        <!-- 主题颜色 -->
         <hr class="mt-0"/>
         <h6 class="text-center mb-0"><?= __('主题颜色') ?></h6>
-
         <div class="p-4">
             <div class="mb-2">
-                <img src="@static(Weline_Admin::assets/images/layouts/layout-1.png)" class="img-thumbnail"
-                     alt="layout-1">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-1.png)" class="img-thumbnail" alt="layout-1">
             </div>
             <div class="form-check form-switch mb-3">
                 <input class="form-check-input theme-choice" type="checkbox" id="light-mode-switch"
@@ -270,22 +57,20 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             </div>
 
             <div class="mb-2">
-                <img src="@static(Weline_Admin::assets/images/layouts/layout-2.png)" class="img-thumbnail"
-                     alt="layout-2">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-2.png)" class="img-thumbnail" alt="layout-2">
             </div>
             <div class="form-check form-switch mb-3">
-                <input class="form-check-input theme-choice" type="checkbox"
-                       id="dark-mode-switch" <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
+                <input class="form-check-input theme-choice" type="checkbox" id="dark-mode-switch"
+                    <?= $themeConfig->getThemeConfig('dark-mode-switch') ? 'checked' : '' ?>>
                 <label class="form-check-label" for="dark-mode-switch"><?= __('暗黑模式') ?></label>
             </div>
 
             <div class="mb-2">
-                <img src="@static(Weline_Admin::assets/images/layouts/layout-3.png)" class="img-thumbnail"
-                     alt="layout-3">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-3.png)" class="img-thumbnail" alt="layout-3">
             </div>
             <div class="form-check form-switch mb-5">
-                <input class="form-check-input theme-choice" type="checkbox"
-                       id="rtl-mode-switch" <?= $themeConfig->getThemeConfig('rtl-mode-switch') ? 'checked' : '' ?>>
+                <input class="form-check-input theme-choice" type="checkbox" id="rtl-mode-switch"
+                    <?= $themeConfig->getThemeConfig('rtl-mode-switch') ? 'checked' : '' ?>>
                 <label class="form-check-label" for="rtl-mode-switch"><?= __('RTL模式') ?></label>
             </div>
         </div>
@@ -295,3 +80,170 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 
 <!-- Right bar overlay-->
 <div class="rightbar-overlay"></div>
+
+<script>
+(function($) {
+    'use strict';
+
+    function initLayoutPresetSettings() {
+        // 布局预设映射
+        const layoutPresets = {
+            'default': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': 'light',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'light',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal-dark': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'dark',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal-boxed': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'light',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': 'boxed',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'light-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': 'colored',
+                    'data-sidebar': 'light',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'icon-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': 'true',
+                    'class': 'vertical-collpsed'
+                }
+            },
+            'compact-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': 'small',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'boxed': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': 'boxed',
+                    'data-keep-enlarged': 'true',
+                    'class': 'vertical-collpsed'
+                }
+            }
+        };
+
+        // 布局预设选择（配置包）
+        $('#layout-preset').on('change', function() {
+            const preset = $(this).val();
+            if (layoutPresets[preset]) {
+                setThemeConfig(layoutPresets[preset]);
+            }
+        });
+
+        // 检测当前配置并更新布局预设下拉框的选中状态
+        function updateLayoutPresetSelection() {
+            const bodyClass = $('body').attr('class') || '';
+            const currentLayouts = {
+                'data-layout': $('body').attr('data-layout') || '',
+                'data-topbar': $('body').attr('data-topbar') || '',
+                'data-sidebar': $('body').attr('data-sidebar') || '',
+                'data-sidebar-size': $('body').attr('data-sidebar-size') || '',
+                'data-layout-size': $('body').attr('data-layout-size') || '',
+                'data-keep-enlarged': $('body').attr('data-keep-enlarged') || '',
+                'class': bodyClass.includes('vertical-collpsed') ? 'vertical-collpsed' : ''
+            };
+            
+            // 匹配预设
+            let matchedPreset = 'default';
+            for (const [presetKey, presetConfig] of Object.entries(layoutPresets)) {
+                const presetLayouts = presetConfig.layouts || {};
+                let match = true;
+                
+                for (const [key, value] of Object.entries(presetLayouts)) {
+                    const currentValue = key === 'class' ? currentLayouts['class'] : currentLayouts[key];
+                    if (value !== currentValue) {
+                        match = false;
+                        break;
+                    }
+                }
+                
+                if (match) {
+                    matchedPreset = presetKey;
+                    break;
+                }
+            }
+            
+            $('#layout-preset').val(matchedPreset);
+        }
+        
+        // 监听单独配置项的变化，自动更新布局预设选择
+        // 延迟执行，等待 setThemeConfig 完成
+        const originalSetThemeConfig = window.setThemeConfig;
+        if (typeof originalSetThemeConfig === 'function') {
+            window.setThemeConfig = function(config) {
+                const result = originalSetThemeConfig.apply(this, arguments);
+                setTimeout(function() {
+                    updateLayoutPresetSelection();
+                }, 100);
+                return result;
+            };
+        }
+        
+        // 页面加载时初始化布局预设选择
+        $(document).ready(function() {
+            setTimeout(function() {
+                updateLayoutPresetSelection();
+            }, 200);
+        });
+    }
+
+    initLayoutPresetSettings();
+
+})(jQuery);
+</script>

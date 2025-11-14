@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
+use Weline\Backend\Session\BackendSession;
+use Weline\Framework\Manager\ObjectManager;
+
 class Topnav extends \Weline\Framework\View\Block
 {
     public string $_template = 'Weline_Admin::backend/public/topnav.phtml';
@@ -30,15 +33,20 @@ class Topnav extends \Weline\Framework\View\Block
     public function __init()
     {
         parent::__init();
-        # 检测主题配置
-        if ($this->themeConfig->getThemeConfig('topnav')) {
+        # 检测是否为水平布局，水平布局时显示顶部菜单
+        $currentLayouts = $this->themeConfig->getOriginThemeConfig('layouts') ?? [];
+        $dataLayout = $currentLayouts['data-layout'] ?? '';
+        if ($dataLayout === 'horizontal') {
             $this->processMenu();
         }
     }
 
     public function render():string
     {
-        if ($this->themeConfig->getThemeConfig('topnav')) {
+        # 检测是否为水平布局，水平布局时显示顶部菜单
+        $currentLayouts = $this->themeConfig->getOriginThemeConfig('layouts') ?? [];
+        $dataLayout = $currentLayouts['data-layout'] ?? '';
+        if ($dataLayout === 'horizontal') {
             return parent::render();
         }
         return '';
@@ -46,6 +54,19 @@ class Topnav extends \Weline\Framework\View\Block
 
     public function processMenu()
     {
-        $this->assign('menus', $this->menu->getMenuTree());
+        // 获取当前登录用户和角色
+        /**@var BackendSession $session */
+        $session = ObjectManager::getInstance(BackendSession::class);
+        /**@var \Weline\Backend\Model\BackendUser $user */
+        $user = $session->getLoginUser();
+        if ($user) {
+            $role = $user->getRoleModel();
+            // 使用 getMenuTreeByRole 方法获取菜单树
+            $menus = $this->menu->getMenuTreeByRole($role);
+        } else {
+            $menus = [];
+        }
+        // 确保 menus 始终是数组，避免 foreach 循环错误
+        $this->assign('menus', is_array($menus) ? $menus : []);
     }
 }

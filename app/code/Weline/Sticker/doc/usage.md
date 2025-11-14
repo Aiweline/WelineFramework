@@ -5,8 +5,8 @@
 ### 快速开始
 
 - 模块：`Weline_Sticker`
-- 源规则目录：`<你的模块>/extends/Weline_Sticker/<目标模块>/<相对路径>`
-- 生成目录（编译输出）：`generated/extends/Weline_Sticker/`
+- 源规则目录：`<你的模块>/extends/module/Weline_Sticker/<目标模块>/<相对路径>`
+- 生成目录（编译输出）：`generated/extends/module/Weline_Sticker/`
 - 注册表文件：`generated/sticker.php`
 - 事件拦截：`Framework_View::fetch_file`
 - 不使用：`module.xml`、Plugin（插件）。全部用事件实现。
@@ -15,7 +15,7 @@
 
 示例：对 `Weline_Sticker` 自身的模板 `view/templates/Test/index.phtml` 进行贴纸修改：
 ```
-app/code/Weline/Sticker/extends/Weline_Sticker/Weline/Sticker/view/templates/Test/index.phtml
+app/code/Weline/Sticker/extends/module/Weline_Sticker/Weline_Sticker/view/templates/Test/index.phtml
 ```
 - 规则文件路径与目标文件路径严格一致（以模块根为前缀）。
 - Sticker 文件内部使用 `w:sticker` 标签描述修改规则。
@@ -74,7 +74,7 @@ app/code/Weline/Sticker/extends/Weline_Sticker/Weline/Sticker/view/templates/Tes
   - 注册表仅在执行命令或发布时更新。
 
 输出目录与文件：
-- 编译输出：`generated/extends/Weline_Sticker/`
+- 编译输出：`generated/extends/module/Weline_Sticker/`
 - 注册表：`generated/sticker.php`
 
 ### CLI 命令
@@ -96,7 +96,7 @@ php bin/w sticker:refresh Weline_Sticker
 
 - 监听 `Framework_View::fetch_file` 事件，在框架获取模板文件时：
   1) 先判断该模板所属模块是否存在于注册表中
-  2) 若存在且该文件有规则，优先使用 `generated/extends/Weline_Sticker/...` 下的编译产物
+  2) 若存在且该文件有规则，优先使用 `generated/extends/module/Weline_Sticker/...` 下的编译产物
 
 ### 冲突与通知
 
@@ -118,5 +118,5 @@ php bin/w sticker:refresh Weline_Sticker
 
 示例参考：
 - `view/templates/Test/*.phtml`
-- `extends/Weline_Sticker/Weline/Sticker/view/templates/Test/*.phtml`
+- `extends/module/Weline_Sticker/Weline_Sticker/view/templates/Test/*.phtml`
 

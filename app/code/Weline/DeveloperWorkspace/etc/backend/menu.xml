@@ -7,8 +7,12 @@
          parent="Weline_Backend::system_dev_configuration" icon="ri-code-box-line" order="20001"/>
     <add source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试/沙盒" action="dev/tool/admin/sandbox"
          parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-code-tags-check" order="20004"/>
-    <add source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档管理器" action="dev/tool/admin/document"
+    <add source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档" action="dev/tool/admin/document"
          parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="20002"/>
-    <add source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="开发文档前端" action="dev/tool/" is_backend="0"
-         parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-file-document-multiple" order="20003"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-catalog" name="dev-document-catalog" title="分类管理" action="dev/tool/admin/document/catalog"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-sitemap" order="20021"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-list" name="dev-document-list" title="文档管理" action="dev/tool/admin/document"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-file-document-multiple" order="20022"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="开发文档前端" action="dev/tool/docs" is_backend="0"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-open-in-new" order="20023"/>
 </menus>

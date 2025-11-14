@@ -98,14 +98,38 @@ class ThemeConfig extends \Weline\Framework\View\Block
     {
         $body_attributes = $this->userSession->getData(self::theme_Session_Config)['layouts'] ?? [];
         if (empty($body_attributes)) {
-            $body_attributes = json_decode($this->userConfig->getData(self::theme_Session_Config) ?? '')['layouts'] ?? [];
+            $configData = $this->userConfig->getData(self::theme_Session_Config);
+            if ($configData) {
+                $decoded = json_decode($configData, true);
+                $body_attributes = $decoded['layouts'] ?? [];
+            }
         }
         $body_attributes_str = '';
+        $class_value = '';
+        
         foreach ($body_attributes as $attribute => $value) {
+            // 跳过空字符串值
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            
+            // 特殊处理 class 属性
+            if ($attribute === 'class') {
+                $class_value = $value;
+                continue;
+            }
+            
+            // 处理 data- 属性
             if (is_string($value)) {
                 $body_attributes_str .= "$attribute=\"$value\" ";
             }
         }
-        return $body_attributes_str;
+        
+        // 添加 class 属性（如果有）
+        if ($class_value !== '') {
+            $body_attributes_str .= "class=\"$class_value\" ";
+        }
+        
+        return trim($body_attributes_str);
     }
 }

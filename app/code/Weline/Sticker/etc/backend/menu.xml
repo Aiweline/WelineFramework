@@ -8,7 +8,7 @@
          name="sticker_manager" 
          title="Sticker管理" 
          action="*/backend/sticker/index"
-         parent="Weline_Backend::system_configuration" 
+         parent="Weline_DeveloperWorkspace::dev-tool" 
          icon="mdi mdi-sticker" 
          order="60000"/>
    <add source="Weline_Sticker::sticker_manager_test" 

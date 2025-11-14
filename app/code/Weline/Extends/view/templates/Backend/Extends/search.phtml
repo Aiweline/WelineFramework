@@ -1,0 +1,265 @@
+<!-- 页面标题 -->
+<div class="page-title">
+    <h1><?= $title ?? '扩展搜索' ?></h1>
+    <div class="page-actions">
+        <a href="*/backend/extends/index" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<!-- 搜索表单 -->
+<div class="search-form">
+    <form method="get" action="*/backend/extends/search">
+        <div class="form-group">
+            <input type="text" name="q" value="<?= htmlspecialchars($search_term ?? '') ?>" 
+                   placeholder="搜索模块名、扩展点、文件路径..." class="form-control">
+        </div>
+        <div class="form-group">
+            <select name="type" class="form-control">
+                <option value="all" <?= ($search_type ?? 'all') === 'all' ? 'selected' : '' ?>>全部类型</option>
+                <option value="sticker" <?= ($search_type ?? '') === 'sticker' ? 'selected' : '' ?>>Sticker 扩展</option>
+                <option value="module" <?= ($search_type ?? '') === 'module' ? 'selected' : '' ?>>模块扩展</option>
+                <option value="theme" <?= ($search_type ?? '') === 'theme' ? 'selected' : '' ?>>主题扩展</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="mdi mdi-magnify"></i> 搜索
+        </button>
+    </form>
+</div>
+
+<!-- 搜索结果 -->
+<?php
+$results = $this->getData('results') ?? [];
+?>
+<div class="search-results">
+    <?php if (empty($search_term ?? '')): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-magnify"></i>
+            <h3>请输入搜索关键词</h3>
+            <p>在搜索框中输入模块名、扩展点名称或文件路径进行搜索。</p>
+        </div>
+    <?php elseif (empty($results)): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-magnify"></i>
+            <h3>未找到匹配结果</h3>
+            <p>没有找到与 "<?= htmlspecialchars($search_term ?? '') ?>" 相关的扩展信息。</p>
+        </div>
+    <?php else: ?>
+        <div class="results-summary">
+            <p>找到 <strong><?= count($results) ?></strong> 个模块的匹配结果</p>
+        </div>
+        
+        <?php foreach ($results as $moduleName => $moduleResults): ?>
+            <div class="result-module">
+                <h3>
+                    <i class="mdi mdi-cube"></i>
+                    <?= htmlspecialchars($moduleName) ?>
+                    <span class="count"><?= count($moduleResults) ?> 个匹配项</span>
+                </h3>
+                
+                <div class="result-items">
+                    <?php foreach ($moduleResults as $result): ?>
+                        <div class="result-item">
+                            <div class="result-type">
+                                <?php
+                                $type = $result['type'] ?? 'unknown';
+                                $typeLabels = [
+                                    'module_name' => '模块名',
+                                    'extends_definition' => '扩展定义',
+                                    'extended_by' => '被扩展',
+                                    'extension_file' => '扩展文件'
+                                ];
+                                ?>
+                                <span class="badge badge-info"><?= $typeLabels[$type] ?? $type ?></span>
+                            </div>
+                            
+                            <div class="result-content">
+                                <?php if ($type === 'module_name'): ?>
+                                    <p>模块：<strong><?= htmlspecialchars($moduleName) ?></strong></p>
+                                    <a href="*/backend/extends/moduleDetail/module/<?= urlencode($moduleName) ?>" 
+                                       class="btn btn-sm btn-outline-primary">查看详情</a>
+                                    
+                                <?php elseif ($type === 'extends_definition'): ?>
+                                    <p><strong>扩展点：</strong><?= htmlspecialchars($result['extend_name'] ?? '') ?></p>
+                                    <p><strong>描述：</strong><?= htmlspecialchars($result['data']['description'] ?? '') ?></p>
+                                    <p><strong>路径：</strong><code><?= htmlspecialchars($result['data']['path'] ?? '') ?></code></p>
+                                    
+                                <?php elseif ($type === 'extended_by'): ?>
+                                    <p><strong>源模块：</strong><?= htmlspecialchars($result['source_module'] ?? '') ?></p>
+                                    <p><strong>扩展数量：</strong><?= count($result['data'] ?? []) ?></p>
+                                    
+                                <?php elseif ($type === 'extension_file'): ?>
+                                    <p><strong>源模块：</strong><?= htmlspecialchars($result['source_module'] ?? '') ?></p>
+                                    <p><strong>文件路径：</strong><code><?= htmlspecialchars($result['extension']['file_path'] ?? '') ?></code></p>
+                                    <p><strong>源文件：</strong><code class="small"><?= htmlspecialchars($result['extension']['source_file'] ?? '') ?></code></p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
+
+<style>
+.page-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.search-form {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.search-form form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.form-group {
+    flex: 1;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.search-results {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+}
+
+.results-summary {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.result-module {
+    margin-bottom: 30px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.result-module h3 {
+    margin: 0;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.result-module .count {
+    font-size: 14px;
+    color: #666;
+    font-weight: normal;
+    margin-left: auto;
+}
+
+.result-items {
+    padding: 15px;
+}
+
+.result-item {
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    background: #f9f9f9;
+}
+
+.result-type {
+    margin-bottom: 10px;
+}
+
+.result-content p {
+    margin: 5px 0;
+    color: #333;
+}
+
+.result-content code {
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.result-content .small {
+    font-size: 11px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #ddd;
+    margin-bottom: 20px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+}
+
+.badge-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-outline-primary {
+    background-color: transparent;
+    color: #007bff;
+    border: 1px solid #007bff;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+</style>

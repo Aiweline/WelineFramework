@@ -1,0 +1,330 @@
+"   • %{name}: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","   • %{name}: Scan %{scanned}, new %{new}, updated %{updated}"
+"   删除分类: %{count} 个（不存在于导入目录的分类）","   Delete categories: %{count} (categories not in import directory)"
+"   删除文档: %{count} 个（不在文件中的文档）","   Delete documents: %{count} (documents not in files)"
+"   总共扫描: %{count} 个文档","   Total scanned: %{count} documents"
+"   新增: %{count} 个","   New: %{count} "
+"   更新: %{count} 个","   Update: %{count} "
+"  - ID=%{id}, Level=%{level}","  - ID=%{id}, Level=%{level}"
+"  - ID=%{id}, 分类名=%{name}, PID=%{pid}, 当前层级=%{current}, 期望层级=%{expected}, 原因=%{reason}","  - ID=%{id}, Category name=%{name}, PID=%{pid}, Current level=%{current}, Expected level=%{expected}, Reason=%{reason}"
+"  - ID=%{id}, 名称=%{name}, Level=%{level}","  - ID=%{id}, Name=%{name}, Level=%{level}"
+"  Level %{level}: %{count} 个分类","  Level %{level}: %{count} categories"
+"""不要，取消吧！""","""No, cancel!"""
+"""你确定要操作么？""","""Are you sure you want to proceed?"""
+"""删除提示！""","""DeleteTip！"""
+"""好的""","""OK"""
+"""已删除！""","""Deleted！"""
+"""操作后你将无法恢复！""","""You cannot recover after this operation!"""
+"""文章删除失败，请重试！""","""ArticleDelete failed, please retry！"""
+"""文章已经被删除了！""","""Article has been deleted!"""
+"""是的，我确定要删除！""","""Yes, I'm sure to delete!"""
+"""示例1""","""Example1"""
+"""示例2""","""Example2"""
+"""粗体""","""Bold"""
+"""红色文字""","""RedText"""
+"""红色标题""","""RedTitle"""
+"""表格样式""","""TableStyle"""
+"""表格行1""","""Table Row 1"""
+'开发'分类有子分类:,"'Development' category has subcategories:"
+'开发'分类没有子分类,"'Development' category has no subcategories"
+"- ID=%{id}, Level=%{level}","- ID=%{id}, Level=%{level}"
+"- ID=%{id}, 分类名=%{name}, PID=%{pid}, 当前层级=%{current}, 期望层级=%{expected}, 原因=%{reason}","- ID=%{id}, Category name=%{name}, PID=%{pid}, Current level=%{current}, Expected level=%{expected}, Reason=%{reason}"
+"- ID=%{id}, 名称=%{name}, Level=%{level}","- ID=%{id}, Name=%{name}, Level=%{level}"
+...,...
+"1. 检查同一父级ID下是否有同名分类...","1. CheckUnder the same parent IDWhether there isSame name category..."
+"2. 检查层级是否正确...","2. Check levelIs correct..."
+"3. 检查'开发'分类的子分类...","3. Check subcategories of 'Development' category..."
+"4. 统计信息:","4. StatisticsInformation:"
+@if{enabled=>'开启'|'关闭'},@if{enabled=>'Open'|'Close'}
+"Level %{level}: %{count} 个分类","Level %{level}: %{count} Category"
+RTL模式,RTLMode
+"Weline Admin 管理面板","Weline Admin Management Panel"
+"WelineFramework 开发文档","WelineFramework Development Documentation"
+WelineFramework开发文档,"WelineFrameworkDevelopment Documentation"
+"[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] ScanningModule: %{name}"
+"is_system 字段已添加","is_system Field added"
+jstree实例不可用，请刷新页面重试,"jstreeInstanceNot available, please refreshPageRetry"
+jstree库未加载，请刷新页面重试,"jstree library not loaded, please refresh page and retry"
+"• %{name}: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","• %{name}: Scan %{scanned}, new %{new}, updated %{updated}"
+"⚠️ 警告：删除分类会同时删除其所有子分类！","⚠️ Warning: Deleting category will also delete all its subcategories!"
+"✅ 文档扫描完成！","✅ DocumentScanComplete！"
+下层有系统分类，不允许删除,"Lower level hasSystem category，Not allowed to delete"
+不能将自己作为父分类,"CannotYourself asParent Category"
+不能自己选择自己作为父类！,"CannotSelect yourselfAs parent！"
+不要，取消吧！,"No, cancel!"
+中国,China
+主题布局,ThemeLayout
+主题颜色,ThemeColor
+作者,Author
+作者:,Author:
+你确定要操作么？,"Are you sure you want to proceed?"
+保存,Save
+保存失败,"Save failed"
+保存成功！,"Save successful！"
+保存排序失败，已恢复原位置,"SaveSortFailed, restoredOriginal position"
+修改,Modify
+修改成功！,"Modify successful!"
+全部文档,AllDocument
+关闭,Close
+关闭沙盒,CloseSandbox
+关闭沙盒环境,"Close sandbox environment"
+关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
+分类,Category
+分类:,Category:
+分类ID不能为空,"Category IDCannot be empty"
+分类不存在,"Category does not exist"
+分类信息,CategoryInformation
+分类名称,"Category name"
+"分类名称""","Category name"""
+分类名称不能为空,"Category nameCannot be empty"
+"分类层级不一致: %{name} (当前层级: %{current} != 计算层级: %{calculated})，将更新层级","Category levelInconsistent: %{name} (CurrentLevel: %{current} != CalculateLevel: %{calculated}), willUpdateLevel"
+分类描述,"Category description"
+分类树,"Category tree"
+分类树加载失败,"Category treeLoadFailed"
+分类树未初始化，请刷新页面重试,"Category treeNot initialized, please refreshPageRetry"
+创建分类,CreateCategory
+创建时间:,CreateTime:
+"创建顶层分类: %{name}","CreateTop level category: %{name}"
+"创建顶层分类: %{name} (ID: %{id}, PID=0, Level=1)","CreateTop LevelCategory: %{name} (ID: %{id}, PID=0, Level=1)"
+"创建顶层分类（用于子目录）: %{name} (ID: %{id}, PID=0, Level=1)","Create top level category (for subdirectory): %{name} (ID: %{id}, PID=0, Level=1)"
+初始化分类树失败,"InitializeCategory treeFailed"
+删除,Delete
+"删除 %{count} 个不存在的文档...","Delete %{count} non-existentDocument..."
+删除分类,DeleteCategory
+"删除分类: %{count} 个（不存在于导入目录的分类）","Delete categories: %{count} (categories not in import directory)"
+删除失败,"Delete failed"
+删除成功,"Delete successful"
+删除成功！,"Delete successful!"
+删除所有自动导入的文档...,"Delete allAuto importedDocument..."
+删除提示！,DeleteTip！
+"删除文档: %{count} 个（不在文件中的文档）","Delete documents: %{count} (documents not in files)"
+删除节点失败:,DeleteNodeFailed:
+删除请求失败,DeleteRequestFailed
+刷新页面,RefreshPage
+加载中...,Loading...
+加载分类树失败：,"LoadCategory treeFailed:"
+加载文档失败，请刷新页面重试,"LoadDocumentFailed, please refreshPageRetry"
+加载文档失败，请重试,"LoadDocumentFailed, please retry"
+"发现 %{count} 个子目录，将直接作为顶层分类（PID=0, Level=1）","Found %{count} sub directories, will directlyAsTop level category (PID=0, Level=1）"
+"发现 %{count} 个层级错误:","Found %{count} LevelError:"
+"发现同名但父ID不同的分类: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level} < %{currentLevel})，可能是重复处理，将使用已存在的分类","Found same name butDifferent parent IDCategory: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level} < %{currentLevel})，PossibleIs duplicate processing, will useExistingCategory"
+"发现同名但父ID不同的分类: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level})，将创建新分类","Found same name butDifferent parent IDCategory: %{name} (id: %{id}, pid: %{pid} != %{parentId}, level: %{level}), willCreateNew category"
+"发现已存在的同名分类: %{name} (id: %{id}, pid: %{pid}, level: %{level})，将使用已存在的分类","Found existingSame name category: %{name} (id: %{id}, pid: %{pid}, level: %{level}), will useExistingCategory"
+"发现已存在的顶层分类: %{name} (id: %{id}, pid: %{pid})，将使用已存在的分类","Found existingTop level category: %{name} (id: %{id}, pid: %{pid}), will useExistingCategory"
+"发现重复: 父ID=%{pid}, 分类名=%{name}, 重复数量=%{count}","FoundDuplicate: Parent ID=%{pid}, Category name=%{name}, Duplicate count=%{count}"
+取消,Cancel
+可配置参数：,ConfigurableParameters:
+启动Key错误,"Start KeyError"
+启用分类,EnableCategory
+图文菜单,"Image TextMenu"
+图标侧边栏,IconSidebar
+图标菜单,IconMenu
+"处理顶层分类: %{name}","ProcessTop level category: %{name}"
+头像,Avatar
+头部语言,HeaderLanguage
+好的,好的
+子分类层级应该是父分类层级+1,"Sub category levelShould be parent category level + 1"
+"子分类数量: %{count}","Sub categoriesCount: %{count}"
+层级,Level
+左侧点击分类可在右侧编辑，拖拽节点可调整分类顺序和层级，空白处按住鼠标可以左右拖动,"Click category on the left to edit on the right, drag nodes to adjust category order and hierarchy, hold mouse in blank area to drag left and right"
+"已删除 %{count} 个不存在的分类","Deleted %{count} non-existentCategory"
+"已删除 %{count} 个文档","Deleted %{count} Document"
+"已删除旧的 name 唯一索引","Deleted old name Unique index"
+已删除！,已Delete！
+布局预设配置包,"LayoutPresetConfiguration Package"
+常用菜单,FrequentMenu
+开发,Development
+开发助手,"Development Assistant"
+开发文档,"Development Documentation"
+开发文档分类管理,"Development DocumentationCategory Management"
+开发文档管理器,"Development DocumentationManager"
+"开发文档编辑器 有新的开发文档时可以随时编辑","Development DocumentationEditor When there is a newDevelopment documentationCan at any timeEdit"
+开启沙盒,OpenSandbox
+开始导入数据库Sql文件,"Start importingDatabaseSQLFile"
+强制重新扫描所有文档,"Force rescanAllDocument"
+强制重新扫描（会删除旧的自动导入文档）,"Force rescan（Will deleteOldAuto importedDocument）"
+当前Key：,"Current Key:"
+当前沙盒状态：,"Current Sandbox Status:"
+"总共 %{count} 个系统分类","Total %{count} system categories"
+"总共扫描: %{count} 个文档","TotalScan: %{count} Document"
+我的钱包,MyWallet
+"扫描 Weline_Framework/doc 目录（特殊处理模式：子目录作为顶层分类 PID=0，不创建模块分类）","Scan Weline_Framework/doc Directory (Special handlingMode:Sub directoriesAsTop level category PID=0, do not createModule category）"
+"扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个","ScanComplete: Document %{scanned} , new %{new} , updated %{updated} "
+扫描并导入各模块的开发文档,"Scan and importEach module'sDevelopment Documentation"
+扫描所有模块文档（增量导入）,"Scan allModule documents（Incremental import）"
+"扫描目录: %{path}","ScanDirectory: %{path}"
+"找到 %{count} 个模块包含 doc 目录，开始扫描...","Found %{count} modulesContain doc Directory, start scanning..."
+"找到'开发'分类: ID=%{id}","Found'Development'Category: ID=%{id}"
+排序已保存,"Sort saved"
+控制沙盒环境参数来达到测试系统环境。,"ControlSandbox environmentParameterTo achieveTest systemEnvironment。"
+提交,Submit
+"搜索 ...","Search ..."
+搜索关键词不能为空,"Search keywordCannot be empty"
+搜索文档...,SearchDocument...
+搜索结果,SearchResult
+搜索菜单,SearchMenu
+搜索菜单...,SearchMenu...
+摘要,Summary
+操作后你将无法恢复！,Operation后你将无法恢复！
+数据库Sql文件导入完成,"DatabaseSQLFileImport complete"
+文件上传失败！,"File uploadFailed!"
+文档ID不能为空,"Document IDCannot be empty"
+文档不存在,"Document does not exist"
+文档分类,DocumentCategory
+文档详情,DocumentDetails
+文档路径信息不完整,"Document pathInformation incomplete"
+文章内容,"Article content"
+文章内容不能为空,"Article contentCannot be empty"
+文章删除失败，请重试！,"ArticleDeleteFailed, please retry！"
+文章已经被删除了！,文章已经被Delete了！
+"新增: %{count} 个","New: %{count} "
+"新增: %{path}","New: %{path}"
+新增文章,NewArticle
+新建一篇开发文档,"NewADevelopment Documentation"
+新建文档,NewDocument
+无标题,"No Title"
+无法打开添加分类对话框，请刷新页面重试,"Unable to openAddCategoryDialog, please refreshPageRetry"
+无法打开编辑分类对话框，请刷新页面重试,"Unable to openEditCategoryDialog, please refreshPageRetry"
+无法找到对话框元素，请刷新页面重试,"Unable to findDialogElement, please refreshPageRetry"
+"无法读取文件: %{path}","Unable to readFile: %{path}"
+无法读取文档文件,"Unable to readDocument file"
+无需删除分类,"No need to deleteCategory"
+无需删除文档,"No need to deleteDocument"
+明亮模式,BrightMode
+是的，我确定要删除！,是的，我确定要Delete！
+显示帮助信息,ShowHelpInformation
+暂无内容,NoContent
+"暂无分类，点击""添加顶级分类""开始创建","NoCategory, click""AddTop Category""Start creating"
+暂无分类，请先,"NoCategory, please first"
+暂无文章,NoArticle
+暗黑模式,DarkMode
+"更新: %{count} 个","Update: %{count} "
+"更新: %{path}","Update: %{path}"
+更新时间:,UpdateTime:
+最近访问,RecentAccess
+未分类,Uncategorized
+未命名分类,UnnamedCategory
+未找到'开发'分类,"Not found'Development'Category"
+未知,Unknown
+查看,View
+标题,Title
+检查系统分类...,"CheckSystem category..."
+检查自动导入的文档...,"CheckAuto importedDocument..."
+模块:,Module:
+正在加载分类树...,"LoadingCategory tree..."
+正在加载文档...,LoadingDocument...
+"正在扫描模块: Weline_Framework（特殊处理，不创建模块分类）","ScanningModule: Weline_Framework (Special handling, do not createModule category）"
+正在清理不存在的文档和分类...,"CleaningNon-existentDocuments and categories..."
+正在清理旧的自动导入文档和分类...,"CleaningOldAuto importedDocuments and categories..."
+此操作不可恢复，请谨慎操作！,"This operationCannot be recovered, please be carefulOperation！"
+水平布局,HorizontalLayout
+水平布局（深色顶部栏）,"HorizontalLayout（DarkTop Bar）"
+水平布局（盒装宽度）,HorizontalLayout（BoxedWidth）
+水平盒子,HorizontalBox
+水平顶黑,"HorizontalTop Black"
+沙盒Key,"Sandbox Key"
+沙盒Key验证成功,"Sandbox KeyVerification successful"
+沙盒启动Key,"Sandbox Start Key"
+沙盒启动Key设置成功,"Sandbox Start KeySet successful"
+沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：
+"沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
+"沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
+沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。,沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。
+"沙盒环境管-Weline Admin 管理面板","Sandbox Environment Management-Weline Admin Management Panel"
+沙盒环境配置,"Sandbox environmentConfigure"
+浅色侧边栏,LightSidebar
+添加,Add
+"添加 is_system 字段...","Add is_system Fields..."
+添加分类,AddCategory
+添加子分类,"AddSub categories"
+添加子分类失败:,"AddSub categoriesFailed:"
+添加成功！,"Add successful!"
+"添加联合唯一索引 (name, pid, level)...","AddUnion unique index (name, pid, level)..."
+添加顶级分类,"AddTop Category"
+清理完成,"Cleanup complete"
+"点击""新增文章""按钮开始创建您的第一篇文档","Click""NewArticle""ButtonStart creatingYourFirstDocument"
+父分类,"Parent Category"
+父分类不存在,"Parent category does not exist"
+盒装布局,BoxedLayout
+"目录 %{name}","Directory %{name}"
+目录名不能为空！,"Directory nameCannot be empty！"
+目录管理,DirectoryManagement
+目标位置已存在同名分类,"Target positionAlready existsSame name category"
+"目标位置已存在同名分类：""","Target positionAlready existsSame name category:"""
+确定,OK
+确定要删除分类,"Are you sure toDeleteCategory"
+确定要删除该分类吗？此操作不可恢复！,确定要删除该分类吗？此操作不可恢复！
+确认,Confirm
+确认删除吗？,ConfirmDelete?
+示例1,Example1
+示例2,Example2
+管理开发文档,"ManagementDevelopment Documentation"
+粗体,Bold
+系统,System
+系统分类,"System category"
+系统分类不允许修改名称,"System categoryNot allowedModifyName"
+系统分类不允许删除,"System categoryNot allowed to delete"
+系统分类不允许拖动排序,"System categoryNot allowed to drag and sort"
+系统分类不允许编辑,"System categoryNot allowedEdit"
+紧凑侧边栏,CompactSidebar
+红色文字,RedText
+红色标题,RedTitle
+编写和管理开发文档,"Write andManagementDevelopment Documentation"
+编辑,Edit
+编辑分类,EditCategory
+编辑节点失败:,EditNodeFailed:
+联合唯一索引已添加,"Union unique indexAdded"
+自动导入,"Auto imported"
+节点不存在，ID:,"NodeDoes not exist，ID:"
+节点数据格式错误,"Node dataFormat error"
+节点数据格式错误，请刷新页面,"Node dataFormat error, please refreshPage"
+获取成功,"Get successful"
+菜单布局,MenuLayout
+菜单明亮,MenuBright
+表不存在，正在创建...,"Table does not exist, creating..."
+表格样式,TableStyle
+表格行1,表格行1
+设置,Settings
+设置开启沙盒环境的Key,Settings开启沙盒环境的Key
+"设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。","Settings开启沙盒环境的Key，一旦Settings后，前端启用沙盒环境则需要特定的Key,才能启用。"
+访问最多,AccessMost
+访问次数:,AccessTimes:
+"访问次数: ","AccessTimes: "
+该分类下暂无文档,该分类下暂无文档
+该记录已不存在！ID:,"This recordNo longer exists！ID:"
+"该记录已不存在！ID: ","This recordNo longer exists! ID: "
+请从左侧选择一个分类进行编辑,请从左侧选择一个分类进行编辑
+请从左侧选择分类查看文档,"Please fromLeftSelectCategoryViewDocument"
+请输入作者,"Please enterAuthor"
+请输入分类名称,"Please enterCategory name"
+请输入分类描述,"Please enterCategory description"
+请输入摘要,"Please enterSummary"
+请输入标题,"Please enterTitle"
+请输入沙盒Key,"Please enterSandbox Key"
+资料,Profile
+"路径: %{path}","Path: %{path}"
+"跳过 doc 根目录下的文档: %{file}（顶层分类不能直接关联文档）","Skip doc Root directoryDocument: %{file} (Top level categoryCannot directlyAssociateDocument）"
+返回,Back
+返回上一页,"BackPrevious Page"
+返回文档列表,BackDocumentList
+返回欢迎页,"BackWelcome Page"
+这是系统分类，部分字段不允许修改,"This isSystem category, someFieldsNot allowedModify"
+退出,Exit
+选择分类查看文档,SelectCategoryViewDocument
+选择布局预设,SelectLayoutPreset
+选择预设后，将自动配置所有相关布局选项,"SelectPreset, willAutomaticallyConfigureAllRelatedLayoutOptions"
+通过：同一父级ID下没有同名分类,"Pass:Under the same parent IDNoSame name category"
+通过：所有分类的层级都正确,"Pass: All category levelsAre correct"
+配置沙盒启动Key,"ConfigureSandbox Start Key"
+重试,Retry
+锁定屏幕,LockScreen
+错误,Error
+"顶层分类 %{name}","Top level category %{name}"
+顶层分类层级应该是1,"Top level category levelShould be1"
+顶级分类,"Top Category"
+验证分类数据,"Verify category data"
+验证分类数据是否符合规则,"Verify category dataComplies with rules"
+验证完成！,"Verification complete!"
+默认布局,DefaultLayout
+"📊 扫描统计:","📊 ScanStatistics:"
+"📚 开始扫描模块文档...","📚 StartScanModule documents..."
+"📚 开始扫描模块文档...","📚 StartScanModule documents..."

@@ -16,6 +16,8 @@
 - [ORM 查询使用规范](#orm-查询使用规范)
 - [环境配置读取错误](#环境配置读取错误)
 - [禁止使用 routes.xml 文件](#禁止使用-routesxml-文件)
+- [后端控制器必须使用 Weline_Admin 布局](#后端控制器必须使用-weline_admin-布局)
+- [详情或小型信息查看必须使用 Block Offcanvas](#详情或小型信息查看必须使用-block-offcanvas)
 
 ---
 
@@ -402,11 +404,47 @@ public function postDelete(): string
 ### 要点
 - **必须使用 `w-delete` 组件**：框架提供了智能删除确认组件，不要自定义 JavaScript 实现
 - **必须引入组件**：在页面底部使用 `<js:part name="w-delete"/>` 引入组件
+- **URL 配置**：
+  - 在 JavaScript 模板字符串中，URL 必须在 PHP 中预先定义：`const deleteUrl = '<?= $this->getBackendUrl("path") ?>';`
+  - 不能直接在模板字符串中使用 `@admin-url()` 等模板函数
+  - `w-url` 属性必须是完整的 URL 字符串
 - **后端支持 JSON**：使用 `$this->request->getParams()` 同时支持 JSON 和表单数据，因为 `w-delete` 组件在 POST 请求时发送 JSON 数据
-- **自动移除行**：删除成功后组件会自动移除对应的表格行，无需手动刷新页面
+- **返回格式**：后端必须同时返回 `message` 和 `msg` 字段：`['success' => true, 'message' => '消息', 'msg' => '消息']`
+- **自动移除行**：删除成功后组件会自动移除对应的表格行（如果按钮在 `<tr>` 中），无需手动刷新页面
+- **其他情况**：如果删除按钮不在表格行中，需要监听删除成功事件，手动刷新数据
 - **确认消息**：使用 `w-msg` 属性自定义确认消息，建议包含要删除的记录名称
 - **HTTP方法**：使用 `w-method="POST"` 指定 HTTP 方法
-- **参数传递**：使用 `w-var-*` 属性传递额外参数，如 `w-var-id="123"`
+- **参数传递**：使用 `w-var-*` 属性传递额外参数，如 `w-var-id="123"` 会作为 `id: 123` 发送
+- **事件委托**：组件使用事件委托，支持动态添加的元素，无需手动绑定事件
+- **禁止使用**：
+  - ❌ 禁止使用 `confirm()` 实现删除确认
+  - ❌ 禁止使用自定义 JavaScript 实现删除功能
+  - ❌ 禁止使用 `alert()` 显示删除结果
+
+### JavaScript 模板字符串中的 URL 配置示例
+```javascript
+// ✅ 正确：在函数开始处定义 URL
+function renderEditForm(data) {
+    const deleteUrl = '<?= $this->getBackendUrl("path/to/delete") ?>';
+    
+    let html = `
+        <button w-delete="true"
+                w-url="${deleteUrl}"
+                w-method="POST"
+                w-var-id="${data.id}">
+            删除
+        </button>
+    `;
+}
+
+// ❌ 错误：直接在模板字符串中使用模板函数
+let html = `
+    <button w-delete="true"
+            w-url="@admin-url('path/to/delete')">
+        删除
+    </button>
+`;
+```
 
 ---
 
@@ -779,6 +817,87 @@ if (empty($result)) {
    - Model 查询：保持原有逻辑（返回 Model 对象）
    - SQL 查询：从数组结果中提取数据
 4. **测试验证**：确保功能正常
+
+---
+
+## ORM 操作必须使用 fetch 或 fetchArray（重要）
+
+**核心规则**：所有 ORM 查询操作（`select()`、`find()`、`update()`、`delete()`、`insert()`等）**必须**链式调用`->fetch()`或`->fetchArray()`才会真正执行。ORM 使用惰性执行机制，**不调用 fetch 不会执行查询，查询不会生效**。
+
+**重要说明**：
+- `select()`、`find()` 等方法只是构建查询，不会真正执行，必须调用 `fetch()` 或 `fetchArray()` 才会执行查询并返回结果
+- `update()`、`delete()`、`insert()` 等方法也只是构建操作，必须调用 `fetch()` 才会真正执行数据库操作
+- **不调用 `fetch()` 的查询不会生效，数据库不会有任何变化**
+
+**禁止使用 `fetchOne()`**：Weline Framework 中**不存在**`fetchOne()`方法，使用会导致运行时错误。
+
+### 错误示例
+
+```php
+// ❌ 错误：缺少 fetch()，查询不会执行
+$user = $model->where('id', 1)->find();
+$name = $user->getData('name');  // 错误：$user 是查询构建器，不是结果
+
+// ❌ 错误：使用不存在的 fetchOne() 方法
+$user = $model->where('id', 1)->fetchOne();  // 错误：方法不存在
+$parent = $model->clear()->where('id', $pid)->fetchOne();  // 错误：方法不存在
+
+// ❌ 错误：删除操作缺少 fetch()
+$model->where('id', 1)->delete();  // 删除不会执行
+
+// ❌ 错误：更新操作缺少 fetch()
+$model->where('id', 1)->update(['name' => 'test']);  // 更新不会执行
+```
+
+### 正确写法
+
+```php
+// ✅ 正确：查询单条记录必须使用 find()->fetch()
+$user = $model->where('id', 1)->find()->fetch();
+if ($user && $user->getId()) {
+    $name = $user->getData('name');
+}
+
+// ✅ 正确：查询单条记录也可以使用 find()->fetchArray()
+$user = $model->where('id', 1)->find()->fetchArray();
+if (!empty($user)) {
+    $name = $user['name'] ?? '';
+}
+
+// ✅ 正确：查询多条记录必须使用 select()->fetch() 或 fetchArray()
+$users = $model->where('status', 1)->select()->fetch()->getItems();
+// 或
+$users = $model->where('status', 1)->select()->fetchArray();
+
+// ✅ 正确：删除操作必须使用 fetch()
+$model->where('id', 1)->delete()->fetch();
+
+// ✅ 正确：更新操作必须使用 fetch()
+$model->where('id', 1)->update(['name' => 'test'])->fetch();
+
+// ✅ 正确：插入操作必须使用 fetch()
+$model->insert(['name' => 'test'])->fetch();
+
+// ✅ 正确：save() 方法例外，不需要 fetch()
+$model->setData('name', 'test')->save();
+```
+
+### 要点总结
+
+1. **必须调用 fetch() 或 fetchArray()**：
+   - `select()` → `select()->fetch()` 或 `select()->fetchArray()`
+   - `find()` → `find()->fetch()` 或 `find()->fetchArray()`
+   - `update()` → `update([...])->fetch()`
+   - `delete()` → `delete()->fetch()`
+   - `insert()` → `insert([...])->fetch()`
+
+2. **禁止使用 fetchOne()**：
+   - ❌ `->fetchOne()` 方法不存在
+   - ✅ 使用 `->find()->fetch()` 或 `->find()->fetchArray()` 替代
+
+3. **save() 方法例外**：
+   - `save()` 方法内部已包含执行逻辑，直接调用即可
+   - 不需要链式调用 `fetch()`
 
 ---
 
@@ -1435,9 +1554,44 @@ return [
 
 ---
 
+## 框架方法验证原则（最重要）
+
+**核心规则**：所有使用的方法必须是框架实际存在和支持的，禁止自己想象或创造不存在的方法。
+
+### 验证步骤
+
+1. **使用前必须验证**：
+   - 使用 `codebase_search` 或 `grep` 工具搜索框架代码，确认方法存在
+   - 查阅开发文档，确认方法签名和用法
+   - 如果不确定，必须先验证再使用
+
+2. **禁止使用的方法示例**：
+   - ❌ `fetchOne()` - 不存在，使用 `find()->fetch()` 替代
+   - ❌ `tableColumnExist()` - 不存在，使用 `hasField()` 替代
+   - ❌ 任何自己想象的方法
+
+3. **正确验证流程**：
+   ```bash
+   # 1. 搜索方法是否存在
+   grep -r "function fetchOne" app/code/Weline/Framework
+   
+   # 2. 如果找不到，说明方法不存在，不能使用
+   # 3. 查找正确的替代方法
+   grep -r "function fetch" app/code/Weline/Framework/Database
+   ```
+
+4. **常见错误**：
+   - ❌ 错误：自己想象 `fetchOne()` 方法存在
+   - ✅ 正确：先搜索确认，发现不存在，使用 `find()->fetch()` 替代
+
+---
+
 ## 快速检查清单
 
 生成代码时，请检查以下事项：
+
+- [ ] **框架方法验证**：使用的所有方法是否都通过代码搜索验证确实存在于框架中
+- [ ] **禁止创造方法**：是否使用了任何自己想象或创造的方法（禁止）
 
 - [ ] `register.php` 文件是否包含完整的 `Register::register()` 调用，参数是否完整
 - [ ] 数据库升级方法是否使用 `hasField()` 而不是 `tableColumnExist()`
@@ -1449,15 +1603,472 @@ return [
 - [ ] 是否存在类名冲突（控制器类名与导入的模型类名相同），如有则使用别名
 - [ ] 删除功能是否使用 `w-delete` 组件而不是自定义 JavaScript
 - [ ] 后端删除方法是否使用 `getParams()` 支持 JSON 和表单数据
-- [ ] **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
+- [ ] **后端控制器是否继承 `Weline\Admin\Controller\BaseController` 以使用 Weline_Admin 布局**
+- [ ] **详情或小型信息查看是否使用 Block Offcanvas 而不是独立页面**
+- [ ] **功能校验**：在提交代码前是否已自行校验功能，确保代码可以正常工作
+
+---
+
+## 功能校验原则（重要）
+
+### 规则说明
+
+**在提交代码给用户之前，必须自己先校验功能是否正常工作。**
+
+### 校验清单
+
+在提交代码前，必须完成以下校验：
+
+1. **代码语法检查**
+   - ✅ 使用 `read_lints` 工具检查所有修改的文件
+   - ✅ 确保没有语法错误、类型错误、未定义变量等
+   - ✅ 修复所有 linter 报告的错误
+
+2. **功能逻辑验证**
+   - ✅ 检查关键代码路径是否正确
+   - ✅ 验证条件判断和循环逻辑
+   - ✅ 确认异常处理是否完善
+   - ✅ 检查返回值类型是否正确
+
+3. **文件路径和引用检查**
+   - ✅ 确认所有文件路径是否正确
+   - ✅ 检查类名、命名空间是否正确
+   - ✅ 验证模板文件路径是否正确
+   - ✅ 确认资源文件引用是否正确
+
+4. **数据流验证**
+   - ✅ 检查参数传递是否正确
+   - ✅ 验证数据格式和类型
+   - ✅ 确认数据转换和序列化是否正确
+   - ✅ 检查数据库查询和更新逻辑
+
+5. **运行时错误检查**
+   - ✅ 检查是否有明显的空指针引用
+   - ✅ 验证数组访问是否安全
+   - ✅ 确认函数调用参数是否正确
+   - ✅ 检查是否有未处理的异常
+
+6. **集成验证**
+   - ✅ 确认新代码与现有代码的集成是否正确
+   - ✅ 检查是否有破坏性变更
+   - ✅ 验证依赖关系是否正确
+
+### 校验方法
+
+1. **使用工具检查**
+   ```php
+   // 检查语法错误
+   read_lints(['app/code/Weline/YourModule'])
+   ```
+
+2. **代码审查**
+   - 仔细阅读修改的代码
+   - 检查逻辑是否正确
+   - 确认是否符合框架规范
+
+3. **路径验证**
+   - 确认文件是否存在
+   - 检查路径是否正确
+   - 验证模板文件位置
+
+4. **逻辑验证**
+   - 追踪数据流
+   - 检查条件分支
+   - 验证返回值
+
+### 禁止行为
+
+- ❌ **禁止**将明显有语法错误的代码提交给用户
+- ❌ **禁止**将未完成的功能提交给用户
+- ❌ **禁止**将已知有问题的代码提交给用户
+- ❌ **禁止**在未校验的情况下直接提交代码
+
+### 正确流程
+
+1. **编写代码** → 实现功能
+2. **自行校验** → 使用工具和代码审查检查
+3. **修复问题** → 修复发现的所有问题
+4. **再次校验** → 确认问题已修复
+5. **提交代码** → 只有确认无误后才提交给用户
+
+### 要点
+
+- **必须**在提交前完成校验
+- **必须**修复所有发现的问题
+- **必须**确认功能基本可用
+- **可以**在提交时说明已验证的内容
+- **可以**说明已知的限制或注意事项
+
+---
+
+## 后端控制器必须使用 Weline_Admin 布局
+
+### 错误示例
+
+```php
+// ❌ 错误：直接继承 BackendController，导致页面没有 Weline_Admin 布局（没有侧边栏、顶部导航等）
+namespace Weline\YourModule\Controller\Backend;
+
+use Weline\Framework\App\Controller\BackendController;
+
+class YourController extends BackendController
+{
+    public function index()
+    {
+        return $this->fetch();
+    }
+}
+```
+
+### 正确写法
+
+```php
+// ✅ 正确：继承 BaseController，自动使用 Weline_Admin 布局
+namespace Weline\YourModule\Controller\Backend;
+
+use Weline\Admin\Controller\BaseController;
+
+class YourController extends BaseController
+{
+    public function index()
+    {
+        // 设置页面数据
+        $this->assign('title', __('页面标题'));
+        // 直接调用 fetch()，BaseController 会自动包装 Weline_Admin 布局
+        return $this->fetch();
+    }
+}
+```
+
+### 模板文件要求
+
+**模板内容必须放在 `container-fluid` 容器内**：
+
+```html
+<!-- ✅ 正确：模板内容包装在 container-fluid 中 -->
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="page-title">
+        <h1><?= $title ?? '页面标题' ?></h1>
+    </div>
+    
+    <!-- 页面内容 -->
+    <div class="page-content">
+        <!-- 你的内容 -->
+    </div>
+</div>
+<!-- end container-fluid -->
+```
+
+### 布局说明
+
+`Weline\Admin\Controller\BaseController` 会自动：
+1. 渲染 `Weline_Admin::templates/Backend/page-layout/main-content-before.phtml`（包含头部、侧边栏、顶部导航等）
+2. 渲染你的模板内容（放在 `page-content` 容器内）
+3. 渲染 `Weline_Admin::templates/Backend/page-layout/main-content-after.phtml`（包含页脚等）
+
+### 要点
+
+- **必须**继承 `Weline\Admin\Controller\BaseController` 而不是 `BackendController`
+- **必须**在模板内容外层包裹 `<div class="container-fluid">` 容器
+- **禁止**在模板中重复包含 HTML、head、body 等标签（布局已包含）
+- **禁止**直接输出没有布局的页面（会导致无法使用侧边栏、顶部导航等功能）
+
+### 为什么必须使用 Weline_Admin 布局
+
+1. **统一用户体验**：所有后台页面使用相同的布局，提供一致的操作体验
+2. **功能完整性**：包含侧边栏菜单、顶部导航、用户信息等必要功能
+3. **响应式设计**：布局已适配不同屏幕尺寸
+4. **主题支持**：支持暗色/亮色主题切换
+5. **权限集成**：布局已集成权限控制功能
+
+---
+
+## 详情或小型信息查看必须使用 Block Offcanvas
+
+### 错误示例
+
+```php
+// ❌ 错误：为详情页面创建独立的控制器方法和模板文件
+namespace Weline\YourModule\Controller\Backend;
+
+use Weline\Admin\Controller\BaseController;
+
+class YourController extends BaseController
+{
+    public function detail()
+    {
+        $id = $this->request->getParam('id');
+        $data = $this->getData($id);
+        $this->assign('data', $data);
+        return $this->fetch(); // 返回独立的详情页面
+    }
+}
+```
+
+```html
+<!-- ❌ 错误：创建独立的详情页面模板 -->
+<!-- detail.phtml -->
+<div class="container-fluid">
+    <h1>详情页面</h1>
+    <!-- 详情内容 -->
+</div>
+```
+
+### 正确写法
+
+#### 1. 创建 Block 类
+
+```php
+// ✅ 正确：创建 Block 类来渲染详情内容
+namespace Weline\YourModule\Block\Backend\YourModule;
+
+use Weline\Framework\View\Block;
+
+class Detail extends Block
+{
+    public function render(): string
+    {
+        $data = $this->getData('data');
+        if (!$data) {
+            return '<div class="alert alert-warning">数据不存在</div>';
+        }
+        return $this->fetch('Weline_YourModule::templates/Backend/YourModule/detail-content.phtml');
+    }
+}
+```
+
+#### 2. 创建详情内容模板（不包含页面布局）
+
+```html
+<!-- ✅ 正确：只包含详情内容，不包含 container-fluid 等布局 -->
+<!-- detail-content.phtml -->
+<div class="detail-content">
+    <h2><?= htmlspecialchars($data['title'] ?? '') ?></h2>
+    <p><?= htmlspecialchars($data['description'] ?? '') ?></p>
+    <!-- 其他详情内容 -->
+</div>
+```
+
+#### 3. 控制器方法只支持 AJAX 请求
+
+```php
+// ✅ 正确：控制器方法只返回 JSON，用于 AJAX 加载
+namespace Weline\YourModule\Controller\Backend;
+
+use Weline\Admin\Controller\BaseController;
+use Weline\Framework\Manager\ObjectManager;
+
+class YourController extends BaseController
+{
+    /**
+     * 详情 API（用于 offcanvas AJAX 加载）
+     */
+    public function detail()
+    {
+        try {
+            // 只支持 AJAX 请求
+            if (!$this->request->isAjax()) {
+                $this->redirect('*/index');
+                return;
+            }
+            
+            $id = $this->request->getParam('id');
+            if (empty($id)) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => __('请指定ID')], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            
+            // 获取数据
+            $data = $this->getDataById($id);
+            if (!$data) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => __('数据不存在')], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            
+            // 返回 Block 渲染的内容
+            /** @var \Weline\YourModule\Block\Backend\YourModule\Detail $detailBlock */
+            $detailBlock = ObjectManager::getInstance(\Weline\YourModule\Block\Backend\YourModule\Detail::class);
+            $detailBlock->setData('data', $data);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'html' => $detailBlock->render(),
+                'title' => __('详情') . ': ' . ($data['title'] ?? '')
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => __('加载失败: %1', $e->getMessage())], JSON_UNESCAPED_UNICODE);
+        }
+    }
+}
+```
+
+#### 4. 在列表页面添加 Offcanvas 容器和 JavaScript
+
+```html
+<!-- ✅ 正确：在列表页面添加 offcanvas 和 JavaScript -->
+<!-- index.phtml -->
+<div class="container-fluid">
+    <!-- 列表内容 -->
+    <table class="table">
+        <tbody>
+            <?php foreach ($items as $item): ?>
+                <tr>
+                    <td><?= htmlspecialchars($item['name'] ?? '') ?></td>
+                    <td>
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-primary btn-view-detail" 
+                                data-id="<?= htmlspecialchars($item['id'] ?? '') ?>"
+                                title="查看详情">
+                            <i class="mdi mdi-eye"></i> 详情
+                        </button>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+
+<!-- Offcanvas 详情容器 -->
+<div class="offcanvas offcanvas-start" tabindex="-1" id="detailOffcanvas" 
+     aria-labelledby="detailOffcanvasLabel" style="width: 75%; max-width: 75%;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="detailOffcanvasTitle">详情</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="关闭"></button>
+    </div>
+    <div class="offcanvas-body" id="detailOffcanvasBody" style="overflow-y: auto; padding: 1rem;">
+        <div class="text-center p-5">
+            <p class="text-muted">点击"详情"按钮查看详情</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Offcanvas 详情功能
+(function() {
+    const offcanvasElement = document.getElementById('detailOffcanvas');
+    const offcanvasTitle = document.getElementById('detailOffcanvasTitle');
+    const offcanvasBody = document.getElementById('detailOffcanvasBody');
+    let offcanvasInstance = null;
+    
+    // 初始化 Bootstrap Offcanvas
+    if (offcanvasElement && typeof bootstrap !== 'undefined') {
+        offcanvasInstance = new bootstrap.Offcanvas(offcanvasElement);
+    }
+    
+    // 绑定查看详情按钮事件
+    document.querySelectorAll('.btn-view-detail').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            if (!id) return;
+            
+            // 显示加载状态
+            if (offcanvasBody) {
+                offcanvasBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在加载详情...</p></div>';
+            }
+            
+            // 设置标题
+            if (offcanvasTitle) {
+                offcanvasTitle.textContent = '详情';
+            }
+            
+            // 打开 offcanvas
+            if (offcanvasInstance) {
+                offcanvasInstance.show();
+            }
+            
+            // AJAX 加载详情
+            const detailUrl = '*/backend/your-module/detail/id/' + encodeURIComponent(id) + '?isAjax=1';
+            const url = typeof window.url === 'function' ? window.url(detailUrl) : detailUrl.replace('*/', window.location.pathname.split('/').slice(0, -2).join('/') + '/');
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success && data.html) {
+                    if (offcanvasBody) {
+                        offcanvasBody.innerHTML = data.html;
+                    }
+                    if (offcanvasTitle && data.title) {
+                        offcanvasTitle.textContent = data.title;
+                    }
+                } else {
+                    if (offcanvasBody) {
+                        offcanvasBody.innerHTML = '<div class="alert alert-danger">' + (data.message || '加载失败') + '</div>';
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.error('加载详情失败:', error);
+                if (offcanvasBody) {
+                    offcanvasBody.innerHTML = '<div class="alert alert-danger">加载详情失败，请稍后重试</div>';
+                }
+            });
+        });
+    });
+})();
+</script>
+
+<style>
+/* Offcanvas 样式优化 */
+#detailOffcanvas {
+    width: 75% !important;
+    max-width: 75% !important;
+}
+
+@media (max-width: 768px) {
+    #detailOffcanvas {
+        width: 90% !important;
+        max-width: 90% !important;
+    }
+}
+</style>
+```
+
+### 要点
+
+- **必须**使用 Block 类来渲染详情内容，而不是独立的模板文件
+- **必须**创建详情内容模板（如 `detail-content.phtml`），只包含内容，不包含页面布局
+- **必须**在列表页面添加 offcanvas 容器和 JavaScript 代码
+- **必须**控制器方法只支持 AJAX 请求，返回 JSON 格式数据
+- **禁止**创建独立的详情页面模板（如 `detail.phtml`）
+- **禁止**在详情方法中返回完整的页面（使用 `fetch()`）
+- **推荐**offcanvas 宽度设置为 75%，移动端为 90%
+
+### 为什么必须使用 Block Offcanvas
+
+1. **用户体验**：无需跳转页面，在当前页面查看详情，操作更流畅
+2. **代码简洁**：避免创建冗余的详情页面模板和路由
+3. **统一规范**：所有详情查看使用统一的方式，便于维护
+4. **响应式设计**：Offcanvas 自动适配不同屏幕尺寸
+5. **性能优化**：按需加载详情内容，减少页面跳转
+
+### 适用场景
+
+- ✅ 详情查看（如：事件详情、订单详情、用户详情等）
+- ✅ 小型信息展示（如：提示信息、帮助说明等）
+- ✅ 表单预览（如：查看表单数据、预览内容等）
+- ❌ 大型编辑页面（应使用独立页面）
+- ❌ 复杂操作页面（应使用独立页面）
+
+---
 - [ ] **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
 - [ ] **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
 - [ ] **PHP 8.2+ 兼容性**：所有字符串函数参数是否处理了可能的 null 值
 - [ ] **禁止使用 fetchOne()**：所有 Model 查询是否使用 `->find()->fetch()` 而不是 `->fetchOne()`
 - [ ] **禁止使用 fetchOne()**：所有 ConnectionFactory 查询是否使用 `->query()->fetch()` 而不是 `->fetchOne()`
 - [ ] **禁止使用 fetchOne()**：字段检查是否使用 `hasField()` 或 `query()->fetch()` 而不是 `fetchOne()`
+- [ ] **ORM 操作必须使用 fetch 或 fetchArray**：所有 ORM 查询操作（`select()`、`find()`、`update()`、`delete()`、`insert()`）是否都调用了 `->fetch()` 或 `->fetchArray()`
+- [ ] **禁止使用 fetchOne()**：代码中是否使用了 `->fetchOne()`（禁止，方法不存在）
 - [ ] **ORM 使用规范**：所有业务逻辑查询是否使用 ORM 方法而不是直接 SQL
-- [ ] **ORM 使用规范**：所有 ORM 查询是否调用了 `fetch()` 或 `fetchArray()`
 - [ ] **ORM 使用规范**：批量更新和删除是否调用了 `fetch()`
 - [ ] **ORM 使用规范**：是否在业务逻辑中直接使用 `query("SELECT ...")`（禁止）
 - [ ] **环境配置读取**：是否使用 `Env::get()` 静态方法而不是 `getInstance()->getConfig()`
