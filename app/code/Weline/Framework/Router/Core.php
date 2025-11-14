@@ -231,7 +231,6 @@ class Core
         
         // 优先尝试读取统一缓存（减少 IO 操作）
         $unifiedCache = $this->cache->get($this->unified_cache_key);
-        
         if (is_array($unifiedCache) && !empty($unifiedCache)) {
             // 从统一缓存中提取数据
             $url = $unifiedCache[RouterCache::UNIFIED_CACHE_URL_KEY] ?? null;
@@ -333,7 +332,6 @@ class Core
             $url = trim($url, '/');
             $url = str_replace('//', '/', $url);
         }
-
         return $url;
     }
 
@@ -597,7 +595,7 @@ class Core
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
             $dispatch_class = $dispatch::class;
-            throw new Exception("{$dispatch_class}: 控制器方法 {$method} 不存在!");
+            throw new Exception(__('%{1}: 控制器方法 %{2} 不存在!', [$dispatch_class, $method]));
         }
         // 开启输出缓冲区以捕获控制器输出
         ob_start();

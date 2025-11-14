@@ -122,22 +122,31 @@ class Url implements UrlInterface
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                $api = Env::get('api');
-                if (empty($api)) {
-                    $url = $this->request->getBaseHost() . '/' . $path;
-                } else {
-                    $url = $this->request->getBaseHost() . '/' . $api . '/' . $path;
-                }
+                
+                // 获取货币和语言
+                $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
+                $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+                
+                // 获取API area前缀（前端API使用Env::get('api')）
+                $apiArea = Env::get('api') ?: 'api';
+                $apiAreaPrefix = '/' . strtolower($apiArea) . '/';
+                
+                // 构建URL: /{area_prefix}/{currency}/{language}/{path}
+                $url = $this->request->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/' . ltrim($path, '/');
             } else {
                 $url = $path;
             }
         } else {
-            $api = Env::get('api');
-            if (empty($api)) {
-                $url = $this->request->getBaseHost();
-            } else {
-                $url = $this->request->getBaseHost() . $api . '/';
-            }
+            // 获取货币和语言
+            $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
+            $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+            
+            // 获取API area前缀（前端API使用Env::get('api')）
+            $apiArea = Env::get('api') ?: 'api';
+            $apiAreaPrefix = '/' . strtolower($apiArea) . '/';
+            
+            // 构建URL: /{area_prefix}/{currency}/{language}/
+            $url = $this->request->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/';
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -469,7 +478,17 @@ class Url implements UrlInterface
         if (empty(self::$parserServer)) {
             self::$parserServer = $_SERVER;
             self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
-            self::$parserServer['WELINE_API_AREA'] = Env::get('api')?:'rest';
+            // 获取API area前缀，用于URL匹配和生成
+            $apiArea = Env::get('api');
+            if (empty($apiArea)) {
+                // 如果没有配置，使用默认值 'api'
+                self::$parserServer['WELINE_API_AREA'] = 'api';
+                self::$parserServer['WELINE_API_AREA_PREFIX'] = '/api/rest/';
+            } else {
+                // 如果配置了，使用配置值（如 'api123'）
+                self::$parserServer['WELINE_API_AREA'] = strtolower($apiArea);
+                self::$parserServer['WELINE_API_AREA_PREFIX'] = '/' . strtolower($apiArea) . '/';
+            }
             self::$parserServer['WELINE_API_ADMIN_AREA'] = Env::get('api_admin');
             self::$parserServer['WELINE_BACKEND_AREA'] = Env::get('admin');
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
@@ -618,15 +637,12 @@ class Url implements UrlInterface
         if (empty($area)) {
             return $url;
         }
-        // 如果 小写的url包含/rest/ 则认为是api
-        if(('rest' === self::$parserServer['WELINE_API_AREA']) && ('frontend' === self::$parserServer['WELINE_AREA']) && str_contains(strtolower($url), '/rest/')){
-            $area = 'rest';
-        }
         $has_area = $data['has_area'] ?? false;
         switch ($area) {
             case self::$parserServer['WELINE_API_AREA']:
                 self::$parserServer['WELINE_AREA'] = 'api';
-                self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_API_AREA'];
+                self::$parserServer['WELINE_AREA_ROUTE'] = self::$parserServer['WELINE_API_AREA_PREFIX'] ?? '/api/rest/';
+                array_shift($splits);
                 $uri = '/' . implode('/', $splits);
                 $has_area = true;
                 break;

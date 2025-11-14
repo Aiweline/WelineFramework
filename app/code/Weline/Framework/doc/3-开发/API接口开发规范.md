@@ -4,13 +4,93 @@
 
 Weline Framework 提供了统一的API接口开发规范，确保所有API接口遵循相同的注释标准，便于统一管理和自动生成文档。
 
-**重要提示**：所有API接口必须遵循本规范，不符合规范的接口在路由注册时会被拦截，无法正常访问。
+**重要提示**：
+- **只有继承 `Weline\Framework\Controller\AbstractRestController` 的控制器类的方法才需要遵循本规范**
+- Observer 类、Helper 类、Service 类等非 API 控制器不需要遵循 API 规范
+- 不符合规范的接口在路由注册时会被拦截，无法正常访问
 
 **规范说明**：
 - API文档信息使用PHPDoc的 `@Document` 标签
 - **不需要** `ApiDoc` Attribute（Acl注解已经可以用于权限控制和API识别）
 - 后台API接口必须使用 `Acl` Attribute标记权限（Acl注解可以直接运行代码）
 - 公开接口和前端接口不需要Acl注释
+
+### 1.1 API URL 结构规范
+
+**重要变更**：API URL 结构已更新，支持国际化（i18n）和多货币支持。
+
+**URL 结构格式**：
+```
+[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]
+```
+
+**结构说明**：
+- `[]` 表示**必然存在**的部分
+- `{}` 表示**可存在可不存在**的部分（可选）
+
+**各部分说明**：
+
+| 部分 | 说明 | 是否必填 | 示例 |
+|------|------|---------|------|
+| `[网站前缀]` | 网站基础URL | ✅ 必填 | `http://127.0.0.1:9981` |
+| `{区域前缀}` | API区域标识（前端API或后端API） | ⚠️ 可选 | `api`、`api123`、`api_admin` 等 |
+| `{货币前缀}` | 货币代码（3位大写字母） | ⚠️ 可选 | `CNY`、`USD`、`EUR` 等 |
+| `{语言前缀}` | 语言代码 | ⚠️ 可选 | `zh_Hans_CN`、`en_US` 等 |
+| `[模组前缀]` | 模块路由标识 | ✅ 必填 | `weline_api`、`weline_frontend` 等 |
+| `[路由]` | API路由路径 | ✅ 必填 | `rest/v1/auth/login` 等 |
+
+**完整URL示例**：
+
+1. **前端API（带i18n）**：
+   ```
+   http://127.0.0.1:9981/api123/USD/en_US/weline_api/rest/v1/auth/login
+   ```
+   - 网站前缀：`http://127.0.0.1:9981`
+   - 区域前缀：`api123`（从 `env.php` 的 `api` 配置获取）
+   - 货币前缀：`USD`
+   - 语言前缀：`en_US`
+   - 模组前缀：`weline_api`
+   - 路由：`rest/v1/auth/login`
+
+2. **前端API（不带i18n）**：
+   ```
+   http://127.0.0.1:9981/api123/weline_api/rest/v1/auth/login
+   ```
+   - 网站前缀：`http://127.0.0.1:9981`
+   - 区域前缀：`api123`
+   - 货币前缀：无（可选）
+   - 语言前缀：无（可选）
+   - 模组前缀：`weline_api`
+   - 路由：`rest/v1/auth/login`
+
+3. **后端API**：
+   ```
+   http://127.0.0.1:9981/J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/weline_api/rest/v1/backend/auth/login
+   ```
+   - 网站前缀：`http://127.0.0.1:9981`
+   - 区域前缀：`J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE`（从 `env.php` 的 `api_admin` 配置获取）
+   - 货币前缀：无（后端API通常不需要）
+   - 语言前缀：无（后端API通常不需要）
+   - 模组前缀：`weline_api`
+   - 路由：`rest/v1/backend/auth/login`
+
+**配置说明**：
+- 区域前缀配置在 `app/etc/env.php` 中：
+  - `api`: 前端API区域前缀（如 `'api' => 'api123'`）
+  - `api_admin`: 后端API区域前缀（如 `'api_admin' => 'J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE'`）
+- 货币和语言前缀从当前用户会话或网站配置中获取
+- 路由注册时只注册 `[模组前缀]/[路由]` 部分，区域前缀和i18n前缀在URL生成时动态添加
+
+**在 `@example` 注释中的使用**：
+- `Path` 字段应使用完整路径，包含区域前缀、货币、语言（如果适用）
+- 示例：
+  ```
+  Path: /api123/USD/en_US/weline_api/rest/v1/auth/login
+  ```
+  或
+  ```
+  Path: /J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/weline_api/rest/v1/backend/auth/login
+  ```
 
 ## 二、规范要求
 
@@ -77,11 +157,17 @@ API接口必须同时满足以下要求：
 - 任何触发路由注册的操作时
 
 **检测范围**：
-- 扫描所有实现了 `AbstractRestController` 的控制器方法
+- **只验证继承 `AbstractRestController` 的控制器方法**
+- Observer、Helper、Service 等非 API 控制器类不需要遵循 API 规范
 - 验证所有API接口的规范符合性
 - 检查所有必填项（@Document注释、PHPDoc注释、@param、@return等）
 - 检查后台API接口是否有Acl权限注释（公开接口和前端接口不需要）
 - **不需要检查ApiDoc Attribute**（Acl注解已经足够）
+
+**重要说明**：
+- 只有继承 `Weline\Framework\Controller\AbstractRestController` 的控制器类的方法才需要遵循 API 规范
+- Observer 类（如 `ControllerAttributes`）、Helper 类、Service 类等非 API 控制器不需要遵循 API 规范
+- 验证器会自动检查类是否继承 `AbstractRestController`，只有继承的类才会进行验证
 
 ## 三、@Document 注释规范
 

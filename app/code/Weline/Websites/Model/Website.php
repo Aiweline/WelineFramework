@@ -5,6 +5,7 @@ namespace Weline\Websites\Model;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
@@ -39,7 +40,29 @@ class Website extends Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: Implement upgrade() method.
+        // 修改默认货币和默认语言字段为可空
+        if ($setup->tableExist()) {
+            try {
+                $tableName = $setup->getTable();
+                $connection = $setup->getConnection();
+                
+                // 检查并修改default_currency字段
+                try {
+                    $connection->query("ALTER TABLE `{$tableName}` MODIFY COLUMN `default_currency` VARCHAR(20) NULL COMMENT '默认货币'");
+                } catch (\Exception $e) {
+                    // 字段可能已经修改过或不存在，忽略错误
+                }
+                
+                // 检查并修改default_language字段
+                try {
+                    $connection->query("ALTER TABLE `{$tableName}` MODIFY COLUMN `default_language` VARCHAR(20) NULL COMMENT '默认语言'");
+                } catch (\Exception $e) {
+                    // 字段可能已经修改过或不存在，忽略错误
+                }
+            } catch (\Exception $e) {
+                // 忽略错误，可能表不存在或其他问题
+            }
+        }
     }
 
     /**
@@ -55,8 +78,8 @@ class Website extends Model
             ->addColumn(self::fields_NAME, TableInterface::column_type_VARCHAR, 128, "not null unique", '网站名称')
             ->addColumn(self::fields_CODE, TableInterface::column_type_VARCHAR, 20, "not null unique", '网站代码')
             ->addColumn(self::fields_URL, TableInterface::column_type_VARCHAR, 128, "not null unique", '网站链接')
-            ->addColumn(self::fields_DEFAULT_CURRENCY, TableInterface::column_type_VARCHAR, 20, "not null", '默认货币')
-            ->addColumn(self::fields_DEFAULT_LANGUAGE, TableInterface::column_type_VARCHAR, 20, "not null", '默认语言')
+            ->addColumn(self::fields_DEFAULT_CURRENCY, TableInterface::column_type_VARCHAR, 20, "", '默认货币')
+            ->addColumn(self::fields_DEFAULT_LANGUAGE, TableInterface::column_type_VARCHAR, 20, "", '默认语言')
             ->addColumn(self::fields_DEFAULT_TIMEZONE, TableInterface::column_type_VARCHAR, 60, "not null", '默认时区')
             ->create();
         # 新建一个默认网站
@@ -118,26 +141,56 @@ class Website extends Model
         return (string)$this->getData(self::fields_URL);
     }
 
-    public function setDefaultCurrency(string $currency): self
+    public function setDefaultCurrency(?string $currency): self
     {
         $this->setData(self::fields_DEFAULT_CURRENCY, $currency);
         return $this;
     }
 
-    public function getDefaultCurrency(): string
+    public function getDefaultCurrency(): ?string
     {
-        return (string)$this->getData(self::fields_DEFAULT_CURRENCY);
+        $currency = $this->getData(self::fields_DEFAULT_CURRENCY);
+        return $currency ? (string)$currency : null;
     }
 
-    public function setDefaultLanguage(string $language): self
+    public function setDefaultLanguage(?string $language): self
     {
         $this->setData(self::fields_DEFAULT_LANGUAGE, $language);
         return $this;
     }
 
-    public function getDefaultLanguage(): string
+    public function getDefaultLanguage(): ?string
     {
-        return (string)$this->getData(self::fields_DEFAULT_LANGUAGE);
+        $language = $this->getData(self::fields_DEFAULT_LANGUAGE);
+        return $language ? (string)$language : null;
+    }
+
+    /**
+     * 获取网站的关联货币代码列表
+     * 
+     * @return array
+     */
+    public function getCurrencyCodes(): array
+    {
+        if (!$this->getWebsiteId()) {
+            return [];
+        }
+        $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
+        return $websiteCurrency->getWebsiteCurrencyCodes($this->getWebsiteId());
+    }
+
+    /**
+     * 获取网站的关联语言代码列表
+     * 
+     * @return array
+     */
+    public function getLanguageCodes(): array
+    {
+        if (!$this->getWebsiteId()) {
+            return [];
+        }
+        $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
+        return $websiteLanguage->getWebsiteLanguageCodes($this->getWebsiteId());
     }
 
     public function setDefaultTimezone(string $timezone): self

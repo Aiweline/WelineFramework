@@ -8,6 +8,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 
 class DetectWebsite implements ObserverInterface
@@ -55,6 +56,9 @@ class DetectWebsite implements ObserverInterface
             // 获取所有网站配置
             $allSites = $website_model->reset()->select()->fetchArray();
             
+            // 解析当前URL的域名
+            $currentHost = parse_url($url1, PHP_URL_HOST);
+            
             // 遍历所有网站，使用域名匹配
             foreach ($allSites as $siteData) {
                 $siteUrl = $siteData['url'] ?? '';
@@ -62,8 +66,11 @@ class DetectWebsite implements ObserverInterface
                     continue;
                 }
                 
-                // 使用域名匹配函数检查是否匹配
-                if (Url::isHostMatch($url1, $siteUrl)) {
+                // 解析网站URL的域名
+                $siteHost = parse_url($siteUrl, PHP_URL_HOST);
+                
+                // 域名匹配（处理 www 和非 www 的情况）
+                if ($this->isHostMatch($currentHost, $siteHost)) {
                     // 找到匹配的网站，创建 Website 对象
                     $site = $website_model->reset();
                     $site->setData($siteData);
@@ -107,7 +114,31 @@ class DetectWebsite implements ObserverInterface
         $data->setData('default_currency', $site->getDefaultCurrency());
         $data->setData('default_language', $site->getDefaultLanguage());
         $data->setData('default_timezone', $site->getDefaultTimezone());
+        
         # 设置默认时区
         date_default_timezone_set($site->getDefaultTimezone());
+        
+        # 设置静态网站数据类，供其他模块使用
+        WebsiteData::setWebsite($site);
+    }
+
+    /**
+     * 检查两个主机名是否匹配（处理 www 和非 www 的情况）
+     * 
+     * @param string $host1
+     * @param string $host2
+     * @return bool
+     */
+    private function isHostMatch(string $host1, string $host2): bool
+    {
+        if ($host1 === $host2) {
+            return true;
+        }
+        
+        // 处理 www 和非 www 的情况
+        $host1WithoutWww = preg_replace('/^www\./', '', $host1);
+        $host2WithoutWww = preg_replace('/^www\./', '', $host2);
+        
+        return $host1WithoutWww === $host2WithoutWww;
     }
 }

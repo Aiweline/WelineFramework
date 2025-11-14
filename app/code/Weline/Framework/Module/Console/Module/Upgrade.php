@@ -93,8 +93,13 @@ class Upgrade extends CommandAbstract
         if ($argsModule) {
             $this->printer->setup(__('指定模块升级模式：仅升级 %{1}', [implode(', ', $argsModule)]));
         }
-        if (isset($args['model'])) {
-            $appoint = true;
+        
+        // 检查是否指定了部分更新模式
+        $doModel = isset($args['model']);
+        $doRoute = isset($args['route']);
+        $appoint = $doModel || $doRoute;
+        
+        if ($doModel) {
             /**@var ModelManager $modelManager */
             $modelManager = ObjectManager::getInstance(ModelManager::class);
             /**@var Handle $module_handle */
@@ -121,10 +126,10 @@ class Upgrade extends CommandAbstract
                 $module_handle->setupModel(new Module($module));
             }
         }
-        if (isset($args['route'])) {
+        
+        if ($doRoute) {
             // 扫描模型注册代码
             list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
-            $appoint = true;
             // 注册路由信息
             /**@var Handle $module_handle */
             $module_handle = ObjectManager::getInstance(Handle::class);
@@ -157,6 +162,7 @@ class Upgrade extends CommandAbstract
                 $module_handle->registerRoute(new Module($module));
             }
         }
+        
         if ($appoint) {
             $this->printer->success(__('委托部分更新已运行！'));
             return;

@@ -8,6 +8,8 @@ use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Data\WebsiteData;
+use Weline\I18n\Model\Locale\Name as LocaleName;
 
 /**
  * 前端文档浏览控制器
@@ -56,11 +58,19 @@ class Docs extends FrontendController
         $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
         $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
         
+        // 从数据库获取可用的货币列表
+        $availableCurrencies = $this->getAvailableCurrencies();
+        
+        // 从数据库获取可用的语言列表
+        $availableLocales = $this->getAvailableLocales();
+        
         // 传递给模板
         $this->assign('currentCurrency', $currentCurrency);
         $this->assign('currentLanguage', $currentLanguage);
         $this->assign('defaultCurrency', $defaultCurrency);
         $this->assign('defaultLanguage', $defaultLanguage);
+        $this->assign('availableCurrencies', $availableCurrencies);
+        $this->assign('availableLocales', $availableLocales);
         
         // 获取文档ID（如果有）
         $documentId = $this->request->getParam('id');
@@ -586,11 +596,25 @@ class Docs extends FrontendController
             $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
             $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
             
+            // 从数据库获取可用的货币列表
+            $availableCurrencies = $this->getAvailableCurrencies();
+            
+            // 从数据库获取可用的语言列表
+            $availableLocales = $this->getAvailableLocales();
+            
+            // 获取API area配置
+            $apiArea = \Weline\Framework\App\Env::get('api') ?: 'api';
+            $apiAdminArea = \Weline\Framework\App\Env::get('api_admin') ?: 'api_admin';
+            
             // 传递给模板
             $this->assign('currentCurrency', $currentCurrency);
             $this->assign('currentLanguage', $currentLanguage);
             $this->assign('defaultCurrency', $defaultCurrency);
             $this->assign('defaultLanguage', $defaultLanguage);
+            $this->assign('availableCurrencies', $availableCurrencies);
+            $this->assign('availableLocales', $availableLocales);
+            $this->assign('apiArea', $apiArea);
+            $this->assign('apiAdminArea', $apiAdminArea);
             
             // 获取API文档数据
             /** @var \Weline\Api\Service\ApiDocService $apiDocService */
@@ -675,6 +699,118 @@ class Docs extends FrontendController
             $this->assign('title', __('API文档管理'));
             $this->assign('error', $e->getMessage());
             return $this->fetch('Weline_DeveloperWorkspace::templates/Docs/api-manager');
+        }
+    }
+    
+    /**
+     * 获取可用的货币列表（从当前网站关联的货币中获取）
+     * 
+     * @return array 货币列表 [['code' => 'CNY', 'name' => '人民币'], ...]
+     */
+    private function getAvailableCurrencies(): array
+    {
+        try {
+            // 从当前网站获取关联的货币列表
+            $currencies = WebsiteData::getCurrencies();
+            
+            // 如果网站没有关联货币，返回默认列表
+            if (empty($currencies)) {
+                return [
+                    ['code' => 'CNY', 'name' => '人民币'],
+                    ['code' => 'USD', 'name' => '美元'],
+                ];
+            }
+            
+            // 转换为需要的格式
+            $result = [];
+            foreach ($currencies as $currency) {
+                $result[] = [
+                    'code' => $currency['code'] ?? '',
+                    'name' => $currency['name'] ?? '',
+                ];
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            // 如果查询失败，返回默认列表
+            return [
+                ['code' => 'CNY', 'name' => '人民币'],
+                ['code' => 'USD', 'name' => '美元'],
+            ];
+        }
+    }
+    
+    /**
+     * 获取可用的语言列表（从当前网站关联的语言中获取）
+     * 
+     * @return array 语言列表 [['code' => 'zh_Hans_CN', 'name' => '简体中文'], ...]
+     */
+    private function getAvailableLocales(): array
+    {
+        try {
+            // 从当前网站获取关联的语言代码列表
+            $languageCodes = WebsiteData::getLanguageCodes();
+            
+            // 如果网站没有关联语言，从数据库获取所有语言
+            if (empty($languageCodes)) {
+                /** @var LocaleName $localeNameModel */
+                $localeNameModel = ObjectManager::getInstance(LocaleName::class);
+                $locales = $localeNameModel->clear()
+                    ->order(LocaleName::fields_LOCALE_CODE, 'ASC')
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                
+                $result = [];
+                foreach ($locales as $locale) {
+                    $result[] = [
+                        'code' => $locale->getData(LocaleName::fields_LOCALE_CODE),
+                        'name' => $locale->getData(LocaleName::fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::fields_DISPLAY_LOCALE_CODE),
+                    ];
+                }
+                
+                // 如果数据库中没有语言，返回默认列表
+                if (empty($result)) {
+                    return [
+                        ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
+                        ['code' => 'en_US', 'name' => 'English'],
+                    ];
+                }
+                
+                return $result;
+            }
+            
+            // 根据语言代码获取语言详细信息
+            /** @var LocaleName $localeNameModel */
+            $localeNameModel = ObjectManager::getInstance(LocaleName::class);
+            $result = [];
+            foreach ($languageCodes as $code) {
+                $locale = $localeNameModel->clear()
+                    ->where(LocaleName::fields_LOCALE_CODE, $code)
+                    ->find()
+                    ->fetch();
+                
+                if ($locale->getId()) {
+                    $result[] = [
+                        'code' => $locale->getData(LocaleName::fields_LOCALE_CODE),
+                        'name' => $locale->getData(LocaleName::fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::fields_DISPLAY_LOCALE_CODE),
+                    ];
+                } else {
+                    // 如果找不到详细信息，至少显示代码
+                    $result[] = [
+                        'code' => $code,
+                        'name' => $code,
+                    ];
+                }
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            // 如果查询失败，返回默认列表
+            return [
+                ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
+                ['code' => 'en_US', 'name' => 'English'],
+            ];
         }
     }
 }

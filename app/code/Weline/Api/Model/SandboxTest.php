@@ -28,15 +28,8 @@ class SandboxTest extends Model
     public const fields_environment = 'environment';
     public const fields_created_at = 'created_at';
     public const fields_updated_at = 'updated_at';
-    
-    /**
-     * 初始化模型
-     */
-    public function _init(): void
-    {
-        $this->_table = 'w_api_sandbox_test';
-        $this->_id_field_name = 'id';
-    }
+
+    public string $table = 'm_api_sandbox_test';
     
     /**
      * 模型设置

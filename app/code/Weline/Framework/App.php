@@ -274,7 +274,7 @@ class App
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventManager->dispatch('App::run_before');
         $result = '';
-        # URL结构：[网站前缀]/[货币前缀]/[语言前缀]/[路由]，没有网站
+        # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
         if (!CLI) {
             // dd( $_SERVER['WELINE_NO_PARSER_URL']);
             $parse = null;
@@ -291,7 +291,7 @@ class App
                 $_SERVER = $parse['server'];
                 
                 // 根据 WELINE_AREA 设置后端标识，方便后续判断
-                $welineArea = $_SERVER['WELINE_AREA'] ?? 'frontend';
+                $welineArea = $_SERVER['WELINE_AREA'] ?? '';
                 $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'admin' || $welineArea === 'api_admin');
                 
                 $default_cookies = [

@@ -51,6 +51,31 @@ class ControllerAttributes implements ObserverInterface
             return;
         }
         
+        // 检查类是否存在
+        if (!class_exists($className)) {
+            return;
+        }
+        
+        // 只验证继承 AbstractRestController 的控制器方法
+        // Observer、Helper 等非 API 控制器不需要验证
+        $reflection = new \ReflectionClass($className);
+        $isApiController = false;
+        
+        // 检查是否继承 AbstractRestController
+        $parentClass = $reflection->getParentClass();
+        while ($parentClass) {
+            if ($parentClass->getName() === 'Weline\Framework\Controller\AbstractRestController') {
+                $isApiController = true;
+                break;
+            }
+            $parentClass = $parentClass->getParentClass();
+        }
+        
+        // 如果不是 API 控制器，跳过验证
+        if (!$isApiController) {
+            return;
+        }
+        
         // 验证API规范
         $result = $this->validator->validateMethod($className, $methodName, $isBackend);
         

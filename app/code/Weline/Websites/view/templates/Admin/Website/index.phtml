@@ -16,6 +16,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     <!-- jvectormap -->
     <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
     <title><lang>Weline Admin 管理面板</lang></title>
+    <style>
+        .badge {
+            font-size: 0.75rem;
+            padding: 0.25em 0.5em;
+        }
+    </style>
 </head>
 
 <!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
@@ -83,81 +89,40 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     <div class="card-body">
                         <div class="d-flex justify-content-between mb-3">
                             <h4 class="card-title">网站列表</h4>
-                            <block class='Weline\Component\Block\OffCanvas'
-                                   cache='0'
-                                   id='add_result_modal'
-                                   action='*/admin/website/add'
-                                   title='添加网站'
-                                   close-button-show='1'
-                                   close-button-text='关闭'
-                                   direction='right'
-                                   class-names='w-75 h-100'
-                                   off-canvas-body-style=''
-                                   target-button-text='添加网站'
-                                   icon='mdi mdi-plus'
-                                   target-button-class='btn btn-primary'
-                                   target-tag='a'
-                                   save='1'
-                            />
+                            <div class="d-flex gap-2">
+                                <form id="search-form" method="get" action="<?= $this->getUrl('*/admin/website') ?>" class="d-flex gap-2">
+                                    <input type="text" id="search-input" name="search" class="form-control" placeholder="搜索名称、代码或URL" 
+                                           value="<?= htmlspecialchars($search ?? '') ?>" style="width: 250px;">
+                                    <button type="submit" class="btn btn-outline-primary">
+                                        <i class="mdi mdi-magnify"></i> 搜索
+                                    </button>
+                                    <?php if (!empty($search)): ?>
+                                        <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
+                                            <i class="mdi mdi-close"></i> 清除
+                                        </a>
+                                    <?php endif; ?>
+                                </form>
+                                <block class='Weline\Component\Block\OffCanvas'
+                                       cache='0'
+                                       id='add_result_modal'
+                                       action='*/admin/website/add'
+                                       title='添加网站'
+                                       close-button-show='1'
+                                       close-button-text='关闭'
+                                       direction='right'
+                                       class-names='w-75 h-100'
+                                       off-canvas-body-style=''
+                                       target-button-text='添加网站'
+                                       icon='mdi mdi-plus'
+                                       target-button-class='btn btn-primary'
+                                       target-tag='a'
+                                       save='1'
+                                />
+                            </div>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>名称</th>
-                                    <th>代码</th>
-                                    <th>URL</th>
-                                    <th>货币</th>
-                                    <th>语言</th>
-                                    <th>时区</th>
-                                    <th>操作</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <?php foreach ($websites as $website): ?>
-                                    <tr>
-                                        <td><?= $website['website_id'] ?></td>
-                                        <td><?= $website['name'] ?></td>
-                                        <td><?= $website['code'] ?></td>
-                                        <td><?= $website['url'] ?></td>
-                                        <td><?= $website['default_currency'] ?></td>
-                                        <td><?= $website['default_language'] ?></td>
-                                        <td><?= $website['default_timezone'] ?></td>
-                                        <td>
-                                            <block class='Weline\Component\Block\OffCanvas'
-                                                   cache='0'
-                                                   id='add_result_modal'
-                                                   action='*/admin/website/edit'
-                                                   vars="website"
-                                                   action-params='{id:website.website_id}'
-                                                   title='编辑网站'
-                                                   close-button-show='1'
-                                                   close-button-text='关闭'
-                                                   direction='right'
-                                                   class-names='w-75 h-100'
-                                                   off-canvas-body-style=''
-                                                   target-button-text=''
-                                                   icon='mdi mdi-pencil'
-                                                   target-button-class='btn btn-sm btn-outline-info'
-                                                   target-tag='a'
-                                                   save='1'
-                                            />
-                                            <a href="@url('*/admin/website/delete')?id={{website.website_id}}"
-                                               w-delete="true"
-                                               w-msg="@lang(您确定要删除吗?)"
-                                               class="btn btn-sm btn-outline-danger"
-                                               title="删除">
-                                                <i class="mdi mdi-delete"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-
-                            <?= $pagination ?>
+                        <div id="website-table-container">
+                            <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
                         </div>
                     </div>
                 </div>
@@ -180,5 +145,153 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <script src="@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)"></script>
 @template(Weline_Admin::common/footer.phtml)
 <js:part name="w-delete"/>
+<script>
+// 异步搜索功能
+(function() {
+    let searchTimeout = null;
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-input');
+    const tableContainer = document.getElementById('website-table-container');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const searchUrl = '<?= $this->getUrl('*/admin/website') ?>';
+    
+    // 执行异步搜索
+    function performSearch() {
+        if (!searchForm || !tableContainer) return;
+        
+        const searchValue = searchInput ? searchInput.value.trim() : '';
+        
+        // 显示加载状态
+        tableContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">加载中...</span></div><p class="mt-3">正在搜索...</p></div>';
+        
+        // 构建 AJAX URL
+        const params = new URLSearchParams();
+        if (searchValue) {
+            params.append('search', searchValue);
+        }
+        const ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
+        
+        // 发送 AJAX 请求
+        fetch(ajaxUrl, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('HTTP error! status: ' + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('JSON parse error:', e, text);
+                throw new Error('服务器返回的不是有效的JSON数据');
+            }
+        })
+        .then(function(data) {
+            if (data.success) {
+                // 更新表格内容
+                tableContainer.innerHTML = data.html;
+                
+                // 执行新插入的 script 标签（用于初始化 OffCanvas 等组件）
+                const scripts = tableContainer.querySelectorAll('script');
+                scripts.forEach(function(oldScript) {
+                    const newScript = document.createElement('script');
+                    Array.from(oldScript.attributes).forEach(function(attr) {
+                        newScript.setAttribute(attr.name, attr.value);
+                    });
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                });
+                
+                // 更新清除按钮显示状态
+                const currentClearBtn = document.getElementById('clear-search');
+                if (searchValue) {
+                    // 如果有搜索值，显示清除按钮
+                    if (!currentClearBtn) {
+                        const btn = document.createElement('a');
+                        btn.href = searchUrl;
+                        btn.className = 'btn btn-outline-secondary';
+                        btn.id = 'clear-search';
+                        btn.innerHTML = '<i class="mdi mdi-close"></i> 清除';
+                        searchForm.appendChild(btn);
+                        btn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            searchInput.value = '';
+                            performSearch();
+                        });
+                    }
+                } else {
+                    // 如果没有搜索值，移除清除按钮
+                    if (currentClearBtn && currentClearBtn.parentNode) {
+                        currentClearBtn.parentNode.removeChild(currentClearBtn);
+                    }
+                }
+                
+                // 重新初始化 w-delete 功能
+                if (typeof window.initWDelete === 'function') {
+                    window.initWDelete();
+                } else {
+                    // 如果 w-delete 还没有初始化，尝试重新加载脚本
+                    const wDeleteScript = document.querySelector('script[src*="w-delete"]');
+                    if (wDeleteScript) {
+                        const newScript = document.createElement('script');
+                        newScript.src = wDeleteScript.src;
+                        document.body.appendChild(newScript);
+                    }
+                }
+            } else {
+                tableContainer.innerHTML = '<div class="alert alert-danger">搜索失败: ' + (data.message || '未知错误') + '</div>';
+            }
+        })
+        .catch(function(error) {
+            console.error('Search error:', error);
+            tableContainer.innerHTML = '<div class="alert alert-danger">搜索出错，请刷新页面重试</div>';
+        });
+    }
+    
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!searchForm || !searchInput) return;
+        
+        // 阻止表单默认提交
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            clearTimeout(searchTimeout);
+            performSearch();
+        });
+        
+        // 输入框输入时自动搜索（防抖）
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                performSearch();
+            }, 500); // 输入后500ms才搜索
+        });
+        
+        // 回车键立即搜索
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(searchTimeout);
+                performSearch();
+            }
+        });
+        
+        // 清除按钮点击事件
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                searchInput.value = '';
+                performSearch();
+            });
+        }
+    });
+})();
+</script>
 </body>
 </html>

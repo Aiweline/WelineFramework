@@ -8,4 +8,16 @@
                   disabled="false"
                   shared="true" sort="0"/>
     </event>
+    <!--货币验证观察者：在网站检测之后验证货币是否被允许-->
+    <event name="Framework_Url::detect_currency">
+        <observer name="Weline_Websites::validate_currency" instance="Weline\Websites\Observer\ValidateCurrency"
+                  disabled="false"
+                  shared="true" sort="100"/>
+    </event>
+    <!--语言验证观察者：在网站检测之后验证语言是否被允许-->
+    <event name="Framework_Url::detect_language">
+        <observer name="Weline_Websites::validate_language" instance="Weline\Websites\Observer\ValidateLanguage"
+                  disabled="false"
+                  shared="true" sort="100"/>
+    </event>
 </config>

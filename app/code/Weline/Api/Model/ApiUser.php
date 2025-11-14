@@ -34,6 +34,8 @@ class ApiUser extends \Weline\Framework\Database\Model
     public const fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
     public const fields_allowed_user_agents = 'allowed_user_agents';
 
+    public string $table = 'm_api_user';
+
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'username', 'email', 'api_key'];
 

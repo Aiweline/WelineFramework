@@ -225,6 +225,16 @@
   - `Controller/Frontend/Test/Index.php` → `{模块router}/frontend/test/index`
   - `Controller/Backend/User/List.php` → `{模块router}/backend/user/list`
   - `Api/Rest/V1/User.php` → `{模块router}/rest/v1/user`
+- **API URL 结构规范（重要）**：
+  - **URL 结构格式**：`[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]`
+  - `[]` 表示**必然存在**的部分
+  - `{}` 表示**可存在可不存在**的部分（可选）
+  - **前端API（带i18n）**：`http://127.0.0.1:9981/{api_area}/{currency}/{locale}/{模块路由}/rest/v1/{控制器路径}`
+  - **前端API（不带i18n）**：`http://127.0.0.1:9981/{api_area}/{模块路由}/rest/v1/{控制器路径}`
+  - **后端API**：`http://127.0.0.1:9981/{api_admin}/{模块路由}/rest/v1/{控制器路径}`
+  - 区域前缀从 `env.php` 的 `api` 和 `api_admin` 配置获取
+  - 货币和语言前缀从当前用户会话或网站配置中获取
+  - 路由注册时只注册 `{模块路由}/rest/v1/{控制器路径}` 部分，区域前缀和i18n前缀在URL生成时动态添加
 - **新控制器添加后必须更新系统**（重要）：
   - ✅ **必须执行**：添加新控制器后，必须运行 `php bin/w setup:upgrade --route` 更新路由配置
   - ✅ **完整升级**：也可以运行 `php bin/w setup:upgrade` 进行完整系统升级（包含路由更新）
@@ -285,34 +295,69 @@
     }
     ```
   - **暗色主题支持**：必须同时支持明暗主题切换，使用 `[data-theme="dark"]` 选择器
-  - **滚动条样式规范**：
-    - 滚动条宽度：6px（Webkit）或 thin（Firefox）
-    - 滚动条颜色：浅色主题 `#a2adb7`，暗色主题 `#8590a5`
-    - 滚动条轨道：透明（transparent）
-    - 必须使用CSS变量：`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`
-    - 示例代码：
+  - **滚动条样式规范（强制）**：
+    - ❌ **绝对禁止**：任何滚动条样式都不能使用硬编码颜色值（如 `#ffffff`、`white`、`rgba(255,255,255,0.2)` 等）
+    - ❌ **绝对禁止**：任何滚动条样式都不能自定义颜色，必须使用主题滚动条变量
+    - ✅ **必须使用**：所有滚动条样式必须使用CSS变量：`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`
+    - ✅ **适用范围**：包括但不限于：
+      - 页面主滚动条
+      - 下拉菜单滚动条（如 Select2、自定义下拉组件等）
+      - 表格滚动条
+      - 侧边栏滚动条
+      - 任何可滚动容器的滚动条
+    - **滚动条宽度**：6px（Webkit）或 thin（Firefox）
+    - **滚动条颜色**：浅色主题 `#a2adb7`，暗色主题 `#8590a5`（通过CSS变量自动切换）
+    - **滚动条轨道**：透明（transparent）
+    - **示例代码**：
       ```css
+      /* ✅ 正确：使用主题变量 */
       /* Webkit浏览器滚动条 */
       *::-webkit-scrollbar {
           width: 6px;
           height: 6px;
       }
       *::-webkit-scrollbar-track {
-          background: var(--scrollbar-track);
-          border-radius: 3px;
+          background: var(--scrollbar-track, transparent);
       }
       *::-webkit-scrollbar-thumb {
-          background: var(--scrollbar-thumb);
+          background: var(--scrollbar-thumb, #a2adb7);
           border-radius: 3px;
           transition: background 0.2s ease;
       }
       *::-webkit-scrollbar-thumb:hover {
-          background: var(--scrollbar-thumb-hover);
+          background: var(--scrollbar-thumb-hover, #8590a5);
       }
       /* Firefox滚动条 */
       * {
           scrollbar-width: thin;
-          scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+          scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
+      }
+      
+      /* ✅ 正确：Select2下拉菜单滚动条 */
+      .select2-results__options {
+          scrollbar-width: thin;
+          scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
+      }
+      .select2-results__options::-webkit-scrollbar {
+          width: 8px;
+      }
+      .select2-results__options::-webkit-scrollbar-track {
+          background: var(--scrollbar-track, transparent);
+      }
+      .select2-results__options::-webkit-scrollbar-thumb {
+          background: var(--scrollbar-thumb, #a2adb7);
+          border-radius: 4px;
+      }
+      .select2-results__options::-webkit-scrollbar-thumb:hover {
+          background: var(--scrollbar-thumb-hover, #8590a5);
+      }
+      
+      /* ❌ 错误：硬编码颜色值 */
+      *::-webkit-scrollbar-thumb {
+          background: #ffffff;  /* 禁止！必须使用 var(--scrollbar-thumb) */
+      }
+      .select2-results__options::-webkit-scrollbar-thumb {
+          background: white;  /* 禁止！必须使用 var(--scrollbar-thumb) */
       }
       ```
   - **按钮样式规范**：

@@ -21,6 +21,7 @@ use Weline\Framework\System\File\Scan;
 use Weline\I18n\Cache\I18NCache;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Observer\ParserWordsRegister;
+use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 
 class I18n
 {
@@ -571,7 +572,9 @@ class I18n
                         $handle = @fopen($file->getPathname(), 'r');
                         if ($handle !== false) {
                             while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                                $file_words[$data[0]] = $data[1];
+                                if(isset($data[0]) && isset($data[1])){
+                                    $file_words[$data[0]] = $data[1];
+                                }
                             }
                             fclose($handle);
                         }
@@ -613,6 +616,37 @@ class I18n
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
+        
+        // 在线翻译模式：从数据库读取翻译并合并到CSV翻译中
+        $translate_mode = Env::getInstance()->getConfig('translate_mode') ?: 'default';
+        if ($translate_mode === 'online') {
+            try {
+                /**@var LocaleDictionary $localeDictionary */
+                $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
+                foreach ($locals_names as $local_code => $local_name) {
+                    if (!isset($locals_words[$local_code])) {
+                        $locals_words[$local_code] = [];
+                    }
+                    // 从数据库读取该语言的翻译
+                    $db_translations = $localeDictionary->reset()
+                        ->where(LocaleDictionary::fields_LOCALE_CODE, $local_code)
+                        ->select()
+                        ->fetchArray();
+                    // 合并数据库翻译（数据库翻译优先级高于CSV）
+                    foreach ($db_translations as $db_trans) {
+                        $word = $db_trans[LocaleDictionary::fields_WORD] ?? '';
+                        $translate = $db_trans[LocaleDictionary::fields_TRANSLATE] ?? '';
+                        if ($word && $translate) {
+                            $locals_words[$local_code][$word] = $translate;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // 数据库读取失败时静默处理，继续使用CSV翻译
+                error_log(__("在线翻译模式：从数据库读取翻译失败：%{error}", ['error' => $e->getMessage()]));
+            }
+        }
+        
         if ($locals_words) {
             // 确保目录存在
             $words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;

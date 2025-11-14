@@ -96,7 +96,7 @@ php bin/w test Weline\\Framework\\Http\\Test\\WwwDomainTest
 
 1. **清理缓存**: 部署后建议清理相关缓存
    ```bash
-   php bin/w cache:clean
+   php bin/w cache:clear
    ```
 
 2. **验证配置**: 确保网站配置中的 URL 格式正确

@@ -11,8 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\Api\Setup;
 
+use Weline\Acl\Model\WhiteAclSource;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 
@@ -46,7 +48,7 @@ class Install implements InstallInterface
         $connection = $setup->getDb();
         
         // 创建 w_api_user 表（API用户表，独立于BackendUser）
-        $connection->createTable('w_api_user', 'API用户表')
+        $connection->createTable('api_user', 'API用户表')
             ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '用户ID')
             ->addColumn('username', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '用户名')
             ->addColumn('email', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '邮箱')
@@ -73,7 +75,7 @@ class Install implements InstallInterface
             ->create();
         
         // 创建 w_api_user_role 表（API用户角色关联表）
-        $connection->createTable('w_api_user_role', 'API用户角色关联表')
+        $connection->createTable('api_user_role', 'API用户角色关联表')
             ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
             ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', 'API用户ID')
             ->addColumn('role_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '角色ID')
@@ -84,7 +86,7 @@ class Install implements InstallInterface
             ->create();
         
         // 创建 w_api_user_token 表（API用户令牌表）
-        $connection->createTable('w_api_user_token', 'API用户令牌表')
+        $connection->createTable('api_user_token', 'API用户令牌表')
             ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
             ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '用户ID')
             ->addColumn('token', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '令牌值')
@@ -98,7 +100,7 @@ class Install implements InstallInterface
             ->create();
         
         // 创建 w_api_security_log 表（安全日志表）
-        $connection->createTable('w_api_security_log', 'API安全日志表')
+        $connection->createTable('api_security_log', 'API安全日志表')
             ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
             ->addColumn('user_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '用户ID（如果有）')
             ->addColumn('request_ip', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 45, '', '请求IP')
@@ -115,7 +117,7 @@ class Install implements InstallInterface
             ->create();
         
         // 创建 w_api_sandbox_test 表（沙盒测试表）
-        $connection->createTable('w_api_sandbox_test', '沙盒测试表')
+        $connection->createTable('api_sandbox_test', '沙盒测试表')
             ->addColumn('id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', 'ID')
             ->addColumn('name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '测试名称')
             ->addColumn('content', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '测试内容')
@@ -125,6 +127,37 @@ class Install implements InstallInterface
             ->addIndex('INDEX', 'idx_w_api_sandbox_test_environment', ['environment'])
             ->addIndex('INDEX', 'idx_w_api_sandbox_test_created_at', ['created_at'])
             ->create();
+
+        // 插入API白名单路径
+         /** @var WhiteAclSource $whiteAclSource */
+         $whiteAclSource = ObjectManager::getInstance(WhiteAclSource::class);
+        
+         // API认证接口白名单路径（前端API）
+         $apiWhiteListPaths = [
+             'api/rest/v1/auth/login',
+             'api/rest/v1/auth/exchange',
+             'api/rest/v1/auth/refresh',
+             'api/rest/v1/auth/token-info',
+             'api/rest/v1/auth/logout',
+             'api/rest/v1/auth/me',
+         ];
+         
+         // 后端API认证接口白名单路径（后端API路径不包含api_admin前缀，因为路由注册时已经移除了）
+         $backendApiWhiteListPaths = [
+             'api/rest/v1/backend/auth/login',
+             'api/rest/v1/backend/auth/refresh',
+             'api/rest/v1/backend/auth/logout',
+             'api/rest/v1/backend/auth/me',
+             'api/rest/v1/backend/auth/token-info',
+         ];
+         
+         // 使用模型进行写入及更新操作
+         foreach (array_merge($apiWhiteListPaths, $backendApiWhiteListPaths) as $path) {
+             $whiteAclSource->clear()
+             ->setData('path', $path)
+             ->setData('type', WhiteAclSource::type_API)
+             ->save();
+         }
     }
 }
 

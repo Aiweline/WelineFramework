@@ -57,6 +57,37 @@ class Collect implements CommandInterface
             $this->printing->warning(__('缓存清理失败：%{1}', [$e->getMessage()]));
         }
         
+        // 强制重新加载模块列表（清除内存缓存）
+        $this->printing->note(__('刷新模块列表缓存...'));
+        try {
+            /** @var \Weline\Framework\App\Env $env */
+            $env = ObjectManager::getInstance(\Weline\Framework\App\Env::class);
+            // 强制重新获取模块列表，清除内存缓存
+            $env->getModuleList(true);
+            $env->getActiveModules(true);
+            $this->printing->success(__('模块列表缓存已刷新！'));
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('模块列表缓存刷新失败：%{1}', [$e->getMessage()]));
+        }
+        
+        // 清理菜单相关缓存
+        $this->printing->note(__('清理菜单缓存...'));
+        try {
+            // 清理菜单URL验证器缓存
+            if (class_exists(\Weline\Admin\Helper\MenuUrlValidator::class)) {
+                \Weline\Admin\Helper\MenuUrlValidator::clearCache();
+            }
+            
+            // 清理模板缓存（菜单在模板中渲染）
+            /** @var \Weline\Framework\Cache\Console\Template\Clear $templateCacheClear */
+            $templateCacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class);
+            $templateCacheClear->execute();
+            
+            $this->printing->success(__('菜单缓存已清理！'));
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('菜单缓存清理失败：%{1}', [$e->getMessage()]));
+        }
+        
         $this->printing->success(__('菜单收集和系统更新完成！菜单已生效。'));
     }
 

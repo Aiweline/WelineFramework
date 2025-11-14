@@ -2158,6 +2158,62 @@ class YourController extends BaseController
 
 ---
 
+## 滚动条样式违反主题色规则（扣分记录）
+
+### 错误示例
+- ❌ **错误**：Select2下拉菜单的滚动条使用硬编码颜色值（如 `#ffffff`、`white` 等）
+- ❌ **错误**：任何滚动条样式自定义颜色，不使用主题滚动条变量
+- ❌ **错误**：认为滚动条颜色可以自定义，忽略主题色规范
+
+### 正确做法
+- ✅ **必须使用**：所有滚动条样式必须使用CSS变量：`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`
+- ✅ **适用范围**：包括但不限于：
+  - 页面主滚动条
+  - 下拉菜单滚动条（如 Select2、自定义下拉组件等）
+  - 表格滚动条
+  - 侧边栏滚动条
+  - 任何可滚动容器的滚动条
+- ✅ **示例代码**：
+  ```css
+  /* ✅ 正确：Select2下拉菜单滚动条使用主题变量 */
+  .select2-results__options {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
+  }
+  .select2-results__options::-webkit-scrollbar {
+      width: 8px;
+  }
+  .select2-results__options::-webkit-scrollbar-track {
+      background: var(--scrollbar-track, transparent);
+  }
+  .select2-results__options::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb, #a2adb7);
+      border-radius: 4px;
+  }
+  .select2-results__options::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover, #8590a5);
+  }
+  
+  /* ❌ 错误：硬编码颜色值 */
+  .select2-results__options::-webkit-scrollbar-thumb {
+      background: white;  /* 禁止！必须使用 var(--scrollbar-thumb) */
+  }
+  ```
+
+### 扣分记录
+- **时间**：2025年（Websites模块Select2时区选择功能）
+- **错误**：Select2下拉菜单的滚动条使用浏览器默认的白色滚动条，违反主题色规则
+- **影响**：滚动条颜色与主题不一致，影响用户体验和视觉统一性
+- **修复**：已更新滚动条样式，使用主题CSS变量（`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`），确保滚动条遵循主题色规范
+
+### 要点
+- **绝对禁止**：任何滚动条样式都不能使用硬编码颜色值
+- **绝对禁止**：任何滚动条样式都不能自定义颜色，必须使用主题滚动条变量
+- **必须使用**：所有滚动条样式必须使用CSS变量
+- **适用范围**：所有可滚动容器的滚动条都必须遵循此规则
+
+---
+
 *最后更新：2025-01-XX*
 *文档维护：AI 代码审查助手*
 *PHP 版本要求：PHP 8.2+*
