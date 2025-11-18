@@ -1,0 +1,239 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+// 获取当前布局配置
+$currentLayouts = $themeConfig->getOriginThemeConfig('layouts') ?? [];
+$dataLayout = $currentLayouts['data-layout'] ?? '';
+$dataTopbar = $currentLayouts['data-topbar'] ?? '';
+$dataSidebar = $currentLayouts['data-sidebar'] ?? '';
+$dataSidebarSize = $currentLayouts['data-sidebar-size'] ?? '';
+$dataLayoutSize = $currentLayouts['data-layout-size'] ?? '';
+$dataKeepEnlarged = $currentLayouts['data-keep-enlarged'] ?? '';
+$layoutClass = $currentLayouts['class'] ?? '';
+?>
+<!-- Right Sidebar -->
+<div class='right-bar'>
+    <div data-simplebar class='h-100'>
+        <div class='rightbar-title d-flex align-items-center px-3 py-4'>
+            <h5 class='m-0 me-2'><?= __('设置') ?></h5>
+            <a href="javascript:void(0);" class="right-bar-toggle ms-auto">
+                <i class="mdi mdi-close noti-icon"></i>
+            </a>
+        </div>
+
+        <!-- 布局预设配置包 -->
+        <hr class='mt-0'/>
+        <h6 class='text-center mb-0'><?= __('布局预设配置包') ?></h6>
+        <div class='p-4'>
+            <div class='mb-3'>
+                <label class='form-label'><?= __('选择布局预设') ?></label>
+                <select class='form-select' id='layout-preset'>
+                    <option value='default' <?= ($dataLayout === '' && $dataLayoutSize === '' && $layoutClass === '' && $dataTopbar !== 'colored' && $dataSidebarSize !== 'small') ? 'selected' : '' ?>><?= __('默认布局') ?></option>
+                    <option value='light-sidebar' <?= ($dataTopbar === 'colored' && $dataLayout === '' && $dataSidebar === 'light' && $dataLayoutSize === '' && $dataSidebarSize === '' && $layoutClass === '') ? 'selected' : '' ?>><?= __('浅色侧边栏') ?></option>
+                    <option value='icon-sidebar' <?= ($dataSidebar === 'dark' && $dataKeepEnlarged === 'true' && $layoutClass === 'vertical-collpsed' && $dataLayout === '' && $dataLayoutSize === '' && $dataSidebarSize === '') ? 'selected' : '' ?>><?= __('图标侧边栏') ?></option>
+                    <option value='compact-sidebar' <?= ($dataSidebar === 'dark' && $dataSidebarSize === 'small' && $dataLayout === '' && $dataLayoutSize === '' && $dataKeepEnlarged !== 'true' && $layoutClass === '') ? 'selected' : '' ?>><?= __('紧凑侧边栏') ?></option>
+                    <option value='horizontal' <?= ($dataLayout === 'horizontal' && $dataTopbar === 'light' && $dataLayoutSize === '' && $dataSidebar === '') ? 'selected' : '' ?>><?= __('水平布局') ?></option>
+                    <option value='horizontal-dark' <?= ($dataLayout === 'horizontal' && $dataTopbar === 'dark' && $dataLayoutSize === '' && $dataSidebar === '') ? 'selected' : '' ?>><?= __('水平布局（深色顶部栏）') ?></option>
+                    <option value='horizontal-boxed' <?= ($dataLayout === 'horizontal' && $dataLayoutSize === 'boxed' && $dataTopbar === 'light') ? 'selected' : '' ?>><?= __('水平布局（盒装宽度）') ?></option>
+                    <option value='boxed' <?= ($dataSidebar === 'dark' && $dataKeepEnlarged === 'true' && $layoutClass === 'vertical-collpsed' && $dataLayoutSize === 'boxed' && $dataLayout === '' && $dataSidebarSize === '') ? 'selected' : '' ?>><?= __('盒装布局') ?></option>
+                </select>
+                <small class="form-text text-muted d-block mt-2"><?= __('选择预设后，将自动配置所有相关布局选项') ?></small>
+            </div>
+        </div>
+
+        <!-- 主题颜色 -->
+        <hr class="mt-0"/>
+        <h6 class="text-center mb-0"><?= __('主题颜色') ?></h6>
+        <div class="p-4">
+            <div class="mb-3">
+                <label class="form-label"><?= __('选择主题模式') ?></label>
+                <select class="form-select theme-choice" id="theme-mode-switch">
+                    <option value="light" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'light' || (empty($themeConfig->getThemeConfig('theme-mode-switch')) && $themeConfig->getThemeConfig('light-mode-switch'))) ? 'selected' : '' ?>><?= __('明亮模式') ?></option>
+                    <option value="dark" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'dark' || $themeConfig->getThemeConfig('dark-mode-switch')) ? 'selected' : '' ?>><?= __('暗黑模式') ?></option>
+                </select>
+            </div>
+
+            <div class="mb-2">
+                <img src="@static(Weline_Admin::assets/images/layouts/layout-3.png)" class="img-thumbnail" alt="layout-3">
+            </div>
+            <div class="form-check form-switch mb-5">
+                <input class="form-check-input theme-choice" type="checkbox" id="rtl-mode-switch"
+                    <?= $themeConfig->getThemeConfig('rtl-mode-switch') ? 'checked' : '' ?>>
+                <label class="form-check-label" for="rtl-mode-switch"><?= __('RTL模式') ?></label>
+            </div>
+        </div>
+    </div> <!-- end slimscroll-menu-->
+</div>
+<!-- /Right-bar -->
+
+<!-- Right bar overlay-->
+<div class="rightbar-overlay"></div>
+
+<script>
+(function($) {
+    'use strict';
+
+    function initLayoutPresetSettings() {
+        // 布局预设映射
+        const layoutPresets = {
+            'default': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': 'light',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'light',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal-dark': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'dark',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'horizontal-boxed': {
+                layouts: {
+                    'data-layout': 'horizontal',
+                    'data-topbar': 'light',
+                    'data-sidebar': '',
+                    'data-sidebar-size': '',
+                    'data-layout-size': 'boxed',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'light-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': 'colored',
+                    'data-sidebar': 'light',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'icon-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': 'true',
+                    'class': 'vertical-collpsed'
+                }
+            },
+            'compact-sidebar': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': 'small',
+                    'data-layout-size': '',
+                    'data-keep-enlarged': '',
+                    'class': ''
+                }
+            },
+            'boxed': {
+                layouts: {
+                    'data-layout': '',
+                    'data-topbar': '',
+                    'data-sidebar': 'dark',
+                    'data-sidebar-size': '',
+                    'data-layout-size': 'boxed',
+                    'data-keep-enlarged': 'true',
+                    'class': 'vertical-collpsed'
+                }
+            }
+        };
+
+        // 布局预设选择（配置包）
+        $('#layout-preset').on('change', function() {
+            const preset = $(this).val();
+            if (layoutPresets[preset]) {
+                setThemeConfig(layoutPresets[preset]);
+            }
+        });
+
+        // 检测当前配置并更新布局预设下拉框的选中状态
+        function updateLayoutPresetSelection() {
+            const bodyClass = $('body').attr('class') || '';
+            const currentLayouts = {
+                'data-layout': $('body').attr('data-layout') || '',
+                'data-topbar': $('body').attr('data-topbar') || '',
+                'data-sidebar': $('body').attr('data-sidebar') || '',
+                'data-sidebar-size': $('body').attr('data-sidebar-size') || '',
+                'data-layout-size': $('body').attr('data-layout-size') || '',
+                'data-keep-enlarged': $('body').attr('data-keep-enlarged') || '',
+                'class': bodyClass.includes('vertical-collpsed') ? 'vertical-collpsed' : ''
+            };
+            
+            // 匹配预设
+            let matchedPreset = 'default';
+            for (const [presetKey, presetConfig] of Object.entries(layoutPresets)) {
+                const presetLayouts = presetConfig.layouts || {};
+                let match = true;
+                
+                for (const [key, value] of Object.entries(presetLayouts)) {
+                    const currentValue = key === 'class' ? currentLayouts['class'] : currentLayouts[key];
+                    if (value !== currentValue) {
+                        match = false;
+                        break;
+                    }
+                }
+                
+                if (match) {
+                    matchedPreset = presetKey;
+                    break;
+                }
+            }
+            
+            $('#layout-preset').val(matchedPreset);
+        }
+        
+        // 监听单独配置项的变化，自动更新布局预设选择
+        // 延迟执行，等待 setThemeConfig 完成
+        const originalSetThemeConfig = window.setThemeConfig;
+        if (typeof originalSetThemeConfig === 'function') {
+            window.setThemeConfig = function(config) {
+                const result = originalSetThemeConfig.apply(this, arguments);
+                setTimeout(function() {
+                    updateLayoutPresetSelection();
+                }, 100);
+                return result;
+            };
+        }
+        
+        // 页面加载时初始化布局预设选择
+        $(document).ready(function() {
+            setTimeout(function() {
+                updateLayoutPresetSelection();
+            }, 200);
+        });
+    }
+
+    initLayoutPresetSettings();
+
+})(jQuery);
+</script>

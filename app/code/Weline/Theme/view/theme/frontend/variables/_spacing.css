@@ -1,0 +1,27 @@
+/**
+ * Weline Frontend - 间距变量定义
+ * 
+ * 定义统一的间距系统
+ */
+
+:root {
+    /* ========== 基础间距 ========== */
+    --spacing-xs: 0.25rem;    /* 4px */
+    --spacing-sm: 0.5rem;     /* 8px */
+    --spacing-md: 1rem;       /* 16px */
+    --spacing-lg: 1.5rem;     /* 24px */
+    --spacing-xl: 2rem;       /* 32px */
+    --spacing-2xl: 3rem;      /* 48px */
+    --spacing-3xl: 4rem;      /* 64px */
+    
+    /* ========== 组件间距 ========== */
+    --spacing-component-padding: var(--spacing-md);
+    --spacing-component-gap: var(--spacing-sm);
+    --spacing-section-margin: var(--spacing-xl);
+    
+    /* ========== 布局间距 ========== */
+    --spacing-container-padding: var(--spacing-md);
+    --spacing-container-max-width: 1200px;
+    --spacing-grid-gap: var(--spacing-md);
+}
+

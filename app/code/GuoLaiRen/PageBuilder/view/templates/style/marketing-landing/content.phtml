@@ -1,0 +1,999 @@
+<?php
+/**
+ * 营销落地页模板 - Content
+ * Marketing Landing Page Template - Content Area
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:layout => 布局设置[MTD]:📱响应式配置说明:控制内容区域的布局\n• 支持移动端/PC端响应式配置\n• 移动端默认纵向堆叠\n• PC端支持横向布局
+ * layout.direction => PC端布局方向:select:image-right|image-left,image-right
+ * layout.gap => 元素间距:responsive:20/40|px[MD]
+ * layout.min_height => 最小高度:responsive:0/224|px[MD]
+ * layout.padding_v => 上下内边距:responsive:20/40|px[MD]
+ * 
+ * group:container => 容器设置
+ * container.max_width => 最大宽度:responsive:100/1280|%/px
+ * container.padding_h => 左右内边距:responsive:16/40|px[MD]
+ * container.background_color => 容器背景色:color:transparent
+ * 
+ * group:title => 标题设置
+ * title.text => 主标题内容:textarea:"Secret Money Calendar" Reveals 3 Stocks to Explode in the Coming Weeks
+ * title.color => 标题颜色:color:#58FF01
+ * title.size => 标题字号:responsive:28/56|px[MD]
+ * title.weight => 字体粗细:select:700|400,500,600,700,800
+ * title.line_height => 行高:number:1.1
+ * title.align => 对齐方式:select:left|left,center,right
+ * title.margin => 下边距:responsive:20/30|px[MD]
+ * 
+ * group:subtitle => 副标题设置[MTD]:📝段落格式说明:使用双换行符分段，自动生成p标签\n• 使用 **文字** 标记粗体\n• 使用双换行符（空行）分段\n• 每段自动用<p>标签包裹
+ * subtitle.text => 副标题内容:textarea:There's a **secret trading calendar…**\n\nThat's provided traders with the **chance to make 100%+ potential gains…**\n\nThis Calendar reveals the EXACT dates that — if everything goes right — anyone can target cash payouts of $125, $415, and even $1,665.\n\nEvery single month… for the last four years.\n\nIt's based on a powerful phenomenon we discovered on Wall Street…\n\nThat's used by elite funds like BlackRock, Goldman Sachs, and Bridgewater…\n\nAnd this month…\n\nThe Calendar is targeting 3 stocks and the exact dates they'll explode.\n\nSign up below to receive a full report on this month's Money Calendar and get access to an exclusive live training happening today.
+ * subtitle.color => 文字颜色:color:#ffffff
+ * subtitle.size => 字体大小:responsive:16/18|px[MD]
+ * subtitle.weight => 字体粗细:select:400|400,500,600,700
+ * subtitle.line_height => 行高:number:1.5
+ * subtitle.align => 对齐方式:select:left|left,center,right
+ * subtitle.margin => 段落间距:responsive:12/16|px[MD]
+ * 
+ * group:form => 表单设置
+ * form.title => 表单标题:text:Sign up below to receive full report
+ * form.title_color => 标题颜色:color:#ffffff
+ * form.title_size => 标题字号:responsive:18/24|px[MD]
+ * form.title_weight => 标题字重:select:600|400,500,600,700,800
+ * form.title_margin => 标题下边距:responsive:16/24|px[MD]
+ * form.background_color => 表单背景色:color:rgb(244, 245, 247)
+ * form.border_radius => 圆角大小:number:8|px
+ * form.padding => 表单内边距:responsive:20/30|px[MD]
+ * 
+ * group:messages => 表单提示信息配置[MTD]:💬提示信息说明:配置表单提交时的各种提示信息\n• 验证错误提示可自定义\n• 提交状态提示可配置\n• 支持多语言
+ * messages.email_required => 邮箱必填提示:text:请输入邮箱地址
+ * messages.email_invalid => 邮箱格式错误提示:text:邮箱格式不正确
+ * messages.phone_required => 电话必填提示:text:请输入电话号码
+ * messages.phone_invalid => 电话格式错误提示:text:电话号码格式不正确
+ * messages.submitting => 提交中提示:text:Submitting your information...
+ * messages.success => 提交成功提示（无跳转）:text:Thank you! Your submission has been received.
+ * messages.success_redirect => 提交成功提示（有跳转）:text:Success! Redirecting...
+ * messages.error => 提交失败提示:text:Submission failed. Please try again.
+ * 
+ * group:input => 输入框设置
+ * input.background_color => 背景颜色:color:#ffffff
+ * input.text_color => 文字颜色:color:#333333
+ * input.border_color => 边框颜色:color:#dddddd
+ * input.border_radius => 圆角大小:number:4|px
+ * input.padding => 内边距:responsive:12/14|px[MD]
+ * input.font_size => 字体大小:responsive:14/16|px[MD]
+ * input.height => 输入框高度:responsive:44/48|px[MD]
+ * input.margin_bottom => 下边距:responsive:12/16|px[MD]
+ * input.placeholder_color => 占位符颜色:color:#999999
+ * 
+ * group:button => 按钮设置
+ * button.text => 按钮文本:text:Get Strategy For Free!
+ * button.background_color => 背景颜色:color:#f39c12
+ * button.hover_background => 悬停背景色:color:#e67e22
+ * button.text_color => 文字颜色:color:#ffffff
+ * button.font_size => 字体大小:responsive:16/18|px[MD]
+ * button.font_weight => 字体粗细:select:700|400,500,600,700,800
+ * button.height => 按钮高度:responsive:48/56|px[MD]
+ * button.border_radius => 圆角大小:number:6|px
+ * button.padding_h => 左右内边距:responsive:24/32|px[MD]
+ * button.wiggle_interval => 摇晃间隔时间:number:2|秒
+ * 
+ * group:image => 图片设置[MTD]:📱三端响应式配置说明:控制图片容器在不同设备上的宽度\n• 移动端/平板/PC端三端配置\n• 单位：百分比(%)\n• 示例：100/45/30 表示移动端100%，平板45%，PC端30%
+ * image.url => 图片地址:text:
+ * image.alt => 图片描述:text:Money Calendar
+ * image.border_radius => 圆角大小:number:8|px
+ * image.container_width => 图片容器宽度:responsive:100/45/30|%[移动端/平板/PC]
+ * 
+ * group:disclaimer => 免责声明设置
+ * disclaimer.text => 免责声明文本:textarea:By entering your info and clicking below, you agree to receive marketing communications. Messaging frequency varies. Reply STOP to opt-out.
+ * disclaimer.color => 文字颜色:color:#999999
+ * disclaimer.font_size => 字体大小:responsive:11/12|px[MD]
+ * disclaimer.line_height => 行高:number:1.5
+ * disclaimer.margin_top => 上边距:responsive:12/16|px[MD]
+ * 
+ * group:content_text => 内容文本设置
+ * content_text.display => 显示正文内容:select:yes|yes,no
+ * content_text.color => 文字颜色:color:#e0e0e0
+ * content_text.font_size => 字体大小:responsive:15/16|px[MD]
+ * content_text.line_height => 行高:number:1.8
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 复用函数
+function getContentConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+// 标题配置
+$titleText = getContentConfig($styleSettings, 'title.text', '"Secret Money Calendar" Reveals 3 Stocks to Explode in the Coming Weeks');
+$titleColor = getContentConfig($styleSettings, 'title.color', '#58FF01');
+$titleSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'title.size', '28/56') . 'px'));
+$titleWeight = getContentConfig($styleSettings, 'title.weight', '700');
+$titleLineHeight = getContentConfig($styleSettings, 'title.line_height', '1.1');
+$titleAlign = getContentConfig($styleSettings, 'title.align', 'left');
+$titleMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'title.margin', '20/30') . 'px'));
+
+// 副标题配置
+$defaultSubtitle = "There's a **secret trading calendar…**\n\nThat's provided traders with the **chance to make 100%+ potential gains…**\n\nThis Calendar reveals the EXACT dates that — if everything goes right — anyone can target cash payouts of $125, $415, and even $1,665.\n\nEvery single month… for the last four years.\n\nIt's based on a powerful phenomenon we discovered on Wall Street…\n\nThat's used by elite funds like BlackRock, Goldman Sachs, and Bridgewater…\n\nAnd this month…\n\nThe Calendar is targeting 3 stocks and the exact dates they'll explode.\n\nSign up below to receive a full report on this month's Money Calendar and get access to an exclusive live training happening today.";
+$subtitleText = getContentConfig($styleSettings, 'subtitle.text', $defaultSubtitle);
+if (strlen($subtitleText) < 100) {
+    $subtitleText = $defaultSubtitle;
+}
+$subtitleColor = getContentConfig($styleSettings, 'subtitle.color', '#ffffff');
+$subtitleSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'subtitle.size', '16/18') . 'px'));
+$subtitleWeight = getContentConfig($styleSettings, 'subtitle.weight', '400');
+$subtitleLineHeight = getContentConfig($styleSettings, 'subtitle.line_height', '1.5');
+$subtitleAlign = getContentConfig($styleSettings, 'subtitle.align', 'left');
+$subtitleMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'subtitle.margin', '12/16') . 'px'));
+
+function parseResp($value) {
+    if (empty($value)) return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['tablet'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+        case 3: $result['mobile'] = trim($parts[0]); $result['tablet'] = trim($parts[1]); $result['desktop'] = trim($parts[2]); break;
+    }
+    return $result;
+}
+
+function genRespCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+function processContentText($text) {
+    // 先将字面的 \n 转换为真正的换行符
+    $text = str_replace('\\n', "\n", $text);
+    
+    $text = htmlspecialchars($text ?? '');
+    // 先处理粗体标记
+    $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
+    
+    // 按双换行符分段
+    $paragraphs = preg_split('/\n\s*\n/', $text);
+    $result = '';
+    foreach ($paragraphs as $paragraph) {
+        $paragraph = trim($paragraph);
+        if (!empty($paragraph)) {
+            // 单个换行符替换为空格
+            $paragraph = preg_replace('/\n/', ' ', $paragraph);
+            $result .= '<p>' . $paragraph . '</p>';
+        }
+    }
+    return $result;
+}
+
+// 布局配置
+$direction = getContentConfig($styleSettings, 'layout.direction', 'image-right');
+$gap = genRespCSS(parseResp(getContentConfig($styleSettings, 'layout.gap', '30/60') . 'px'));
+$minHeight = genRespCSS(parseResp(getContentConfig($styleSettings, 'layout.min_height', '400/600') . 'px'));
+$paddingV = genRespCSS(parseResp(getContentConfig($styleSettings, 'layout.padding_v', '40/80') . 'px'));
+
+// 容器配置
+$maxWidth = genRespCSS(parseResp(getContentConfig($styleSettings, 'container.max_width', '100/1280')));
+$paddingH = genRespCSS(parseResp(getContentConfig($styleSettings, 'container.padding_h', '16/40') . 'px'));
+$containerBg = getContentConfig($styleSettings, 'container.background_color', '#0a1628');
+
+// 表单配置
+$formTitle = getContentConfig($styleSettings, 'form.title', 'Sign up below to receive full report');
+$formTitleColor = getContentConfig($styleSettings, 'form.title_color', '#333333');
+$formTitleSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.title_size', '18/24') . 'px'));
+$formTitleWeight = getContentConfig($styleSettings, 'form.title_weight', '600');
+$formTitleMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.title_margin', '16/24') . 'px'));
+$formBg = getContentConfig($styleSettings, 'form.background_color', 'rgb(244, 245, 247)');
+$formRadius = getContentConfig($styleSettings, 'form.border_radius', '8');
+$formPadding = genRespCSS(parseResp(getContentConfig($styleSettings, 'form.padding', '20/30') . 'px'));
+
+// 输入框配置
+$inputBg = getContentConfig($styleSettings, 'input.background_color', '#ffffff');
+$inputText = getContentConfig($styleSettings, 'input.text_color', '#333333');
+$inputBorder = getContentConfig($styleSettings, 'input.border_color', '#dddddd');
+$inputRadius = getContentConfig($styleSettings, 'input.border_radius', '4');
+$inputPadding = genRespCSS(parseResp(getContentConfig($styleSettings, 'input.padding', '12/14') . 'px'));
+$inputSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'input.font_size', '14/16') . 'px'));
+$inputHeight = genRespCSS(parseResp(getContentConfig($styleSettings, 'input.height', '44/48') . 'px'));
+$inputMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'input.margin_bottom', '12/16') . 'px'));
+$inputPlaceholder = getContentConfig($styleSettings, 'input.placeholder_color', '#999999');
+
+// 按钮配置
+$btnText = getContentConfig($styleSettings, 'button.text', 'Get Strategy For Free!');
+$btnBg = getContentConfig($styleSettings, 'button.background_color', '#00ff00');
+$btnHoverBg = getContentConfig($styleSettings, 'button.hover_background', '#00dd00');
+$btnColor = getContentConfig($styleSettings, 'button.text_color', '#000000');
+$btnSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'button.font_size', '16/18') . 'px'));
+$btnWeight = getContentConfig($styleSettings, 'button.font_weight', '700');
+$btnHeight = genRespCSS(parseResp(getContentConfig($styleSettings, 'button.height', '48/56') . 'px'));
+$btnRadius = getContentConfig($styleSettings, 'button.border_radius', '6');
+$btnPaddingH = genRespCSS(parseResp(getContentConfig($styleSettings, 'button.padding_h', '24/32') . 'px'));
+$btnWiggleInterval = getContentConfig($styleSettings, 'button.wiggle_interval', '2');
+
+// 图片配置 - Money Calendar 封面图片
+$defaultImageUrl = 'https://lp.streetsensedaily.com/money-cal/images/money-cal-cover.webp';
+$imageUrl = getContentConfig($styleSettings, 'image.url', $defaultImageUrl);
+if (empty($imageUrl) || strpos($imageUrl, 'placeholder') !== false) {
+    $imageUrl = $defaultImageUrl;
+}
+$imageAlt = getContentConfig($styleSettings, 'image.alt', 'The Secret Behind The Money Calendar\'s Accuracy - Money Calendar Cover');
+$imageRadius = getContentConfig($styleSettings, 'image.border_radius', '8');
+
+// 图片容器宽度 - 三端配置（移动端/平板/PC端）
+$imageContainerWidthConfig = parseResp(getContentConfig($styleSettings, 'image.container_width', '100/45/30') . '%');
+$imageContainerWidthMobile = floatval($imageContainerWidthConfig['mobile']) . '%';
+$imageContainerWidthTablet = floatval($imageContainerWidthConfig['tablet'] ?: $imageContainerWidthConfig['desktop']) . '%';
+$imageContainerWidthDesktop = floatval($imageContainerWidthConfig['desktop']) . '%';
+
+// 免责声明配置
+$disclaimerText = getContentConfig($styleSettings, 'disclaimer.text', 'By entering your info and clicking below, you agree to receive marketing communications. Messaging frequency varies. Reply STOP to opt-out.');
+$disclaimerColor = getContentConfig($styleSettings, 'disclaimer.color', '#999999');
+$disclaimerSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'disclaimer.font_size', '11/12') . 'px'));
+$disclaimerHeight = getContentConfig($styleSettings, 'disclaimer.line_height', '1.5');
+$disclaimerMargin = genRespCSS(parseResp(getContentConfig($styleSettings, 'disclaimer.margin_top', '12/16') . 'px'));
+
+// 内容文本配置
+$showContent = getContentConfig($styleSettings, 'content_text.display', 'yes');
+$contentColor = getContentConfig($styleSettings, 'content_text.color', '#e0e0e0');
+$contentSize = genRespCSS(parseResp(getContentConfig($styleSettings, 'content_text.font_size', '15/16') . 'px'));
+$contentHeight = getContentConfig($styleSettings, 'content_text.line_height', '1.8');
+
+// 页面内容
+$pageContent = $page ? $page->getData('content') : '';
+
+// 表单提交地址 - 使用 getFrontendUrl 避免加密前缀
+$formAction = $this->getFrontendUrl('pagebuilder/frontend/form/submit', ['page_id' => $page ? $page->getId() : 0]);
+
+// 提交成功后的跳转地址（如果为空则不跳转）
+$redirectUrl = $page ? $page->getData('redirect_url') : '';
+
+// 跟踪代码配置
+$ga4Id = $page ? $page->getData('ga4_id') : '';
+$fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
+
+// CTA 事件名称（如果未设置，使用默认：handle_form_submit）
+$ctaEventName = $page ? $page->getData('cta_event_name') : '';
+if (empty($ctaEventName) && $page) {
+    $handle = $page->getData('handle') ?: 'page';
+    $ctaEventName = $handle . '_form_submit';
+}
+
+// 表单提示信息配置
+$formMessages = [
+    'email_required' => getContentConfig($styleSettings, 'messages.email_required', '请输入邮箱地址'),
+    'email_invalid' => getContentConfig($styleSettings, 'messages.email_invalid', '邮箱格式不正确'),
+    'phone_required' => getContentConfig($styleSettings, 'messages.phone_required', '请输入电话号码'),
+    'phone_invalid' => getContentConfig($styleSettings, 'messages.phone_invalid', '电话号码格式不正确'),
+    'submitting' => getContentConfig($styleSettings, 'messages.submitting', 'Submitting your information...'),
+    'success' => getContentConfig($styleSettings, 'messages.success', 'Thank you! Your submission has been received.'),
+    'success_redirect' => getContentConfig($styleSettings, 'messages.success_redirect', 'Success! Redirecting...'),
+    'error' => getContentConfig($styleSettings, 'messages.error', 'Submission failed. Please try again.')
+];
+?>
+
+<style>
+    .marketing-content {
+        width: 100%;
+        padding-top: <?= $paddingV ?>;
+        padding-bottom: <?= $paddingV ?>;
+        background: linear-gradient(180deg, #020818 0%, #0a1929 100%);
+    }
+    
+    .marketing-content-container {
+        max-width: <?= $maxWidth ?>;
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: <?= $paddingH ?>;
+        padding-right: <?= $paddingH ?>;
+    }
+    
+    .marketing-content-layout {
+        display: flex;
+        flex-direction: column;
+        gap: <?= $gap ?>;
+        min-height: <?= $minHeight ?>;
+        align-items: stretch;
+    }
+    
+    /* PC端：左边内容（标题+表单），右边图片 */
+    @media (min-width: 768px) {
+        .marketing-content-layout {
+            flex-direction: <?= $direction === 'image-left' ? 'row-reverse' : 'row' ?>;
+            align-items: center;
+        }
+    }
+    
+    /* 左侧内容区（标题+副标题+表单） */
+    .marketing-form-wrapper {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+    
+    /* 右侧图片区 */
+    .marketing-image-wrapper {
+        flex: 0 0 auto;
+        width: <?= $imageContainerWidthMobile ?>;
+        order: -1; /* 移动端图片在上 */
+        perspective: 1000px; /* 3D透视效果 */
+    }
+    
+    @media (min-width: 768px) and (max-width: 1024px) {
+        /* 平板端 */
+        .marketing-image-wrapper {
+            width: <?= $imageContainerWidthTablet ?>;
+            max-width: none;
+            order: 0;
+        }
+        .marketing-form-wrapper {
+            flex: 1 1 auto;
+            width: <?= (100 - floatval($imageContainerWidthConfig['tablet'] ?: $imageContainerWidthConfig['desktop'])) ?>%;
+            max-width: none;
+            min-width: 0;
+        }
+    }
+    
+    @media (min-width: 1024px) {
+        /* PC端 */
+        .marketing-image-wrapper {
+            width: <?= $imageContainerWidthDesktop ?>;
+            max-width: none;
+            order: 0;
+        }
+        .marketing-form-wrapper {
+            flex: 1 1 auto;
+            width: <?= (100 - floatval($imageContainerWidthConfig['desktop'])) ?>%;
+            max-width: none;
+            min-width: 0;
+        }
+    }
+    
+    @media (min-width: 1024px) {
+        .marketing-content-layout {
+            justify-content: center;
+            gap: clamp(40px, calc(40px + 40 * ((100vw - 1024px) / 256)), 80px);
+        }
+    }
+    
+    /* 标题和副标题区域 */
+    .marketing-text-section {
+        margin-bottom: clamp(30px, calc(30px + 20 * ((100vw - 375px) / 905)), 50px);
+    }
+    
+    .marketing-title {
+        color: <?= htmlspecialchars($titleColor ?? '') ?>;
+        font-size: <?= $titleSize ?>;
+        font-weight: <?= htmlspecialchars($titleWeight ?? '') ?>;
+        line-height: <?= htmlspecialchars($titleLineHeight ?? '') ?>;
+        text-align: <?= htmlspecialchars($titleAlign ?? '') ?>;
+        margin-bottom: <?= $titleMargin ?>;
+    }
+    
+    .marketing-subtitle p {
+        color: <?= htmlspecialchars($subtitleColor ?? '') ?>;
+        font-size: <?= $subtitleSize ?>;
+        font-weight: <?= htmlspecialchars($subtitleWeight ?? '') ?>;
+        line-height: <?= htmlspecialchars($subtitleLineHeight ?? '') ?>;
+        text-align: <?= htmlspecialchars($subtitleAlign ?? '') ?>;
+        margin-top: 0;
+        margin-bottom: <?= $subtitleMargin ?>;
+    }
+    
+    .marketing-subtitle p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .marketing-subtitle strong {
+        font-weight: 700;
+        color: #ffffff;
+    }
+    
+    .marketing-form {
+        background-color: <?= htmlspecialchars($formBg ?? '') ?>;
+        border-radius: <?= htmlspecialchars($formRadius ?? '') ?>px;
+        padding: <?= $formPadding ?>;
+    }
+    
+    .marketing-form-title {
+        color: <?= htmlspecialchars($formTitleColor ?? '') ?>;
+        font-size: <?= $formTitleSize ?>;
+        font-weight: <?= htmlspecialchars($formTitleWeight ?? '') ?>;
+        margin-bottom: <?= $formTitleMargin ?>;
+    }
+    
+    .marketing-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: clamp(12px, calc(12px + 8 * ((100vw - 375px) / 905)), 20px);
+        margin-bottom: clamp(16px, calc(16px + 8 * ((100vw - 375px) / 905)), 24px);
+    }
+    
+    /* 移动端：邮箱和电话上下堆叠 */
+    @media (max-width: 640px) {
+        .marketing-form-row {
+            grid-template-columns: 1fr;
+            gap: clamp(14px, calc(14px + 4 * ((100vw - 375px) / 905)), 18px);
+        }
+    }
+    
+    .marketing-form-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .marketing-form-label {
+        color: #666666;
+        font-size: clamp(13px, calc(13px + 2 * ((100vw - 375px) / 905)), 15px);
+        font-weight: 400;
+        margin-bottom: clamp(6px, calc(6px + 2 * ((100vw - 375px) / 905)), 8px);
+    }
+    
+    .marketing-input {
+        width: 100%;
+        height: <?= $inputHeight ?>;
+        background-color: <?= htmlspecialchars($inputBg ?? '') ?>;
+        color: <?= htmlspecialchars($inputText ?? '') ?>;
+        border: 1px solid <?= htmlspecialchars($inputBorder ?? '') ?>;
+        border-radius: <?= htmlspecialchars($inputRadius ?? '') ?>px;
+        padding: <?= $inputPadding ?>;
+        font-size: <?= $inputSize ?>;
+        outline: none;
+        transition: border-color 0.3s;
+    }
+    
+    .marketing-input::placeholder {
+        color: #cccccc;
+    }
+    
+    .marketing-input:focus {
+        border-color: #00ff00;
+    }
+    
+    .marketing-checkbox-wrapper {
+        display: flex;
+        align-items: flex-start;
+        gap: clamp(8px, calc(8px + 4 * ((100vw - 375px) / 905)), 12px);
+        margin-bottom: clamp(16px, calc(16px + 8 * ((100vw - 375px) / 905)), 24px);
+    }
+    
+    .marketing-checkbox {
+        flex-shrink: 0;
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        cursor: pointer;
+        accent-color: #00ff00;
+    }
+    
+    .marketing-checkbox-label {
+        color: #666666;
+        font-size: clamp(11px, calc(11px + 1 * ((100vw - 375px) / 905)), 12px);
+        line-height: 1.6;
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    .marketing-checkbox-label a {
+        color: #000000;
+        text-decoration: underline;
+        font-weight: 600;
+    }
+    
+    .marketing-checkbox-label a:hover {
+        color: #333333;
+    }
+    
+    .marketing-button {
+        width: 100%;
+        height: <?= $btnHeight ?>;
+        background-color: #00ff00;
+        color: #000000;
+        border: none;
+        border-radius: <?= htmlspecialchars($btnRadius ?? '') ?>px;
+        padding-left: <?= $btnPaddingH ?>;
+        padding-right: <?= $btnPaddingH ?>;
+        font-size: <?= $btnSize ?>;
+        font-weight: <?= htmlspecialchars($btnWeight ?? '') ?>;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        animation: wiggle <?= htmlspecialchars($btnWiggleInterval ?? '') ?>s ease infinite;
+    }
+    
+    .marketing-button:hover {
+        background-color: #00dd00;
+        animation-play-state: paused;
+    }
+    
+    .marketing-button:active {
+        animation-play-state: paused;
+        transform: scale(0.98) rotate(0deg);
+    }
+    
+    .marketing-disclaimer {
+        color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
+        font-size: <?= $disclaimerSize ?>;
+        line-height: <?= htmlspecialchars($disclaimerHeight ?? '') ?>;
+        margin-top: <?= $disclaimerMargin ?>;
+    }
+    
+    /* 图片3D旋转动画 */
+    @keyframes bookFloat {
+        0% {
+            transform: rotateX(10deg) rotateY(-20deg);
+        }
+        50% {
+            transform: rotateX(10deg) rotateY(-10deg);
+        }
+        100% {
+            transform: rotateX(10deg) rotateY(-20deg);
+        }
+    }
+    
+    .marketing-image {
+        width: 100%;
+        height: auto;
+        border-radius: <?= htmlspecialchars($imageRadius ?? '') ?>px;
+        object-fit: cover;
+        transform-style: preserve-3d;
+        animation: bookFloat 4s ease-in-out infinite;
+    }
+    
+    /* 按钮左右晃动动画 - 2秒摇晃一次 */
+    @keyframes wiggle {
+        0% {
+            transform: rotate(0deg);
+        }
+        5% {
+            transform: rotate(-3deg);
+        }
+        10% {
+            transform: rotate(3deg);
+        }
+        15% {
+            transform: rotate(-3deg);
+        }
+        20%, 100% {
+            transform: rotate(0deg);
+        }
+    }
+    
+    .marketing-content-text {
+        color: <?= htmlspecialchars($contentColor ?? '') ?>;
+        font-size: <?= $contentSize ?>;
+        line-height: <?= htmlspecialchars($contentHeight ?? '') ?>;
+        margin-bottom: <?= $gap ?>;
+    }
+    
+    .marketing-content-text strong {
+        font-weight: 700;
+        color: #ffffff;
+    }
+    
+    /* 移动端全局优化 */
+    @media (max-width: 767px) {
+        .marketing-content {
+            padding-top: clamp(30px, 8vw, 40px);
+            padding-bottom: clamp(30px, 8vw, 40px);
+        }
+        
+        .marketing-content-container {
+            max-width: 100%;
+            padding-left: clamp(16px, 4vw, 24px);
+            padding-right: clamp(16px, 4vw, 24px);
+        }
+        
+        .marketing-content-layout {
+            gap: clamp(30px, 8vw, 40px);
+            min-height: auto;
+        }
+        
+        /* 标题和副标题区域 */
+        .marketing-text-section {
+            margin-bottom: clamp(24px, 6vw, 32px);
+        }
+        
+        .marketing-title {
+            font-size: clamp(24px, 6.5vw, 32px);
+            line-height: 1.2;
+            margin-bottom: clamp(16px, 4vw, 20px);
+            text-align: center;
+        }
+        
+        .marketing-subtitle p {
+            font-size: clamp(14px, 3.8vw, 16px);
+            line-height: 1.6;
+            text-align: center;
+            margin-bottom: clamp(10px, 2.5vw, 12px);
+        }
+        
+        .marketing-subtitle p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .marketing-form {
+            padding: clamp(20px, 5vw, 28px);
+        }
+        
+        .marketing-form-title {
+            font-size: clamp(16px, 4.5vw, 20px);
+            margin-bottom: clamp(16px, 4vw, 20px);
+        }
+        
+        .marketing-input {
+            height: clamp(44px, 11vw, 48px);
+            font-size: clamp(14px, 3.5vw, 16px);
+            padding: clamp(10px, 2.5vw, 12px);
+        }
+        
+        .marketing-button {
+            height: clamp(48px, 12vw, 52px);
+            font-size: clamp(15px, 4vw, 17px);
+        }
+        
+        .marketing-image {
+            border-radius: clamp(4px, 2vw, 8px);
+        }
+        
+        .marketing-checkbox-label {
+            font-size: clamp(10px, 2.5vw, 11px);
+            line-height: 1.5;
+        }
+        
+        .marketing-disclaimer {
+            font-size: clamp(10px, 2.5vw, 11px);
+            margin-top: clamp(10px, 2.5vw, 12px);
+        }
+    }
+    
+    /* 超小屏幕优化 (iPhone SE等) */
+    @media (max-width: 374px) {
+        .marketing-content-container {
+            max-width: 100%;
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+        
+        .marketing-form {
+            padding: 16px;
+        }
+        
+        .marketing-form-title {
+            font-size: 15px;
+        }
+        
+        .marketing-input {
+            height: 42px;
+            font-size: 13px;
+        }
+        
+        .marketing-button {
+            height: 46px;
+            font-size: 14px;
+        }
+    }
+    
+    /* iPad平板端优化 (768px-1024px) */
+    @media (min-width: 768px) and (max-width: 1024px) {
+        /* 内容区域 */
+        .marketing-content {
+            padding-top: clamp(40px, 5vw, 60px);
+            padding-bottom: clamp(40px, 5vw, 60px);
+        }
+        
+        .marketing-content-container {
+            max-width: clamp(700px, 85vw, 900px);
+            padding-left: clamp(32px, 5vw, 48px);
+            padding-right: clamp(32px, 5vw, 48px);
+        }
+        
+        .marketing-content-layout {
+            gap: clamp(40px, 5vw, 50px);
+            flex-direction: row;
+            align-items: center;
+        }
+        
+        /* 标题和副标题区域 */
+        .marketing-text-section {
+            margin-bottom: clamp(32px, 4vw, 40px);
+        }
+        
+        .marketing-title {
+            font-size: clamp(36px, 5vw, 48px);
+            line-height: 1.15;
+            margin-bottom: clamp(24px, 3vw, 28px);
+        }
+        
+        .marketing-subtitle p {
+            font-size: clamp(16px, 2.2vw, 18px);
+            line-height: 1.6;
+            margin-bottom: clamp(12px, 1.8vw, 14px);
+        }
+        
+        .marketing-subtitle p:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* 表单样式 */
+        .marketing-form {
+            padding: clamp(24px, 3.5vw, 32px);
+        }
+        
+        .marketing-form-title {
+            font-size: clamp(20px, 2.8vw, 24px);
+            margin-bottom: clamp(20px, 3vw, 24px);
+        }
+        
+        /* 表单行保持并排 */
+        .marketing-form-row {
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(14px, 2vw, 18px);
+        }
+        
+        .marketing-form-label {
+            font-size: clamp(14px, 1.8vw, 15px);
+        }
+        
+        .marketing-input {
+            height: clamp(46px, 6vw, 50px);
+            font-size: clamp(15px, 2vw, 16px);
+            padding: clamp(12px, 1.8vw, 14px);
+        }
+        
+        .marketing-button {
+            height: clamp(50px, 6.5vw, 54px);
+            font-size: clamp(16px, 2.2vw, 18px);
+            padding-left: clamp(28px, 4vw, 32px);
+            padding-right: clamp(28px, 4vw, 32px);
+        }
+        
+        .marketing-checkbox-label {
+            font-size: clamp(11px, 1.5vw, 12px);
+            line-height: 1.6;
+        }
+        
+        .marketing-disclaimer {
+            font-size: clamp(11px, 1.5vw, 12px);
+            margin-top: clamp(14px, 2vw, 16px);
+        }
+        
+        .marketing-image {
+            border-radius: 8px;
+        }
+    }
+</style>
+
+<main class="marketing-content">
+    <div class="marketing-content-container">
+        <?php if ($showContent === 'yes' && $pageContent): ?>
+        <div class="marketing-content-text">
+            <?= processContentText($pageContent) ?>
+        </div>
+        <?php endif; ?>
+        
+        <div class="marketing-content-layout">
+            <!-- 左侧内容区：标题+副标题+表单 -->
+            <div class="marketing-form-wrapper">
+                <!-- 标题和副标题 -->
+                <div class="marketing-text-section">
+                    <?php if ($titleText): ?>
+                    <h1 class="marketing-title"><?= htmlspecialchars($titleText ?? '') ?></h1>
+                    <?php endif; ?>
+                    
+                    <div class="marketing-subtitle"><?= processContentText($subtitleText) ?></div>
+                </div>
+                
+                <!-- 表单 -->
+                <div class="marketing-form">
+                    <?php if ($formTitle): ?>
+                    <h2 class="marketing-form-title"><?= htmlspecialchars($formTitle ?? '') ?></h2>
+                    <?php endif; ?>
+                    
+                    <form method="POST" action="<?= htmlspecialchars($formAction ?? '') ?>" id="marketingForm">
+                    <?= $this->getFormKey($formAction) ?>
+                        <input type="hidden" name="page_id" value="<?= $page ? $page->getId() : 0 ?>">
+                        
+                        <!-- Email and Phone Row -->
+                        <div class="marketing-form-row">
+                            <div class="marketing-form-group">
+                                <label for="email" class="marketing-form-label">Your Email</label>
+                                <input type="email" 
+                                       id="email"
+                                       name="email" 
+                                       class="marketing-input" 
+                                       placeholder="email@example.com"
+                                       required>
+                            </div>
+                            <div class="marketing-form-group">
+                                <label for="phone" class="marketing-form-label">Your Phone</label>
+                                <input type="tel" 
+                                       id="phone"
+                                       name="phone" 
+                                       class="marketing-input" 
+                                       placeholder=""
+                                       required>
+                            </div>
+                        </div>
+                        
+                        <!-- Agreement Checkbox -->
+                        <div class="marketing-checkbox-wrapper">
+                            <input type="checkbox" 
+                                   id="marketing-agree" 
+                                   name="marketing_agree" 
+                                   class="marketing-checkbox"
+                                   required>
+                            <label for="marketing-agree" class="marketing-checkbox-label">
+                                I AGREE TO RECEIVE MARKETING. By entering your info and clicking I AGREE & GET ALERTS below, you provide your electronic signature and consent to our 
+                                <a href="#" target="_blank">TERMS OF SERVICE</a> and 
+                                <a href="#" target="_blank">PRIVACY POLICY</a> 
+                                and for Millionairepub.com, along with its agents and assigns, to email, call and text you at the email address and telephone number you provided (including possibly using an automatic telephone dialing system, prerecorded messages and artificial/A.I. voices, with important alerts, trading education and marketing offers, including outside of normal calling windows and even if you are on a DNC list.
+                            </label>
+                        </div>
+                        
+                        <button type="submit" class="marketing-button" id="submitBtn">
+                            <?= htmlspecialchars($btnText ?? '') ?>
+                        </button>
+                        
+                        <!-- 提交状态提示 -->
+                        <div id="formMessage" style="display: none; margin-top: 16px; padding: 12px; border-radius: 4px; text-align: center; font-size: 14px;"></div>
+                        
+                        <?php if ($disclaimerText): ?>
+                        <div class="marketing-disclaimer">
+                            <?= processContentText($disclaimerText) ?>
+                        </div>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 图片区域 -->
+            <?php if ($imageUrl): ?>
+            <div class="marketing-image-wrapper">
+                <img src="<?= htmlspecialchars($imageUrl ?? '') ?>" loading="lazy"
+                     alt="<?= htmlspecialchars($imageAlt ?? '') ?>" 
+                     class="marketing-image">
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</main>
+
+<script>
+(function() {
+    'use strict';
+    
+    const form = document.getElementById('marketingForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const formMessage = document.getElementById('formMessage');
+    const redirectUrl = <?= json_encode($redirectUrl) ?>;
+    const messages = <?= json_encode($formMessages) ?>;
+    
+    // 跟踪代码配置
+    const ctaEventName = <?= json_encode($ctaEventName) ?>;
+    
+    if (!form) return;
+    
+    // 保存原始按钮文本
+    const originalBtnText = submitBtn.textContent;
+    
+    // 显示消息
+    function showMessage(message, type) {
+        formMessage.textContent = message;
+        formMessage.style.display = 'block';
+        
+        if (type === 'success') {
+            formMessage.style.backgroundColor = '#d4edda';
+            formMessage.style.color = '#155724';
+            formMessage.style.border = '1px solid #c3e6cb';
+        } else if (type === 'error') {
+            formMessage.style.backgroundColor = '#f8d7da';
+            formMessage.style.color = '#721c24';
+            formMessage.style.border = '1px solid #f5c6cb';
+        } else if (type === 'loading') {
+            formMessage.style.backgroundColor = '#d1ecf1';
+            formMessage.style.color = '#0c5460';
+            formMessage.style.border = '1px solid #bee5eb';
+        }
+    }
+    
+    // 隐藏消息
+    function hideMessage() {
+        formMessage.style.display = 'none';
+    }
+    
+    // 设置按钮loading状态
+    function setButtonLoading(loading) {
+        if (loading) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = messages.submitting || 'Submitting...';
+            submitBtn.style.opacity = '0.7';
+            submitBtn.style.cursor = 'not-allowed';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+        }
+    }
+    
+    // 表单提交处理
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 验证表单
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        hideMessage();
+        setButtonLoading(true);
+        showMessage(messages.submitting, 'loading');
+        
+        // 收集表单数据
+        const formData = new FormData(form);
+        
+        // 发送AJAX请求
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            setButtonLoading(false);
+            
+            if (data.success || data.status === 'success') {
+                // 根据是否有跳转地址显示不同的成功消息
+                const successMsg = (redirectUrl && redirectUrl.trim() !== '') 
+                    ? messages.success_redirect 
+                    : messages.success;
+                showMessage(successMsg, 'success');
+                
+                // 触发转化事件跟踪 - 使用通用跟踪函数
+                window.trackFormSubmit(ctaEventName, {
+                    email: formData.get('email'),
+                    phone: formData.get('phone')
+                });
+                
+                // 如果配置了跳转地址，1秒后跳转；否则不跳转
+                if (redirectUrl && redirectUrl.trim() !== '') {
+                    setTimeout(function() {
+                        window.location.href = redirectUrl;
+                    }, 1000);
+                }
+            } else {
+                // 使用服务器返回的错误消息，如果没有则使用配置的默认消息
+                const errorMsg = data.message || data.error || messages.error;
+                showMessage(errorMsg, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Form submission error:', error);
+            setButtonLoading(false);
+            showMessage(messages.error, 'error');
+        });
+    });
+})();
+</script>
+
+

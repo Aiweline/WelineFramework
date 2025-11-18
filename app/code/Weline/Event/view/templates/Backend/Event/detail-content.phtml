@@ -1,0 +1,568 @@
+<?php
+$event = $this->getData('event') ?? [];
+$eventName = $this->getData('event_name') ?? '';
+?>
+
+<!-- 事件信息概览 -->
+<div class="event-overview">
+    <div class="event-header">
+        <div class="event-icon">
+            <i class="mdi mdi-lightning-bolt"></i>
+        </div>
+        <div class="event-info">
+            <h2><?= htmlspecialchars($event['name'] ?? $eventName) ?></h2>
+            <div class="event-code">
+                <code id="event-code-value"><?= htmlspecialchars($eventName) ?></code>
+                <button type="button" class="btn-copy" onclick="copyEventName()" title="复制事件名">
+                    <i class="mdi mdi-content-copy"></i>
+                </button>
+            </div>
+            <div class="event-badges">
+                <?php if ($event['has_spec'] ?? false): ?>
+                    <span class="badge badge-success">有规约</span>
+                <?php else: ?>
+                    <span class="badge badge-danger">无规约</span>
+                <?php endif; ?>
+                <?php if ($event['has_doc'] ?? false): ?>
+                    <span class="badge badge-info">有文档</span>
+                <?php else: ?>
+                    <span class="badge badge-warning">无文档</span>
+                <?php endif; ?>
+                <?php if (($event['observer_count'] ?? 0) > 0): ?>
+                    <span class="badge badge-primary"><?= $event['observer_count'] ?> 个观察者</span>
+                <?php else: ?>
+                    <span class="badge badge-secondary">无观察者</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-cube-outline"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= htmlspecialchars($event['module'] ?? '') ?></div>
+            <div class="stat-label">定义模块</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-eye"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= $event['observer_count'] ?? 0 ?></div>
+            <div class="stat-label">观察者数量</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-package-variant"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= count($event['observer_modules'] ?? []) ?></div>
+            <div class="stat-label">观察者模块数</div>
+        </div>
+    </div>
+</div>
+
+<!-- 详细信息 -->
+<div class="event-details">
+    <!-- 基本信息 -->
+    <div class="detail-section">
+        <h3><i class="mdi mdi-information"></i> 基本信息</h3>
+        <div class="detail-content">
+            <div class="detail-item">
+                <label>事件名：</label>
+                <span><code><?= htmlspecialchars($eventName) ?></code></span>
+            </div>
+            <div class="detail-item">
+                <label>显示名：</label>
+                <span><?= htmlspecialchars($event['name'] ?? $eventName) ?></span>
+            </div>
+            <div class="detail-item">
+                <label>定义模块：</label>
+                <span class="module-name"><?= htmlspecialchars($event['module'] ?? '') ?></span>
+            </div>
+            <?php if (!empty($event['description'])): ?>
+                <div class="detail-item">
+                    <label>描述：</label>
+                    <span><?= nl2br(htmlspecialchars($event['description'] ?? '')) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($event['doc_path'])): ?>
+                <div class="detail-item">
+                    <label>文档路径：</label>
+                    <span>
+                        <code><?= htmlspecialchars($event['doc_path'] ?? '') ?></code>
+                    </span>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- 观察者信息 -->
+    <div class="detail-section">
+        <h3><i class="mdi mdi-eye"></i> 观察者信息</h3>
+        <?php
+        $observers = $event['observers'] ?? [];
+        $observersByModule = $event['observers_by_module'] ?? [];
+        ?>
+        <?php if (empty($observers)): ?>
+            <div class="empty-state">
+                <i class="mdi mdi-eye-off"></i>
+                <p>该事件暂无观察者</p>
+            </div>
+        <?php else: ?>
+            <div class="observers-list">
+                <?php foreach ($observersByModule as $moduleName => $moduleObservers): ?>
+                    <div class="observer-module-group">
+                        <h4>
+                            <i class="mdi mdi-package-variant"></i> 
+                            <?= htmlspecialchars($moduleName) ?>
+                            <span class="badge badge-primary"><?= count($moduleObservers) ?></span>
+                        </h4>
+                        <div class="observers-table">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>观察者名</th>
+                                        <th>实例类</th>
+                                        <th>排序</th>
+                                        <th>状态</th>
+                                        <th>共享</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($moduleObservers as $observer): ?>
+                                        <tr>
+                                            <td>
+                                                <code><?= htmlspecialchars($observer['name'] ?? '') ?></code>
+                                            </td>
+                                            <td>
+                                                <code class="text-primary"><?= htmlspecialchars($observer['instance'] ?? '') ?></code>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary"><?= $observer['sort'] ?? 10000 ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if (($observer['disabled'] ?? 'false') === 'false'): ?>
+                                                    <span class="badge badge-success">启用</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-danger">禁用</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (($observer['shared'] ?? 'true') === 'true'): ?>
+                                                    <span class="badge badge-info">是</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-secondary">否</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.event-overview {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    margin-bottom: 20px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-overview {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.event-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.event-icon {
+    font-size: 48px;
+    color: #fcb92c;
+}
+
+.event-info h2 {
+    margin: 0 0 10px 0;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .event-info h2 {
+    color: #e9ecef;
+}
+
+.event-code {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.event-code code {
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #0bb197;
+    flex: 1;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-code code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.btn-copy {
+    background: #f8f9fa;
+    border: 1px solid #eff2f7;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #74788d;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .btn-copy {
+    background: #1e2125;
+    border-color: #2d3448;
+    color: #8590a5;
+}
+
+.btn-copy:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .btn-copy:hover {
+    background: #2d3448;
+    color: #e9ecef;
+}
+
+.btn-copy i {
+    font-size: 16px;
+}
+
+.event-badges {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .stat-card {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.stat-icon {
+    font-size: 32px;
+    color: #4aa3ff;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #212529;
+    margin-bottom: 4px;
+}
+
+[data-theme-mode="dark"] .stat-value {
+    color: #e9ecef;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .stat-label {
+    color: #8590a5;
+}
+
+.event-details {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .event-details {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.detail-section {
+    margin-bottom: 30px;
+}
+
+.detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.detail-section h3 {
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eff2f7;
+    color: #212529;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-theme-mode="dark"] .detail-section h3 {
+    border-bottom-color: #2d3448;
+    color: #e9ecef;
+}
+
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: #74788d;
+    min-width: 100px;
+}
+
+[data-theme-mode="dark"] .detail-item label {
+    color: #8590a5;
+}
+
+.detail-item span {
+    flex: 1;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .detail-item span {
+    color: #e9ecef;
+}
+
+.observers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.observer-module-group {
+    border: 1px solid #eff2f7;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+[data-theme-mode="dark"] .observer-module-group {
+    border-color: #2d3448;
+}
+
+.observer-module-group h4 {
+    margin: 0 0 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .observer-module-group h4 {
+    color: #e9ecef;
+}
+
+.observers-table {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .table th,
+[data-theme-mode="dark"] .table td {
+    border-bottom-color: #2d3448;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+[data-theme-mode="dark"] .table th {
+    background-color: #1e2125;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .empty-state {
+    color: #8590a5;
+}
+
+.empty-state i {
+    font-size: 48px;
+    color: #eff2f7;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+[data-theme-mode="dark"] .empty-state i {
+    color: #2d3448;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+}
+
+.badge-primary { background-color: #0bb197; color: white; }
+.badge-info { background-color: #4aa3ff; color: white; }
+.badge-success { background-color: #0ac074; color: white; }
+.badge-warning { background-color: #fcb92c; color: #212529; }
+.badge-danger { background-color: #ff3d60; color: white; }
+.badge-secondary { background-color: #74788d; color: white; }
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
+
+code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #0bb197;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.text-primary {
+    color: #0bb197;
+}
+
+.module-name {
+    color: #4aa3ff;
+    font-weight: 500;
+}
+</style>
+
+<script>
+function copyEventName() {
+    const eventCode = document.getElementById('event-code-value');
+    if (!eventCode) return;
+    
+    const text = eventCode.textContent;
+    
+    // 使用现代 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            showCopySuccess();
+        }).catch(function(err) {
+            console.error('复制失败:', err);
+            fallbackCopyText(text);
+        });
+    } else {
+        // 降级方案
+        fallbackCopyText(text);
+    }
+}
+
+function fallbackCopyText(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showCopySuccess();
+    } catch (err) {
+        console.error('复制失败:', err);
+        alert('复制失败，请手动复制');
+    }
+    document.body.removeChild(textArea);
+}
+
+function showCopySuccess() {
+    const btn = document.querySelector('.btn-copy');
+    if (!btn) return;
+    
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-check"></i>';
+    btn.style.color = '#28a745';
+    setTimeout(function() {
+        btn.innerHTML = originalHTML;
+        btn.style.color = '';
+    }, 2000);
+}
+</script>
+

@@ -1,0 +1,25 @@
+{
+    "joemiller303@gmail.com": {
+        "email": "joemiller303@gmail.com",
+        "name": "Joe Miller",
+        "attempts": 3,
+        "reasons": [
+            {
+                "reason": "Sent 0 individual emails (with variable replacement)",
+                "timestamp": "2025-10-25 00:09:07"
+            },
+            {
+                "reason": "Exception with new account: SMTP Error: The following recipients failed: joemiller303@gmail.com: <joemiller303@gmail.com>: Recipient address rejected: Policy Rejection- Sending limit reached - outgoing message count, recipient count, or outgoing message total size. Please try again later.\r\n",
+                "timestamp": "2025-10-25 00:09:11"
+            },
+            {
+                "reason": "Exception with new account: SMTP Error: The following recipients failed: joemiller303@gmail.com: <joemiller303@gmail.com>: Recipient address rejected: Policy Rejection- Sending limit reached - outgoing message count, recipient count, or outgoing message total size. Please try again later.\r\n",
+                "timestamp": "2025-10-25 00:11:26"
+            }
+        ],
+        "first_failed_at": "2025-10-25 00:09:07",
+        "last_failed_at": "2025-10-25 00:11:26",
+        "permanent_reason": "Exceeded maximum retry attempts (3)",
+        "moved_to_permanent_at": "2025-10-25 00:11:26"
+    }
+}

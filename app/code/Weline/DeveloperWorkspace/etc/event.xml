@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Framework_Module::module_upgrade">
+        <observer name="Weline_DeveloperWorkspace::module_upgrade_documents" instance="Weline\DeveloperWorkspace\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    
+    <!-- 开发工具面板：在应用运行完成后注入 -->
+    <event name="App::run_after">
+        <observer name="Weline_DeveloperWorkspace::dev_tool_panel" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+</config>
+
+

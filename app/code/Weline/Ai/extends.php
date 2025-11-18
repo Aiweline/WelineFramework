@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+/**
+ * Weline_Ai 模块扩展规约
+ * 
+ * 本文件定义了 Weline_Ai 模块提供的扩展点，其他模块可以通过这些扩展点来扩展 AI 功能
+ */
+return [
+    'type' => 'module', // module 或 theme
+    'documentation' => 'extends.md', // 文档文件路径（相对于模块根目录）
+    'extends' => [
+        'Adapter' => [
+            'path' => 'extends/module/Weline_Ai/Adapter',
+            'interface' => 'Weline\Ai\Interface\ScenarioAdapterInterface',
+            'description' => '场景适配器扩展点，用于扩展 AI 场景适配功能',
+            'required' => true, // 是否必须实现接口
+            'multiple' => true  // 是否允许多个实现
+        ]
+        // 可以定义多个扩展点目录
+    ]
+];
+

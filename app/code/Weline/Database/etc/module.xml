@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:weline:framework:etc/module.xsd">
+    <module name="Weline_Database" setup_version="1.0.0">
+        <sequence>
+            <module name="Weline_Framework"/>
+        </sequence>
+    </module>
+</config>

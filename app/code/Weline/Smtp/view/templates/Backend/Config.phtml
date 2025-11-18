@@ -1,0 +1,264 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <!-- jvectormap -->
+    <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
+    <!-- jquery.mCustomScrollbar 插件 -->
+    <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar' />
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- start page title -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('Smtp邮件服务配置') ?></h4>
+
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('Smtp邮件服务配置') ?></li>
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <template>Weline_Component::message.phtml</template>
+                                <h4 class="card-title"><?= __('Smtp邮件服务配置') ?></h4>
+                                <div class='alert alert-danger alert-dismissible fade show mb-0' role='alert'>
+                                    <button type='button' class='btn-close' data-bs-dismiss='alert' aria-label='Close'></button>
+                                    <strong>
+                                        <lang>提示！</lang>
+                                    </strong>
+                                    <lang>为了安全，默认支持auth验证和开启secure安全模式！仅https和验证模式下正常运行。</lang>
+                                </div>
+                                <form class='needs-validation' novalidate method='post' action="@backend-url{'*/backend/config'}">
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='validationHost'>
+                                                    <lang>主机</lang>
+                                                </label>
+                                                <input type='text' name='smtp_host' class='form-control' id='validationHost'
+                                                       placeholder='@lang(请输入主机名)' value='{{smtp_host}}' required>
+                                                <div class='valid-feedback'>
+                                                    <lang>Smtp主机录入成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入Smtp主机</lang>
+                                                </div>
+                                            </div>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='validationPort'>
+                                                    <lang>端口</lang>
+                                                </label>
+                                                <input type='number' name='smtp_port' step='1' class='form-control' id='validationPort'
+                                                       placeholder='@lang{请个输入端口}'
+                                                       value='{{smtp_port ?: 465}}'
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>Smtp端口录入成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入Smtp端口</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='validationUsername'>
+                                                    <lang>用户名</lang>
+                                                </label>
+                                                <input type='text' name='smtp_username' class='form-control' id='validationUsername'
+                                                       placeholder='@lang(请输入Smtp用户名)' value='{{smtp_username}}' required>
+                                                <div class='valid-feedback'>
+                                                    <lang>Smtp用户名录入成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入Smtp用户名</lang>
+                                                </div>
+                                            </div>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='validationPassword'>
+                                                    <lang>密码</lang>
+                                                </label>
+                                                <input type='password' name='smtp_password' class='form-control' id='validationPassword'
+                                                       placeholder='@lang{请个Smtp用户密码}'
+                                                       value='{{smtp_password}}'
+                                                       required>
+                                                <div class='valid-feedback'>
+                                                    <lang>Smtp用户密码录入成功</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>请输入Smtp用户密码</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class='btn btn-primary' type='submit'>
+                                        <lang>保存配置</lang>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- end row -->
+                    </div> <!-- end col -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <template>Weline_Component::message.phtml</template>
+                                <h4 class="card-title"><?= __('Smtp邮件服务配置测试') ?></h4>
+                                <form class='needs-validation' novalidate method='post' action="@backend-url{'*/backend/config/test'}">
+                                    <div class='row'>
+                                        <div class='col-md-6'>
+                                            <div class='mb-3'>
+                                                <label class='form-label' for='validationTestEmail'>
+                                                    <lang>测试邮箱</lang>
+                                                </label>
+                                                <input type='email' name='smtp_test_address' class='form-control' id='validationTestEmail'
+                                                       placeholder='@lang(请输入邮箱地址)' value='{{smtp_test_address}}' required>
+                                                <div class='valid-feedback'>
+                                                    <lang>Smtp测试邮件地址录入成功！</lang>
+                                                </div>
+                                                <div class='invalid-feedback'>
+                                                    <lang>Smtp测试邮件地址未录入！</lang>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class='btn btn-primary' type='submit'>
+                                        <lang>发送</lang>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- end row -->
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- Table Editable plugin -->
+<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
+<script src="@static(Weline_Admin::assets/js/pages/menus/table-editable.init.js)"></script>
+<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!-- Sweet alert init js-->
+<js>Weline_Admin::assets/js/pages/menus/sweet-alerts.init.js</js>
+<!-- parsleyjs -->
+<script src='@static(Weline_Admin::assets/libs/parsleyjs/parsley.min.js)'></script>
+<!-- validation init -->
+<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
+@template(Weline_Admin::common/footer.phtml)
+<script>
+    $('.form-switch').bind('input propertychange', (e) => {
+        let input = $(e.target);
+        let id = input.attr('id');
+        let value = input.is(':checked');
+        let url = '@admin-url("admin/system/cache/status")';
+        let data = {
+            identity: id,
+            cache: value
+        };
+        $.post(url, data, (res) => {
+            if (res.code === 200) {
+                input.prop('checked', res.data);
+                //SweetAlert 提示 成功 自动关闭
+                Swal.fire({
+                    title: '操作成功',
+                    text: '缓存状态已更新',
+                    type: 'success'
+                });
+            } else {
+                input.prop('checked', !res.data);
+            }
+        });
+    })
+</script>
+</body>
+</html>

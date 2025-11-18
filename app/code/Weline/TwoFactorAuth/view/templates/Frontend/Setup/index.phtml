@@ -1,0 +1,465 @@
+<?php
+/**
+ * 2FA设置页面
+ * 
+ * @var string $secret
+ * @var string $formatted_secret
+ * @var array $backup_codes
+ * @var string $qr_code_url
+ * @var string $qr_code_uri
+ * @var string $user_email
+ * @var int $user_id
+ */
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>启用双因素身份验证</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+        }
+        
+        .step {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .step h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .step p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .qr-code img {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .secret-box {
+            background: white;
+            padding: 20px;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .secret-text {
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            font-weight: bold;
+            color: #007bff;
+            letter-spacing: 2px;
+            margin: 10px 0;
+            user-select: all;
+            cursor: pointer;
+        }
+        
+        .secret-text:hover {
+            color: #0056b3;
+        }
+        
+        .backup-codes {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .backup-codes h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .backup-codes-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .backup-code-item {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .verify-section {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .verify-section h3 {
+            color: #155724;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin: 20px 0;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            max-width: 300px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .copy-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #0056b3;
+        }
+        
+        .app-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .app-option {
+            padding: 15px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .app-option:hover {
+            border-color: #007bff;
+            transform: translateY(-2px);
+        }
+        
+        .app-option strong {
+            display: block;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .app-option small {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1>🔐 启用双因素身份验证</h1>
+                <p>按照以下步骤完成设置，增强您的账户安全</p>
+            </div>
+
+            <!-- 步骤1：选择验证器 -->
+            <div class="step">
+                <h3><span class="step-number">1</span>选择验证器应用</h3>
+                <p>您可以使用以下任意一种验证器应用：</p>
+                
+                <div class="app-options">
+                    <div class="app-option">
+                        <strong>🔷 我们的验证器</strong>
+                        <small>完全自主开发</small>
+                        <br>
+                        <a href="/twofa-app/" target="_blank" style="font-size: 12px; color: #007bff;">打开应用</a>
+                    </div>
+                    <div class="app-option">
+                        <strong>🔴 Google Authenticator</strong>
+                        <small>适用于iOS/Android</small>
+                    </div>
+                    <div class="app-option">
+                        <strong>🔵 Microsoft Authenticator</strong>
+                        <small>适用于iOS/Android</small>
+                    </div>
+                    <div class="app-option">
+                        <strong>🟢 其他TOTP应用</strong>
+                        <small>任何标准验证器</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 步骤2：扫描二维码 -->
+            <div class="step">
+                <h3><span class="step-number">2</span>扫描二维码</h3>
+                <p>在验证器应用中选择"添加账户"或"扫描二维码"，然后扫描下方二维码：</p>
+                
+                <div class="qr-code">
+                    <img src="<?= $qr_code_url ?>" alt="2FA QR Code">
+                    <p style="color: #666; margin-top: 10px; font-size: 14px;">
+                        账户：<?= htmlspecialchars($user_email) ?>
+                    </p>
+                </div>
+            </div>
+
+            <!-- 步骤3：手动输入密钥（可选） -->
+            <div class="step">
+                <h3><span class="step-number">3</span>或者手动输入密钥（可选）</h3>
+                <p>如果无法扫描二维码，可以手动输入以下密钥：</p>
+                
+                <div class="secret-box">
+                    <p style="color: #666; margin-bottom: 10px;">点击密钥可复制</p>
+                    <div class="secret-text" onclick="copySecret()" id="secretText">
+                        <?= $formatted_secret ?>
+                    </div>
+                    <button class="copy-btn" onclick="copySecret()">📋 复制密钥</button>
+                </div>
+            </div>
+
+            <!-- 备份码 -->
+            <div class="backup-codes">
+                <h4>⚠️ 备份码（请妥善保存）</h4>
+                <p style="color: #856404; margin-bottom: 10px;">
+                    当您无法获取验证器时，可以使用这些一次性备份码登录。每个备份码只能使用一次。
+                </p>
+                
+                <div class="backup-codes-grid">
+                    <?php foreach ($backup_codes as $code): ?>
+                        <div class="backup-code-item"><?= $code ?></div>
+                    <?php endforeach; ?>
+                </div>
+                
+                <button class="copy-btn" onclick="copyBackupCodes()" style="margin-top: 15px;">
+                    📋 复制所有备份码
+                </button>
+            </div>
+
+            <div class="warning">
+                <strong>⚠️ 重要提示：</strong>
+                请务必保存好备份码！如果丢失手机且没有备份码，您将无法登录账户。
+            </div>
+
+            <!-- 步骤4：验证 -->
+            <div class="verify-section">
+                <h3><span class="step-number">4</span>验证并启用</h3>
+                <p style="color: #155724; margin-bottom: 20px;">
+                    在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：
+                </p>
+                
+                <div class="form-group">
+                    <input 
+                        type="text" 
+                        id="verifyCode" 
+                        placeholder="000000" 
+                        maxlength="6"
+                        pattern="[0-9]*"
+                        inputmode="numeric"
+                    >
+                </div>
+                
+                <div>
+                    <a href="/two-factor-auth/frontend" class="btn btn-secondary">取消</a>
+                    <button class="btn btn-primary" onclick="enableTwoFactor()">确认启用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="secret" value="<?= $secret ?>">
+    <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
+
+    <script>
+        // 复制密钥
+        function copySecret() {
+            const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
+            navigator.clipboard.writeText(text).then(() => {
+                alert('密钥已复制到剪贴板');
+            });
+        }
+
+        // 复制备份码
+        function copyBackupCodes() {
+            const codes = <?= json_encode($backup_codes) ?>;
+            const text = codes.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                alert('备份码已复制到剪贴板\n请妥善保存！');
+            });
+        }
+
+        // 自动格式化验证码输入
+        document.getElementById('verifyCode').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // 启用2FA
+        async function enableTwoFactor() {
+            const code = document.getElementById('verifyCode').value;
+            const secret = document.getElementById('secret').value;
+            const backupCodes = document.getElementById('backupCodesJson').value;
+
+            if (!code || code.length !== 6) {
+                alert('请输入6位验证码');
+                return;
+            }
+
+            try {
+                const response = await fetch('/two-factor-auth/frontend/setup/enable', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `secret=${encodeURIComponent(secret)}&code=${code}&backup_codes=${encodeURIComponent(backupCodes)}`
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ 双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。');
+                    window.location.href = '/two-factor-auth/frontend';
+                } else {
+                    alert('❌ ' + result.message + '\n\n请检查验证码是否正确，注意验证码每30秒会更新。');
+                }
+            } catch (error) {
+                alert('操作失败，请重试');
+                console.error(error);
+            }
+        }
+
+        // Enter键提交
+        document.getElementById('verifyCode').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                enableTwoFactor();
+            }
+        });
+    </script>
+</body>
+</html>
+

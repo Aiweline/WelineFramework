@@ -1,0 +1,43 @@
+<?php
+/**
+ * 双因素认证器APP页面
+ * 通过控制器渲染，确保登录保护生效
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $username string
+ * @var $user_id int
+ */
+
+// 获取静态资源的实际路径
+$staticPath = BP . '/pub/static/Weline/default/Weline/TwoFactorAuth/view/statics/twofa-app/index.html';
+
+// 检查文件是否存在
+if (!file_exists($staticPath)) {
+    echo '<div style="padding: 40px; text-align: center;">';
+    echo '<h2 style="color: #d32f2f;">❌ 验证器应用未部署</h2>';
+    echo '<p>请运行部署命令：<code>php bin/w deploy:upgrade</code></p>';
+    echo '</div>';
+    return;
+}
+
+// 读取静态HTML内容
+$htmlContent = file_get_contents($staticPath);
+
+// 准备注入的用户信息
+$userData = [
+    'username' => $username ?? '',
+    'user_id' => $user_id ?? 0,
+];
+
+// 在HTML的</head>之前注入登录信息
+$scriptInjection = sprintf(
+    '<script>window.WELINE_USER = %s; window.WELINE_LOGGED_IN = true;</script>',
+    json_encode($userData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG)
+);
+
+$htmlContent = str_replace('</head>', $scriptInjection . PHP_EOL . '</head>', $htmlContent);
+
+// 输出修改后的HTML
+echo $htmlContent;
+?>
+

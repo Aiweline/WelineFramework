@@ -1,0 +1,104 @@
+<?php
+/**
+ * 数据统计页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $stats
+ * @var array $trends
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$stats = $stats ?? [];
+$trends = $trends ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>数据统计</lang></title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><lang>数据统计</lang></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title"><lang>总用户数</lang></h5>
+                                <h3 class="mb-0"><?= number_format($stats['total_users'] ?? 0) ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title"><lang>总订单数</lang></h5>
+                                <h3 class="mb-0"><?= number_format($stats['total_orders'] ?? 0) ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title"><lang>总产品数</lang></h5>
+                                <h3 class="mb-0"><?= number_format($stats['total_products'] ?? 0) ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title"><lang>总访问数</lang></h5>
+                                <h3 class="mb-0"><?= number_format($stats['total_visits'] ?? 0) ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提示信息 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong> <lang>数据统计功能正在开发中，敬请期待。</lang>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+</body>
+</html>
+

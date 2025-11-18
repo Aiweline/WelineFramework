@@ -1,0 +1,80 @@
+<?php
+/**
+ * 组件：Pagination
+ * 
+ * 分页组件，用于数据分页导航
+ * 字段
+ * @info description 描述：分页组件，用于数据分页导航
+ * @info name 名称：Pagination分页组件
+ * @param currentPage 当前页码（必填）
+ * @param totalPages 总页数（必填）
+ * @param baseUrl 基础URL（必填）
+ * @param pageParam 页码参数名
+ * @param showFirstLast 是否显示首页/末页
+ * @param showPrevNext 是否显示上一页/下一页
+ * @param maxVisible 最大可见页码数
+ * @param class 额外CSS类
+ */
+$currentPage = (int)($this->getData('currentPage') ?? 1);
+$totalPages = (int)($this->getData('totalPages') ?? 1);
+$baseUrl = $this->getData('baseUrl') ?? '';
+$pageParam = $this->getData('pageParam') ?? 'page';
+$showFirstLast = $this->getData('showFirstLast') ?? true;
+$showPrevNext = $this->getData('showPrevNext') ?? true;
+$maxVisible = (int)($this->getData('maxVisible') ?? 5);
+$class = $this->getData('class') ?? '';
+
+// 构建CSS类
+$paginationClass = 'pagination';
+if ($class) {
+    $paginationClass .= ' ' . htmlspecialchars($class);
+}
+
+// 构建URL函数
+$buildUrl = function($page) use ($baseUrl, $pageParam) {
+    $url = $baseUrl;
+    $separator = strpos($url, '?') !== false ? '&' : '?';
+    return $url . $separator . $pageParam . '=' . $page;
+};
+
+// 计算显示的页码范围
+$startPage = max(1, $currentPage - floor($maxVisible / 2));
+$endPage = min($totalPages, $startPage + $maxVisible - 1);
+if ($endPage - $startPage < $maxVisible - 1) {
+    $startPage = max(1, $endPage - $maxVisible + 1);
+}
+?>
+<nav class="<?= $paginationClass ?>">
+    <ul class="pagination-list">
+        <?php if ($showFirstLast && $currentPage > 1): ?>
+            <li class="page-item">
+                <a class="page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($showPrevNext && $currentPage > 1): ?>
+            <li class="page-item">
+                <a class="page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
+            </li>
+        <?php endif; ?>
+        
+        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                <a class="page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+            </li>
+        <?php endfor; ?>
+        
+        <?php if ($showPrevNext && $currentPage < $totalPages): ?>
+            <li class="page-item">
+                <a class="page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
+            </li>
+        <?php endif; ?>
+        
+        <?php if ($showFirstLast && $currentPage < $totalPages): ?>
+            <li class="page-item">
+                <a class="page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
+            </li>
+        <?php endif; ?>
+    </ul>
+</nav>
+
