@@ -32,6 +32,7 @@ class BackendUser extends \Weline\Framework\Database\Model
     public const fields_sess_id = 'sess_id';
     public const fields_is_deleted = 'is_deleted';
     public const fields_is_enabled = 'is_enabled';
+    public const fields_is_sandbox = 'is_sandbox';
 
     public array $_unit_primary_keys = ['user_id'];
     public array $_index_sort_keys = ['user_id', 'email', 'username'];
@@ -63,6 +64,18 @@ class BackendUser extends \Weline\Framework\Database\Model
     add is_deleted int default 0 null comment '是否删除' after is_enabled;
             ");
         }
+        if (!$setup->hasField(self::fields_is_sandbox)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_is_sandbox,
+                    self::fields_is_deleted,
+                    TableInterface::column_type_INTEGER,
+                    1,
+                    'default 0',
+                    '是否沙盒账户'
+                )
+                ->alter();
+        }
     }
 
     /**
@@ -87,6 +100,7 @@ class BackendUser extends \Weline\Framework\Database\Model
                 ->addColumn(self::fields_attempt_ip, TableInterface::column_type_VARCHAR, 255, '', '尝试登录IP')
                 ->addColumn(self::fields_is_enabled, TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
                 ->addColumn(self::fields_is_deleted, TableInterface::column_type_INTEGER, 1, 'default 0', '是否删除')
+                ->addColumn(self::fields_is_sandbox, TableInterface::column_type_INTEGER, 1, 'default 0', '是否沙盒账户')
                 ->create();
 
             # 初始化超管和管理员账户
@@ -207,6 +221,16 @@ class BackendUser extends \Weline\Framework\Database\Model
     public function setLoginIp(string $ip): BackendUser
     {
         return $this->setData(self::fields_login_ip, $ip);
+    }
+
+    public function isSandboxAccount(): bool
+    {
+        return (bool)$this->getData(self::fields_is_sandbox);
+    }
+
+    public function setSandboxAccount(bool $flag): static
+    {
+        return $this->setData(self::fields_is_sandbox, $flag ? 1 : 0);
     }
 
     public function getRole(): Backend\Acl\UserRole

@@ -68,6 +68,9 @@ class Localization extends BaseController
         
         // 检查语言切换并强制更新
         $this->checkLanguageSwitchAndUpdate();
+        
+        // 确保 zh_Hans_CN 默认安装
+        $this->ensureZhHansCnInstalled();
         $this->locale->reset()->joinModel(\Weline\I18n\Model\Locale\Name::class, 'ln', 'main_table.code=ln.locale_code', 'left')
         ->where('ln.display_locale_code', Cookie::getLangLocal());
         // 处理搜索条件
@@ -696,7 +699,7 @@ class Localization extends BaseController
         if (empty($localeName) || $localeName === $localeCode) {
             try {
                 if (\Symfony\Component\Intl\Locales::exists($localeCode)) {
-                    $localeName = \Symfony\Component\Intl\Locales::getName($localeCode, 'zh_CN');
+                    $localeName = \Symfony\Component\Intl\Locales::getName($localeCode, 'zh_Hans_CN');
                 }
             } catch (\Exception $e) {
                 // 忽略错误
@@ -878,6 +881,12 @@ class Localization extends BaseController
             $this->redirect('*/backend/localization');
         }
         
+        // 禁止停用 zh_Hans_CN
+        if ($localeCode === 'zh_Hans_CN') {
+            Message::error(__('不允许停用 zh_Hans_CN 区域，这是系统默认区域'));
+            $this->redirect('*/backend/localization');
+        }
+        
         try {
             $locale = $this->locale->where($this->locale::fields_CODE, $localeCode)->find()->fetch();
             
@@ -942,6 +951,12 @@ class Localization extends BaseController
             $this->redirect('*/backend/localization');
         }
         
+        // 禁止删除 zh_Hans_CN
+        if ($localeCode === 'zh_Hans_CN') {
+            Message::error(__('不允许卸载 zh_Hans_CN 区域，这是系统默认区域'));
+            $this->redirect('*/backend/localization');
+        }
+        
         try {
             $locale = $this->locale->where($this->locale::fields_CODE, $localeCode)->find()->fetch();
             
@@ -990,7 +1005,7 @@ class Localization extends BaseController
     
     /**
      * 从locale代码中提取国家码
-     * 例如：zh_CN -> CN, en_US -> US, fr_FR -> FR
+     * 例如：zh_Hans_CN -> CN, en_US -> US, fr_FR -> FR
      */
     private function extractCountryCodeFromLocale($localeCode)
     {
@@ -1131,5 +1146,56 @@ class Localization extends BaseController
         }
         
         $this->redirect('*/backend/localization');
+    }
+    
+    /**
+     * 确保 zh_Hans_CN 默认安装
+     * 如果发现未安装，则自动安装并激活
+     */
+    private function ensureZhHansCnInstalled()
+    {
+        try {
+            $localeCode = 'zh_Hans_CN';
+            $locale = $this->locale->reset()->where($this->locale::fields_CODE, $localeCode)->find()->fetch();
+            
+            // 如果区域不存在，先创建
+            if (!$locale->getId()) {
+                // 获取国家代码（从 locale code 中提取）
+                $countryCode = 'CN';
+                
+                // 创建区域记录
+                $locale->setData($this->locale::fields_CODE, $localeCode);
+                $locale->setData($this->locale::fields_COUNTRY_CODE, $countryCode);
+                $locale->setData($this->locale::fields_IS_INSTALL, 1);
+                $locale->setData($this->locale::fields_IS_ACTIVE, 1);
+                
+                // 获取国旗
+                try {
+                    $flag = $this->i18n->getCountryFlag($countryCode, 24, 18);
+                    $locale->setData($this->locale::fields_FLAG, $flag ?: '');
+                } catch (\Exception $e) {
+                    $locale->setData($this->locale::fields_FLAG, '');
+                }
+                
+                $locale->save();
+                Message::notes(__('已自动安装并激活默认区域：%{1}', [$localeCode]));
+            } else {
+                // 如果区域存在但未安装，自动安装并激活
+                if (!$locale->getData($this->locale::fields_IS_INSTALL)) {
+                    $locale->setData($this->locale::fields_IS_INSTALL, 1);
+                    $locale->setData($this->locale::fields_IS_ACTIVE, 1);
+                    $locale->save();
+                    Message::notes(__('已自动安装并激活默认区域：%{1}', [$localeCode]));
+                } elseif (!$locale->getData($this->locale::fields_IS_ACTIVE)) {
+                    // 如果已安装但未激活，自动激活
+                    $locale->setData($this->locale::fields_IS_ACTIVE, 1);
+                    $locale->save();
+                    Message::notes(__('已自动激活默认区域：%{1}', [$localeCode]));
+                }
+            }
+        } catch (\Exception $e) {
+            // 静默处理错误，不影响主要功能
+            Message::error(__('确保 zh_Hans_CN 安装失败: %{1}', $e->getMessage()));
+        }
     }
 }

@@ -1,0 +1,25 @@
+WelineFramework框架模型如何使用？
+<p>模型使用：</p>
+<p><span style="color: #e03e2d;">load函数：</span></p>
+<pre>public function index()<br />{<br />    /**@var \Weline\DeveloperWorkspace\Model\Document $document*/<br />    $document = ObjectManager::getInstance(\Weline\DeveloperWorkspace\Model\Document::class);<br />    $this-&gt;assign('document', $document-&gt;load($this-&gt;_request-&gt;getParam('id')));<br />    return $this-&gt;fetch();<br />}</pre>
+<p>这个函数加载这个模型的主键查询这个数据。</p>
+<p>说明：\Weline\DeveloperWorkspace\Model\Document这个是文档模型，load加载了文档\Weline\DeveloperWorkspace\Model\Document模型中指定的主键</p>
+<p>以下是代码的一部分：</p>
+<pre>&lt;?php<br /><br />declare(strict_types=1);<br /><br />/*<br /> * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。<br /> * 邮箱：aiweline@qq.com<br /> * 网址：aiweline.com<br /> * 论坛：https://bbs.aiweline.com<br /> */<br /><br />namespace Weline\DeveloperWorkspace\Model;<br /><br />use Weline\Framework\Database\Api\Db\TableInterface;<br />use Weline\Framework\Http\Url;<br />use Weline\Framework\Manager\ObjectManager;<br />use Weline\Framework\Setup\Data\Context;<br />use Weline\Framework\Setup\Db\ModelSetup;<br /><br />class Document extends \Weline\Framework\Database\Model<br />{<br />    <span style="color: #e03e2d;">public const fields_ID          = 'id';</span><br />    public const fields_TITLE       = 'title';<br />    public const fields_summary     = 'summary';<br />    public const fields_AUTHOR_ID   = 'author_id';<br />    public const fields_CATEGORY_ID = 'category_id';<br />    .....</pre>
+<p>我已经用红色文字标红，<span style="color: #e03e2d;">fields_ID</span>是文档的主键字段，当你使用load的时候直接就是查询这个字段。</p>
+<p>save函数：</p>
+<p>这个函数可以保存数据也可以更新数据，主要是看当前模型实例对象中是否有主键，有主键则直接更新，没有则save会新增数据。</p>
+<p>来看一段控制器保存数据的示例代码：</p>
+<pre>public function postPost()<br />{<br />    # 保存<br />    /**@var \Weline\DeveloperWorkspace\Model\Document $documentModel */<br />    $documentModel = ObjectManager::getInstance(\Weline\DeveloperWorkspace\Model\Document::class);<br />    try {<br />        $pre_msg = __('添加');<br />        if ($this-&gt;_request-&gt;getPost('id')) {<br />            $pre_msg = __('修改');<br />        }<br />        <span style="color: #e03e2d;">$documentModel-&gt;save($this-&gt;_request-&gt;getPost());</span><br />        $this-&gt;getMessageManager()-&gt;addSuccess($pre_msg . '文档成功！ID:' . $documentModel-&gt;getId());<br />    } catch (\Exception $exception) {<br />        $this-&gt;exception($exception);<br />    }<br />    $this-&gt;redirect($this-&gt;_url-&gt;build('dev/tool/admin/document'));<br />}</pre>
+<p>相信一眼能后看明白，如果请求的post中有主键，那么save就是更新了，如果没有就是新增。</p>
+<p>查询：</p>
+<p>来看一段代码：</p>
+<pre>public function index()<br />{<br />    $documentModel = ModelService::getDocumentModel();<br />    <span style="color: #e03e2d;">$documents     = $documentModel-&gt;joinModel(Catalog::class, '<span style="color: #3598db;">catalog</span>', '<span style="color: #3598db;">main_table.category_id=catalog.id</span>')</span><br /><span style="color: #e03e2d;">                                   -&gt;fields('<span style="color: #3598db;">main_table.*,main_table.id as doc_id,catalog.*,catalog.id as c_id,catalog.name as c_name</span>')</span><br /><span style="color: #e03e2d;">                                   -&gt;pagination(</span><br /><span style="color: #e03e2d;">                                       intval($this-&gt;_request-&gt;getParam('page', 1)),</span><br /><span style="color: #e03e2d;">                                       intval($this-&gt;_request-&gt;getParam('pageSize', 10)),</span><br /><span style="color: #e03e2d;">                                       $this-&gt;_request-&gt;getParams()</span><br /><span style="color: #e03e2d;">                                   )-&gt;select()-&gt;fetch();</span><br />    $this-&gt;assign('documents', $documents);<br />    $this-&gt;assign('pagination', $documentModel-&gt;getPagination());<br />    return $this-&gt;fetch();<br />}</pre>
+<p>可以看到，这个查询也很简单，链式查询，支持find,load,where,join,select等，具体请在</p>
+<pre>Weline\Framework\Database\AbstractModel</pre>
+<p>和</p>
+<pre>Weline\Framework\Database\Api\Connection\QueryInterface</pre>
+<p>中参考使用方法。</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>

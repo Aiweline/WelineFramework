@@ -262,9 +262,7 @@ class Config extends BackendController
             
             // 获取所有货币总数
             $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
-            $totalCount = (int)$currencyModel->clear()
-                ->count()
-                ->fetchOrigin();
+            $totalCount = (int)$currencyModel->clear()->count();
             
             // 如果current为0，说明是第一次调用，开始更新
             if ($current === 0) {

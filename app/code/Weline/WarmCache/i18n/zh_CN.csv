@@ -1,4 +1,0 @@
-"请输入域名！或者在 %{1} 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com ","请输入域名！或者在 %{1} 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com "
-缓存预热开始...,缓存预热开始...
-"提供缓存预热,加速网页访问","提供缓存预热,加速网页访问"
-"请输入域名！或者在 %{1} 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com","请输入域名！或者在 %{1} 中添加domain键【指定域名后无需输入域名即可运行命令：php bin/w cache:warm】。命令行指定示例：php bin/w cache:warm www.aiweline.com"

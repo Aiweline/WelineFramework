@@ -1369,7 +1369,7 @@ document.addEventListener('DOMContentLoaded', function () {
  * i18n翻译函数 - 使用框架提供的翻译系统
  * 
  * Weline Framework会自动将__()函数注入到页面中
- * 翻译文件位于：app/code/Weline/TwoFactorAuth/i18n/zh_CN.csv 和 en_US.csv
+ * 翻译文件位于：app/code/Weline/TwoFactorAuth/i18n/zh_Hans_CN.csv 和 en_US.csv
  * 
  * 如果框架未注入__()函数（PWA独立应用场景），提供简单的fallback
  */

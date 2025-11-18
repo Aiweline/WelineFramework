@@ -66,7 +66,8 @@ class Handle implements RegisterInterface
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = ''): array
     {
         $controller = explode('Controller', $param['class']);
-        $controller = array_pop($controller);
+        // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元素
+        $controller = empty(end($controller)) && count($controller) > 1 ? $controller[count($controller) - 2] : array_pop($controller);
         $controller = ltrim(str_replace('\\', '/', $controller), '/');
         switch ($param['type']) {
             case DataInterface::type_API:

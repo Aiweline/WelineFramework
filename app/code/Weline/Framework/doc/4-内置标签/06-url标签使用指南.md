@@ -115,7 +115,7 @@
 ```html
 <!-- 基本用法 -->
 <script>
-    var apiUrl = '@backend-api(/admin/api/user/list)';
+    var apiUrl = '@backend-api(/admin/api/backend/user/list)';
     fetch(apiUrl).then(response => response.json());
 </script>
 ```
@@ -218,7 +218,7 @@
     
     // 后端 API
     function loadUsers() {
-        var url = '@backend-api(/admin/api/user/list)';
+        var url = '@backend-api(/admin/api/backend/user/list)';
         fetch(url)
             .then(response => response.json())
             .then(data => {

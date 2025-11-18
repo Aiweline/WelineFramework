@@ -52,22 +52,23 @@ class ModelSelect implements TaglibInterface
 
             $attributes['url'] = $epUrl;
             $attributes['limit'] = $limit;
+            // 解析所有属性（包括 id），解析后的值会存储在 $Taglib__{属性名} 变量中
             $code = \Weline\Taglib\Taglib::attributes($attributes);
-            $id = $attributes['id'];
+            // 使用解析后的 id（Taglib::attributes 会自动解析变量，如果变量不存在会返回原始字符串）
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
 
-            // 输出 HTML（直接使用解析后的值）
+            // 输出 HTML（使用解析后的 id 值）
             $html[] = '<div class="position-relative ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '">';
-            $html[] = '  <button type="button" class="btn btn-outline-secondary w-100 text-start" id="' . $id . '_trigger" style="height: 38px;">';
-            $html[] = '    <span id="' . $id . '_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('使用默认模型')) . '<?php endif; ?></span>';
+            $html[] = '  <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($Taglib__id) ?>_trigger" style="height: 38px;">';
+            $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('使用默认模型')) . '<?php endif; ?></span>';
             $html[] = '  </button>';
-            $html[] = '  <div id="' . $id . '_container" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060;">';
-            $html[] = '    <input type="text" class="form-control mb-2" id="' . $id . '_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
-            $html[] = '    <input type="hidden" id="' . $id . '_code" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>">';
+            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060;">';
+            $html[] = '    <input type="text" class="form-control mb-2" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
+            $html[] = '    <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_code" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>">';
             $html[] = '    <div class="border rounded shadow bg-white" style="max-height:300px; overflow-y:auto; position:relative;">';
-            $html[] = '      <div id="' . $id . '_loading" style="padding:1rem; text-align:center; display:none;"></div>';
-            $html[] = '      <div id="' . $id . '_list" style="padding:0.25rem;"></div>';
+            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>';
+            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_list" style="padding:0.25rem;"></div>';
             $html[] = '    </div>';
             $html[] = '  </div>';
             $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：点击选择AI模型，输入关键词搜索（800ms防抖）') . '</small>';
@@ -76,7 +77,7 @@ class ModelSelect implements TaglibInterface
             // 脚本：数据加载 + 搜索 + 选中回填
             $html[] = '<script>(function(){';
             $html[] = 'const ep = ' . json_encode($epUrl) . ';';
-            $html[] = 'const id = ' . json_encode($id) . ';';
+            $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const json = <?=$Taglib__json?>;';
             $html[] = 'const limit = \'<?=$Taglib__limit?>\';';
             $html[] = 'const trigger = document.getElementById(id+"_trigger");';
@@ -89,7 +90,8 @@ class ModelSelect implements TaglibInterface
             // 初始化时已用服务端解析值，不再解析 JSON
             $t_no_match = __('未找到匹配的模型');
             $t_load_fail = __('加载失败');
-            $html[] = <<<'JS'
+            $t_default_model = addslashes(__('使用默认模型'));
+            $html[] = <<<JS
  let cache = null;
  function render(items){
    if(!items||!items.length){
@@ -115,11 +117,17 @@ class ModelSelect implements TaglibInterface
    });
    if(hidden.value){
      const act = list.querySelector('.model-item[data-code="' + hidden.value + '"]');
-     if(act) act.classList.add("active");
+     if(act) {
+       act.classList.add("active");
+       // 如果显示文本为空或为默认值，则根据选中的模型设置显示文本
+       if(!display.textContent || display.textContent.trim() === '' || display.textContent === '{$t_default_model}'){
+         display.textContent = act.dataset.text;
+       }
+     }
    }
  }
- JS;
-            $html[] = <<<'JS'
+JS;
+            $html[] = <<<JS
 function firstLoad(){
   loading.style.display = "block";
   fetch(ep+"?limit="+limit)
@@ -128,6 +136,14 @@ function firstLoad(){
       loading.style.display = "none";
       cache = (res&&res.success) ? (res.data||[]) : [];
       render(cache);
+      // 渲染完成后，如果有初始值，尝试设置显示文本
+      if(hidden.value && cache && cache.length > 0){
+        const matched = cache.find(function(m){ return m.code === hidden.value; });
+        if(matched && (!display.textContent || display.textContent.trim() === '' || display.textContent === '{$t_default_model}')){
+          const txt = matched.name + " (" + matched.supplier + ") - " + matched.version;
+          display.textContent = txt;
+        }
+      }
     })
     .catch(()=>{
       loading.style.display = "none";
@@ -144,6 +160,17 @@ JS;
             $html[] = 'function closeOutside(ev){ if(!(box.contains(ev.target)||trigger.contains(ev.target))){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
             $html[] = 'function esc(e){ if(e.key==="Escape"){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
             $html[] = 'trigger.addEventListener("click", function(){ setTimeout(function(){ document.addEventListener("click", closeOutside); document.addEventListener("keydown", esc); }, 0); });';
+            // 页面加载时，如果有初始值但显示文本为空，则自动加载并设置
+            $html[] = 'if(hidden.value && (!display.textContent || display.textContent.trim() === "" || display.textContent === "' . $t_default_model . '")){';
+            $html[] = '  fetch(ep+"?limit="+limit).then(r=>r.json()).then(res=>{';
+            $html[] = '    const models = (res&&res.success) ? (res.data||[]) : [];';
+            $html[] = '    const matched = models.find(function(m){ return m.code === hidden.value; });';
+            $html[] = '    if(matched){';
+            $html[] = '      const txt = matched.name + " (" + matched.supplier + ") - " + matched.version;';
+            $html[] = '      display.textContent = txt;';
+            $html[] = '    }';
+            $html[] = '  }).catch(function(){});';
+            $html[] = '}';
             $html[] = '})();</script>';
 
             // 将翻译插入到前面占位符，避免转义问题

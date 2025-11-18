@@ -1,0 +1,65 @@
+<?php
+/**
+ * 存储设置页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $settings
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$settings = $settings ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>存储设置</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><lang>存储设置</lang></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 提示信息 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong> <lang>存储设置功能正在开发中，敬请期待。</lang>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+</body>
+</html>
+

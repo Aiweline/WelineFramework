@@ -1,0 +1,44 @@
+/**
+ * Weline Frontend - 主题主样式文件
+ * 
+ * 导入顺序：
+ * 1. 变量文件
+ * 2. 颜色主题
+ * 3. 基础样式
+ * 4. 组件样式
+ * 5. 工具类
+ */
+
+/* ========== 1. 核心变量 ========== */
+@import '../variables/_colors.css';
+@import '../variables/_spacing.css';
+@import '../variables/_typography.css';
+@import '../variables/_shadows.css';
+@import '../variables/_borders.css';
+
+/* ========== 2. 颜色主题 ========== */
+@import '../colors/_light.css';
+@import '../colors/_dark.css';
+@import '../colors/_amazon.css';
+
+/* ========== 3. 基础样式 ========== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-primary);
+}
+
+/* ========== 4. 组件样式 ========== */
+@import './components.css';
+
+/* ========== 5. 工具类 ========== */
+@import './utilities.css';
+

@@ -3,21 +3,35 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-   <!-- Sticker管理顶级菜单 -->
+   <!-- 开发工作台 -->
    <add source="Weline_Sticker::sticker_manager" 
          name="sticker_manager" 
          title="Sticker管理" 
-         action="*/backend/sticker/index"
-         parent="Weline_DeveloperWorkspace::dev-tool" 
+         action=""
+         parent="Weline_Backend::dev_workspace" 
          icon="mdi mdi-sticker" 
-         order="60000"/>
+         order="40"/>
+   <add source="Weline_Sticker::sticker_list" 
+        name="sticker_list" 
+        title="Sticker列表" 
+        action="*/backend/sticker/index"
+        parent="Weline_Sticker::sticker_manager" 
+        icon="mdi mdi-view-list" 
+        order="10"/>
+   <add source="Weline_Sticker::sticker_refresh" 
+        name="sticker_refresh" 
+        title="刷新注册表" 
+        action="*/backend/sticker/refresh"
+        parent="Weline_Sticker::sticker_manager" 
+        icon="mdi mdi-refresh" 
+        order="20"/>
    <add source="Weline_Sticker::sticker_manager_test" 
       name="sticker_manager_test" 
       title="Sticker测试" 
       action="*/backend/test/index"
       parent="Weline_Sticker::sticker_manager" 
-      icon="mdi mdi-sticker" 
-      order="60000"/>
+      icon="mdi mdi-flask" 
+      order="30"/>
     
 </menus>
 

@@ -38,7 +38,11 @@ class Product extends \Weline\Framework\App\Controller\BackendController
 
     public function index()
     {
-        $products = $this->product->order()->pagination()->select()->fetch();
+        // 明确指定排序字段，使用表别名避免JOIN时的字段歧义
+        $products = $this->product->order('main_table.' . \WeShop\Product\Model\Product::fields_ID, 'DESC')
+            ->pagination()
+            ->select()
+            ->fetch();
         $this->assign('products', $products->getItems());
         $this->assign('pagination', $products->getPagination());
         return $this->fetch();

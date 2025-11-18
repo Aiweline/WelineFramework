@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\Console\Deploy\Upgrade;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Console\Setup\Di\Compile;
 use Weline\Framework\View\Data\DataInterface;
@@ -132,6 +133,17 @@ class Set extends CommandAbstract
                 /**@var $deploy_upgrade Upgrade */
                 $deploy_upgrade = ObjectManager::getInstance(Upgrade::class);
                 $deploy_upgrade->execute();
+                
+                // 派发事件，通知其他模块部署模式已切换到prod
+                // 其他模块可以监听此事件执行相应的操作（如生成加密token等）
+                /** @var EventsManager $eventManager */
+                $eventManager = ObjectManager::getInstance(EventsManager::class);
+                $eventData = new \Weline\Framework\DataObject\DataObject([
+                    'mode' => $type,
+                    'deploy_version' => $this->getDeployModuleVersion(),
+                    'printer' => $this->printer
+                ]);
+                $eventManager->dispatch('Framework_Deploy_Mode_Set::prod_after', $eventData);
                 break;
             case 'dev':
                 $this->cleanTplComDir();
@@ -146,6 +158,36 @@ class Set extends CommandAbstract
             $this->printer->success('（●´∀｀）♪ 当前部署模式：' . $type);
         } else {
             $this->printer->error('╮(๑•́ ₃•̀๑)╭ 部署模式设置错误：' . $type);
+        }
+    }
+
+    /**
+     * 获取Deploy模块的版本号
+     * 
+     * 从Weline_Deploy模块的register.php文件中读取版本号
+     * 
+     * @return string|null
+     */
+    private function getDeployModuleVersion(): ?string
+    {
+        try {
+            $deployRegisterFile = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Deploy' . DS . 'register.php';
+            if (!file_exists($deployRegisterFile)) {
+                return null;
+            }
+            
+            // 读取register.php文件内容
+            $content = file_get_contents($deployRegisterFile);
+            
+            // 使用正则表达式提取版本号
+            // Register::register(..., '版本号', ...)
+            if (preg_match("/Register::register\s*\([^,]+,\s*[^,]+,\s*[^,]+,\s*['\"]([^'\"]+)['\"]/", $content, $matches)) {
+                return $matches[1] ?? null;
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            return null;
         }
     }
 }

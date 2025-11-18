@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素数据分析API测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        .test-section h2 {
+            color: #007bff;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .test-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .test-form input,
+        .test-form select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .test-form input[type="text"],
+        .test-form select {
+            flex: 1;
+            min-width: 150px;
+        }
+        .btn {
+            padding: 8px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .result.success {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .result.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .label {
+            display: inline-block;
+            min-width: 100px;
+            font-weight: 500;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>像素数据分析API测试</h1>
+        
+        <!-- 商业价值分析 -->
+        <div class="test-section">
+            <h2>1. 商业价值分析</h2>
+            <div class="test-form">
+                <input type="text" id="business-websiteId" placeholder="站点ID (可选)" value="">
+                <select id="business-period">
+                    <option value="daily">每天</option>
+                    <option value="weekly">每周</option>
+                    <option value="monthly">每月</option>
+                    <option value="quarterly">每季度</option>
+                    <option value="yearly">每年</option>
+                </select>
+                <input type="date" id="business-startDate" placeholder="开始日期 (可选)">
+                <input type="date" id="business-endDate" placeholder="结束日期 (可选)">
+                <button class="btn" onclick="testBusinessValue()">测试</button>
+            </div>
+            <div id="business-result" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- 大屏展示数据 -->
+        <div class="test-section">
+            <h2>2. 大屏展示数据（实时）</h2>
+            <div class="test-form">
+                <input type="text" id="dashboard-websiteId" placeholder="站点ID (可选)" value="">
+                <select id="dashboard-interval">
+                    <option value="10">10分钟</option>
+                    <option value="30">30分钟</option>
+                </select>
+                <input type="number" id="dashboard-hours" placeholder="最近N小时" value="24" min="1" max="168">
+                <button class="btn" onclick="testDashboard()">测试</button>
+            </div>
+            <div id="dashboard-result" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- 数据变化百分比 -->
+        <div class="test-section">
+            <h2>3. 数据变化百分比</h2>
+            <div class="test-form">
+                <input type="text" id="change-websiteId" placeholder="站点ID (可选)" value="">
+                <select id="change-interval">
+                    <option value="10">10分钟</option>
+                    <option value="30">30分钟</option>
+                </select>
+                <input type="number" id="change-hours" placeholder="最近N小时" value="24" min="1" max="168">
+                <button class="btn" onclick="testChangePercentage()">测试</button>
+            </div>
+            <div id="change-result" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- 每日对比分析 -->
+        <div class="test-section">
+            <h2>4. 每日对比分析（相比昨天）</h2>
+            <div class="test-form">
+                <input type="text" id="daily-websiteId" placeholder="站点ID (可选)" value="">
+                <input type="number" id="daily-days" placeholder="最近N天" value="7" min="1" max="30">
+                <button class="btn" onclick="testDailyComparison()">测试</button>
+            </div>
+            <div id="daily-result" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- A/B测试 -->
+        <div class="test-section">
+            <h2>5. A/B测试数据</h2>
+            <div class="test-form">
+                <input type="text" id="abtest-websiteId" placeholder="站点ID (可选)" value="">
+                <input type="text" id="abtest-testId" placeholder="测试ID (必填)" value="test_001" required>
+                <select id="abtest-variant">
+                    <option value="">所有变体</option>
+                    <option value="A">变体A</option>
+                    <option value="B">变体B</option>
+                </select>
+                <button class="btn" onclick="testAbTest()">测试</button>
+            </div>
+            <div id="abtest-result" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 获取基础URL
+        function getBaseUrl() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const pathname = window.location.pathname;
+            // 提取基础路径（假设路径格式为 /area/currency/locale/...）
+            const pathParts = pathname.split('/').filter(p => p);
+            // 找到visitor模块的位置
+            let basePath = '';
+            for (let i = 0; i < pathParts.length; i++) {
+                if (pathParts[i] === 'visitor') {
+                    basePath = '/' + pathParts.slice(0, i).join('/');
+                    break;
+                }
+            }
+            if (!basePath) {
+                basePath = pathname.substring(0, pathname.indexOf('/visitor') || pathname.length);
+            }
+            return protocol + '//' + host + basePath;
+        }
+
+        const baseUrl = getBaseUrl();
+        const apiBase = baseUrl + '/visitor/rest/v1/analytics';
+
+        // 显示结果
+        function showResult(elementId, data, isError = false) {
+            const resultDiv = document.getElementById(elementId);
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result ' + (isError ? 'error' : 'success');
+            resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        }
+
+        // 显示加载中
+        function showLoading(elementId) {
+            const resultDiv = document.getElementById(elementId);
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '<div class="loading"></div> 加载中...';
+        }
+
+        // 构建查询参数
+        function buildParams(params) {
+            const query = Object.entries(params)
+                .filter(([key, value]) => value !== null && value !== '' && value !== undefined)
+                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                .join('&');
+            return query ? '?' + query : '';
+        }
+
+        // 测试商业价值分析
+        async function testBusinessValue() {
+            const websiteId = document.getElementById('business-websiteId').value;
+            const period = document.getElementById('business-period').value;
+            const startDate = document.getElementById('business-startDate').value;
+            const endDate = document.getElementById('business-endDate').value;
+
+            showLoading('business-result');
+
+            const params = buildParams({
+                websiteId: websiteId || undefined,
+                period: period,
+                startDate: startDate || undefined,
+                endDate: endDate || undefined
+            });
+
+            try {
+                const response = await fetch(apiBase + '/business-value' + params);
+                const data = await response.json();
+                showResult('business-result', data, !response.ok);
+            } catch (error) {
+                showResult('business-result', { error: error.message }, true);
+            }
+        }
+
+        // 测试大屏展示数据
+        async function testDashboard() {
+            const websiteId = document.getElementById('dashboard-websiteId').value;
+            const interval = document.getElementById('dashboard-interval').value;
+            const hours = document.getElementById('dashboard-hours').value;
+
+            showLoading('dashboard-result');
+
+            const params = buildParams({
+                websiteId: websiteId || undefined,
+                interval: interval,
+                hours: hours
+            });
+
+            try {
+                const response = await fetch(apiBase + '/dashboard' + params);
+                const data = await response.json();
+                showResult('dashboard-result', data, !response.ok);
+            } catch (error) {
+                showResult('dashboard-result', { error: error.message }, true);
+            }
+        }
+
+        // 测试数据变化百分比
+        async function testChangePercentage() {
+            const websiteId = document.getElementById('change-websiteId').value;
+            const interval = document.getElementById('change-interval').value;
+            const hours = document.getElementById('change-hours').value;
+
+            showLoading('change-result');
+
+            const params = buildParams({
+                websiteId: websiteId || undefined,
+                interval: interval,
+                hours: hours
+            });
+
+            try {
+                const response = await fetch(apiBase + '/change-percentage' + params);
+                const data = await response.json();
+                showResult('change-result', data, !response.ok);
+            } catch (error) {
+                showResult('change-result', { error: error.message }, true);
+            }
+        }
+
+        // 测试每日对比分析
+        async function testDailyComparison() {
+            const websiteId = document.getElementById('daily-websiteId').value;
+            const days = document.getElementById('daily-days').value;
+
+            showLoading('daily-result');
+
+            const params = buildParams({
+                websiteId: websiteId || undefined,
+                days: days
+            });
+
+            try {
+                const response = await fetch(apiBase + '/daily-comparison' + params);
+                const data = await response.json();
+                showResult('daily-result', data, !response.ok);
+            } catch (error) {
+                showResult('daily-result', { error: error.message }, true);
+            }
+        }
+
+        // 测试A/B测试
+        async function testAbTest() {
+            const websiteId = document.getElementById('abtest-websiteId').value;
+            const testId = document.getElementById('abtest-testId').value;
+            const variant = document.getElementById('abtest-variant').value;
+
+            if (!testId) {
+                alert('请输入测试ID');
+                return;
+            }
+
+            showLoading('abtest-result');
+
+            const params = buildParams({
+                websiteId: websiteId || undefined,
+                testId: testId,
+                variant: variant || undefined
+            });
+
+            try {
+                const response = await fetch(apiBase + '/ab-test' + params);
+                const data = await response.json();
+                showResult('abtest-result', data, !response.ok);
+            } catch (error) {
+                showResult('abtest-result', { error: error.message }, true);
+            }
+        }
+
+        // 设置默认日期（今天和30天前）
+        window.onload = function() {
+            const today = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            
+            document.getElementById('business-endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('business-startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        };
+    </script>
+</body>
+</html>
+

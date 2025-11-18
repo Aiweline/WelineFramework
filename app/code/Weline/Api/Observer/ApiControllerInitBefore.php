@@ -17,6 +17,7 @@ use Weline\Api\Service\IpWhitelistService;
 use Weline\Api\Service\TokenService;
 use Weline\Api\Service\UserAgentRestrictionService;
 use Weline\Backend\Session\BackendSession;
+use Weline\Framework\App\Env as FrameworkEnv;
 use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -197,6 +198,7 @@ class ApiControllerInitBefore implements ObserverInterface
                 if (method_exists($user, 'getRoleModel')) {
                     $event->setData('role', $user->getRoleModel());
                 }
+                $this->applySandboxMode($user);
                 return;
             }
         }
@@ -269,6 +271,7 @@ class ApiControllerInitBefore implements ObserverInterface
             if ($role) {
                 $event->setData('role', $role);
             }
+            $this->applySandboxMode($apiUser);
         }
     }
 
@@ -277,26 +280,122 @@ class ApiControllerInitBefore implements ObserverInterface
      * 
      * 认证优先级：
      * 1. 前端Session认证（优先）
-     * 2. API Token认证（备选，暂未实现FrontendApiSession）
+     * 2. API Token认证（备选）
      */
     private function validateFrontendApi(Event &$event): void
     {
+        $isSessionAuthenticated = false;
+        $user = null;
+
         // 2.1 优先检查前端Session是否已登录
-        /** @var \Weline\Frontend\Session\FrontendUserSession $frontendSession */
-        $frontendSession = ObjectManager::getInstance(\Weline\Frontend\Session\FrontendUserSession::class);
-        if ($frontendSession->isLogin()) {
-            $user = $frontendSession->getLoginUser();
-            if ($user && method_exists($user, 'getIsEnabled') && $user->getIsEnabled()) {
-                // Session认证通过，不需要检查IP白名单和User-Agent限制
-                // 将用户信息传递到事件中，供RouteBefore使用
-                $event->setData('user', $user);
-                return;
+        try {
+            /** @var \Weline\Frontend\Session\FrontendUserSession $frontendSession */
+            $frontendSession = ObjectManager::getInstance(\Weline\Frontend\Session\FrontendUserSession::class);
+            if ($frontendSession->isLogin()) {
+                // 获取前端用户模型类
+                $frontendUserClass = \Weline\Frontend\Model\FrontendUser::class;
+                if (class_exists($frontendUserClass)) {
+                    $user = $frontendSession->getLoginUser($frontendUserClass);
+                    if ($user && $user->getId()) {
+                        // 检查用户是否有getIsEnabled方法，如果有则检查状态
+                        if (method_exists($user, 'getIsEnabled')) {
+                            if ($user->getIsEnabled()) {
+                                $isSessionAuthenticated = true;
+                                // Session认证通过，不需要检查IP白名单和User-Agent限制
+                                // 将用户信息传递到事件中，供RouteBefore使用
+                                $event->setData('user', $user);
+                                $this->applySandboxMode($user);
+                                return;
+                            }
+                        } else {
+                            // 没有getIsEnabled方法，直接认为认证通过
+                            $isSessionAuthenticated = true;
+                            $event->setData('user', $user);
+                            $this->applySandboxMode($user);
+                            return;
+                        }
+                    }
+                }
             }
+        } catch (\Exception $e) {
+            // Session验证失败，继续使用Token验证
+            error_log('Frontend session validation error: ' . $e->getMessage());
         }
 
-        // 2.2 如果Session未登录，检查API Token（暂未实现，返回401）
-        // TODO: 实现FrontendApiSession和FrontendApiUser
-        $this->returnError(401, __('请先登录'));
+        // 2.2 如果Session未登录，检查API Token
+        if (!$isSessionAuthenticated) {
+            $token = $this->getTokenFromRequest();
+            if (empty($token)) {
+                // 调试：记录token获取失败
+                error_log('Frontend API: Token not found in request. URL: ' . $this->request->getUriString());
+                $this->returnError(401, __('请先登录'));
+                return;
+            }
+
+            // 验证访问令牌
+            /** @var ApiUser $apiUser */
+            $apiUser = $this->tokenService->validateAccessToken($token);
+            if (!$apiUser) {
+                // 调试：记录token验证失败
+                error_log('Frontend API: Token validation failed. Token prefix: ' . substr($token, 0, 20));
+                $this->returnError(401, __('Token无效或已过期'));
+                return;
+            }
+
+            // 检查用户状态
+            if (!$apiUser->getIsEnabled() || $apiUser->getIsDeleted()) {
+                $this->returnError(403, __('用户已被禁用'));
+                return;
+            }
+
+            // 3. 检查IP白名单（仅Token认证需要检查）
+            if ($apiUser->isIpWhitelistEnabled()) {
+                $allowedIps = $apiUser->getAllowedIps();
+                $clientIp = $this->request->clientIP();
+
+                if (!$this->ipWhitelistService->isIpAllowed($clientIp, $allowedIps)) {
+                    // 记录日志
+                    $this->logSecurityViolation($apiUser->getId(), 'ip_whitelist', [
+                        'client_ip' => $clientIp,
+                        'allowed_ips' => $allowedIps
+                    ]);
+
+                    $this->returnError(403, __('IP地址不在白名单中'), [
+                        'client_ip' => $clientIp,
+                        'allowed_ips' => $allowedIps
+                    ]);
+                    return;
+                }
+            }
+
+            // 4. 检查用户代理限制（仅Token认证需要检查）
+            if ($apiUser->isUserAgentRestrictionEnabled()) {
+                $allowedUserAgents = $apiUser->getAllowedUserAgents();
+                $userAgent = $this->request->getHeader('User-Agent') ?? '';
+
+                if (!$this->userAgentRestrictionService->isUserAgentAllowed($userAgent, $allowedUserAgents)) {
+                    // 记录日志
+                    $this->logSecurityViolation($apiUser->getId(), 'user_agent_restriction', [
+                        'user_agent' => $userAgent,
+                        'allowed_user_agents' => $allowedUserAgents
+                    ]);
+
+                    $this->returnError(403, __('用户代理不匹配'), [
+                        'user_agent' => $userAgent,
+                        'allowed_user_agents' => $allowedUserAgents
+                    ]);
+                    return;
+                }
+            }
+
+            // 将API用户信息传递到事件中，供RouteBefore使用
+            $event->setData('user', $apiUser);
+            $role = $apiUser->getRoleModel();
+            if ($role) {
+                $event->setData('role', $role);
+            }
+            $this->applySandboxMode($apiUser);
+        }
     }
 
     /**
@@ -329,6 +428,19 @@ class ApiControllerInitBefore implements ObserverInterface
         }
 
         return null;
+    }
+
+    /**
+     * 根据账号配置开启沙盒模式
+     */
+    private function applySandboxMode(mixed $user): void
+    {
+        if (!$user) {
+            return;
+        }
+        if (method_exists($user, 'isSandboxAccount') && $user->isSandboxAccount()) {
+            FrameworkEnv::getInstance()->enableSandboxMode('account');
+        }
     }
 
     /**

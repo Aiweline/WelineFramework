@@ -1,0 +1,51 @@
+<?php
+/**
+ * 布局：个人中心 - 订单列表布局
+ * 
+ * 订单列表页面布局，适合表格展示
+ * 字段
+ * @info description 描述：订单列表页面布局，适合表格展示
+ * @info name 名称：个人中心订单列表布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param filters 筛选器（订单状态筛选等）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('我的订单');
+$content = $this->getData('content') ?? '';
+$filters = $this->getData('filters') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <div class="account-orders <?= htmlspecialchars($class) ?>">
+        <aside class="account-sidebar">
+            @template(Weline_Frontend::templates/frontend/account/sidebar.phtml)
+        </aside>
+        
+        <main class="account-orders-content">
+            <?php if ($filters): ?>
+                <div class="orders-filters">
+                    <?= $filters ?>
+                </div>
+            <?php endif; ?>
+            
+            <div class="orders-list">
+                <?= $content ?>
+            </div>
+        </main>
+    </div>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

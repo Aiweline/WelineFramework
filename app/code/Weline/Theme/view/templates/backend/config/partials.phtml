@@ -1,0 +1,149 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Theme\Model\WelineTheme $theme */
+/**@var array $frontendPartials */
+/**@var array $backendPartials */
+/**@var array $frontendConfig */
+/**@var array $backendConfig */
+?>
+<div class="theme-partials-config">
+    <div class="page-header">
+        <h1><?= __('主题 Partials 配置') ?></h1>
+        <p class="text-muted"><?= __('主题：%1', $theme->getName()) ?></p>
+    </div>
+
+    <form id="partials-config-form" method="post" action="<?= $this->getUrl('theme/backend/config/partials/save') ?>">
+        <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>" id="theme-id">
+        
+        <div class="row">
+            <!-- 前端配置 -->
+            <div class="col-md-6">
+                <div class="card" id="frontend-config-card">
+                    <div class="card-header">
+                        <h3><?= __('前端 Partials') ?></h3>
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($frontendPartials)): ?>
+                            <p class="text-muted"><?= __('该主题暂无前端 partials 选项') ?></p>
+                        <?php else: ?>
+                            <?php foreach ($frontendPartials as $type => $options): ?>
+                                <div class="form-group mb-3">
+                                    <label for="partial-frontend-<?= $type ?>"><?= ucfirst($type) ?></label>
+                                    <select name="frontend_partials[<?= $type ?>]" id="partial-frontend-<?= $type ?>" class="form-control" data-area="frontend" data-type="<?= $type ?>">
+                                        <?php foreach ($options as $option): ?>
+                                            <option value="<?= htmlspecialchars($option) ?>" 
+                                                    <?= ($frontendConfig[$type] ?? 'default') === $option ? 'selected' : '' ?>>
+                                                <?= ucfirst($option) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 后端配置 -->
+            <div class="col-md-6">
+                <div class="card" id="backend-config-card">
+                    <div class="card-header">
+                        <h3><?= __('后端 Partials') ?></h3>
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($backendPartials)): ?>
+                            <p class="text-muted"><?= __('该主题暂无后端 partials 选项') ?></p>
+                        <?php else: ?>
+                            <?php foreach ($backendPartials as $type => $options): ?>
+                                <div class="form-group mb-3">
+                                    <label for="partial-backend-<?= $type ?>"><?= ucfirst($type) ?></label>
+                                    <select name="backend_partials[<?= $type ?>]" id="partial-backend-<?= $type ?>" class="form-control" data-area="backend" data-type="<?= $type ?>">
+                                        <?php foreach ($options as $option): ?>
+                                            <option value="<?= htmlspecialchars($option) ?>" 
+                                                    <?= ($backendConfig[$type] ?? 'default') === $option ? 'selected' : '' ?>>
+                                                <?= ucfirst($option) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions mt-4">
+            <button type="submit" class="btn btn-primary"><?= __('保存配置') ?></button>
+            <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-secondary"><?= __('返回') ?></a>
+        </div>
+    </form>
+</div>
+
+<script>
+// 分别处理前端和后端配置的保存
+document.getElementById('partials-config-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const themeId = document.getElementById('theme-id').value;
+    
+    // 收集前端配置
+    const frontendPartials = {};
+    const frontendSelects = document.querySelectorAll('#frontend-config-card select[data-area="frontend"]');
+    frontendSelects.forEach(select => {
+        const type = select.getAttribute('data-type');
+        frontendPartials[type] = select.value;
+    });
+    
+    // 收集后端配置
+    const backendPartials = {};
+    const backendSelects = document.querySelectorAll('#backend-config-card select[data-area="backend"]');
+    backendSelects.forEach(select => {
+        const type = select.getAttribute('data-type');
+        backendPartials[type] = select.value;
+    });
+    
+    // 保存前端配置
+    const frontendData = new FormData();
+    frontendData.append('theme_id', themeId);
+    frontendData.append('area', 'frontend');
+    Object.keys(frontendPartials).forEach(key => {
+        frontendData.append(`partials[${key}]`, frontendPartials[key]);
+    });
+    
+    // 保存后端配置
+    const backendData = new FormData();
+    backendData.append('theme_id', themeId);
+    backendData.append('area', 'backend');
+    Object.keys(backendPartials).forEach(key => {
+        backendData.append(`partials[${key}]`, backendPartials[key]);
+    });
+    
+    // 先保存前端配置
+    fetch('<?= $this->getUrl('theme/backend/config/partials/save') ?>', {
+        method: 'POST',
+        body: frontendData
+    }).then(response => response.json()).then(data => {
+        if (data.status === 'success') {
+            // 再保存后端配置
+            return fetch('<?= $this->getUrl('theme/backend/config/partials/save') ?>', {
+                method: 'POST',
+                body: backendData
+            });
+        } else {
+            throw new Error(data.message || '<?= __('保存失败') ?>');
+        }
+    }).then(response => response.json()).then(data => {
+        if (data.status === 'success') {
+            alert('<?= __('配置保存成功') ?>');
+            location.reload();
+        } else {
+            alert(data.message || '<?= __('保存失败') ?>');
+        }
+    }).catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('保存失败') ?>: ' + error.message);
+    });
+});
+</script>
+

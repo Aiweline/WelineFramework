@@ -124,6 +124,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 ->setLoginIp($this->request->clientIP());
             # 重置 尝试登录次数
             $adminUsernameUser->resetAttemptTimes()->save();
+            $this->syncSandboxCookie($adminUsernameUser->isSandboxAccount());
             # 检测是否记住我
             if ($this->request->getParam('remember')) {
                 /**@var BackendUserToken $backendUserToken */
@@ -223,8 +224,17 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         
         Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
+        Cookie::set('w_sandbox', '', -1, ['path' => '/']);
+        Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->logout();
         $this->redirect($this->_url->getBackendUrl('admin/login'));
+    }
+
+    private function syncSandboxCookie(bool $enabled): void
+    {
+        $lifetime = $enabled ? 0 : -1;
+        Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/']);
+        Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/' . $this->request->getAreaRouter()]);
     }
 
     /**

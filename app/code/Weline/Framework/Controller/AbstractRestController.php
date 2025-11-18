@@ -59,12 +59,44 @@ abstract class AbstractRestController extends Core
             case self::fetch_JSON:
             default:
                 header('Content-Type:application/json');
+                // 将所有值转换为字符串
+                $data = $this->convertAllToString($data);
                 $result = json_encode($data);
 
                 break;
         }
 
         return $result;
+    }
+
+    /**
+     * 递归将所有值转换为字符串
+     *
+     * @param mixed $data
+     * @return mixed
+     */
+    private function convertAllToString($data)
+    {
+        if (is_array($data)) {
+            $result = [];
+            foreach ($data as $key => $value) {
+                $result[$key] = $this->convertAllToString($value);
+            }
+            return $result;
+        } elseif (is_object($data)) {
+            // 如果是对象，转换为数组再处理
+            $array = (array)$data;
+            $result = [];
+            foreach ($array as $key => $value) {
+                $result[$key] = $this->convertAllToString($value);
+            }
+            return $result;
+        } elseif (is_null($data)) {
+            return '';
+        } else {
+            // 将所有其他类型（int, float, bool等）转换为字符串
+            return (string)$data;
+        }
     }
 
     private function setXml(array $data)
@@ -84,5 +116,17 @@ abstract class AbstractRestController extends Core
         $xml .= '</xml>';
 
         return $xml;
+    }
+
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
+    {
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
+    }
+
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 400): string
+    {
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 }

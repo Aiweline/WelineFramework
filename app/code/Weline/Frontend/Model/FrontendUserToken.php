@@ -56,6 +56,7 @@ class FrontendUserToken extends \Weline\Framework\Database\Model
      */
     public function setup(ModelSetup $setup, Context $context): void
     {
+        $this->install($setup, $context);
     }
 
     /**

@@ -281,7 +281,13 @@ class TokenService
             return [
                 'access_token' => $newAccessToken,
                 'refresh_token' => $newRefreshToken,
-                'expire_time' => $expireTime > 0 ? $expireTime : (time() + $user->getTokenExpireTime())
+                'expire_time' => $expireTime > 0 ? $expireTime : (time() + $user->getTokenExpireTime()),
+                'user' => [
+                    'id' => $user->getId(),
+                    'username' => $user->getUsername(),
+                    'email' => $user->getEmail(),
+                    'is_sandbox' => $user->isSandboxAccount(),
+                ]
             ];
 
         } catch (\Exception $e) {
@@ -371,7 +377,13 @@ class TokenService
             return [
                 'access_token' => $accessToken,
                 'refresh_token' => $refreshToken,
-                'expire_time' => $expireTime > 0 ? $expireTime : (time() + $user->getTokenExpireTime())
+                'expire_time' => $expireTime > 0 ? $expireTime : (time() + $user->getTokenExpireTime()),
+                'user' => [
+                    'id' => $user->getId(),
+                    'username' => $user->getUsername(),
+                    'email' => $user->getEmail(),
+                    'is_sandbox' => $user->isSandboxAccount(),
+                ]
             ];
 
         } catch (\Exception $e) {
@@ -412,12 +424,17 @@ class TokenService
                 return null;
             }
 
+            /** @var ApiUser $user */
+            $user = ObjectManager::getInstance(ApiUser::class);
+            $user->load($tokenRecord->getUserId());
+
             return [
                 'user_id' => $tokenRecord->getUserId(),
                 'token' => $tokenRecord->getToken(),
                 'type' => $tokenRecord->getType(),
                 'expire_time' => $tokenRecord->getTokenExpireTime(),
-                'is_expired' => $tokenRecord->isExpired()
+                'is_expired' => $tokenRecord->isExpired(),
+                'is_sandbox' => $user->getId() ? $user->isSandboxAccount() : false
             ];
 
         } catch (\Exception $e) {

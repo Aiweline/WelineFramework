@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素数据分析面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background: #007bff;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .chart-card {
+            grid-column: span 2;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 14px;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            color: #666;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-value.positive {
+            color: #28a745;
+        }
+        .stat-value.negative {
+            color: #dc3545;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>像素数据分析面板</h1>
+            <p>全面的数据分析和可视化工具</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('business', event)">商业价值</button>
+            <button class="tab" onclick="switchTab('dashboard', event)">实时大屏</button>
+            <button class="tab" onclick="switchTab('comparison', event)">数据对比</button>
+            <button class="tab" onclick="switchTab('abtest', event)">A/B测试</button>
+            <button class="tab" onclick="switchTab('report', event)">综合报告</button>
+        </div>
+
+        <!-- 商业价值分析 -->
+        <div id="business" class="tab-content active">
+            <div class="card">
+                <h3>查询条件</h3>
+                <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="business-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>时间维度</label>
+                        <select id="business-period">
+                            <option value="daily">每天</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                            <option value="quarterly">每季度</option>
+                            <option value="yearly">每年</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" id="business-startDate">
+                    </div>
+                    <div class="form-group">
+                        <label>结束日期</label>
+                        <input type="date" id="business-endDate">
+                    </div>
+                </div>
+                <button class="btn" onclick="loadBusinessValue()">查询</button>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>总价值</h3>
+                    <div class="stat-value" id="total-value" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card">
+                    <h3>总事件数</h3>
+                    <div class="stat-value" id="total-events" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card chart-card">
+                    <h3>价值趋势</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="business-value-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <h3>事件趋势</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="business-events-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>详细数据</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>价值</th>
+                            <th>事件数</th>
+                            <th>事件类型数</th>
+                            <th>平均价值</th>
+                            <th>转化率</th>
+                        </tr>
+                    </thead>
+                    <tbody id="business-table-body">
+                        <tr><td colspan="6" class="loading">请点击查询按钮加载数据</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 实时大屏 -->
+        <div id="dashboard" class="tab-content">
+            <div class="card">
+                <h3>查询条件</h3>
+                <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="dashboard-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>时间间隔</label>
+                        <select id="dashboard-interval">
+                            <option value="10">10分钟</option>
+                            <option value="30">30分钟</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>时间范围（小时）</label>
+                        <input type="number" id="dashboard-hours" value="24" min="1" max="168">
+                    </div>
+                </div>
+                <button class="btn" onclick="loadDashboard()">查询</button>
+                <button class="btn btn-secondary" onclick="toggleAutoRefresh()" id="auto-refresh-btn">开启自动刷新</button>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>当前价值</h3>
+                    <div class="stat-value" id="dashboard-current-value" style="font-size: 32px;">0</div>
+                    <div class="stat-label" id="dashboard-current-time">--</div>
+                </div>
+                <div class="card">
+                    <h3>当前事件数</h3>
+                    <div class="stat-value" id="dashboard-current-events" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card">
+                    <h3>变化百分比</h3>
+                    <div class="stat-value" id="dashboard-change-percent" style="font-size: 32px;">0%</div>
+                </div>
+                <div class="card chart-card">
+                    <h3>价值趋势（实时）</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="dashboard-value-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <h3>事件趋势（实时）</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="dashboard-events-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据对比 -->
+        <div id="comparison" class="tab-content">
+            <div class="card">
+                <h3>每日对比分析</h3>
+                <div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="comparison-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>天数</label>
+                        <input type="number" id="comparison-days" value="7" min="1" max="30">
+                    </div>
+                </div>
+                <button class="btn" onclick="loadComparison()">查询</button>
+            </div>
+
+            <div class="card">
+                <h3>对比数据</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>今天价值</th>
+                            <th>昨天价值</th>
+                            <th>变化值</th>
+                            <th>变化百分比</th>
+                            <th>今天事件</th>
+                            <th>昨天事件</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparison-table-body">
+                        <tr><td colspan="7" class="loading">请点击查询按钮加载数据</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card chart-card">
+                <h3>对比趋势图</h3>
+                <div class="chart-wrapper">
+                    <canvas id="comparison-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- A/B测试 -->
+        <div id="abtest" class="tab-content">
+            <div class="card">
+                <h3>A/B测试管理</h3>
+                <div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="abtest-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>状态筛选</label>
+                        <select id="abtest-status">
+                            <option value="">全部</option>
+                            <option value="active">进行中</option>
+                            <option value="paused">暂停</option>
+                            <option value="completed">已完成</option>
+                            <option value="draft">草稿</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn" onclick="loadAbTestList()">加载测试列表</button>
+                <button class="btn btn-secondary" onclick="showCreateAbTest()">创建新测试</button>
+            </div>
+
+            <div class="card">
+                <h3>测试列表</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>测试ID</th>
+                            <th>名称</th>
+                            <th>状态</th>
+                            <th>开始时间</th>
+                            <th>结束时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="abtest-table-body">
+                        <tr><td colspan="6" class="loading">请点击加载测试列表</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" id="abtest-detail" style="display:none;">
+                <h3>测试详情</h3>
+                <div class="form-group">
+                    <label>测试ID</label>
+                    <input type="text" id="abtest-detail-testId" readonly>
+                </div>
+                <button class="btn" onclick="loadAbTestData()">查看数据</button>
+                <div id="abtest-detail-result" style="margin-top: 20px;">                </div>
+            </div>
+        </div>
+
+        <!-- 综合报告 -->
+        <div id="report" class="tab-content">
+            <div class="card">
+                <h3>查询条件</h3>
+                <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="report-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" id="report-startDate">
+                    </div>
+                    <div class="form-group">
+                        <label>结束日期</label>
+                        <input type="date" id="report-endDate">
+                    </div>
+                </div>
+                <button class="btn" onclick="loadReport()">生成报告</button>
+                <button class="btn btn-secondary" onclick="exportData()">导出数据</button>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>总记录数</h3>
+                    <div class="stat-value" id="report-total" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card">
+                    <h3>总价值</h3>
+                    <div class="stat-value" id="report-total-value" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card">
+                    <h3>事件类型数</h3>
+                    <div class="stat-value" id="report-event-count" style="font-size: 32px;">0</div>
+                </div>
+                <div class="card">
+                    <h3>未处理记录</h3>
+                    <div class="stat-value" id="report-undeal" style="font-size: 32px;">0</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>热门事件 Top 10</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>排名</th>
+                            <th>事件名称</th>
+                            <th>事件数量</th>
+                            <th>占比</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-top-events">
+                        <tr><td colspan="4" class="loading">请点击生成报告</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card chart-card">
+                <h3>事件分布图</h3>
+                <div class="chart-wrapper">
+                    <canvas id="report-events-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="card chart-card">
+                <h3>每日趋势</h3>
+                <div class="chart-wrapper">
+                    <canvas id="report-daily-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let charts = {};
+        let autoRefreshInterval = null;
+        let isAutoRefreshing = false;
+
+        // 获取基础URL
+        function getBaseUrl() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const pathname = window.location.pathname;
+            const pathParts = pathname.split('/').filter(p => p);
+            let basePath = '';
+            for (let i = 0; i < pathParts.length; i++) {
+                if (pathParts[i] === 'visitor') {
+                    basePath = '/' + pathParts.slice(0, i).join('/');
+                    break;
+                }
+            }
+            if (!basePath) {
+                basePath = pathname.substring(0, pathname.indexOf('/visitor') || pathname.length);
+            }
+            return protocol + '//' + host + basePath;
+        }
+
+        const baseUrl = getBaseUrl();
+        const apiBase = baseUrl + '/visitor/rest/v1/analytics';
+
+        // 切换标签页
+        function switchTab(tabName, event) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                // 如果没有event对象，通过tabName找到对应的tab按钮
+                document.querySelectorAll('.tab').forEach(tab => {
+                    if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(tabName)) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
+            const targetContent = document.getElementById(tabName);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+        }
+
+        // 初始化图表
+        function initChart(canvasId, type = 'line') {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return null;
+            
+            if (charts[canvasId]) {
+                charts[canvasId].destroy();
+            }
+
+            charts[canvasId] = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            return charts[canvasId];
+        }
+
+        // 加载商业价值数据
+        async function loadBusinessValue() {
+            const websiteId = document.getElementById('business-websiteId').value;
+            const period = document.getElementById('business-period').value;
+            const startDate = document.getElementById('business-startDate').value;
+            const endDate = document.getElementById('business-endDate').value;
+
+            const params = new URLSearchParams({ period });
+            if (websiteId) params.append('websiteId', websiteId);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            try {
+                const response = await fetch(apiBase + '/business-value?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    const data = result.data;
+                    document.getElementById('total-value').textContent = data.total_value.toLocaleString();
+                    document.getElementById('total-events').textContent = data.total_events.toLocaleString();
+
+                    // 更新图表
+                    updateBusinessCharts(data);
+                    updateBusinessTable(data);
+                } else {
+                    alert('加载失败: ' + result.msg);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 更新商业价值图表
+        function updateBusinessCharts(data) {
+            const labels = data.data_points.map(p => p.date);
+            const values = data.data_points.map(p => p.value);
+            const events = data.data_points.map(p => p.events);
+
+            const valueChart = initChart('business-value-chart');
+            if (valueChart) {
+                valueChart.data.labels = labels;
+                valueChart.data.datasets = [{
+                    label: '价值',
+                    data: values,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4
+                }];
+                valueChart.update();
+            }
+
+            const eventsChart = initChart('business-events-chart');
+            if (eventsChart) {
+                eventsChart.data.labels = labels;
+                eventsChart.data.datasets = [{
+                    label: '事件数',
+                    data: events,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                }];
+                eventsChart.update();
+            }
+        }
+
+        // 更新商业价值表格
+        function updateBusinessTable(data) {
+            const tbody = document.getElementById('business-table-body');
+            tbody.innerHTML = data.data_points.map(point => `
+                <tr>
+                    <td>${point.date}</td>
+                    <td>${point.value.toLocaleString()}</td>
+                    <td>${point.events}</td>
+                    <td>${point.event_types}</td>
+                    <td>${point.avg_value.toFixed(2)}</td>
+                    <td>${(point.conversion_rate * 100).toFixed(2)}%</td>
+                </tr>
+            `).join('');
+        }
+
+        // 加载大屏数据
+        async function loadDashboard() {
+            const websiteId = document.getElementById('dashboard-websiteId').value;
+            const interval = document.getElementById('dashboard-interval').value;
+            const hours = document.getElementById('dashboard-hours').value;
+
+            const params = new URLSearchParams({ interval, hours });
+            if (websiteId) params.append('websiteId', websiteId);
+
+            try {
+                const response = await fetch(apiBase + '/dashboard?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    const data = result.data;
+                    const current = data.current_period;
+                    
+                    if (current) {
+                        document.getElementById('dashboard-current-value').textContent = current.value.toLocaleString();
+                        document.getElementById('dashboard-current-events').textContent = current.events.toLocaleString();
+                        document.getElementById('dashboard-current-time').textContent = current.timestamp;
+                    }
+
+                    const changePercent = data.change_percentage || 0;
+                    const changeEl = document.getElementById('dashboard-change-percent');
+                    changeEl.textContent = (changePercent >= 0 ? '+' : '') + changePercent.toFixed(2) + '%';
+                    changeEl.className = 'stat-value ' + (changePercent >= 0 ? 'positive' : 'negative');
+
+                    updateDashboardCharts(data);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 更新大屏图表
+        function updateDashboardCharts(data) {
+            const labels = data.data_points.map(p => {
+                const date = new Date(p.timestamp);
+                return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            });
+            const values = data.data_points.map(p => p.value);
+            const events = data.data_points.map(p => p.events);
+
+            const valueChart = initChart('dashboard-value-chart');
+            if (valueChart) {
+                valueChart.data.labels = labels;
+                valueChart.data.datasets = [{
+                    label: '价值',
+                    data: values,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4
+                }];
+                valueChart.update('none');
+            }
+
+            const eventsChart = initChart('dashboard-events-chart');
+            if (eventsChart) {
+                eventsChart.data.labels = labels;
+                eventsChart.data.datasets = [{
+                    label: '事件数',
+                    data: events,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                }];
+                eventsChart.update('none');
+            }
+        }
+
+        // 切换自动刷新
+        function toggleAutoRefresh() {
+            isAutoRefreshing = !isAutoRefreshing;
+            const btn = document.getElementById('auto-refresh-btn');
+            
+            if (isAutoRefreshing) {
+                btn.textContent = '停止自动刷新';
+                btn.classList.remove('btn-secondary');
+                autoRefreshInterval = setInterval(loadDashboard, 30000);
+            } else {
+                btn.textContent = '开启自动刷新';
+                btn.classList.add('btn-secondary');
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+
+        // 加载对比数据
+        async function loadComparison() {
+            const websiteId = document.getElementById('comparison-websiteId').value;
+            const days = document.getElementById('comparison-days').value;
+
+            const params = new URLSearchParams({ days });
+            if (websiteId) params.append('websiteId', websiteId);
+
+            try {
+                const response = await fetch(apiBase + '/daily-comparison?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    updateComparisonTable(result.data);
+                    updateComparisonChart(result.data);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 更新对比表格
+        function updateComparisonTable(data) {
+            const tbody = document.getElementById('comparison-table-body');
+            tbody.innerHTML = data.comparisons.map(comp => `
+                <tr>
+                    <td>${comp.date}</td>
+                    <td>${comp.today.value.toLocaleString()}</td>
+                    <td>${comp.yesterday.value.toLocaleString()}</td>
+                    <td class="stat-value ${comp.change_value >= 0 ? 'positive' : 'negative'}">
+                        ${comp.change_value >= 0 ? '+' : ''}${comp.change_value.toFixed(2)}
+                    </td>
+                    <td class="stat-value ${comp.change_percentage >= 0 ? 'positive' : 'negative'}">
+                        ${comp.change_percentage >= 0 ? '+' : ''}${comp.change_percentage.toFixed(2)}%
+                    </td>
+                    <td>${comp.today.events}</td>
+                    <td>${comp.yesterday.events}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 更新对比图表
+        function updateComparisonChart(data) {
+            const labels = data.comparisons.map(c => c.date);
+            const todayValues = data.comparisons.map(c => c.today.value);
+            const yesterdayValues = data.comparisons.map(c => c.yesterday.value);
+
+            const chart = initChart('comparison-chart');
+            if (chart) {
+                chart.data.labels = labels;
+                chart.data.datasets = [
+                    {
+                        label: '今天',
+                        data: todayValues,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4
+                    },
+                    {
+                        label: '昨天',
+                        data: yesterdayValues,
+                        borderColor: '#6c757d',
+                        backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                        tension: 0.4
+                    }
+                ];
+                chart.update();
+            }
+        }
+
+        // 加载A/B测试列表
+        async function loadAbTestList() {
+            const websiteId = document.getElementById('abtest-websiteId').value;
+            const status = document.getElementById('abtest-status').value;
+
+            const params = new URLSearchParams();
+            if (websiteId) params.append('websiteId', websiteId);
+            if (status) params.append('status', status);
+
+            try {
+                const response = await fetch(apiBase + '/ab-test/list?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    updateAbTestTable(result.data.tests);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 更新A/B测试表格
+        function updateAbTestTable(tests) {
+            const tbody = document.getElementById('abtest-table-body');
+            if (tests.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">暂无测试数据</td></tr>';
+                return;
+            }
+
+            const statusBadge = (status) => {
+                const badges = {
+                    'active': '<span class="badge badge-success">进行中</span>',
+                    'paused': '<span class="badge badge-warning">暂停</span>',
+                    'completed': '<span class="badge badge-info">已完成</span>',
+                    'draft': '<span class="badge badge-danger">草稿</span>'
+                };
+                return badges[status] || status;
+            };
+
+            tbody.innerHTML = tests.map(test => `
+                <tr>
+                    <td>${test.test_id}</td>
+                    <td>${test.name}</td>
+                    <td>${statusBadge(test.status)}</td>
+                    <td>${test.start_date || '--'}</td>
+                    <td>${test.end_date || '--'}</td>
+                    <td>
+                        <button class="btn" onclick="viewAbTest('${test.test_id}')">查看</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 查看A/B测试
+        function viewAbTest(testId) {
+            document.getElementById('abtest-detail-testId').value = testId;
+            document.getElementById('abtest-detail').style.display = 'block';
+            loadAbTestData();
+        }
+
+        // 加载A/B测试数据
+        async function loadAbTestData() {
+            const testId = document.getElementById('abtest-detail-testId').value;
+            const websiteId = document.getElementById('abtest-websiteId').value;
+
+            if (!testId) {
+                alert('请先选择测试');
+                return;
+            }
+
+            const params = new URLSearchParams({ testId });
+            if (websiteId) params.append('websiteId', websiteId);
+
+            try {
+                const response = await fetch(apiBase + '/ab-test?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    displayAbTestData(result.data);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 显示A/B测试数据
+        function displayAbTestData(data) {
+            const resultDiv = document.getElementById('abtest-detail-result');
+            const variants = data.variants;
+            
+            let html = '<div class="grid">';
+            for (const [variant, stats] of Object.entries(variants)) {
+                const isWinner = data.winner === variant;
+                html += `
+                    <div class="card" style="${isWinner ? 'border: 2px solid #28a745;' : ''}">
+                        <h3>变体 ${variant} ${isWinner ? '🏆 获胜' : ''}</h3>
+                        <div class="stat-item">
+                            <span class="stat-label">价值:</span>
+                            <span class="stat-value">${stats.value.toLocaleString()}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">事件数:</span>
+                            <span class="stat-value">${stats.events}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">转化率:</span>
+                            <span class="stat-value">${(stats.conversion_rate * 100).toFixed(2)}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            
+            if (data.improvement !== 0) {
+                html += `<div class="card" style="margin-top: 20px;">
+                    <h3>改进情况</h3>
+                    <p>变体B相比变体A改进了 <strong>${data.improvement}%</strong></p>
+                </div>`;
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+
+        // 显示创建A/B测试表单
+        function showCreateAbTest() {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+            modal.innerHTML = `
+                <div style="background:white;padding:30px;border-radius:8px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;">
+                    <h2 style="margin-bottom:20px;">创建A/B测试</h2>
+                    <div class="form-group">
+                        <label>测试ID *</label>
+                        <input type="text" id="create-testId" placeholder="test_001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>测试名称 *</label>
+                        <input type="text" id="create-name" placeholder="首页按钮颜色测试" required>
+                    </div>
+                    <div class="form-group">
+                        <label>测试描述</label>
+                        <textarea id="create-description" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;" placeholder="测试不同按钮颜色对转化率的影响"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>站点ID</label>
+                        <input type="number" id="create-websiteId" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="create-status">
+                            <option value="draft">草稿</option>
+                            <option value="active">进行中</option>
+                            <option value="paused">暂停</option>
+                        </select>
+                    </div>
+                    <div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+                        <div class="form-group">
+                            <label>开始时间</label>
+                            <input type="datetime-local" id="create-startDate">
+                        </div>
+                        <div class="form-group">
+                            <label>结束时间</label>
+                            <input type="datetime-local" id="create-endDate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>流量分配 (A:B)</label>
+                        <input type="text" id="create-trafficSplit" value="50:50" placeholder="50:50">
+                    </div>
+                    <div class="form-group">
+                        <label>变体A配置 (JSON)</label>
+                        <textarea id="create-variantA" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;" placeholder='{"color": "blue"}'>{}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>变体B配置 (JSON)</label>
+                        <textarea id="create-variantB" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;" placeholder='{"color": "red"}'>{}</textarea>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:20px;">
+                        <button class="btn" onclick="submitCreateAbTest()">创建</button>
+                        <button class="btn btn-secondary" onclick="this.closest('div[style*=\"position:fixed\"]').remove()">取消</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // 提交创建A/B测试
+        async function submitCreateAbTest() {
+            const testId = document.getElementById('create-testId').value;
+            const name = document.getElementById('create-name').value;
+            
+            if (!testId || !name) {
+                alert('请填写测试ID和测试名称');
+                return;
+            }
+
+            let variantA = {};
+            let variantB = {};
+            try {
+                variantA = JSON.parse(document.getElementById('create-variantA').value || '{}');
+                variantB = JSON.parse(document.getElementById('create-variantB').value || '{}');
+            } catch (e) {
+                alert('变体配置JSON格式错误: ' + e.message);
+                return;
+            }
+
+            const data = {
+                testId: testId,
+                name: name,
+                description: document.getElementById('create-description').value,
+                websiteId: parseInt(document.getElementById('create-websiteId').value) || 0,
+                status: document.getElementById('create-status').value,
+                variantA: variantA,
+                variantB: variantB,
+                trafficSplit: document.getElementById('create-trafficSplit').value || '50:50'
+            };
+
+            const startDate = document.getElementById('create-startDate').value;
+            const endDate = document.getElementById('create-endDate').value;
+            if (startDate) {
+                data.startDate = startDate.replace('T', ' ') + ':00';
+            }
+            if (endDate) {
+                data.endDate = endDate.replace('T', ' ') + ':00';
+            }
+
+            try {
+                const response = await fetch(apiBase + '/ab-test/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    alert('创建成功！');
+                    document.querySelector('div[style*="position:fixed"]').remove();
+                    loadAbTestList();
+                } else {
+                    alert('创建失败: ' + result.msg);
+                }
+            } catch (error) {
+                alert('创建失败: ' + error.message);
+            }
+        }
+
+        // 加载综合报告
+        async function loadReport() {
+            const websiteId = document.getElementById('report-websiteId').value;
+            const startDate = document.getElementById('report-startDate').value;
+            const endDate = document.getElementById('report-endDate').value;
+
+            const params = new URLSearchParams();
+            if (websiteId) params.append('websiteId', websiteId);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            try {
+                const response = await fetch(apiBase + '/report?' + params);
+                const result = await response.json();
+
+                if (result.code === 200) {
+                    const data = result.data;
+                    
+                    // 更新统计卡片
+                    const totalCount = data.time_range_stats?.total_count || data.summary?.total_count || 0;
+                    document.getElementById('report-total').textContent = totalCount.toLocaleString();
+                    
+                    const totalValue = data.daily_stats?.total_value || 0;
+                    document.getElementById('report-total-value').textContent = totalValue.toLocaleString();
+                    
+                    const eventCount = data.summary?.event_count || Object.keys(data.event_stats || {}).length || 0;
+                    document.getElementById('report-event-count').textContent = eventCount;
+                    
+                    const unDealCount = data.summary?.un_deal_count || 0;
+                    document.getElementById('report-undeal').textContent = unDealCount.toLocaleString();
+
+                    // 更新热门事件表格
+                    updateTopEventsTable(data.top_events, data.event_stats);
+
+                    // 更新图表
+                    updateReportCharts(data);
+                }
+            } catch (error) {
+                alert('加载失败: ' + error.message);
+            }
+        }
+
+        // 更新热门事件表格
+        function updateTopEventsTable(topEvents, allEvents) {
+            const tbody = document.getElementById('report-top-events');
+            const total = Object.values(allEvents).reduce((sum, count) => sum + count, 0);
+            
+            if (Object.keys(topEvents).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="loading">暂无数据</td></tr>';
+                return;
+            }
+
+            let rank = 1;
+            tbody.innerHTML = Object.entries(topEvents).map(([event, count]) => {
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(2) : 0;
+                return `
+                    <tr>
+                        <td>${rank++}</td>
+                        <td>${event}</td>
+                        <td>${count.toLocaleString()}</td>
+                        <td>${percentage}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 更新报告图表
+        function updateReportCharts(data) {
+            // 事件分布饼图
+            const eventChart = initChart('report-events-chart', 'doughnut');
+            if (eventChart && data.top_events) {
+                const labels = Object.keys(data.top_events);
+                const values = Object.values(data.top_events);
+                const colors = [
+                    '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8',
+                    '#6f42c1', '#e83e8c', '#fd7e14', '#20c997', '#6c757d'
+                ];
+                
+                eventChart.data.labels = labels;
+                eventChart.data.datasets = [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderWidth: 1
+                }];
+                eventChart.update();
+            }
+
+            // 每日趋势图
+            const dailyChart = initChart('report-daily-chart');
+            if (dailyChart && data.daily_stats && data.daily_stats.data_points) {
+                const labels = data.daily_stats.data_points.map(p => p.date);
+                const values = data.daily_stats.data_points.map(p => p.value);
+                const events = data.daily_stats.data_points.map(p => p.events);
+
+                dailyChart.data.labels = labels;
+                dailyChart.data.datasets = [
+                    {
+                        label: '价值',
+                        data: values,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        yAxisID: 'y',
+                        tension: 0.4
+                    },
+                    {
+                        label: '事件数',
+                        data: events,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.4
+                    }
+                ];
+                dailyChart.options.scales = {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: {
+                            drawOnChartArea: false,
+                        },
+                    },
+                };
+                dailyChart.update();
+            }
+        }
+
+        // 导出数据
+        function exportData() {
+            const websiteId = document.getElementById('report-websiteId').value;
+            const startDate = document.getElementById('report-startDate').value;
+            const endDate = document.getElementById('report-endDate').value;
+
+            const params = new URLSearchParams();
+            if (websiteId) params.append('websiteId', websiteId);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+            params.append('format', 'csv');
+
+            window.open(apiBase + '/export?' + params, '_blank');
+        }
+
+        // 初始化
+        window.onload = function() {
+            // 设置默认日期
+            const today = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            document.getElementById('business-endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('business-startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('report-endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('report-startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        };
+    </script>
+</body>
+</html>
+

@@ -130,7 +130,6 @@ class DefaultModelManager
      */
     public function getAllDefaultModels(): array
     {
-        $results = [];
         $collection = clone $this->defaultModel;
         $items = $collection->where(AiDefaultModel::fields_IS_DEFAULT, 1)
             ->order(AiDefaultModel::fields_SERVICE_TYPE, 'ASC')

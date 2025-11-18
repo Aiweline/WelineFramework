@@ -2,14 +2,18 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!--顶层：面板-->
+    <!--消息服务分组菜单-->
+    <add source="Weline_Queue::message_service" name="message_service" title="消息服务" action="" parent="Weline_Backend::system_service"
+         icon="mdi mdi-message-processing" order="30200"/>
+    
+    <!--消息服务-->
     <add source="Weline_Queue:main" name="main" title="消息队列"
-         action="" parent="Weline_Backend::system_configuration"
-         icon="mdi mdi-human-queue" order="1"/>
+         action="" parent="Weline_Queue::message_service"
+         icon="mdi mdi-human-queue" order="10"/>
     <add source="Weline_Queue:listing" name="listing" title="队列列表"
-         action="queue/backend/queue" parent="Weline_Queue:main"
-         icon="mdi mdi-view-list-outline" order="1"/>
+         action="queue/backend/queue" parent="Weline_Queue::main"
+         icon="mdi mdi-view-list-outline" order="10"/>
     <add source="Weline_Queue:type" name="type" title="队列类型"
-         action="queue/backend/type" parent="Weline_Queue:main"
-         icon="mdi mdi-ev-plug-type2" order="2"/>
+         action="queue/backend/type" parent="Weline_Queue::main"
+         icon="mdi mdi-ev-plug-type2" order="20"/>
 </menus>

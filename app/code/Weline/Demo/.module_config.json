@@ -1,0 +1,221 @@
+{
+    "module_name": "Weline_Demo",
+    "version": "1.0.0",
+    "description": "demo",
+    "router": "weline_demo",
+    "controllers": [
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": true
+        },
+        {
+            "name": "Helo",
+            "routes": [
+                "helo"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Demo",
+            "routes": [
+                "api\/rest\/v1\/demo"
+            ],
+            "type": "FrontendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "FrontendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "FrontendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "BackendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "FrontendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "FrontendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "BackendApi",
+            "is_default": false
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false,
+            "acl": null
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": false,
+            "acl": null
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Backend",
+            "is_default": false,
+            "acl": {
+                "class": {
+                    "source_id": "Weline_Demo::Helloword",
+                    "source_name": "Helloword"
+                },
+                "method": {
+                    "source_id": "Weline_Demo::Helloword::index",
+                    "source_name": "哈喽"
+                }
+            }
+        },
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "FrontendApi",
+            "is_default": false,
+            "acl": null
+        }
+    ],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": true,
+    "created_at": "2025-11-16 14:27:24",
+    "updated_at": "2025-11-16 16:13:23"
+}

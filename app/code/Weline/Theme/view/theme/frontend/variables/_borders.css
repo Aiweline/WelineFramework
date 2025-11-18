@@ -1,0 +1,33 @@
+/**
+ * Weline Frontend - 边框变量定义
+ * 
+ * 定义统一的边框系统
+ */
+
+:root {
+    /* ========== 边框宽度 ========== */
+    --border-width-none: 0;
+    --border-width-thin: 1px;
+    --border-width-medium: 2px;
+    --border-width-thick: 3px;
+    
+    /* ========== 边框圆角 ========== */
+    --border-radius-none: 0;
+    --border-radius-sm: 3px;
+    --border-radius-md: 4px;
+    --border-radius-lg: 8px;
+    --border-radius-xl: 12px;
+    --border-radius-2xl: 16px;
+    --border-radius-full: 9999px;
+    
+    /* ========== 边框样式 ========== */
+    --border-style-solid: solid;
+    --border-style-dashed: dashed;
+    --border-style-dotted: dotted;
+    
+    /* ========== 组件边框 ========== */
+    --border-input: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+    --border-button: var(--border-width-thin) var(--border-style-solid) var(--color-primary-border);
+    --border-card: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+}
+

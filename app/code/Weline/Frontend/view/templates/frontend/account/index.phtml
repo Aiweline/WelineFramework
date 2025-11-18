@@ -1,0 +1,238 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Frontend\Model\FrontendUser $user */
+?>
+<div class="account-index-content">
+    <!-- 侧边栏导航 -->
+    <aside class="account-sidebar">
+        <nav class="nav flex-column">
+            <a class="nav-link active" href="#profile" data-section="profile">
+                <i class="ri-user-line"></i> <?= __('个人资料') ?>
+            </a>
+            <a class="nav-link" href="#security" data-section="security">
+                <i class="ri-lock-line"></i> <?= __('安全设置') ?>
+            </a>
+            <a class="nav-link" href="/twofa" target="_blank">
+                <i class="ri-shield-keyhole-line"></i> <?= __('两步验证') ?>
+            </a>
+            <a class="nav-link" href="/frontend/account/logout">
+                <i class="ri-logout-box-line"></i> <?= __('退出登录') ?>
+            </a>
+        </nav>
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="account-main-content">
+        <!-- 个人资料头部 -->
+        <div class="profile-header">
+            <div class="avatar-large">
+                <?= strtoupper(mb_substr($user->getUsername(), 0, 1)) ?>
+            </div>
+            <div class="profile-info">
+                <h3><?= htmlspecialchars($user->getUsername()) ?></h3>
+                <p><?= __('欢迎回来！您可以在这里管理您的账户信息') ?></p>
+            </div>
+        </div>
+
+        <!-- 个人资料部分 -->
+        <div class="content-section" id="profile-section">
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('个人资料'),
+                'content' => '
+                    <div class="alert alert-success d-none" id="profileSuccessMsg"></div>
+                    <div class="alert alert-danger d-none" id="profileErrorMsg"></div>
+
+                    <form id="profileForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="username" class="form-label">' . __('用户名') . '</label>
+                                <input type="text" class="form-control" id="username" 
+                                       value="' . htmlspecialchars($user->getUsername()) . '" disabled>
+                                <small class="text-muted">' . __('用户名不可修改') . '</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="userId" class="form-label">' . __('用户ID') . '</label>
+                                <input type="text" class="form-control" id="userId" 
+                                       value="' . $user->getId() . '" disabled>
+                            </div>
+
+                            <div class="col-12 mb-3">
+                                <label for="avatar" class="form-label">' . __('头像URL') . '</label>
+                                <input type="url" class="form-control" id="avatar" name="avatar" 
+                                       value="' . htmlspecialchars($user->getAvatar() ?: '') . '" 
+                                       placeholder="https://example.com/avatar.jpg">
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+                                'text' => __('保存更改'),
+                                'type' => 'primary',
+                                'attributes' => 'type="submit"'
+                            ]) . '
+                        </div>
+                    </form>
+                '
+            ]);
+            ?>
+        </div>
+
+        <!-- 安全设置部分 -->
+        <div class="content-section d-none" id="security-section">
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('修改密码'),
+                'content' => '
+                    <div class="alert alert-success d-none" id="securitySuccessMsg"></div>
+                    <div class="alert alert-danger d-none" id="securityErrorMsg"></div>
+
+                    <form id="securityForm">
+                        ' . $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+                            'name' => 'old_password',
+                            'type' => 'password',
+                            'label' => __('原密码'),
+                            'placeholder' => __('请输入原密码'),
+                            'id' => 'old_password'
+                        ]) . '
+                        
+                        ' . $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+                            'name' => 'new_password',
+                            'type' => 'password',
+                            'label' => __('新密码'),
+                            'placeholder' => __('至少6位字符'),
+                            'id' => 'new_password'
+                        ]) . '
+                        
+                        ' . $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+                            'name' => 'confirm_password',
+                            'type' => 'password',
+                            'label' => __('确认新密码'),
+                            'placeholder' => __('再次输入新密码'),
+                            'id' => 'confirm_password'
+                        ]) . '
+
+                        <div class="mt-4">
+                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+                                'text' => __('修改密码'),
+                                'type' => 'primary',
+                                'attributes' => 'type="submit"'
+                            ]) . '
+                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+                                'text' => __('重置'),
+                                'type' => 'secondary',
+                                'class' => 'ms-2',
+                                'attributes' => 'type="reset"'
+                            ]) . '
+                        </div>
+                    </form>
+                '
+            ]);
+            ?>
+            
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('登录信息'),
+                'content' => '
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">' . __('最后登录IP') . '</label>
+                            <p class="text-muted">' . htmlspecialchars($user->getLoginIp() ?: __('未知')) . '</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">' . __('Session ID') . '</label>
+                            <p class="text-muted">' . htmlspecialchars(substr($user->getSessionId() ?: 'N/A', 0, 16)) . '...</p>
+                        </div>
+                    </div>
+                '
+            ]);
+            ?>
+        </div>
+    </main>
+</div>
+
+<script>
+$(document).ready(function() {
+    // 侧边栏导航
+    $('.account-sidebar .nav-link[data-section]').on('click', function(e) {
+        e.preventDefault();
+        const section = $(this).data('section');
+        
+        // 更新激活状态
+        $('.account-sidebar .nav-link').removeClass('active');
+        $(this).addClass('active');
+        
+        // 切换内容区
+        $('.content-section').addClass('d-none');
+        $(`#${section}-section`).removeClass('d-none');
+    });
+
+    // 个人资料表单提交
+    $('#profileForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const $successMsg = $('#profileSuccessMsg');
+        const $errorMsg = $('#profileErrorMsg');
+        
+        $successMsg.addClass('d-none');
+        $errorMsg.addClass('d-none');
+
+        $.ajax({
+            url: '/frontend/account/update',
+            method: 'POST',
+            data: $(this).serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $successMsg.text(response.message).removeClass('d-none');
+                    setTimeout(() => $successMsg.addClass('d-none'), 3000);
+                } else {
+                    $errorMsg.text(response.message).removeClass('d-none');
+                }
+            },
+            error: function() {
+                $errorMsg.text('<?= __('更新失败，请稍后重试') ?>').removeClass('d-none');
+            }
+        });
+    });
+
+    // 安全设置表单提交
+    $('#securityForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const $successMsg = $('#securitySuccessMsg');
+        const $errorMsg = $('#securityErrorMsg');
+        const newPassword = $('#new_password').val();
+        const confirmPassword = $('#confirm_password').val();
+        
+        $successMsg.addClass('d-none');
+        $errorMsg.addClass('d-none');
+
+        // 验证密码
+        if (newPassword !== confirmPassword) {
+            $errorMsg.text('<?= __('两次输入的新密码不一致') ?>').removeClass('d-none');
+            return;
+        }
+
+        $.ajax({
+            url: '/frontend/account/update',
+            method: 'POST',
+            data: $(this).serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $successMsg.text(response.message).removeClass('d-none');
+                    $('#securityForm')[0].reset();
+                    setTimeout(() => $successMsg.addClass('d-none'), 3000);
+                } else {
+                    $errorMsg.text(response.message).removeClass('d-none');
+                }
+            },
+            error: function() {
+                $errorMsg.text('<?= __('修改失败，请稍后重试') ?>').removeClass('d-none');
+            }
+        });
+    });
+});
+</script>

@@ -1,0 +1,23 @@
+怎样快速创建WelineFramework框架模组控制器？
+
+
+<p>首先创建一个模组，创建模组请参考<a title="怎样快速建立模组" href="../../../../../dev/tool/document?id=7" target="_blank" rel="noopener">怎样快速建立模组</a></p>
+<p>在etc/env.php文件数组中建立路由。</p>
+<pre><code>&lt;?php</code><br /><br /><code>/*</code><br /><code> * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code> * 邮箱：aiweline@qq.com</code><br /><code> * 网址：aiweline.com</code><br /><code> * 论坛：https://bbs.aiweline.com</code><br /><code> */</code><br /><br /><code>return [</code><br /><code>    'router'       =&gt; 'index',//路由</code><br /><code>    'dependencies' =&gt; [</code><br /><code>    ]</code><br /><code>];</code></pre>
+<p>模组目录下创建Controller目录。子目录既是url的路径。</p>
+<p><span style="color: #e03e2d;">例如：test/demo/index</span></p>
+<p><span style="color: #e03e2d;">那么在目录中可以表现为：</span></p>
+<p><span style="color: #e03e2d;">Controller\Test\Demo.php</span></p>
+<p><span style="color: #e03e2d;">剩余的index指的是Demo.php中的类index方法:</span></p>
+<p>创建任意名字的Controller类，继承类有FrontendController,BackendController,FrontendRestController,BackendRestController,所有控制器类型位于Weline\Framework\App\Controller下。</p>
+<p><img src="../../../../../pub/media/wyswyg/Weline/DeveloperWorkspace/document/控制器目录.png" alt="" width="571" height="180" /></p>
+<p>FrontendController&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 前端控制器</p>
+<p>BackendController&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# 后端控制器</p>
+<p>FrontendRestController&nbsp; &nbsp;# 前端rest api控制器</p>
+<p>BackendRestController&nbsp; &nbsp; # 后端resst api控制器</p>
+<p>&nbsp;</p>
+<p>示例：</p>
+<pre><code>&lt;?php</code><br /><br /><code>declare(strict_types=1);</code><br /><br /><code>/*</code><br /><code> * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code> * 邮箱：aiweline@qq.com</code><br /><code> * 网址：aiweline.com</code><br /><code> * 论坛：https://bbs.aiweline.com</code><br /><code> */</code><br /><br /><code>namespace Aiweline\Index\Controller;</code><br /><br /><code>use Weline\Framework\App\Controller\FrontendController;</code><br /><br /><code>class Upload extends FrontendController</code><br /><code>{</code><br /><code>    public function index()</code><br /><code>    {</code><br /><code>        return $this-&gt;fetch();</code><br /><code>    }</code><br /><code>}</code><br /><br />执行 php bin/m module:upgrade<br /><br />验证：<br /><img src="../../../../../pub/media/wyswyg/Weline/DeveloperWorkspace/document/控制器验证.png" alt="" width="3323" height="1337" /><br /><br /><br /><strong><span style="color: #ff0000;">高级控制器玩法：</span></strong><br /><br />当你有很多代码冗余，或者需要初始化控制器的一些行为，可以设置一个BaseController,继承以上父控制器，然后再通过子控制器类实现。下面是例子：<br />比如在Weline_Admin模块中，使用了类似的功能。<br /><br /><img src="../../../../../pub/media/wyswyg/Weline/DeveloperWorkspace/document/Base控制器目录.png" alt="" width="533" height="222" /><br />BaseController控制器内指定了模板为html格式，（默认是phtml）</pre>
+<pre><code>&lt;?php</code><br /><br /><code>declare(strict_types=1);</code><br /><br /><code>/*</code><br /><code> * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code> * 邮箱：aiweline@qq.com</code><br /><code> * 网址：aiweline.com</code><br /><code> * 论坛：https://bbs.aiweline.com</code><br /><code> */</code><br /><br /><code>namespace Weline\Admin\Controller\Template;</code><br /><br /><code>class BaseController extends \Weline\Admin\Controller\BaseController</code><br /><code>{</code><br /><code>    public function __init()</code><br /><code>    {</code><br /><code>        # 设置模板文件为html</code><br /><code>        $this-&gt;getTemplate()-&gt;setFileExt('html');</code><br /><code>        parent::__init();</code><br /><code>    }</code><br /><code>}</code></pre>
+<pre><br /><br />看下Upzet.php，继承了这个BaseContrller控制器。</pre>
+<pre><code>&lt;?php</code><br /><br /><code>declare(strict_types=1);</code><br /><br /><code>/*</code><br /><code> * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code> * 邮箱：aiweline@qq.com</code><br /><code> * 网址：aiweline.com</code><br /><code> * 论坛：https://bbs.aiweline.com</code><br /><code> */</code><br /><br /><code>namespace Weline\Admin\Controller\Template;</code><br /><br /><code>class Upzet extends BaseController</code><br /><code>{</code><br /><code>    public function index()</code><br /><code>    {</code><br /><code>        return $this-&gt;fetch($this-&gt;_request-&gt;getRule('template'));</code><br /><code>    }</code><br /><code>}</code><br /><br /><span style="color: #e03e2d;">可以看到，这个玩法只是把模板文件格式拓展名换了一下。</span></pre>

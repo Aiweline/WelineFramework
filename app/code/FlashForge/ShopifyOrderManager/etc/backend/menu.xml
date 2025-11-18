@@ -5,7 +5,7 @@
     <!--Shopify订单管理-->
     <!--Shopify订单管理-主菜单-->
     <add source="FlashForge_ShopifyOrderManager::main" name="shopify_order_main" title="Shopify订单" action="shopify/backend/order/index"
-         parent="Weline_Backend::dashboard" icon="fas fa-shopping-cart" order="100"/>
+         parent="Weline_Backend::business_module" icon="fas fa-shopping-cart" order="40000"/>
     <!--Shopify订单管理-订单管理-->
     <add source="FlashForge_ShopifyOrderManager::order_manage" name="shopify_order_manage" title="订单管理" action="shopify/backend/order/index"
          parent="FlashForge_ShopifyOrderManager::main" icon="fas fa-list" order="1"/>

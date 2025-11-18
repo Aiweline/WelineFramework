@@ -13,6 +13,7 @@ namespace Weline\Sticker\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Sticker\Helper\CodeMinifier;
+use Weline\Sticker\Service\StickerRegistry;
 
 /**
  * 冲突检测服务
@@ -22,10 +23,77 @@ use Weline\Sticker\Helper\CodeMinifier;
 class ConflictDetector
 {
     private CodeMinifier $codeMinifier;
+    private StickerRegistry $stickerRegistry;
 
-    public function __construct(CodeMinifier $codeMinifier)
+    public function __construct(CodeMinifier $codeMinifier, StickerRegistry $stickerRegistry)
     {
         $this->codeMinifier = $codeMinifier;
+        $this->stickerRegistry = $stickerRegistry;
+    }
+
+    /**
+     * 检查特定Sticker是否有冲突
+     *
+     * @param string $targetModule 目标模块
+     * @param string $targetFile 目标文件
+     * @param string $sourceModule 来源模块
+     * @return bool
+     */
+    public function hasConflict(string $targetModule, string $targetFile, string $sourceModule): bool
+    {
+        try {
+            $registry = $this->stickerRegistry->getRegistry();
+            
+            // 如果没有该文件的Sticker信息，返回false
+            if (!isset($registry[$targetModule][$targetFile])) {
+                return false;
+            }
+            
+            $stickers = $registry[$targetModule][$targetFile];
+            
+            // 如果只有一个Sticker，不会有冲突
+            if (count($stickers) <= 1) {
+                return false;
+            }
+            
+            // 获取源文件内容
+            $modules = Env::getInstance()->getModuleList();
+            if (!isset($modules[$targetModule])) {
+                return false;
+            }
+            
+            $module = $modules[$targetModule];
+            $basePath = $module['base_path'] ?? '';
+            $sourceFilePath = $basePath . str_replace('/', DIRECTORY_SEPARATOR, $targetFile);
+            
+            if (!file_exists($sourceFilePath)) {
+                return false;
+            }
+            
+            // 读取并压缩源文件
+            $sourceContent = file_get_contents($sourceFilePath);
+            $minifiedSource = $this->codeMinifier->minify($sourceContent);
+            
+            // 检测该文件的冲突
+            $conflicts = $this->detectFileConflicts($targetModule, $targetFile, $stickers, $minifiedSource);
+            
+            // 检查是否有涉及指定来源模块的冲突
+            foreach ($conflicts as $conflict) {
+                foreach ($conflict['conflicts'] as $indexConflict) {
+                    foreach ($indexConflict['sticker_actions'] as $action) {
+                        if ($action['source_module'] === $sourceModule) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            // 如果检查过程中出现异常，记录日志但不抛出异常
+            error_log("检查Sticker冲突时发生错误: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**

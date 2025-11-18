@@ -143,12 +143,12 @@ class ApiUserToken extends \Weline\Framework\Database\Model
     /**
      * 保存前设置创建时间
      */
-    public function beforeSave(): self
+    public function save_before()
     {
         if (!$this->getId()) {
             $this->setData('created_at', date('Y-m-d H:i:s'));
         }
-        return $this;
+        parent::save_before();
     }
 }
 

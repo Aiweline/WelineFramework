@@ -22,6 +22,7 @@ use Weline\I18n\Cache\I18NCache;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Observer\ParserWordsRegister;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
+use Weline\I18n\Service\TranslationCollector;
 
 class I18n
 {
@@ -73,8 +74,8 @@ class I18n
                 return $locale;
             }
         }
-        $this->i18nCache->set($locale_code, 'zh_CN');
-        return 'zh_CN';
+        $this->i18nCache->set($locale_code, 'zh_Hans_CN');
+        return 'zh_Hans_CN';
     }
 
     /**
@@ -325,15 +326,19 @@ class I18n
      * 参数区：
      *
      * @param bool $cache
+     * @param string|null $moduleName 指定模块名，如果为null则收集所有模块
      * @return array
      * @throws Exception
      */
-    public function getLocalsWords(bool $cache = true): array
+    public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
     {
         if (self::$local_words and $cache) {
             return self::$local_words;
         }
         $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
+        // 获取翻译模式
+        $translate_mode = Env::get('translation.mode', 'default');
+        
         if ($cache) {
             if (!file_exists($all_locals_words_file)) {
                 touch($all_locals_words_file);
@@ -342,20 +347,39 @@ class I18n
             }
             $all_locals_words = (array)(include $all_locals_words_file);
             if (!empty($all_locals_words)) {
-                self::$local_words = $all_locals_words;
-                return $all_locals_words;
+                // 在 online 模式下，即使使用缓存，也需要合并数据库翻译
+                if ($translate_mode === 'online') {
+                    // 合并数据库翻译（见后面的逻辑）
+                    // 这里先设置 locals_words，后面会合并数据库翻译
+                    $locals_words = $all_locals_words;
+                } else {
+                    // 非 online 模式，直接返回缓存
+                    self::$local_words = $all_locals_words;
+                    return $all_locals_words;
+                }
             }
         }
+        
         // 所有语言
         $locals_names = Locales::getNames();
-        // 所有语言对应存在的翻译词
-        $locals_words = [];
+        // 所有语言对应存在的翻译词（如果使用缓存且是 online 模式，已经在上面的 if 中设置了）
+        if (!isset($locals_words)) {
+            $locals_words = [];
+        }
         $error_count = 0;
         $first_error = true;
         
         // 模块翻译覆盖语言包翻译
+        // 用于记录每个词的模块名，用于总词典中标记重复词
+        $word_modules = []; // [locale][word] => [modules]
+        // 用于记录每个词的翻译来源模块（用于优先使用当前模块的词）
+        $word_translate_modules = []; // [locale][word] => module_name
+        // 用于记录每个词在每个模块中的翻译（用于生成CSV时每个模块一行）
+        $word_module_translations = []; // [locale][word][module] => translate
         $all_i18ns = $this->reader->getAllI18ns();
         foreach ($all_i18ns as $module_name => $i18n_files) {
+            // 获取完整的模块名（如 Weline_I18n）
+            $full_module_name = $this->getFullModuleName($module_name);
             /**@var $i18n_file File */
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
@@ -426,6 +450,8 @@ class I18n
                         }
                         
                         $data[1] = trim($data[1]);
+                        // 第三列是模块名（可选），如果存在则使用，否则使用当前完整模块名
+                        $word_module = isset($data[2]) && !empty(trim($data[2])) ? trim($data[2]) : $full_module_name;
                         
                         if (!$is_utf8) {
                             if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
@@ -450,7 +476,50 @@ class I18n
                             }
                         }
                         
-                        $locals_words[$local][$data[0]] = $data[1];
+                        // 记录词的模块信息（使用完整模块名）
+                        if (!isset($word_modules[$local])) {
+                            $word_modules[$local] = [];
+                        }
+                        if (!isset($word_modules[$local][$data[0]])) {
+                            $word_modules[$local][$data[0]] = [];
+                        }
+                        if (!in_array($word_module, $word_modules[$local][$data[0]])) {
+                            $word_modules[$local][$data[0]][] = $word_module;
+                        }
+                        
+                        // 记录每个词在每个模块中的翻译（用于生成CSV时每个模块一行）
+                        if (!isset($word_module_translations[$local])) {
+                            $word_module_translations[$local] = [];
+                        }
+                        if (!isset($word_module_translations[$local][$data[0]])) {
+                            $word_module_translations[$local][$data[0]] = [];
+                        }
+                        $word_module_translations[$local][$data[0]][$word_module] = $data[1];
+                        
+                        // 存储翻译（当前模块优先：如果词已存在，优先使用当前模块的词）
+                        // 如果词不存在，直接添加
+                        // 如果词已存在，检查是否来自当前模块，如果是则覆盖（确保当前模块的词优先）
+                        if (!isset($locals_words[$local][$data[0]])) {
+                            // 词不存在，直接添加
+                            $locals_words[$local][$data[0]] = $data[1];
+                            // 记录翻译来源模块
+                            if (!isset($word_translate_modules[$local])) {
+                                $word_translate_modules[$local] = [];
+                            }
+                            $word_translate_modules[$local][$data[0]] = $word_module;
+                        } else {
+                            // 词已存在，检查是否来自当前模块
+                            // 如果当前模块在模块列表中，使用当前模块的词（覆盖）
+                            if (in_array($word_module, $word_modules[$local][$data[0]])) {
+                                $locals_words[$local][$data[0]] = $data[1];
+                                // 更新翻译来源模块
+                                if (!isset($word_translate_modules[$local])) {
+                                    $word_translate_modules[$local] = [];
+                                }
+                                $word_translate_modules[$local][$data[0]] = $word_module;
+                            }
+                            // 如果当前模块不在模块列表中，保留原有翻译（不覆盖）
+                        }
                         $line += 1;
                     }
 
@@ -493,71 +562,31 @@ class I18n
         $directories = [];
         Env::getInstance()->getActiveModules();
         foreach (Env::getInstance()->getActiveModules() as $module) {
+            // 如果指定了模块名，只收集该模块
+            if ($moduleName !== null && $module['name'] !== $moduleName) {
+                continue;
+            }
             $directories[$module['name']] = $module['base_path'];
         }
         // 初始化翻译词数组
         $translations = [];
+        // 使用统一的翻译收集服务
+        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        
         // 遍历目录
         foreach ($directories as $module => $directory) {
-            // 使用过滤器在迭代器层面就跳过不需要扫描的目录
-            $dirIterator = new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS);
-            $filterIterator = new \RecursiveCallbackFilterIterator($dirIterator, function ($current, $key, $iterator) {
-                // // 如果是目录，检查是否需要跳过
-                // if ($iterator->hasChildren()) {
-                //     $path = $current->getPathname();
-                //     // 跳过 statics/assets 和 statics/libs 目录
-                //     if (strpos($path, '/statics/assets') !== false || 
-                //         strpos($path, '/statics/libs') !== false ||
-                //         strpos($path, DIRECTORY_SEPARATOR . 'statics' . DIRECTORY_SEPARATOR . 'assets') !== false ||
-                //         strpos($path, DIRECTORY_SEPARATOR . 'statics' . DIRECTORY_SEPARATOR . 'libs') !== false) {
-                //         return false;
-                //     }
-                // }
-                return true;
-            });
-            $iterator = new \RecursiveIteratorIterator($filterIterator);
-            # FIXME 未能更加精准搜索到词语
+            // 获取完整的模块名（如 Weline_I18n）
+            $full_module_name = $this->getFullModuleName($module);
+            
+            // 使用统一的翻译收集服务收集模块的翻译字符串
+            $collectedStrings = $collector->collect($directory, $module);
+            
             $module_words = [];
-            foreach ($iterator as $file) {
-                if ($file->isFile() && in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
-                    $content = file_get_contents($file->getPathname());
-                    // 直接提取<lang>标签内容
-                    if (preg_match_all('/<lang>(.*?)<\/lang>/', $content, $matches)) {
-                        foreach ($matches[1] as $match) {
-                            if ($match) {
-                                $translations[$match] = $match;
-                                $module_words[$match] = $match;
-                            }
-                        }
-                    }
-                    
-                    # 正则替换@lang()和@lang{}情况
-                    if (preg_match_all('/@lang\((.*?)\)/', $content, $matches)) {
-                        foreach ($matches[1] as $match) {
-                            if ($match) {
-                                $translations[$match] = $match;
-                                $module_words[$match] = $match;
-                            }
-                        }
-                    }
-                    if (preg_match_all('/@lang\{(.*?)}/', $content, $matches)) {
-                        foreach ($matches[1] as $match) {
-                            if ($match) {
-                                $translations[$match] = $match;
-                                $module_words[$match] = $match;
-                            }
-                        }
-                    }
-                    // 使用正则表达式匹配__()
-                    if (preg_match_all('/__\(([\'"])(.*?)(?<!\\))\1/', $content, $matches)) {
-                        foreach ($matches[2] as $match) {
-                            // 提取第一个参数
-//                            $filename = str_replace(BP, '', $file->getPathname());
-                            $translations[$match] = $match;
-                            $module_words[$match] = $match;
-                        }
-                    }
-                }
+            foreach ($collectedStrings as $original => $info) {
+                $translations[$original] = $original;
+                $module_words[$original] = $original;
+                // 注意：收集到的词还没有翻译，不需要为所有语言创建记录
+                // 模块信息会在读取CSV文件时记录（CSV文件中才有实际的翻译）
             }
             // 遍历模组i8n目录中的csv翻译文件
             $i18n_dir = $directory . '/i18n';
@@ -618,7 +647,7 @@ class I18n
         }
         
         // 在线翻译模式：从数据库读取翻译并合并到CSV翻译中
-        $translate_mode = Env::getInstance()->getConfig('translate_mode') ?: 'default';
+        $translate_mode = Env::get('translation.mode', 'default');
         if ($translate_mode === 'online') {
             try {
                 /**@var LocaleDictionary $localeDictionary */
@@ -643,7 +672,8 @@ class I18n
                 }
             } catch (\Exception $e) {
                 // 数据库读取失败时静默处理，继续使用CSV翻译
-                error_log(__("在线翻译模式：从数据库读取翻译失败：%{error}", ['error' => $e->getMessage()]));
+                // 注意：这里不能使用 __() 函数，因为可能会在翻译加载过程中触发循环调用
+                error_log("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage());
             }
         }
         
@@ -655,10 +685,115 @@ class I18n
                 mkdir($dir, 0755, true);
             }
             
-            $text = '<?php return ' . w_var_export($locals_words, true) . ';';
+            // 生成总词典，按模块组织，提升性能
+            // 格式：['all_words' => [...], 'locale' => ['Weline_I18n' => [...], 'Weline_Cdn' => [...]]]
+            $words_by_module = [
+                'all_words' => []  // 全局唯一词（所有语言共享，没有模块标记的词）
+            ];
+            $all_words_global = [];  // 收集所有语言的唯一词
+            
+            foreach ($locals_words as $locale => $words) {
+                $words_by_module[$locale] = [];
+                
+                // 按模块组织词
+                foreach ($words as $word => $translate) {
+                    // 过滤掉代码片段
+                    if (!self::isValidTranslationString($word)) {
+                        continue;
+                    }
+                    
+                    $modules = $word_modules[$locale][$word] ?? [];
+                    
+                    if (count($modules) > 1) {
+                        // 多个模块重复，为每个模块单独记录
+                        foreach ($modules as $module_name) {
+                            if (!isset($words_by_module[$locale][$module_name])) {
+                                $words_by_module[$locale][$module_name] = [];
+                            }
+                            // 获取该模块的翻译
+                            $module_translate = $word_module_translations[$locale][$word][$module_name] ?? $translate;
+                            $words_by_module[$locale][$module_name][$word] = $module_translate;
+                        }
+                    } elseif (count($modules) === 1) {
+                        // 只有一个模块，记录到该模块下
+                        $module_name = $modules[0];
+                        if (!isset($words_by_module[$locale][$module_name])) {
+                            $words_by_module[$locale][$module_name] = [];
+                        }
+                        $words_by_module[$locale][$module_name][$word] = $translate;
+                    } else {
+                        // 没有模块信息，记录到全局 all_words（唯一词）
+                        // 使用第一个语言的翻译作为全局翻译（通常所有语言的唯一词翻译相同）
+                        if (!isset($all_words_global[$word])) {
+                            $all_words_global[$word] = $translate;
+                        }
+                    }
+                }
+            }
+            
+            // 将全局唯一词放到顶层
+            $words_by_module['all_words'] = $all_words_global;
+            
+            $text = '<?php return ' . w_var_export($words_by_module, true) . ';';
             $result = @file_put_contents($words_file, $text);
             if ($result === false) {
                 error_log(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]));
+            }
+            
+            // 同时生成每个语言的PHP文件（按模块组织，不包含 all_words）
+            foreach ($words_by_module as $locale => $module_words_data) {
+                // 跳过顶层的 all_words
+                if ($locale === 'all_words') {
+                    continue;
+                }
+                
+                $words_filename = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
+                // 确保目录存在
+                $words_dir = dirname($words_filename);
+                if (!is_dir($words_dir)) {
+                    mkdir($words_dir, 0755, true);
+                }
+                $file = new \Weline\Framework\System\File\Io\File();
+                $file->open($words_filename, $file::mode_w);
+                $text = '<?php return ' . var_export($module_words_data, true) . ';?>';
+
+                try {
+                    $file->write($text);
+                } catch (Exception $e) {
+                    error_log(__("警告：无法写入语言文件 %{file}", ['file' => $words_filename]));
+                }
+                $file->close();
+            }
+            
+            // 同时生成CSV格式的总库文件（每个语言一个文件）
+            // 格式：原文,译文,模块名
+            // 如果词在多个模块中重复，每个模块单独一行
+            foreach ($words_by_module as $locale => $module_words_data) {
+                // 跳过顶层的 all_words
+                if ($locale === 'all_words') {
+                    continue;
+                }
+                
+                $csv_file_path = dirname($words_file) . DS . $locale . '_total.csv';
+                $csv_handle = @fopen($csv_file_path, 'w+');
+                if ($csv_handle !== false) {
+                    // 写入CSV文件，格式：原文,译文,模块名
+                    // 先写入全局唯一词（all_words）
+                    if (isset($words_by_module['all_words'])) {
+                        foreach ($words_by_module['all_words'] as $word => $translate) {
+                            // CSV格式：原文,译文,模块名（唯一词模块名为空）
+                            fputcsv($csv_handle, [$word, $translate, ''], ',', '"', '\\');
+                        }
+                    }
+                    // 再写入各模块的词
+                    foreach ($module_words_data as $module_name => $words) {
+                        foreach ($words as $word => $translate) {
+                            // CSV格式：原文,译文,模块名
+                            fputcsv($csv_handle, [$word, $translate, $module_name], ',', '"', '\\');
+                        }
+                    }
+                    fclose($csv_handle);
+                }
             }
         }
         self::$local_words = $locals_words;
@@ -693,27 +828,14 @@ class I18n
      *
      * @throws Exception
      */
-    public function convertToLanguageFile(bool $cache = true): void
+    public function convertToLanguageFile(bool $cache = true, ?string $moduleName = null): void
     {
-        $locals_words = $this->getLocalsWords($cache);
-        foreach ($locals_words as $local => $locals_word) {
-            // 过滤无效的 locale 代码（如 0、空字符串等）
-            if (empty($local) || is_numeric($local) || strlen($local) < 2) {
-                continue;
-            }
-            
-            $words_filename = Env::path_TRANSLATE_FILES_PATH . $local . '.php';
-            $file = new \Weline\Framework\System\File\Io\File();
-            $file->open($words_filename, $file::mode_w);
-            $text = '<?php return ' . var_export($locals_word, true) . ';?>';
-
-            try {
-                $file->write($text);
-            } catch (Exception $e) {
-                throw new Exception('错误：' . $e->getMessage());
-            }
-            $file->close();
-        }
+        // 调用 getLocalsWords 会生成总词典和语言文件，这里只需要确保生成即可
+        // getLocalsWords 已经会生成按模块组织的结构
+        $this->getLocalsWords($cache, $moduleName);
+        
+        // 如果需要单独生成语言文件，可以从总词典读取并转换格式
+        // 但通常 getLocalsWords 已经处理了，这里主要是为了兼容性
     }
 
     /**
@@ -730,6 +852,48 @@ class I18n
     function getCollectedWords(): array
     {
         return ObjectManager::getInstance(ParserWordsRegister::class)->getWords();
+    }
+    
+    /**
+     * 获取完整的模块名（如 Weline_I18n）
+     * 
+     * @param string $module_name 模块名（如 I18n）
+     * @return string 完整模块名（如 Weline_I18n）
+     */
+    private function getFullModuleName(string $module_name): string
+    {
+        // 如果已经是完整格式，直接返回
+        if (strpos($module_name, 'Weline_') === 0) {
+            return $module_name;
+        }
+        
+        // 尝试从模块信息获取完整名称
+        try {
+            $module_info = Env::getInstance()->getModuleInfo($module_name);
+            if ($module_info && isset($module_info['name'])) {
+                return $module_info['name'];
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        
+        // 默认格式：Weline_模块名
+        return 'Weline_' . $module_name;
+    }
+    
+    /**
+     * 验证是否是有效的翻译字符串
+     * 过滤掉代码片段、变量、函数调用等
+     * 
+     * @param string $str
+     * @return bool
+     * @deprecated 使用 TranslationCollector::isValidTranslationString() 代替
+     */
+    private static function isValidTranslationString(string $str): bool
+    {
+        // 使用统一的收集服务进行验证
+        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        return $collector->isValidTranslationString($str);
     }
 
     /**

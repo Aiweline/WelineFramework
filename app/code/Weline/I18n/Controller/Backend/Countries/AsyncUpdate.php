@@ -301,7 +301,7 @@ class AsyncUpdate extends BaseController
         $this->setProgress($taskId, '正在更新区域名称数据...', 70);
         
         // 支持的语言列表
-        $displayLanguages = ['en', 'zh_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
+        $displayLanguages = ['en', 'zh_Hans_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
         
         /** @var Locale $locale */
         $locale = ObjectManager::getInstance(Locale::class);
@@ -434,7 +434,7 @@ class AsyncUpdate extends BaseController
         $this->setProgress($taskId, '正在更新区域名称数据...', 50);
         
         // 支持的语言列表
-        $displayLanguages = ['en', 'zh_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
+        $displayLanguages = ['en', 'zh_Hans_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
         
         /** @var Locale $locale */
         $locale = ObjectManager::getInstance(Locale::class);
@@ -577,7 +577,7 @@ class AsyncUpdate extends BaseController
         
         try {
             // 尝试使用中文作为降级
-            $name = \Symfony\Component\Intl\Locales::getName($localeCode, 'zh_CN');
+            $name = \Symfony\Component\Intl\Locales::getName($localeCode, 'zh_Hans_CN');
             if (!empty($name) && $name !== $localeCode) {
                 return $name;
             }

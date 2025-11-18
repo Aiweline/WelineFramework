@@ -1,0 +1,52 @@
+<?php
+/**
+ * 片段：Header - 极简风格
+ * 
+ * 极简风格的页面头部，只包含Logo和基本导航
+ * 字段
+ * @info description 描述：极简风格的页面头部，只包含Logo和基本导航
+ * @info name 名称：Header极简风格片段
+ * @param logo Logo URL
+ * @param logoText Logo文字
+ * @param navItems 导航项数组
+ * @param class 额外CSS类
+ */
+$logo = $this->getData('logo') ?? '';
+$logoText = $this->getData('logoText') ?? __('Weline');
+$navItems = $this->getData('navItems') ?? [];
+$class = $this->getData('class') ?? '';
+
+$baseUrl = $this->request->getBaseUrl();
+$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+?>
+<header class="weline-header minimal-header <?= htmlspecialchars($class) ?>">
+    <div class="header-container">
+        <!-- Logo -->
+        <div class="header-logo">
+            <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
+                <?php if ($logo): ?>
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                <?php else: ?>
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                <?php endif; ?>
+                <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText) ?></span>
+            </a>
+        </div>
+
+        <!-- 导航菜单 -->
+        <?php if (!empty($navItems)): ?>
+            <nav class="header-nav">
+                <ul class="nav-list">
+                    <?php foreach ($navItems as $item): ?>
+                        <li class="nav-item">
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
+                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+    </div>
+</header>
+

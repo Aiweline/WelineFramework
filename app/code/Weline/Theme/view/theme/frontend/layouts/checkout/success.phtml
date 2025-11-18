@@ -1,0 +1,79 @@
+<?php
+/**
+ * 布局：结账页 - 成功页面布局
+ * 
+ * 订单提交成功后的确认页面布局
+ * 字段
+ * @info description 描述：订单提交成功后的确认页面布局
+ * @info name 名称：结账成功页面布局
+ * @param title 页面标题（默认：订单确认）
+ * @param content 主要内容（HTML字符串）
+ * @param orderNumber 订单号
+ * @param orderDetails 订单详情（HTML字符串，可选）
+ * @param continueShopping 继续购物链接
+ * @param viewOrder 查看订单链接（可选）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('订单确认');
+$content = $this->getData('content') ?? '';
+$orderNumber = $this->getData('orderNumber') ?? '';
+$orderDetails = $this->getData('orderDetails') ?? '';
+$continueShopping = $this->getData('continueShopping') ?? '/';
+$viewOrder = $this->getData('viewOrder') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="checkout-success-main <?= htmlspecialchars($class) ?>">
+        <div class="checkout-success-container">
+            <div class="checkout-success-content">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h1 class="success-title"><?= __('订单提交成功！') ?></h1>
+                
+                <?php if ($orderNumber): ?>
+                    <p class="order-number">
+                        <?= __('订单号：') ?><strong><?= htmlspecialchars($orderNumber) ?></strong>
+                    </p>
+                <?php endif; ?>
+                
+                <?php if ($content): ?>
+                    <div class="success-message">
+                        <?= $content ?>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if ($orderDetails): ?>
+                    <div class="order-details">
+                        <?= $orderDetails ?>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="success-actions">
+                    <?php if ($viewOrder): ?>
+                        <a href="<?= htmlspecialchars($viewOrder) ?>" class="btn btn-primary">
+                            <?= __('查看订单') ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="btn btn-secondary">
+                        <?= __('继续购物') ?>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

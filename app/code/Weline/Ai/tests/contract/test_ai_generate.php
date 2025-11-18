@@ -25,7 +25,7 @@ class AiGenerateContractTest extends TestCase
             'prompt' => '请帮我写一个PHP函数',
             'model_code' => 'gpt-3.5-turbo',
             'scenario_code' => 'code_generation',
-            'locale' => 'zh_CN'
+            'locale' => 'zh_Hans_CN'
         ];
 
         $response = $this->makeRequest('POST', '/ai/generate', $requestData);
@@ -65,7 +65,7 @@ class AiGenerateContractTest extends TestCase
             'prompt' => 'Hello, how are you?',
             'model_code' => 'gpt-3.5-turbo',
             'scenario_code' => 'translation',
-            'locale' => 'zh_CN',
+            'locale' => 'zh_Hans_CN',
             'params' => [
                 'target_language' => '中文',
                 'source_language' => '英文'
