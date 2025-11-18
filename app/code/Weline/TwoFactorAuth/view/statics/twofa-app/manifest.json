@@ -1,0 +1,38 @@
+{
+    "name": "Weline 身份验证器",
+    "short_name": "Weline 2FA",
+    "description": "完全自主开发的双因素身份验证器，兼容所有标准TOTP协议",
+    "start_url": "/twofa-app/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#007bff",
+    "orientation": "portrait",
+    "scope": "/twofa-app/",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23007bff' width='192' height='192' rx='40'/><text x='96' y='140' text-anchor='middle' font-size='120' fill='white'>🔐</text></svg>",
+            "sizes": "192x192",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23007bff' width='512' height='512' rx='100'/><text x='256' y='380' text-anchor='middle' font-size='320' fill='white'>🔐</text></svg>",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "utilities",
+        "security"
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "添加账户",
+            "url": "/twofa-app/?action=add",
+            "description": "添加新的2FA账户"
+        }
+    ],
+    "prefer_related_applications": false
+}

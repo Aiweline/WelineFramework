@@ -1,0 +1,48 @@
+<?php
+/**
+ * 布局：购物车 - 空购物车布局
+ * 
+ * 空购物车页面布局，提示用户购物车为空
+ * 字段
+ * @info description 描述：空购物车页面布局，提示用户购物车为空
+ * @info name 名称：空购物车布局
+ * @param title 页面标题（默认：购物车）
+ * @param message 提示信息（可选）
+ * @param continueShopping 继续购物链接
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('购物车');
+$message = $this->getData('message') ?? __('您的购物车是空的');
+$continueShopping = $this->getData('continueShopping') ?? '/';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="cart-empty-main <?= htmlspecialchars($class) ?>">
+        <div class="cart-empty-container">
+            <div class="cart-empty-content">
+                <div class="cart-empty-icon">
+                    <i class="fas fa-shopping-cart"></i>
+                </div>
+                <h2 class="cart-empty-title"><?= __('购物车是空的') ?></h2>
+                <p class="cart-empty-message"><?= htmlspecialchars($message) ?></p>
+                <a href="<?= htmlspecialchars($continueShopping) ?>" class="btn btn-primary continue-shopping-btn">
+                    <?= __('继续购物') ?>
+                </a>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!-- 网站服务分组菜单 -->
+    <add source="Weline_Websites::website_service"
+         name="website_service"
+         title="网站服务"
+         action=""
+         parent="Weline_Backend::system_service"
+         icon="mdi mdi-web"
+         order="30400"/>
+    
+    <!-- 网站服务 -->
+    <add source="Weline_Websites::website"
+         name="websites"
+         title="网站管理"
+         action="*/admin/website/index"
+         parent="Weline_Websites::website_service"
+         icon="mdi mdi-web"
+         order="10"/>
+    <add source="Weline_Websites::website_maintenance"
+         name="website_maintenance"
+         title="网站维护模式"
+         action="*/backend/maintenance"
+         parent="Weline_Websites::website_service"
+         icon="mdi mdi-tools"
+         order="20"/>
+    <add source="Weline_Websites::website_backup"
+         name="website_backup"
+         title="网站备份"
+         action="*/backend/backup"
+         parent="Weline_Websites::website_service"
+         icon="mdi mdi-backup-restore"
+         order="30"/>
+</menus>

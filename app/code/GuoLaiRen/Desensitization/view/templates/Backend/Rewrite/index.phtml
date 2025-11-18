@@ -1,0 +1,209 @@
+<?php
+/**
+ * AI润色页面模板
+ * 
+ * @var array $styles
+ * @var array $models
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$styles = $this->styles ?? [];
+$models = $this->models ?? [];
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>AI润色</title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-auto-fix me-2"></i>
+                                <lang>AI润色</lang>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 润色输入区域 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-pencil me-2"></i>
+                                    输入内容
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="rewriteForm">
+                                    <div class="mb-3">
+                                        <label class="form-label">待润色内容 <span class="text-danger">*</span></label>
+                                        <textarea class="form-control" id="content" name="content" rows="8" 
+                                                  placeholder="请输入需要脱敏并润色的内容..."></textarea>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">AI模型</label>
+                                                <select class="form-select" id="model_code" name="model_code">
+                                                    <option value="">使用默认模型</option>
+                                                    <?php foreach ($models as $model): ?>
+                                                        <option value="<?= $model['code'] ?>">
+                                                            <?= $model['name'] ?> (<?= $model['supplier'] ?>)
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">润色风格</label>
+                                                <select class="form-select" id="rewrite_style" name="rewrite_style">
+                                                    <?php foreach ($styles as $key => $label): ?>
+                                                        <option value="<?= $key ?>"><?= $label ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label d-block">选项</label>
+                                                <div class="form-check form-switch mt-2">
+                                                    <input class="form-check-input" type="checkbox" 
+                                                           id="preserve_format" name="preserve_format" checked>
+                                                    <label class="form-check-label" for="preserve_format">
+                                                        保持原有格式
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="text-end">
+                                        <button type="button" class="btn btn-primary btn-lg" onclick="executeRewrite()">
+                                            <i class="mdi mdi-magic-staff me-1"></i>
+                                            <lang>开始润色</lang>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 润色结果 -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="card" id="resultCard" style="display: none;">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="mdi mdi-check-circle me-2"></i>
+                                    润色结果
+                                </h3>
+                            </div>
+                            <div class="card-body" id="resultContent">
+                                <!-- 结果将在这里显示 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+function executeRewrite() {
+    const content = document.getElementById('content').value;
+    if (!content) {
+        alert('请输入内容');
+        return;
+    }
+
+    const form = document.getElementById('rewriteForm');
+    const formData = new FormData(form);
+    const data = {
+        content: formData.get('content'),
+        model_code: formData.get('model_code'),
+        rewrite_style: formData.get('rewrite_style'),
+        preserve_format: document.getElementById('preserve_format').checked ? 1 : 0
+    };
+
+    const resultCard = document.getElementById('resultCard');
+    const resultContent = document.getElementById('resultContent');
+    
+    resultContent.innerHTML = '<div class="text-center py-4"><i class="mdi mdi-loading mdi-spin me-2"></i>AI正在润色中，请稍候...</div>';
+    resultCard.style.display = 'block';
+
+    fetch('<?= $this->getBackendUrl('*/backend/rewrite/execute') ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const result = data.data;
+            const html = `
+                <div class="alert alert-success">
+                    <strong>润色完成</strong> - 执行时间: ${result.execution_time}
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><i class="mdi mdi-file-document me-2"></i>原内容</h5>
+                        <div class="p-3 bg-light rounded">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word;">${result.original}</pre>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5><i class="mdi mdi-auto-fix me-2"></i>润色后</h5>
+                        <div class="p-3 bg-success bg-opacity-10 rounded">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word;">${result.rewritten}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+            resultContent.innerHTML = html;
+        } else {
+            resultContent.innerHTML = `<div class="alert alert-danger">润色失败: ${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        resultContent.innerHTML = `<div class="alert alert-danger">润色失败: ${error.message}</div>`;
+    });
+}
+</script>
+
+</body>
+</html>

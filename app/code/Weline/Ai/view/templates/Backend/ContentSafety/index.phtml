@@ -1,0 +1,47 @@
+<?php
+/**
+ * 内容安全管理 - 索引页面
+ *
+ * @var $this \Weline\Framework\View\Template
+ */
+?>
+
+<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
+
+<div class="sz-page-header">
+    <h1 class="sz-page-title">
+        <i class="mdi mdi-shield-check"></i>
+        内容安全管理
+    </h1>
+    <p class="sz-page-subtitle">AI内容安全审核和过滤管理</p>
+</div>
+
+<div class="sz-card">
+    <div class="sz-card-body">
+        <div class="sz-empty-state">
+            <i class="mdi mdi-shield-outline sz-empty-icon"></i>
+            <h3>功能开发中</h3>
+            <p class="text-muted">内容安全管理功能正在开发中，敬请期待...</p>
+            <div class="mt-4">
+                <a href="<?= $this->getBackendUrl('*/backend/index') ?>" class="btn btn-primary">
+                    <i class="mdi mdi-arrow-left"></i> 返回首页
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
+
+<style>
+.sz-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+.sz-empty-icon {
+    font-size: 80px;
+    color: #ddd;
+    margin-bottom: 20px;
+}
+</style>
+

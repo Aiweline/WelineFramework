@@ -1,0 +1,47 @@
+<?php
+/**
+ * 布局：个人中心 - 仪表盘布局
+ * 
+ * 个人中心仪表盘布局，包含侧边栏导航和主内容区
+ * 字段
+ * @info description 描述：个人中心仪表盘布局，包含侧边栏导航和主内容区
+ * @info name 名称：个人中心仪表盘布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param sidebar 侧边栏内容（导航菜单）
+ * @param sidebarCollapsed 侧边栏是否折叠
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('个人中心');
+$content = $this->getData('content') ?? '';
+$sidebar = $this->getData('sidebar') ?? '';
+$sidebarCollapsed = $this->getData('sidebarCollapsed') ?? false;
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <div class="account-dashboard <?= htmlspecialchars($class) ?>">
+        <?php if ($sidebar): ?>
+            <aside class="account-sidebar <?= $sidebarCollapsed ? 'collapsed' : '' ?>">
+                <?= $sidebar ?>
+            </aside>
+        <?php endif; ?>
+        
+        <main class="account-main-content">
+            <?= $content ?>
+        </main>
+    </div>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

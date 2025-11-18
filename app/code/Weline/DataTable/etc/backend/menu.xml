@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--DataTable模块菜单-->
+    <add source="Weline_DataTable::datatable_module"
+         name="datatable_module"
+         title="DataTable"
+         action=""
+         parent="Weline_Backend::system_module"
+         icon="mdi mdi-table"
+         order="20001"/>
+
+    <add source="Weline_DataTable::datatable_test_index"
+         name="datatable_test_index"
+         title="测试首页"
+         action="datatable/backend/test/index"
+         parent="Weline_DataTable::datatable_module"
+         icon="mdi mdi-home"
+         order="20002"/>
+
+    <add source="Weline_DataTable::datatable_test_comprehensive"
+         name="datatable_test_comprehensive"
+         title="综合测试"
+         action="datatable/backend/test/comprehensive/index"
+         parent="Weline_DataTable::datatable_module"
+         icon="mdi mdi-test-tube"
+         order="20003"/>
+
+    <add source="Weline_DataTable::datatable_test_tag"
+         name="datatable_test_tag"
+         title="标签测试"
+         action="datatable/backend/test/tag-test/index"
+         parent="Weline_DataTable::datatable_module"
+         icon="mdi mdi-tag"
+         order="20004"/>
+
+    <add source="Weline_DataTable::datatable_doc"
+         name="datatable_doc"
+         title="文档说明"
+         action=""
+         parent="Weline_DataTable::datatable_module"
+         icon="mdi mdi-book-open-variant"
+         order="20005"/>
+
+    <add source="Weline_DataTable::datatable_doc_quickstart"
+         name="datatable_doc_quickstart"
+         title="快速入门"
+         action="datatable/backend/test/index/doc"
+         parent="Weline_DataTable::datatable_doc"
+         icon="mdi mdi-speedometer"
+         order="20006"/>
+
+    <add source="Weline_DataTable::datatable_doc_guide"
+         name="datatable_doc_guide"
+         title="使用指南"
+         action="datatable/backend/test/index/doc"
+         parent="Weline_DataTable::datatable_doc"
+         icon="mdi mdi-book-open-page-variant"
+         order="20007"/>
+</menus>

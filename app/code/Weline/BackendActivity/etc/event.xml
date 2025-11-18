@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!--控制器注解属性-->
+    <event name="Framework_App::backend_controller_init_after">
+        <observer name="Weline_BackendActivity::backend_controller_init_after" instance="Weline\BackendActivity\Observer\BackendControllerInit" disabled="false"
+                  shared="true" sort="0"/>
+    </event>
+    <event name="Framework_Router::route_after">
+        <observer name="Weline_BackendActivity::route_after" instance="Weline\BackendActivity\Observer\BackendControllerRouteAfter" disabled="false"
+                  shared="true" sort="0"/>
+    </event>
+</config>

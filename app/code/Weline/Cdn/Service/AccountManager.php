@@ -1,0 +1,113 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\Cdn\Service;
+
+use Weline\Cdn\Model\Account;
+use Weline\Cdn\Model\Domain;
+use Weline\Framework\Manager\ObjectManager;
+
+/**
+ * 账户管理服务
+ * 
+ * @package Weline_Cdn
+ */
+class AccountManager
+{
+    private ObjectManager $objectManager;
+
+    public function __construct(ObjectManager $objectManager)
+    {
+        $this->objectManager = $objectManager;
+    }
+
+    /**
+     * 获取账户模型实例
+     * 
+     * @return Account
+     */
+    private function getAccountModel(): Account
+    {
+        return $this->objectManager->getInstance(Account::class);
+    }
+
+    /**
+     * 获取域名模型实例
+     * 
+     * @return Domain
+     */
+    private function getDomainModel(): Domain
+    {
+        return $this->objectManager->getInstance(Domain::class);
+    }
+
+    /**
+     * 设置默认账户
+     * 
+     * @param int $accountId 账户ID
+     * @return void
+     */
+    public function setDefaultAccount(int $accountId): void
+    {
+        $account = $this->getAccountModel()->reset()->load($accountId);
+        
+        if (!$account->getData(Account::fields_ACCOUNT_ID)) {
+            throw new \InvalidArgumentException(__('账户不存在'));
+        }
+
+        $adapter = $account->getData(Account::fields_ADAPTER);
+        
+        // 先取消该适配器的所有默认账户
+        $this->getAccountModel()->reset()
+            ->where(Account::fields_ADAPTER, $adapter)
+            ->where(Account::fields_IS_DEFAULT, 1)
+            ->update([Account::fields_IS_DEFAULT => 0])
+            ->fetch();
+        
+        // 设置新的默认账户
+        $account->setData(Account::fields_IS_DEFAULT, 1)->save();
+    }
+
+    /**
+     * 获取适配器的默认账户
+     * 
+     * @param string $adapter 适配器代码
+     * @return Account|null
+     */
+    public function getDefaultAccount(string $adapter): ?Account
+    {
+        $account = $this->getAccountModel()->reset()
+            ->where(Account::fields_ADAPTER, $adapter)
+            ->where(Account::fields_IS_DEFAULT, 1)
+            ->where(Account::fields_STATUS, Account::STATUS_ACTIVE)
+            ->find()
+            ->fetch();
+        
+        return $account->getId() ? $account : null;
+    }
+
+    /**
+     * 获取账户关联的域名列表
+     * 
+     * @param int $accountId 账户ID
+     * @return array
+     */
+    public function getAccountDomains(int $accountId): array
+    {
+        $domains = $this->getDomainModel()->reset()
+            ->where(Domain::fields_ACCOUNT_ID, $accountId)
+            ->select()
+            ->fetch();
+        
+        return $domains->getItems();
+    }
+}
+

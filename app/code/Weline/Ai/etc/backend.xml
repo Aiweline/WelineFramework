@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<config>
+    <router>
+        <router_name>ai</router_name>
+        <router_area>backend</router_area>
+        <router_path_name>ai/backend</router_path_name>
+        <router_class>Weline\Ai\Controller\Backend</router_class>
+    </router>
+</config>
+

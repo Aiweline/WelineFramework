@@ -1,0 +1,149 @@
+{
+    "module_name": "Weline_I18n",
+    "version": "1.0.0",
+    "description": "",
+    "router": "weline_i18n",
+    "controllers": [
+        {
+            "name": "Helloword",
+            "routes": [
+                "helloword"
+            ],
+            "type": "Frontend",
+            "is_default": true
+        }
+    ],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": true,
+    "created_at": "2025-11-16 17:10:52",
+    "updated_at": "2025-11-16 18:10:07",
+    "i18n": [
+        {
+            "extracted_at": "2025-11-16 17:11:31",
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:15:47",
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:16:36",
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:16:44",
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:20:33",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:23:10",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 393,
+            "translated_strings": 0,
+            "untranslated_strings": 393
+        },
+        {
+            "extracted_at": "2025-11-16 17:25:32",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 394,
+            "translated_strings": 0,
+            "untranslated_strings": 394
+        },
+        {
+            "extracted_at": "2025-11-16 17:26:39",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 394,
+            "translated_strings": 0,
+            "untranslated_strings": 394
+        },
+        {
+            "extracted_at": "2025-11-16 17:28:30",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 390,
+            "translated_strings": 0,
+            "untranslated_strings": 390
+        },
+        {
+            "extracted_at": "2025-11-16 17:31:21",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 334,
+            "translated_strings": 0,
+            "untranslated_strings": 334
+        },
+        {
+            "extracted_at": "2025-11-16 17:31:40",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 334,
+            "translated_strings": 0,
+            "untranslated_strings": 334
+        },
+        {
+            "extracted_at": "2025-11-16 17:34:23",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 382,
+            "translated_strings": 0,
+            "untranslated_strings": 382
+        },
+        {
+            "extracted_at": "2025-11-16 17:41:22",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 386,
+            "translated_strings": 0,
+            "untranslated_strings": 386
+        },
+        {
+            "extracted_at": "2025-11-16 17:41:30",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 386,
+            "translated_strings": 0,
+            "untranslated_strings": 386
+        },
+        {
+            "extracted_at": "2025-11-16 18:10:07",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 386,
+            "translated_strings": 0,
+            "untranslated_strings": 386
+        }
+    ]
+}

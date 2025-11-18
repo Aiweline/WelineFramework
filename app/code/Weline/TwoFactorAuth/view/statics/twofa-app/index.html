@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#007bff">
+    <meta name="description" content="完全自主开发的双因素身份验证器">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Weline验证器">
+    <title>Weline 身份验证器</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="app-header">
+            <h1>🔐 Weline 验证器</h1>
+            <p class="subtitle">完全自主开发的身份验证系统</p>
+        </header>
+
+        <!-- 账户列表 -->
+        <main class="accounts-container" id="accountsContainer">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon">🔑</div>
+                <h2>还没有账户</h2>
+                <p>点击下方"+"按钮添加第一个账户</p>
+                <div class="features">
+                    <div class="feature-badge">✓ 兼容所有标准2FA</div>
+                    <div class="feature-badge">✓ 离线工作</div>
+                    <div class="feature-badge">✓ 安全加密</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 添加按钮 -->
+        <button class="fab" onclick="showAddModal()" title="添加账户">
+            <span>+</span>
+        </button>
+
+        <!-- 导出按钮 -->
+        <button class="fab-secondary" onclick="exportAccounts()" title="导出备份">
+            <span>💾</span>
+        </button>
+
+        <!-- 底部信息 -->
+        <footer class="app-footer">
+            <p>完全自主开发 • 标准TOTP协议 • 兼容所有主流应用</p>
+        </footer>
+    </div>
+
+    <!-- 添加账户模态框 -->
+    <div class="modal" id="addModal">
+        <div class="modal-overlay" onclick="closeAddModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>添加账户</h2>
+                <button class="close-btn" onclick="closeAddModal()">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('manual')">手动输入</button>
+                    <button class="tab-btn" onclick="switchTab('scan')">扫描二维码</button>
+                    <button class="tab-btn" onclick="switchTab('import')">导入备份</button>
+                </div>
+
+                <!-- 手动输入表单 -->
+                <div id="manualTab" class="tab-content active">
+                    <div class="form-group">
+                        <label>发行者（如：Weline Framework）</label>
+                        <input type="text" id="issuer" placeholder="输入发行者名称">
+                    </div>
+
+                    <div class="form-group">
+                        <label>账户名（如：admin@example.com）</label>
+                        <input type="text" id="accountName" placeholder="输入账户名">
+                    </div>
+
+                    <div class="form-group">
+                        <label>密钥（Secret Key）</label>
+                        <input type="text" id="secret" placeholder="输入密钥或粘贴otpauth://链接">
+                        <small>支持Base32密钥或完整的otpauth://链接</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>备注（可选）</label>
+                        <input type="text" id="accountNote" placeholder="如：公司账号、个人邮箱等">
+                        <small>添加备注方便识别不同账户</small>
+                    </div>
+                </div>
+
+                <!-- 扫描二维码 -->
+                <div id="scanTab" class="tab-content">
+                    <div class="scan-methods">
+                        <!-- 方式1：上传截图 -->
+                        <div class="scan-method">
+                            <h4 style="margin-bottom: 10px; color: #333;">📸 上传二维码截图（推荐）</h4>
+                            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                                先用手机对二维码截图，然后上传图片自动识别
+                            </p>
+                            <input type="file" id="qrImageFile" accept="image/*" style="display: none;"
+                                onchange="handleQRImageUpload(event)">
+                            <button class="btn btn-primary" onclick="document.getElementById('qrImageFile').click()">
+                                📁 选择二维码图片
+                            </button>
+
+                            <!-- 图片预览区 -->
+                            <div id="qrImagePreview" style="display: none; margin-top: 15px;">
+                                <div
+                                    style="text-align: center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <img id="qrPreviewImg"
+                                        style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                                    <div id="qrScanStatus" style="margin-top: 10px; font-size: 14px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0; text-align: center; color: #999;">或</div>
+
+                        <!-- 方式2：摄像头扫描 -->
+                        <div class="scan-method">
+                            <h4 style="margin-bottom: 10px; color: #333;">📷 摄像头实时扫描</h4>
+                            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                                使用设备摄像头直接扫描二维码（需要摄像头权限）
+                            </p>
+                            <button class="btn btn-secondary" onclick="startCameraScanning()">
+                                启动摄像头扫描
+                            </button>
+
+                            <!-- 摄像头预览区 -->
+                            <div id="cameraPreview" style="display: none; margin-top: 15px;">
+                                <video id="qrVideo" style="width: 100%; max-width: 400px; border-radius: 8px;"></video>
+                                <div style="margin-top: 10px;">
+                                    <button class="btn btn-danger" onclick="stopCameraScanning()">停止扫描</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 导入备份 -->
+                <div id="importTab" class="tab-content">
+                    <div class="import-info">
+                        <h3 style="margin-bottom: 15px;">📦 从其他验证器导入</h3>
+                        <p style="color: #666; margin-bottom: 15px;">
+                            支持多种格式：JSON、URI列表、Aegis等
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>选择备份文件</label>
+                        <input type="file" id="importFile" accept=".json,.txt" style="display: none;"
+                            onchange="handleFileSelect(event)">
+                        <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">
+                            📁 选择文件
+                        </button>
+                        <div id="fileName" style="margin-top: 10px; color: #666; font-size: 14px;"></div>
+                    </div>
+
+                    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <strong style="display: block; margin-bottom: 10px;">或粘贴备份内容：</strong>
+                        <textarea id="importText" rows="6" placeholder="粘贴JSON、URI列表或其他格式的备份内容..."
+                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: monospace; font-size: 12px;"></textarea>
+                    </div>
+
+                    <div id="importPreview" style="margin-top: 15px; display: none;">
+                        <strong>将导入以下账户：</strong>
+                        <div id="importList" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAddModal()">取消</button>
+                <button class="btn btn-primary" id="addBtn" onclick="addAccount()">添加</button>
+                <button class="btn btn-primary" id="importBtn" onclick="importAccounts()"
+                    style="display: none;">导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 账户编辑确认框 -->
+    <div class="modal" id="editConfirmModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 data-i18n="edit_confirm_title">✅ 账户已添加，请确认信息</h2>
+                <button class="close-btn" onclick="closeEditConfirmModal(true)">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="success-banner"
+                    style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <p style="margin: 0; color: #2e7d32; font-weight: 500;" data-i18n="account_added_success">
+                        🎉 账户添加成功！您现在可以查看验证码了
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label data-i18n="edit_issuer_label">发行者</label>
+                    <input type="text" id="editIssuer" readonly style="background: #f5f5f5;">
+                    <small data-i18n="edit_issuer_hint">发行者通常不需要修改</small>
+                </div>
+
+                <div class="form-group">
+                    <label data-i18n="edit_account_label">
+                        账户名 <span style="color: #ff9800;">（可修改）</span>
+                    </label>
+                    <input type="text" id="editAccountName">
+                    <small data-i18n="edit_account_hint">您可以修改账户名，如添加环境标识：admin-prod</small>
+                </div>
+
+                <div class="form-group">
+                    <label data-i18n="edit_note_label">备注</label>
+                    <input type="text" id="editNote">
+                    <small data-i18n="edit_note_hint">添加备注方便日后识别</small>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="editEnableRecovery" style="margin-right: 8px;">
+                        <span data-i18n="enable_recovery_label">启用恢复码功能（推荐）</span>
+                    </label>
+                    <small data-i18n="recovery_hint" style="color: #ff9800;">
+                        ⚠️ 恢复码用于密钥丢失时恢复账户，建议启用并妥善保管
+                    </small>
+                </div>
+
+                <div id="recoveryCodesDisplay"
+                    style="display: none; margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+                    <strong data-i18n="recovery_codes_title">🔑 恢复码（请妥善保存）</strong>
+                    <div id="recoveryCodesList" style="margin-top: 10px; font-family: monospace; font-size: 13px;">
+                    </div>
+                    <button class="btn btn-sm" onclick="copyRecoveryCodes()" style="margin-top: 10px;"
+                        data-i18n="copy_recovery_codes">
+                        📋 复制所有恢复码
+                    </button>
+                </div>
+
+                <div class="preview-code"
+                    style="margin-top: 20px; text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <small data-i18n="current_code_label" style="display: block; margin-bottom: 8px; color: #666;">
+                        当前验证码
+                    </small>
+                    <div id="previewCode"
+                        style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 4px;">
+                        ------
+                    </div>
+                    <small id="previewTimer" style="display: block; margin-top: 8px; color: #666;">
+                        -- <span data-i18n="seconds_unit">秒</span>
+                    </small>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditConfirmModal(false)" data-i18n="btn_cancel_edit">
+                    取消修改
+                </button>
+                <button class="btn btn-primary" onclick="saveEditedAccount()" data-i18n="btn_save_confirm">
+                    确认保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- jsQR 二维码解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="qr-scanner.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // 注册Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }
+
+        // PWA安装提示
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            // 显示安装按钮（可选）
+            const installBtn = document.createElement('button');
+            installBtn.textContent = '📱 安装到桌面';
+            installBtn.className = 'install-btn';
+            installBtn.onclick = async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        showToast('应用已安装！');
+                    }
+                    deferredPrompt = null;
+                    installBtn.remove();
+                }
+            };
+            document.querySelector('.app-header').appendChild(installBtn);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,45 @@
+<?php
+/**
+ * 布局：个人中心 - 个人资料布局
+ * 
+ * 个人资料页面布局，适合表单编辑
+ * 字段
+ * @info description 描述：个人资料页面布局，适合表单编辑
+ * @info name 名称：个人中心个人资料布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param sidebar 侧边栏内容（可选）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('个人资料');
+$content = $this->getData('content') ?? '';
+$sidebar = $this->getData('sidebar') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <div class="account-profile <?= htmlspecialchars($class) ?>">
+        <?php if ($sidebar): ?>
+            <aside class="account-sidebar">
+                <?= $sidebar ?>
+            </aside>
+        <?php endif; ?>
+        
+        <main class="account-profile-content">
+            <?= $content ?>
+        </main>
+    </div>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

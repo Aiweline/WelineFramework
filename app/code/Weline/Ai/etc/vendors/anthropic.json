@@ -1,0 +1,24 @@
+{
+    "name": "Anthropic",
+    "code": "anthropic",
+    "base_url": "https://api.anthropic.com/v1",
+    "models_prefix": ["claude-"],
+    "test_model": "claude-3-haiku-20240307",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "Anthropic Claude API服务",
+    "website": "https://www.anthropic.com",
+    "documentation": "https://docs.anthropic.com",
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": false,
+        "image": true,
+        "audio": false
+    },
+    "rate_limits": {
+        "requests_per_minute": 50,
+        "tokens_per_minute": 100000
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "module_name": "Weline_Extends",
+    "version": "1.0.0",
+    "description": "",
+    "router": "",
+    "controllers": [],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": false,
+    "created_at": "2025-11-18 14:59:50",
+    "updated_at": "2025-11-18 15:00:12",
+    "i18n": [
+        {
+            "extracted_at": "2025-11-18 15:00:12",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 38,
+            "translated_strings": 0,
+            "untranslated_strings": 38
+        }
+    ]
+}

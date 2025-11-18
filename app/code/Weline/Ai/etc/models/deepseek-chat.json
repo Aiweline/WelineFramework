@@ -1,0 +1,32 @@
+{
+    "vendor": "deepseek",
+    "model_code": "deepseek-chat",
+    "name": "DeepSeek Chat",
+    "model_name": "DeepSeek Chat",
+    "model_version": "1.0",
+    "token_price_input": 0.00055,
+    "token_price_output": 0.002,
+    "is_active": 1,
+    "is_default": 0,
+    "config": {
+        "api_key": "",
+        "base_url": "https://api.deepseek.com/v1",
+        "model_id": "deepseek-chat",
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0,
+        "stream": true,
+        "timeout": 30,
+        "max_retries": 3
+    },
+    "proxy_info": {
+        "enabled": false,
+        "host": "",
+        "port": 0,
+        "username": "",
+        "password": ""
+    }
+}
+

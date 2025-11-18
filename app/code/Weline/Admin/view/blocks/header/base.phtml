@@ -1,0 +1,52 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<block>Weline\Backend\Block\Header\Base</block>
+<!--加载require常用js模块-->
+<!--<script src='@static(Weline_Frontend::base/require.configs.js)'></script>-->
+<script>
+    // 确保 window.url 函数已定义（如果 Backend block 没有定义，则使用 fallback）
+    if (typeof window.url !== 'function') {
+        // 从 window.site 获取 URL 信息
+        if (window.site && window.site.url_host) {
+            window.url = (path) => {
+                if (!path) return '';
+                // 处理路径
+                if (path.indexOf('//') === 0) {
+                    path = path.slice(2);
+                }
+                if (path.indexOf('/') === 0) {
+                    path = path.slice(1);
+                }
+                return window.site.url_host + path;
+            };
+        } else if (window.backend_url) {
+            // 使用 backend_url 作为 fallback
+            window.url = (path) => {
+                if (!path) return '';
+                if (path.indexOf('//') === 0) {
+                    path = path.slice(2);
+                }
+                if (path.indexOf('/') === 0) {
+                    path = path.slice(1);
+                }
+                return window.backend_url(path);
+            };
+        } else {
+            // 最后的 fallback：使用当前页面的基础 URL
+            window.url = (path) => {
+                if (!path) return '';
+                if (/^https?:\/\//i.test(path)) {
+                    return path;
+                }
+                if (path.indexOf('//') === 0) {
+                    path = path.slice(2);
+                }
+                const baseUrl = window.location.origin + (window.location.pathname.match(/^\/[^\/]+/) || [''])[0];
+                return baseUrl + (path.startsWith('/') ? path : '/' + path);
+            };
+        }
+    }
+</script>

@@ -1,0 +1,65 @@
+快速建立一个模型
+快速创建WelineFramework模型
+
+<h1 style="color: #ff0000;">#1 什么是模组？</h1>
+<p>WelineFramework框架实现web功能的代码功能集合，一个模组包含普通的MVC功能。</p>
+<h1 style="color: #ff0000;">#2 模组基本结构。</h1>
+<p>以Aiweline_Index模组为例，以下是Aiweline_Index模组的基本目录。</p>
+<p>*注意：模组的安装支持composer安装（此安装模式下代码不在app/code/目录下）。</p>
+<p><img src="blob:http://127.0.0.1/b467eeec-f344-4443-b06f-cd9445956074" alt="" width="309" height="335" /></p>
+<p><br />Aiweline &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# 代码供应商名（自己的供应商名自己写）</p>
+<p>Index &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 模型名（模型的名字，自己定义）</p>
+<p>结构说明：</p>
+<p>Api &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 目录是模组的接口目录</p>
+<p>Controller &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# 模组控制器目录</p>
+<p>etc &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 模组配置目录</p>
+<p>Model &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 模组数据库模型</p>
+<p>test &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 可有可无，单元测试目录</p>
+<p>view &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# 视图目录</p>
+<p>register.php &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# 模型注册文件（必须）</p>
+<p>register.php文件内容：</p>
+<p><code>&lt;?php</code></p>
+<p><code>/*</code><br /><code>&nbsp;* 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code>&nbsp;* 邮箱：aiweline@qq.com</code><br /><code>&nbsp;* 网址：aiweline.com</code><br /><code>&nbsp;* 论坛：https://bbs.aiweline.com</code><br /><code>&nbsp;*/</code></p>
+<p><code>use Weline\Framework\Register\Register;</code></p>
+<p><code>Register::register(</code><br /><code>&nbsp; &nbsp; Register::MODULE,</code><br /><code>&nbsp; &nbsp; 'Aiweline_Index',</code><br /><code>&nbsp; &nbsp; __DIR__,</code><br /><code>&nbsp; &nbsp; '1.1.0',</code><br /><code>&nbsp; &nbsp; '&lt;p&gt;模组名：Aiweline_Index&lt;/p&gt;</code><br /><code>&lt;p&gt;描述：首页应用，此应用用于配置网站首页！&lt;/p&gt;</code><br /><code>&lt;p&gt;作者：秋枫雁飞（Aiweline）&lt;/p&gt;</code><br /><code>&lt;p&gt;签名：人生总要做点有意义的事儿，非是一定要成功，但是一定是在做。&lt;/p&gt;</code><br /><code>&lt;a href="http://bbs.aiweline.com"&gt;&lt;/a&gt;'</code><br /><code>);</code></p>
+<p>&nbsp;</p>
+<p><br />一个模组要被框架识别，那么register.php文件就是声明这个目录是一个框架模型的声明文件。</p>
+<p>&nbsp;</p>
+<h1 style="color: #ff0000;"><br /># 3安装模组</h1>
+<p>在项目目录下打开终端：执行命令php bin/m module:upgrade&nbsp;</p>
+<p>关于命令的使用：请执行php bin/m 查看命令使用</p>
+<h1 style="color: #ff0000;">#4验证框架是否已经安装此模组</h1>
+<p><img src="blob:http://127.0.0.1/84a08e3c-54e0-40bd-b743-653e8eb1dbf8" alt="" width="1371" height="452" /></p>
+<p><br />如果出现类似以上结果，表明模型安装成功！</p>
+<h1 style="color: #ff0000;"># 4 建立控制器</h1>
+<p>建立控制器之前，配置路由入口</p>
+<p>etc/env.php文件中录入路由入口，我们以index为例。env.php内容如下：</p>
+<p><code>&lt;?php</code></p>
+<p><code>/*</code><br /><code>&nbsp;* 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code>&nbsp;* 邮箱：aiweline@qq.com</code><br /><code>&nbsp;* 网址：aiweline.com</code><br /><code>&nbsp;* 论坛：https://bbs.aiweline.com</code><br /><code>&nbsp;*/</code></p>
+<p><code>return [</code><br /><code>&nbsp; &nbsp; 'router' &nbsp; &nbsp; &nbsp; =&gt; 'index',//路由</code><br /><code>&nbsp; &nbsp; 'dependencies' =&gt; [</code><br /><code>&nbsp; &nbsp; ]</code><br /><code>];</code></p>
+<p><br /><code>router &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # 路由入口</code></p>
+<p><code>dependencies &nbsp; &nbsp; &nbsp; &nbsp;# 依赖的其他模块</code></p>
+<p><code>配置完成后，进行控制器类创建</code></p>
+<p><code>在Controller目录下建立php类，前端url继承 Weline\Framework\App\Controller\FrontendController</code></p>
+<p><code>内容如下：</code></p>
+<p><code>&lt;?php</code></p>
+<p><code>/*</code><br /><code>&nbsp;* 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。</code><br /><code>&nbsp;* 邮箱：aiweline@qq.com</code><br /><code>&nbsp;* 网址：aiweline.com</code><br /><code>&nbsp;* 论坛：https://bbs.aiweline.com</code><br /><code>&nbsp;*/</code></p>
+<p><code>namespace Aiweline\Index\Controller;</code></p>
+<p><code>use Weline\Framework\App\Controller\FrontendController;</code></p>
+<p><code>class Index extends FrontendController</code><br /><code>{</code></p>
+<p><code>&nbsp; &nbsp; /**</code><br /><code>&nbsp; &nbsp; &nbsp;* @DESC &nbsp; &nbsp; &nbsp; &nbsp; |首页</code><br /><code>&nbsp; &nbsp; &nbsp;*</code><br /><code>&nbsp; &nbsp; &nbsp;* 参数区：</code><br /><code>&nbsp; &nbsp; &nbsp;*</code><br /><code>&nbsp; &nbsp; &nbsp;*/</code><br /><code>&nbsp; &nbsp; public function index()</code><br /><code>&nbsp; &nbsp; {</code><br /><code>&nbsp; &nbsp; &nbsp; &nbsp; return $this-&gt;fetch();</code><br /><code>&nbsp; &nbsp; }</code><br /><code>}</code></p>
+<p>下一步建立视图文件<br />在模型目录view下面建立templates/Index/index.phtml<br />文件内容：</p>
+<p><code>&lt;!DOCTYPE html&gt;</code><br /><code>&lt;html&gt;</code><br /><code>&lt;body&gt;</code><br /><code>&lt;h1&gt;&lt;lang&gt;Hello World!框架测试首页&lt;/lang&gt;&lt;/h1&gt;</code><br /><code>&lt;/body&gt;</code><br /><code>&lt;/html&gt;</code></p>
+<p><br /><span style="color: #e03e2d;">*lang标签是框架的i18n多语言翻译模板标签，表现形式还可以有：@lang(框架测试首页)或者@lang{框架测试首页}</span></p>
+<p>&nbsp;</p>
+<h1 style="color: #ff0000;"># 5 注册控制器（每个新的控制类创建都需要注册到框架）</h1>
+<p><br />项目目录下打开终端执行php bin/m module:upgrade &nbsp;<span style="color: #e03e2d;">*每个新的控制器类一旦创建出来都需要执行这个命令注册到框架系统中。</span></p>
+<p>&nbsp;</p>
+<h1 style="color: #ff0000;"># 6 验证控制</h1>
+<p><img src="blob:http://127.0.0.1/5c087add-8170-4cc3-9af2-5fcd2ba28f00" alt="" width="1907" height="730" /></p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>快速 创建一个模型 完成！</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>

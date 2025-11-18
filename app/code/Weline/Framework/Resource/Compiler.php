@@ -1,0 +1,75 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ */
+
+namespace Weline\Framework\Resource;
+
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Resource\Config\ResourceReaderInterface;
+
+class Compiler implements CompilerInterface
+{
+    protected ?EventsManager $eventsManager = null;
+
+    protected ?ResourceReaderInterface $reader;
+
+    public function setReader(ResourceReaderInterface $resourceReader): static
+    {
+        $this->reader = $resourceReader;
+        return $this;
+    }
+
+    public function getEventManager(): EventsManager
+    {
+        if (!isset($this->eventsManager, $_)) {
+            $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
+        }
+        return $this->eventsManager;
+    }
+
+    public function compile(string $source_file = '', string $out_file = '')
+    {
+        $config_resources = $this->reader->getResourceFiles();
+        
+        // 如果没有找到任何资源，也要触发事件，让 Observer 生成空文件
+        if (empty($config_resources)) {
+            // 为 frontend 和 backend 都触发事件
+            foreach (['frontend', 'backend'] as $area) {
+                $data = new DataObject(
+                    [
+                        'area' => $area,
+                        'type' => $this->reader->getSourceType(),
+                        'resources' => ''
+                    ]
+                );
+                $this->getEventManager()->dispatch(
+                    'Framework_Resource::compiler',
+                    $data
+                );
+            }
+        } else {
+            foreach ($config_resources as $area => $config_resource) {
+                $data = new DataObject(
+                    [
+                        'area' => $area,
+                        'type' => $this->reader->getSourceType(),
+                        'resources' => $config_resource
+                    ]
+                );
+                $this->getEventManager()->dispatch(
+                    'Framework_Resource::compiler',
+                    $data
+                );
+            }
+        }
+    }
+}

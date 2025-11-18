@@ -1,0 +1,58 @@
+<?php
+/**
+ * 片段：Footer
+ * 
+ * 页面底部区域（链接、版权信息等）
+ * 字段
+ * @info description 描述：页面底部区域（链接、版权信息等）
+ * @info name 名称：Footer底部片段
+ * @param copyright 版权信息
+ * @param links 链接数组
+ * @param showBackToTop 是否显示返回顶部
+ * @param class 额外CSS类
+ */
+$copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+$links = $this->getData('links') ?? [];
+$showBackToTop = $this->getData('showBackToTop') ?? true;
+$class = $this->getData('class') ?? '';
+?>
+<footer class="weline-footer <?= htmlspecialchars($class) ?>">
+    <div class="footer-container">
+        <?php if (!empty($links)): ?>
+            <div class="footer-content">
+                <?php foreach ($links as $section): ?>
+                    <div class="footer-section">
+                        <?php if (isset($section['title'])): ?>
+                            <h3><?= htmlspecialchars($section['title']) ?></h3>
+                        <?php endif; ?>
+                        <?php if (isset($section['items'])): ?>
+                            <ul>
+                                <?php foreach ($section['items'] as $item): ?>
+                                    <li>
+                                        <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
+                                            <?= htmlspecialchars($item['text'] ?? '') ?>
+                                        </a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        
+        <div class="footer-bottom">
+            <p><?= htmlspecialchars($copyright) ?></p>
+        </div>
+    </div>
+    
+    <!-- Footer Hooks -->
+    <hook>footer</hook>
+    
+    <?php if ($showBackToTop): ?>
+        <button class="back-to-top" id="backToTop" title="<?= __('返回顶部') ?>">
+            <i class="fas fa-arrow-up"></i>
+        </button>
+    <?php endif; ?>
+</footer>
+

@@ -1,0 +1,345 @@
+<?php
+/**
+ * Jion Landing 模板 - Header
+ * 顶部横条，包含右侧按钮
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:header => 头部设置
+ * header.logo_image => Logo图片地址:text:
+ * header.logo_display => 显示Logo:select:yes|yes,no
+ * header.logo_position => Logo位置:select:left|left,center
+ * header.button_text => 按钮文本:text:Jion Free
+ * header.button_url => 按钮链接地址:text:#
+ * header.button_event_name => 按钮事件名称:text:
+ * header.padding_v => 上下内边距:responsive:12/16|px
+ * header.padding_h => 左右内边距:responsive:16/24|px
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+// 加载颜色配置：统一从 base/colors.phtml 引入
+$colors = [];
+$this->assign('template_code', 'jion-landing');
+?>
+<div>
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+// 确保 $colors 已定义
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// Helper functions
+if (!function_exists('getConfig')) {
+    function getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+if (!function_exists('parseResp')) {
+    function parseResp($value) {
+        if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+        $value = trim($value);
+        $unit = '';
+        if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+            $unit = $matches[1];
+            $value = preg_replace('/[a-z%]+$/i', '', $value);
+        }
+        $parts = explode('/', trim($value));
+        $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+        switch (count($parts)) {
+            case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+            case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('genRespCSS')) {
+    function genRespCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+if (!function_exists('genButtonHeight')) {
+    /**
+     * 生成按钮高度的 clamp 表达式
+     * @param int $mobile 移动端高度
+     * @param int $pc PC端高度
+     * @return string
+     */
+    function genButtonHeight($mobile, $pc) {
+        $diff = $pc - $mobile;
+        return "clamp({$mobile}px, calc({$mobile}px + {$diff} * ((100vw - 375px) / (1280 - 375))), {$pc}px)";
+    }
+}
+
+// 配置值（颜色从色系配置中读取）
+// Logo 图片地址：优先使用页面的 logo，如果没有则使用配置中的 header.logo_image
+$pageLogo = ($page && $page->getData('logo')) ? (string)$page->getData('logo') : '';
+$configLogo = getConfig($styleSettings, 'header.logo_image', '');
+$logoImage = !empty($pageLogo) ? $pageLogo : (!empty($configLogo) ? $configLogo : '');
+$logoDisplay = getConfig($styleSettings, 'header.logo_display', 'yes');
+$logoPosition = getConfig($styleSettings, 'header.logo_position', 'left');
+$buttonText = getConfig($styleSettings, 'header.button_text', 'Jion Free');
+$buttonUrl = getConfig($styleSettings, 'header.button_url', '#');
+// 按钮事件名称：header_button_{pageHandle}{_custom}，默认 custom 来自 page.cta_event_name
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+$buttonEventRaw = trim(getConfig($styleSettings, 'header.button_event_name', ''));
+if ($buttonEventRaw !== '') {
+    $buttonEventName = 'header_button_' . $pageHandleForEvent . '_' . $buttonEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $buttonEventName = $pageDefaultCtaEvent;
+} else {
+    $buttonEventName = 'header_button_' . $pageHandleForEvent . '_click';
+}
+$buttonBg = $colors['header_button_bg'] ?? ($colors['button_primary_bg'] ?? 'rgb(16 30 56)');
+$buttonTextColor = $colors['header_button_text'] ?? ($colors['button_primary_text'] ?? '#FFFFFF');
+$buttonHoverBg = $colors['header_button_hover'] ?? ($colors['button_primary_hover'] ?? '#1E4FD6');
+$buttonBorder = $colors['header_button_border'] ?? '#96a0ae';
+$bodyBg = $colors['body_bg'] ?? ($colors['primary_bg'] ?? '#0A1128');
+$headerBg = $colors['header_bg'] ?? 'transparent';
+$paddingV = genRespCSS(parseResp(getConfig($styleSettings, 'header.padding_v', '12/16') . 'px'));
+$paddingH = genRespCSS(parseResp(getConfig($styleSettings, 'header.padding_h', '16/24') . 'px'));
+
+// SEO信息
+$metaTitle = $page ? $page->getData('meta_title') : ($page ? $page->getData('title') : '');
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+
+// Banner 图片配置（用于 LCP 优化 - preload）
+$bannerBgImage = getConfig($styleSettings, 'banner.background_image', '');
+$bannerBgImageMobile = getConfig($styleSettings, 'banner.background_image_mobile', '');
+$defaultBannerUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/jion-landing/asset/img/banner.jpg');
+$defaultBannerUrlMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/jion-landing/asset/img/mobile-banner.jpg');
+$bannerBgImageFinal = $bannerBgImage ?: $defaultBannerUrl;
+$bannerBgImageMobileFinal = $bannerBgImageMobile ?: ($defaultBannerUrlMobile ?: $defaultBannerUrl);
+
+// 检测是否为预览模式
+$pathInfo = $this->getRequest()->getPathInfo();
+$isPreview = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle ?: ($page ? $page->getData('title') : '')) ?></title>
+    
+    <!-- Favicon -->
+    <?php $pageIcon = $page ? ($page->getData('icon') ?: '') : ''; ?>
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon ?? '') ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <?php endif; ?>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription ?? '') ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
+    <?php endif; ?>
+    
+    <!-- 统计代码 -->
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <!-- Header 按钮事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
+    
+    <!-- Banner 图片预加载（LCP 优化） -->
+    <?php if (!empty($bannerBgImageMobileFinal)): ?>
+    <link rel="preload" as="image" href="<?= htmlspecialchars($bannerBgImageMobileFinal ?? '') ?>" media="(max-width: 767px)" fetchpriority="high">
+    <?php endif; ?>
+    <?php if (!empty($bannerBgImageFinal)): ?>
+    <link rel="preload" as="image" href="<?= htmlspecialchars($bannerBgImageFinal ?? '') ?>" media="(min-width: 768px)" fetchpriority="high">
+    <?php endif; ?>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: <?= htmlspecialchars($bodyBg ?? '') ?> !important;
+            color: <?= htmlspecialchars($colors['text_primary'] ?? '#FFFFFF') ?>;
+        }
+        
+        .jion-header {
+            width: 100%;
+            background-color: <?= htmlspecialchars($headerBg ?? 'transparent') ?> !important;
+            padding: <?= $paddingV ?> <?= $paddingH ?>;
+        }
+        
+        .jion-header-container {
+            max-width: 1280px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+        
+        /* 当没有 logo 时，按钮靠右 */
+        .jion-header-container.jion-no-logo {
+            justify-content: flex-end;
+        }
+        
+        .jion-header-logo {
+            display: inline-block;
+            height: <?= genRespCSS(parseResp('32/40' . 'px')) ?>;
+            width: auto;
+            max-width: 200px;
+            flex-shrink: 0;
+        }
+        
+        .jion-header-logo img {
+            height: 100%;
+            width: auto;
+            display: block;
+            object-fit: contain;
+        }
+        
+        /* Logo 位置控制 */
+        .jion-header-logo.jion-logo-left {
+            margin-right: auto;
+        }
+        
+        .jion-header-logo.jion-logo-center {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-right: 0;
+        }
+        
+        .jion-header-button, .jion-header .jion-header-container .jion-header-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            /* 高度动态计算：PC 43px, iPad 40px, Mobile 42px */
+            height: <?= genButtonHeight(42, 43) ?>;
+            padding: 10px 40px;
+            line-height: 1;
+            background-color: <?= htmlspecialchars($buttonBg ?? 'rgb(16 30 56)') ?> !important;
+            background-image: none !important;
+            color: <?= htmlspecialchars($buttonTextColor ?? '#FFFFFF') ?> !important;
+            text-decoration: none !important;
+            border-radius: 333px;
+            font-size: <?= genRespCSS(parseResp('14/16' . 'px')) ?>;
+            font-weight: 500;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            border: 2px solid <?= htmlspecialchars($buttonBorder ?? '') ?> !important;
+            outline: none !important;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        /* 按钮文本样式（根据设计稿要求） */
+        .jion-header-button .jion-header-button-text {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-style: normal;
+            font-weight: 900;
+            font-size: 20px; /* PC/Pad */
+            line-height: 1; /* PC/Pad */
+            color: inherit; /* 继承各色系文字色 */
+        }
+        
+        .jion-header-button:hover,
+        .jion-header-button:focus,
+        .jion-header-button:active,
+        .jion-header .jion-header-container .jion-header-button:hover,
+        .jion-header .jion-header-container .jion-header-button:focus,
+        .jion-header .jion-header-container .jion-header-button:active {
+            background-color: <?= htmlspecialchars($buttonHoverBg ?? '#1E4FD6') ?> !important;
+            color: <?= htmlspecialchars($buttonTextColor ?? '#FFFFFF') ?> !important;
+            text-decoration: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            border: 2px solid <?= htmlspecialchars($buttonBorder ?? '') ?> !important;
+        }
+        
+        .jion-header-button:visited {
+            color: <?= htmlspecialchars($buttonTextColor ?? '#FFFFFF') ?> !important;
+        }
+        
+        /* iPad 精确高度（clamp 无法精确匹配 40px，使用媒体查询覆盖）*/
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .jion-header-button {
+                height: 40px;
+                line-height: 1;
+            }
+        }
+        
+        @media (max-width: 767px) {
+            .jion-header {
+                padding: <?= genRespCSS(parseResp('10/12' . 'px')) ?> <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+            }
+            
+            .jion-header-container {
+                position: relative;
+            }
+            
+            .jion-header-logo {
+                max-width: 150px;
+            }
+            
+            .jion-header-button {
+                position: static;
+                width: auto;
+                height: 32px;
+                margin-left: auto; /* 挤到右侧 */
+                padding: 6px 16px;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                font-style: normal;
+                font-weight: 900;
+                font-size: 13px;
+                text-align: center;
+            }
+            .jion-header-button .jion-header-button-text {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                font-style: normal;
+                font-weight: 900;
+                font-size: 13px;
+                line-height: 16px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="jion-header">
+        <div class="jion-header-container<?= (($logoDisplay === 'yes' && !empty($logoImage)) ? '' : ' jion-no-logo') ?>">
+            <?php if ($logoDisplay === 'yes' && !empty($logoImage)): ?>
+            <div class="jion-header-logo jion-logo-<?= htmlspecialchars($logoPosition ?? 'left') ?>">
+                <img src="<?= htmlspecialchars($logoImage ?? '') ?>" alt="Logo">
+            </div>
+            <?php endif; ?>
+            
+            <?php if ($buttonText && $buttonUrl): ?>
+            <a href="<?= htmlspecialchars($buttonUrl ?? '') ?>" 
+               class="jion-header-button"
+               data-track-event="<?= htmlspecialchars($buttonEventName ?? '') ?>">
+                <span class="jion-header-button-text"><?= htmlspecialchars($buttonText ?? '') ?></span>
+            </a>
+            <?php endif; ?>
+        </div>
+    </header>

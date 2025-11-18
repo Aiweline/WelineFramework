@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- 双因素认证主菜单 -->
+    <add source="Weline_TwoFactorAuth::2fa_main" 
+         name="2fa_main" 
+         title="双因素认证" 
+         action="" 
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-shield-lock"
+         order="20700"/>
+    
+    <!-- 2FA账户管理 -->
+    <add source="Weline_TwoFactorAuth::my_2fa"
+         name="my_2fa"
+         title="2FA账户管理"
+         action="*/backend"
+         parent="Weline_TwoFactorAuth::2fa_main"
+         icon="mdi mdi-shield-account"
+         order="10"/>
+
+    <!-- 验证器APP（仅展示，跳转到前端） -->
+    <add source="Weline_TwoFactorAuth::2fa_app"
+         name="2fa_app"
+         title="打开验证器APP"
+         action="*/app"
+         parent="Weline_TwoFactorAuth::2fa_main"
+         icon="mdi mdi-cellphone-key"
+         order="20"/>
+         
+</menus>

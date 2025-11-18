@@ -1,0 +1,82 @@
+<?php
+/**
+ * 组件：Input
+ * 
+ * 输入框组件，支持多种类型和验证
+ * 字段
+ * @info description 描述：输入框组件，支持多种类型和验证
+ * @info name 名称：Input输入框组件
+ * @param name 字段名（必填）
+ * @param type 输入类型 (text/password/email/tel/number等)
+ * @param label 标签文字
+ * @param placeholder 占位符
+ * @param value 默认值
+ * @param required 是否必填
+ * @param disabled 是否禁用
+ * @param readonly 是否只读
+ * @param class 额外CSS类
+ * @param id 元素ID
+ * @param help 帮助文字
+ * @param error 错误信息
+ * @param icon 图标类名
+ * @param autocomplete 自动完成
+ */
+$name = $this->getData('name') ?? '';
+$type = $this->getData('type') ?? 'text';
+$label = $this->getData('label') ?? '';
+$placeholder = $this->getData('placeholder') ?? '';
+$value = $this->getData('value') ?? '';
+$required = $this->getData('required') ?? false;
+$disabled = $this->getData('disabled') ?? false;
+$readonly = $this->getData('readonly') ?? false;
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? $name;
+$help = $this->getData('help') ?? '';
+$error = $this->getData('error') ?? '';
+$icon = $this->getData('icon') ?? '';
+$autocomplete = $this->getData('autocomplete') ?? 'off';
+
+// 构建CSS类
+$inputClass = 'form-control';
+if ($class) {
+    $inputClass .= ' ' . htmlspecialchars($class);
+}
+if ($error) {
+    $inputClass .= ' is-invalid';
+}
+?>
+<div class="form-group">
+    <?php if ($label): ?>
+        <label for="<?= htmlspecialchars($id) ?>" class="form-label">
+            <?= htmlspecialchars($label) ?>
+            <?php if ($required): ?>
+                <span class="text-danger">*</span>
+            <?php endif; ?>
+        </label>
+    <?php endif; ?>
+    
+    <div class="input-wrapper">
+        <?php if ($icon): ?>
+            <i class="<?= htmlspecialchars($icon) ?> input-icon"></i>
+        <?php endif; ?>
+        <input type="<?= htmlspecialchars($type) ?>"
+               name="<?= htmlspecialchars($name) ?>"
+               id="<?= htmlspecialchars($id) ?>"
+               class="<?= $inputClass ?>"
+               placeholder="<?= htmlspecialchars($placeholder) ?>"
+               value="<?= htmlspecialchars($value) ?>"
+               autocomplete="<?= htmlspecialchars($autocomplete) ?>"
+               <?= $required ? 'required' : '' ?>
+               <?= $disabled ? 'disabled' : '' ?>
+               <?= $readonly ? 'readonly' : '' ?>>
+    </div>
+    
+    <?php if ($help && !$error): ?>
+        <small class="form-text"><?= htmlspecialchars($help) ?></small>
+    <?php endif; ?>
+    
+    <?php if ($error): ?>
+        <div class="invalid-feedback"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+</div>
+

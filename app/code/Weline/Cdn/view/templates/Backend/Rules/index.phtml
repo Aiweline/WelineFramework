@@ -1,0 +1,522 @@
+<?php
+/**
+ * CDN规则管理列表页
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$domains = $this->getData('domains') ?: [];
+$selectedDomainId = $this->getData('domain_id') ?: '';
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('CDN规则管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0">
+                                <i class="mdi mdi-file-document-edit text-primary"></i> <?= __('CDN规则管理') ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                                    <li class="breadcrumb-item"><?= __('CDN管理') ?></li>
+                                    <li class="breadcrumb-item active"><?= __('规则管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <!-- 规则管理 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label"><?= __('选择域名') ?></label>
+                                        <select id="domainSelect" class="form-select" onchange="loadRules()">
+                                            <option value=""><?= __('全局默认规则') ?></option>
+                                            <?php foreach ($domains as $domain): ?>
+                                                <option value="<?= $domain->getData('domain_id') ?>" 
+                                                        <?= $selectedDomainId == $domain->getData('domain_id') ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($domain->getData('domain_name')) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button type="button" class="btn btn-success" onclick="saveRules()">
+                                            <i class="mdi mdi-content-save"></i> <?= __('保存规则') ?>
+                                        </button>
+                                        <button type="button" class="btn btn-info" onclick="importRules()">
+                                            <i class="mdi mdi-download"></i> <?= __('从CDN导入') ?>
+                                        </button>
+                                        <button type="button" class="btn btn-primary" onclick="pushRules()">
+                                            <i class="mdi mdi-upload"></i> <?= __('推送到CDN') ?>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="rulesEditor">
+                                    <div class="mb-3">
+                                        <label class="form-label"><?= __('规则配置（JSON格式）') ?></label>
+                                        <textarea id="rulesTextarea" class="form-control" rows="20" 
+                                                  style="font-family: monospace; font-size: 12px;"></textarea>
+                                        <small class="form-text text-muted">
+                                            <?= __('规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。') ?>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+
+<script>
+let currentDomainId = '<?= $selectedDomainId ?>';
+
+function loadRules() {
+    const domainId = document.getElementById('domainSelect').value;
+    currentDomainId = domainId;
+    
+    const url = domainId 
+        ? '<?= $this->getBackendUrl('*/backend/rules/getDomainRules') ?>?domain_id=' + domainId
+        : '<?= $this->getBackendUrl('*/backend/rules/getGlobalRules') ?>';
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const rules = data.data || {};
+                document.getElementById('rulesTextarea').value = JSON.stringify(rules, null, 2);
+            } else {
+                alert('<?= __('加载失败：') ?>' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('<?= __('请求失败：') ?>' + error.message);
+        });
+}
+
+function saveRules() {
+    const rulesText = document.getElementById('rulesTextarea').value;
+    let rules;
+    
+    try {
+        rules = JSON.parse(rulesText);
+    } catch (e) {
+        alert('<?= __('JSON格式错误：') ?>' + e.message);
+        return;
+    }
+    
+    const url = currentDomainId 
+        ? '<?= $this->getBackendUrl('*/backend/rules/saveDomainRules') ?>'
+        : '<?= $this->getBackendUrl('*/backend/rules/saveGlobalRules') ?>';
+    
+    const formData = new FormData();
+    formData.append('rules', JSON.stringify(rules));
+    if (currentDomainId) {
+        formData.append('domain_id', currentDomainId);
+    }
+    
+    fetch(url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+        } else {
+            alert('<?= __('保存失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+    });
+}
+
+function importRules() {
+    if (!currentDomainId) {
+        alert('<?= __('请先选择域名') ?>');
+        return;
+    }
+    
+    if (!confirm('<?= __('确定要从CDN导入规则吗？这将覆盖当前规则。') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl('*/backend/rules/import') ?>?domain_id=' + currentDomainId, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('rulesTextarea').value = JSON.stringify(data.data || {}, null, 2);
+            alert(data.message);
+        } else {
+            alert('<?= __('导入失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+    });
+}
+
+async function pushRules() {
+    // 显示进度弹窗
+    showPushProgressModal();
+    
+    // 重置状态
+    const progressBar = document.getElementById('pushProgressBar');
+    const logContainer = document.getElementById('pushLogContainer');
+    const closeBtn = document.getElementById('pushCloseBtn');
+    
+    // 添加开始日志
+    addLog('info', '<?= __('正在获取域名列表...') ?>');
+    
+    try {
+        // 1. 获取所有启用的域名列表
+        const domainsResponse = await fetch('<?= $this->getBackendUrl('*/backend/rules/getDomains') ?>');
+        const domainsData = await domainsResponse.json();
+        
+        if (!domainsData.success || !domainsData.domains || domainsData.domains.length === 0) {
+            addLog('error', domainsData.message || '<?= __('没有可推送的域名') ?>');
+            closeBtn.disabled = false;
+            progressBar.classList.remove('progress-bar-animated');
+            return;
+        }
+        
+        const domains = domainsData.domains;
+        const total = domains.length;
+        let successCount = 0;
+        let failCount = 0;
+        
+        // 更新总数
+        document.getElementById('pushTotal').textContent = total;
+        
+        // 添加开始推送日志
+        const startMsg = '<?= __('开始推送规则到 %{1} 个域名...') ?>';
+        addLog('info', startMsg.replace(/%\{1\}/g, String(total || 0)));
+        
+        // 2. 逐个推送域名（串行推送，确保一个完成后再推送下一个）
+        for (let index = 0; index < domains.length; index++) {
+            const domain = domains[index];
+            const currentIndex = index + 1;
+            const progress = Math.round((currentIndex / total) * 100);
+            
+            // 确保域名名称和ID都有值
+            const domainName = (domain.domain_name && String(domain.domain_name).trim()) || '未知域名';
+            const domainId = (domain.domain_id && String(domain.domain_id)) || '未知ID';
+            
+            // 更新进度条
+            updateProgressBar(progress);
+            
+            // 添加开始推送日志 - 优先显示域名名称，ID作为补充信息
+            addLog('info', `[${currentIndex}/${total}] <?= __('正在推送域名') ?>: ${domainName} (ID: ${domainId})`);
+            
+            try {
+                // 推送单个域名（使用 await 确保串行执行，一个完成后再推送下一个）
+                const formData = new FormData();
+                formData.append('id', domain.domain_id);
+                
+                const pushResponse = await fetch('<?= $this->getBackendUrl('*/backend/rules/push') ?>', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const pushData = await pushResponse.json();
+                
+                // 如果后端返回了域名名称，优先使用后端的名称
+                const finalDomainName = (pushData.domain_name && String(pushData.domain_name).trim()) || domainName;
+                
+                if (pushData.success) {
+                    successCount++;
+                    addLog('success', `[${currentIndex}/${total}] ✓ <?= __('推送成功') ?>: ${finalDomainName} - ${pushData.message || '<?= __('推送成功') ?>'}`);
+                } else {
+                    failCount++;
+                    addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败') ?>: ${finalDomainName} - ${pushData.message || '<?= __('推送失败') ?>'}`);
+                }
+                
+                // 更新统计
+                document.getElementById('pushSuccess').textContent = successCount;
+                document.getElementById('pushFail').textContent = failCount;
+                
+            } catch (error) {
+                failCount++;
+                addLog('error', `[${currentIndex}/${total}] ✗ <?= __('推送失败') ?>: ${domainName} - <?= __('请求失败：') ?>${error.message}`);
+                document.getElementById('pushFail').textContent = failCount;
+            }
+        }
+        
+        // 3. 完成推送
+        updateProgressBar(100);
+        progressBar.classList.remove('progress-bar-animated');
+        closeBtn.disabled = false;
+        
+        const summaryType = failCount === 0 ? 'success' : 'warning';
+        const summaryMsg = '<?= __('推送完成：总共 %{1} 个，成功 %{2} 个，失败 %{3} 个') ?>';
+        addLog(summaryType, summaryMsg.replace(/%\{1\}/g, String(total || 0)).replace(/%\{2\}/g, String(successCount || 0)).replace(/%\{3\}/g, String(failCount || 0)));
+        
+    } catch (error) {
+        addLog('error', `<?= __('获取域名列表失败：') ?>${error.message}`);
+        closeBtn.disabled = false;
+        progressBar.classList.remove('progress-bar-animated');
+    }
+}
+
+// 添加日志
+function addLog(type, message) {
+    const logContainer = document.getElementById('pushLogContainer');
+    const timestamp = new Date().toLocaleTimeString();
+    
+    let typeClass = 'text-muted';
+    if (type === 'success') {
+        typeClass = 'text-success';
+    } else if (type === 'error') {
+        typeClass = 'text-danger';
+    } else if (type === 'warning') {
+        typeClass = 'text-warning';
+    } else if (type === 'info') {
+        typeClass = 'text-info';
+    }
+    
+    const logHtml = `
+        <div class="mb-1 ${typeClass}">
+            <strong>[${timestamp}]</strong> ${message}
+        </div>
+    `;
+    
+    logContainer.insertAdjacentHTML('beforeend', logHtml);
+    
+    // 自动滚动到底部
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// 更新进度条
+function updateProgressBar(progress) {
+    const progressBar = document.getElementById('pushProgressBar');
+    const overallProgress = document.getElementById('pushOverallProgress');
+    
+    progressBar.style.width = progress + '%';
+    progressBar.setAttribute('aria-valuenow', progress);
+    progressBar.textContent = progress.toFixed(1) + '%';
+    overallProgress.textContent = progress.toFixed(1) + '%';
+}
+
+// 显示推送进度弹窗
+function showPushProgressModal() {
+    // 创建弹窗HTML
+    const modalHtml = `
+        <div class="modal fade" id="pushProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="mdi mdi-upload"></i> <?= __('推送规则到所有域名') ?>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold"><?= __('总体进度') ?></span>
+                                <span id="pushOverallProgress" class="badge bg-primary">0%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div id="pushProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                    0%
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span><?= __('总数') ?>: <strong id="pushTotal">0</strong></span>
+                                <span class="text-success"><?= __('成功') ?>: <strong id="pushSuccess">0</strong></span>
+                                <span class="text-danger"><?= __('失败') ?>: <strong id="pushFail">0</strong></span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold"><?= __('推送日志') ?></label>
+                            <div id="pushLogContainer" style="max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                                <div class="text-muted"><?= __('正在推送...') ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="pushCloseBtn" disabled>
+                            <?= __('关闭') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的弹窗
+    const existingModal = document.getElementById('pushProgressModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 添加弹窗到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 显示弹窗
+    const modal = new bootstrap.Modal(document.getElementById('pushProgressModal'));
+    modal.show();
+    
+    // 重置状态
+    document.getElementById('pushProgressBar').style.width = '0%';
+    document.getElementById('pushProgressBar').textContent = '0%';
+    document.getElementById('pushOverallProgress').textContent = '0%';
+    document.getElementById('pushTotal').textContent = '0';
+    document.getElementById('pushSuccess').textContent = '0';
+    document.getElementById('pushFail').textContent = '0';
+    document.getElementById('pushLogContainer').innerHTML = '<div class="text-muted"><?= __('正在推送...') ?></div>';
+    document.getElementById('pushCloseBtn').disabled = true;
+}
+
+// 更新推送进度
+function updatePushProgress(data) {
+    const progressBar = document.getElementById('pushProgressBar');
+    const overallProgress = document.getElementById('pushOverallProgress');
+    const totalEl = document.getElementById('pushTotal');
+    const successEl = document.getElementById('pushSuccess');
+    const failEl = document.getElementById('pushFail');
+    const logContainer = document.getElementById('pushLogContainer');
+    const closeBtn = document.getElementById('pushCloseBtn');
+    
+    const total = data.total || 0;
+    const successCount = data.success_count || 0;
+    const failCount = data.fail_count || 0;
+    
+    // 如果有结果，使用最后一个结果的进度
+    let progress = 0;
+    if (data.results && data.results.length > 0) {
+        const lastResult = data.results[data.results.length - 1];
+        progress = lastResult.progress || (data.results.length / total * 100);
+    } else if (total > 0) {
+        progress = 0;
+    }
+    
+    // 更新进度条
+    progressBar.style.width = progress + '%';
+    progressBar.setAttribute('aria-valuenow', progress);
+    progressBar.textContent = progress.toFixed(1) + '%';
+    overallProgress.textContent = progress.toFixed(1) + '%';
+    
+    // 更新统计
+    totalEl.textContent = total;
+    successEl.textContent = successCount;
+    failEl.textContent = failCount;
+    
+    // 更新日志 - 优先使用 logs 数组，如果没有则使用 results
+    let logHtml = '';
+    if (data.logs && data.logs.length > 0) {
+        // 使用详细的日志数组
+        data.logs.forEach((log) => {
+            let typeClass = 'text-muted';
+            if (log.type === 'success') {
+                typeClass = 'text-success';
+            } else if (log.type === 'error') {
+                typeClass = 'text-danger';
+            } else if (log.type === 'warning') {
+                typeClass = 'text-warning';
+            } else if (log.type === 'info') {
+                typeClass = 'text-info';
+            }
+            
+            logHtml += `
+                <div class="mb-1 ${typeClass}">
+                    <strong>[${log.timestamp || ''}]</strong> ${log.message || ''}
+                </div>
+            `;
+        });
+    } else if (data.results && data.results.length > 0) {
+        // 回退到使用 results
+        data.results.forEach((result) => {
+            const statusClass = result.success ? 'text-success' : 'text-danger';
+            const statusIcon = result.success ? '✓' : '✗';
+            const timestamp = result.index ? `[${result.index}/${result.total}]` : '';
+            
+            logHtml += `
+                <div class="mb-2 ${statusClass}">
+                    <strong>${timestamp}</strong> 
+                    <span class="fw-bold">${statusIcon}</span> 
+                    <strong>${result.domain_name}</strong> 
+                    <span class="text-muted">(${result.domain_id})</span>
+                    <br>
+                    <span class="ms-4">${result.message}</span>
+                </div>
+            `;
+        });
+    }
+    
+    logContainer.innerHTML = logHtml;
+    
+    // 自动滚动到底部
+    logContainer.scrollTop = logContainer.scrollHeight;
+    
+    // 如果所有结果都返回了，启用关闭按钮
+    if (data.results && data.results.length >= total && total > 0) {
+        progressBar.classList.remove('progress-bar-animated');
+        closeBtn.disabled = false;
+        
+        // 添加总结信息
+        const summaryClass = failCount === 0 ? 'text-success' : 'text-warning';
+        if (!logHtml.includes('推送完成')) {
+            logHtml += `
+                <div class="mt-3 pt-3 border-top ${summaryClass}">
+                    <strong>${data.message || '<?= __('推送完成') ?>'}</strong>
+                </div>
+            `;
+            logContainer.innerHTML = logHtml;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    }
+}
+
+// 页面加载时加载规则
+window.addEventListener('DOMContentLoaded', function() {
+    loadRules();
+});
+</script>
+
+</body>
+</html>
+

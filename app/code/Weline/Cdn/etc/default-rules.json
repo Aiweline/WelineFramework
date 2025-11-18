@@ -1,0 +1,27 @@
+[
+    {
+        "expression": "(http.request.uri.path matches \"^/static/\" or http.request.uri.path matches \"^/media/\")",
+        "action": {
+            "cache": {
+                "status_code": [200, 301, 308],
+                "ttl": 2592000
+            }
+        },
+        "description": "静态资源缓存30天"
+    },
+    {
+        "expression": "(http.request.uri.path matches \"^/admin/\" or http.request.uri.path matches \"^/backend/\")",
+        "action": {
+            "cache": false
+        },
+        "description": "后台路径不缓存"
+    },
+    {
+        "expression": "http.request.uri.path matches \"^/api/\"",
+        "action": {
+            "cache": false
+        },
+        "description": "API路径不缓存"
+    }
+]
+

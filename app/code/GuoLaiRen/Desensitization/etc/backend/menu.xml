@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    
+    <!-- 数据脱敏主菜单 -->
+    <add source="GuoLaiRen_Desensitization::main" 
+         name="main" 
+         title="数据脱敏" 
+         action="" 
+         parent=""
+         icon="mdi mdi-shield-lock"
+         order="10000"/>
+    
+    <!-- 敏感检测 -->
+    <add source="GuoLaiRen_Desensitization::detect"
+         name="detect"
+         title="敏感检测"
+         action="*/backend/detect"
+         parent="GuoLaiRen_Desensitization::main"
+         icon="mdi mdi-shield-search"
+         order="10"/>
+    
+    <!-- AI润色 -->
+    <add source="GuoLaiRen_Desensitization::rewrite"
+         name="rewrite"
+         title="AI润色"
+         action="*/backend/rewrite"
+         parent="GuoLaiRen_Desensitization::main"
+         icon="mdi mdi-robot"
+         order="20"/>
+    
+    <!-- 模块配置 -->
+    <add source="GuoLaiRen_Desensitization::config"
+         name="config"
+         title="模块配置"
+         action="*/backend/config"
+         parent="GuoLaiRen_Desensitization::main"
+         icon="mdi mdi-cog"
+         order="60"/>
+         
+</menus>
+

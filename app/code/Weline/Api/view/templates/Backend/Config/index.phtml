@@ -1,0 +1,217 @@
+<?php
+/**
+ * API模块配置页面
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var array $config 配置数据
+ */
+$config = $this->getData('config') ?? [];
+?>
+<div class="api-config-page">
+    <div class="page-header">
+        <h1><?= __('API模块配置') ?></h1>
+        <p class="text-muted"><?= __('配置API令牌刷新周期等参数') ?></p>
+    </div>
+
+    <form id="api-config-form" method="post" action="<?= $this->getBackendUrl('*/backend/config/save') ?>">
+        <div class="card">
+            <div class="card-header">
+                <h3><?= __('令牌刷新配置') ?></h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 令牌刷新周期 -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="api_token_refresh_period" class="form-label">
+                                <?= __('令牌刷新周期（秒）') ?>
+                                <span class="text-muted small"><?= __('前端自动刷新令牌的时间间隔') ?></span>
+                            </label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="api_token_refresh_period" 
+                                name="api_token_refresh_period" 
+                                value="<?= htmlspecialchars($config['api_token_refresh_period'] ?? '300') ?>"
+                                min="60"
+                                max="3600"
+                                required>
+                            <small class="form-text text-muted">
+                                <?= __('建议值：300秒（5分钟）。范围：60-3600秒。注意：应小于令牌过期时间') ?>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- 过期前刷新时间 -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="api_token_refresh_before_expire" class="form-label">
+                                <?= __('过期前刷新时间（秒）') ?>
+                                <span class="text-muted small"><?= __('在令牌过期前多少秒开始刷新（必须小于令牌过期时间）') ?></span>
+                            </label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="api_token_refresh_before_expire" 
+                                name="api_token_refresh_before_expire" 
+                                value="<?= htmlspecialchars($config['api_token_refresh_before_expire'] ?? '60') ?>"
+                                min="30"
+                                max="600"
+                                required>
+                            <small class="form-text text-muted">
+                                <?= __('建议值：60-120秒（1-2分钟）。范围：30-600秒。确保在令牌过期前刷新，避免过期后请求失败') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- 默认令牌过期时间 -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="api_token_default_expires_in" class="form-label">
+                                <?= __('默认访问令牌过期时间（秒）') ?>
+                                <span class="text-muted small"><?= __('新生成的访问令牌默认过期时间') ?></span>
+                            </label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="api_token_default_expires_in" 
+                                name="api_token_default_expires_in" 
+                                value="<?= htmlspecialchars($config['api_token_default_expires_in'] ?? '3600') ?>"
+                                min="300"
+                                max="86400"
+                                required>
+                            <small class="form-text text-muted">
+                                <?= __('建议值：3600秒（1小时）。范围：300-86400秒') ?>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- 默认刷新令牌过期时间 -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="api_refresh_token_default_expires_in" class="form-label">
+                                <?= __('默认刷新令牌过期时间（秒）') ?>
+                                <span class="text-muted small"><?= __('新生成的刷新令牌默认过期时间') ?></span>
+                            </label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="api_refresh_token_default_expires_in" 
+                                name="api_refresh_token_default_expires_in" 
+                                value="<?= htmlspecialchars($config['api_refresh_token_default_expires_in'] ?? '2592000') ?>"
+                                min="86400"
+                                max="31536000"
+                                required>
+                            <small class="form-text text-muted">
+                                <?= __('建议值：2592000秒（30天）。范围：86400-31536000秒') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions mt-4">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-content-save"></i>
+                <?= __('保存配置') ?>
+            </button>
+            <a href="<?= $this->getBackendUrl('*/backend/index') ?>" class="btn btn-secondary">
+                <?= __('返回') ?>
+            </a>
+        </div>
+    </form>
+</div>
+
+<style>
+.api-config-page {
+    padding: 20px;
+}
+
+.api-config-page .page-header {
+    margin-bottom: 30px;
+}
+
+.api-config-page .page-header h1 {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.api-config-page .card {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.api-config-page .card-header {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.api-config-page .card-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.api-config-page .card-body {
+    padding: 20px;
+}
+
+.api-config-page .form-label {
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.api-config-page .form-label .text-muted {
+    display: block;
+    font-weight: normal;
+    font-size: 0.875em;
+    margin-top: 2px;
+}
+
+.api-config-page .form-text {
+    display: block;
+    margin-top: 5px;
+}
+
+.api-config-page .form-actions {
+    display: flex;
+    gap: 10px;
+}
+</style>
+
+<script>
+document.getElementById('api-config-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {};
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    fetch(this.action, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            return response.text();
+        }
+    })
+    .catch(error => {
+        console.error('保存配置失败:', error);
+        alert('保存配置失败，请重试');
+    });
+});
+</script>
+

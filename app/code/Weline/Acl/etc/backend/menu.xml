@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--安全中心分组菜单-->
+    <add source="Weline_Acl::security_center" name="security_center" title="安全中心" action="" parent="Weline_Backend::system_menu"
+         icon="mdi mdi-shield-check" order="20200"/>
+    
+    <!--顶层：系统-->
+    <add source="Weline_Acl::acl" name="acl" title="权限管理" action="" parent="Weline_Acl::security_center"
+         icon="mdi mdi-security"
+         order="10"/>
+    <add source="Weline_Acl::acl_role" name="acl_role" title="权限角色" action="acl/backend/acl/role" parent="Weline_Acl::acl"
+         icon="dripicons-user-group"
+         order="10"/>
+    <add source="Weline_Acl::acl_source" name="acl_source" title="权限资源" action="acl/backend/acl" parent="Weline_Acl::acl"
+         icon="mdi mdi-format-list-checks"
+         order="20"/>
+    <add source="Weline_Acl::security_log" name="security_log" title="安全日志" action="acl/backend/security-log" parent="Weline_Acl::security_center"
+         icon="mdi mdi-shield-alert"
+         order="30"/>
+    <add source="Weline_Acl::ip_whitelist" name="ip_whitelist" title="IP白名单" action="acl/backend/ip-whitelist" parent="Weline_Acl::security_center"
+         icon="mdi mdi-shield-check"
+         order="40"/>
+</menus>

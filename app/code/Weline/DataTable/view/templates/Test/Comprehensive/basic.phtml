@@ -1,0 +1,239 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>DataTable 基本表格功能</title>
+    <style>
+        <?php
+        // 计算主题色的深色版本
+        $themeColorValue = $themeColor ?? '#667eea';
+        $themeColorDark = $themeColorValue;
+        if (preg_match('/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i', $themeColorValue, $matches)) {
+            $r = max(0, min(255, hexdec($matches[1]) - 20));
+            $g = max(0, min(255, hexdec($matches[2]) - 20));
+            $b = max(0, min(255, hexdec($matches[3]) - 20));
+            $themeColorDark = sprintf('#%02x%02x%02x', $r, $g, $b);
+        }
+        ?>
+        :root {
+            --theme-color: <?= htmlspecialchars($themeColorValue, ENT_QUOTES, 'UTF-8') ?>;
+            --theme-color-dark: <?= htmlspecialchars($themeColorDark, ENT_QUOTES, 'UTF-8') ?>;
+        }
+        .demo-section {
+            background: <?= ($themeMode ?? '') === 'dark' ? '#2d2d2d' : '#ffffff' ?>;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, <?= ($themeMode ?? '') === 'dark' ? '0.5' : '0.1' ?>);
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid <?= ($themeMode ?? '') === 'dark' ? '#404040' : '#dee2e6' ?>;
+        }
+        .code-block {
+            background: <?= ($themeMode ?? '') === 'dark' ? '#1e1e1e' : '#f8f9fa' ?>;
+            border: 1px solid <?= ($themeMode ?? '') === 'dark' ? '#404040' : '#dee2e6' ?>;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 15px 0;
+            color: <?= ($themeMode ?? '') === 'dark' ? '#d4d4d4' : '#333333' ?>;
+        }
+        .text-muted {
+            color: <?= ($themeMode ?? '') === 'dark' ? '#b0b0b0' : '#6c757d' ?> !important;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--theme-color) 0%, var(--theme-color-dark) 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-table me-2"></i>
+                                DataTable 基本表格功能
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>DataTable</a></li>
+                                    <li class='breadcrumb-item'><a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>">综合测试</a></li>
+                                    <li class='breadcrumb-item active'>基本表格功能</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="demo-section">
+                            <h2 class="mb-3">
+                                <i class="mdi mdi-table me-3"></i>DataTable 基本表格功能
+                            </h2>
+                            <p class="text-muted">展示DataTable模块的基本表格功能，包括表格展示、排序、搜索、分页等核心特性</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 基本表格示例 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="demo-section">
+                            <h4 class="mb-3">
+                                <i class="mdi mdi-format-list-bulleted me-2"></i>基本用户表格
+                            </h4>
+                            <p class="text-muted">这是一个基本的用户信息表格，展示了标准的DataTable配置。</p>
+                            
+                            <div class="code-block">
+&lt;w:d-table model="Weline\DataTable\Model\TestUser" scope="basic-user-table"&gt;
+    &lt;w:t-header&gt;
+        &lt;w:field belong="t-header" name="id" sortable="true" width="80"&gt;ID&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="username" sortable="true" width="150"&gt;用户名&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="email" sortable="true" width="200"&gt;邮箱&lt;/w:field&gt;
+        &lt;w:field belong="t-header" name="create_time" sortable="true" width="150"&gt;创建时间&lt;/w:field&gt;
+    &lt;/w:t-header&gt;
+&lt;/w:d-table&gt;
+                            </div>
+
+                            <!-- 实际表格内容将在这里渲染 -->
+                            <div class="mt-3">
+                                <w:d-table model="Weline\DataTable\Model\TestUser" scope="basic-user-table">
+                                    <w:t-filter></w:t-filter>
+                                    <w:t-header>
+                                        <w:field belong="t-header" name="id" sortable="true" width="80">ID</w:field>
+                                        <w:field belong="t-header" name="create_time" sortable="true" width="150">创建时间</w:field>
+                                        <w:field belong="t-header" name="update_time" sortable="true" width="150">更新时间</w:field>
+                                    </w:t-header>
+                                </w:d-table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 表格功能特性 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="demo-section">
+                            <h4 class="mb-3">
+                                <i class="mdi mdi-cog me-2"></i>表格功能特性
+                            </h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>核心功能</h6>
+                                    <ul class="list-unstyled">
+                                        <li><i class="mdi mdi-check text-success me-2"></i>自动列排序</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>实时搜索</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>分页导航</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>响应式设计</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>配置选项</h6>
+                                    <ul class="list-unstyled">
+                                        <li><i class="mdi mdi-check text-success me-2"></i>自定义列宽</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>排序状态控制</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>作用域管理</li>
+                                        <li><i class="mdi mdi-check text-success me-2"></i>模型绑定</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 使用说明 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="demo-section">
+                            <h4 class="mb-3">
+                                <i class="mdi mdi-information me-2"></i>使用说明
+                            </h4>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6>必需属性</h6>
+                                    <ul class="list-unstyled small">
+                                        <li><strong>model:</strong> 模型类名</li>
+                                        <li><strong>scope:</strong> 表格作用域</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6>字段属性</h6>
+                                    <ul class="list-unstyled small">
+                                        <li><strong>name:</strong> 字段名</li>
+                                        <li><strong>belong:</strong> 所属标签</li>
+                                        <li><strong>sortable:</strong> 是否可排序</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6>可选属性</h6>
+                                    <ul class="list-unstyled small">
+                                        <li><strong>width:</strong> 列宽</li>
+                                        <li><strong>editable:</strong> 是否可编辑</li>
+                                        <li><strong>filterable:</strong> 是否可过滤</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 返回链接 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="text-center">
+                            <a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>" class="btn btn-primary">
+                                <i class="mdi mdi-arrow-left me-2"></i>返回综合测试首页
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

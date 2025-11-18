@@ -1,0 +1,225 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Weline Admin 管理面板') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='container-fluid'>
+        <!-- start page message -->
+        <div class='row'>
+            <template>Weline_Component::message.phtml</template>
+        </div> <!-- end message -->
+        <div class='row'>
+            <div class='col-12'>
+                <div class='card'>
+                    <div class='card-body'>
+                        <h4 class='card-title'>
+                            <lang>分类</lang>
+                            <notempty name='category'>
+                                <lang>编辑</lang>
+                                <else/>
+                                <lang>添加</lang>
+                            </notempty>
+                        </h4>
+                        <p class='card-title-desc'>
+                            <lang>新增分类</lang>
+                        </p>
+                        <form class='needs-validation' novalidate='' action='{{action}}' method='post'>
+                            <has name="category">
+                                <input type="hidden" name="category_id" value="{{category.category_id}}">
+                            </has>
+                            <!--基础信息-->
+                            <div class='row'>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationName'>
+                                            <lang>分类名</lang>
+                                        </label>
+                                        <input type='text' class='form-control' maxlength='128' data-parsley-minlength='3'
+                                               id='validationName' placeholder='@lang{分类名}'
+                                               value='{{category.name}}' name='name'
+                                               required=''>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请正确填写分类名！</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationCategorySearch'>
+                                            <lang>搜索父分类</lang>
+                                        </label>
+                                        <input type='text' id='validationCategorySearch' class='form-control'
+                                               placeholder='@lang{搜素父分类...}'>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationCategorySelect'>
+                                            <lang>父分类</lang>
+                                        </label>
+                                        <select type='text' class='form-control' name='pid' data-parsley-minlength='1'
+                                                id='validationCategorySelect'
+                                                required='required' data-selected='{{category.category_id}}'>
+                                            <if condition='category.parent_name'>
+                                                <option value='{{category.parent_id}}'>{{category.parent_name}}</option>
+                                                <else/>
+                                                <option value='0'>
+                                                    <lang>顶层分类</lang>
+                                                </option>
+                                            </if>
+                                        </select>
+                                        <script>
+                                            /*延迟期间最多执行一次：优化输入请求过多ajax*/
+                                            function debounce(func, delay) {
+                                                let timeoutId;
+                                                return function (...args) {
+                                                    if (timeoutId) {
+                                                        clearTimeout(timeoutId);
+                                                    }
+                                                    timeoutId = setTimeout(() => {
+                                                        func.apply(this, args);
+                                                        timeoutId = null;
+                                                    }, delay);
+                                                };
+                                            }
+
+                                            function throttle(func, delay) {
+                                                let timeoutId;
+                                                let lastExecTime = 0;
+                                                return function (...args) {
+                                                    const elapsedTime = new Date().getTime() - lastExecTime;
+                                                    if (elapsedTime > delay) {
+                                                        lastExecTime = new Date().getTime();
+                                                        func.apply(this, args);
+                                                    } else {
+                                                        clearTimeout(timeoutId);
+                                                        timeoutId = setTimeout(() => {
+                                                            lastExecTime = new Date().getTime();
+                                                            func.apply(this, args);
+                                                            timeoutId = null;
+                                                        }, delay - elapsedTime);
+                                                    }
+                                                };
+                                            }
+
+                                            /*监听属性代码是否可用*/
+                                            const debounceProgressAttributeCode = debounce((e) => {
+                                                let target = $(e.target)
+                                                let search = target.val()
+                                                $.ajax({
+                                                    url: '@backend-url("*/backend/category/search")' +
+                                                        '?id={{category.category_id}}&field=name&limit=10&search=' + search,
+                                                    success: function (res) {
+                                                        if (res['msg']) {
+                                                            Swal.fire(
+                                                                {
+                                                                    title: '警告！',
+                                                                    text: res['msg'],
+                                                                    icon: 'error',
+                                                                    dangerMode: true,
+                                                                    confirmButtonText: '@lang{好的}'
+                                                                }
+                                                            )
+                                                            return false;
+                                                        }
+                                                        let items = res['items']
+                                                        let validationCategorySelect = $('#validationCategorySelect')
+                                                        validationCategorySelect.empty()
+                                                        if (items.length) {
+                                                            // 渲染选项
+                                                            for (let i = 0; i < items.length; i++) {
+                                                                let item = items[i]
+                                                                validationCategorySelect.append("<option " +
+                                                                    "value='" + item['category_id'] + "'>" +
+                                                                    (item['local_name'] ?? item['name']) + "</option>")
+                                                            }
+                                                            target.removeClass('border-danger')
+                                                            target.addClass('border-success')
+                                                        } else {
+                                                            validationCategorySelect.append('<option value=\'0\'>@lang{顶层分类}</option>')
+                                                            target.removeClass('border-success')
+                                                            target.addClass('border-danger')
+                                                        }
+                                                    }
+                                                })
+                                            }, 500);
+                                            $('#validationCategorySearch').on('input', debounceProgressAttributeCode)
+                                        </script>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>父分类必选！</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationCategoryPosition'>
+                                            <lang>位置</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='position' data-parsley-minlength='1'
+                                               id='validationCategoryPosition'
+                                               required='required' value="{{category.position|0}}"/>
+                                        <div class='valid-feedback'>
+                                            <lang>请设置分类位置</lang>
+                                        </div>
+                                        <div class='invalid-feedback'>
+                                            <lang>请设置分类位置</lang>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class='btn btn-primary' type='submit'>
+                                <empty
+                                    name='category'>
+                                    <lang>添加</lang>
+                                    <else/>
+                                    <lang>编辑</lang>
+                                </empty>
+                            </button>
+                            <notempty name='category'>
+                                <a class='btn btn-info' href="@backend-url('*/backend/category/add')">
+                                    <lang>继续新增</lang>
+                                </a>
+                            </notempty>
+                        </form>
+                    </div>
+                </div>
+            </div> <!-- end col -->
+        </div> <!-- end row -->
+    </div> <!-- container-fluid -->
+    <!-- end main content-->
+</div>
+<!-- END layout-wrapper -->
+</body>
+</html>

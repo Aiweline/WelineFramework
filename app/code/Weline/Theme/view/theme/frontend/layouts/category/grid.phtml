@@ -1,0 +1,37 @@
+<?php
+/**
+ * 布局：分类页 - 网格布局
+ * 
+ * 分类网格布局，适合展示分类卡片
+ * 字段
+ * @info description 描述：分类网格布局，适合展示分类卡片
+ * @info name 名称：分类网格布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('分类');
+$content = $this->getData('content') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="category-grid-main <?= htmlspecialchars($class) ?>">
+        <div class="category-grid-container">
+            <?= $content ?>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+
