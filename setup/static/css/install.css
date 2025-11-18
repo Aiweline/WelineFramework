@@ -1,0 +1,116 @@
+html,
+body {
+    background: #eee;
+    font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to left, rgb(52, 198, 206), rgb(250, 157, 78));
+}
+
+.swiper-container {
+    width: 80%;
+    height: 800px;
+    margin-top: 3%;
+}
+
+.swiper-slide {
+    text-align: center;
+    font-size: 18px;
+    background: #fff;
+
+    /* Center slide text vertically */
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+.container {
+    width: 60%;
+    margin: 10%;
+    height: 600px;
+    padding: 2% 5%;
+    border-radius: 10px;
+    color: #038d80;
+}
+
+.swiper-container-horizontal > .swiper-pagination-progressbar, .swiper-container-vertical > .swiper-pagination-progressbar.swiper-pagination-progressbar-opposite {
+    height: 25px;
+}
+
+.swiper-pagination-progressbar-fill {
+    border-radius: 0 10px 10px 0;
+}
+
+.swiper-slide {
+    background-color: #e9bcb7;
+    background-image: linear-gradient(315deg, #e9bcb7 0%, #29524a 74%);
+    /**/
+    /*background: linear-gradient(to left, rgb(122 56 0),rgb(3 81 85));*/
+}
+
+::-webkit-scrollbar-track-piece {
+    background-color: transparent;
+}
+
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #0a5f03;
+    background-clip: padding-box;
+    min-height: 28px;
+}
+
+.swiper-button-next {
+    display: none;
+}
+
+.console {
+    box-shadow: 0 7px 15px #252729;
+    margin-top: 2%;
+    padding: 8px;
+    text-align: left;
+    width: 98%;
+    color: green;
+    min-height: 200px;
+    max-height: 200px;
+    overflow-y: scroll;
+    word-break: break-word;
+    display: inline-block;
+    /*-webkit-box-reflect: below 0px -webkit-gradient(linear, left top, left bottom, from(transparent), to(rgba(250, 250, 250, 0.1)));*/
+    -webkit-box-reflect: above 0 -webkit-gradient(linear, left top, left bottom, from(transparent), to(rgba(250, 250, 250, 0.1)));
+    scrollbar-3dlight-color: #20a53a;
+    background-image: linear-gradient(to top, black 0%, #384744 130%);
+}
+.next-button {
+    width: 120px;
+    height: 45px;
+    line-height: 45px;
+    background-color: #375349;
+    border: solid 0;
+    text-align: center;
+    float: right;
+    pointer-events: none;
+    text-decoration: none;
+    color: darkgray !important;
+    margin-top: 2%;
+}
+
+.next-button-active {
+    pointer-events: all !important;
+    color: #03e9f4 !important;
+    background-color: #1e2624;
+}

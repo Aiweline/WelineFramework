@@ -1,0 +1,259 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+/**
+ * 变量：
+ * @var array $accounts TOTP账户列表
+ * @var int $user_id 用户ID
+ */
+
+$accounts = $this->getData('accounts') ?: [];
+$totalAccounts = is_array($accounts) ? count($accounts) : 0;
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>2FA账户管理</lang></title>
+    <style>
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: none;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .stat-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2.5rem;
+            opacity: 0.3;
+        }
+        
+        .account-card {
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .account-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-shield-account me-2"></i>
+                                <lang>2FA账户管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>双因素认证</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>账户管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card">
+                            <i class="mdi mdi-shield-check stat-icon"></i>
+                            <div class="stat-label"><lang>总账户数</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card success">
+                            <i class="mdi mdi-cellphone-key stat-icon"></i>
+                            <div class="stat-label"><lang>TOTP账户</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card warning">
+                            <i class="mdi mdi-account-multiple stat-icon"></i>
+                            <div class="stat-label"><lang>活跃用户</lang></div>
+                            <div class="stat-number"><?= $totalAccounts ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card info">
+                            <i class="mdi mdi-security stat-icon"></i>
+                            <div class="stat-label"><lang>安全状态</lang></div>
+                            <div class="stat-number">正常</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TOTP账户列表 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-header'>
+                                <div class='d-flex align-items-center justify-content-between'>
+                                    <h4 class='mb-0'>
+                                        <i class="mdi mdi-shield-lock me-2"></i>
+                                        <lang>验证器账户列表</lang>
+                                    </h4>
+                                    <a href="/two-factor-auth/frontend/accounts" class="btn btn-primary btn-sm" target="_blank">
+                                        <i class="mdi mdi-open-in-new me-1"></i>
+                                        <lang>打开前端管理</lang>
+                                    </a>
+                                </div>
+                            </div>
+                            <div class='card-body'>
+                                <?php if (empty($accounts)): ?>
+                                    <div class="alert alert-info">
+                                        <i class="mdi mdi-information me-2"></i>
+                                        <lang>暂无账户数据</lang>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="row">
+                                        <?php foreach ($accounts as $account): ?>
+                                        <div class="col-md-6 col-lg-4 mb-3">
+                                            <div class="account-card card">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                                        <div>
+                                                            <h5 class="mb-1"><?= htmlspecialchars($account['name'] ?? '未命名') ?></h5>
+                                                            <small class="text-muted"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></small>
+                                                        </div>
+                                                        <span class="badge bg-primary">TOTP</span>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <small class="text-muted d-block mb-1"><lang>密钥</lang></small>
+                                                        <code class="text-primary small"><?= htmlspecialchars(substr($account['secret'] ?? '', 0, 20)) ?>...</code>
+                                                    </div>
+                                                    
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <small class="text-muted d-block"><lang>创建时间</lang></small>
+                                                            <small class="text-dark"><?= htmlspecialchars($account['created_at'] ?? '未知') ?></small>
+                                                        </div>
+                                                        <div>
+                                                            <small class="text-muted d-block"><lang>算法</lang></small>
+                                                            <span class="badge bg-info"><?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 提示卡片 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='alert alert-info'>
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong>
+                            <lang>这里是后台账户管理页面，您可以查看所有用户的TOTP账户。要添加或管理账户，请使用前端管理界面。</lang>
+                            <a href="/two-factor-auth/frontend/accounts" class="alert-link" target="_blank"><lang>点击进入前端管理</lang></a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

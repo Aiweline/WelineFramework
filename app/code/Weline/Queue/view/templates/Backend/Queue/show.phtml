@@ -1,0 +1,185 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- <body data-layout="horizontal" data-topbar="dark"> -->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='page-content'>
+        <div class='container-fluid'>
+            <!-- start page message -->
+            <div class='row'>
+                <template>Weline_Component::message.phtml</template>
+            </div> <!-- end message -->
+            <div class='row'>
+                <div class='col-12'>
+                    <div class='card'>
+                        <div class='card-body'>
+                            <h4 class='card-title'>
+                                <lang>队列查看</lang>
+                            </h4>
+                            <p class='card-title-desc'>
+                                <lang>查看队列详细信息</lang>
+                            </p>
+                            <p>
+                                <b>
+                                    <lang>ID</lang>
+                                </b>
+                                : {{queue.queue_id}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列状态</lang>
+                                </b>
+                                :
+                                <if condition="queue.status == 'done'">
+                                    <span class='badge badge-success text-success font-size-24'><lang>已完成</lang></span>
+                                    <elseif condition="queue.status == 'pending'"/>
+                                    <span class='badge badge-warning text-warning font-size-24'>
+                                        <lang>等待中</lang>
+                                    </span>
+                                    <elseif condition="queue.status == 'running'"/>
+                                    <span class='badge badge-primary text-primary font-size-24'><lang>运行中</lang></span>
+                                    <elseif condition="queue.status == 'error'"/>
+                                    <span class='badge badge-danger  text-danger font-size-24'><lang>错误</lang></span>
+                                </if>
+                                <br></p>
+                            <p>
+                                <b>
+                                    <lang>进程ID</lang>
+                                </b>
+                                : {{queue.pid}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>运行结果</lang>
+                                </b>
+                                : <br></p>
+                            <p>
+                            <div class='card-footer'>
+                                {{queue.result}}
+                            </div>
+                            </p>
+                            <p>
+                                <b>
+                                    <lang>开始于</lang>
+                                </b>
+                                : {{queue.start_at}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>结束于</lang>
+                                </b>
+                                : {{queue.end_at}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列名称</lang>
+                                </b>
+                                : {{queue.name}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>创建时间</lang>
+                                </b>
+                                : {{queue.create_time}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>更新时间</lang>
+                                </b>
+                                : {{queue.update_time}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列执行类</lang>
+                                </b>
+                                : {{queue.class}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列类型</lang>
+                                </b>
+                                : {{queue.t_name}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列执行注意项</lang>
+                                </b>
+                                : {{queue.tip}}<br></p>
+                            <p>
+
+                            <p>
+                                <b>
+                                    <lang>是否结束</lang>
+                                </b>
+                                : {{queue.finished}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>是否自动运行</lang>
+                                </b>
+                                : {{queue.auto}}<br></p>
+                            <p>
+                                <b>
+                                    <lang>队列数据</lang>
+                                </b>
+                                :
+                            <div class="row">
+                                <foreach name="queue.data">
+                                    <div class="col-lg-4 col-md-6 col-sm-12">
+                                        {{v.html}}
+                                    </div>
+                                </foreach>
+                            </div>
+                            </p>
+                        </div>
+                    </div>
+                </div> <!-- end col -->
+            </div> <!-- end row -->
+        </div> <!-- container-fluid -->
+    </div>
+    <!-- end main content-->
+</div>
+<!-- END layout-wrapper -->
+<script>
+    let validationEntity = $('#validationEntity')
+    validationEntity.change(function () {
+        let selectedOption = $(this).find(':selected').val();
+        renderAttributeSet(selectedOption)
+    });
+    // 初始化
+    let initSelected = validationEntity.find(':selected').val()
+    let validationSet = $('#validationSet')
+    renderAttributeSet(initSelected)
+
+    function renderAttributeSet(entity_id) {
+        $.get("@backend-url('*/backend/attribute/set/apiSearch')?entity_id=" + entity_id).then((res) => {
+            let items = res['items']
+            validationSet.empty()
+            for (const itemsKey in items) {
+                let item = items[itemsKey]
+                let selected = '';
+                if (validationSet.attr('data-selected') === item.set_id) {
+                    selected = 'selected';
+                }
+                validationSet.append("<option value='" + item.set_id + "' " + selected + ">" + window.lang(item.name) + "</option>")
+            }
+        })
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<?php
+/**
+ * 营销落地页样式 - Footer
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:style => 样式配置
+ * style.background_color => 背景颜色:color:#ffffff
+ * style.text_color => 文字颜色:color:#666666
+ * style.link_color => 链接颜色:color:#00AFE9
+ * style.link_hover_color => 链接悬停颜色:color:#0088bb
+ * style.border_top => 显示顶部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#e5e5e5
+ * 
+ * group:layout => 布局设置[MD]:📱响应式配置说明:支持移动端/PC端响应式配置\n• 双端值: 20/40 表示移动端20，PC端40\n• 断点: M(375px) D(1280px)
+ * layout.max_width => 最大宽度:number:1200
+ * layout.padding_horizontal => 左右内边距:responsive:20/40|px[MD]
+ * layout.padding_vertical => 上下内边距:responsive:30/40|px[MD]
+ * 
+ * group:content => 内容显示[使用说明]:💡链接占位符说明:在免责声明文本中使用占位符来插入链接\n• {disclaimer} 会被替换为"disclaimer"链接\n• {Privacy Policy} 会被替换为"Privacy Policy"链接\n• 示例：See our {disclaimer} and our {Privacy Policy}.
+ * content.disclaimer_text => 免责声明文本:textarea:All content on this website is intended for educational and informational purposes only. See our {disclaimer} and our {Privacy Policy}.
+ * content.disclaimer_link => Disclaimer链接地址:text:#
+ * content.privacy_link => Privacy Policy链接地址:text:#
+ * content.copyright_text => 版权信息文本:text:© 2025 Millionaire Publishing LLC. All Rights Reserved
+ * 
+ * group:typography => 排版设置[MD]:📱响应式配置说明:支持移动端/PC端响应式字体大小\n• 移动端: 12px\n• PC端: 14px
+ * typography.font_size => 字体大小:responsive:12/14|px[MD]
+ * typography.line_height => 行高:number:1.5
+ * 
+ * @fields_end
+ */
+$page = $this->getData('page');
+// 兼容两种变量名：style（前端页面）和 style_settings（后端编辑预览）
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 获取配置值的辅助函数
+function getMarketingFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+// 复用响应式解析函数
+if (!function_exists('parseResponsiveValue')) {
+    function parseResponsiveValue($value) {
+        if (empty($value)) {
+            return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
+        }
+        
+        $value = trim($value);
+        $unit = '';
+        if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+            $unit = $matches[1];
+            $value = preg_replace('/[a-z%]+$/i', '', $value);
+        }
+        
+        $parts = explode('/', $value);
+        $parts = array_map('trim', $parts);
+        
+        $result = [
+            'mobile' => '',
+            'tablet' => '',
+            'desktop' => '',
+            'unit' => $unit ?: 'px'
+        ];
+        
+        switch (count($parts)) {
+            case 1:
+                $result['mobile'] = $parts[0];
+                $result['tablet'] = $parts[0];
+                $result['desktop'] = $parts[0];
+                break;
+            case 2:
+                $result['mobile'] = $parts[0];
+                $result['tablet'] = '';
+                $result['desktop'] = $parts[1];
+                break;
+            case 3:
+                $result['mobile'] = $parts[0];
+                $result['tablet'] = $parts[1];
+                $result['desktop'] = $parts[2];
+                break;
+        }
+        
+        return $result;
+    }
+}
+
+if (!function_exists('generateResponsiveCSS')) {
+    function generateResponsiveCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        
+        if ($mobile === $desktop) {
+            return $mobile . $unit;
+        }
+        
+        $minVw = 375;
+        $maxVw = 1280;
+        $vwDiff = $maxVw - $minVw;
+        $diff = $desktop - $mobile;
+        
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - {$minVw}px) / {$vwDiff})), {$desktop}{$unit})";
+    }
+}
+
+// 样式配置
+$bgColor = getMarketingFooterConfig($styleSettings, 'style.background_color', '#ffffff');
+$textColor = getMarketingFooterConfig($styleSettings, 'style.text_color', '#666666');
+$linkColor = getMarketingFooterConfig($styleSettings, 'style.link_color', '#00AFE9');
+$linkHoverColor = getMarketingFooterConfig($styleSettings, 'style.link_hover_color', '#0088bb');
+$borderTop = getMarketingFooterConfig($styleSettings, 'style.border_top', 'yes');
+$borderColor = getMarketingFooterConfig($styleSettings, 'style.border_color', '#e5e5e5');
+
+// 布局配置
+$maxWidth = getMarketingFooterConfig($styleSettings, 'layout.max_width', '1200');
+$paddingHorizontalValue = getMarketingFooterConfig($styleSettings, 'layout.padding_horizontal', '20/40');
+$paddingVerticalValue = getMarketingFooterConfig($styleSettings, 'layout.padding_vertical', '30/40');
+
+$paddingHorizontal = parseResponsiveValue($paddingHorizontalValue . 'px');
+$paddingHorizontalResponsive = generateResponsiveCSS($paddingHorizontal);
+$paddingVertical = parseResponsiveValue($paddingVerticalValue . 'px');
+$paddingVerticalResponsive = generateResponsiveCSS($paddingVertical);
+
+// 内容配置
+$disclaimerText = getMarketingFooterConfig($styleSettings, 'content.disclaimer_text', 'All content on this website is intended for educational and informational purposes only. See our {disclaimer} and our {Privacy Policy}.');
+$disclaimerLink = getMarketingFooterConfig($styleSettings, 'content.disclaimer_link', '#');
+$privacyLink = getMarketingFooterConfig($styleSettings, 'content.privacy_link', '#');
+$copyrightText = getMarketingFooterConfig($styleSettings, 'content.copyright_text', '© 2025 Millionaire Publishing LLC. All Rights Reserved');
+
+// 排版配置
+$fontSizeValue = getMarketingFooterConfig($styleSettings, 'typography.font_size', '12/14');
+$lineHeight = getMarketingFooterConfig($styleSettings, 'typography.line_height', '1.5');
+
+$fontSize = parseResponsiveValue($fontSizeValue . 'px');
+$fontSizeResponsive = generateResponsiveCSS($fontSize);
+
+// 页面信息
+$pageName = $page ? $page->getData('name') : '';
+?>
+        </div>
+    </main>
+    
+    <style>
+        /* Footer 移动端优化 */
+        .marketing-footer {
+            background: <?= htmlspecialchars($bgColor ?? '') ?>;
+            <?= $borderTop === 'yes' ? 'border-top: 1px solid ' . htmlspecialchars($borderColor ?? '') . ';' : '' ?>
+            margin-top: clamp(40px, 10vw, 60px);
+            padding: <?= $paddingVerticalResponsive ?> <?= $paddingHorizontalResponsive ?>;
+        }
+        
+        .marketing-footer-container {
+            max-width: <?= intval($maxWidth) ?>px;
+            margin: 0 auto;
+        }
+        
+        .marketing-footer-content {
+            text-align: center;
+            color: <?= htmlspecialchars($textColor ?? '') ?>;
+            font-size: <?= $fontSizeResponsive ?>;
+            line-height: <?= floatval($lineHeight) ?>;
+        }
+        
+        .marketing-footer-disclaimer {
+            margin-bottom: clamp(8px, 2vw, 12px);
+            font-size: <?= $fontSizeResponsive ?>;
+        }
+        
+        .marketing-footer-link {
+            color: <?= htmlspecialchars($linkColor ?? '') ?>;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .marketing-footer-link:hover {
+            color: <?= htmlspecialchars($linkHoverColor ?? '') ?>;
+            text-decoration: underline;
+        }
+        
+        .marketing-footer-copyright {
+            margin: 0;
+            font-size: <?= $fontSizeResponsive ?>;
+        }
+        
+        @media (max-width: 767px) {
+            .marketing-footer {
+                margin-top: clamp(30px, 8vw, 40px);
+                padding: clamp(24px, 6vw, 32px) clamp(16px, 4vw, 24px);
+            }
+            
+            .marketing-footer-content {
+                font-size: clamp(11px, 3vw, 13px);
+            }
+            
+            .marketing-footer-disclaimer {
+                margin-bottom: clamp(6px, 1.5vw, 8px);
+                font-size: clamp(11px, 3vw, 13px);
+            }
+            
+            .marketing-footer-copyright {
+                font-size: clamp(11px, 3vw, 13px);
+            }
+        }
+        
+        @media (max-width: 374px) {
+            .marketing-footer {
+                padding: 20px 12px;
+            }
+            
+            .marketing-footer-content {
+                font-size: 11px;
+            }
+            
+            .marketing-footer-disclaimer {
+                font-size: 11px;
+            }
+        }
+        
+        /* iPad平板端优化 (768px-1024px) */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .marketing-footer {
+                margin-top: clamp(50px, 6vw, 60px);
+                padding: clamp(32px, 4.5vw, 40px) clamp(32px, 5vw, 48px);
+            }
+            
+            .marketing-footer-content {
+                font-size: clamp(13px, 1.8vw, 14px);
+            }
+            
+            .marketing-footer-disclaimer {
+                font-size: clamp(13px, 1.8vw, 14px);
+            }
+            
+            .marketing-footer-copyright {
+                font-size: clamp(13px, 1.8vw, 14px);
+            }
+        }
+    </style>
+    
+    <footer class="marketing-footer">
+        <div class="marketing-footer-container">
+            <div class="marketing-footer-content">
+                <!-- Disclaimer Text with Links -->
+                <?php if ($disclaimerText): ?>
+                    <div class="marketing-footer-disclaimer">
+                        <?php
+                        // 处理 {disclaimer} 和 {Privacy Policy} 占位符
+                        $output = htmlspecialchars($disclaimerText ?? '');
+                        $output = str_replace('{disclaimer}', '<a href="' . htmlspecialchars($disclaimerLink ?? '') . '" class="marketing-footer-link">disclaimer</a>', $output);
+                        $output = str_replace('{Privacy Policy}', '<a href="' . htmlspecialchars($privacyLink ?? '') . '" class="marketing-footer-link">Privacy Policy</a>', $output);
+                        echo $output;
+                        ?>
+                    </div>
+                <?php endif; ?>
+                
+                <!-- Copyright -->
+                <?php if ($copyrightText): ?>
+                    <p class="marketing-footer-copyright">
+                        <?= htmlspecialchars($copyrightText ?? '') ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+

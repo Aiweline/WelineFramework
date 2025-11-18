@@ -1,0 +1,24 @@
+{
+    "name": "DeepSeek",
+    "code": "deepseek",
+    "base_url": "https://api.deepseek.com/v1",
+    "models_prefix": ["deepseek-"],
+    "test_model": "deepseek-chat",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "DeepSeek AI API服务",
+    "website": "https://www.deepseek.com",
+    "documentation": "https://platform.deepseek.com/api-docs",
+    "supported_features": {
+        "chat": true,
+        "completion": true,
+        "embedding": false,
+        "image": false,
+        "audio": false
+    },
+    "rate_limits": {
+        "requests_per_minute": 60,
+        "tokens_per_minute": 100000
+    }
+}

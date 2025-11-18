@@ -1,0 +1,20 @@
+{
+    "version": "1.0.0",
+    "description": "Weline Backend 模块配置文件，声明所有可用的JS模块",
+    "modules": {
+        "jquery": {
+            "paths": [
+                "https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js",
+                "https://code.bdstatic.com/npm/jquery@3.6.0/dist/jquery.min.js",
+                "Weline_Backend::libs/jquery/3.6.0/jquery.min.js"
+            ],
+            "globalVar": "jQuery",
+            "description": "jQuery库"
+        }
+    },
+    "moduleAliases": {
+        "jq": "jquery",
+        "$": "jquery"
+    }
+}
+

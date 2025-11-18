@@ -1,0 +1,57 @@
+<?php
+/**
+ * 布局：结账页 - 单页布局
+ * 
+ * 单页结账布局，所有步骤在一个页面完成
+ * 字段
+ * @info description 描述：单页结账布局，所有步骤在一个页面完成
+ * @info name 名称：结账页单页布局
+ * @param title 页面标题（默认：结账）
+ * @param content 主要内容（HTML字符串）
+ * @param orderSummary 订单摘要（HTML字符串）
+ * @param breadcrumb 面包屑导航（可选）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('结账');
+$content = $this->getData('content') ?? '';
+$orderSummary = $this->getData('orderSummary') ?? '';
+$breadcrumb = $this->getData('breadcrumb') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <?php if ($breadcrumb): ?>
+        <nav class="breadcrumb-nav">
+            <?= $breadcrumb ?>
+        </nav>
+    <?php endif; ?>
+    
+    <main class="checkout-main one-page <?= htmlspecialchars($class) ?>">
+        <div class="checkout-container">
+            <div class="checkout-content-wrapper">
+                <div class="checkout-form">
+                    <?= $content ?>
+                </div>
+                
+                <?php if ($orderSummary): ?>
+                    <aside class="checkout-summary sticky">
+                        <?= $orderSummary ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

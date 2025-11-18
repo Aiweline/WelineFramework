@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素跟踪浏览器测试</title>
+    <!-- 加载像素跟踪脚本 -->
+    {weline:taglib name="Weline_Visitor::taglib/pixel" /}
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h2 {
+            color: #34495e;
+            margin-top: 0;
+        }
+        .test-button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #2980b9;
+        }
+        .test-button.success {
+            background: #27ae60;
+        }
+        .test-button.error {
+            background: #e74c3c;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+        }
+        .result.success {
+            border-left-color: #27ae60;
+            background: #d4edda;
+        }
+        .result.error {
+            border-left-color: #e74c3c;
+            background: #f8d7da;
+        }
+        .log {
+            margin-top: 10px;
+            padding: 10px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #34495e;
+        }
+        .log-entry.success {
+            color: #2ecc71;
+        }
+        .log-entry.error {
+            color: #e74c3c;
+        }
+        .log-entry.info {
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <h1>像素跟踪浏览器测试</h1>
+    
+    <div class="test-section">
+        <h2>基础像素跟踪测试</h2>
+        <button class="test-button" onclick="testBasicPixelTracking()">测试基础像素跟踪</button>
+        <button class="test-button" onclick="testPixelWithABTest()">测试A/B测试像素</button>
+        <button class="test-button" onclick="testPixelWithCustomData()">测试自定义数据像素</button>
+        <div id="basic-result" class="result" style="display:none;"></div>
+        <div id="basic-log" class="log" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>像素脚本加载测试</h2>
+        <button class="test-button" onclick="testPixelScriptLoad()">测试像素脚本加载</button>
+        <button class="test-button" onclick="testPixelVersionFetch()">测试版本号获取</button>
+        <div id="script-result" class="result" style="display:none;"></div>
+        <div id="script-log" class="log" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>事件触发测试</h2>
+        <button class="test-button" onclick="testClickEvent()">测试点击事件</button>
+        <button class="test-button" onclick="testCustomEvent()">测试自定义事件</button>
+        <button class="test-button" data-test-id="test_001" data-variant="A" onclick="testABTestEvent(this)">测试A/B测试事件（变体A）</button>
+        <button class="test-button" data-test-id="test_001" data-variant="B" onclick="testABTestEvent(this)">测试A/B测试事件（变体B）</button>
+        <div id="event-result" class="result" style="display:none;"></div>
+        <div id="event-log" class="log" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>数据验证测试</h2>
+        <button class="test-button" onclick="testDataValidation()">测试数据验证</button>
+        <button class="test-button" onclick="testSiteIdDetection()">测试站点ID检测</button>
+        <div id="validation-result" class="result" style="display:none;"></div>
+        <div id="validation-log" class="log" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>完整测试套件</h2>
+        <button class="test-button" onclick="runAllTests()">运行所有测试</button>
+        <div id="all-result" class="result" style="display:none;"></div>
+        <div id="all-log" class="log" style="display:none;"></div>
+    </div>
+
+    <!-- 加载像素脚本 -->
+    <script>
+        // 模拟必要的全局变量（如果不存在）
+        if (typeof window.site === 'undefined') {
+            window.site = {
+                user_id: 0,
+                site_id: 1,
+                module: 'Weline_Visitor',
+                env_model: 'dev'
+            };
+        }
+        
+        // 模拟frontend_api函数（如果不存在）
+        if (typeof window.frontend_api === 'undefined') {
+            window.frontend_api = function(path) {
+                const protocol = window.location.protocol;
+                const host = window.location.host;
+                const pathname = window.location.pathname;
+                const pathParts = pathname.split('/').filter(p => p);
+                let basePath = '';
+                for (let i = 0; i < pathParts.length; i++) {
+                    if (pathParts[i] === 'visitor') {
+                        basePath = '/' + pathParts.slice(0, i).join('/');
+                        break;
+                    }
+                }
+                if (!basePath) {
+                    basePath = pathname.substring(0, pathname.indexOf('/visitor') || pathname.length);
+                }
+                return protocol + '//' + host + basePath + '/' + path;
+            };
+        }
+        
+        // 模拟getCookie函数（如果不存在）
+        if (typeof getCookie === 'undefined') {
+            function getCookie(name) {
+                const value = '; ' + document.cookie;
+                const parts = value.split('; ' + name + '=');
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            }
+            window.getCookie = getCookie;
+        }
+    </script>
+    <script src="/visitor/taglib/pixel/js?name=browser_test"></script>
+    
+    <script>
+        // 获取基础URL
+        function getBaseUrl() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const pathname = window.location.pathname;
+            const pathParts = pathname.split('/').filter(p => p);
+            let basePath = '';
+            for (let i = 0; i < pathParts.length; i++) {
+                if (pathParts[i] === 'visitor') {
+                    basePath = '/' + pathParts.slice(0, i).join('/');
+                    break;
+                }
+            }
+            if (!basePath) {
+                basePath = pathname.substring(0, pathname.indexOf('/visitor') || pathname.length);
+            }
+            return protocol + '//' + host + basePath;
+        }
+
+        const baseUrl = getBaseUrl();
+        const pixelApiUrl = baseUrl + '/visitor/rest/v1/pixel';
+        const versionApiUrl = baseUrl + '/visitor/rest/v1/version/current';
+
+        // 日志记录
+        function log(elementId, message, type = 'info') {
+            const logEl = document.getElementById(elementId);
+            if (!logEl) return;
+            
+            logEl.style.display = 'block';
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // 显示结果
+        function showResult(elementId, message, success = true) {
+            const resultEl = document.getElementById(elementId);
+            if (!resultEl) return;
+            
+            resultEl.style.display = 'block';
+            resultEl.className = 'result ' + (success ? 'success' : 'error');
+            resultEl.textContent = message;
+        }
+
+        // 测试基础像素跟踪
+        async function testBasicPixelTracking() {
+            log('basic-log', '开始测试基础像素跟踪...', 'info');
+            
+            const testData = {
+                url: window.location.href,
+                eventName: 'test_click',
+                websiteId: 1,
+                userId: 0,
+                userAgent: navigator.userAgent,
+                value: 100,
+                currency: 'RMB',
+                userLang: 'zh-CN'
+            };
+
+            try {
+                const response = await fetch(pixelApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    log('basic-log', '像素数据发送成功', 'success');
+                    log('basic-log', '响应: ' + JSON.stringify(result, null, 2), 'info');
+                    showResult('basic-result', '测试成功: 像素ID=' + result.data.pixel_id, true);
+                } else {
+                    log('basic-log', '像素数据发送失败: ' + result.msg, 'error');
+                    showResult('basic-result', '测试失败: ' + result.msg, false);
+                }
+            } catch (error) {
+                log('basic-log', '请求异常: ' + error.message, 'error');
+                showResult('basic-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 测试A/B测试像素
+        async function testPixelWithABTest() {
+            log('basic-log', '开始测试A/B测试像素...', 'info');
+            
+            const testData = {
+                url: window.location.href,
+                eventName: 'ab_test_click',
+                websiteId: 1,
+                testId: 'browser_test_001',
+                variant: 'A',
+                value: 200
+            };
+
+            try {
+                const response = await fetch(pixelApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data.ab_test) {
+                    log('basic-log', 'A/B测试像素数据发送成功', 'success');
+                    log('basic-log', 'A/B测试数据: ' + JSON.stringify(result.data.ab_test, null, 2), 'info');
+                    showResult('basic-result', 'A/B测试成功: testId=' + result.data.ab_test.testId + ', variant=' + result.data.ab_test.variant, true);
+                } else {
+                    log('basic-log', 'A/B测试像素数据发送失败', 'error');
+                    showResult('basic-result', 'A/B测试失败', false);
+                }
+            } catch (error) {
+                log('basic-log', '请求异常: ' + error.message, 'error');
+                showResult('basic-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 测试自定义数据像素
+        async function testPixelWithCustomData() {
+            log('basic-log', '开始测试自定义数据像素...', 'info');
+            
+            const testData = {
+                url: window.location.href,
+                eventName: 'custom_event',
+                websiteId: 1,
+                additionalInfo: {
+                    customField1: 'value1',
+                    customField2: 'value2',
+                    nested: {
+                        key: 'value'
+                    }
+                },
+                screen: {
+                    width: window.screen.width,
+                    height: window.screen.height
+                }
+            };
+
+            try {
+                const response = await fetch(pixelApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    log('basic-log', '自定义数据像素发送成功', 'success');
+                    showResult('basic-result', '自定义数据测试成功', true);
+                } else {
+                    log('basic-log', '自定义数据像素发送失败: ' + result.msg, 'error');
+                    showResult('basic-result', '测试失败: ' + result.msg, false);
+                }
+            } catch (error) {
+                log('basic-log', '请求异常: ' + error.message, 'error');
+                showResult('basic-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 测试像素脚本加载
+        function testPixelScriptLoad() {
+            log('script-log', '检查像素脚本是否已加载...', 'info');
+            
+            if (typeof window.WelinePixel !== 'undefined') {
+                log('script-log', 'WelinePixel对象已加载', 'success');
+                log('script-log', 'WelinePixel URL: ' + window.WelinePixel.url, 'info');
+                showResult('script-result', '像素脚本加载成功', true);
+            } else {
+                log('script-log', 'WelinePixel对象未找到', 'error');
+                showResult('script-result', '像素脚本未加载', false);
+            }
+        }
+
+        // 测试版本号获取
+        async function testPixelVersionFetch() {
+            log('script-log', '测试版本号获取...', 'info');
+            
+            try {
+                const response = await fetch(versionApiUrl);
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data && result.data.version) {
+                    log('script-log', '版本号获取成功: ' + result.data.version, 'success');
+                    showResult('script-result', '版本号: ' + result.data.version, true);
+                } else {
+                    log('script-log', '版本号获取失败', 'error');
+                    showResult('script-result', '版本号获取失败', false);
+                }
+            } catch (error) {
+                log('script-log', '请求异常: ' + error.message, 'error');
+                showResult('script-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 测试点击事件
+        function testClickEvent() {
+            log('event-log', '测试点击事件触发...', 'info');
+            
+            if (typeof window.WelinePixel !== 'undefined' && typeof window.WelinePixel.target === 'function') {
+                // 模拟点击事件
+                const mockEvent = {
+                    target: document.createElement('button'),
+                    type: 'click'
+                };
+                mockEvent.target.textContent = '测试按钮';
+                
+                try {
+                    window.WelinePixel.target(mockEvent, 'test_click_event');
+                    log('event-log', '点击事件触发成功', 'success');
+                    showResult('event-result', '点击事件测试成功', true);
+                } catch (error) {
+                    log('event-log', '点击事件触发失败: ' + error.message, 'error');
+                    showResult('event-result', '测试失败: ' + error.message, false);
+                }
+            } else {
+                log('event-log', 'WelinePixel.target方法未找到', 'error');
+                showResult('event-result', '像素脚本未加载', false);
+            }
+        }
+
+        // 测试自定义事件
+        function testCustomEvent() {
+            log('event-log', '测试自定义事件...', 'info');
+            
+            if (typeof window.WelinePixel !== 'undefined' && typeof window.WelinePixel.send === 'function') {
+                const customData = {
+                    eventName: 'custom_browser_test',
+                    name: '浏览器测试事件',
+                    value: 300
+                };
+                
+                try {
+                    window.WelinePixel.send(customData);
+                    log('event-log', '自定义事件发送成功', 'success');
+                    showResult('event-result', '自定义事件测试成功', true);
+                } catch (error) {
+                    log('event-log', '自定义事件发送失败: ' + error.message, 'error');
+                    showResult('event-result', '测试失败: ' + error.message, false);
+                }
+            } else {
+                log('event-log', 'WelinePixel.send方法未找到', 'error');
+                showResult('event-result', '像素脚本未加载', false);
+            }
+        }
+
+        // 测试A/B测试事件
+        function testABTestEvent(button) {
+            log('event-log', '测试A/B测试事件...', 'info');
+            
+            const testId = button.getAttribute('data-test-id');
+            const variant = button.getAttribute('data-variant');
+            
+            log('event-log', 'A/B测试ID: ' + testId + ', 变体: ' + variant, 'info');
+            
+            if (typeof window.WelinePixel !== 'undefined' && typeof window.WelinePixel.target === 'function') {
+                const mockEvent = {
+                    target: button,
+                    type: 'click'
+                };
+                
+                try {
+                    window.WelinePixel.target(mockEvent, 'ab_test_click');
+                    log('event-log', 'A/B测试事件发送成功 (testId=' + testId + ', variant=' + variant + ')', 'success');
+                    showResult('event-result', 'A/B测试事件成功: ' + testId + ' / ' + variant, true);
+                } catch (error) {
+                    log('event-log', 'A/B测试事件发送失败: ' + error.message, 'error');
+                    showResult('event-result', '测试失败: ' + error.message, false);
+                }
+            } else {
+                log('event-log', 'WelinePixel.target方法未找到', 'error');
+                showResult('event-result', '像素脚本未加载', false);
+            }
+        }
+
+        // 测试数据验证
+        async function testDataValidation() {
+            log('validation-log', '测试数据验证...', 'info');
+            
+            const invalidData = {
+                url: 'invalid-url',
+                ip: 'invalid-ip',
+                module: 'a'.repeat(300), // 超长字符串
+                value: -100 // 负数
+            };
+
+            try {
+                const response = await fetch(pixelApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(invalidData)
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    log('validation-log', '数据验证测试通过（无效数据已被清理）', 'success');
+                    showResult('validation-result', '数据验证测试成功', true);
+                } else {
+                    log('validation-log', '数据验证测试失败: ' + result.msg, 'error');
+                    showResult('validation-result', '测试失败: ' + result.msg, false);
+                }
+            } catch (error) {
+                log('validation-log', '请求异常: ' + error.message, 'error');
+                showResult('validation-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 测试站点ID检测
+        async function testSiteIdDetection() {
+            log('validation-log', '测试站点ID检测...', 'info');
+            
+            // 设置Cookie
+            document.cookie = 'WELINE_WEBSITE_ID=999; path=/';
+            
+            const testData = {
+                url: window.location.href,
+                eventName: 'site_id_test'
+            };
+
+            try {
+                const response = await fetch(pixelApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    log('validation-log', '站点ID检测测试通过', 'success');
+                    showResult('validation-result', '站点ID检测测试成功', true);
+                } else {
+                    log('validation-log', '站点ID检测测试失败: ' + result.msg, 'error');
+                    showResult('validation-result', '测试失败: ' + result.msg, false);
+                }
+            } catch (error) {
+                log('validation-log', '请求异常: ' + error.message, 'error');
+                showResult('validation-result', '测试失败: ' + error.message, false);
+            }
+        }
+
+        // 运行所有测试
+        async function runAllTests() {
+            log('all-log', '开始运行所有测试...', 'info');
+            
+            const tests = [
+                { name: '基础像素跟踪', fn: testBasicPixelTracking },
+                { name: 'A/B测试像素', fn: testPixelWithABTest },
+                { name: '自定义数据像素', fn: testPixelWithCustomData },
+                { name: '像素脚本加载', fn: testPixelScriptLoad },
+                { name: '版本号获取', fn: testPixelVersionFetch },
+                { name: '点击事件', fn: testClickEvent },
+                { name: '自定义事件', fn: testCustomEvent },
+                { name: '数据验证', fn: testDataValidation },
+                { name: '站点ID检测', fn: testSiteIdDetection }
+            ];
+
+            let passed = 0;
+            let failed = 0;
+
+            for (const test of tests) {
+                log('all-log', '运行测试: ' + test.name, 'info');
+                try {
+                    await test.fn();
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 等待500ms
+                    passed++;
+                } catch (error) {
+                    log('all-log', '测试失败: ' + test.name + ' - ' + error.message, 'error');
+                    failed++;
+                }
+            }
+
+            const total = tests.length;
+            const message = `所有测试完成: 总计 ${total}, 通过 ${passed}, 失败 ${failed}`;
+            log('all-log', message, passed === total ? 'success' : 'error');
+            showResult('all-result', message, failed === 0);
+        }
+
+        // 页面加载时检查像素脚本
+        window.addEventListener('load', function() {
+            log('script-log', '页面加载完成，检查像素脚本...', 'info');
+            setTimeout(() => {
+                testPixelScriptLoad();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+

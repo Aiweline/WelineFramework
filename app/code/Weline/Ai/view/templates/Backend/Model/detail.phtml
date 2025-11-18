@@ -1,0 +1,218 @@
+<?php
+/**
+ * AI模型详情页面模板
+ * 
+ * @var \Weline\Ai\Model\AiModel $model
+ * @var array $config
+ * @var array $proxyInfo
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>模型详情</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- 开始 主要内容 -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+<div class="model-detail-container">
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('基本信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('模型ID') ?></th>
+                    <td><?= $model->getId() ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('模型名称') ?></th>
+                    <td><?= $model->getName() ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('供应商') ?></th>
+                    <td><?= $model->getVendor() ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('模型代码') ?></th>
+                    <td><code><?= $model->getModelCode() ?></code></td>
+                </tr>
+                <tr>
+                    <th><?= __('版本') ?></th>
+                    <td><?= $model->getVersion() ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('状态') ?></th>
+                    <td>
+                        <?php if ($model->isActive()): ?>
+                            <span class="badge badge-success"><?= __('激活') ?></span>
+                        <?php else: ?>
+                            <span class="badge badge-secondary"><?= __('未激活') ?></span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?= __('默认模型') ?></th>
+                    <td>
+                        <?php if ($model->isDefault()): ?>
+                            <span class="badge badge-primary"><?= __('是') ?></span>
+                        <?php else: ?>
+                            <span class="badge badge-secondary"><?= __('否') ?></span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('定价信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('输入Token价格') ?></th>
+                    <td><?= $model->getData('token_price_input') ?> / 1K tokens</td>
+                </tr>
+                <tr>
+                    <th><?= __('输出Token价格') ?></th>
+                    <td><?= $model->getData('token_price_output') ?> / 1K tokens</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <?php if (!empty($config)): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('模型配置') ?></h5>
+        </div>
+        <div class="card-body">
+            <pre class="bg-light p-3"><?= json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($proxyInfo)): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('代理配置') ?></h5>
+        </div>
+        <div class="card-body">
+            <pre class="bg-light p-3"><?= json_encode($proxyInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('时间信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('创建时间') ?></th>
+                    <td><?= date('Y-m-d H:i:s', $model->getData('created_time')) ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('更新时间') ?></th>
+                    <td><?= date('Y-m-d H:i:s', $model->getData('updated_time')) ?></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div class="card mb-3">
+        <div class="card-body text-center">
+            <button type="button" class="btn btn-primary" onclick="testConnection()">
+                <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function testConnection() {
+    if (!confirm('<?= __('确定要测试此模型的连接吗？') ?>')) {
+        return;
+    }
+
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
+
+    fetch('<?= $this->getBackendUrl('*/backend/model/testConnection') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'id=<?= $model->getId() ?>'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('连接测试成功！') ?>\n\n' + data.response);
+        } else {
+            alert('<?= __('连接测试失败：') ?>' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('<?= __('请求失败：') ?>' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="mdi mdi-connection"></i> <?= __('测试连接') ?>';
+    });
+}
+</script>
+
+<style>
+.model-detail-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.model-detail-container .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.model-detail-container pre {
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+
+.model-detail-container .table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.model-detail-container .table td {
+    vertical-align: middle;
+}
+</style>
+
+            </div><!-- container-fluid -->
+        </div><!-- page-content -->
+    </div><!-- main-content -->
+</div><!-- layout-wrapper -->
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

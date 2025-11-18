@@ -1,0 +1,24 @@
+{
+  "name": "weline/module-customer",
+  "description": "Weline Framework front customer management module",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Customer\\": ""
+    },
+    "psr-0": {
+      "Weline\\Customer\\": ""
+    }
+  },
+  "license": "MIT"
+}
+

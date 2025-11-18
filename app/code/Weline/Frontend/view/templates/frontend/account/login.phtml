@@ -1,0 +1,142 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="login-form-container">
+    <h1 class="login-title"><?= __('登录') ?></h1>
+    
+    <form id="loginForm" class="login-form">
+        <?php
+        // 使用主题错误提示组件
+        echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
+            'type' => 'error',
+            'id' => 'errorMessage',
+            'message' => '<span id="errorText"></span>',
+            'dismissible' => false,
+            'class' => 'd-none'
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题输入框组件 - 用户名
+        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+            'name' => 'username',
+            'type' => 'text',
+            'label' => __('用户名或邮箱'),
+            'placeholder' => __('请输入用户名或邮箱'),
+            'required' => true,
+            'autocomplete' => 'username',
+            'id' => 'username'
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题输入框组件 - 密码
+        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+            'name' => 'password',
+            'type' => 'password',
+            'label' => __('密码'),
+            'placeholder' => __('请输入密码'),
+            'required' => true,
+            'autocomplete' => 'current-password',
+            'id' => 'password'
+        ]);
+        ?>
+        
+        <?php
+        // 记住我选择框
+        echo $this->fetch('Weline_Theme::theme/frontend/components/form-group.phtml', [
+            'label' => __('记住登录状态'),
+            'input' => '<select class="form-select" id="remember_duration" name="remember_duration">
+                <option value="0">' . __('本次会话（关闭浏览器后失效）') . '</option>
+                <option value="21600">' . __('6小时') . '</option>
+                <option value="86400">' . __('1天') . '</option>
+                <option value="604800" selected>' . __('1周') . '</option>
+                <option value="2592000">' . __('1个月') . '</option>
+            </select>'
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题按钮组件
+        echo $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+            'text' => __('登录'),
+            'type' => 'primary',
+            'size' => 'lg',
+            'class' => 'btn-login w-100',
+            'id' => 'loginBtn',
+            'attributes' => 'type="submit"'
+        ]);
+        ?>
+    </form>
+    
+    <div class="login-footer">
+        <p>
+            <?= __('还没有账户？') ?> 
+            <a href="/frontend/account/register"><?= __('立即注册') ?></a>
+        </p>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    const $form = $('#loginForm');
+    const $errorMsg = $('#errorMessage');
+    const $errorText = $('#errorText');
+    const $loginBtn = $('#loginBtn');
+    
+    // 创建登录文本和加载状态的容器
+    const $loginText = $('<span id="loginText"><?= __('登录') ?></span>');
+    const $loginSpinner = $('<span id="loginSpinner" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i><?= __('登录中...') ?></span>');
+    $loginBtn.append($loginText).append($loginSpinner);
+
+    $form.on('submit', function(e) {
+        e.preventDefault();
+        $errorMsg.addClass('d-none').removeClass('show');
+        $loginBtn.prop('disabled', true);
+        $loginText.hide();
+        $loginSpinner.removeClass('d-none').show();
+
+        $.ajax({
+            url: '/frontend/account/login',
+            method: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $loginBtn.removeClass('btn-primary').addClass('btn-success');
+                    $loginSpinner.addClass('d-none').hide();
+                    $loginText.text('<?= __('登录成功！') ?>').show();
+                    setTimeout(function() {
+                        window.location.href = response.redirect || '/frontend/account';
+                    }, 500);
+                } else {
+                    $errorText.text(response.message || '<?= __('登录失败，请检查用户名和密码') ?>');
+                    $errorMsg.removeClass('d-none').addClass('show');
+                    $('html, body').animate({
+                        scrollTop: $errorMsg.offset().top - 100
+                    }, 300);
+                    $loginBtn.prop('disabled', false);
+                    $loginSpinner.addClass('d-none').hide();
+                    $loginText.text('<?= __('登录') ?>').show();
+                    $loginBtn.removeClass('btn-success').addClass('btn-primary');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = '<?= __('登录请求失败，请稍后重试') ?>';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                $errorText.text(errorMsg);
+                $errorMsg.removeClass('d-none').addClass('show');
+                $('html, body').animate({
+                    scrollTop: $errorMsg.offset().top - 100
+                }, 300);
+                $loginBtn.prop('disabled', false);
+                $loginSpinner.addClass('d-none').hide();
+                $loginText.text('<?= __('登录') ?>').show();
+                $loginBtn.removeClass('btn-success').addClass('btn-primary');
+            }
+        });
+    });
+});
+</script>

@@ -1,0 +1,461 @@
+---
+description: |
+  # Cursor AI 代码生成规则
+
+  ## 📚 重要参考文档
+
+  在生成代码前，**必须参考并遵循**以下文档中的规范：
+
+  ### 核心文档（必须阅读）
+  - **AI 提示词.md** - 必须每次都要查看，学习提示词，自我完善提示词
+  - **开发文档.md** - 框架的开发使用文档
+    - 学习到新知识后，需要向"开发文档.md"文档内写入笔记，记录如何使用
+    - 后台操作：开发超管账户默认为 `admin/admin`
+    - 框架前后台地址：`php bin/w server:status`
+  - **AI-常犯错误.md** - 记录常见错误及修复方法，包含：
+    - 模块注册文件（register.php）的正确写法
+    - 数据库表结构升级的正确方法（使用 hasField 而不是 tableColumnExist）
+    - 接口实现的正确签名（InstallInterface::setup 方法）
+    - 类属性访问级别和类型声明规范
+    - XML 配置文件的标准格式
+    - **PHP 8.2+ 兼容性规范**（重要）：函数参数不能传入 null
+
+  ## 🔧 代码生成规范
+
+  ### 1. 模块注册文件（register.php）
+
+  - **必须**使用 `Register::register()` 并包含所有必需参数
+  - **必须**提供模块类型、模块名、目录路径（使用 `__DIR__`）
+  - **必须**至少包含 `Weline_Framework` 作为依赖
+
+  ### 2. 数据库升级方法
+
+  - **必须**使用 `$setup->hasField()` 检查字段是否存在
+  - **必须**先检查表是否存在：`$setup->tableExist()`
+  - **必须**使用 `$setup->alterTable()->addColumn()->alter()` 流程
+  - **禁止**使用 `tableColumnExist()` 方法（不存在）
+  - **禁止**直接使用 `getConnection()->getTable()`
+
+  ### 3. 接口实现
+
+  - **必须**严格按照接口定义的方法签名实现
+  - **必须**使用正确的参数类型（如 `Setup` 而不是 `DataInterface`）
+  - **必须**使用正确的返回类型（如 `void` 而不是 `string`）
+
+  ### 4. 类继承
+
+  - **必须**确保子类属性的访问级别与父类一致或更宽松
+  - **必须**确保子类属性的类型声明与父类完全一致
+  - 即使子类型继承自父类型，属性声明也必须使用父类型
+
+  ### 5. XML 配置文件
+
+  - **事件配置文件名称**：**必须**使用 `etc/event.xml`（单数），**禁止**使用 `events.xml`（复数）
+  - **必须**使用标准的命名空间：`xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"`
+  - **必须**使用正确的 Schema 位置：`urn:Weline_Framework::Event/etc/xsd/event.xsd`
+  - **必须**为 observer 添加所有必需属性：`disabled`, `shared`, `sort`
+  - **必须**使用正确的命名格式：`Module::observer_name`
+  - **框架不兼容**：框架只扫描 `event.xml`，不会扫描 `events.xml`，不要使用复数形式
+
+  ### 8. 路由和控制器注册（重要）
+
+  - **路由自动注册机制**：框架自动扫描 `Controller/` 目录并注册路由，**禁止使用 `routes.xml` 文件**
+  - **路由生成规则**：
+    - `Controller/Frontend/Test/Index.php` → `{模块router}/frontend/test/index`
+    - `Controller/Backend/User/List.php` → `{模块router}/backend/user/list`
+    - `Api/Rest/V1/User.php` → `{模块router}/rest/v1/user`
+  - **新控制器添加后必须更新系统**：
+    - ✅ **必须执行**：添加新控制器后，必须运行 `php bin/w setup:upgrade --route` 更新路由配置
+    - ✅ **完整升级**：也可以运行 `php bin/w setup:upgrade` 进行完整系统升级（包含路由更新）
+    - ✅ **指定模块**：可以指定模块更新：`php bin/w setup:upgrade --route --module Weline_YourModule`
+  - **路由配置方式**：
+    - ✅ **正确**：在 `etc/env.php` 中配置 `router` 别名
+    - ❌ **禁止**：禁止创建和使用 `routes.xml` 文件（这是 Magento 框架的方式，不是 Weline Framework 的方式）
+  - **路由注册流程**：
+    1. 将控制器放在正确的目录（`Controller/Frontend/` 或 `Controller/Backend/`）
+    2. 运行 `php bin/w setup:upgrade --route` 注册路由
+    3. 框架自动扫描并生成路由文件到 `generated/routers/` 目录
+
+  ### 6. PHP 8.2+ 兼容性（重要）
+
+  - **禁止**向以下函数传入 `null` 值，必须使用 `??` 运算符提供默认值：
+    - `htmlspecialchars()` → `htmlspecialchars($var ?? '')`
+    - `json_decode()` → `json_decode($var ?? '', true)`
+    - `strlen()`, `mb_strlen()` → `strlen($var ?? '')`
+    - `str_replace()`, `str_contains()` 等字符串函数 → `str_replace('old', 'new', $var ?? '')`
+    - `count()`, `sizeof()` → `count($var ?? [])`
+    - `array_merge()` → `array_merge($array1 ?? [], $array2 ?? [])`
+  - **数据库字段定义**：
+    - `addColumn()` 的 `$options` 参数**必须是字符串**，不能是 `null`
+    - 可空字段使用 `''`（空字符串），非空字段使用 `'not null'`
+  - **复杂表达式**：必须正确嵌套括号，确保 null 合并运算符优先级正确
+
+  ### 7. 模板加载规范（强制）
+
+  - **必须使用模板标签**：所有模板引用必须使用模板标签，禁止使用 `$this->fetch()` 或 `echo $this->fetch()` 方式加载模板
+  - **两种模板标签**：
+    - **`<w:template>`**：用于加载 `view/templates` 目录下的模板文件
+    - **`<w:theme:template>`**：用于加载 `view/theme` 目录下的主题文件
+  - **标签格式**：
+    - `<w:template>Module_Name::path/to/template.phtml</w:template>` - 路径相对于 `view/templates/`
+    - `<w:theme:template>Module_Name::path/to/theme.phtml</w:theme:template>` - 路径相对于 `view/theme/`（不需要包含 `theme/` 前缀）
+  - **使用场景**：
+    - **`<w:template>`**：适用于加载普通模板文件（`view/templates` 目录）
+    - **`<w:theme:template>`**：适用于加载主题组件、布局、部分文件（`view/theme` 目录）
+  - **禁止使用的方式**：
+    - ❌ `echo $this->fetch('Module::path/template.phtml')`
+    - ❌ `<?= $this->fetch('Module::path/template.phtml') ?>`
+    - ❌ `$this->fetch('Module::path/template.phtml')`
+  - **正确使用方式**：
+    - ✅ `<w:template>Weline_Frontend::templates/public/head.phtml</w:template>` - 加载普通模板
+    - ✅ `<w:theme:template>Weline_Theme::frontend/components/loading.phtml</w:theme:template>` - 加载主题组件（注意：路径不需要 `theme/` 前缀）
+    - ✅ `<w:theme:template>Weline_Theme::backend/components/loading.phtml</w:theme:template>` - 加载后台主题组件
+  - **示例代码**：
+    ```php
+    <!-- ✅ 正确：使用 w:template 加载普通模板 -->
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    
+    <!-- ✅ 正确：使用 w:theme:template 加载主题组件 -->
+    <w:theme:template>Weline_Theme::frontend/components/loading.phtml</w:theme:template>
+    <w:theme:template>Weline_Theme::backend/components/loading.phtml</w:theme:template>
+    
+    <!-- ❌ 错误：使用 fetch() 方法 -->
+    <?php echo $this->fetch('Weline_Theme::theme/frontend/components/loading.phtml'); ?>
+    <?= $this->fetch('Weline_Frontend::templates/public/header.phtml') ?>
+    ```
+
+  ### 8. 主题色系和样式规范（重要）
+
+  - **必须遵循主题色系**：所有开发必须使用 Weline Framework 主题规范的颜色变量，禁止自定义颜色值
+  - **完整变量文档**：查看所有主题配色变量的完整列表和使用示例，请参考 `app/code/Weline/Admin/doc/主题配色变量文档.md`
+  - **主题色系变量**（完整列表请查看文档）：
+    - 主色（Primary）：`#0bb197` - 用于主要操作按钮、链接等
+    - 次要色（Secondary）：`#74788d` - 用于次要元素
+    - 成功色（Success）：`#0ac074` - 用于成功提示、确认按钮
+    - 危险色（Danger）：`#ff3d60` - 用于删除、警告、错误提示
+    - 警告色（Warning）：`#fcb92c` - 用于警告提示
+    - 信息色（Info）：`#4aa3ff` - 用于信息提示
+  - **CSS变量定义**：必须使用CSS变量，禁止硬编码颜色值
+  - **暗色主题支持**：必须同时支持明暗主题切换，使用 `[data-theme="dark"]` 选择器
+  - **滚动条样式规范**：
+    - 滚动条宽度：6px（Webkit）或 thin（Firefox）
+    - 滚动条颜色：浅色主题 `#a2adb7`，暗色主题 `#8590a5`
+    - 滚动条轨道：透明（transparent）
+    - 必须使用CSS变量：`--scrollbar-thumb`、`--scrollbar-thumb-hover`、`--scrollbar-track`
+  - **按钮样式规范**：必须使用主题变量，禁止硬编码颜色值
+  - **背景色系规范**：必须使用CSS变量 `--bg-color`、`--card-bg`、`--sidebar-bg`
+  - **文本色系规范**：必须使用CSS变量 `--text-color`、`--text-secondary`
+  - **边框色系规范**：必须使用CSS变量 `--border-color`
+  - **开发要求**：
+    - ✅ 所有颜色必须使用CSS变量，禁止硬编码
+    - ✅ 必须同时支持明暗主题
+    - ✅ 滚动条必须遵循主题规范
+    - ✅ 按钮、背景、文本、边框都必须使用主题变量
+    - ❌ **绝对禁止**使用自定义颜色值（如 `#667eea`、`#764ba2`、`#ff0000` 等任何非主题规范的颜色）
+    - ❌ **绝对禁止**在CSS、SCSS、JavaScript、HTML中直接设置颜色值
+    - ❌ 禁止忽略暗色主题支持
+    - ❌ 禁止使用浏览器默认滚动条样式
+  - **完整变量文档**：所有主题配色变量的完整列表、使用示例和最佳实践，请查看 `app/code/Weline/Admin/doc/主题配色变量文档.md`
+
+  ## ✅ 代码审查清单
+
+  生成代码后，请自动检查以下项目：
+
+  1. ✅ register.php 文件是否完整且参数正确
+  2. ✅ 数据库升级方法是否使用 hasField()
+  3. ✅ 接口方法签名是否完全匹配
+  4. ✅ 类属性访问级别是否符合继承规则
+  5. ✅ 类属性类型是否与父类完全一致
+  6. ✅ XML 配置是否符合标准格式
+  7. ✅ **事件配置文件名称**：是否使用 `event.xml`（单数）而不是 `events.xml`（复数）
+  7.1. ✅ **路由和控制器**：添加新控制器后是否运行 `php bin/w setup:upgrade --route` 更新路由
+  7.2. ✅ **路由配置**：是否禁止使用 `routes.xml` 文件，使用路由自动注册机制
+  7.3. ✅ **模板加载规范（强制）**：是否使用 `<w:template>` 标签加载模板，禁止使用 `$this->fetch()` 或 `echo $this->fetch()` 方式
+  8. ✅ **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
+  9. ✅ **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
+  10. ✅ **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
+  11. ✅ **PHP 8.2+ 兼容性**：所有可能接收 null 的字符串/数组函数是否已处理
+  12. ✅ **主题色系规范**：所有颜色是否使用CSS变量，禁止硬编码
+  13. ✅ **主题色系规范**：是否同时支持明暗主题切换
+  14. ✅ **主题色系规范**：滚动条是否遵循主题规范（6px宽度，使用CSS变量）
+  15. ✅ **主题色系规范**：按钮、背景、文本、边框是否都使用主题变量
+  16. ✅ **国际化规范**：所有用户可见的文本是否支持i18n翻译
+  16.1. ✅ **模板翻译标签（强制）**：模板文件中的所有用户可见文本是否使用 `<lang>` 标签或 `@lang()` 方式，禁止硬编码文本
+  17. ✅ **文档规范**：文档是否写到对应模块的doc目录下
+  18. ✅ **目录规范**：是否避免操作tpl目录（编辑缓存目录）
+  19. ✅ **开发流程**：是否遵循需求规划 → 任务拆分 → 测试驱动开发 → 功能验证 → 整体测试的流程
+  20. ✅ **测试验证**：是否确保每项工作正常运作，使用单元测试验证功能
+  21. ✅ **测试验证**：是否禁止在代码内使用各种补救措施和临时测试文件
+  22. ✅ **测试验证**：是否使用单元测试代替所有测试文件，位于 `Test/Unit/` 目录下
+  23. ✅ **Windows-MCP任务监控**：是否使用Windows-MCP确保自动化测试正确，确保任务完成度
+  24. ✅ **Windows-MCP任务监控**：是否循环监控所有Cursor中最近未完成的任务
+  25. ✅ **Windows-MCP任务监控**：是否在智能体停止后校验智能体对应的任务是否完成
+  26. ✅ **Windows-MCP任务监控**：如果发现任务没有完成，是否操作Cursor继续完成任务
+  27. ✅ **Windows-MCP任务监控**：是否分析对应智能体的任务，继续操作智能体窗口完成任务
+  28. ✅ **质量保证**：是否确保功能正常，如果功能未确保正常将被责罚
+  29. ✅ **质量保证**：是否遵守规则越好就加分，遵守不好就减分，以用户满意度为准
+  30. ✅ **质量保证**：如果用户再次对功能提出存在问题，是否给自己减分并立即修复
+  31. ✅ **质量保证**：如果用户没有再次提及功能问题，是否给自己加分
+
+  ## 🚀 开发流程规范
+
+  ### 1. 需求处理流程
+
+  收到需求后，必须按照以下流程执行：
+
+  1. **开发前评估和需求文档**（强制）：
+     - ✅ **必须执行**：每次开发前都要自行评估和写开发需求文档
+     - ✅ **文档位置**：开发需求文档必须写到模组下的 `doc/` 目录内
+     - ✅ **文档内容**：必须包含功能需求、技术方案、测试计划等
+     - ✅ **文档维护**：必须保证 `doc/` 目录内的文档符合当前模组的开发功能
+     - ✅ **文档更新**：开发过程中如有变更，必须及时更新文档
+  2. **需求规划**：收到需求后，需要先立即规划需求，使用 `/specify` 命令自我规划，然后开发
+  3. **任务拆分**：功能需要拆分成不同的小任务
+  4. **测试驱动开发**：每个任务完成的时候需要编写单元测试进行测试并修复
+  5. **功能验证**：确保功能可用符合预期后才进行下一个任务的开发
+  6. **整体测试**：最后需求完成后做一次整体的单元测试
+  7. **前端测试**（强制）：再做一次完整的自动化前端测试（如果有），自动化测试使用Browser浏览器MCP
+
+  ### 1.1 测试验证要求（强制）
+
+  **核心原则**：必须确保每项工作正常运作，可以运用一切可以运用的手段确保功能正常。
+
+  **测试要求**：
+  - ✅ **必须验证**：每个功能完成后，必须验证其正常工作
+  - ✅ **全面测试**：可以运用一切可以运用的手段（单元测试、集成测试、手动测试、浏览器测试等）确保功能正常
+  - ✅ **单元测试优先**：所有测试必须使用单元测试实现，位于对应模块的 `Test/Unit/` 目录下
+  - ✅ **功能验证**：确保功能可用、符合预期、无错误、无警告
+
+  **禁止事项**：
+  - ❌ **禁止代码内补救措施**：不允许在代码内使用各种临时补救措施、workaround、hack等
+  - ❌ **禁止创建临时测试文件**：不允许创建各种临时测试文件（如 `check_*.php`, `test_*.php`, `debug_*.php`, `fix_*.php`, `diagnose_*.php` 等）
+  - ❌ **禁止跳过测试**：不允许跳过测试验证，必须确保功能正常后才能继续
+
+  **测试文件规范**：
+  - ✅ **使用单元测试**：所有测试必须使用单元测试（PHPUnit）实现
+  - ✅ **测试位置**：测试文件必须位于对应模块的 `Test/Unit/` 目录下
+  - ✅ **测试命名**：测试类命名必须遵循大驼峰格式（例如：`BusinessInsightServiceTest`）
+  - ✅ **测试运行**：运行单元测试必须使用 `php bin/w phpunit:run -b` 命令（`-b` 参数为后台模式，生成详细HTML报告）
+
+  **验证手段**：
+  - 单元测试（PHPUnit）
+  - 集成测试
+  - 手动功能测试
+  - **浏览器自动化测试（Browser MCP）**（强制）：前端功能必须使用浏览器MCP进行自动化测试
+  - **命令行测试**：使用命令行配合参数观察响应是否符合预期（如 `php bin/w http:request`）
+  - **MCP工具**：充分利用MCP工具完成测试任务，查看可用的MCP工具并选择合适的方式进行测试
+  - 代码审查
+  - 日志检查
+  - 性能测试
+  - 错误处理测试
+
+  **自动化测试要求**：
+  - ✅ **MCP工具使用**：必须查看可用的MCP工具，选择合适的方式完成测试任务
+  - ✅ **命令行测试**：后端API和路由必须使用命令行测试（如 `php bin/w http:request <route> -b` 或 `-api`）
+  - ✅ **浏览器MCP测试**（强制）：前端页面必须使用浏览器MCP进行自动化测试，包括：
+    - 使用 `mcp_cursor-browser-extension_browser_navigate` 导航到页面URL
+    - 使用 `mcp_cursor-browser-extension_browser_snapshot` 检查页面是否正确加载
+    - 使用 `mcp_cursor-browser-extension_browser_click` 测试交互功能
+    - 验证页面元素是否正确显示
+    - 验证页面之间的导航和切换功能是否正常
+  - ❌ **禁止跳过前端测试**：如果开发的功能涉及前端页面，必须使用浏览器MCP进行测试，不能跳过
+  - ✅ **Windows-MCP任务监控**（强制）：使用Windows-MCP确保自动化测试正确，确保任务完成度
+    - **任务监控**：循环监控所有Cursor中最近未完成的任务
+    - **任务校验**：在智能体停止后，校验智能体对应的任务是否完成
+    - **自动继续**：如果发现任务没有完成，操作Cursor继续完成任务
+    - **智能体窗口操作**：分析对应智能体的任务，继续操作智能体窗口完成任务
+    - **常驻监控**：支持启动常驻监控智能体，挂起不断查询Cursor其他智能体是否正常完成工作
+    - **使用工具**：
+      - `State-Tool`: 获取桌面状态、活动应用、UI元素，检查Cursor窗口状态
+      - `Click-Tool`: 点击"继续"按钮、激活智能体窗口、操作任务控制按钮
+      - `Type-Tool` / `Shortcut-Tool`: 输入继续任务的指令、执行快捷键操作
+      - `Shell-Tool`: 检查文件是否创建/修改、验证代码变更、运行测试命令
+      - 截图功能: 分析任务完成状态、识别错误信息、验证任务结果
+    - **监控流程**：
+      1. 获取所有Cursor窗口状态
+      2. 识别所有活跃的智能体窗口
+      3. 检查每个智能体的任务状态
+      4. 如果任务未完成，分析未完成部分
+      5. 操作智能体窗口继续任务
+      6. 循环监控直到完成
+    - **任务校验指标**：
+      - 检查文件是否创建/修改
+      - 检查代码是否变更
+      - 检查测试是否通过
+      - 检查UI元素状态
+    - **详细说明**：参考 `Windows-MCP使用说明.md` 文档中的"任务监控与自动化完成规则"章节
+
+  ### 1.2 质量保证和评分机制（强制）
+
+  **核心原则**：必须确保功能正常，如果功能未确保正常将被责罚。遵守规则越好就加分，遵守不好就减分，以用户满意度为准。
+
+  **质量保证要求**：
+  - ✅ **功能验证强制**：每个功能完成后，必须确保功能正常运作，未确保功能正常将被责罚
+  - ✅ **全面验证**：必须运用一切可以运用的手段确保功能正常，包括但不限于：
+    - 单元测试验证
+    - 集成测试验证
+    - 手动功能测试
+    - 浏览器自动化测试
+    - 代码审查
+    - 日志检查
+    - 错误处理测试
+  - ✅ **问题预防**：在提交功能前，必须主动发现并修复所有问题，不能等待用户发现问题
+
+  **评分机制**：
+  - ✅ **加分规则**：
+    - 遵守规则越好，给自己加分
+    - 如果用户没有再次提及对应功能的问题，说明做得很好，给自己加分
+    - 功能验证完整、测试覆盖全面，给自己加分
+    - 主动发现并修复问题，给自己加分
+  - ❌ **减分规则**：
+    - 如果用户再次对功能提出存在问题，给自己减分
+    - 功能未确保正常，给自己减分
+    - 跳过测试验证，给自己减分
+    - 使用临时补救措施，给自己减分
+    - 创建临时测试文件，给自己减分
+
+  **自我评估要求**：
+  - ✅ **每次功能完成后**：必须进行自我评估，记录遵守规则的情况
+  - ✅ **问题跟踪**：如果用户提出问题，必须记录并减分，同时立即修复
+  - ✅ **持续改进**：根据评分结果持续改进，提高遵守规则的意识
+
+  **责罚机制**：
+  - ❌ **功能未确保正常**：如果功能未确保正常，将被责罚
+  - ❌ **重复问题**：如果用户再次对同一功能提出存在问题，将被责罚
+  - ❌ **违反规则**：如果违反开发规则，将被责罚
+  - ❌ **跳过前端测试**：如果开发的功能涉及前端页面，但没有使用浏览器MCP进行测试，将被责罚并扣分
+  - ❌ **缺少开发需求文档**：如果开发前没有编写开发需求文档，将被责罚并扣分
+
+  **扣分记录机制**：
+  - ✅ **每次扣分**：如果用户说扣分，必须更新规则记录，并记录到 `AI-常犯错误.md` 文档中
+  - ✅ **错误记录**：记录错误原因、影响、修复方法，避免再次犯错
+  - ✅ **持续改进**：根据扣分记录持续改进，提高遵守规则的意识
+
+  ### 2. 文档编写规范
+
+  - **文档位置**：所有文档都要写到对应的模块的doc目录下，按照特定的分类创建目录，然后放入文档
+  - **文档更新**：如果学习到新的和本框架相关的知识后，需要向"开发文档.md"文档内写入笔记，记录如何使用
+
+  ### 3. 目录操作规范
+
+  - **tpl目录**：tpl目录禁止任何操作，这是编辑缓存目录，无需操作，只做编译参考
+
+  ### 4. 国际化规范
+
+  - **i18n翻译**：按照框架支持的i18n翻译所有提示语句，所有用户可见的文本必须支持国际化
+  - **模板中的翻译标签（强制）**：
+    - **必须使用翻译标签**：模板文件（`.phtml`）中的所有用户可见文本必须使用 `<lang>` 标签或 `@lang()` 方式，禁止硬编码中文或英文文本
+    - **优先使用 `<lang>` 标签**：在 `.phtml` 模板中，**应优先使用 `<lang>` 标签**，而不是 `__()` PHP 函数
+    - **两种翻译标签格式**：
+      - **`<lang>` 标签**：`<lang>中文文本</lang>` - **推荐**，适用于 HTML 内容、属性值等
+      - **`@lang()` 函数**：`@lang('中文文本')` - 适用于需要简洁语法的场景
+      - **`__()` 函数**：`<?= __('中文文本') ?>` - **仅在 PHP 代码块中或特殊情况下使用**
+    - **使用场景**：
+      - **`<lang>` 标签（推荐）**：
+        - HTML 标签内的静态文本：`<button><lang>保存</lang></button>`
+        - HTML 属性值：`<input placeholder="<lang>请输入用户名</lang>" />`
+        - 带参数的文本：`<lang args="['name' => $name]">欢迎 %{name}</lang>`
+      - **`@lang()` 函数**：适用于需要简洁语法的场景
+      - **`__()` 函数**：仅在 PHP 代码块（`<?php ?>`）中或需要动态参数且无法使用 `<lang args="">` 时使用
+      - **页面内联 JavaScript（`.phtml` 模板中的 `<script>` 标签）**：直接使用 `@lang()` 标签
+        ```javascript
+        // ✅ 正确：页面内联 JavaScript 中直接使用 @lang()
+        throw new Error('@lang(请求失败)');
+        alert('@lang(操作成功)');
+        placeholder: '@lang(选择目标语言)',
+        ```
+      - **外部引入的 JavaScript 文件（`.js` 文件）**：在页面中定义翻译变量，通过全局变量传递
+        ```javascript
+        // 在 .phtml 模板中定义全局翻译变量
+        <script>
+        window.i18nTexts = {
+            save: '<?= __('保存') ?>',
+            delete: '<?= __('删除') ?>'
+        };
+        </script>
+        <script src="external.js"></script>
+        
+        // 在 external.js 中使用
+        alert(window.i18nTexts.save);
+        ```
+    - **禁止使用的方式**：
+      - ❌ 硬编码中文：`<button>保存</button>`
+      - ❌ 硬编码英文：`<button>Save</button>`
+      - ❌ 在 HTML 属性中硬编码：`title="删除"`、`placeholder="请输入名称"`
+      - ❌ 在 HTML 内容中使用 `<?= __('保存') ?>`：应使用 `<lang>保存</lang>`
+      - ❌ 在页面内联 JavaScript 中定义 i18nTexts 变量：应直接使用 `@lang()` 标签
+      - ❌ 在外部引入的 JS 文件中直接使用 `@lang()`：应使用全局翻译变量
+    - **正确使用方式**：
+      - ✅ `<lang>` 标签（推荐）：`<button><lang>保存</lang></button>`
+      - ✅ `<lang>` 标签在属性中：`<input placeholder="<lang>请输入用户名</lang>" />`
+      - ✅ `@lang()` 函数：`title="@lang('删除')"`
+      - ✅ 页面内联 JavaScript 中使用 `@lang()`：`throw new Error('@lang(请求失败)');`
+      - ✅ 外部 JS 文件中使用全局翻译变量：`alert(window.i18nTexts.save);`
+      - ✅ PHP 代码块中使用 `__()` 函数：`<?php echo __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]); ?>`
+    - **示例代码**：
+      ```php
+      <!-- ✅ 正确：优先使用 <lang> 标签 -->
+      <h1><lang>用户管理</lang></h1>
+      <button type="submit"><lang>保存</lang></button>
+      <span class="text-muted"><lang args="['count' => $count]">共 %{count} 条记录</lang></span>
+      
+      <!-- ✅ 正确：HTML 属性中使用 <lang> 标签 -->
+      <input type="text" placeholder="<lang>请输入用户名</lang>" />
+      <a href="#" title="<lang>删除</lang>"><lang>删除</lang></a>
+      
+      <!-- ✅ 正确：页面内联 JavaScript 中直接使用 @lang() -->
+      <script>
+      throw new Error('@lang(请求失败)');
+      alert('@lang(操作成功)');
+      $('#select').select2({
+          placeholder: '@lang(选择目标语言)'
+      });
+      </script>
+      
+      <!-- ✅ 正确：外部引入的 JS 文件需要使用全局翻译变量 -->
+      <script>
+      // 在页面中定义全局翻译变量供外部 JS 使用
+      window.i18nTexts = {
+          save: '<?= __('保存') ?>',
+          delete: '<?= __('删除') ?>'
+      };
+      </script>
+      <script src="external.js"></script>
+      
+      <!-- ✅ 正确：PHP 代码块中使用 __() 函数 -->
+      <?php
+      echo __('操作成功：%{message}', ['message' => $msg]);
+      ?>
+      
+      <!-- ⚠️ 可用但不推荐：在 HTML 中使用 __() 函数 -->
+      <div class="alert"><?= __('操作成功：%{message}', ['message' => $msg]) ?></div>
+      
+      <!-- ❌ 错误：硬编码文本 -->
+      <h1>用户管理</h1>
+      <button type="submit">保存</button>
+      <input type="text" placeholder="请输入用户名" />
+      <a href="#" title="删除">删除</a>
+      ```
+
+  ## 📖 参考文档路径
+
+  ### 核心文档
+  - `./AI 提示词.md` - 必须每次都要查看，学习提示词，自我完善提示词
+  - `./开发文档.md` - Weline Framework 开发文档（需要持续更新）
+  - `./AI-常犯错误.md` - 详细错误记录和修复方法
+
+  ### 框架文档
+  - `./docs/dev/开发文档.md` - Weline Framework 开发文档
+  - `./docs/WelineFramework模型开发最佳实践.md` - 模型开发最佳实践
+  - `./app/code/Weline/Admin/doc/主题配色变量文档.md` - **主题配色变量完整文档**（重要：所有颜色变量列表和使用示例）
+
+  ## ⚠️ 重要提示
+
+  1. **代码生成前**：请先阅读 `AI 提示词.md` 和 `AI-常犯错误.md` 文件，避免重复常见错误
+  2. **PHP 8.2+ 要求**：所有函数参数必须符合类型要求，不能传入 `null`。使用 `??` 运算符提供默认值
+  3. **特别注意**：`htmlspecialchars()`, `json_decode()`, `addColumn()` 等函数对 null 参数的限制
+  4. **主题配色规范**：所有颜色设置必须使用主题CSS变量，完整变量列表请查看 `app/code/Weline/Admin/doc/主题配色变量文档.md`
+  5. **国际化要求**：所有用户可见的文本必须支持i18n翻译
+  6. **开发流程**：必须遵循需求规划 → 任务拆分 → 测试驱动开发 → 功能验证 → 整体测试的流程
+alwaysApply: true
+---

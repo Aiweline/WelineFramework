@@ -1,0 +1,1574 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         后台共用头部
+-->
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title><lang>Weline Admin 管理面板</lang></title>
+    <!--模板Weline_Admin::common/head.phtml-->
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <!-- jvectormap -->
+    <w:css>Weline_Admin::assets/libs/jqvmap/jqvmap.min.css</w:css>
+    <!-- Responsive Table css -->
+    <link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet'
+          type='text/css'/>
+    <!-- Sweet Alert-->
+    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+    <!-- jstree -->
+    <link rel="stylesheet" href="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)" />
+    <style>
+        .document-card {
+            transition: background-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease, border-color 0.35s ease;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(233, 236, 239, 0.6);
+            color: #2f3a52;
+            box-shadow: 0 1px 4px rgba(31, 45, 61, 0.02);
+            position: relative;
+        }
+        .document-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(97, 122, 255, 0.3) 0%, rgba(249, 195, 233, 0.3) 100%);
+            opacity: 0;
+            transition: opacity 0.35s ease;
+        }
+        .document-card:hover {
+            box-shadow: 0 4px 12px rgba(31, 45, 61, 0.08);
+            transform: translateY(-2px);
+            border-color: rgba(97, 122, 255, 0.2);
+        }
+        .document-card:hover::before {
+            opacity: 1;
+        }
+        .document-header {
+            background: linear-gradient(135deg, rgba(97, 122, 255, 0.06) 0%, rgba(249, 195, 233, 0.08) 100%);
+            color: #495057;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(233, 236, 239, 0.5);
+            transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+            position: relative;
+        }
+        .document-header h5,
+        .document-header h6,
+        .document-header .h5,
+        .document-header .h6 {
+            color: #495057;
+            margin: 0;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .document-body {
+            padding: 0.875rem 1rem;
+            background: #ffffff;
+            color: #495057;
+            transition: background-color 0.35s ease, color 0.35s ease;
+        }
+        .document-footer {
+            padding: 0.5rem 1rem;
+            background: #f8f9fa;
+            border-top: 1px solid rgba(233, 236, 239, 0.5);
+            color: #495057;
+            transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        /* 暗色模式下的文档卡片样式 */
+        body[data-topbar="dark"] .document-card {
+            background: rgba(27, 44, 63, 0.85);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: #d8e3f3;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        }
+        body[data-topbar="dark"] .document-card::before {
+            background: linear-gradient(90deg, rgba(97, 122, 255, 0.5) 0%, rgba(249, 195, 233, 0.5) 100%);
+        }
+        body[data-topbar="dark"] .document-card:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            border-color: rgba(97, 122, 255, 0.3);
+            background: rgba(27, 44, 63, 0.95);
+        }
+        body[data-topbar="dark"] .document-header {
+            background: linear-gradient(135deg, rgba(97, 122, 255, 0.12) 0%, rgba(249, 195, 233, 0.14) 100%);
+            color: #e9ecef;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        body[data-topbar="dark"] .document-header h5,
+        body[data-topbar="dark"] .document-header h6,
+        body[data-topbar="dark"] .document-header .h5,
+        body[data-topbar="dark"] .document-header .h6 {
+            color: #e9ecef;
+        }
+        body[data-topbar="dark"] .document-body {
+            background: rgba(27, 44, 63, 0.85);
+            color: #d8e3f3;
+        }
+        body[data-topbar="dark"] .document-footer {
+            background: rgba(37, 43, 59, 0.6);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+       
+        .badge-module {
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.15) 0%, rgba(245, 87, 108, 0.15) 100%);
+            color: #6c757d;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            border: 1px solid rgba(240, 147, 251, 0.2);
+        }
+        .badge-auto {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);
+            color: #6c757d;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            border: 1px solid rgba(79, 172, 254, 0.2);
+        }
+        body[data-topbar="dark"] .badge-module {
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.2) 0%, rgba(245, 87, 108, 0.2) 100%);
+            color: rgba(255, 255, 255, 0.7);
+            border-color: rgba(240, 147, 251, 0.3);
+        }
+        body[data-topbar="dark"] .badge-auto {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(0, 242, 254, 0.2) 100%);
+            color: rgba(255, 255, 255, 0.7);
+            border-color: rgba(79, 172, 254, 0.3);
+        }
+        .summary-text {
+            color: rgba(108, 117, 125, 0.75);
+            font-size: 0.8rem;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        body[data-topbar="dark"] .summary-text {
+            color: rgba(255, 255, 255, 0.55);
+        }
+        .action-buttons .btn {
+            margin-right: 0.375rem;
+            margin-bottom: 0;
+            font-size: 0.8125rem;
+            padding: 0.25rem 0.625rem;
+            border-width: 1px;
+            opacity: 0.85;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .action-buttons .btn:hover {
+            opacity: 1;
+            transform: translateY(-1px);
+        }
+        .action-buttons .btn-primary {
+            background-color: transparent;
+            border-color: #6c757d;
+            color: #6c757d;
+        }
+        .action-buttons .btn-primary:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+        }
+        .action-buttons .btn-info {
+            background-color: transparent;
+            border-color: #6c757d;
+            color: #6c757d;
+        }
+        .action-buttons .btn-info:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+        }
+        .action-buttons .btn-danger {
+            background-color: transparent;
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        .action-buttons .btn-danger:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: #fff;
+        }
+        body[data-topbar="dark"] .action-buttons .btn-primary,
+        body[data-topbar="dark"] .action-buttons .btn-info {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.7);
+        }
+        body[data-topbar="dark"] .action-buttons .btn-primary:hover,
+        body[data-topbar="dark"] .action-buttons .btn-info:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.4);
+            color: #fff;
+        }
+        body[data-topbar="dark"] .action-buttons .btn-danger {
+            border-color: rgba(220, 53, 69, 0.6);
+            color: rgba(220, 53, 69, 0.8);
+        }
+        body[data-topbar="dark"] .action-buttons .btn-danger:hover {
+            background-color: rgba(220, 53, 69, 0.2);
+            border-color: #dc3545;
+            color: #fff;
+        }
+        .offcanvas-document {
+            max-width: 1600px;
+        }
+        /* 响应式适配 */
+        @media (min-width: 1920px) {
+            .offcanvas-document {
+                max-width: 1800px;
+            }
+        }
+        @media (min-width: 1400px) and (max-width: 1919px) {
+            .offcanvas-document {
+                max-width: 1600px;
+            }
+        }
+        @media (min-width: 1200px) and (max-width: 1399px) {
+            .offcanvas-document {
+                max-width: 1400px;
+            }
+        }
+        @media (max-width: 991.98px) {
+            .offcanvas-document {
+                max-width: 90vw;
+            }
+        }
+        @media (max-width: 575.98px) {
+            .offcanvas-document {
+                max-width: 100vw;
+            }
+        }
+        .document-content {
+            max-height: 60vh;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 0;
+            border: 1px solid #e9ecef;
+        }
+        /* 暗色主题下的文档内容 */
+        body[data-topbar="dark"] .document-content {
+            background: #1b2c3f;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #d7e4ec;
+        }
+        .document-content img {
+            max-width: 100%;
+            height: auto;
+        }
+        .document-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(233, 236, 239, 0.5);
+            color: #495057;
+            transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease;
+        }
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .meta-item i {
+            color: #6c757d;
+            transition: color 0.35s ease;
+        }
+        .meta-item strong {
+            color: #495057;
+            font-weight: 600;
+            transition: color 0.35s ease;
+        }
+        body[data-topbar="dark"] .document-meta {
+            background: rgba(37, 43, 59, 0.6);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+        }
+        body[data-topbar="dark"] .meta-item i {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        body[data-topbar="dark"] .meta-item strong {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #6c757d;
+            transition: color 0.35s ease;
+        }
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+            transition: opacity 0.35s ease, color 0.35s ease;
+        }
+        body[data-topbar="dark"] .empty-state {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        body[data-topbar="dark"] .empty-state i {
+            opacity: 0.4;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .document-layout {
+            display: flex;
+            gap: 1rem;
+            height: calc(100vh - 300px);
+            min-height: 600px;
+        }
+        .catalog-sidebar {
+            width: 300px;
+            min-width: 250px;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow: hidden; /* 移除滚动条，让内部容器处理 */
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .document-content-area {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden; /* 防止水平滚动条 */
+            min-width: 0; /* 允许 flex 子元素缩小 */
+        }
+        /* 确保内容容器不会溢出 */
+        #document-list-container {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            box-sizing: border-box;
+        }
+        /* 修复 Bootstrap row 的负边距导致的溢出问题 */
+        .document-content-area .row {
+            margin-left: -0.75rem;
+            margin-right: -0.75rem;
+        }
+        .document-content-area .row > [class*="col-"] {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        /* 确保文档卡片不会超出容器 */
+        .document-content-area .document-card {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .catalog-tree-container {
+            flex: 1;
+            min-height: 400px;
+            overflow-x: auto;
+            overflow-y: auto;
+            user-select: none;
+            background: transparent;
+            transition: background-color 0.3s ease;
+            /* 自定义滚动条样式 - Webkit浏览器 (Chrome, Safari, Edge) */
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: rgba(155, 155, 155, 0.5) transparent; /* Firefox */
+        }
+        /* Webkit浏览器滚动条样式 */
+        .catalog-tree-container::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .catalog-tree-container::-webkit-scrollbar-track {
+            background: transparent;
+            border-radius: 3px;
+        }
+        .catalog-tree-container::-webkit-scrollbar-thumb {
+            background: rgba(155, 155, 155, 0.5);
+            border-radius: 3px;
+            transition: background 0.2s ease;
+        }
+        .catalog-tree-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(155, 155, 155, 0.7);
+        }
+        /* 暗色主题下的分类树容器 */
+        body[data-topbar="dark"] .catalog-tree-container {
+            background: transparent;
+            scrollbar-color: rgba(133, 144, 165, 0.5) transparent; /* Firefox */
+        }
+        /* 暗色主题下的滚动条 */
+        body[data-topbar="dark"] .catalog-tree-container::-webkit-scrollbar-thumb {
+            background: rgba(133, 144, 165, 0.5);
+        }
+        body[data-topbar="dark"] .catalog-tree-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(133, 144, 165, 0.7);
+        }
+        
+        .catalog-tree-container.dragging {
+            cursor: grabbing !important;
+        }
+        .jstree-node {
+            min-height: 28px;
+            line-height: 28px;
+            margin: 1px 0;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        .jstree-node:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .jstree-node:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        /* 暗色主题下的节点背景 */
+        body[data-topbar="dark"] .jstree-node:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        body[data-topbar="dark"] .jstree-node:nth-child(odd) {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .jstree-anchor {
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            color: #495057;
+        }
+        /* 暗色主题下的节点文字颜色 */
+        body[data-topbar="dark"] .jstree-anchor {
+            color: #8590a5;
+        }
+        .jstree-anchor:hover {
+            background-color: rgba(11, 177, 151, 0.1) !important;
+            color: #0bb197 !important;
+            box-shadow: 0 2px 4px rgba(11, 177, 151, 0.15);
+            transform: translateX(2px);
+        }
+        /* 暗色主题下的hover效果 */
+        body[data-topbar="dark"] .jstree-anchor:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: #d7e4ec !important;
+            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+        }
+        .jstree-clicked {
+            background-color: rgba(11, 177, 151, 0.15) !important;
+            color: #0a9d85 !important;
+            box-shadow: 0 2px 6px rgba(11, 177, 151, 0.25);
+        }
+        /* 暗色主题下的选中状态 */
+        body[data-topbar="dark"] .jstree-clicked {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            color: #d7e4ec !important;
+            box-shadow: 0 2px 6px rgba(255, 255, 255, 0.15);
+        }
+        body[data-topbar="dark"] .jstree-clicked .jstree-anchor {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            color: #d7e4ec !important;
+        }
+        .catalog-header {
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 1rem;
+            transition: border-color 0.3s ease;
+            flex-shrink: 0; /* 防止标题被压缩 */
+        }
+        /* 暗色主题下的分类标题边框 */
+        body[data-topbar="dark"] .catalog-header {
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        .catalog-header h5 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: inherit;
+            transition: color 0.3s ease;
+        }
+        /* 暗色主题下的分类标题文字 */
+        body[data-topbar="dark"] .catalog-header h5 {
+            color: #d7e4ec;
+        }
+        
+        /* jstree 图标样式 */
+        .jstree-anchor i.mdi {
+            font-size: 16px;
+            line-height: 1;
+            margin-right: 4px;
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        /* 暗色主题下的 jstree 展开/收起按钮 */
+        body[data-topbar="dark"] .jstree-ocl {
+            color: #8590a5;
+        }
+        body[data-topbar="dark"] .jstree-ocl:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #d7e4ec;
+        }
+        
+        /* 暗色主题下的 jstree 图标 */
+        body[data-topbar="dark"] .jstree-icon {
+            color: #8590a5;
+        }
+        
+        /* 右键菜单样式（如果使用） */
+        .jstree-contextmenu {
+            z-index: 10000;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .jstree-contextmenu .jstree-contextmenu-item {
+            padding: 10px 20px;
+            transition: all 0.2s ease;
+        }
+        .jstree-contextmenu .jstree-contextmenu-item:hover {
+            background-color: rgba(11, 177, 151, 0.1);
+            color: #0bb197;
+        }
+        /* 暗色主题下的右键菜单 */
+        body[data-topbar="dark"] .jstree-contextmenu {
+            background-color: #1b2c3f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body[data-topbar="dark"] .jstree-contextmenu .jstree-contextmenu-item {
+            color: #8590a5;
+        }
+        body[data-topbar="dark"] .jstree-contextmenu .jstree-contextmenu-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #d7e4ec;
+        }
+        
+        /* SweetAlert2 暗色主题样式 */
+        body[data-topbar="dark"] .swal2-popup.swal2-dark {
+            background-color: #1b2c3f !important;
+            color: #d7e4ec !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-title.swal2-title-dark {
+            color: #d7e4ec !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-html-container.swal2-html-dark {
+            color: #8590a5 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon {
+            border-color: rgba(255, 255, 255, 0.2) !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon.swal2-warning {
+            border-color: #ffc107 !important;
+            color: #ffc107 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon.swal2-success {
+            border-color: #28a745 !important;
+            color: #28a745 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon.swal2-error {
+            border-color: #dc3545 !important;
+            color: #dc3545 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #28a745 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #dc3545 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-actions {
+            margin-top: 1.5rem !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-confirm.swal2-confirm-dark {
+            background-color: rgba(40, 167, 69, 0.2) !important;
+            border-color: #28a745 !important;
+            color: #28a745 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-confirm.swal2-confirm-dark:hover {
+            background-color: #28a745 !important;
+            color: #fff !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-cancel.swal2-cancel-dark {
+            background-color: rgba(220, 53, 69, 0.2) !important;
+            border-color: #dc3545 !important;
+            color: #dc3545 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-cancel.swal2-cancel-dark:hover {
+            background-color: #dc3545 !important;
+            color: #fff !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-close {
+            color: #8590a5 !important;
+        }
+        body[data-topbar="dark"] .swal2-popup.swal2-dark .swal2-close:hover {
+            color: #d7e4ec !important;
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--加载中组件 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <!--页头工具条 结束-->
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav' />
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+
+        <div class="page-content" style="min-height: 800px">
+            <div class="container-fluid">
+                <div class='row'>
+                    <!--消息-->
+                    <template>Weline_Component::message.phtml</template>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <div>
+                                        <h4 class='card-title mb-1'>
+                                            <i class="mdi mdi-file-document-outline me-2"></i>
+                                            <?=__('开发文档')?>
+                                        </h4>
+                                        <p class='text-muted mb-0'>
+                                            <?=__('编写和管理开发文档')?>
+                                        </p>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <a href="@admin-url('dev/tool/docs/api')">
+                                            <button type='button' class='btn btn-primary waves-effect waves-light'>
+                                                <i class="mdi mdi-api me-1"></i>
+                                                <?=__('API文档')?>
+                                            </button>
+                                        </a>
+                                        <a href="@admin-url('dev/tool/admin/document/catalog')">
+                                            <button type='button' class='btn btn-info waves-effect waves-light'>
+                                                <i class="mdi mdi-folder-cog me-1"></i>
+                                                <?=__('目录管理')?>
+                                            </button>
+                                        </a>
+                                        <a href="@admin-url('dev/tool/admin/document/add')">
+                                            <button type='button' class='btn btn-success waves-effect waves-light'>
+                                                <i class="mdi mdi-plus-circle me-1"></i>
+                                                <?=__('新增文章')?>
+                                            </button>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- 左右分栏布局 -->
+                                <div class="document-layout">
+                                    <!-- 左侧分类树 -->
+                                    <div class="catalog-sidebar">
+                                        <div class="catalog-header">
+                                            <h5>
+                                                <i class="mdi mdi-folder-tree me-2"></i>
+                                                <?=__('文档分类')?>
+                                            </h5>
+                                        </div>
+                                        <div id="catalog-tree-container" class="catalog-tree-container">
+                                            <div class="text-center py-5">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden"><?=__('加载中...')?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 右侧文档列表 -->
+                                    <div class="document-content-area">
+                                        <div id="document-list-container">
+                                            <!-- 文档列表 -->
+                                            <div class="row">
+                                    <empty name="documents">
+                                        <div class="col-12">
+                                            <div class="empty-state">
+                                                <i class="mdi mdi-file-document-outline"></i>
+                                                <h5><?=__('暂无文章')?></h5>
+                                                <p class="text-muted"><?=__('点击"新增文章"按钮开始创建您的第一篇文档')?></p>
+                                                <a href="@admin-url('dev/tool/admin/document/add')">
+                                                    <button type='button' class='btn btn-success waves-effect waves-light'>
+                                                        <i class="mdi mdi-plus-circle me-1"></i>
+                                                        <?=__('新增文章')?>
+                                                    </button>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </empty>
+                                    <foreach name="documents" item="vo">
+                                        <div class="col-md-4 col-lg-3 mb-3">
+                                            <div class="document-card h-100">
+                                                <div class="document-header">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="flex-grow-1">
+                                                            <h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">
+                                                                <var>vo.title</var>
+                                                            </h5>
+                                                            <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                                                                <span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                                                    <i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>
+                                                                    <var>vo.c_name</var>
+                                                                </span>
+                                                                <if condition="$vo['module_name']">
+                                                                    <span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                                                        <i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>
+                                                                        <var>vo.module_name</var>
+                                                                    </span>
+                                                                </if>
+                                                                <if condition="$vo['is_auto_imported']">
+                                                                    <span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                                                        <i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>
+                                                                        <?=__('自动导入')?>
+                                                                    </span>
+                                                                </if>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="document-body">
+                                                    <p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                                        <var>vo.summary</var>
+                                                    </p>
+                                                    <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;">
+                                                        <span>
+                                                            <i class="mdi mdi-account-outline me-1"></i>
+                                                            <?=__('作者:')?> <?php echo (($vo['author'] ?? $vo['author_id'] ?? __('未知'))); ?>
+                                                        </span>
+                                                        <span>
+                                                            <i class="mdi mdi-clock-outline me-1"></i>
+                                                            <var>vo.update_time</var>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="document-footer">
+                                                    <div class="action-buttons d-flex justify-content-end">
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-primary view-document-btn" 
+                                                                data-id="<var>vo.doc_id</var>">
+                                                            <i class="mdi mdi-eye me-1"></i>
+                                                            <?=__('查看')?>
+                                                        </button>
+                                                        <a href="@admin-url{'dev/tool/admin/document/edit',['id'=>$vo->getData('doc_id')]}">
+                                                            <button type="button" class="btn btn-sm btn-info">
+                                                                <i class="mdi mdi-pencil me-1"></i>
+                                                                <?=__('编辑')?>
+                                                            </button>
+                                                        </a>
+                                                        <if condition="!$vo['is_auto_imported']">
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-danger document-delete-btn" 
+                                                                data-url="@admin-url{'dev/tool/admin/document/delete',['id'=>$vo->getData('doc_id')]}">
+                                                            <i class="mdi mdi-delete me-1"></i>
+                                                            <?=__('删除')?>
+                                                        </button>
+                                                        </if>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </foreach>
+                                </div>
+
+                                            <!-- 分页 -->
+                                            <?php
+                                            $pagination = $this->getData('pagination');
+                                            if (!empty($pagination) && !empty($pagination['html'])): ?>
+                                                <div class="mt-4" id="pagination-container">
+                                                    <?php echo $pagination['html']; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- end col -->
+                </div> <!-- end row -->
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>document.write(new Date().getFullYear())</script>
+                        © Weline.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
+                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- 文档查看 Offcanvas -->
+<div class="offcanvas offcanvas-end offcanvas-document w-50" tabindex="-1" id="documentViewOffcanvas" aria-labelledby="documentViewOffcanvasLabel">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="documentViewOffcanvasLabel">
+            <i class="mdi mdi-file-document-outline me-2"></i>
+            <?=__('文档详情')?>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="documentViewContent">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden"><?=__('加载中...')?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- jstree js -->
+<script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
+<!--tinymce js-->
+<script src='@static(Weline_Admin::assets/libs/tinymce/tinymce.min.js)'></script>
+
+<!-- init js -->
+<script src='@static(Weline_Admin::assets/js/pages/form-editor.init.js)'></script>
+
+<!-- Responsive Table js -->
+<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+
+<!-- Init js -->
+<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+<!-- Sweet Alerts js -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+
+<!--页脚-->
+@template(Weline_Admin::common/footer.phtml)
+
+<!-- jquery.vectormap map -->
+<script src="@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)"></script>
+<script src="@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.usa.js)"></script>
+
+<!--国际化字符串-->
+<script>
+    const i18n = {
+        'loading': '<?=__('加载中...')?>',
+        'loadingDocument': '<?=__('正在加载文档...')?>',
+        'loadDocumentFailed': '<?=__('加载文档失败，请重试')?>',
+        'loadDocumentFailedRefresh': '<?=__('加载文档失败，请刷新页面重试')?>',
+        'category': '<?=__('分类:')?>',
+        'uncategorized': '<?=__('未分类')?>',
+        'author': '<?=__('作者:')?>',
+        'unknown': '<?=__('未知')?>',
+        'createTime': '<?=__('创建时间:')?>',
+        'updateTime': '<?=__('更新时间:')?>',
+        'module': '<?=__('模块:')?>',
+        'autoImported': '<?=__('自动导入')?>',
+        'noTitle': '<?=__('无标题')?>',
+        'noContent': '<?=__('暂无内容')?>'
+    };
+</script>
+
+<!--按钮-->
+<script>
+(function() {
+    let catalogTree = null;
+    let currentCategoryId = <?=json_encode($this->getData('selectedCategoryId') ?? '')?>;
+    
+    // 初始化分类树
+    function initCatalogTree() {
+        try {
+            console.log('[CatalogTree] 开始初始化分类树...');
+            
+            // 检查jstree库是否加载
+            if (typeof $.fn.jstree === 'undefined') {
+                console.error('[CatalogTree] jstree库未加载！');
+                $('#catalog-tree-container').html(`
+                    <div class="alert alert-danger m-3">
+                        <i class="mdi mdi-alert-circle me-2"></i>
+                        <strong><?=__('错误')?>:</strong> <?=__('jstree库未加载，请刷新页面重试')?>
+                    </div>
+                `);
+                return;
+            }
+            
+            // 获取分类数据
+            const catalogs = <?=json_encode($this->getData('catalogs') ?? [])?>;
+            console.log('[CatalogTree] 获取到的分类数据:', catalogs);
+            
+            // 转换为jstree格式
+            let treeData = [];
+            
+            // 添加"全部"选项
+            treeData.push({
+                id: '',
+                text: '<i class="mdi mdi-view-list me-2"></i><?=__('全部文档')?>',
+                state: {
+                    selected: !currentCategoryId
+                },
+                icon: false
+            });
+            
+            // 添加分类树
+            if (catalogs && Array.isArray(catalogs) && catalogs.length > 0) {
+                console.log('[CatalogTree] 开始转换分类数据格式，共', catalogs.length, '个分类');
+                const catalogTreeData = convertToJSTreeFormat(catalogs);
+                console.log('[CatalogTree] 转换后的树形数据:', catalogTreeData);
+                treeData = treeData.concat(catalogTreeData);
+            } else {
+                console.warn('[CatalogTree] 没有分类数据或数据为空');
+                // 即使没有分类，也显示"全部"选项
+            }
+            
+            // 清空容器并创建jstree容器
+            $('#catalog-tree-container').html('<div id="catalog-tree"></div>');
+            
+            // 如果没有分类数据（只有"全部"选项），显示提示
+            if (treeData.length === 1) {
+                console.log('[CatalogTree] 只有"全部"选项，没有分类数据');
+                // 在树下方显示提示信息
+                setTimeout(function() {
+                    $('#catalog-tree-container').append(`
+                        <div class="alert alert-info m-3 mt-2">
+                            <i class="mdi mdi-information me-2"></i>
+                            <small><?=__('暂无分类，请先')?> <a href="@admin-url('dev/tool/admin/document/catalog')" class="alert-link"><?=__('创建分类')?></a></small>
+                        </div>
+                    `);
+                }, 500);
+            }
+            
+            // 初始化jstree
+            console.log('[CatalogTree] 开始初始化jstree，数据项数:', treeData.length);
+            catalogTree = $('#catalog-tree').jstree({
+                'core': {
+                    'data': treeData,
+                    'themes': {
+                        'responsive': true,
+                        'variant': 'large',
+                        'stripes': false
+                    }
+                },
+                'plugins': []
+            }).on('ready.jstree', function() {
+                console.log('[CatalogTree] jstree初始化完成');
+                // 如果有选中的分类，选中它（文档已经在服务器端加载）
+                if (currentCategoryId) {
+                    try {
+                        catalogTree.jstree('select_node', currentCategoryId.toString());
+                        console.log('[CatalogTree] 已选中分类:', currentCategoryId);
+                    } catch (e) {
+                        console.warn('[CatalogTree] 选中分类失败:', e);
+                    }
+                } else {
+                    // 如果没有选中分类，选中"全部"选项（文档已经在服务器端加载）
+                    try {
+                        catalogTree.jstree('select_node', '');
+                        console.log('[CatalogTree] 已选中"全部"选项');
+                    } catch (e) {
+                        console.warn('[CatalogTree] 选中"全部"选项失败:', e);
+                    }
+                }
+            }).on('select_node.jstree', function(e, data) {
+                // 点击分类节点时加载该分类下的文档
+                const categoryId = data.node.id;
+                console.log('[CatalogTree] 分类节点被选中:', categoryId);
+                loadDocumentsByCategory(categoryId);
+            }).on('error.jstree', function(e, data) {
+                console.error('[CatalogTree] jstree错误事件:', data);
+                // 安全地提取错误信息，避免循环引用
+                let errorMsg = '';
+                try {
+                    if (data && typeof data === 'object') {
+                        if (data.error) {
+                            errorMsg = String(data.error);
+                        } else if (data.message) {
+                            errorMsg = String(data.message);
+                        } else if (data.type) {
+                            errorMsg = '错误类型: ' + String(data.type);
+                        }
+                    } else if (data) {
+                        errorMsg = String(data);
+                    }
+                } catch (err) {
+                    errorMsg = '无法解析错误信息';
+                }
+                $('#catalog-tree-container').html(`
+                    <div class="alert alert-danger m-3">
+                        <i class="mdi mdi-alert-circle me-2"></i>
+                        <strong><?=__('错误')?>:</strong> <?=__('分类树加载失败')?>
+                        ${errorMsg ? '<br><small class="text-muted">' + escapeHtml(errorMsg) + '</small>' : ''}
+                        <br><button class="btn btn-sm btn-primary mt-2" onclick="initCatalogTree()">
+                            <i class="mdi mdi-refresh me-1"></i><?=__('重试')?>
+                        </button>
+                    </div>
+                `);
+            });
+            
+            console.log('[CatalogTree] 分类树初始化完成');
+        } catch (error) {
+            console.error('[CatalogTree] 初始化分类树时发生错误:', error);
+            // 安全地提取错误信息
+            let errorMsg = '';
+            try {
+                if (error && typeof error === 'object') {
+                    errorMsg = error.message || error.toString();
+                } else if (error) {
+                    errorMsg = String(error);
+                }
+            } catch (err) {
+                errorMsg = '未知错误';
+            }
+            $('#catalog-tree-container').html(`
+                <div class="alert alert-danger m-3">
+                    <i class="mdi mdi-alert-circle me-2"></i>
+                    <strong><?=__('错误')?>:</strong> <?=__('初始化分类树失败')?>
+                    ${errorMsg ? '<br><small class="text-muted">' + escapeHtml(errorMsg) + '</small>' : ''}
+                    <br><button class="btn btn-sm btn-primary mt-2" onclick="initCatalogTree()">
+                        <i class="mdi mdi-refresh me-1"></i><?=__('重试')?>
+                    </button>
+                    <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="location.reload()">
+                        <i class="mdi mdi-reload me-1"></i><?=__('刷新页面')?>
+                    </button>
+                </div>
+            `);
+        }
+    }
+    
+    // 转换为jstree格式
+    function convertToJSTreeFormat(data, level = 1) {
+        const result = [];
+        
+        // 数据验证
+        if (!data) {
+            console.warn('[CatalogTree] convertToJSTreeFormat: 数据为空');
+            return result;
+        }
+        
+        if (!Array.isArray(data)) {
+            console.warn('[CatalogTree] convertToJSTreeFormat: 数据不是数组类型', typeof data);
+            return result;
+        }
+        
+        if (data.length === 0) {
+            console.log('[CatalogTree] convertToJSTreeFormat: 数据数组为空');
+            return result;
+        }
+        
+        console.log('[CatalogTree] convertToJSTreeFormat: 开始转换，数据项数:', data.length, '层级:', level);
+        
+        data.forEach(function(item, index) {
+            try {
+                // 验证item是否为有效对象
+                if (!item) {
+                    console.warn('[CatalogTree] convertToJSTreeFormat: 第', index, '项数据为空，跳过');
+                    return;
+                }
+                
+                // 验证id字段
+                if (item.id === null || item.id === undefined || item.id === '') {
+                    console.warn('[CatalogTree] convertToJSTreeFormat: 第', index, '项数据缺少id字段，跳过', item);
+                    return;
+                }
+                
+                // 获取层级
+                const itemLevel = (item.level !== null && item.level !== undefined) ? parseInt(item.level) : level;
+                
+                // 获取名称，处理null/undefined
+                const itemName = (item.name !== null && item.name !== undefined) ? String(item.name) : '<?=__('未命名分类')?>';
+                
+                // 构建节点
+                const node = {
+                    id: String(item.id),
+                    text: '<i class="mdi mdi-folder me-2"></i>' + escapeHtml(itemName),
+                    state: {
+                        opened: itemLevel <= 2
+                    },
+                    icon: false
+                };
+                
+                // 处理子节点
+                if (item.nodes && Array.isArray(item.nodes) && item.nodes.length > 0) {
+                    console.log('[CatalogTree] convertToJSTreeFormat: 分类', itemName, '有', item.nodes.length, '个子分类');
+                    const children = convertToJSTreeFormat(item.nodes, itemLevel + 1);
+                    if (children && children.length > 0) {
+                        node.children = children;
+                    }
+                }
+                
+                result.push(node);
+                console.log('[CatalogTree] convertToJSTreeFormat: 成功转换分类', itemName, '(ID:', item.id, ')');
+            } catch (error) {
+                console.error('[CatalogTree] convertToJSTreeFormat: 转换第', index, '项数据时出错:', error, item);
+                // 继续处理下一项，不中断整个转换过程
+            }
+        });
+        
+        console.log('[CatalogTree] convertToJSTreeFormat: 转换完成，返回', result.length, '个节点');
+        return result;
+    }
+    
+    // HTML转义函数（防止XSS）
+    function escapeHtml(text) {
+        if (text === null || text === undefined) {
+            return '';
+        }
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+    
+    // 根据分类加载文档
+    function loadDocumentsByCategory(categoryId) {
+        currentCategoryId = categoryId;
+        
+        // 显示加载状态
+        $('#document-list-container').html(`
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">${i18n.loading}</span>
+                </div>
+                <p class="mt-2 text-muted">${i18n.loadingDocument}</p>
+            </div>
+        `);
+        
+        // 加载文档列表
+        $.ajax({
+            url: '@admin-url("dev/tool/admin/document/list")',
+            method: 'GET',
+            data: { category_id: categoryId },
+            dataType: 'json',
+            success: function(response) {
+                if (response.code === 200 && response.data) {
+                    renderDocumentList(response.data.items, response.data.pagination);
+                } else {
+                    $('#document-list-container').html(`
+                        <div class="alert alert-danger">
+                            <i class="mdi mdi-alert-circle me-2"></i>
+                            ${response.msg || i18n.loadDocumentFailed}
+                        </div>
+                    `);
+                }
+            },
+            error: function(xhr) {
+                $('#document-list-container').html(`
+                    <div class="alert alert-danger">
+                        <i class="mdi mdi-alert-circle me-2"></i>
+                        ${i18n.loadDocumentFailedRefresh}
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    // 渲染文档列表
+    function renderDocumentList(items, pagination) {
+        if (!items || items.length === 0) {
+            $('#document-list-container').html(`
+                <div class="empty-state">
+                    <i class="mdi mdi-file-document-outline"></i>
+                    <h5><?=__('暂无文章')?></h5>
+                    <p class="text-muted"><?=__('该分类下暂无文档')?></p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '<div class="row">';
+        items.forEach(function(doc) {
+            html += `
+                <div class="col-md-4 col-lg-3 mb-3">
+                    <div class="document-card h-100">
+                        <div class="document-header">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1" style="font-size: 0.95rem; font-weight: 500; line-height: 1.4;">
+                                        ${doc.title || ''}
+                                    </h5>
+                                    <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                                        <span class="badge bg-light text-dark" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                            <i class="mdi mdi-folder-outline me-1" style="font-size: 0.7rem;"></i>
+                                            ${doc.c_name || ''}
+                                        </span>
+                                        ${doc.module_name ? `
+                                        <span class="badge-module" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                            <i class="mdi mdi-package-variant me-1" style="font-size: 0.7rem;"></i>
+                                            ${doc.module_name}
+                                        </span>
+                                        ` : ''}
+                                        ${doc.is_auto_imported ? `
+                                        <span class="badge-auto" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">
+                                            <i class="mdi mdi-auto-fix me-1" style="font-size: 0.7rem;"></i>
+                                            ${i18n.autoImported}
+                                        </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="document-body">
+                            <p class="summary-text mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                ${doc.summary || ''}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;">
+                                <span>
+                                    <i class="mdi mdi-account-outline me-1"></i>
+                                    ${i18n.author} ${doc.author || doc.author_id || i18n.unknown}
+                                </span>
+                                <span>
+                                    <i class="mdi mdi-clock-outline me-1"></i>
+                                    ${doc.update_time || ''}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="document-footer">
+                            <div class="action-buttons d-flex justify-content-end">
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary view-document-btn" 
+                                        data-id="${doc.doc_id}">
+                                    <i class="mdi mdi-eye me-1"></i>
+                                    <?=__('查看')?>
+                                </button>
+                                <a href="@admin-url('dev/tool/admin/document/edit')?id=${doc.doc_id}">
+                                    <button type="button" class="btn btn-sm btn-info">
+                                        <i class="mdi mdi-pencil me-1"></i>
+                                        <?=__('编辑')?>
+                                    </button>
+                                </a>
+                                ${!doc.is_auto_imported ? `
+                                <button type="button" 
+                                        class="btn btn-sm btn-danger document-delete-btn" 
+                                        data-url="@admin-url('dev/tool/admin/document/delete')?id=${doc.doc_id}">
+                                    <i class="mdi mdi-delete me-1"></i>
+                                    <?=__('删除')?>
+                                </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        // 添加分页
+        if (pagination && pagination.html) {
+            html += `<div class="mt-4" id="pagination-container">${pagination.html}</div>`;
+        }
+        
+        $('#document-list-container').html(html);
+        
+        // 重新绑定删除按钮事件
+        bindDeleteButtons();
+    }
+    
+    // 绑定删除按钮事件
+    function bindDeleteButtons() {
+        $('.document-delete-btn').off('click').on('click', function(e) {
+            let target = $(e.target).closest('.document-delete-btn');
+            // 检测当前主题
+            const isDark = document.body.getAttribute('data-topbar') === 'dark';
+            const swalConfig = {
+                title: '@lang("你确定要操作么？")',
+                text: '@lang("操作后你将无法恢复！")',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '@lang("是的，我确定要删除！")',
+                cancelButtonText: '@lang("不要，取消吧！")',
+                confirmButtonClass: 'btn btn-success mt-2',
+                cancelButtonClass: 'btn btn-danger ms-2 mt-2',
+                buttonsStyling: false,
+                customClass: {
+                    popup: isDark ? 'swal2-dark' : '',
+                    title: isDark ? 'swal2-title-dark' : '',
+                    htmlContainer: isDark ? 'swal2-html-dark' : '',
+                    confirmButton: isDark ? 'swal2-confirm-dark' : '',
+                    cancelButton: isDark ? 'swal2-cancel-dark' : ''
+                }
+            };
+            Swal.fire(swalConfig).then(function (result) {
+                if (result.value) {
+                    showLoading();
+                    $.post({
+                        url: target.attr('data-url')
+                    }).done(res => {
+                        hideLoading();
+                        if (200 === res.code) {
+                            Swal.fire({
+                                title: '@lang("已删除！")',
+                                text: '@lang("文章已经被删除了！")',
+                                confirmButtonText: '@lang("好的")',
+                                icon: 'success',
+                                customClass: {
+                                    popup: isDark ? 'swal2-dark' : '',
+                                    title: isDark ? 'swal2-title-dark' : '',
+                                    htmlContainer: isDark ? 'swal2-html-dark' : '',
+                                    confirmButton: isDark ? 'swal2-confirm-dark' : ''
+                                }
+                            }).then(res => {
+                                if (res.value) {
+                                    // 重新加载当前分类的文档
+                                    if (currentCategoryId) {
+                                        loadDocumentsByCategory(currentCategoryId);
+                                    } else {
+                                        window.location.reload();
+                                    }
+                                }
+                            })
+                        } else {
+                            Swal.fire({
+                                title: '@lang("删除提示！")',
+                                text: '@lang("文章删除失败，请重试！")',
+                                confirmButtonText: '@lang("好的")',
+                                icon: 'error',
+                                customClass: {
+                                    popup: isDark ? 'swal2-dark' : '',
+                                    title: isDark ? 'swal2-title-dark' : '',
+                                    htmlContainer: isDark ? 'swal2-html-dark' : '',
+                                    confirmButton: isDark ? 'swal2-confirm-dark' : ''
+                                }
+                            })
+                        }
+                    })
+                }
+            });
+        });
+    }
+    
+    // 将initCatalogTree暴露到全局作用域，以便重试按钮可以调用
+    window.initCatalogTree = initCatalogTree;
+    
+    // 页面加载完成后初始化
+    $(document).ready(function() {
+        initCatalogTree();
+        bindDeleteButtons();
+    });
+    
+    // 查看文档
+    $(document).on('click', '.view-document-btn', function() {
+        const docId = $(this).data('id');
+        const offcanvasElement = document.getElementById('documentViewOffcanvas');
+        const offcanvas = new bootstrap.Offcanvas(offcanvasElement);
+        
+        // 显示加载状态
+        $('#documentViewContent').html(`
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">${i18n.loading}</span>
+                </div>
+                <p class="mt-2 text-muted">${i18n.loadingDocument}</p>
+            </div>
+        `);
+        
+        // 打开offcanvas
+        offcanvas.show();
+        
+        // 加载文档数据
+        $.ajax({
+            url: '@admin-url("dev/tool/admin/document/view")',
+            method: 'GET',
+            data: { id: docId },
+            dataType: 'json',
+            success: function(response) {
+                if (response.code === 200 && response.data) {
+                    const doc = response.data;
+                    let html = `
+                        <div class="document-meta">
+                            <div class="meta-item">
+                                <i class="mdi mdi-folder-outline"></i>
+                                <span><strong>${i18n.category}</strong> ${doc.category || i18n.uncategorized}</span>
+                            </div>
+                            <div class="meta-item">
+                                <i class="mdi mdi-account-outline"></i>
+                                <span><strong>${i18n.author}</strong> ${doc.author || i18n.unknown}</span>
+                            </div>
+                            <div class="meta-item">
+                                <i class="mdi mdi-clock-outline"></i>
+                                <span><strong>${i18n.createTime}</strong> ${doc.create_time || '-'}</span>
+                            </div>
+                            <div class="meta-item">
+                                <i class="mdi mdi-update"></i>
+                                <span><strong>${i18n.updateTime}</strong> ${doc.update_time || '-'}</span>
+                            </div>
+                            ${doc.module_name ? `
+                            <div class="meta-item">
+                                <i class="mdi mdi-package-variant"></i>
+                                <span><strong>${i18n.module}</strong> ${doc.module_name}</span>
+                            </div>
+                            ` : ''}
+                            ${doc.is_auto_imported ? `
+                            <div class="meta-item">
+                                <i class="mdi mdi-auto-fix"></i>
+                                <span class="badge-auto">${i18n.autoImported}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="mb-3">
+                            <h4 class="mb-2">${doc.title || i18n.noTitle}</h4>
+                            ${doc.summary ? `<p class="text-muted">${doc.summary}</p>` : ''}
+                        </div>
+                        <pre class="document-content">${doc.content ? escapeHtml(doc.content) : '<span class="text-muted">' + i18n.noContent + '</span>'}</pre>
+                    `;
+                    $('#documentViewContent').html(html);
+                } else {
+                    $('#documentViewContent').html(`
+                        <div class="alert alert-danger">
+                            <i class="mdi mdi-alert-circle me-2"></i>
+                            ${response.msg || i18n.loadDocumentFailed}
+                        </div>
+                    `);
+                }
+            },
+            error: function(xhr) {
+                $('#documentViewContent').html(`
+                    <div class="alert alert-danger">
+                        <i class="mdi mdi-alert-circle me-2"></i>
+                        ${i18n.loadDocumentFailedRefresh}
+                    </div>
+                `);
+            }
+        });
+    });
+    
+    // 添加拖拽滚动功能
+    function initDragScroll() {
+        const catalogTreeContainer = document.getElementById('catalog-tree-container');
+        if (!catalogTreeContainer) return;
+        
+        let isMouseDown = false;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeft = 0;
+        let scrollTop = 0;
+        let dragThreshold = 5; // 拖拽阈值，超过这个距离才认为是拖拽
+        
+        catalogTreeContainer.addEventListener('mousedown', function(e) {
+            // 只响应鼠标左键
+            if (e.button !== 0) return;
+            
+            // 如果点击的是可交互元素（如链接、按钮、jstree节点），不启用拖拽
+            if (e.target.tagName === 'A' || e.target.closest('a') || 
+                e.target.closest('.jstree-anchor') ||
+                e.target.closest('.jstree-node')) {
+                // 检查是否点击的是jstree的展开/收起按钮
+                if (e.target.classList.contains('jstree-ocl') || 
+                    e.target.closest('.jstree-ocl')) {
+                    return;
+                }
+            }
+            
+            isMouseDown = true;
+            isDragging = false;
+            startX = e.pageX;
+            startY = e.pageY;
+            scrollLeft = catalogTreeContainer.scrollLeft;
+            scrollTop = catalogTreeContainer.scrollTop;
+            e.preventDefault(); // 防止文本选择
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!isMouseDown || !catalogTreeContainer) return;
+            
+            // 如果还没有开始拖拽，检查是否超过阈值
+            if (!isDragging) {
+                const deltaX = Math.abs(e.pageX - startX);
+                const deltaY = Math.abs(e.pageY - startY);
+                
+                // 如果移动距离超过阈值，开始拖拽
+                if (deltaX > dragThreshold || deltaY > dragThreshold) {
+                    isDragging = true;
+                    catalogTreeContainer.classList.add('dragging');
+                    // 重新计算起始位置（相对于容器）
+                    const rect = catalogTreeContainer.getBoundingClientRect();
+                    startX = e.pageX - rect.left;
+                    startY = e.pageY - rect.top;
+                    scrollLeft = catalogTreeContainer.scrollLeft;
+                    scrollTop = catalogTreeContainer.scrollTop;
+                } else {
+                    return; // 还没超过阈值，不处理
+                }
+            }
+            
+            // 执行拖拽滚动
+            e.preventDefault();
+            const rect = catalogTreeContainer.getBoundingClientRect();
+            const x = e.pageX - rect.left;
+            const y = e.pageY - rect.top;
+            const walkX = (x - startX) * 2; // 滚动速度倍数
+            const walkY = (y - startY) * 2;
+            catalogTreeContainer.scrollLeft = scrollLeft - walkX;
+            catalogTreeContainer.scrollTop = scrollTop - walkY;
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (isMouseDown) {
+                isMouseDown = false;
+                if (isDragging) {
+                    isDragging = false;
+                    catalogTreeContainer.classList.remove('dragging');
+                }
+            }
+        });
+        
+        // 鼠标离开容器时也停止拖拽
+        catalogTreeContainer.addEventListener('mouseleave', function() {
+            if (isMouseDown) {
+                isMouseDown = false;
+                if (isDragging) {
+                    isDragging = false;
+                    catalogTreeContainer.classList.remove('dragging');
+                }
+            }
+        });
+    }
+    
+    // 等待DOM加载完成后初始化拖拽滚动
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initDragScroll, 500);
+        });
+    } else {
+        setTimeout(initDragScroll, 500);
+    }
+})();
+</script>
+</body>
+</html>
