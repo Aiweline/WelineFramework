@@ -29,4 +29,6 @@ class DataInterface
     public const dir_type_BASE = 'base';
 
     public const dir_type_TEMPLATE_COMPILE = 'tpl';
+
+    public const dir_type_THEME = 'theme';
 }

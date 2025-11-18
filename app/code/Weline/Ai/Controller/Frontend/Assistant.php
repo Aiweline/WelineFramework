@@ -94,7 +94,7 @@ class Assistant extends FrontendController
             // 获取用户的助手列表
             $assistants = $this->aiAssistant->reset()
                 ->where('user_id', $userId)
-                ->order('assistant_id', 'DESC')
+                ->order(\Weline\Ai\Model\AiAssistant::fields_ID, 'DESC')
                 ->select()
                 ->fetch();
 

@@ -64,12 +64,16 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postEdit()
     {
         try {
+            $password = trim($this->request->getPost('password') ?? '');
             $this->backendUser->clearData()
                 ->setId($this->request->getPost('user_id'))
                 ->setUsername($this->request->getPost('username'))
-                ->setEmail($this->request->getPost('email'))
-                ->setPassword($this->request->getPost('password'))
-                ->save(true);
+                ->setEmail($this->request->getPost('email'));
+            // 只有在提供了密码时才更新密码
+            if (!empty($password)) {
+                $this->backendUser->setPassword($password);
+            }
+            $this->backendUser->save(true);
             $this->getMessageManager()->addSuccess(__('修改成功！'));
             $this->backendUserData->deleteScope('w_user');
             $this->redirect('*/backend/user/edit', ['id' => $this->backendUser->getId()]);
@@ -102,12 +106,39 @@ class User extends \Weline\Framework\App\Controller\BackendController
     function postDelete()
     {
         try {
-            $this->backendUser->clearData()->load($this->request->getPost('id'))
+            // 支持JSON和表单数据
+            $params = $this->request->getParams();
+            $id = $params['id'] ?? $this->request->getPost('id');
+            
+            if (empty($id)) {
+                throw new \Exception(__('用户ID不能为空'));
+            }
+            
+            $this->backendUser->clearData()->load($id)
                 ->setIsDeleted()
                 ->save();
+            
+            // 如果是AJAX请求，返回JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => __('删除成功！'),
+                    'msg' => __('删除成功！')
+                ]);
+            }
+            
             $this->getMessageManager()->addSuccess(__('删除成功！'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
+            // 如果是AJAX请求，返回JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('删除失败！') . ($exception->getMessage() ? ': ' . $exception->getMessage() : ''),
+                    'msg' => __('删除失败！') . ($exception->getMessage() ? ': ' . $exception->getMessage() : '')
+                ]);
+            }
+            
             $this->getMessageManager()->addWarning(__('删除失败！'));
             if (DEV) $this->getMessageManager()->addException($exception);
             $this->redirect('*/backend/user/listing');

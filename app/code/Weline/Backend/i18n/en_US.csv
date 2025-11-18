@@ -1,16 +1,5 @@
 跳过格式不正确的菜单配置文件：%{1},跳过格式不正确的菜单配置文件：%{1}
-"菜单元素menus必须设置：noNamespaceSchemaLocation=""urn:weline:module:Weline_Backend::etc/xsd/menu.xsd""，文件：%{1}","菜单元素menus必须设置：noNamespaceSchemaLocation=""urn:weline:module:Weline_Backend::etc/xsd/menu.xsd""，文件：%{1}"
-"菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
 "菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}","菜单排序值 %{1} 重复,请重新设置order排序值.错误所在文件：%{2}"
-"菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
-"菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
 开始收集菜单...,开始收集菜单...
 菜单收集完成！,菜单收集完成！
 清理事件缓存...,清理事件缓存...
@@ -64,10 +53,24 @@ Token无效,Token无效
 "保存失败! %{1}","保存失败! %{1}"
 保存成功！,保存成功！
 "找不到模组: %{1}","找不到模组: %{1}"
-"key格式错误，请使用[模块::key],例如：%{1}","key格式错误，请使用[模块::key],例如：%{1}"
-"模块不存在，请检查模块名称!请使用[模块::key],例如：%{1}。当前Key：%{2}，模块：%{3}","模块不存在，请检查模块名称!请使用[模块::key],例如：%{1}。当前Key：%{2}，模块：%{3}"
 请先登录,"Please login first"
 模块不存在：%{1},模块不存在：%{1}
 系统菜单,系统菜单
 用户菜单,用户菜单
 "JS: inject_path函数path路径不允许为空！","JS: inject_path函数path路径不允许为空！"
+"Weline Framework","Weline Framework"
+"Weline Framework - 后台管理","Weline Framework - 后台管理"
+"Weline Framework - 现代化的PHP框架后台管理","Weline Framework - 现代化的PHP框架后台管理"
+"菜单元素menus必须设置：noNamespaceSchemaLocation=""urn:weline:module:Weline_Backend::etc/xsd/menu.xsd""，文件：%{1}","菜单元素menus必须设置：noNamespaceSchemaLocation=""urn:weline:module:Weline_Backend::etc/xsd/menu.xsd""，文件：%{1}"
+"菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/""  icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少icon属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少name属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少source属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少title属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少action属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>","菜单配置错诶：add元素缺少order属性,文件：%{1} 配置示例： <add source=""Weline_Backend::dashboard"" name=""Dashboard"" title=""Dashboard"" action=""/"" icon=""mdi-home-variant-outline"" order=""999""/>"
+"key格式错误，请使用[模块::key],例如：%{1}","key格式错误，请使用[模块::key],例如：%{1}"
+"模块不存在，请检查模块名称!请使用[模块::key],例如：%{1}。当前Key：%{2}，模块：%{3}","模块不存在，请检查模块名称!请使用[模块::key],例如：%{1}。当前Key：%{2}，模块：%{3}"

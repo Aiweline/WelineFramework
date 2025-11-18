@@ -1,0 +1,37 @@
+<?php
+/**
+ * 布局：个人中心 - 认证页面布局
+ * 
+ * 登录/注册等认证页面的专用布局
+ * 字段
+ * @info description 描述：登录/注册等认证页面的专用布局
+ * @info name 名称：个人中心认证页面布局
+ * @param title 页面标题
+ * @param content 认证表单内容（HTML字符串）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('登录');
+$content = $this->getData('content') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="account-auth-content <?= htmlspecialchars($class) ?>">
+        <div class="auth-container">
+            <?= $content ?>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

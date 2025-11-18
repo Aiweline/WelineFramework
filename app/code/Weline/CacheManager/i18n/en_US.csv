@@ -43,7 +43,7 @@
 过期文件数,过期文件数
 可释放空间,可释放空间
 过期文件比例,过期文件比例
-"过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', [","过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', ["
+"过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)","过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)"
 缓存清理说明,缓存清理说明
 自动清理：,自动清理：
 系统每10分钟自动清理7天前的过期缓存文件,系统每10分钟自动清理7天前的过期缓存文件
@@ -89,3 +89,4 @@ system,system
 系统持久缓存无法操作,系统持久缓存无法操作
 开启,开启
 关闭,Close
+"过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', [","过期文件: %{expired_files} / %{total_files} (%{expired_percentage}%)', ["

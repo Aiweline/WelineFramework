@@ -39,17 +39,71 @@ class BaseController extends \Weline\Framework\App\Controller\BackendController
             ->where('ln.' . Locale\Name::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
         $this->locale = $locale;
         $targetLocale = clone $locale;
-        $targetLocale = $targetLocale->where($locale::fields_CODE, Cookie::getLangLocal())
-        ->find()
-        ->fetch();
+        $targetLocale = $targetLocale->clearQuery()
+            ->where($locale::fields_CODE, Cookie::getLangLocal())
+            ->find()
+            ->fetch();
         if (!$targetLocale->getId()) {
+            $currentLang = Cookie::getLangLocal();
+            // 尝试从语言代码中提取国家代码（例如：zh_Hans_CN -> CN）
+            $countryCode = '';
+            if (preg_match('/_([A-Z]{2})$/', $currentLang, $matches)) {
+                $countryCode = $matches[1];
+            } elseif (preg_match('/^([A-Z]{2})_/', $currentLang, $matches)) {
+                $countryCode = $matches[1];
+            }
+            
+            $flag = '';
+            if ($countryCode) {
+                try {
+                    $flag = $i18n->getCountryFlag($countryCode, 24, 18);
+                    if (empty($flag)) {
+                        throw new \Exception('Empty flag');
+                    }
+                } catch (\Exception $e) {
+                    // 如果获取失败，尝试使用 getCountryFlagWithLocal
+                    try {
+                        $flagData = $i18n->getCountryFlagWithLocal($currentLang, 24, 18);
+                        if (is_array($flagData) && isset($flagData['flag']) && !empty($flagData['flag'])) {
+                            $flag = $flagData['flag'];
+                        }
+                    } catch (\Exception $e2) {
+                        // 静默失败，使用空字符串
+                        $flag = '';
+                    }
+                }
+            } else {
+                // 如果无法提取国家代码，尝试使用 getCountryFlagWithLocal
+                try {
+                    $flagData = $i18n->getCountryFlagWithLocal($currentLang, 24, 18);
+                    if (is_array($flagData) && isset($flagData['flag']) && !empty($flagData['flag'])) {
+                        $flag = $flagData['flag'];
+                    }
+                } catch (\Exception $e) {
+                    // 静默失败，使用空字符串
+                    $flag = '';
+                }
+            }
+            
             $target_locale = [
-                'code' => Cookie::getLangLocal(),
-                'name' => $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal()),
+                'code' => $currentLang,
+                'name' => $i18n->getLocaleName($currentLang, $currentLang),
+                'flag' => $flag,
             ];
         } else {
-            $target_locale         = $targetLocale->getData();
-            $target_locale['name'] = $locale->getData(Locale\Name::fields_DISPLAY_NAME);
+            $target_locale = $targetLocale->getData();
+            $target_locale['name'] = $targetLocale->getData(Locale\Name::fields_DISPLAY_NAME) ?: $i18n->getLocaleName(Cookie::getLangLocal(), Cookie::getLangLocal());
+            // 获取国家代码并获取国旗
+            $countryCode = $targetLocale->getData($locale::fields_COUNTRY_CODE);
+            if ($countryCode) {
+                try {
+                    $target_locale['flag'] = $i18n->getCountryFlag($countryCode, 24, 18) ?: '';
+                } catch (\Exception $e) {
+                    $target_locale['flag'] = '';
+                }
+            } else {
+                $target_locale['flag'] = '';
+            }
         }
         $this->assign('target_locale', $target_locale);
         $this->i18n   = $i18n;

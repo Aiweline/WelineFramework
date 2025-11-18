@@ -8,9 +8,9 @@
          name="multipass_management" 
          title="Multipass管理" 
          action=""
-         parent="Weline_Backend::system_module" 
+         parent="Weline_Backend::business_module" 
          icon="mdi mdi-key-link" 
-         order="60"/>
+         order="25000"/>
     
     <!-- Multipass账户管理子菜单 -->
     <add source="Weline_Multipass::account_management" 

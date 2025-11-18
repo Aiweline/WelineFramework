@@ -1,0 +1,22 @@
+<?php
+/**
+ * 片段：Backend Footer - 默认风格
+ * 
+ * 后端管理界面的默认底部
+ * 字段
+ * @info description 描述：后端管理界面的默认底部
+ * @info name 名称：Footer底部片段
+ * @param copyright 版权信息
+ * @param class 额外CSS类
+ */
+$copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+$class = $this->getData('class') ?? '';
+?>
+<footer class="backend-footer <?= htmlspecialchars($class) ?>">
+    <div class="footer-container">
+        <div class="footer-bottom">
+            <p><?= htmlspecialchars($copyright) ?></p>
+        </div>
+    </div>
+</footer>
+

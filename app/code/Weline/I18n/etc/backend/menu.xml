@@ -2,11 +2,15 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--国际化分组菜单-->
+    <add source="Weline_I18n::i18n_management" name="i18n_management" title="国际化" action="" parent="Weline_Backend::system_menu"
+         icon="mdi mdi-translate" order="20600"/>
+    
     <!--顶层：系统配置-->
     <add source="Weline_I18n::i18n" name="i18n_manager" title="I18n国际化" action=""
-         parent="Weline_Backend::system_configuration"
+         parent="Weline_I18n::i18n_management"
          icon="ri-translate"
-         order="99"/>
+         order="10"/>
     <add source="Weline_I18n::i18n_localization" name="i18n_localization" title="本地化" action="/i18n/backend/localization"
          parent="Weline_I18n::i18n"
          icon="ri-translate-2"

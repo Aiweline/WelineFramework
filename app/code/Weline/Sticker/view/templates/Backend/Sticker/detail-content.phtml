@@ -1,0 +1,489 @@
+<?php
+/**
+ * Sticker 详情内容视图
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$targetModule = $this->getData('target_module') ?? '';
+$targetFile = $this->getData('target_file') ?? '';
+$sourceModule = $this->getData('source_module') ?? '';
+$stickerFile = $this->getData('sticker_file') ?? '';
+$stickerRelativePath = $this->getData('sticker_relative_path') ?? '';
+$actions = $this->getData('actions') ?? [];
+$actionsCount = $this->getData('actions_count') ?? 0;
+$status = $this->getData('status') ?? [];
+$isActive = $this->getData('is_active') ?? false;
+$hasConflict = $this->getData('has_conflict') ?? false;
+$errorMessage = $this->getData('error_message') ?? '';
+$stickerContent = $this->getData('sticker_content') ?? '';
+$sourceContent = $this->getData('source_content') ?? '';
+$sourceFilePath = $this->getData('source_file_path') ?? '';
+$compiledContent = $this->getData('compiled_content') ?? '';
+$compiledFilePath = $this->getData('compiled_file_path') ?? '';
+?>
+
+<!-- 基本信息 -->
+<div class="sticker-detail-section">
+    <h5 class="section-title">基本信息</h5>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="info-item">
+                <label>目标模块:</label>
+                <span class="badge badge-info"><?= htmlspecialchars($targetModule) ?></span>
+            </div>
+            <div class="info-item">
+                <label>目标文件:</label>
+                <code class="text-primary"><?= htmlspecialchars($targetFile) ?></code>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="info-item">
+                <label>来源模块:</label>
+                <span class="badge badge-success"><?= htmlspecialchars($sourceModule) ?></span>
+            </div>
+            <div class="info-item">
+                <label>Sticker文件:</label>
+                <code class="text-secondary"><?= htmlspecialchars($stickerRelativePath) ?></code>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 状态信息 -->
+<div class="sticker-detail-section">
+    <h5 class="section-title">状态信息</h5>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="info-item">
+                <label>生效状态:</label>
+                <?php if ($isActive): ?>
+                    <span class="badge badge-success">
+                        <i class="mdi mdi-check-circle"></i> 已生效
+                    </span>
+                <?php else: ?>
+                    <span class="badge badge-danger" title="<?= htmlspecialchars($errorMessage) ?>">
+                        <i class="mdi mdi-close-circle"></i> 未生效
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="info-item">
+                <label>冲突状态:</label>
+                <?php if ($hasConflict): ?>
+                    <span class="badge badge-danger">
+                        <i class="mdi mdi-alert-circle"></i> 有冲突
+                    </span>
+                <?php else: ?>
+                    <span class="badge badge-success">
+                        <i class="mdi mdi-check-circle"></i> 无冲突
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="info-item">
+                <label>规则数量:</label>
+                <span class="badge badge-warning"><?= $actionsCount ?></span>
+            </div>
+            <?php if (!$isActive && !empty($errorMessage)): ?>
+                <div class="info-item">
+                    <label>错误信息:</label>
+                    <div class="error-message"><?= htmlspecialchars($errorMessage) ?></div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- 规则列表 -->
+<?php if (!empty($actions)): ?>
+<div class="sticker-detail-section">
+    <h5 class="section-title">规则列表</h5>
+    <div class="actions-list">
+        <?php foreach ($actions as $index => $action): ?>
+            <div class="action-item">
+                <div class="action-header">
+                    <span class="action-index">#<?= $index + 1 ?></span>
+                    <span class="action-type badge badge-primary"><?= htmlspecialchars($action['type'] ?? 'replace') ?></span>
+                    <span class="action-position">位置: <?= htmlspecialchars($action['position'] ?? 'all') ?></span>
+                </div>
+                <div class="action-content">
+                    <div class="action-target">
+                        <label>目标代码:</label>
+                        <pre class="code-block"><code><?= htmlspecialchars($action['target'] ?? '') ?></code></pre>
+                    </div>
+                    <div class="action-code">
+                        <label>替换代码:</label>
+                        <pre class="code-block"><code><?= htmlspecialchars($action['code'] ?? '') ?></code></pre>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- 文件内容 -->
+<div class="sticker-detail-section">
+    <h5 class="section-title">文件内容</h5>
+    
+    <!-- 标签页导航 -->
+    <ul class="nav nav-tabs" id="fileTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="sticker-tab" data-bs-toggle="tab" data-bs-target="#sticker-content" type="button" role="tab" aria-controls="sticker-content" aria-selected="true">
+                Sticker文件
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="source-tab" data-bs-toggle="tab" data-bs-target="#source-content" type="button" role="tab" aria-controls="source-content" aria-selected="false">
+                源文件
+            </button>
+        </li>
+        <?php if (!empty($compiledContent)): ?>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="compiled-tab" data-bs-toggle="tab" data-bs-target="#compiled-content" type="button" role="tab" aria-controls="compiled-content" aria-selected="false">
+                编译后文件
+            </button>
+        </li>
+        <?php endif; ?>
+    </ul>
+    
+    <!-- 标签页内容 -->
+    <div class="tab-content" id="fileTabsContent">
+        <div class="tab-pane fade show active" id="sticker-content" role="tabpanel" aria-labelledby="sticker-tab">
+            <div class="file-info">
+                <small class="text-muted">文件路径: <?= htmlspecialchars($stickerFile) ?></small>
+            </div>
+            <div class="code-container">
+                <pre class="code-block"><code><?= htmlspecialchars($stickerContent) ?></code></pre>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="source-content" role="tabpanel" aria-labelledby="source-tab">
+            <div class="file-info">
+                <small class="text-muted">文件路径: <?= htmlspecialchars($sourceFilePath) ?></small>
+            </div>
+            <div class="code-container">
+                <pre class="code-block"><code><?= htmlspecialchars($sourceContent) ?></code></pre>
+            </div>
+        </div>
+        <?php if (!empty($compiledContent)): ?>
+        <div class="tab-pane fade" id="compiled-content" role="tabpanel" aria-labelledby="compiled-tab">
+            <div class="file-info">
+                <small class="text-muted">文件路径: <?= htmlspecialchars($compiledFilePath) ?></small>
+            </div>
+            <div class="code-container">
+                <pre class="code-block"><code><?= htmlspecialchars($compiledContent) ?></code></pre>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+/* Sticker详情样式 */
+.sticker-detail-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .sticker-detail-section {
+    border-bottom-color: #2d3448;
+}
+
+.section-title {
+    color: #212529;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #0bb197;
+}
+
+[data-theme-mode="dark"] .section-title {
+    color: #e9ecef;
+}
+
+.info-item {
+    margin-bottom: 15px;
+}
+
+.info-item label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #74788d;
+    font-size: 14px;
+}
+
+[data-theme-mode="dark"] .info-item label {
+    color: #8590a5;
+}
+
+.error-message {
+    padding: 8px 12px;
+    background-color: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: 4px;
+    color: #c53030;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+[data-theme-mode="dark"] .error-message {
+    background-color: #2a1a1a;
+    border-color: #4a2a2a;
+    color: #fc8181;
+}
+
+/* 规则列表样式 */
+.actions-list {
+    margin-top: 15px;
+}
+
+.action-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #eff2f7;
+    border-radius: 6px;
+}
+
+[data-theme-mode="dark"] .action-item {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.action-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.action-index {
+    font-weight: 600;
+    color: #0bb197;
+}
+
+.action-position {
+    font-size: 12px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .action-position {
+    color: #8590a5;
+}
+
+.action-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .action-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+.action-target, .action-code {
+    margin-bottom: 10px;
+}
+
+.action-target label, .action-code label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #74788d;
+    font-size: 14px;
+}
+
+[data-theme-mode="dark"] .action-target label, 
+[data-theme-mode="dark"] .action-code label {
+    color: #8590a5;
+}
+
+/* 代码块样式 */
+.code-block {
+    background-color: #f8f9fa;
+    border: 1px solid #eff2f7;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+[data-theme-mode="dark"] .code-block {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.code-block code {
+    background: none;
+    padding: 0;
+    border: none;
+    color: #212529;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+[data-theme-mode="dark"] .code-block code {
+    color: #e9ecef;
+}
+
+/* 标签页样式 */
+.nav-tabs {
+    border-bottom: 1px solid #eff2f7;
+    margin-bottom: 15px;
+}
+
+[data-theme-mode="dark"] .nav-tabs {
+    border-bottom-color: #2d3448;
+}
+
+.nav-link {
+    color: #74788d;
+    border: 1px solid transparent;
+    border-bottom: none;
+    padding: 8px 16px;
+    margin-right: 5px;
+    border-radius: 4px 4px 0 0;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .nav-link {
+    color: #8590a5;
+}
+
+.nav-link:hover {
+    color: #0bb197;
+    border-color: #eff2f7;
+}
+
+[data-theme-mode="dark"] .nav-link:hover {
+    border-color: #2d3448;
+}
+
+.nav-link.active {
+    color: #0bb197;
+    background-color: #fff;
+    border-color: #eff2f7;
+    border-bottom-color: #fff;
+}
+
+[data-theme-mode="dark"] .nav-link.active {
+    background-color: #252b3b;
+    border-color: #2d3448;
+    border-bottom-color: #252b3b;
+}
+
+.tab-content {
+    background-color: #fff;
+    border: 1px solid #eff2f7;
+    border-radius: 0 0 4px 4px;
+    padding: 15px;
+}
+
+[data-theme-mode="dark"] .tab-content {
+    background-color: #252b3b;
+    border-color: #2d3448;
+}
+
+.tab-pane {
+    padding: 0;
+}
+
+.file-info {
+    margin-bottom: 10px;
+}
+
+.code-container {
+    max-height: 500px;
+    overflow: auto;
+}
+
+/* Badge 样式 */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.badge-primary { 
+    background-color: #0bb197; 
+    color: white; 
+}
+
+.badge-info { 
+    background-color: #4aa3ff; 
+    color: white; 
+}
+
+.badge-success { 
+    background-color: #0ac074; 
+    color: white; 
+}
+
+.badge-warning { 
+    background-color: #fcb92c; 
+    color: #212529; 
+}
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
+
+.badge-danger { 
+    background-color: #ff3d60; 
+    color: white; 
+}
+
+.badge-secondary { 
+    background-color: #74788d; 
+    color: white; 
+}
+
+/* 代码样式 */
+code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #0bb197;
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.text-primary {
+    color: #0bb197 !important;
+}
+
+.text-secondary {
+    color: #74788d !important;
+}
+
+[data-theme-mode="dark"] .text-secondary {
+    color: #8590a5 !important;
+}
+
+.text-muted {
+    color: #74788d !important;
+}
+
+[data-theme-mode="dark"] .text-muted {
+    color: #8590a5 !important;
+}
+</style>

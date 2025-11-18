@@ -49,15 +49,16 @@ class BackendRestController extends AbstractRestController
     }
 
         
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200)
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404)
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
-
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 
     protected function exception(\Exception $exception, string $msg = '请求失败！', mixed $data = '', int $code = 403): mixed

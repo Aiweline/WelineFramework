@@ -41,8 +41,10 @@ class MenuUrlValidator
         }
 
         // 尝试从缓存获取
+        /** @var \Weline\Framework\Cache\CacheFactoryInterface $cacheFactory */
+        $cacheFactory = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
         /** @var CacheInterface $cache */
-        $cache = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
+        $cache = $cacheFactory->create();
         $cachedPaths = $cache->get(self::CACHE_KEY);
 
         if ($cachedPaths !== false && is_array($cachedPaths)) {
@@ -86,8 +88,11 @@ class MenuUrlValidator
     public static function clearCache(): void
     {
         self::$menuPathsCache = null;
+        /** @var \Weline\Framework\Cache\CacheFactoryInterface $cacheFactory */
+        $cacheFactory = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
+        // CacheFactory需要调用create()方法获取CacheInterface实例
         /** @var CacheInterface $cache */
-        $cache = ObjectManager::getInstance(\Weline\Admin\Cache\AdminCache::class);
+        $cache = $cacheFactory->create();
         $cache->delete(self::CACHE_KEY);
     }
 }

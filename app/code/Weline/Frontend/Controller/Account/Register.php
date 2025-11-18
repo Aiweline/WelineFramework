@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Controller\Account;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\View\Template;
@@ -24,7 +25,6 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
     ) {
         $this->session = $session;
         $this->template = $template;
-        parent::__construct();
     }
 
     /**
@@ -37,7 +37,11 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
             $this->redirect('/frontend/account');
         }
 
-        return $this->template->setFile('Weline_Frontend::account/register.phtml')->toHtml();
+        // 使用主题认证布局
+        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/auth.phtml', [
+            'title' => __('用户注册'),
+            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/register.phtml')
+        ]);
     }
 
     /**
@@ -111,6 +115,16 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
             $newUser->setSessionId($this->session->getSessionId())
                 ->setLoginIp($this->request->clientIP())
                 ->save();
+
+            // 派发注册成功事件
+            /** @var EventsManager $eventManager */
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = new \Weline\Framework\DataObject\DataObject([
+                'user' => $newUser,
+                'request' => $this->request,
+                'session' => $this->session
+            ]);
+            $eventManager->dispatch('Frontend_Account_Register::register_after', $eventData);
 
             return $this->json([
                 'success' => true,

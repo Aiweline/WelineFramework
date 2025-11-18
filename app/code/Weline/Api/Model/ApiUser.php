@@ -33,6 +33,7 @@ class ApiUser extends \Weline\Framework\Database\Model
     public const fields_allowed_ips = 'allowed_ips';
     public const fields_user_agent_restriction_enabled = 'user_agent_restriction_enabled';
     public const fields_allowed_user_agents = 'allowed_user_agents';
+    public const fields_is_sandbox = 'is_sandbox';
 
     public string $table = 'm_api_user';
 
@@ -52,7 +53,18 @@ class ApiUser extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // 数据库升级逻辑
+        if (!$setup->hasField(self::fields_is_sandbox)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_is_sandbox,
+                    self::fields_is_deleted,
+                    TableInterface::column_type_INTEGER,
+                    1,
+                    'default 0',
+                    '是否沙盒账户'
+                )
+                ->alter();
+        }
     }
 
     /**
@@ -265,6 +277,22 @@ class ApiUser extends \Weline\Framework\Database\Model
     }
 
     /**
+     * 是否沙盒账户
+     */
+    public function isSandboxAccount(): bool
+    {
+        return (bool)($this->getData(self::fields_is_sandbox) ?? false);
+    }
+
+    /**
+     * 设置沙盒账户
+     */
+    public function setSandboxAccount(bool $sandbox): self
+    {
+        return $this->setData(self::fields_is_sandbox, (int)$sandbox);
+    }
+
+    /**
      * 是否删除
      */
     public function getIsDeleted(): bool
@@ -455,7 +483,7 @@ class ApiUser extends \Weline\Framework\Database\Model
     /**
      * 保存前自动生成API Key和Secret（如果不存在）
      */
-    public function beforeSave(): self
+    public function save_before()
     {
         // 如果是新用户且没有API Key，自动生成
         if (!$this->getId() && empty($this->getApiKey())) {
@@ -470,7 +498,7 @@ class ApiUser extends \Weline\Framework\Database\Model
             $this->setData('created_at', date('Y-m-d H:i:s'));
         }
         
-        return $this;
+        parent::save_before();
     }
 }
 

@@ -1,0 +1,61 @@
+<?php
+/**
+ * 片段：Sidebar
+ * 
+ * 侧边栏导航
+ * 字段
+ * @info description 描述：侧边栏导航
+ * @info name 名称：Sidebar侧边栏片段
+ * @param items 菜单项数组（必填）
+ * @param activeItem 当前激活项
+ * @param collapsed 是否折叠
+ * @param class 额外CSS类
+ */
+$items = $this->getData('items') ?? [];
+$activeItem = $this->getData('activeItem') ?? '';
+$collapsed = $this->getData('collapsed') ?? false;
+$class = $this->getData('class') ?? '';
+
+// 构建CSS类
+$sidebarClass = 'sidebar';
+if ($collapsed) {
+    $sidebarClass .= ' collapsed';
+}
+if ($class) {
+    $sidebarClass .= ' ' . htmlspecialchars($class);
+}
+
+// 检查菜单项是否激活
+$isActive = function($url, $activeItem) {
+    return $url === $activeItem || strpos($activeItem, $url) === 0;
+};
+?>
+<aside class="<?= $sidebarClass ?>">
+    <nav class="sidebar-nav">
+        <ul class="sidebar-menu">
+            <?php foreach ($items as $item): ?>
+                <li class="sidebar-menu-item <?= $isActive($item['url'] ?? '', $activeItem) ? 'active' : '' ?>">
+                    <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-menu-link">
+                        <?php if (isset($item['icon'])): ?>
+                            <i class="<?= htmlspecialchars($item['icon']) ?>"></i>
+                        <?php endif; ?>
+                        <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+                    </a>
+                    
+                    <?php if (isset($item['children']) && !empty($item['children'])): ?>
+                        <ul class="sidebar-submenu">
+                            <?php foreach ($item['children'] as $child): ?>
+                                <li class="sidebar-submenu-item <?= $isActive($child['url'] ?? '', $activeItem) ? 'active' : '' ?>">
+                                    <a href="<?= htmlspecialchars($child['url'] ?? '#') ?>">
+                                        <?= htmlspecialchars($child['text'] ?? '') ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </nav>
+</aside>
+

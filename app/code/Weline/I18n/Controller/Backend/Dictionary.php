@@ -213,7 +213,7 @@ class Dictionary extends BaseController
     private function getSampleTranslations($localeCode)
     {
         $translations = [
-            'zh_CN' => [
+            'zh_Hans_CN' => [
                 'Hello' => '你好',
                 'World' => '世界',
                 'Welcome' => '欢迎',
@@ -867,17 +867,17 @@ class Dictionary extends BaseController
             // 如果找到目标记录，调整分页以显示目标记录及其上下文
             if ($targetIndex >= 0) {
                 // 计算目标记录应该在的页码
-                $targetPage = floor($targetIndex / $pageSize) + 1;
+                $targetPage = (int)(floor($targetIndex / $pageSize) + 1);
                 $page = $targetPage;
                 
                 // 获取目标记录前后的上下文（共5条记录，目标记录居中）
                 $contextSize = 5;
-                $contextStart = max(0, $targetIndex - floor($contextSize / 2));
-                $contextEnd = min($total, $contextStart + $contextSize);
+                $contextStart = (int)max(0, $targetIndex - floor($contextSize / 2));
+                $contextEnd = (int)min($total, $contextStart + $contextSize);
                 
                 // 如果末尾不够，调整开始位置
                 if ($contextEnd - $contextStart < $contextSize && $contextStart > 0) {
-                    $contextStart = max(0, $contextEnd - $contextSize);
+                    $contextStart = (int)max(0, $contextEnd - $contextSize);
                 }
                 
                 $paginatedItems = array_slice($translationItems, $contextStart, $contextSize);
@@ -887,7 +887,7 @@ class Dictionary extends BaseController
                 
             } else {
                 // 正常分页
-                $offset = ($page - 1) * $pageSize;
+                $offset = (int)(($page - 1) * $pageSize);
                 $paginatedItems = array_slice($translationItems, $offset, $pageSize);
                 $targetIndexInPage = -1;
             }

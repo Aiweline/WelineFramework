@@ -6,9 +6,9 @@
     <add source="WeShop_Store::main" name="main" title="店铺" action=""
          parent="WeShop_Shop::main"
          icon="ri-store-3-line"
-         order="1"/>
+         order="20"/>
     <add source="WeShop_Store::listing" name="main" title="列表" action="shop-store/backend/store"
          parent="WeShop_Store::main"
          icon="ri-store-3-line"
-         order="1"/>
+         order="10"/>
 </menus>

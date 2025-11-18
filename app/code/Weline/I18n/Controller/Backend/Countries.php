@@ -42,8 +42,17 @@ class Countries extends BaseController
     {
         parent::__construct($locale, $i18n);
         $this->countries = $countries;
-        // 使用LEFT JOIN获取国家显示名称
-        $this->countries->joinModel(Name::class, 'cln', 'main_table.code=cln.country_code', 'left');
+        // 使用LEFT JOIN获取国家显示名称，明确选择 display_name 字段
+        // 在 ON 条件中添加当前语言限制，优先显示当前语言的显示名称
+        $currentLang = Cookie::getLangLocal();
+        $joinCondition = "main_table.code=cln.country_code AND cln." . Name::fields_DISPLAY_LOCALE_CODE . "='" . addslashes($currentLang) . "'";
+        $this->countries->joinModel(
+            Name::class, 
+            'cln', 
+            $joinCondition, 
+            'left',
+            'cln.' . Name::fields_DISPLAY_NAME . ' as display_name, cln.' . Name::fields_DISPLAY_LOCALE_CODE
+        );
         $this->localeNames = $localeName;
     }
 
@@ -87,8 +96,9 @@ class Countries extends BaseController
             }
         }
         
-        // 暂时移除有问题的locale_code引用
-        $this->countries->where('cln.' . $this->localeNames::fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
+        // 注意：由于使用了 LEFT JOIN，即使没有显示名称也会显示国家记录
+        // 我们不在查询时限制显示名称的语言，而是在数据处理时优先使用当前语言的显示名称
+        // 这样可以避免复杂的 OR 条件导致的 SQL 错误
     }
 
     public function index()
@@ -129,7 +139,7 @@ class Countries extends BaseController
         $query_copy = clone $query;
         $installed_countries = $query->pagination()->select()->fetch();
         # 查不到数据就更新
-        if ($installed_countries->getTotal() == 0) {
+        if (empty($installed_countries->getItems())) {
             $updateService = ObjectManager::getInstance(\Weline\I18n\Service\CountryDataUpdateService::class);
             $updateService->updateCountryData();
             $installed_countries = $query_copy->pagination()->select()->fetch();
@@ -138,12 +148,113 @@ class Countries extends BaseController
         // 自动更新当前语言的显示数据（只有当前语言没有数据时才更新）
         $this->autoUpdateMissingLocaleData();
         
-        $this->assign('countries', $installed_countries->getItems());
+        // 处理国家数据，确保 display_name 字段正确
+        $countries = $installed_countries->getItems();
+        $currentLang = Cookie::getLangLocal();
+        
+        foreach ($countries as $country) {
+            // 如果 display_name 为空，使用国家代码或从 I18n 服务获取
+            if (empty($country->getData('display_name'))) {
+                $countryCode = $country->getData($this->countries::fields_CODE);
+                // 尝试从 I18n 服务获取国家名称
+                try {
+                    $countryNames = $this->i18n->getCountries($currentLang);
+                    if (isset($countryNames[$countryCode])) {
+                        $country->setData('display_name', $countryNames[$countryCode]);
+                    } else {
+                        // 如果还是没有，使用国家代码
+                        $country->setData('display_name', $countryCode);
+                    }
+                } catch (\Exception $e) {
+                    // 如果获取失败，使用国家代码
+                    $country->setData('display_name', $countryCode);
+                }
+            }
+            
+            // 确保 flag 字段存在
+            if (empty($country->getData('flag'))) {
+                $countryCode = $country->getData($this->countries::fields_CODE);
+                try {
+                    $flag = $this->i18n->getCountryFlag($countryCode, 32, 24);
+                    $country->setData('flag', $flag ?: '');
+                } catch (\Exception $e) {
+                    $country->setData('flag', '');
+                }
+            }
+        }
+        
+        // 检测是否为AJAX请求或请求JSON格式
+        $isAjax = $this->request->isAjax();
+        $acceptHeader = $this->request->getHeader('Accept') ?? '';
+        $format = $this->request->getGet('format', '');
+        $isJsonRequest = $isAjax 
+            || strpos($acceptHeader, 'application/json') !== false 
+            || $format === 'json';
+        
+        // 如果是JSON请求，返回JSON格式数据
+        if ($isJsonRequest) {
+            return $this->jsonResponse($countries, $installed_countries->getPagination(), $filter, $search);
+        }
+        
+        // 否则返回HTML模板
+        $this->assign('countries', $countries);
         $this->assign('countries_pagination', $installed_countries->getPagination());
         $this->assign('current_filter', $filter);
         $this->assign('search', $search);
         
         return $this->fetch();
+    }
+    
+    /**
+     * JSON响应方法
+     * 
+     * @param array $countries 国家列表
+     * @param mixed $pagination 分页对象
+     * @param string $filter 筛选条件
+     * @param string $search 搜索关键词
+     * @return string
+     */
+    private function jsonResponse($countries, $pagination, $filter, $search): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        
+        // 格式化国家数据
+        $countriesData = [];
+        foreach ($countries as $country) {
+            $countriesData[] = [
+                'id' => $country->getId(),
+                'code' => $country->getData($this->countries::fields_CODE),
+                'display_name' => $country->getData('display_name') ?: $country->getData($this->countries::fields_CODE),
+                'flag' => $country->getData('flag') ?: '',
+                'is_install' => (bool)$country->getData($this->countries::fields_IS_INSTALL),
+                'is_active' => (bool)$country->getData($this->countries::fields_IS_ACTIVE),
+                'display_locale_code' => $country->getData('display_locale_code') ?: Cookie::getLangLocal(),
+            ];
+        }
+        
+        // 格式化分页数据
+        $paginationData = null;
+        if ($pagination) {
+            $paginationData = [
+                'current_page' => $pagination->getCurrentPage(),
+                'page_size' => $pagination->getPageSize(),
+                'total_pages' => $pagination->getTotalPages(),
+                'total_records' => $pagination->getTotalRecords(),
+            ];
+        }
+        
+        // 返回JSON响应
+        return json_encode([
+            'success' => true,
+            'message' => __('获取成功'),
+            'data' => [
+                'countries' => $countriesData,
+                'pagination' => $paginationData,
+                'filter' => $filter,
+                'search' => $search,
+                'current_locale' => Cookie::getLangLocal(),
+            ]
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -229,6 +340,13 @@ class Countries extends BaseController
     public function postUninstall()
     {
         $code = $this->request->getPost('code');
+        
+        // 禁止删除中国（CN）
+        if ($code === 'CN') {
+            $this->getMessageManager()->addError(__('不允许卸载中国（CN），这是系统默认国家'));
+            $this->redirect('*/backend/countries');
+        }
+        
         try {
             $this->countries->clearQuery()->where($this->countries::fields_CODE, $code)
                 ->find()
@@ -280,6 +398,13 @@ class Countries extends BaseController
             $this->getMessageManager()->addWarning(__('请选择国家禁用！'));
             $this->redirect('*/backend/countries?filter=' . $filter);
         }
+        
+        // 禁止停用中国（CN）
+        if ($code === 'CN') {
+            $this->getMessageManager()->addError(__('不允许停用中国（CN），这是系统默认国家'));
+            $this->redirect('*/backend/countries?filter=' . $filter);
+        }
+        
         try {
             $this->countries->clearQuery();
             $this->countries->load($this->countries::fields_CODE, $code);

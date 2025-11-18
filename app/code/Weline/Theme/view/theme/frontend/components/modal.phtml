@@ -1,0 +1,71 @@
+<?php
+/**
+ * 组件：Modal
+ * 
+ * 模态框组件，用于弹窗展示内容
+ * 字段
+ * @info description 描述：模态框组件，用于弹窗展示内容
+ * @info name 名称：Modal模态框组件
+ * @param id 模态框ID（必填）
+ * @param title 模态框标题
+ * @param content 内容（HTML字符串，必填）
+ * @param footer 底部内容（按钮等）
+ * @param size 尺寸 (sm/md/lg/xl)
+ * @param backdrop 是否显示背景遮罩
+ * @param keyboard 是否支持ESC关闭
+ * @param closeButton 是否显示关闭按钮
+ */
+$id = $this->getData('id') ?? '';
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$footer = $this->getData('footer') ?? '';
+$size = $this->getData('size') ?? 'md';
+$backdrop = $this->getData('backdrop') ?? true;
+$keyboard = $this->getData('keyboard') ?? true;
+$closeButton = $this->getData('closeButton') ?? true;
+
+// 构建CSS类
+$modalClass = 'modal';
+$modalContentClass = 'modal-content modal-' . htmlspecialchars($size);
+?>
+<div class="<?= $modalClass ?>" 
+     id="<?= htmlspecialchars($id) ?>"
+     tabindex="-1"
+     role="dialog"
+     aria-labelledby="<?= htmlspecialchars($id) ?>Label"
+     aria-hidden="true"
+     data-backdrop="<?= $backdrop ? 'true' : 'false' ?>"
+     data-keyboard="<?= $keyboard ? 'true' : 'false' ?>">
+    <div class="modal-dialog" role="document">
+        <div class="<?= $modalContentClass ?>">
+            <?php if ($title || $closeButton): ?>
+                <div class="modal-header">
+                    <?php if ($title): ?>
+                        <h5 class="modal-title" id="<?= htmlspecialchars($id) ?>Label">
+                            <?= htmlspecialchars($title) ?>
+                        </h5>
+                    <?php endif; ?>
+                    <?php if ($closeButton): ?>
+                        <button type="button" 
+                                class="close" 
+                                data-dismiss="modal" 
+                                aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            
+            <div class="modal-body">
+                <?= $content ?>
+            </div>
+            
+            <?php if ($footer): ?>
+                <div class="modal-footer">
+                    <?= $footer ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+

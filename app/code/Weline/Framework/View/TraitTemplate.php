@@ -149,6 +149,7 @@ trait TraitTemplate
         $data = '';
         switch ($type) {
             case DataInterface::dir_type_TEMPLATE:
+            case DataInterface::dir_type_THEME:
                 if ($t_f = $this->viewCache->get($cache_key)) {
                     $data = $this->fetch($t_f);
                     break;
@@ -238,6 +239,48 @@ trait TraitTemplate
                     }
                 }
                 $data = rtrim($this->getUrlPath($base_url_path), DataInterface::dir_type_STATICS) . DS . $t_f;
+                break;
+            case DataInterface::dir_type_THEME:
+                // 检查是否是静态资源文件（js/css等），如果是则返回URL，否则返回文件路径
+                $isStaticResource = preg_match('/\.(js|css|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot|otf|pdf|zip)$/i', $source);
+                if ($isStaticResource) {
+                    // 静态资源：返回URL路径，参考STATICS类型的处理方式
+                    list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
+                    # 第三方模组或当前模组
+                    if ($module_name) {
+                        $modules = Env::getInstance()->getModuleList();
+                        if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
+                            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+                            // 对于THEME类型，使用theme目录
+                            $base_url_path = $module_view_dir_path . 'theme' . DS;
+                            $t_f = str_replace($module_name . '::', '', $t_f);
+                            // 移除type前缀（theme/），因为base_url_path已经包含了theme目录
+                            $t_f = preg_replace('#^theme' . preg_quote(DS, '#') . '#', '', $t_f);
+                            $t_f = preg_replace('#^theme' . preg_quote('/', '#') . '#', '', $t_f);
+                        } else {
+                            throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
+                        }
+                    } else {
+                        // 没有指定模块时，使用当前请求模块的theme目录
+                        $current_module_name = $this->getRequest()->getModuleName();
+                        $modules = Env::getInstance()->getModuleList();
+                        if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
+                            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+                            $base_url_path = $module_view_dir_path . 'theme' . DS;
+                        } else {
+                            $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS) . 'theme' . DS;
+                        }
+                    }
+                    $data = rtrim($this->getUrlPath($base_url_path), '/') . '/' . str_replace('\\', '/', $t_f);
+                } else {
+                    // 模板文件：返回文件路径
+                    $data = $this->viewCache->get($cache_key);
+                    if (PROD && $data && is_file($data)) {
+                        return $data;
+                    }
+                    list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
+                    $data = $this->getFetchFile($t_f, $module_name);
+                }
                 break;
             case DataInterface::dir_type_BASE:
             case DataInterface::dir_type_TEMPLATE:

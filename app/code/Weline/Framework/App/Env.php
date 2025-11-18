@@ -120,6 +120,9 @@ class Env extends DataObject
     // 拓展目录
     public const backup_dir = self::VAR_DIR . DS . 'backup' . DS;
 
+    // 卸载备份目录（默认在项目根目录的上级目录的 storage 目录）
+    public const path_UNINSTALL_BACKUP_DIR = null; // 将在 getUninstallBackupDir() 中动态获取
+
     // 主题设计
     public const path_THEME_DESIGN_DIR = BP . 'app' . DS . 'design' . DS;
     // 主题设计
@@ -131,6 +134,10 @@ class Env extends DataObject
      * @var Env
      */
     private static Env $instance;
+    /**
+     * 是否由业务逻辑强制开启沙盒模式
+     */
+    private bool $sandboxOverride = false;
 
     public const default_CONFIG = [
         'env' => 'local',
@@ -143,6 +150,9 @@ class Env extends DataObject
         'php-cs' => false,
         'lang' => 'zh_Hans_CN',
         'currency' => 'CNY',
+        'uninstall' => [
+            'backup_dir' => null, // 如果为 null，则使用项目根目录上级的 storage 目录
+        ],
         'db' => [
             'default' => 'sqlite',
             'master' => [
@@ -644,14 +654,15 @@ class Env extends DataObject
      */
     public function getDbConfig(): array
     {
-        if (SANDBOX || DEBUG) {
+        $sandboxEnabled = $this->isSandboxMode();
+        if ($sandboxEnabled || DEBUG) {
             $sandbox_db = $this->config['sandbox_db'] ?? [];
             if ($sandbox_db) {
                 return $sandbox_db;
             } else {
                 # 默认使用Sqlite
                 $driver_type = 'sqlite';
-                $path = BP . (SANDBOX ? 'sandbox' : 'debug') . '.db.sqlite';
+                $path = BP . ($sandboxEnabled ? 'sandbox' : 'debug') . '.db.sqlite';
                 $db_conf['type'] = $driver_type;
                 $db_conf['path'] = $path;
                 return $db_conf;
@@ -667,6 +678,34 @@ class Env extends DataObject
         $db_conf['type'] = $driver_type;
         $db_conf['path'] = $path;
         return $db_conf;
+    }
+
+    /**
+     * 强制开启沙盒模式（针对当前请求）
+     */
+    public function enableSandboxMode(?string $source = null): void
+    {
+        $this->sandboxOverride = true;
+        if ($source) {
+            $this->setData('sandbox_source', $source);
+        }
+    }
+
+    /**
+     * 关闭沙盒模式强制（针对当前请求）
+     */
+    public function disableSandboxMode(): void
+    {
+        $this->sandboxOverride = false;
+        $this->unsetData('sandbox_source');
+    }
+
+    /**
+     * 判断当前是否处于沙盒模式（包含业务强制）
+     */
+    public function isSandboxMode(): bool
+    {
+        return $this->sandboxOverride || (defined('SANDBOX') && SANDBOX);
     }
 
     /**
@@ -798,5 +837,28 @@ class Env extends DataObject
         } catch (Exception $exception) {
             return false;
         }
+    }
+
+    /**
+     * @DESC         |获取卸载备份目录
+     *
+     * 参数区：
+     *
+     * @return string
+     */
+    public static function getUninstallBackupDir(): string
+    {
+        $backupDir = self::get('uninstall.backup_dir');
+        
+        // 如果配置了备份目录，使用配置的目录
+        if (!empty($backupDir) && is_string($backupDir)) {
+            return rtrim($backupDir, DS) . DS;
+        }
+        
+        // 否则使用项目根目录上级的 storage 目录
+        $parentDir = dirname(BP);
+        $storageDir = $parentDir . DS . 'storage' . DS;
+        
+        return $storageDir;
     }
 }

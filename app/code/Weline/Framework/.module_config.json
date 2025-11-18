@@ -1,0 +1,188 @@
+{
+    "module_name": "Weline_Framework",
+    "version": "1.0.0",
+    "description": "",
+    "router": "",
+    "controllers": [],
+    "events": [],
+    "plugins": [],
+    "models": [],
+    "services": [],
+    "extends": [],
+    "env_configured": false,
+    "created_at": "2025-11-16 22:07:18",
+    "updated_at": "2025-11-16 23:03:16",
+    "i18n": [
+        {
+            "extracted_at": "2025-11-16 22:07:26",
+            "languages": [
+                "zh_Hans_CN"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:08:20",
+            "languages": [
+                "en_US"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:08:53",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:15:43",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:17:55",
+            "languages": [
+                "js_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:18:56",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:20:43",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:21:03",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:27:55",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:31:49",
+            "languages": [
+                "js_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:32:07",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:33:12",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:38:27",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:40:59",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:42:47",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 22:57:51",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 23:00:37",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 23:01:54",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        },
+        {
+            "extracted_at": "2025-11-16 23:03:16",
+            "languages": [
+                "ja_JP"
+            ],
+            "total_strings": 894,
+            "translated_strings": 0,
+            "untranslated_strings": 894
+        }
+    ]
+}

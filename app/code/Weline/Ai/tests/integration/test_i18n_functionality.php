@@ -33,7 +33,7 @@ class I18nFunctionalityIntegrationTest extends TestCase
         $zhContent->setData([
             'content_type' => 'message',
             'content_key' => 'welcome_message',
-            'locale_code' => 'zh_CN',
+            'locale_code' => 'zh_Hans_CN',
             'content_value' => '欢迎使用AI助手'
         ]);
         $zhContent->save();
@@ -59,13 +59,13 @@ class I18nFunctionalityIntegrationTest extends TestCase
     public function testLanguageSwitching(): void
     {
         // 设置中文内容
-        $this->createI18nContent('welcome_message', 'zh_CN', '欢迎使用AI助手');
+        $this->createI18nContent('welcome_message', 'zh_Hans_CN', '欢迎使用AI助手');
         
         // 设置英文内容
         $this->createI18nContent('welcome_message', 'en_US', 'Welcome to AI Assistant');
         
         // 测试中文获取
-        $zhResult = $this->i18nManager->getContent('welcome_message', 'zh_CN');
+        $zhResult = $this->i18nManager->getContent('welcome_message', 'zh_Hans_CN');
         $this->assertEquals('欢迎使用AI助手', $zhResult);
         
         // 测试英文获取
@@ -79,7 +79,7 @@ class I18nFunctionalityIntegrationTest extends TestCase
     public function testContentTranslation(): void
     {
         $sourceText = 'Hello, how are you?';
-        $targetLanguage = 'zh_CN';
+        $targetLanguage = 'zh_Hans_CN';
         
         // 模拟翻译功能
         $translatedText = $this->i18nManager->translateContent($sourceText, $targetLanguage);

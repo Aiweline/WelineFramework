@@ -328,7 +328,7 @@ class AiService
         }
 
         // 3. 使用全局默认模型
-        return $this->defaultModelManager->getDefaultModel();
+        return $this->defaultModelManager->getDefaultModel(DefaultModelManager::SERVICE_TYPE_DEFAULT);
     }
 
     /**

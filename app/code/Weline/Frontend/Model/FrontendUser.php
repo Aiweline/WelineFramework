@@ -29,6 +29,7 @@ class FrontendUser extends \Weline\Framework\Database\Model
     public const fields_attempt_ip    = 'attempt_ip';
     public const fields_attempt_times = 'attempt_times';
     public const fields_sess_id       = 'sess_id';
+    public const fields_is_sandbox    = 'is_sandbox';
 
     /**
      * @var array 主键字段
@@ -71,6 +72,18 @@ class FrontendUser extends \Weline\Framework\Database\Model
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
+        if (!$setup->hasField(self::fields_is_sandbox)) {
+            $setup->alterTable()
+                ->addColumn(
+                    self::fields_is_sandbox,
+                    self::fields_attempt_ip,
+                    TableInterface::column_type_INTEGER,
+                    1,
+                    'default 0',
+                    '是否沙盒账户'
+                )
+                ->alter();
+        }
     }
 
     /**
@@ -88,6 +101,7 @@ class FrontendUser extends \Weline\Framework\Database\Model
                   ->addColumn(self::fields_sess_id, TableInterface::column_type_VARCHAR, 32, '', '管理员Session ID')
                   ->addColumn(self::fields_attempt_times, TableInterface::column_type_INTEGER, 0, '', '尝试登录次数')
                   ->addColumn(self::fields_attempt_ip, TableInterface::column_type_VARCHAR, 16, '', '尝试登录IP')
+                  ->addColumn(self::fields_is_sandbox, TableInterface::column_type_INTEGER, 1, 'default 0', '是否沙盒账户')
                   ->create();
 
             # 初始化一个账户
@@ -174,5 +188,15 @@ class FrontendUser extends \Weline\Framework\Database\Model
     public function setLoginIp(string $ip): static
     {
         return $this->setData(self::fields_login_ip, $ip);
+    }
+
+    public function isSandboxAccount(): bool
+    {
+        return (bool)$this->getData(self::fields_is_sandbox);
+    }
+
+    public function setSandboxAccount(bool $flag): static
+    {
+        return $this->setData(self::fields_is_sandbox, $flag ? 1 : 0);
     }
 }

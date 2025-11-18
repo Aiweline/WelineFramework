@@ -64,8 +64,7 @@ class CountryDataUpdateService
     private function importGlobalCountries(): void
     {
         // 获取所有可用的国家信息
-        $availableCountries = $this->i18n->getCountries('en');
-        
+        $availableCountries = $this->i18n->getCountries(Cookie::getLangLocal());
         $insert_countries = [];
         $insert_countries_display = [];
         
@@ -80,6 +79,7 @@ class CountryDataUpdateService
             $displayData = [
                 Name::fields_COUNTRY_CODE => $code,
                 Name::fields_DISPLAY_NAME => $country,
+                Name::fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
             ];
             
             $insert_countries[] = $countryData;
@@ -88,8 +88,23 @@ class CountryDataUpdateService
         
         // 批量插入数据
         if (!empty($insert_countries)) {
-            $this->countries->clearQuery()->insert($insert_countries, Countries::fields_CODE)->fetch();
-            $this->localeNames->clearQuery()->insert($insert_countries_display, Name::fields_COUNTRY_CODE)->fetch();
+            # 事务
+            $this->countries->beginTransaction();
+            try {
+                // 分批插入，每批999条，数据库限制
+                $insert_countries = array_chunk($insert_countries, 50);
+                foreach ($insert_countries as $batch) {
+                    $this->countries->clear()->insert($batch, Countries::fields_CODE)->fetch();
+                }
+                $insert_countries_display = array_chunk($insert_countries_display, 50);
+                foreach ($insert_countries_display as $batch) {
+                    $this->localeNames->clear()->insert($batch, Name::fields_COUNTRY_CODE)->fetch();
+                }
+                $this->countries->commit();
+            } catch (\Exception $e) {
+                $this->countries->rollBack();
+                Message::exception($e);
+            }
         }
     }
 

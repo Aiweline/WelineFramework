@@ -341,6 +341,10 @@ class App
         $data = new DataObject(['result' => $result]);
         $eventManager->dispatch('App::run_after', $data);
         $result = $data->getData('result');
+        if(is_array($result)) {
+            $result = json_encode($result);
+            die($result);
+        }
         if (!CLI) {
             echo($result);
             exit(0);

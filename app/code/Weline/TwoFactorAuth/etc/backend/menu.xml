@@ -8,9 +8,9 @@
          name="2fa_main" 
          title="双因素认证" 
          action="" 
-         parent="Weline_Backend::system_module"
+         parent="Weline_Backend::system_menu"
          icon="mdi mdi-shield-lock"
-         order="20000"/>
+         order="20700"/>
     
     <!-- 2FA账户管理 -->
     <add source="Weline_TwoFactorAuth::my_2fa"

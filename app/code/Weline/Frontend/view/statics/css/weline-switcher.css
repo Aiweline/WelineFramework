@@ -1,0 +1,156 @@
+/**
+ * Weline Switcher Component Styles
+ * SEO友好的切换器组件样式
+ */
+
+/* 基础样式 */
+weline-switcher {
+    display: inline-block;
+    position: relative;
+    font-family: inherit;
+}
+
+/* 简单模式（选项少于2个） */
+weline-switcher.weline-switcher--simple {
+    display: inline;
+}
+
+/* 按钮样式 */
+weline-switcher .weline-switcher__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    color: inherit;
+    transition: all 0.2s ease;
+    min-width: 100px;
+}
+
+weline-switcher .weline-switcher__button:hover {
+    background: var(--hover-bg, #f5f5f5);
+    border-color: var(--hover-border, #d0d0d0);
+}
+
+weline-switcher .weline-switcher__button:focus {
+    outline: 2px solid var(--focus-color, #0bb197);
+    outline-offset: 2px;
+}
+
+weline-switcher .weline-switcher__button::after {
+    content: '▼';
+    font-size: 0.7em;
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+}
+
+weline-switcher.weline-switcher--open .weline-switcher__button::after {
+    transform: rotate(180deg);
+}
+
+/* 下拉菜单样式 */
+weline-switcher .weline-switcher__dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 0.25rem;
+    padding: 0.5rem 0;
+    background: var(--dropdown-bg, #ffffff);
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    list-style: none;
+    z-index: 1000;
+    min-width: 150px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+weline-switcher .weline-switcher__dropdown[hidden] {
+    display: none;
+}
+
+/* 选项样式 */
+weline-switcher .weline-switcher__option {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--text-color, #333333);
+    text-decoration: none;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+weline-switcher .weline-switcher__option:hover,
+weline-switcher .weline-switcher__option:focus {
+    background: var(--hover-bg, #f5f5f5);
+    outline: none;
+}
+
+weline-switcher .weline-switcher__option--active {
+    background: var(--active-bg, #e8f5f3);
+    color: var(--active-color, #0bb197);
+    font-weight: 500;
+}
+
+/* 暗色主题支持 */
+[data-theme="dark"] weline-switcher .weline-switcher__button {
+    border-color: var(--border-color, #2d3448);
+    color: var(--text-color, #e9ecef);
+}
+
+[data-theme="dark"] weline-switcher .weline-switcher__button:hover {
+    background: var(--hover-bg, #2d3448);
+}
+
+[data-theme="dark"] weline-switcher .weline-switcher__dropdown {
+    background: var(--dropdown-bg, #252b3b);
+    border-color: var(--border-color, #2d3448);
+}
+
+[data-theme="dark"] weline-switcher .weline-switcher__option {
+    color: var(--text-color, #e9ecef);
+}
+
+[data-theme="dark"] weline-switcher .weline-switcher__option:hover,
+[data-theme="dark"] weline-switcher .weline-switcher__option:focus {
+    background: var(--hover-bg, #2d3448);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    weline-switcher .weline-switcher__button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9em;
+    }
+
+    weline-switcher .weline-switcher__dropdown {
+        right: 0;
+        left: auto;
+        min-width: 120px;
+    }
+}
+
+/* 可访问性增强 */
+weline-switcher .weline-switcher__option:focus-visible {
+    outline: 2px solid var(--focus-color, #0bb197);
+    outline-offset: -2px;
+}
+
+/* SEO内容隐藏（但保持可访问） */
+weline-switcher .weline-switcher__seo-content {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+

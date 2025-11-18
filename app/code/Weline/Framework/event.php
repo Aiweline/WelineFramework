@@ -126,6 +126,11 @@ return [
         'description' => __('在模板标签配置完成后触发，允许其他模块修改标签配置。'),
         'doc' => 'template/标签配置后.md',
     ],
+    'Framework_Template::after_compile' => [
+        'name' => __('模板编译后'),
+        'description' => __('在模板编译完成后触发，允许其他模块处理编译后的模板内容。可以修改模板内容、提取信息、注入代码等。'),
+        'doc' => 'template/模板编译后.md',
+    ],
     
     // ========== 控制台事件 ==========
     'Framework_Console::compile' => [

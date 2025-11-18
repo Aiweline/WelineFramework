@@ -213,6 +213,27 @@ class Website extends BackendController
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            
+            // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id
+            $postWebsiteId = $data['website_id'] ?? null;
+            if (empty($postWebsiteId)) {
+                $postWebsiteId = $this->request->getParam('id');
+            }
+            
+            // 如果还是没有，说明是新增，不是编辑
+            if (empty($postWebsiteId)) {
+                MessageManager::error(__('网站ID不能为空'));
+                $this->redirect('/component/offcanvas/error', [
+                    'msg' => __('网站ID不能为空'),
+                    'url' => '*/admin/website/edit',
+                    'reload' => '0',
+                    'time' => '3',
+                ]);
+                return;
+            }
+            
+            $postWebsiteId = (int)$postWebsiteId;
+            
             try {
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
@@ -228,13 +249,16 @@ class Website extends BackendController
                     $data['default_language'] = $languageCodes[0];
                 }
                 
+                // 确保 website_id 在数据中
+                $data['website_id'] = $postWebsiteId;
+                
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
                 
                 // 保存关联货币
                 try {
                     $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-                    $websiteCurrency->setWebsiteCurrencies($websiteId, $currencyCodes);
+                    $websiteCurrency->setWebsiteCurrencies($postWebsiteId, $currencyCodes);
                 } catch (\Exception $e) {
                     // 如果关联表不存在，忽略错误
                     MessageManager::warning(__('保存关联货币失败: %{1}', $e->getMessage()));
@@ -243,7 +267,7 @@ class Website extends BackendController
                 // 保存关联语言
                 try {
                     $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-                    $websiteLanguage->setWebsiteLanguages($websiteId, $languageCodes);
+                    $websiteLanguage->setWebsiteLanguages($postWebsiteId, $languageCodes);
                 } catch (\Exception $e) {
                     // 如果关联表不存在，忽略错误
                     MessageManager::warning(__('保存关联语言失败: %{1}', $e->getMessage()));
@@ -303,7 +327,18 @@ class Website extends BackendController
     {
         $websiteId = $this->request->getGet('id');
         try {
-            $this->website->load($websiteId)->delete()->fetch();
+            $this->website->load($websiteId);
+            
+            // 检查是否是默认网站，默认网站不允许删除
+            if ($this->website->getCode() === 'default') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'code' => 403,
+                    'msg' => __('默认网站不允许删除'),
+                ]);
+            }
+            
+            $this->website->delete()->fetch();
             return $this->fetchJson([
                 'code' => 200,
                 'success' => true,
@@ -316,7 +351,7 @@ class Website extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 500,
-                'msg' => __('网站删除失败'),
+                'msg' => __('网站删除失败: %{1}', $e->getMessage()),
             ]);
         }
     }

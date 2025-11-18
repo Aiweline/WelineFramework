@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Api\Setup;
 
 use Weline\Acl\Model\WhiteAclSource;
+use Weline\Api\Model\ApiUser;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
@@ -53,12 +54,13 @@ class Install implements InstallInterface
             ->addColumn('username', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', '用户名')
             ->addColumn('email', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '邮箱')
             ->addColumn('password', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', '密码（加密存储）')
-            ->addColumn('api_key', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 64, 'not null', 'API密钥（用于令牌交换）')
+            ->addColumn('api_key', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 128, 'not null', 'API密钥（用于令牌交换）')
             ->addColumn('api_secret', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 255, 'not null', 'API密钥（加密存储）')
             ->addColumn('token_expire_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 604800', '访问令牌有效期（秒，默认7天）')
             ->addColumn('refresh_token_expire_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 2592000', '刷新令牌有效期（秒，默认30天）')
             ->addColumn('is_enabled', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用（1=启用，0=禁用）')
             ->addColumn('is_deleted', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否删除（1=已删除，0=未删除）')
+            ->addColumn('is_sandbox', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否沙盒账户（1=沙盒，0=正式）')
             ->addColumn('ip_whitelist_enabled', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否启用IP白名单（1=启用，0=禁用）')
             ->addColumn('allowed_ips', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '允许的IP地址列表（JSON格式或换行分隔）')
             ->addColumn('user_agent_restriction_enabled', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否启用用户代理限制（1=启用，0=禁用）')
@@ -157,6 +159,22 @@ class Install implements InstallInterface
              ->setData('path', $path)
              ->setData('type', WhiteAclSource::type_API)
              ->save();
+         }
+
+         // 调用ApiUser模型，插入初始数据
+         /**@var ApiUser $apiUser */
+         $apiUser = ObjectManager::getInstance(ApiUser::class);
+         // 检查是否已存在admin用户
+         $existingUser = $apiUser->clear()->load('username', 'admin');
+         if (!$existingUser->getId()) {
+             $apiUser->clear()
+                ->setUsername('admin')
+                ->setEmail('admin@example.com')
+                ->setPassword('admin')
+                ->autoGenerateApiCredentials()
+                ->setData('created_at', date('Y-m-d H:i:s'))
+                ->setData('updated_at', date('Y-m-d H:i:s'))
+                ->save(); 
          }
     }
 }

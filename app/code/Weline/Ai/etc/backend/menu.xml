@@ -12,10 +12,10 @@
          icon="mdi mdi-robot"
          order="15000"/>
     
-    <!-- ==================== 概览与分析 ==================== -->
+    <!-- ==================== 📊 概览与监控 ==================== -->
     <add source="Weline_Ai::ai_overview" 
          name="ai_overview" 
-         title="概览与分析" 
+         title="概览与监控" 
          action="" 
          parent="Weline_Ai::ai"
          icon="mdi mdi-monitor-dashboard"
@@ -39,16 +39,16 @@
          icon="mdi mdi-chart-line"
          order="20"/>
     
-    <!-- ==================== 模型管理 ==================== -->
+    <!-- ==================== 🤖 模型中心 ==================== -->
     <add source="Weline_Ai::ai_model_center" 
          name="ai_model_center" 
-         title="模型管理" 
+         title="模型中心" 
          action="" 
          parent="Weline_Ai::ai"
          icon="mdi mdi-cube-outline"
          order="20"/>
     
-    <!-- AI模型管理 -->
+    <!-- AI模型列表 -->
     <add source="Weline_Ai::ai_model_manager" 
          name="ai_model_manager" 
          title="AI模型列表" 
@@ -75,10 +75,37 @@
          icon="mdi mdi-star-settings"
          order="30"/>
     
-    <!-- ==================== 助手中心 ==================== -->
+    <!-- 模型部署 -->
+    <add source="Weline_Ai::ai_model_deployment" 
+         name="ai_model_deployment" 
+         title="模型部署" 
+         action="ai/backend/modeldeployment" 
+         parent="Weline_Ai::ai_model_center"
+         icon="mdi mdi-rocket-launch"
+         order="40"/>
+    
+    <!-- 模型版本管理 -->
+    <add source="Weline_Ai::ai_model_versioning" 
+         name="ai_model_versioning" 
+         title="模型版本管理" 
+         action="ai/backend/modelversioning" 
+         parent="Weline_Ai::ai_model_center"
+         icon="mdi mdi-source-branch"
+         order="50"/>
+    
+    <!-- 模型基准测试 -->
+    <add source="Weline_Ai::ai_model_benchmark" 
+         name="ai_model_benchmark" 
+         title="模型基准测试" 
+         action="ai/backend/modelbenchmark" 
+         parent="Weline_Ai::ai_model_center"
+         icon="mdi mdi-speedometer"
+         order="60"/>
+    
+    <!-- ==================== 👤 助手管理 ==================== -->
     <add source="Weline_Ai::ai_assistant_center" 
          name="ai_assistant_center" 
-         title="助手中心" 
+         title="助手管理" 
          action="" 
          parent="Weline_Ai::ai"
          icon="mdi mdi-account-supervisor-circle"
@@ -111,21 +138,120 @@
          icon="mdi mdi-star"
          order="30"/>
     
-    <!-- ==================== 系统管理 ==================== -->
-    <add source="Weline_Ai::ai_system_manager" 
-         name="ai_system_manager" 
-         title="系统管理" 
+    <!-- ==================== 🛠️ 开发与测试 ==================== -->
+    <add source="Weline_Ai::ai_development" 
+         name="ai_development" 
+         title="开发与测试" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-code-tags"
+         order="40"/>
+    
+    <!-- 开发者工具 -->
+    <add source="Weline_Ai::ai_developer_tools" 
+         name="ai_developer_tools" 
+         title="开发者工具" 
+         action="ai/backend/developertools" 
+         parent="Weline_Ai::ai_development"
+         icon="mdi mdi-tools"
+         order="10"/>
+    
+    <!-- API管理 -->
+    <add source="Weline_Ai::ai_api_manager" 
+         name="ai_api_manager" 
+         title="API管理" 
+         action="ai/backend/api" 
+         parent="Weline_Ai::ai_development"
+         icon="mdi mdi-api"
+         order="20"/>
+    
+    <!-- 测试工具 -->
+    <add source="Weline_Ai::ai_test_tools" 
+         name="ai_test_tools" 
+         title="测试工具" 
+         action="ai/backend/test" 
+         parent="Weline_Ai::ai_development"
+         icon="mdi mdi-test-tube"
+         order="30"/>
+    
+    <!-- A/B测试 -->
+    <add source="Weline_Ai::ai_ab_testing" 
+         name="ai_ab_testing" 
+         title="A/B测试" 
+         action="ai/backend/abtesting" 
+         parent="Weline_Ai::ai_development"
+         icon="mdi mdi-chart-box"
+         order="40"/>
+    
+    <!-- ==================== 🔒 内容与安全 ==================== -->
+    <add source="Weline_Ai::ai_security" 
+         name="ai_security" 
+         title="内容与安全" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-shield-check"
+         order="50"/>
+    
+    <!-- 内容安全 -->
+    <add source="Weline_Ai::ai_content_safety" 
+         name="ai_content_safety" 
+         title="内容安全" 
+         action="ai/backend/contentsafety" 
+         parent="Weline_Ai::ai_security"
+         icon="mdi mdi-shield-alert"
+         order="10"/>
+    
+    <!-- 安全扫描 -->
+    <add source="Weline_Ai::ai_security_scan" 
+         name="ai_security_scan" 
+         title="安全扫描" 
+         action="ai/backend/securityscan" 
+         parent="Weline_Ai::ai_security"
+         icon="mdi mdi-shield-search"
+         order="20"/>
+    
+    <!-- ==================== 📈 营销与支持 ==================== -->
+    <add source="Weline_Ai::ai_marketing" 
+         name="ai_marketing" 
+         title="营销与支持" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-bullhorn"
+         order="60"/>
+    
+    <!-- 营销工具 -->
+    <add source="Weline_Ai::ai_marketing_tools" 
+         name="ai_marketing_tools" 
+         title="营销工具" 
+         action="ai/backend/marketingtools" 
+         parent="Weline_Ai::ai_marketing"
+         icon="mdi mdi-megaphone"
+         order="10"/>
+    
+    <!-- 客户支持 -->
+    <add source="Weline_Ai::ai_customer_support" 
+         name="ai_customer_support" 
+         title="客户支持" 
+         action="ai/backend/customersupport" 
+         parent="Weline_Ai::ai_marketing"
+         icon="mdi mdi-headset"
+         order="20"/>
+    
+    <!-- ==================== ⚙️ 账户与配置 ==================== -->
+    <add source="Weline_Ai::ai_account" 
+         name="ai_account" 
+         title="账户与配置" 
          action="" 
          parent="Weline_Ai::ai"
          icon="mdi mdi-cog-outline"
-         order="40"/>
+         order="70"/>
     
     <!-- 用户管理 -->
     <add source="Weline_Ai::ai_user_manager" 
          name="ai_user_manager" 
          title="用户管理" 
          action="ai/backend/user" 
-         parent="Weline_Ai::ai_system_manager"
+         parent="Weline_Ai::ai_account"
          icon="mdi mdi-account-multiple"
          order="10"/>
     
@@ -134,35 +260,62 @@
          name="ai_tenant_manager" 
          title="租户管理" 
          action="ai/backend/tenant" 
-         parent="Weline_Ai::ai_system_manager"
+         parent="Weline_Ai::ai_account"
          icon="mdi mdi-office-building"
          order="20"/>
     
-    <!-- 供应商账户管理 -->
+    <!-- 供应商账户 -->
     <add source="Weline_Ai::ai_provider_account" 
          name="ai_provider_account" 
          title="供应商账户" 
          action="ai/backend/provider" 
-         parent="Weline_Ai::ai_system_manager"
+         parent="Weline_Ai::ai_account"
          icon="mdi mdi-account-key"
-         order="25"/>
+         order="30"/>
     
     <!-- API密钥管理 -->
     <add source="Weline_Ai::ai_apikey_manager" 
          name="ai_apikey_manager" 
          title="API密钥管理" 
          action="ai/backend/apikey" 
-         parent="Weline_Ai::ai_system_manager"
+         parent="Weline_Ai::ai_account"
          icon="mdi mdi-key"
-         order="30"/>
+         order="40"/>
     
     <!-- 账户充值 -->
     <add source="Weline_Ai::ai_recharge" 
          name="ai_recharge" 
          title="账户充值" 
          action="ai/backend/recharge" 
-         parent="Weline_Ai::ai_system_manager"
+         parent="Weline_Ai::ai_account"
          icon="mdi mdi-cash-multiple"
-         order="40"/>
+         order="50"/>
+    
+    <!-- ==================== 🔌 集成与数据 ==================== -->
+    <add source="Weline_Ai::ai_integration" 
+         name="ai_integration" 
+         title="集成与数据" 
+         action="" 
+         parent="Weline_Ai::ai"
+         icon="mdi mdi-link-variant"
+         order="80"/>
+    
+    <!-- 第三方集成 -->
+    <add source="Weline_Ai::ai_third_party_integration" 
+         name="ai_third_party_integration" 
+         title="第三方集成" 
+         action="ai/backend/thirdpartyintegration" 
+         parent="Weline_Ai::ai_integration"
+         icon="mdi mdi-connection"
+         order="10"/>
+    
+    <!-- 训练数据 -->
+    <add source="Weline_Ai::ai_training_data" 
+         name="ai_training_data" 
+         title="训练数据" 
+         action="ai/backend/trainingdata" 
+         parent="Weline_Ai::ai_integration"
+         icon="mdi mdi-database"
+         order="20"/>
          
 </menus>

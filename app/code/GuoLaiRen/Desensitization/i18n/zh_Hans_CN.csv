@@ -1,0 +1,18 @@
+"无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)","无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)"
+"无效的级别: %{level}，有效值为: %{valid}","无效的级别: %{level}，有效值为: %{valid}"
+"无效的润色风格: %{style}，有效值为: %{valid}","无效的润色风格: %{style}，有效值为: %{valid}"
+"工作模式（detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取）","工作模式（detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取）"
+"脱敏/检测级别（high=高级, standard=标准, low=低级）","脱敏/检测级别（high=高级, standard=标准, low=低级）"
+"润色风格（仅在mode=rewrite时有效，natural=自然, formal=正式, casual=轻松, professional=专业, concise=简洁）","润色风格（仅在mode=rewrite时有效，natural=自然, formal=正式, casual=轻松, professional=专业, concise=简洁）"
+模块配置,模块配置
+保存配置,保存配置
+脱敏记录,脱敏记录
+AI润色,AI润色
+脱敏规则管理,脱敏规则管理
+添加规则,添加规则
+脱敏规则列表,脱敏规则列表
+脱敏测试,脱敏测试
+执行测试,执行测试
+敏感内容检测,敏感内容检测
+开始检测,开始检测
+开始润色,开始润色
