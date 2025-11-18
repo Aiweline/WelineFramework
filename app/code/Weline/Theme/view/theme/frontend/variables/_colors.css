@@ -1,0 +1,42 @@
+/**
+ * Weline Frontend - 颜色变量定义
+ * 
+ * 定义所有颜色相关的CSS变量和默认值
+ */
+
+:root {
+    /* ========== 品牌色 ========== */
+    --color-primary: #f0c14b;
+    --color-primary-light: #f4d078;
+    --color-primary-dark: #e7b92e;
+    --color-primary-border: #a88734;
+    
+    /* ========== 文本色 ========== */
+    --color-text-primary: #111;
+    --color-text-secondary: #767676;
+    --color-text-tertiary: #a6a6a6;
+    --color-text-disabled: #c7c7c7;
+    
+    /* ========== 背景色 ========== */
+    --color-bg-primary: #fff;
+    --color-bg-secondary: #f8f9fa;
+    --color-bg-tertiary: #e7e7e7;
+    --color-bg-dark: #232f3e;
+    
+    /* ========== 边框色 ========== */
+    --color-border-default: #ddd;
+    --color-border-emphasis: #a6a6a6;
+    --color-border-focus: #e77600;
+    
+    /* ========== 功能色 ========== */
+    --color-success: #28a745;
+    --color-warning: #ffc107;
+    --color-error: #dc3545;
+    --color-info: #17a2b8;
+    
+    /* ========== 链接色 ========== */
+    --color-link: #0066c0;
+    --color-link-hover: #c45500;
+    --color-link-visited: #551a8b;
+}
+

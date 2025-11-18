@@ -1,0 +1,89 @@
+<?php
+/**
+ * 组件：Button
+ * 
+ * 按钮组件，支持多种样式和状态
+ * 字段
+ * @info description 描述：按钮组件，支持多种样式和状态
+ * @info name 名称：Button按钮组件
+ * @param text 按钮文字（必填）
+ * @param type 按钮类型 (primary/secondary/danger/success/info)
+ * @param size 按钮大小 (sm/md/lg)
+ * @param icon 图标类名
+ * @param iconPosition 图标位置 (left/right)
+ * @param class 额外CSS类
+ * @param id 元素ID
+ * @param disabled 是否禁用
+ * @param loading 是否显示加载状态
+ * @param href 链接地址（如果提供，渲染为<a>标签）
+ * @param onclick 点击事件
+ * @param data data属性数组
+ * @param attributes 额外的HTML属性字符串
+ */
+$text = $this->getData('text') ?? '';
+$type = $this->getData('type') ?? 'primary';
+$size = $this->getData('size') ?? 'md';
+$icon = $this->getData('icon') ?? '';
+$iconPosition = $this->getData('iconPosition') ?? 'left';
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? '';
+$disabled = $this->getData('disabled') ?? false;
+$loading = $this->getData('loading') ?? false;
+$href = $this->getData('href') ?? '';
+$onclick = $this->getData('onclick') ?? '';
+$data = $this->getData('data') ?? [];
+$attributes = $this->getData('attributes') ?? '';
+
+// 构建CSS类
+$btnClass = 'btn btn-' . htmlspecialchars($type) . ' btn-' . htmlspecialchars($size);
+if ($class) {
+    $btnClass .= ' ' . htmlspecialchars($class);
+}
+if ($loading) {
+    $btnClass .= ' btn-loading';
+}
+
+// 构建属性
+$attrs = [];
+if ($id) {
+    $attrs[] = 'id="' . htmlspecialchars($id) . '"';
+}
+if ($disabled) {
+    $attrs[] = 'disabled';
+}
+if ($onclick) {
+    $attrs[] = 'onclick="' . htmlspecialchars($onclick) . '"';
+}
+foreach ($data as $key => $value) {
+    $attrs[] = 'data-' . htmlspecialchars($key) . '="' . htmlspecialchars($value) . '"';
+}
+
+// 构建图标HTML
+$iconHtml = '';
+if ($icon) {
+    $iconHtml = '<i class="' . htmlspecialchars($icon) . '"></i>';
+}
+
+// 构建内容
+$content = '';
+if ($icon && $iconPosition === 'left') {
+    $content = $iconHtml . ' ' . htmlspecialchars($text);
+} elseif ($icon && $iconPosition === 'right') {
+    $content = htmlspecialchars($text) . ' ' . $iconHtml;
+} else {
+    $content = htmlspecialchars($text);
+}
+
+// 如果是链接按钮
+if ($href) {
+    echo '<a href="' . htmlspecialchars($href) . '" class="' . $btnClass . '" ' . implode(' ', $attrs) . ($attributes ? ' ' . $attributes : '') . '>' . $content . '</a>';
+} else {
+    // 检查是否有自定义属性指定了type
+    $buttonType = 'button';
+    if ($attributes && preg_match('/type=["\']([^"\']+)["\']/', $attributes, $matches)) {
+        $buttonType = $matches[1];
+    }
+    echo '<button type="' . htmlspecialchars($buttonType) . '" class="' . $btnClass . '" ' . implode(' ', $attrs) . ($attributes ? ' ' . $attributes : '') . '>' . $content . '</button>';
+}
+?>
+

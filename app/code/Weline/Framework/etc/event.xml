@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- 服务器启动事件 -->
+    <event name="Framework_Server::start_after">
+        <observer name="Weline_Framework_Server::start_logger" instance="Weline\Framework\Console\Console\Server\Observer\ServerStartObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    
+    <!-- 服务器停止事件 -->
+    <event name="Framework_Server::stop_after">
+        <observer name="Weline_Framework_Server::stop_logger" instance="Weline\Framework\Console\Console\Server\Observer\ServerStopObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    
+    <!-- 系统升级后扫描数据库适配器（只在系统升级完成后扫描一次，避免重复扫描） -->
+    <event name="Framework_Setup::upgrade_after">
+        <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
+        <observer name="Weline_Framework_Extends::setup_upgrade_after" instance="Weline\Framework\Extends\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="200"/>
+    </event>
+
+    <!-- 维护模式：API 请求统一JSON 响应 -->
+    <event name="Weline_Framework::maintenance">
+        <observer name="Weline_Framework_Api::maintenance_response" instance="Weline\Framework\Api\Observer\Maintenance" disabled="false" shared="true" sort="-100"/>
+    </event>
+    
+    <!-- App 运行前检查全页缓存（URL 解析之前，仅做后端判断） -->
+    <event name="App::run_before">
+        <observer name="Weline_Framework_Router::check_full_page_cache" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- URL 解析后检查全页缓存（此时可以生成正确的缓存键） -->
+    <event name="App::url_parsed_after">
+        <observer name="Weline_Framework_Router::check_full_page_cache_after_parse" instance="Weline\Framework\Router\Observer\CheckFullPageCache" disabled="false" shared="true" sort="100"/>
+    </event>
+    
+    <!-- 控制器属性事件：API规范验证 -->
+    <event name="Weline_Module::controller_attributes">
+        <observer name="Weline_Framework_Api::validate_api_spec" instance="Weline\Framework\Api\Observer\ControllerAttributes" disabled="false" shared="true" sort="10"/>
+    </event>
+    
+    <!-- 卸载通知事件：其他模块通过此事件通知卸载服务执行卸载操作 -->
+    <event name="Framework_UninstallService::uninstall">
+        <observer name="Weline_Framework_UninstallService::uninstall_observer" instance="Weline\Framework\Uninstall\Observer\UninstallObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+</config>

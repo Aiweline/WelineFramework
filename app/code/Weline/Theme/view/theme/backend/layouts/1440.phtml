@@ -1,0 +1,94 @@
+<?php
+/**
+ * 布局：后端 - 1440px 宽度布局
+ * 
+ * 后端1440px最大宽度布局，内容居中显示，适合大屏显示器
+ * 字段
+ * @info description 描述：后端1440px最大宽度布局，内容居中显示，适合大屏显示器
+ * @info name 名称：1440px布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param sidebar 侧边栏内容（HTML字符串，可选）
+ * @param showHeader 是否显示header（默认：true）
+ * @param showFooter 是否显示footer（默认：true）
+ * @param sidebarCollapsed 侧边栏是否折叠（默认：false）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$sidebar = $this->getData('sidebar') ?? '';
+$showHeader = $this->getData('showHeader') ?? true;
+$showFooter = $this->getData('showFooter') ?? true;
+$sidebarCollapsed = $this->getData('sidebarCollapsed') ?? false;
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+if ($title) {
+    $this->assign('title', $title);
+}
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Backend::templates/public/head.phtml)
+    <style>
+        .backend-layout-1440 {
+            max-width: 1440px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            padding: 0 20px;
+        }
+        .backend-layout-1440 .backend-sidebar {
+            flex-shrink: 0;
+            width: 250px;
+            transition: width 0.3s ease;
+        }
+        .backend-layout-1440 .backend-sidebar.collapsed {
+            width: 60px;
+        }
+        .backend-layout-1440 .backend-main-content {
+            flex: 1;
+            min-width: 0;
+            overflow: auto;
+        }
+        @media (max-width: 1440px) {
+            .backend-layout-1440 {
+                padding: 0 15px;
+            }
+        }
+        @media (max-width: 768px) {
+            .backend-layout-1440 {
+                flex-direction: column;
+            }
+            .backend-layout-1440 .backend-sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <?php if ($showHeader): ?>
+        @template(Weline_Backend::blocks/header/base.phtml)
+    <?php endif; ?>
+    
+    <div class="backend-layout-1440 <?= htmlspecialchars($class) ?>">
+        <?php if ($sidebar): ?>
+            <aside class="backend-sidebar <?= $sidebarCollapsed ? 'collapsed' : '' ?>">
+                <?= $sidebar ?>
+            </aside>
+        <?php endif; ?>
+        
+        <main class="backend-main-content">
+            <?= $content ?>
+        </main>
+    </div>
+    
+    <?php if ($showFooter): ?>
+        @template(Weline_Backend::blocks/footer/base.phtml)
+    <?php endif; ?>
+</body>
+</html>
+

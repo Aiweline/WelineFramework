@@ -1,0 +1,848 @@
+<?php
+/**
+ * AI模型编辑页面模板
+ * 
+ * @var $this \Weline\Framework\View\Template
+ * @var $model \Weline\Ai\Model\AiModel|null
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+
+use Weline\Ai\Model\AiModel;
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$model = $this->getData('model');
+$isEdit = $model && $model->getId();
+$isCopied = $isEdit && $model->isCopied();
+$isReadonly = $isEdit && !$isCopied; // 只有原始模型（非复制）才只读
+$pageTitle = $isEdit ? __('编辑模型: %{1}', $model->getModelName()) : __('新建模型');
+
+// 解析配置JSON
+$config = [];
+if ($isEdit && $model->getConfigJson()) {
+    $configJson = $model->getConfigJson();
+    $config = is_string($configJson) ? json_decode($configJson, true) : $configJson;
+    if (!is_array($config)) {
+        $config = [];
+    }
+}
+
+// 解析代理信息
+$proxyInfo = [];
+if ($isEdit && $model->getProxyInfo()) {
+    $proxyInfoData = $model->getProxyInfo();
+    $proxyInfo = is_string($proxyInfoData) ? json_decode($proxyInfoData, true) : $proxyInfoData;
+    if (!is_array($proxyInfo)) {
+        $proxyInfo = [];
+    }
+}
+
+// 解析提供商配置
+$providerConfig = [];
+if ($isEdit && $model->getData('provider_config')) {
+    $providerConfigData = $model->getData('provider_config');
+    $providerConfig = is_string($providerConfigData) ? json_decode($providerConfigData, true) : $providerConfigData;
+    if (!is_array($providerConfig)) {
+        $providerConfig = [];
+    }
+}
+
+// 如果没有提供商配置，使用config作为默认值
+if (empty($providerConfig) && !empty($config)) {
+    $providerConfig = $config;
+}
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $pageTitle ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                
+                <!-- 面包屑导航 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <i class="mdi mdi-robot text-primary"></i> <?= $pageTitle ?>
+                            </h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('*/backend/model') ?>"><lang>AI模型</lang></a></li>
+                                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新建') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <div class="model-edit-container">
+                    <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $model->getId() ?>">
+        <?php endif; ?>
+        
+        <!-- 基本信息卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-information-outline me-2"></i><?= __('基本信息') ?></h5>
+                <?php if ($isReadonly): ?>
+                    <small class="text-muted"><?= __('（原始模型基本信息不可修改）') ?></small>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="vendor" class="form-label">
+                                <?= __('供应商') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="vendor" 
+                                   name="vendor" 
+                                   value="<?= $isEdit ? $model->getVendor() : '' ?>" 
+                                   required
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: OpenAI, Google, Anthropic') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('AI模型供应商名称（不可修改）') : __('AI模型供应商名称') ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_code" class="form-label">
+                                <?= __('模型代码') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_code" 
+                                   name="model_code" 
+                                   value="<?= $isEdit ? $model->getModelCode() : '' ?>" 
+                                   required
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: gpt-4, claude-3') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('模型唯一标识代码（不可修改）') : __('模型唯一标识代码') ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_name" class="form-label">
+                                <?= __('模型名称') ?> <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_name" 
+                                   name="model_name" 
+                                   value="<?= $isEdit ? $model->getModelName() : '' ?>" 
+                                   required
+                                   placeholder="<?= __('例如: GPT-4 Turbo') ?>">
+                            <small class="form-text text-muted"><?= __('模型显示名称') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="model_version" class="form-label">
+                                <?= __('模型版本') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="model_version" 
+                                   name="model_version" 
+                                   value="<?= $isEdit ? $model->getModelVersion() : '1.0' ?>"
+                                   <?= $isReadonly ? 'readonly' : '' ?>
+                                   placeholder="<?= __('例如: 1.0, 2.5') ?>">
+                            <small class="form-text text-muted">
+                                <?= $isReadonly ? __('模型版本号（不可修改）') : __('模型版本号') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-api me-2"></i><?= __('API配置') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">
+                                <?= __('API密钥') ?>
+                            </label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="api_key" 
+                                   name="config[api_key]" 
+                                   value="<?= $config['api_key'] ?? '' ?>"
+                                   placeholder="<?= __('输入API密钥') ?>">
+                            <small class="form-text text-muted"><?= __('API访问密钥') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="api_url" class="form-label">
+                                <?= __('API地址') ?>
+                            </label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="api_url" 
+                                   name="config[api_url]" 
+                                   value="<?= $config['api_url'] ?? '' ?>"
+                                   placeholder="<?= __('例如: https://api.openai.com/v1') ?>">
+                            <small class="form-text text-muted"><?= __('API基础URL') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="temperature" class="form-label">
+                                <?= __('温度系数 (Temperature)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="temperature" 
+                                   name="config[temperature]" 
+                                   value="<?= $config['temperature'] ?? '0.7' ?>"
+                                   step="0.1"
+                                   min="0"
+                                   max="2"
+                                   placeholder="0.7">
+                            <small class="form-text text-muted"><?= __('控制输出随机性，0-2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="max_tokens" class="form-label">
+                                <?= __('最大Token数') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="max_tokens" 
+                                   name="config[max_tokens]" 
+                                   value="<?= $config['max_tokens'] ?? '4096' ?>"
+                                   min="1"
+                                   placeholder="4096">
+                            <small class="form-text text-muted"><?= __('最大生成token数量') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="top_p" class="form-label">
+                                <?= __('Top P') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="top_p" 
+                                   name="config[top_p]" 
+                                   value="<?= $config['top_p'] ?? '1' ?>"
+                                   step="0.1"
+                                   min="0"
+                                   max="1"
+                                   placeholder="1">
+                            <small class="form-text text-muted"><?= __('核采样参数，0-1之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="frequency_penalty" class="form-label">
+                                <?= __('频率惩罚 (Frequency Penalty)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="frequency_penalty" 
+                                   name="config[frequency_penalty]" 
+                                   value="<?= $config['frequency_penalty'] ?? '0' ?>"
+                                   step="0.1"
+                                   min="-2"
+                                   max="2"
+                                   placeholder="0">
+                            <small class="form-text text-muted"><?= __('降低重复词汇，-2到2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="presence_penalty" class="form-label">
+                                <?= __('存在惩罚 (Presence Penalty)') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="presence_penalty" 
+                                   name="config[presence_penalty]" 
+                                   value="<?= $config['presence_penalty'] ?? '0' ?>"
+                                   step="0.1"
+                                   min="-2"
+                                   max="2"
+                                   placeholder="0">
+                            <small class="form-text text-muted"><?= __('鼓励新话题，-2到2之间') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="stream" 
+                                       name="config[stream]" 
+                                       value="1"
+                                       <?= ($config['stream'] ?? true) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="stream">
+                                    <?= __('启用流式输出') ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted"><?= __('实时返回生成内容') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 定价信息卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-cash-multiple me-2"></i><?= __('定价信息') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="token_price_input" class="form-label">
+                                <?= __('输入Token价格') ?>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="token_price_input" 
+                                       name="token_price_input" 
+                                       value="<?= $isEdit ? $model->getTokenPriceInput() : '0.000000' ?>"
+                                       step="0.000001"
+                                       min="0"
+                                       placeholder="0.000000">
+                                <span class="input-group-text">/1K tokens</span>
+                            </div>
+                            <small class="form-text text-muted"><?= __('每1000个输入token的价格') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="token_price_output" class="form-label">
+                                <?= __('输出Token价格') ?>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="token_price_output" 
+                                       name="token_price_output" 
+                                       value="<?= $isEdit ? $model->getTokenPriceOutput() : '0.000000' ?>"
+                                       step="0.000001"
+                                       min="0"
+                                       placeholder="0.000000">
+                                <span class="input-group-text">/1K tokens</span>
+                            </div>
+                            <small class="form-text text-muted"><?= __('每1000个输出token的价格') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 提供商配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-cog me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label for="provider_config_json" class="form-label">
+                                <?= __('配置JSON') ?>
+                            </label>
+                            <textarea class="form-control" 
+                                      id="provider_config_json" 
+                                      name="provider_config_json" 
+                                      rows="16"
+                                      placeholder='{
+  "api_key": "your-api-key-here",
+  "base_url": "https://api.example.com",
+  "model_id": "model-name",
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "frequency_penalty": 0.0,
+  "presence_penalty": 0.0,
+  "stream": true,
+  "timeout": 30,
+  "max_retries": 3
+}'
+                                      style="font-family: 'Courier New', monospace;"><?php
+// 优先使用provider_config，如果没有则使用config
+$displayConfig = $providerConfig;
+if (empty($displayConfig) && !empty($config)) {
+    $displayConfig = $config;
+}
+
+if (!empty($displayConfig)) {
+    // 如果是数组，转换为JSON
+    if (is_array($displayConfig)) {
+        echo json_encode($displayConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } else if (is_string($displayConfig)) {
+        // 如果是JSON字符串，尝试解析并格式化
+        $decoded = json_decode($displayConfig, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } else {
+            echo $displayConfig;
+        }
+    } else {
+        echo $displayConfig;
+    }
+}
+?></textarea>
+                            <small class="form-text text-muted">
+                                <?= __('JSON格式的提供商特定配置。所有字段都可自定义，预置值仅供参考。') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 代理配置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-server-network me-2"></i><?= __('代理配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_host" class="form-label">
+                                <?= __('代理主机') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="proxy_host" 
+                                   name="proxy[host]" 
+                                   value="<?= $proxyInfo['host'] ?? '' ?>"
+                                   placeholder="<?= __('例如: proxy.example.com') ?>">
+                            <small class="form-text text-muted"><?= __('代理服务器地址') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_port" class="form-label">
+                                <?= __('代理端口') ?>
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="proxy_port" 
+                                   name="proxy[port]" 
+                                   value="<?= $proxyInfo['port'] ?? '' ?>"
+                                   min="1"
+                                   max="65535"
+                                   placeholder="<?= __('例如: 8080') ?>">
+                            <small class="form-text text-muted"><?= __('代理服务器端口') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_username" class="form-label">
+                                <?= __('代理用户名') ?>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="proxy_username" 
+                                   name="proxy[username]" 
+                                   value="<?= $proxyInfo['username'] ?? '' ?>"
+                                   placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="form-text text-muted"><?= __('代理认证用户名（可选）') ?></small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="proxy_password" class="form-label">
+                                <?= __('代理密码') ?>
+                            </label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="proxy_password" 
+                                   name="proxy[password]" 
+                                   value="<?= $proxyInfo['password'] ?? '' ?>"
+                                   placeholder="<?= __('如需认证请填写') ?>">
+                            <small class="form-text text-muted"><?= __('代理认证密码（可选）') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态设置卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-toggle-switch me-2"></i><?= __('状态设置') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <?php 
+                            // 启用条件：供应商连通性成功；若存在自配置，则自配置连通性也必须成功
+                            $providerOk = (($model ? $model->getData('provider_test_status') : 'pending') === 'success');
+                            // 判断是否存在自配置api_key
+                            $hasSelfConfig = false;
+                            $providerCfgRaw = $model ? $model->getData('provider_config') : '';
+                            if (!empty($providerCfgRaw)) {
+                                $pCfg = is_string($providerCfgRaw) ? json_decode($providerCfgRaw, true) : $providerCfgRaw;
+                                $hasSelfConfig = is_array($pCfg) && !empty($pCfg['api_key']);
+                            }
+                            if (!$hasSelfConfig) {
+                                $cfgRaw = $model ? $model->getData('config') : '';
+                                if (!empty($cfgRaw)) {
+                                    $cCfg = is_string($cfgRaw) ? json_decode($cfgRaw, true) : $cfgRaw;
+                                    $hasSelfConfig = is_array($cCfg) && !empty($cCfg['api_key']);
+                                }
+                            }
+                            $selfOk = !$hasSelfConfig || (($model ? $model->getData('self_config_test_status') : 'pending') === 'success');
+                            $canActivate = $providerOk && $selfOk;
+                            $disableReason = '';
+                            if (!$providerOk) {
+                                $disableReason = '供应商连通性未通过';
+                            } elseif ($hasSelfConfig && !$selfOk) {
+                                $disableReason = '自配置连通性未通过';
+                            }
+                            ?>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_active" 
+                                       name="is_active" 
+                                       value="1"
+                                       <?= ($isEdit && $model->getIsActive()) || !$isEdit ? 'checked' : '' ?>
+                                       <?= !$canActivate ? 'disabled' : '' ?>>
+                                <label class="form-check-label" for="is_active">
+                                    <?= __('启用此模型') ?>
+                                    <?php if (!$canActivate): ?>
+                                        <span class="text-warning">(<?= $disableReason ?>)</span>
+                                    <?php endif; ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                <?= __('只有启用的模型才能被使用') ?>
+                                <?php if (!$canActivate): ?>
+                                    <br><span class="text-warning">
+                                        <i class="mdi mdi-alert-circle"></i> 
+                                        无法激活：<?= $disableReason ?>。请先配置API密钥并进行连通性测试。
+                                    </span>
+                                <?php endif; ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_default" 
+                                       name="is_default" 
+                                       value="1"
+                                       <?= $isEdit && $model->getIsDefault() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_default">
+                                    <?= __('设为默认模型') ?>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted"><?= __('默认模型将在未指定模型时使用') ?></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 模型测试卡片 -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5><i class="mdi mdi-test-tube me-2"></i><?= __('模型测试') ?> <small class="text-muted">(<?= __('可选') ?>)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="test_prompt" class="form-label">
+                        <?= __('测试提示词') ?>
+                    </label>
+                    <textarea class="form-control" 
+                              id="test_prompt" 
+                              rows="3"
+                              placeholder="<?= __('例如: 你好，请介绍一下你自己') ?>">Hello, this is a connection test.</textarea>
+                    <small class="form-text text-muted"><?= __('输入测试提示词，点击测试按钮查看响应结果') ?></small>
+                </div>
+                
+                <button type="button" class="btn btn-success" id="testModelBtn" <?= $isEdit ? '' : 'disabled' ?>>
+                    <i class="mdi mdi-play-circle"></i> <?= __('测试模型') ?>
+                </button>
+                
+                <div id="testResult" class="mt-3" style="display: none;">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><?= __('测试结果') ?></h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="testResultContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 提交按钮 -->
+        <div class="card">
+            <div class="card-body text-end">
+                <a href="<?= $this->getBackendUrl('*/backend/model') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 表单验证
+document.getElementById('model-form').addEventListener('submit', function(e) {
+    // 基本验证
+    const vendor = document.getElementById('vendor').value.trim();
+    const modelCode = document.getElementById('model_code').value.trim();
+    const modelName = document.getElementById('model_name').value.trim();
+    
+    if (!vendor || !modelCode || !modelName) {
+        e.preventDefault();
+        alert(__('请填写必填项：供应商、模型代码、模型名称'));
+        return false;
+    }
+    
+    // 验证提供商配置JSON
+    const providerConfigTextarea = document.getElementById('provider_config_json');
+    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+        try {
+            JSON.parse(providerConfigTextarea.value);
+        } catch (e) {
+            e.preventDefault();
+            alert(__('提供商配置JSON格式错误，请检查语法'));
+            providerConfigTextarea.focus();
+            return false;
+        }
+    }
+    
+    return true;
+});
+
+// 模型测试功能
+<?php if ($isEdit): ?>
+const testModelBtn = document.getElementById('testModelBtn');
+testModelBtn.addEventListener('click', function() {
+    const prompt = document.getElementById('test_prompt').value.trim();
+    const modelId = <?= $model->getId() ?>;
+    
+    if (!prompt) {
+        alert(__('请输入测试提示词'));
+        return;
+    }
+    
+    // 禁用按钮并显示加载状态
+    testModelBtn.disabled = true;
+    testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> ' + __('测试中...');
+    
+    // 隐藏之前的结果
+    document.getElementById('testResult').style.display = 'none';
+    
+    // 发送测试请求
+    const formData = new FormData();
+    formData.append('id', modelId);
+    formData.append('prompt', prompt);
+    
+    fetch('<?= $this->getBackendUrl("*/backend/model/testConnection") ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        // 恢复按钮状态
+        testModelBtn.disabled = false;
+        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
+        
+        // 显示结果
+        const resultDiv = document.getElementById('testResult');
+        const resultContent = document.getElementById('testResultContent');
+        
+        if (data && data.data && data.data.results) {
+            const r = data.data.results;
+            const s = r.self_config || {};
+            const p = r.provider_account || {};
+            const sBadge = s.tested ? (s.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
+            const pBadge = p.tested ? (p.success ? '<span class="badge bg-success">' + __('成功') + '</span>' : '<span class="badge bg-danger">' + __('失败') + '</span>') : '<span class="badge bg-secondary">' + __('未测') + '</span>';
+            resultContent.innerHTML = `
+                <div class="row g-2">
+                    <div class="col-12">
+                        <div class="alert alert-${(s.success ? 'success' : (s.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
+                            <strong>自配置</strong> ${sBadge}<br>
+                            ${s.tested ? (`<small class=\"text-muted\">耗时：</small><code>${s.duration || 0} ms</code><br>` +
+                            `<small class=\"text-muted\">消息：</small>${(s.message || '')}<br>` +
+                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(s.response || '')}</div>`) : ''}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="alert alert-${(p.success ? 'success' : (p.tested ? 'danger' : 'secondary'))} py-2 px-3 mb-2">
+                            <strong>供应商账户</strong> ${pBadge} ${p.account_name ? ` <span class=\"badge bg-info\">${p.account_name}</span>` : ''}<br>
+                            ${p.tested ? (`<small class=\"text-muted\">耗时：</small><code>${p.duration || 0} ms</code><br>` +
+                            `<small class=\"text-muted\">消息：</small>${(p.message || '')}<br>` +
+                            `<div class=\"alert alert-light mb-0\" style=\"white-space: pre-wrap; max-height: 200px; overflow-y: auto;\">${(p.response || '')}</div>`) : ''}
+                        </div>
+                    </div>
+                </div>`;
+        } else if (data.success) {
+            resultContent.innerHTML = `
+                <div class="alert alert-success">
+            <strong>${__('测试成功')}!</strong> ${data.message}
+                </div>`;
+        } else {
+            resultContent.innerHTML = `
+                <div class="alert alert-danger">
+            <strong>${__('测试失败')}!</strong> ${data.message}
+                </div>
+                ${data.error ? `<div class="alert alert-warning"><small>${data.error}</small></div>` : ''}
+            `;
+        }
+        
+        resultDiv.style.display = 'block';
+        
+        // 滚动到结果区域
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    })
+    .catch(error => {
+        // 恢复按钮状态
+        testModelBtn.disabled = false;
+        testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> ' + __('测试模型');
+        
+        // 显示错误
+        const resultDiv = document.getElementById('testResult');
+        const resultContent = document.getElementById('testResultContent');
+        
+        resultContent.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>${__('网络错误')}!</strong> ${error.message}
+            </div>
+        `;
+        
+        resultDiv.style.display = 'block';
+    });
+});
+<?php endif; ?>
+</script>
+
+<style>
+.model-edit-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.model-edit-container .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.model-edit-container .card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.model-edit-container .form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.model-edit-container .form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.model-edit-container .form-text {
+    display: block;
+    margin-top: 0.25rem;
+}
+
+.model-edit-container .card {
+    margin-bottom: 1.5rem;
+}
+</style>
+
+</body>
+</html>

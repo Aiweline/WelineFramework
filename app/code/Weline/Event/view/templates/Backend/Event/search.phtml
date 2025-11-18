@@ -1,0 +1,335 @@
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="page-title">
+    <h1><?= $title ?? '事件搜索' ?></h1>
+    <div class="page-actions">
+        <a href="*/backend/event/index" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<!-- 搜索表单 -->
+<div class="search-form">
+    <form method="get" action="*/backend/event/search">
+        <div class="form-group">
+            <label for="q">搜索关键词：</label>
+            <input type="text" 
+                   id="q" 
+                   name="q" 
+                   value="<?= htmlspecialchars($this->getData('search_term') ?? '') ?>" 
+                   placeholder="输入事件名、描述、模块名或观察者信息..."
+                   class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="type">搜索类型：</label>
+            <select id="type" name="type" class="form-control">
+                <option value="all" <?= ($this->getData('search_type') ?? 'all') === 'all' ? 'selected' : '' ?>>全部</option>
+                <option value="name" <?= ($this->getData('search_type') ?? '') === 'name' ? 'selected' : '' ?>>事件名</option>
+                <option value="description" <?= ($this->getData('search_type') ?? '') === 'description' ? 'selected' : '' ?>>描述</option>
+                <option value="module" <?= ($this->getData('search_type') ?? '') === 'module' ? 'selected' : '' ?>>模块</option>
+                <option value="observer" <?= ($this->getData('search_type') ?? '') === 'observer' ? 'selected' : '' ?>>观察者</option>
+            </select>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-magnify"></i> 搜索
+            </button>
+            <a href="*/backend/event/search" class="btn btn-secondary">清空</a>
+        </div>
+    </form>
+</div>
+
+<!-- 搜索结果 -->
+<?php
+$results = $this->getData('results') ?? [];
+$searchTerm = $this->getData('search_term') ?? '';
+?>
+<div class="search-results">
+    <?php if (empty($searchTerm)): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-magnify"></i>
+            <h3>请输入搜索关键词</h3>
+            <p>在搜索框中输入关键词，然后点击搜索按钮。</p>
+        </div>
+    <?php elseif (empty($results)): ?>
+        <div class="empty-state">
+            <i class="mdi mdi-magnify-close"></i>
+            <h3>未找到匹配的事件</h3>
+            <p>没有找到与 "<strong><?= htmlspecialchars($searchTerm) ?></strong>" 匹配的事件。</p>
+            <p>请尝试使用其他关键词或搜索类型。</p>
+        </div>
+    <?php else: ?>
+        <div class="results-header">
+            <h3>找到 <?= count($results) ?> 个匹配的事件</h3>
+            <p>搜索关键词: "<strong><?= htmlspecialchars($searchTerm) ?></strong>"</p>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>事件名</th>
+                        <th>显示名</th>
+                        <th>定义模块</th>
+                        <th>匹配原因</th>
+                        <th>观察者</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($results as $eventName => $eventInfo): ?>
+                        <tr>
+                            <td>
+                                <div class="event-name">
+                                    <code><?= htmlspecialchars($eventName) ?></code>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="event-display-name">
+                                    <strong><?= htmlspecialchars($eventInfo['name'] ?? $eventName) ?></strong>
+                                </div>
+                                <?php if (!empty($eventInfo['description'])): ?>
+                                    <div class="event-description">
+                                        <small class="text-muted"><?= htmlspecialchars(mb_substr($eventInfo['description'] ?? '', 0, 80)) ?><?= mb_strlen($eventInfo['description'] ?? '') > 80 ? '...' : '' ?></small>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="event-module">
+                                    <span class="badge badge-info"><?= htmlspecialchars($eventInfo['module'] ?? '') ?></span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="match-reasons">
+                                    <?php
+                                    $matchReasons = $eventInfo['match_reasons'] ?? [];
+                                    foreach ($matchReasons as $reason):
+                                    ?>
+                                        <span class="badge badge-success"><?= htmlspecialchars($reason) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="event-observers">
+                                    <?php
+                                    $observerCount = $eventInfo['observer_count'] ?? 0;
+                                    ?>
+                                    <?php if ($observerCount > 0): ?>
+                                        <span class="badge badge-primary">
+                                            <i class="mdi mdi-eye"></i> <?= $observerCount ?> 个
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-muted">无</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="actions">
+                                    <a href="*/backend/event/detail/event/<?= urlencode($eventName) ?>" 
+                                       class="btn btn-sm btn-outline-primary" title="查看详情">
+                                        <i class="mdi mdi-eye"></i> 详情
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.page-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.page-actions .btn {
+    margin-left: 10px;
+}
+
+.search-form {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 30px;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.search-results {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 30px;
+}
+
+.results-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #eee;
+}
+
+.results-header h3 {
+    margin: 0 0 8px 0;
+    color: #333;
+}
+
+.results-header p {
+    margin: 0;
+    color: #666;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.event-name code {
+    background-color: #f4f4f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #e83e8c;
+}
+
+.event-display-name {
+    margin-bottom: 4px;
+}
+
+.event-description {
+    margin-top: 4px;
+}
+
+.match-reasons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #ddd;
+    margin-bottom: 20px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+}
+
+.badge-primary { background-color: #007bff; color: white; }
+.badge-info { background-color: #17a2b8; color: white; }
+.badge-success { background-color: #28a745; color: white; }
+.badge-warning { background-color: #ffc107; color: #212529; }
+.badge-danger { background-color: #dc3545; color: white; }
+.badge-secondary { background-color: #6c757d; color: white; }
+
+.btn {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.3s;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-outline-primary {
+    color: #007bff;
+    border-color: #007bff;
+    background: transparent;
+}
+
+.btn-outline-primary:hover {
+    background: #007bff;
+    color: white;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.text-muted {
+    color: #6c757d;
+}
+</style>
+</div>
+<!-- end container-fluid -->

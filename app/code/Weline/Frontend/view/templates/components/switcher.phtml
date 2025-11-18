@@ -1,0 +1,85 @@
+<?php
+/**
+ * Weline Switcher Component Template
+ * SEO友好的切换器组件模板
+ * 
+ * 参数：
+ * - type: 类型 (language|currency|region)
+ * - current: 当前值
+ * - options: 选项数组 [['value' => 'zh_Hans_CN', 'label' => '中文', 'href' => '/zh_Hans_CN/page']]
+ * - class: 额外CSS类
+ * - id: 组件ID
+ */
+
+$type = $this->getData('type') ?? 'language';
+$current = $this->getData('current') ?? '';
+$options = $this->getData('options') ?? [];
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? '';
+
+// 获取基础URL
+$baseUrl = $this->request->getBaseUrl();
+$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+
+// 如果没有提供选项，尝试从配置中获取
+if (empty($options)) {
+    switch ($type) {
+        case 'language':
+            // 从配置获取可用语言
+            $availableLangs = $this->getData('availableLangs') ?? [
+                ['code' => 'zh_Hans_CN', 'name' => '中文', 'native' => '中文'],
+                ['code' => 'en_US', 'name' => 'English', 'native' => 'English'],
+            ];
+            foreach ($availableLangs as $lang) {
+                $options[] = [
+                    'value' => $lang['code'],
+                    'label' => $lang['native'] ?? $lang['name'],
+                    'href' => $frontendUrl . '?lang=' . urlencode($lang['code'])
+                ];
+            }
+            break;
+        case 'currency':
+            // 从配置获取可用货币
+            $availableCurrencies = $this->getData('availableCurrencies') ?? [
+                ['code' => 'CNY', 'name' => '人民币', 'symbol' => '¥'],
+                ['code' => 'USD', 'name' => '美元', 'symbol' => '$'],
+            ];
+            foreach ($availableCurrencies as $currency) {
+                $options[] = [
+                    'value' => $currency['code'],
+                    'label' => $currency['symbol'] . ' ' . $currency['name'],
+                    'href' => $frontendUrl . '?currency=' . urlencode($currency['code'])
+                ];
+            }
+            break;
+        case 'region':
+            // 从配置获取可用地区
+            $availableRegions = $this->getData('availableRegions') ?? [];
+            foreach ($availableRegions as $region) {
+                $options[] = [
+                    'value' => $region['code'],
+                    'label' => $region['name'],
+                    'href' => $frontendUrl . '?region=' . urlencode($region['code'])
+                ];
+            }
+            break;
+    }
+}
+?>
+<weline-switcher 
+    type="<?= htmlspecialchars($type) ?>" 
+    current="<?= htmlspecialchars($current) ?>"
+    <?php if ($id): ?>id="<?= htmlspecialchars($id) ?>"<?php endif; ?>
+    class="<?= htmlspecialchars($class) ?>"
+    role="combobox"
+    aria-label="<?= __('切换') . __(' ' . $type) ?>">
+    <?php foreach ($options as $option): ?>
+        <a 
+            href="<?= htmlspecialchars($option['href'] ?? '#') ?>" 
+            data-value="<?= htmlspecialchars($option['value']) ?>"
+            <?php if ($option['value'] === $current): ?>aria-current="true"<?php endif; ?>>
+            <?= htmlspecialchars($option['label']) ?>
+        </a>
+    <?php endforeach; ?>
+</weline-switcher>
+

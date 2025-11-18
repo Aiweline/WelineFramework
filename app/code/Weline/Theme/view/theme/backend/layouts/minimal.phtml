@@ -1,0 +1,31 @@
+<?php
+/**
+ * 布局：后端 - 极简布局
+ * 
+ * 后端极简布局，无header和footer，适合弹窗、打印等场景
+ * 字段
+ * @info description 描述：后端极简布局，无header和footer，适合弹窗、打印等场景
+ * @info name 名称：极简布局
+ * @param title 页面标题
+ * @param content 内容（HTML字符串）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+if ($title) {
+    $this->assign('title', $title);
+}
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Backend::templates/public/head.phtml)
+</head>
+<body class="<?= htmlspecialchars($class) ?>">
+    <?= $content ?>
+</body>
+</html>
+

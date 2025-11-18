@@ -1,0 +1,84 @@
+<?php
+/**
+ * 片段：Header - 居中风格
+ * 
+ * Logo居中，导航在Logo下方的头部布局
+ * 字段
+ * @info description 描述：Logo居中，导航在Logo下方的头部布局
+ * @info name 名称：Header居中风格片段
+ * @param logo Logo URL
+ * @param logoText Logo文字
+ * @param navItems 导航项数组
+ * @param showSearch 是否显示搜索框
+ * @param class 额外CSS类
+ */
+$logo = $this->getData('logo') ?? '';
+$logoText = $this->getData('logoText') ?? __('Weline');
+$navItems = $this->getData('navItems') ?? [];
+$showSearch = $this->getData('showSearch') ?? true;
+$class = $this->getData('class') ?? '';
+
+$baseUrl = $this->request->getBaseUrl();
+$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+?>
+<header class="weline-header centered-header <?= htmlspecialchars($class) ?>">
+    <div class="header-container">
+        <!-- Logo 居中 -->
+        <div class="header-logo-centered">
+            <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
+                <?php if ($logo): ?>
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                <?php else: ?>
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                <?php endif; ?>
+                <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText) ?></span>
+            </a>
+        </div>
+
+        <!-- 搜索框（Logo下方） -->
+        <?php if ($showSearch): ?>
+            <div class="header-search-centered">
+                <form action="<?= $frontendUrl ?>search" method="get" class="search-form">
+                    <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
+                    <button type="submit" class="search-button" title="<?= __('搜索') ?>">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </form>
+            </div>
+        <?php endif; ?>
+
+        <!-- 导航菜单（Logo下方） -->
+        <?php if (!empty($navItems)): ?>
+            <nav class="header-nav-centered">
+                <ul class="nav-list">
+                    <?php foreach ($navItems as $item): ?>
+                        <li class="nav-item">
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
+                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+
+        <!-- 右侧功能区 -->
+        <div class="header-actions">
+            <!-- 语言切换 Hook -->
+            <div class="header-action-item" data-hook="header-language-switcher">
+                <hook>header-language-switcher</hook>
+            </div>
+
+            <!-- 货币切换 Hook -->
+            <div class="header-action-item" data-hook="header-currency-switcher">
+                <hook>header-currency-switcher</hook>
+            </div>
+
+            <!-- 购物车 Hook -->
+            <div class="header-action-item" data-hook="header-cart">
+                <hook>header-cart</hook>
+            </div>
+        </div>
+    </div>
+</header>
+

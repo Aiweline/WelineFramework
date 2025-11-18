@@ -1,0 +1,226 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title>DataTable 表单功能</title>
+    <style>
+        <?php
+        // 计算主题色的深色版本
+        $themeColorValue = $themeColor ?? '#667eea';
+        $themeColorDark = $themeColorValue;
+        if (preg_match('/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i', $themeColorValue, $matches)) {
+            $r = max(0, min(255, hexdec($matches[1]) - 20));
+            $g = max(0, min(255, hexdec($matches[2]) - 20));
+            $b = max(0, min(255, hexdec($matches[3]) - 20));
+            $themeColorDark = sprintf('#%02x%02x%02x', $r, $g, $b);
+        }
+        ?>
+        :root {
+            --theme-color: <?= htmlspecialchars($themeColorValue, ENT_QUOTES, 'UTF-8') ?>;
+            --theme-color-dark: <?= htmlspecialchars($themeColorDark, ENT_QUOTES, 'UTF-8') ?>;
+        }
+        .demo-section {
+            background: <?= ($themeMode ?? '') === 'dark' ? '#2d2d2d' : '#ffffff' ?>;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, <?= ($themeMode ?? '') === 'dark' ? '0.5' : '0.1' ?>);
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid <?= ($themeMode ?? '') === 'dark' ? '#404040' : '#dee2e6' ?>;
+        }
+        .code-block {
+            background: <?= ($themeMode ?? '') === 'dark' ? '#1e1e1e' : '#f8f9fa' ?>;
+            border: 1px solid <?= ($themeMode ?? '') === 'dark' ? '#404040' : '#dee2e6' ?>;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 15px 0;
+            color: <?= ($themeMode ?? '') === 'dark' ? '#d4d4d4' : '#333333' ?>;
+        }
+        .form-demo {
+            border: 2px solid <?= ($themeMode ?? '') === 'dark' ? '#404040' : '#e9ecef' ?>;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background: <?= ($themeMode ?? '') === 'dark' ? '#252525' : '#ffffff' ?>;
+        }
+        .text-muted {
+            color: <?= ($themeMode ?? '') === 'dark' ? '#b0b0b0' : '#6c757d' ?> !important;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--theme-color) 0%, var(--theme-color-dark) 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- 主要内容开始 -->
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+
+                <!-- Page Title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-form-select me-2"></i>
+                                DataTable 表单功能
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>DataTable</a></li>
+                                    <li class='breadcrumb-item'><a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>">综合测试</a></li>
+                                    <li class='breadcrumb-item active'>表单功能</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        <!-- 页面标题 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="demo-section">
+                    <h2 class="mb-3">
+                        <i class="mdi mdi-form-select me-3"></i>DataTable 表单功能
+                    </h2>
+                    <p class="text-muted">展示DataTable模块的表单功能，包括手动表单、自动生成、表单模式等特性</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 手动表单示例 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="demo-section">
+                    <h4 class="mb-3">
+                        <i class="mdi mdi-pencil me-2"></i>手动表单
+                    </h4>
+                    <p class="text-muted">手动定义表单字段，完全控制表单的显示和功能。</p>
+                    
+                    <div class="code-block">
+&lt;w:d-form model="Weline\DataTable\Model\TestUser" scope="manual-form" mode="add"&gt;
+    &lt;w:field belong="d-form" name="username" type="text" required="true"&gt;用户名&lt;/w:field&gt;
+    &lt;w:field belong="d-form" name="email" type="email" required="true"&gt;邮箱&lt;/w:field&gt;
+    &lt;w:field belong="d-form" name="status" type="select" options="active:激活,inactive:禁用"&gt;状态&lt;/w:field&gt;
+&lt;/w:d-form&gt;
+                    </div>
+
+                    <div class="form-demo">
+                        <h6>用户信息表单</h6>
+                        <w:d-form model="Weline\DataTable\Model\TestUser" scope="manual-form" mode="add">
+                            <w:field belong="d-form" name="id" type="text" readonly="true">ID</w:field>
+                            <w:field belong="d-form" name="create_time" type="datetime">创建时间</w:field>
+                            <w:field belong="d-form" name="update_time" type="datetime">更新时间</w:field>
+                        </w:d-form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 自动生成表单示例 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="demo-section">
+                    <h4 class="mb-3">
+                        <i class="mdi mdi-auto-fix me-2"></i>自动生成表单
+                    </h4>
+                    <p class="text-muted">基于模型自动生成表单字段，无需手动定义每个字段。</p>
+                    
+                    <div class="code-block">
+&lt;w:d-form model="Weline\DataTable\Model\TestUser" scope="auto-form" mode="add" auto_fields="true"&gt;
+&lt;/w:d-form&gt;
+                    </div>
+
+                    <div class="form-demo">
+                        <h6>自动生成的用户表单</h6>
+                        <w:d-form model="Weline\DataTable\Model\TestUser" scope="auto-form" mode="add" auto_fields="true">
+                        </w:d-form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 表单功能特性 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="demo-section">
+                    <h4 class="mb-3">
+                        <i class="mdi mdi-star me-2"></i>表单功能特性
+                    </h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>基本功能</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="mdi mdi-check text-success me-2"></i>字段类型支持</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>验证规则</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>自动填充</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>文件上传</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>高级功能</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="mdi mdi-check text-success me-2"></i>多步骤表单</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>动态字段</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>条件显示</li>
+                                <li><i class="mdi mdi-check text-success me-2"></i>自定义渲染</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 返回链接 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="text-center">
+                    <a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>" class="btn btn-primary">
+                        <i class="mdi mdi-arrow-left me-2"></i>返回综合测试首页
+                    </a>
+                </div>
+            </div>
+        </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- 主要内容结束 -->
+
+</div>
+<!-- 页面结束 -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

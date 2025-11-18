@@ -1,0 +1,286 @@
+<?php
+/**
+ * 场景适配器详情页面模板
+ * 
+ * @var \Weline\Ai\Model\AiScenarioAdapter $adapter
+ * @var object|null $adapterInstance
+ * @var array $supportedModels
+ * @var array $paramTemplate
+ * @var array $examples
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>适配器详情</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- 开始 主要内容 -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-puzzle me-2"></i>
+                                <lang>适配器详情</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>详情</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 页面标题结束 -->
+
+<div class="adapter-detail-container">
+    <!-- 基本信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('基本信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('适配器ID') ?></th>
+                    <td><?= $adapter->getId() ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('适配器代码') ?></th>
+                    <td><code><?= $adapter->getData('code') ?></code></td>
+                </tr>
+                <tr>
+                    <th><?= __('适配器名称') ?></th>
+                    <td><?= $adapter->getData('name') ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('版本') ?></th>
+                    <td><?= $adapter->getData('version') ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('描述') ?></th>
+                    <td><?= $adapter->getData('description') ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('状态') ?></th>
+                    <td>
+                        <?php if ($adapter->getData('is_active')): ?>
+                            <span class="badge badge-success"><?= __('激活') ?></span>
+                        <?php else: ?>
+                            <span class="badge badge-secondary"><?= __('未激活') ?></span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- 支持的模型类型 -->
+    <?php if (!empty($supportedModels)): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('支持的模型类型') ?></h5>
+        </div>
+        <div class="card-body">
+            <?php if (is_array($supportedModels)): ?>
+                <div class="d-flex flex-wrap gap-2">
+                    <?php foreach ($supportedModels as $model): ?>
+                        <span class="badge bg-info"><?= $model ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <pre class="bg-light p-3"><?= json_encode($supportedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 参数模板 -->
+    <?php if (!empty($paramTemplate)): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('参数模板') ?></h5>
+        </div>
+        <div class="card-body">
+            <pre class="bg-light p-3"><?= json_encode($paramTemplate, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 使用示例 -->
+    <?php if (!empty($examples)): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('使用示例') ?></h5>
+        </div>
+        <div class="card-body">
+            <pre class="bg-light p-3"><?= json_encode($examples, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?></pre>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 适配器实例信息 -->
+    <?php if ($adapterInstance): ?>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('实例信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('类名') ?></th>
+                    <td><code><?= get_class($adapterInstance) ?></code></td>
+                </tr>
+                <?php if (method_exists($adapterInstance, 'getVersion')): ?>
+                <tr>
+                    <th><?= __('运行时版本') ?></th>
+                    <td><?= $adapterInstance->getVersion() ?></td>
+                </tr>
+                <?php endif; ?>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 时间信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5><?= __('时间信息') ?></h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tr>
+                    <th width="200"><?= __('创建时间') ?></th>
+                    <td><?= date('Y-m-d H:i:s', $adapter->getData('created_time')) ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('更新时间') ?></th>
+                    <td><?= date('Y-m-d H:i:s', $adapter->getData('updated_time')) ?></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="mb-3">
+        <a href="<?= $this->_url->getBackendUrl('*/backend/adapter') ?>" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left me-1"></i>
+            <lang>返回列表</lang>
+        </a>
+        <?php if ($adapter->getData('is_active')): ?>
+            <button type="button" class="btn btn-warning" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+                <i class="mdi mdi-power me-1"></i>
+                <lang>禁用</lang>
+            </button>
+        <?php else: ?>
+            <button type="button" class="btn btn-success" onclick="toggleStatus(<?= $adapter->getId() ?>)">
+                <i class="mdi mdi-power me-1"></i>
+                <lang>启用</lang>
+            </button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.adapter-detail-container .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.adapter-detail-container .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.adapter-detail-container pre {
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+
+.adapter-detail-container .table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.adapter-detail-container .table td {
+    vertical-align: middle;
+}
+</style>
+
+            </div><!-- container-fluid -->
+        </div><!-- page-content -->
+    </div><!-- main-content -->
+</div><!-- layout-wrapper -->
+
+@template(Weline_Admin::common/footer.phtml)
+
+<script>
+// 切换适配器状态
+function toggleStatus(id) {
+    if (!confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->_url->getBackendUrl('*/backend/adapter/toggleStatus') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            id: id
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('<?= __('操作失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('网络错误，请稍后重试') ?>');
+    });
+}
+</script>
+
+</body>
+</html>
+

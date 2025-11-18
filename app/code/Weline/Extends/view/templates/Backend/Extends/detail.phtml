@@ -1,0 +1,623 @@
+<!-- 页面标题 -->
+<div class="page-title">
+    <h1><?= $title ?? '模块扩展详情' ?></h1>
+    <div class="page-actions">
+        <a href="*/backend/extends/index" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> 返回列表
+        </a>
+        <a href="*/backend/extends/refresh" class="btn btn-warning">
+            <i class="mdi mdi-refresh"></i> 刷新注册表
+        </a>
+    </div>
+</div>
+
+<?php
+$module = $this->getData('module') ?? '';
+$moduleExtends = $this->getData('module_extends') ?? [];
+$extendedBy = $this->getData('extended_by') ?? [];
+$stickerExtensions = $this->getData('sticker_extensions') ?? [];
+$hasStickerExtensions = $this->getData('has_sticker_extensions') ?? false;
+$hasModuleExtensions = $this->getData('has_module_extensions') ?? false;
+$hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
+?>
+
+<!-- 模块信息概览 -->
+<div class="module-overview">
+    <div class="module-header">
+        <div class="module-icon">
+            <i class="mdi mdi-cube-outline"></i>
+        </div>
+        <div class="module-info">
+            <h2><?= htmlspecialchars($module) ?></h2>
+            <div class="module-badges">
+                <?php if (!empty($moduleExtends)): ?>
+                    <span class="badge badge-info">提供扩展点</span>
+                <?php endif; ?>
+                <?php if ($hasStickerExtensions): ?>
+                    <span class="badge badge-primary">被 Sticker 扩展</span>
+                <?php endif; ?>
+                <?php if ($hasModuleExtensions): ?>
+                    <span class="badge badge-success">被模块扩展</span>
+                <?php endif; ?>
+                <?php if ($hasThemeExtensions): ?>
+                    <span class="badge badge-warning">被主题扩展</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-puzzle"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= count($moduleExtends['extends'] ?? []) ?></div>
+            <div class="stat-label">扩展点数</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-sticker"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= count($stickerExtensions) ?></div>
+            <div class="stat-label">Sticker 扩展</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-cube"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= count($extendedBy['module_extensions'] ?? []) ?></div>
+            <div class="stat-label">模块扩展</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-theme-light-dark"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= count($extendedBy['theme_extensions'] ?? []) ?></div>
+            <div class="stat-label">主题扩展</div>
+        </div>
+    </div>
+</div>
+
+<!-- 详细标签页 -->
+<div class="tab-container">
+    <div class="tab-header">
+        <button class="tab-button active" data-tab="extends-definition">扩展定义</button>
+        <button class="tab-button" data-tab="extended-by">被扩展信息</button>
+        <?php if ($hasStickerExtensions): ?>
+            <button class="tab-button" data-tab="sticker-extensions">Sticker 扩展</button>
+        <?php endif; ?>
+        <button class="tab-button" data-tab="module-extensions">模块扩展</button>
+        <button class="tab-button" data-tab="theme-extensions">主题扩展</button>
+    </div>
+
+    <!-- 扩展定义 -->
+    <div class="tab-content active" id="extends-definition">
+        <?php if (empty($moduleExtends)): ?>
+            <div class="empty-state">
+                <i class="mdi mdi-puzzle-outline"></i>
+                <h3>无扩展定义</h3>
+                <p>该模块没有定义任何扩展点。</p>
+            </div>
+        <?php else: ?>
+            <div class="extends-definition">
+                <div class="definition-header">
+                    <div class="def-type">
+                        <strong>扩展类型：</strong>
+                        <span class="badge badge-info"><?= $moduleExtends['type'] ?? 'unknown' ?></span>
+                    </div>
+                    <div class="def-doc">
+                        <?php if (!empty($moduleExtends['documentation'])): ?>
+                            <strong>文档：</strong>
+                            <a href="#" onclick="alert('文档路径：<?= htmlspecialchars($moduleExtends['documentation']) ?>')">
+                                <?= htmlspecialchars($moduleExtends['documentation']) ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="extends-points">
+                    <h4>扩展点列表</h4>
+                    <?php foreach ($moduleExtends['extends'] ?? [] as $pointName => $pointConfig): ?>
+                        <div class="extend-point">
+                            <div class="point-header">
+                                <h5><?= htmlspecialchars($pointName) ?></h5>
+                                <div class="point-badges">
+                                    <?php 
+                                    $type = $pointConfig['type'] ?? '';
+                                    if (is_array($type)) {
+                                        foreach ($type as $t) {
+                                            echo '<span class="badge badge-secondary">' . htmlspecialchars($t) . '</span>';
+                                        }
+                                    } else {
+                                        echo '<span class="badge badge-secondary">' . htmlspecialchars($type) . '</span>';
+                                    }
+                                    ?>
+                                    <?php if (($pointConfig['required'] ?? false) === true): ?>
+                                        <span class="badge badge-danger">必需</span>
+                                    <?php else: ?>
+                                        <span class="badge badge-success">可选</span>
+                                    <?php endif; ?>
+                                    <?php if (($pointConfig['multiple'] ?? false) === true): ?>
+                                        <span class="badge badge-info">多实例</span>
+                                    <?php else: ?>
+                                        <span class="badge badge-warning">单实例</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="point-details">
+                                <p><?= htmlspecialchars($pointConfig['description'] ?? '') ?></p>
+                                <?php if (!empty($pointConfig['path'])): ?>
+                                    <div class="point-path">
+                                        <strong>路径：</strong>
+                                        <code><?= htmlspecialchars($pointConfig['path']) ?></code>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($pointConfig['interface'])): ?>
+                                    <div class="point-interface">
+                                        <strong>接口：</strong>
+                                        <code><?= htmlspecialchars($pointConfig['interface']) ?></code>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- 被扩展信息 -->
+    <div class="tab-content" id="extended-by">
+        <?php
+        $totalExtended = 0;
+        foreach ($extendedBy as $typeExtensions) {
+            foreach ($typeExtensions as $sourceModule => $extensions) {
+                $totalExtended += count($extensions);
+            }
+        }
+        ?>
+        
+        <?php if ($totalExtended === 0): ?>
+            <div class="empty-state">
+                <i class="mdi mdi-arrow-down"></i>
+                <h3>没有被扩展</h3>
+                <p>该模块没有被其他模块扩展。</p>
+            </div>
+        <?php else: ?>
+            <div class="extended-by-summary">
+                <h4>扩展概览</h4>
+                <div class="summary-stats">
+                    <?php if ($hasStickerExtensions): ?>
+                        <div class="summary-item">
+                            <span class="summary-label">Sticker 扩展：</span>
+                            <span class="summary-value"><?= count($stickerExtensions) ?> 个</span>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($hasModuleExtensions): ?>
+                        <div class="summary-item">
+                            <span class="summary-label">模块扩展：</span>
+                            <span class="summary-value"><?= count($extendedBy['module_extensions'] ?? []) ?> 个</span>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($hasThemeExtensions): ?>
+                        <div class="summary-item">
+                            <span class="summary-label">主题扩展：</span>
+                            <span class="summary-value"><?= count($extendedBy['theme_extensions'] ?? []) ?> 个</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Sticker 扩展 -->
+    <?php if ($hasStickerExtensions): ?>
+        <div class="tab-content" id="sticker-extensions">
+            <div class="extensions-list">
+                <?php 
+                $stickerBySource = [];
+                foreach ($stickerExtensions as $extension) {
+                    $sourceModule = $extension['source_module'] ?? 'unknown';
+                    if (!isset($stickerBySource[$sourceModule])) {
+                        $stickerBySource[$sourceModule] = [];
+                    }
+                    $stickerBySource[$sourceModule][] = $extension;
+                }
+                ?>
+                
+                <?php foreach ($stickerBySource as $sourceModule => $extensions): ?>
+                    <div class="source-module">
+                        <h4>
+                            <i class="mdi mdi-cube"></i>
+                            <?= htmlspecialchars($sourceModule) ?>
+                            <span class="count"><?= count($extensions) ?> 个 Sticker</span>
+                        </h4>
+                        <div class="extensions-table">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>目标文件</th>
+                                        <th>Sticker 类型</th>
+                                        <th>源文件</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($extensions as $extension): ?>
+                                        <tr>
+                                            <td>
+                                                <code><?= htmlspecialchars($extension['file_path'] ?? '') ?></code>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-primary">
+                                                    <?= ($extension['sticker_type'] ?? 'unknown') === 'module' ? '模块级' : '主题级' ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <code class="small"><?= htmlspecialchars($extension['source_file'] ?? '') ?></code>
+                                            </td>
+                                            <td>
+                                                <a href="*/backend/sticker/detail?target_module=<?= urlencode($module) ?>&target_file=<?= urlencode($extension['file_path'] ?? '') ?>&source_module=<?= urlencode($sourceModule) ?>" 
+                                                   class="btn btn-sm btn-outline-primary" title="查看 Sticker 详情">
+                                                    <i class="mdi mdi-eye"></i> 详情
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- 模块扩展 -->
+    <div class="tab-content" id="module-extensions">
+        <div class="extensions-list">
+            <!-- 模块扩展内容将在这里显示 -->
+            <p>模块扩展详情...</p>
+        </div>
+    </div>
+
+    <!-- 主题扩展 -->
+    <div class="tab-content" id="theme-extensions">
+        <div class="extensions-list">
+            <!-- 主题扩展内容将在这里显示 -->
+            <p>主题扩展详情...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 标签页切换
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // 移除所有活动状态
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // 激活当前标签
+            this.classList.add('active');
+            document.getElementById(targetTab).classList.add('active');
+        });
+    });
+});
+</script>
+
+<style>
+.page-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.page-actions .btn {
+    margin-left: 10px;
+}
+
+.module-overview {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.module-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.module-icon {
+    font-size: 48px;
+    color: #007bff;
+}
+
+.module-info h2 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.module-badges {
+    display: flex;
+    gap: 8px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+}
+
+.badge-primary { background-color: #007bff; color: white; }
+.badge-info { background-color: #17a2b8; color: white; }
+.badge-success { background-color: #28a745; color: white; }
+.badge-warning { background-color: #ffc107; color: #212529; }
+.badge-danger { background-color: #dc3545; color: white; }
+.badge-secondary { background-color: #6c757d; color: white; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.stat-icon {
+    font-size: 32px;
+    color: #007bff;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+}
+
+.stat-label {
+    color: #666;
+    font-size: 14px;
+}
+
+.tab-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.tab-header {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.tab-button {
+    padding: 15px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #6c757d;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-button:hover {
+    color: #007bff;
+}
+
+.tab-button.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 20px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.empty-state i {
+    font-size: 48px;
+    color: #ddd;
+    margin-bottom: 15px;
+}
+
+.extends-definition {
+    max-width: none;
+}
+
+.definition-header {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.extends-points h4 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.extend-point {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.point-header {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.point-header h5 {
+    margin: 0;
+    color: #333;
+}
+
+.point-badges {
+    display: flex;
+    gap: 8px;
+}
+
+.point-details {
+    padding: 20px;
+}
+
+.point-details p {
+    margin-bottom: 15px;
+    color: #666;
+}
+
+.point-path,
+.point-interface {
+    margin-bottom: 10px;
+}
+
+.point-path code,
+.point-interface code {
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.extended-by-summary {
+    margin-bottom: 20px;
+}
+
+.summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.summary-item {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.summary-label {
+    color: #666;
+}
+
+.summary-value {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.source-module {
+    margin-bottom: 30px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.source-module h4 {
+    margin: 0;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.source-module .count {
+    font-size: 14px;
+    color: #666;
+    font-weight: normal;
+}
+
+.extensions-table {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.table code {
+    font-size: 12px;
+    background: #f1f3f4;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.table .small {
+    font-size: 11px;
+}
+
+.actions .btn {
+    margin-right: 5px;
+}
+</style>

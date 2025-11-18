@@ -1,0 +1,57 @@
+<?php
+/**
+ * 布局：产品页 - 列表页布局
+ * 
+ * 产品列表页布局，包含筛选、排序、产品网格等
+ * 字段
+ * @info description 描述：产品列表页布局，包含筛选、排序、产品网格等
+ * @info name 名称：产品列表页布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param filters 筛选器内容（HTML字符串）
+ * @param toolbar 工具栏（排序、视图切换等）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('产品列表');
+$content = $this->getData('content') ?? '';
+$filters = $this->getData('filters') ?? '';
+$toolbar = $this->getData('toolbar') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="product-list-main <?= htmlspecialchars($class) ?>">
+        <div class="product-list-container">
+            <?php if ($filters): ?>
+                <aside class="product-list-filters">
+                    <?= $filters ?>
+                </aside>
+            <?php endif; ?>
+            
+            <div class="product-list-content">
+                <?php if ($toolbar): ?>
+                    <div class="product-list-toolbar">
+                        <?= $toolbar ?>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="product-list-grid">
+                    <?= $content ?>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

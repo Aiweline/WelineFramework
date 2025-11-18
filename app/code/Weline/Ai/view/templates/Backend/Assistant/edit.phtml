@@ -1,0 +1,217 @@
+<?php
+/**
+ * AI助手创建/编辑页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\Ai\Model\AiAssistant|null $assistant
+ * @var array $models
+ */
+
+$assistant = $this->getData('assistant');
+$models = $this->getData('models') ?: [];
+$isEdit = $assistant && $assistant->getId();
+$pageTitle = $isEdit ? __('编辑助手') : __('创建助手');
+?>
+
+@template(Weline_Admin::common/head.phtml)
+@template(Weline_Admin::common/page/loading.phtml)
+
+<w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+<w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+@template(Weline_Admin::common/left-sidebar.phtml)
+
+<div class="content">
+    <div class="page-header">
+        <div class="page-title">
+            <h4><?= $pageTitle ?></h4>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('dashboard/index/index') ?>"><lang>首页</lang></a></li>
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('ai/backend/assistant') ?>"><lang>助手管理</lang></a></li>
+                    <li class="breadcrumb-item active" aria-current="page"><?= $pageTitle ?></li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form id="assistantForm" method="post" action="<?= $this->getBackendUrl('*/backend/assistant/save') ?>">
+                <?php if ($isEdit): ?>
+                    <input type="hidden" name="id" value="<?= $assistant->getId() ?>">
+                <?php endif; ?>
+
+                <!-- 基本信息 -->
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2 mb-3"><lang>基本信息</lang></h5>
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label"><lang>助手名称</lang> <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               value="<?= $isEdit ? $assistant->getData('name') : '' ?>"
+                               placeholder="<?= __('请输入助手名称') ?>"
+                               required>
+                        <div class="form-text"><lang>用于识别和显示的助手名称</lang></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="model_code" class="form-label"><lang>AI模型</lang> <span class="text-danger">*</span></label>
+                        <select class="form-select" id="model_code" name="model_code" required>
+                            <option value=""><lang>-- 请选择模型 --</lang></option>
+                            <?php foreach ($models as $model): ?>
+                                <option value="<?= $model->getData('code') ?>"
+                                        <?= ($isEdit && $assistant->getData('model_code') === $model->getData('code')) ? 'selected' : '' ?>>
+                                    <?= $model->getData('name') ?> (<?= $model->getData('supplier') ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text"><lang>选择助手使用的AI模型</lang></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label"><lang>描述</lang></label>
+                        <textarea class="form-control" 
+                                  id="description" 
+                                  name="description" 
+                                  rows="3"
+                                  placeholder="<?= __('请输入助手描述...') ?>"><?= $isEdit ? $assistant->getData('description') : '' ?></textarea>
+                        <div class="form-text"><lang>助手的功能描述和用途说明</lang></div>
+                    </div>
+                </div>
+
+                <!-- 提示词配置 -->
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2 mb-3"><lang>提示词配置</lang></h5>
+                    
+                    <div class="mb-3">
+                        <label for="prompt" class="form-label"><lang>系统提示词</lang> <span class="text-danger">*</span></label>
+                        <textarea class="form-control" 
+                                  id="prompt" 
+                                  name="prompt" 
+                                  rows="8"
+                                  placeholder="<?= __('请输入系统提示词...') ?>"
+                                  required><?= $isEdit ? $assistant->getData('prompt') : '' ?></textarea>
+                        <div class="form-text">
+                            <lang>定义助手的角色、行为和响应风格。例如：</lang><br>
+                            <code>You are a helpful AI assistant. Your role is to...</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MCP配置（可选） -->
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2 mb-3">
+                        <lang>MCP配置</lang>
+                        <small class="text-muted">(<lang>可选</lang>)</small>
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="mcp_config" class="form-label"><lang>MCP工具配置</lang></label>
+                        <textarea class="form-control font-monospace" 
+                                  id="mcp_config" 
+                                  name="mcp_config" 
+                                  rows="6"
+                                  placeholder="<?= __('请输入JSON格式的MCP配置...') ?>"><?= $isEdit ? $assistant->getData('mcp_config') : '[]' ?></textarea>
+                        <div class="form-text">
+                            <lang>JSON格式的MCP工具配置。示例：</lang><br>
+                            <code>{"tools": ["search", "calculator"], "settings": {}}</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 状态设置 -->
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2 mb-3"><lang>状态设置</lang></h5>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="is_active" 
+                               name="is_active" 
+                               value="1"
+                               <?= (!$isEdit || $assistant->getData('is_active')) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="is_active">
+                            <lang>启用此助手</lang>
+                        </label>
+                    </div>
+                    <div class="form-text ms-4"><lang>只有启用的助手才能被使用</lang></div>
+                </div>
+
+                <!-- 提交按钮 -->
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="<?= $this->getBackendUrl('*/backend/assistant') ?>" class="btn btn-secondary">
+                        <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
+                    </a>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i class="mdi mdi-content-save"></i> <lang>保存</lang>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// 表单提交处理
+document.getElementById('assistantForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitBtn = document.getElementById('submitBtn');
+    const originalHtml = submitBtn.innerHTML;
+    
+    // 显示加载状态
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __("保存中...") ?>';
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.href = '<?= $this->getBackendUrl("*/backend/assistant") ?>';
+        } else {
+            alert('<?= __("保存失败：") ?>' + data.message);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    })
+    .catch(error => {
+        alert('<?= __("请求失败：") ?>' + error);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+    });
+});
+
+// MCP配置JSON验证
+document.getElementById('mcp_config').addEventListener('blur', function() {
+    const value = this.value.trim();
+    if (value && value !== '[]') {
+        try {
+            JSON.parse(value);
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        } catch (e) {
+            this.classList.remove('is-valid');
+            this.classList.add('is-invalid');
+            alert('<?= __("MCP配置格式错误，请输入有效的JSON格式") ?>');
+        }
+    } else {
+        this.classList.remove('is-invalid', 'is-valid');
+    }
+});
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+

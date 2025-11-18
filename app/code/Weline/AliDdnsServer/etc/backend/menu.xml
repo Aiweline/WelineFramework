@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--顶层：模组-->
+    <add source="Weline_AliDdnsServer::manager" name="manager" title="Aliyun Ddns" action="aliddns/backend/ddnslist"
+         parent="Weline_Backend::system_module"
+         icon="mdi mdi-router"
+         order="99"/>
+    <add source="Weline_AliDdnsServer::ddns-list" name="ddns-list" title="Ddns" action="aliddns/backend/ddns-list"
+         parent="Weline_AliDdnsServer::manager"
+         icon="mdi mdi-format-list-text"
+         order="99"/>
+    <add source="Weline_AliDdnsServer::config" name="domains" title="Aliyun配置" action="aliddns/backend/config"
+         parent="Weline_AliDdnsServer::manager"
+         icon="ri-list-settings-line"
+         order="99"/>
+</menus>

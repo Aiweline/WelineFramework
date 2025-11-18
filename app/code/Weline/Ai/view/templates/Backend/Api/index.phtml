@@ -1,0 +1,184 @@
+<?php
+/**
+ * API管理页面模板
+ * 
+ * @var array $stats
+ */
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$stats = $stats ?? ['total_requests' => 0, 'success_requests' => 0, 'failed_requests' => 0, 'active_keys' => 0];
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>API管理</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- 开始 主要内容 -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <i class="mdi mdi-api me-2"></i>
+                                <lang>API管理</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI助手</lang></a></li>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>开发与测试</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>API管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 页面标题结束 -->
+
+                <!-- 统计卡片 -->
+                <div class="row mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-truncate font-size-14 mb-2"><lang>总请求数</lang></p>
+                                        <h4 class="mb-2"><?= number_format($stats['total_requests'] ?? 0) ?></h4>
+                                    </div>
+                                    <div class="avatar-sm">
+                                        <span class="avatar-title bg-primary bg-gradient rounded">
+                                            <i class="mdi mdi-api font-size-18"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-truncate font-size-14 mb-2"><lang>成功请求</lang></p>
+                                        <h4 class="mb-2 text-success"><?= number_format($stats['success_requests'] ?? 0) ?></h4>
+                                    </div>
+                                    <div class="avatar-sm">
+                                        <span class="avatar-title bg-success bg-gradient rounded">
+                                            <i class="mdi mdi-check-circle font-size-18"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-truncate font-size-14 mb-2"><lang>失败请求</lang></p>
+                                        <h4 class="mb-2 text-danger"><?= number_format($stats['failed_requests'] ?? 0) ?></h4>
+                                    </div>
+                                    <div class="avatar-sm">
+                                        <span class="avatar-title bg-danger bg-gradient rounded">
+                                            <i class="mdi mdi-alert-circle font-size-18"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <p class="text-truncate font-size-14 mb-2"><lang>活跃密钥</lang></p>
+                                        <h4 class="mb-2 text-info"><?= number_format($stats['active_keys'] ?? 0) ?></h4>
+                                    </div>
+                                    <div class="avatar-sm">
+                                        <span class="avatar-title bg-info bg-gradient rounded">
+                                            <i class="mdi mdi-key font-size-18"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API文档和工具 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="mdi mdi-book-open-variant me-2"></i>
+                                    <lang>API文档</lang>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="mdi mdi-information me-2"></i>
+                                    <lang>API文档功能正在开发中，敬请期待...</lang>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="<?= $this->getBackendUrl('*/backend/apikey') ?>" class="btn btn-primary">
+                                        <i class="mdi mdi-key me-1"></i><lang>管理API密钥</lang>
+                                    </a>
+                                    <a href="<?= $this->getBackendUrl('*/backend/developertools/apitest') ?>" class="btn btn-success">
+                                        <i class="mdi mdi-test-tube me-1"></i><lang>API测试工具</lang>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!-- 页脚 -->
+@template(Weline_Admin::common/footer.phtml)
+
+</body>
+</html>
+

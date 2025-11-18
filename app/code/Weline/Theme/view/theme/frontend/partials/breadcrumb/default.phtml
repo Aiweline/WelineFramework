@@ -1,0 +1,41 @@
+<?php
+/**
+ * 片段：Breadcrumb
+ * 
+ * 面包屑导航
+ * 字段
+ * @info description 描述：面包屑导航
+ * @info name 名称：Breadcrumb面包屑片段
+ * @param items 面包屑项数组（必填）
+ * @param separator 分隔符
+ * @param class 额外CSS类
+ */
+$items = $this->getData('items') ?? [];
+$separator = $this->getData('separator') ?? '/';
+$class = $this->getData('class') ?? '';
+
+// 构建CSS类
+$breadcrumbClass = 'breadcrumb';
+if ($class) {
+    $breadcrumbClass .= ' ' . htmlspecialchars($class);
+}
+?>
+<nav class="<?= $breadcrumbClass ?>" aria-label="breadcrumb">
+    <ol class="breadcrumb-list">
+        <?php foreach ($items as $index => $item): ?>
+            <li class="breadcrumb-item <?= empty($item['url']) ? 'active' : '' ?>">
+                <?php if (!empty($item['url'])): ?>
+                    <a href="<?= htmlspecialchars($item['url']) ?>">
+                        <?= htmlspecialchars($item['text'] ?? '') ?>
+                    </a>
+                <?php else: ?>
+                    <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+                <?php endif; ?>
+            </li>
+            <?php if ($index < count($items) - 1): ?>
+                <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </ol>
+</nav>
+

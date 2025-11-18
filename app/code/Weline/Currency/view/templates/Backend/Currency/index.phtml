@@ -1,0 +1,151 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('货币列表') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>货币管理</lang> > <lang>货币列表</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
+                                    <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>货币列表</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class='row'>
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-body'>
+                                <div class='row mb-3'>
+                                    <div class='col-md-6'>
+                                        <h4 class='card-title'><lang>货币列表</lang></h4>
+                                    </div>
+                                    <div class='col-md-6 text-end'>
+                                        <a href="@backend-url('currency/backend/currency/getAdd')" class='btn btn-primary'>
+                                            <i class='mdi mdi-plus'></i> <lang>添加货币</lang>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <form method='get' action="@backend-url('currency/backend/currency/index')" class='mb-3'>
+                                    <div class='row'>
+                                        <div class='col-md-4'>
+                                            <input type='text' class='form-control' name='search' 
+                                                   value='<?= htmlspecialchars($this->request->getGet('search', '')) ?>' 
+                                                   placeholder='<?= __('搜索货币代码、名称或符号') ?>'>
+                                        </div>
+                                        <div class='col-md-2'>
+                                            <button type='submit' class='btn btn-primary'><lang>搜索</lang></button>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <div class='table-responsive'>
+                                    <table class='table table-bordered table-striped'>
+                                        <thead>
+                                            <tr>
+                                                <th><lang>ID</lang></th>
+                                                <th><lang>货币代码</lang></th>
+                                                <th><lang>货币名称</lang></th>
+                                                <th><lang>图标</lang></th>
+                                                <th><lang>符号</lang></th>
+                                                <th><lang>汇率</lang></th>
+                                                <th><lang>格式化示例</lang></th>
+                                                <th><lang>状态</lang></th>
+                                                <th><lang>操作</lang></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <empty name="currencies">
+                                                <tr>
+                                                    <td colspan='9' class='text-center'><lang>暂无数据</lang></td>
+                                                </tr>
+                                            </empty>
+                                            <notempty name="currencies">
+                                                <foreach name="currencies" item="currency" key="key">
+                                                    <tr>
+                                                        <td>{{currency.currency_id}}</td>
+                                                        <td>{{currency.code}}</td>
+                                                        <td>{{currency.name}}</td>
+                                                        <td>{{currency.icon}}</td>
+                                                        <td>{{currency.symbol}}</td>
+                                                        <td>{{currency.rate}}</td>
+                                                        <td>{{currency.formatted_example}}</td>
+                                                        <td>
+                                                            <if condition="currency.status == 1">
+                                                                <span class='badge bg-success'><lang>启用</lang></span>
+                                                                <else/>
+                                                                <span class='badge bg-danger'><lang>禁用</lang></span>
+                                                            </if>
+                                                        </td>
+                                                        <td>
+                                                            <a href="@backend-url('currency/backend/currency/getEdit')?id={{currency.currency_id}}" 
+                                                               class='btn btn-sm btn-primary'><lang>编辑</lang></a>
+                                                            <button type='button' class='btn btn-sm btn-danger' 
+                                                                    w-delete="true"
+                                                                    w-url="@backend-url('currency/backend/currency/postDelete')"
+                                                                    w-method="POST"
+                                                                    w-var-id="{{currency.currency_id}}"
+                                                                    w-msg="<?= __('确定要删除该货币吗？') ?>"><lang>删除</lang></button>
+                                                        </td>
+                                                    </tr>
+                                                </foreach>
+                                            </notempty>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <notempty name="pagination">
+                                    <div class='row mt-3'>
+                                        <div class='col-12'>
+                                            <var>pagination</var>
+                                        </div>
+                                    </div>
+                                </notempty>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+
+<js:part name="w-delete"/>
+
+</body>
+</html>
+

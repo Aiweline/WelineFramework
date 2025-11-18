@@ -1,0 +1,175 @@
+<?php
+/**
+ * Algorithmic Trading Landing Page - Footer
+ * 算法交易落地页模板 - 页脚
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:copyright => 版权信息
+ * copyright.enabled => 显示版权:select:yes|yes,no
+ * copyright.text => 版权文字:text:© 2025 StocksToTrade\, Inc. All Rights Reserved.
+ * copyright.link1_text => 链接1文字:text:Privacy Statement
+ * copyright.link1_url => 链接1地址:textarea:#
+ * copyright.link2_text => 链接2文字:text:Terms of Service
+ * copyright.link2_url => 链接2地址:textarea:#
+ * 
+ * group:disclaimer => 免责声明
+ * disclaimer.text => 免责声明文字:textarea:** Results not typical or guaranteed. Past performance is not indicative of future returns and financial investing is inherently risky. All content is provided subject to the qualifications and limitations set forth in our Terms of Service and Use.\n\nThis is for informational purposes only as StocksToTrade is not registered as a securities broker-dealer or an investment adviser. No information herein is intended as securities brokerage\, investment\, tax\,accounting or legal advice\, as an offer or solicitation of an offer to sell or buy\, or as an endorsement\, recommendation or sponsorship of any company\, security or fund.\n\nStocksToTrade cannot and does not assess\, verify or guarantee the adequacy\, accuracy or completeness of any information\, the suitability or profitability of any particular investment\,or the potential value of any investment or informational source. The reader bears responsibility for his\/her own investment research and decisions\, should seek the advice of a qualified securities professional before making any investment\,and investigate and fully understand any and all risks before investing.\n\nStocksToTrade in no way warrants the solvency\, financial condition\, or investment advisability of any of the securities mentioned in communications or websites. In addition\, StocksToTrade accepts no liability whatsoever for any direct or consequential loss arising from any use of this information. This information is not intended to be used as the sole basis of any investment decision\, should it be construed as advice designed to meet the investment needs of any particular investor. Past performance is not necessarily indicative of future returns.
+ * disclaimer.color => 文字颜色:color:#ffffff
+ * disclaimer.font_size => 字体大小:responsive:12/14|px
+ * disclaimer.line_height => 行高:number:1.6
+ * disclaimer.bg_color => 背景颜色:color:#2c2e32
+ * disclaimer.padding => 内边距:responsive:40/60|px
+ * disclaimer.border_top => 顶部边框:select:no|yes,no
+ * disclaimer.border_color => 边框颜色:color:#e5e7eb
+ * 
+ * disclaimer.link_color => 链接颜色:color:#ffffff
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+function getAlgoFooterConfig($settings, $key, $default = '') {
+    return $settings[$key] ?? $default;
+}
+
+function parseAlgoFooterResponsive($value) {
+    if (empty($value)) return ['mobile' => '', 'desktop' => '', 'unit' => ''];
+    $value = trim($value);
+    $unit = '';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    $result = ['mobile' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+    switch (count($parts)) {
+        case 1: $result['mobile'] = $result['desktop'] = trim($parts[0]); break;
+        case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+    }
+    return $result;
+}
+
+function genAlgoFooterCSS($parsed) {
+    $mobile = floatval($parsed['mobile']);
+    $desktop = floatval($parsed['desktop']);
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) return $mobile . $unit;
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+}
+
+// 版权信息配置
+$copyrightEnabled = getAlgoFooterConfig($styleSettings, 'copyright.enabled', 'yes');
+$copyrightText = getAlgoFooterConfig($styleSettings, 'copyright.text', '© 2025 StocksToTrade, Inc. All Rights Reserved.');
+$link1Text = getAlgoFooterConfig($styleSettings, 'copyright.link1_text', 'Privacy Statement');
+$link1Url = getAlgoFooterConfig($styleSettings, 'copyright.link1_url', '#');
+$link2Text = getAlgoFooterConfig($styleSettings, 'copyright.link2_text', 'Terms of Service');
+$link2Url = getAlgoFooterConfig($styleSettings, 'copyright.link2_url', '#');
+
+// 免责声明配置
+$disclaimerText = getAlgoFooterConfig($styleSettings, 'disclaimer.text', '** Results not typical or guaranteed. Past performance is not indicative of future returns and financial investing is inherently risky. All content is provided subject to the qualifications and limitations set forth in our Terms of Service and Use.
+
+This is for informational purposes only as StocksToTrade is not registered as a securities broker-dealer or an investment adviser. No information herein is intended as securities brokerage, investment, tax,accounting or legal advice, as an offer or solicitation of an offer to sell or buy, or as an endorsement, recommendation or sponsorship of any company, security or fund.
+
+StocksToTrade cannot and does not assess, verify or guarantee the adequacy, accuracy or completeness of any information, the suitability or profitability of any particular investment,or the potential value of any investment or informational source. The reader bears responsibility for his/her own investment research and decisions, should seek the advice of a qualified securities professional before making any investment,and investigate and fully understand any and all risks before investing.
+
+StocksToTrade in no way warrants the solvency, financial condition, or investment advisability of any of the securities mentioned in communications or websites. In addition, StocksToTrade accepts no liability whatsoever for any direct or consequential loss arising from any use of this information. This information is not intended to be used as the sole basis of any investment decision, should it be construed as advice designed to meet the investment needs of any particular investor. Past performance is not necessarily indicative of future returns.');
+$disclaimerColor = getAlgoFooterConfig($styleSettings, 'disclaimer.color', '#ffffff');
+$disclaimerFontSize = genAlgoFooterCSS(parseAlgoFooterResponsive(getAlgoFooterConfig($styleSettings, 'disclaimer.font_size', '12/14') . 'px'));
+$disclaimerLineHeight = getAlgoFooterConfig($styleSettings, 'disclaimer.line_height', '1.6');
+$disclaimerBgColor = getAlgoFooterConfig($styleSettings, 'disclaimer.bg_color', '#2c2e32');
+$disclaimerPadding = genAlgoFooterCSS(parseAlgoFooterResponsive(getAlgoFooterConfig($styleSettings, 'disclaimer.padding', '40/60') . 'px'));
+$disclaimerBorderTop = getAlgoFooterConfig($styleSettings, 'disclaimer.border_top', 'no');
+$disclaimerBorderColor = getAlgoFooterConfig($styleSettings, 'disclaimer.border_color', '#e5e7eb');
+$linkColor = getAlgoFooterConfig($styleSettings, 'disclaimer.link_color', '#ffffff');
+?>
+
+<style>
+.algo-footer {
+    background-color: <?= htmlspecialchars($disclaimerBgColor ?? '') ?>;
+    padding: <?= $disclaimerPadding ?>;
+    margin-top: 60px;
+    <?php if ($disclaimerBorderTop === 'yes'): ?>
+    border-top: 1px solid <?= htmlspecialchars($disclaimerBorderColor ?? '') ?>;
+    <?php endif; ?>
+}
+
+.algo-footer-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.algo-copyright {
+    text-align: center;
+    margin-bottom: 20px;
+    color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
+    font-size: <?= $disclaimerFontSize ?>;
+}
+
+.algo-copyright-links {
+    display: inline;
+    margin: 0 5px;
+}
+
+.algo-footer-link {
+    color: <?= htmlspecialchars($linkColor ?? '') ?>;
+    text-decoration: none;
+}
+
+.algo-footer-link:hover {
+    text-decoration: underline;
+}
+
+.algo-disclaimer {
+    color: <?= htmlspecialchars($disclaimerColor ?? '') ?>;
+    font-size: <?= $disclaimerFontSize ?>;
+    line-height: <?= $disclaimerLineHeight ?>;
+    text-align: center;
+}
+
+.algo-disclaimer p {
+    margin-bottom: 15px;
+    font-size: <?= $disclaimerFontSize ?> !important;
+}
+</style>
+
+        </div> <!-- 关闭 .algo-container -->
+    </div> <!-- 关闭 .algo-content-section -->
+</div> <!-- 关闭 .algo-content-wrapper -->
+    
+    <!-- 页脚 -->
+    <footer class="algo-footer">
+        <div class="algo-footer-container">
+            <?php if ($copyrightEnabled === 'yes'): ?>
+            <div class="algo-copyright">
+                <p><?= htmlspecialchars($copyrightText ?? '') ?> 
+                <span class="algo-copyright-links">
+                    <a href="<?= htmlspecialchars($link1Url ?? '') ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link1Text ?? '') ?></a> | <a href="<?= htmlspecialchars($link2Url ?? '') ?>" class="algo-footer-link" target="_blank"><?= htmlspecialchars($link2Text ?? '') ?></a>
+                </span>
+                </p>
+            </div>
+            <?php endif; ?>
+            
+            <div class="algo-disclaimer">
+                <?php
+                $paragraphs = explode("\n\n", $disclaimerText);
+                foreach ($paragraphs as $para):
+                    if (trim($para)):
+                ?>
+                    <p><?= htmlspecialchars(trim($para)) ?></p>
+                <?php
+                    endif;
+                endforeach;
+                ?>
+            </div>
+        </div>
+    </footer>
+    
+</body>
+</html>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--系统配置-->
+    <add source="Weline_Extends::extends" name="extends" title="扩展管理" action=""
+         parent="Weline_Admin::system_configuration" icon="mdi mdi-puzzle-outline" order="50"/>
+    <add source="Weline_Extends::extends_index" name="extends_index" title="扩展列表" action="*/backend/extends/index"
+         parent="Weline_Extends::extends" icon="mdi mdi-view-list" order="10"/>
+    <add source="Weline_Extends::extends_circular" name="extends_circular" title="循环依赖检测" action="*/backend/extends/checkCircular"
+         parent="Weline_Extends::extends" icon="mdi mdi-alert-circle" order="20"/>
+    <add source="Weline_Extends::extends_refresh" name="extends_refresh" title="刷新注册表" action="*/backend/extends/refresh"
+         parent="Weline_Extends::extends" icon="mdi mdi-refresh" order="30"/>
+</menus>

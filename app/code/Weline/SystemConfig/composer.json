@@ -1,0 +1,24 @@
+{
+  "name": "weline/module-system-config",
+  "description": "WelineFramework 系统配置",
+  "minimum-stability": "stable",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\SystemConfig\\": ""
+    },
+    "psr-0": {
+      "Weline\\SystemConfig\\": ""
+    }
+  },
+  "license": "MIT"
+}

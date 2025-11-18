@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--开发工作台-->
+    <add source="Weline_DeveloperWorkspace::dev-tool" name="dev-tool" title="开发工具" action="dev/tool/admin"
+         parent="Weline_Backend::dev_workspace" icon="ri-code-box-line" order="10"/>
+    <add source="Weline_DeveloperWorkspace::dev-tool-sandbox" name="dev-tool-sandbox" title="测试/沙盒" action="dev/tool/admin/sandbox"
+         parent="Weline_DeveloperWorkspace::dev-tool" icon="mdi mdi-code-tags-check" order="10"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-manager" name="dev-document-manager" title="开发文档" action="dev/tool/admin/document"
+         parent="Weline_Backend::dev_workspace" icon="mdi mdi-file-document-multiple" order="20"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-catalog" name="dev-document-catalog" title="分类管理" action="dev/tool/admin/document/catalog"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-sitemap" order="10"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-list" name="dev-document-list" title="文档管理" action="dev/tool/admin/document"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-file-document-multiple" order="20"/>
+    <add source="Weline_DeveloperWorkspace::dev-document-frontend" name="dev-document-frontend" title="开发文档前端" action="dev/tool/docs" is_backend="0"
+         parent="Weline_DeveloperWorkspace::dev-document-manager" icon="mdi mdi-open-in-new" order="30"/>
+    
+    <!--调试工具-->
+    <add source="Weline_DeveloperWorkspace::sandbox_config" name="sandbox_config" title="沙盒配置" action="dev/backend/sandbox-config"
+         parent="Weline_Backend::debug_tools" icon="mdi mdi-code-tags-check" order="10"/>
+    <add source="Weline_DeveloperWorkspace::debug_config" name="debug_config" title="Debug配置" action="dev/backend/debug-config"
+         parent="Weline_Backend::debug_tools" icon="mdi mdi-bug" order="20"/>
+    <add source="Weline_DeveloperWorkspace::panel_config" name="panel_config" title="开发面板配置" action="dev/backend/panel-config"
+         parent="Weline_Backend::debug_tools" icon="mdi mdi-view-dashboard" order="30"/>
+</menus>

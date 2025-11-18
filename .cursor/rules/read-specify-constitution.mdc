@@ -1,0 +1,102 @@
+---
+description: |
+  # Specify 工作流规范
+
+  ## 🔒 核心要求
+
+  必须阅读并遵守 `.specify/memory/constitution.md`，这里面是必须遵守的宪章，不能违背。
+
+  ## 🚀 Specify 工作流使用指南
+
+  当收到新需求时，**必须**使用 Specify 工作流进行需求规划和开发，工作流包含以下5个阶段：
+
+  ### 📝 阶段1：需求规格化 (/specify)
+
+  1. **触发命令**：使用 `/specify` 命令，将用户需求转换为规范的需求规格文档
+  2. **执行步骤**：
+     - 运行 `.specify/scripts/powershell/create-new-feature.ps1 -Json "$ARGUMENTS"` 创建功能分支和规格文件
+     - 加载 `.specify/templates/spec-template.md` 模板
+     - 将需求描述转换为结构化的规格文档（spec.md）
+     - 标记所有需要澄清的部分为 `[NEEDS CLARIFICATION: 具体问题]`
+  3. **输出**：生成 `specs/[###-feature-name]/spec.md` 文件
+
+  ### ❓ 阶段2：需求澄清 (/clarify)
+
+  如果规格文档中存在 `[NEEDS CLARIFICATION]` 标记：
+  1. **触发命令**：使用 `/clarify` 命令
+  2. **执行步骤**：
+     - 识别所有需要澄清的问题
+     - 与用户交互获取澄清信息
+     - 更新规格文档，添加 `## Clarifications` 部分
+  3. **输出**：更新后的 spec.md 文件，包含所有澄清信息
+
+  ### 📋 阶段3：实施规划 (/plan)
+
+  1. **触发命令**：使用 `/plan` 命令创建实施计划
+  2. **前置条件检查**：
+     - 检查 spec.md 是否存在 `## Clarifications` 部分
+     - 如果存在未澄清的问题，提示用户先运行 `/clarify`
+  3. **执行步骤**：
+     - 运行 `.specify/scripts/powershell/setup-plan.ps1 -Json` 设置计划文件
+     - 阅读 `.specify/memory/constitution.md` 了解宪章要求
+     - 加载 `.specify/templates/plan-template.md` 模板
+     - 执行计划模板的执行流程（Phase 0-2）：
+       * **Phase 0**：生成 `research.md`（技术研究和决策）
+       * **Phase 1**：生成 `data-model.md`（数据模型）、`contracts/`（API契约）、`quickstart.md`（快速开始指南）
+       * **Phase 2**：描述任务生成方法（不创建 tasks.md）
+  4. **输出**：生成 `specs/[###-feature-name]/plan.md` 及 Phase 0-1 的设计文档
+
+  ### ✅ 阶段4：任务生成 (/tasks)
+
+  1. **触发命令**：使用 `/tasks` 命令生成任务列表
+  2. **前置条件**：必须存在 plan.md 文件
+  3. **执行步骤**：
+     - 加载 plan.md 获取技术栈和结构信息
+     - 加载可选设计文档：data-model.md、contracts/、research.md、quickstart.md
+     - 根据设计文档生成任务：
+       * Setup 任务：项目初始化、依赖配置、代码规范
+       * Test 任务：契约测试、集成测试（标记为 [P] 可并行）
+       * Core 任务：模型、服务、控制器等核心功能
+       * Integration 任务：数据库、中间件、日志等集成
+       * Polish 任务：单元测试、性能优化、文档
+     - 应用任务规则：
+       * 不同文件的任务标记为 [P]（可并行）
+       * 同一文件的任务按顺序执行
+       * 测试优先（TDD）：测试任务在实现任务之前
+  4. **输出**：生成 `specs/[###-feature-name]/tasks.md` 文件
+
+  ### 🔨 阶段5：实施执行 (/implement)
+
+  1. **触发命令**：使用 `/implement` 命令执行任务
+  2. **执行步骤**：
+     - 读取 tasks.md 文件
+     - 按照任务顺序执行（注意并行标记 [P]）
+     - 每个任务完成后进行测试和验证
+     - 更新任务状态
+  3. **输出**：完成的功能实现
+
+  ## 📐 工作流执行原则
+
+  1. **必须按顺序执行**：specify → clarify（如需要）→ plan → tasks → implement
+  2. **不能跳过阶段**：每个阶段都有其输出和前置条件
+  3. **宪章检查**：在 plan 阶段必须检查 constitution.md，确保不违反宪章
+  4. **测试驱动**：tasks 阶段必须遵循 TDD，测试任务在实现任务之前
+  5. **文档同步**：每个阶段都要更新相应的文档
+
+  ## ⚠️ 重要提示
+
+  - **必须阅读宪章**：在开始 plan 阶段前，必须阅读 `.specify/memory/constitution.md`
+  - **遵循模板**：严格按照 `.specify/templates/` 下的模板执行
+  - **使用绝对路径**：所有文件操作使用绝对路径
+  - **错误处理**：如果某个阶段出现错误，必须解决后才能继续下一阶段
+  - **状态跟踪**：每个阶段都要更新进度跟踪，确保可追溯
+
+  ## 📚 命令参考
+
+  - `/specify [需求描述]` - 创建需求规格文档
+  - `/clarify` - 澄清需求中的不确定部分
+  - `/plan` - 创建实施计划
+  - `/tasks` - 生成任务列表
+  - `/implement` - 执行任务实施
+alwaysApply: true
+---
