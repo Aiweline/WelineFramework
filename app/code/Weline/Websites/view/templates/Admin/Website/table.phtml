@@ -1,0 +1,89 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>名称</th>
+            <th>代码</th>
+            <th>URL</th>
+            <th>默认货币</th>
+            <th>关联货币</th>
+            <th>关联语言</th>
+            <th>时区</th>
+            <th>操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($websites as $website): ?>
+            <tr>
+                <td><?= $website['website_id'] ?></td>
+                <td><?= htmlspecialchars($website['name']) ?></td>
+                <td><?= htmlspecialchars($website['code']) ?></td>
+                <td><?= htmlspecialchars($website['url']) ?></td>
+                <td>
+                    <?php if (!empty($website['default_currency'])): ?>
+                        <span class="badge bg-primary"><?= htmlspecialchars($website['default_currency']) ?></span>
+                    <?php else: ?>
+                        <span class="text-muted">-</span>
+                    <?php endif; ?>
+                </td>
+                <td>
+                    <?php 
+                    $currencyCodes = $website['currency_codes'] ?? [];
+                    if (!empty($currencyCodes)): 
+                        foreach ($currencyCodes as $code): ?>
+                            <span class="badge bg-info me-1"><?= htmlspecialchars($code) ?></span>
+                        <?php endforeach;
+                    else: ?>
+                        <span class="text-muted">全部</span>
+                    <?php endif; ?>
+                </td>
+                <td>
+                    <?php 
+                    $languageCodes = $website['language_codes'] ?? [];
+                    if (!empty($languageCodes)): 
+                        foreach ($languageCodes as $code): ?>
+                            <span class="badge bg-success me-1"><?= htmlspecialchars($code) ?></span>
+                        <?php endforeach;
+                    else: ?>
+                        <span class="text-muted">全部</span>
+                    <?php endif; ?>
+                </td>
+                <td><?= htmlspecialchars($website['default_timezone']) ?></td>
+                <td>
+                    <block class='Weline\Component\Block\OffCanvas'
+                           cache='0'
+                           id='edit_website_<?= $website['website_id'] ?>'
+                           action='*/admin/website/edit'
+                           action-params='{"id":<?= $website['website_id'] ?>}'
+                           title='编辑网站'
+                           close-button-show='1'
+                           close-button-text='关闭'
+                           direction='right'
+                           class-names='w-75 h-100'
+                           off-canvas-body-style=''
+                           target-button-text=''
+                           icon='mdi mdi-pencil'
+                           target-button-class='btn btn-sm btn-outline-info'
+                           target-tag='a'
+                           save='1'
+                    />
+                    <a href="<?= $this->getUrl('*/admin/website/delete') ?>?id=<?= $website['website_id'] ?>"
+                       w-delete="true"
+                       w-msg="您确定要删除吗?"
+                       class="btn btn-sm btn-outline-danger"
+                       title="删除">
+                        <i class="mdi mdi-delete"></i>
+                    </a>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+
+    <?= $pagination ?? '' ?>
+</div>
+

@@ -1,0 +1,6 @@
+# This directory stores:
+# - Recipient email lists (xlsx, csv, txt)
+# - Breakpoint data (breakpoint.json)
+# - Failed emails tracking (failed_emails.json)
+# - Permanent failed emails (permanent_failed_emails.json)
+

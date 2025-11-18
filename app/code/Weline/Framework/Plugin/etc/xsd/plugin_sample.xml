@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+    <plugin name="HelloWorld::controller_plugin" class="Aiweline\HelloWorld\Model\PluginTestModel">
+        <interceptor name="HelloWorld::interceptor_index_test1" instance="Aiweline\HelloWorld\Plugin\PluginTestModel" disabled="false" sort="2"/>
+        <interceptor name="HelloWorld::interceptor_index_test2" instance="Aiweline\HelloWorld\Plugin\PluginTest" disabled="false" sort="2"/>
+    </plugin>
+</config>

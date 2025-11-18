@@ -1,0 +1,26 @@
+/**
+ * Weline Frontend - Amazon风格主题颜色覆盖
+ * 
+ * 参考Amazon的设计风格
+ */
+
+[data-theme="amazon"] {
+    /* Amazon风格的颜色调整 */
+    --color-primary: #ff9900;  /* Amazon橙色 */
+    --color-primary-light: #ffb84d;
+    --color-primary-dark: #e68900;
+    --color-primary-border: #cc7700;
+    
+    /* 文本色 - Amazon风格 */
+    --color-text-primary: #111;
+    --color-text-secondary: #565959;
+    
+    /* 背景色 - Amazon风格 */
+    --color-bg-primary: #fff;
+    --color-bg-secondary: #f3f3f3;
+    
+    /* 链接色 - Amazon风格 */
+    --color-link: #007185;
+    --color-link-hover: #c45500;
+}
+

@@ -1,0 +1,17 @@
+<script>
+    /*
+    * Debouncing是一种在一定时间内只执行一次函数的技术。例如，如果你希望某个函数在用户停止输入后才执行，就可以使用Debouncing。
+    * */
+    function debounce(func, delay) {
+        let timeoutId;
+        return function (...args) {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(() => {
+                func.apply(this, args);
+                timeoutId = null;
+            }, delay);
+        };
+    }
+</script>

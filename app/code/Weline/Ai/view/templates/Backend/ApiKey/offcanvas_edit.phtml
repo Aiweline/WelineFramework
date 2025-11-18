@@ -1,0 +1,451 @@
+<?php
+/**
+ * AI API Key Offcanvas 编辑模板
+ * 
+ * 用于新建和编辑 API Key
+ * 
+ * @var \Weline\Ai\Model\AiApiKey $apiKey
+ */
+
+$apiKey = $this->getData('api_key');
+$isEdit = $apiKey && $apiKey->getId();
+$title = $isEdit ? __('编辑 API Key') : __('新建 API Key');
+?>
+
+<!-- Offcanvas 容器 -->
+<div class="offcanvas offcanvas-end" 
+     tabindex="-1" 
+     id="apiKeyEditOffcanvas"
+     data-bs-backdrop="static" 
+     data-bs-keyboard="false" 
+     aria-labelledby="apiKeyEditOffcanvasLabel">
+    
+    <!-- Offcanvas 头部 -->
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="apiKeyEditOffcanvasLabel">
+            <i class="bi bi-key me-2"></i>
+            <?= $title ?>
+        </h5>
+        <button type="button" 
+                class="btn-close" 
+                data-bs-dismiss="offcanvas" 
+                aria-label="<?= __('关闭') ?>">
+        </button>
+    </div>
+    
+    <!-- Offcanvas 主体 -->
+    <div class="offcanvas-body">
+        <form id="apiKeyEditForm" method="post" action="<?= $this->getUrl('*/*/save') ?>">
+            
+            <!-- 隐藏字段 -->
+            <?php if ($isEdit): ?>
+            <input type="hidden" name="id" value="<?= $apiKey->getId() ?>" />
+            <?php endif; ?>
+            
+            <input type="hidden" name="form_key" value="<?= $this->getFormKey($this->getUrl('*/*/save')) ?>" />
+            
+            <!-- 新建成功提示 -->
+            <?php if (!$isEdit): ?>
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong><?= __('重要提示：') ?></strong>
+                <?= __('API Key 只会在创建时显示一次，请务必立即复制保存！') ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- 基础信息 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('基础信息') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- API Key 名称 -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label required">
+                            <?= __('名称') ?>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               value="<?= $apiKey ? $apiKey->getData('name') : '' ?>" 
+                               required
+                               placeholder="<?= __('例如：生产环境密钥') ?>">
+                        <div class="form-text"><?= __('为 API Key 命名，便于识别') ?></div>
+                    </div>
+                    
+                    <!-- 用户ID -->
+                    <div class="mb-3">
+                        <label for="user_id" class="form-label required">
+                            <?= __('用户ID') ?>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="user_id" 
+                               name="user_id" 
+                               value="<?= $apiKey ? $apiKey->getData('user_id') : $this->getCurrentUserId() ?>" 
+                               required
+                               <?= $isEdit ? 'readonly' : '' ?>>
+                        <div class="form-text"><?= __('API Key 所属的用户ID') ?></div>
+                    </div>
+                    
+                    <!-- 租户ID -->
+                    <div class="mb-3">
+                        <label for="tenant_id" class="form-label required">
+                            <?= __('租户ID') ?>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="tenant_id" 
+                               name="tenant_id" 
+                               value="<?= $apiKey ? $apiKey->getData('tenant_id') : $this->getCurrentTenantId() ?>" 
+                               required
+                               <?= $isEdit ? 'readonly' : '' ?>>
+                        <div class="form-text"><?= __('API Key 所属的租户ID') ?></div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- 配额设置 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('配额设置') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 每日配额 -->
+                    <div class="mb-3">
+                        <label for="quota_daily" class="form-label">
+                            <?= __('每日配额') ?>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="quota_daily" 
+                               name="quota_daily" 
+                               value="<?= $apiKey ? $apiKey->getData('quota_daily') : '' ?>" 
+                               min="0"
+                               placeholder="<?= __('例如：1000（留空表示无限制）') ?>">
+                        <div class="form-text"><?= __('每天最多可调用次数') ?></div>
+                        
+                        <?php if ($isEdit && $apiKey->getData('quota_daily')): ?>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <?= __('已使用：%{1} / %{2}', [
+                                    $apiKey->getData('usage_daily'),
+                                    $apiKey->getData('quota_daily')
+                                ]) ?>
+                                (<?= round(($apiKey->getData('usage_daily') / $apiKey->getData('quota_daily')) * 100, 1) ?>%)
+                            </small>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- 每月配额 -->
+                    <div class="mb-3">
+                        <label for="quota_monthly" class="form-label">
+                            <?= __('每月配额') ?>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="quota_monthly" 
+                               name="quota_monthly" 
+                               value="<?= $apiKey ? $apiKey->getData('quota_monthly') : '' ?>" 
+                               min="0"
+                               placeholder="<?= __('例如：30000（留空表示无限制）') ?>">
+                        <div class="form-text"><?= __('每月最多可调用次数') ?></div>
+                        
+                        <?php if ($isEdit && $apiKey->getData('quota_monthly')): ?>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <?= __('已使用：%{1} / %{2}', [
+                                    $apiKey->getData('usage_monthly'),
+                                    $apiKey->getData('quota_monthly')
+                                ]) ?>
+                                (<?= round(($apiKey->getData('usage_monthly') / $apiKey->getData('quota_monthly')) * 100, 1) ?>%)
+                            </small>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- 过期时间 -->
+                    <div class="mb-3">
+                        <label for="expires_at" class="form-label">
+                            <?= __('过期时间') ?>
+                        </label>
+                        <input type="datetime-local" 
+                               class="form-control" 
+                               id="expires_at" 
+                               name="expires_at" 
+                               value="<?= $apiKey && $apiKey->getData('expires_at') ? date('Y-m-d\TH:i', strtotime($apiKey->getData('expires_at'))) : '' ?>">
+                        <div class="form-text"><?= __('留空表示永不过期') ?></div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- 状态管理 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><?= __('状态管理') ?></h6>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 状态 -->
+                    <div class="mb-3">
+                        <label for="status" class="form-label required">
+                            <?= __('状态') ?>
+                        </label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="pending" <?= $apiKey && $apiKey->getData('status') === 'pending' ? 'selected' : '' ?>>
+                                <?= __('等待审核') ?>
+                            </option>
+                            <option value="approved" <?= $apiKey && $apiKey->getData('status') === 'approved' ? 'selected' : '' ?>>
+                                <?= __('已批准') ?>
+                            </option>
+                            <option value="suspended" <?= $apiKey && $apiKey->getData('status') === 'suspended' ? 'selected' : '' ?>>
+                                <?= __('已暂停') ?>
+                            </option>
+                            <option value="revoked" <?= $apiKey && $apiKey->getData('status') === 'revoked' ? 'selected' : '' ?>>
+                                <?= __('已撤销') ?>
+                            </option>
+                        </select>
+                        <div class="form-text">
+                            <?= __('只有"已批准"状态的 API Key 可以正常使用') ?>
+                        </div>
+                    </div>
+                    
+                    <?php if ($isEdit): ?>
+                    <!-- 最后使用时间 -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('最后使用时间') ?></label>
+                        <div class="form-control-plaintext">
+                            <?= $apiKey->getData('last_used_at') ? 
+                                date('Y-m-d H:i:s', strtotime($apiKey->getData('last_used_at'))) : 
+                                __('从未使用') ?>
+                        </div>
+                    </div>
+                    
+                    <!-- 创建时间 -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('创建时间') ?></label>
+                        <div class="form-control-plaintext">
+                            <?= date('Y-m-d H:i:s', strtotime($apiKey->getData('created_at'))) ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>
+                    <?= __('保存') ?>
+                </button>
+                <button type="button" 
+                        class="btn btn-secondary" 
+                        data-bs-dismiss="offcanvas">
+                    <i class="bi bi-x-lg me-1"></i>
+                    <?= __('取消') ?>
+                </button>
+                
+                <?php if ($isEdit && $apiKey->getData('status') !== 'revoked'): ?>
+                <button type="button" 
+                        class="btn btn-danger mt-3" 
+                        onclick="revokeApiKey(<?= $apiKey->getId() ?>)">
+                    <i class="bi bi-trash me-1"></i>
+                    <?= __('撤销 API Key') ?>
+                </button>
+                <?php endif; ?>
+            </div>
+            
+        </form>
+    </div>
+    
+</div>
+
+<!-- Token 显示模态框 -->
+<div class="modal fade" id="tokenModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <?= __('API Key 创建成功！') ?>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong><?= __('重要：') ?></strong>
+                    <?= __('请立即复制保存，此 Token 只会显示一次！') ?>
+                </div>
+                
+                <label class="form-label fw-bold"><?= __('您的 API Key：') ?></label>
+                <div class="input-group">
+                    <input type="text" 
+                           class="form-control font-monospace" 
+                           id="newToken" 
+                           readonly 
+                           value="">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copyToken()">
+                        <i class="bi bi-clipboard"></i>
+                        <?= __('复制') ?>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <?= __('我已保存') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 表单验证
+    const form = document.getElementById('apiKeyEditForm');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 显示加载状态
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
+        
+        // 提交表单
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 如果是新建，显示 Token
+                if (data.data && data.data.token) {
+                    document.getElementById('newToken').value = data.data.token;
+                    const tokenModal = new bootstrap.Modal(document.getElementById('tokenModal'));
+                    tokenModal.show();
+                    
+                    // 关闭 Offcanvas
+                    const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('apiKeyEditOffcanvas'));
+                    offcanvas.hide();
+                } else {
+                    // 显示成功消息
+                    alert('<?= __("保存成功！") ?>');
+                    
+                    // 关闭 Offcanvas
+                    const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('apiKeyEditOffcanvas'));
+                    offcanvas.hide();
+                    
+                    // 刷新列表
+                    window.location.reload();
+                }
+            } else {
+                // 显示错误消息
+                alert('<?= __("保存失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __("保存失败，请稍后重试") ?>');
+        })
+        .finally(() => {
+            // 恢复按钮状态
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+    });
+    
+    // 自动打开 Offcanvas（如果是新建或编辑模式）
+    <?php if ($this->getData('auto_open')): ?>
+    const offcanvas = new bootstrap.Offcanvas(document.getElementById('apiKeyEditOffcanvas'));
+    offcanvas.show();
+    <?php endif; ?>
+});
+
+// 复制 Token
+function copyToken() {
+    const tokenInput = document.getElementById('newToken');
+    tokenInput.select();
+    document.execCommand('copy');
+    
+    // 显示复制成功提示
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check"></i> <?= __("已复制") ?>';
+    
+    setTimeout(() => {
+        btn.innerHTML = originalHtml;
+    }, 2000);
+}
+
+// 撤销 API Key
+function revokeApiKey(id) {
+    if (!confirm('<?= __("确定要撤销此 API Key 吗？此操作不可撤销！") ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getUrl('*/*/revoke') ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            id: id,
+            form_key: '<?= $this->getFormKey($this->getUrl('*/*/revoke')) ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __("API Key 已撤销") ?>');
+            window.location.reload();
+        } else {
+            alert('<?= __("撤销失败：") ?>' + (data.message || '<?= __("未知错误") ?>'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __("撤销失败，请稍后重试") ?>');
+    });
+}
+</script>
+
+<style>
+.offcanvas {
+    width: 600px !important;
+    max-width: 90vw;
+}
+
+.form-label.required::after {
+    content: ' *';
+    color: red;
+}
+
+.card-header h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+.font-monospace {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9rem;
+}
+</style>
+

@@ -1,0 +1,55 @@
+<?php
+/**
+ * 布局：产品页 - 详情页布局
+ * 
+ * 产品详情页布局，包含产品图片、信息、详情等区域
+ * 字段
+ * @info description 描述：产品详情页布局，包含产品图片、信息、详情等区域
+ * @info name 名称：产品详情页布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param sidebar 侧边栏内容（相关产品推荐等）
+ * @param breadcrumb 面包屑导航
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('产品详情');
+$content = $this->getData('content') ?? '';
+$sidebar = $this->getData('sidebar') ?? '';
+$breadcrumb = $this->getData('breadcrumb') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <?php if ($breadcrumb): ?>
+        <nav class="breadcrumb-nav">
+            <?= $breadcrumb ?>
+        </nav>
+    <?php endif; ?>
+    
+    <main class="product-detail-main <?= htmlspecialchars($class) ?>">
+        <div class="product-detail-container">
+            <div class="product-detail-content">
+                <?= $content ?>
+            </div>
+            
+            <?php if ($sidebar): ?>
+                <aside class="product-detail-sidebar">
+                    <?= $sidebar ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

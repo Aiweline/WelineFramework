@@ -1,0 +1,71 @@
+<?php
+/**
+ * 组件：Alert
+ * 
+ * 提示信息组件，支持多种类型和样式
+ * 字段
+ * @info description 描述：提示信息组件，支持多种类型和样式
+ * @info name 名称：Alert提示组件
+ * @param type 类型 (success/error/warning/info)
+ * @param message 提示信息（必填）
+ * @param title 标题
+ * @param dismissible 是否可关闭
+ * @param icon 自定义图标
+ * @param class 额外CSS类
+ */
+$type = $this->getData('type') ?? 'info';
+$message = $this->getData('message') ?? '';
+$title = $this->getData('title') ?? '';
+$dismissible = $this->getData('dismissible') ?? false;
+$icon = $this->getData('icon') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 构建CSS类
+$alertClass = 'alert alert-' . htmlspecialchars($type);
+if ($dismissible) {
+    $alertClass .= ' alert-dismissible fade show';
+}
+if ($class) {
+    $alertClass .= ' ' . htmlspecialchars($class);
+}
+
+// 默认图标
+if (!$icon) {
+    switch ($type) {
+        case 'success':
+            $icon = 'fa-check-circle';
+            break;
+        case 'error':
+        case 'danger':
+            $icon = 'fa-exclamation-circle';
+            break;
+        case 'warning':
+            $icon = 'fa-exclamation-triangle';
+            break;
+        case 'info':
+        default:
+            $icon = 'fa-info-circle';
+            break;
+    }
+}
+?>
+<div class="<?= $alertClass ?>" role="alert">
+    <?php if ($icon): ?>
+        <i class="fa <?= htmlspecialchars($icon) ?> me-2"></i>
+    <?php endif; ?>
+    
+    <?php if ($title): ?>
+        <strong><?= htmlspecialchars($title) ?></strong>
+    <?php endif; ?>
+    
+    <?= htmlspecialchars($message) ?>
+    
+    <?php if ($dismissible): ?>
+        <button type="button" 
+                class="btn-close" 
+                data-bs-dismiss="alert" 
+                aria-label="Close">
+        </button>
+    <?php endif; ?>
+</div>
+

@@ -1,0 +1,23 @@
+{
+  "name": "weline/module-backend",
+  "description": "WelineFramework backend base module",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\Backend\\": ""
+    },
+    "psr-0": {
+      "Weline\\Backend\\": ""
+    }
+  },
+  "license": "MIT"
+}

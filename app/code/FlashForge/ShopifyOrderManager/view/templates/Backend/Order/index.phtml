@@ -1,0 +1,3032 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <title>订单管理 - Shopify订单管理系统</title>
+    @template(Weline_Admin::common/head.phtml)
+    <style>
+        /* 现代化卡片设计 */
+        .modern-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.12);
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .modern-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .modern-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+        
+        .modern-card .card-header {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            padding: 20px 25px;
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .modern-card .card-body {
+            background: rgba(255,255,255,0.98);
+            padding: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* 美化标题 */
+        .page-title {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+        }
+        
+        .page-title i {
+            margin-right: 12px;
+            font-size: 28px;
+        }
+        
+        /* 美化搜索筛选区域 */
+        .filter-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .filter-section .form-control,
+        .filter-section .form-select {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.9);
+        }
+        
+        .filter-section .form-control:focus,
+        .filter-section .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            background: white;
+        }
+        
+        .filter-section .form-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .filter-section .form-label i {
+            margin-right: 8px;
+            color: #667eea;
+        }
+        
+        /* 美化按钮 */
+        .modern-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .modern-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .modern-btn:hover::before {
+            left: 100%;
+        }
+        
+        .modern-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .modern-btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .modern-btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(86, 171, 47, 0.3);
+        }
+        
+        .modern-btn-success:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(86, 171, 47, 0.4);
+            color: white;
+        }
+        
+        .modern-btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .modern-btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+            color: white;
+        }
+        
+        .modern-btn-warning {
+            background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(254, 202, 87, 0.3);
+        }
+        
+        .modern-btn-warning:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(254, 202, 87, 0.4);
+            color: white;
+        }
+        
+        /* 操作按钮样式 - 按照图片设计 */
+        .operation-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .operation-btn {
+            border: none;
+            border-radius: 16px;
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            min-width: 80px;
+            height: 70px;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .operation-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .operation-btn:hover::before {
+            left: 100%;
+        }
+        
+        .operation-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .operation-btn i {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+        
+        .operation-btn span {
+            font-size: 11px;
+            line-height: 1.2;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        /* 筛选按钮 - 紫色渐变 */
+        .filter-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .filter-btn:hover {
+            color: white;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* 导出按钮 - 绿色渐变 */
+        .export-btn {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+        }
+        
+        .export-btn:hover {
+            color: white;
+            box-shadow: 0 6px 20px rgba(86, 171, 47, 0.4);
+        }
+        
+        /* 导出模态框样式 */
+        #exportFormatModal .modal-dialog {
+            max-width: 600px;
+            margin: 1.75rem auto;
+        }
+        
+        #exportFormatModal .modal-content {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+        }
+        
+        #exportFormatModal .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 0;
+            border-bottom: none;
+            padding: 25px 30px;
+            position: relative;
+        }
+        
+        #exportFormatModal .modal-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            pointer-events: none;
+        }
+        
+        #exportFormatModal .modal-title {
+            font-weight: 700;
+            font-size: 1.4rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        #exportFormatModal .modal-title i {
+            font-size: 1.6rem;
+            margin-right: 12px;
+            opacity: 0.9;
+        }
+        
+        #exportFormatModal .btn-close {
+            filter: invert(1);
+            opacity: 0.8;
+            font-size: 1.2rem;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        
+        #exportFormatModal .btn-close:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        
+        #exportFormatModal .modal-body {
+            padding: 30px;
+            background: white;
+        }
+        
+        #exportFormatModal .form-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        #exportFormatModal .form-check {
+            padding: 12px 0;
+            margin: 8px 0;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        #exportFormatModal .form-check:hover {
+            background-color: rgba(102, 126, 234, 0.05);
+            transform: translateX(5px);
+        }
+        
+        #exportFormatModal .form-check-input {
+            width: 20px;
+            height: 20px;
+            margin-top: 0;
+            margin-right: 12px;
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+        
+        #exportFormatModal .form-check-input:checked {
+            background-color: #28a745;
+            border-color: #28a745;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+        }
+        
+        #exportFormatModal .form-check-label {
+            font-weight: 500;
+            color: #495057;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-size: 1rem;
+        }
+        
+        #exportFormatModal .form-check-label i {
+            font-size: 1.2rem;
+            margin-right: 8px;
+            color: #6c757d;
+        }
+        
+        #exportFormatModal .alert {
+            border: none;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #exportFormatModal .alert::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: currentColor;
+            opacity: 0.3;
+        }
+        
+        #exportFormatModal .alert-info {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            color: #1565c0;
+            border-left: 4px solid #2196f3;
+        }
+        
+        #exportFormatModal .alert-info i {
+            color: #1976d2;
+            font-size: 1.1rem;
+        }
+        
+        #exportFormatModal .alert-warning {
+            background: linear-gradient(135deg, #fff8e1 0%, #fce4ec 100%);
+            color: #e65100;
+            border-left: 4px solid #ff9800;
+        }
+        
+        #exportFormatModal .alert-warning i {
+            color: #f57c00;
+            font-size: 1.1rem;
+        }
+        
+        #exportFormatModal .alert strong {
+            font-weight: 700;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        #exportFormatModal .alert ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        #exportFormatModal .alert li {
+            margin: 6px 0;
+            line-height: 1.5;
+        }
+        
+        #exportFormatModal .modal-footer {
+            padding: 25px 30px;
+            background: linear-gradient(145deg, #f8f9fa 0%, #ffffff 100%);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 0 0 20px 20px;
+        }
+        
+        #exportFormatModal .btn {
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #exportFormatModal .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        #exportFormatModal .btn:hover::before {
+            left: 100%;
+        }
+        
+        #exportFormatModal .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+        }
+        
+        #exportFormatModal .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+        }
+        
+        #exportFormatModal .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        #exportFormatModal .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+        
+        #exportFormatModal .btn i {
+            margin-right: 8px;
+            font-size: 1.1rem;
+        }
+        
+        /* 模态框动画效果 */
+        #exportFormatModal .modal-dialog {
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        #exportFormatModal .modal-content {
+            animation: modalContentFadeIn 0.4s ease-out 0.1s both;
+        }
+        
+        @keyframes modalContentFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            #exportFormatModal .modal-dialog {
+                max-width: 95%;
+                margin: 1rem auto;
+            }
+            
+            #exportFormatModal .modal-header {
+                padding: 20px 25px;
+            }
+            
+            #exportFormatModal .modal-body {
+                padding: 25px;
+            }
+            
+            #exportFormatModal .modal-footer {
+                padding: 20px 25px;
+            }
+            
+            #exportFormatModal .modal-title {
+                font-size: 1.2rem;
+            }
+            
+            #exportFormatModal .btn {
+                padding: 10px 25px;
+                font-size: 0.9rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #exportFormatModal .modal-dialog {
+                max-width: 98%;
+                margin: 0.5rem auto;
+            }
+            
+            #exportFormatModal .modal-header {
+                padding: 15px 20px;
+            }
+            
+            #exportFormatModal .modal-body {
+                padding: 20px;
+            }
+            
+            #exportFormatModal .modal-footer {
+                padding: 15px 20px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            #exportFormatModal .btn {
+                width: 100%;
+                padding: 12px 20px;
+            }
+        }
+        
+        
+        
+        
+        /* 美化表格 */
+        .modern-table {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            margin-bottom: 0;
+        }
+        
+        .modern-table thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .modern-table thead th {
+            color: white;
+            font-weight: 600;
+            padding: 16px 12px;
+            border: none;
+            text-align: center;
+            font-size: 14px;
+            position: relative;
+        }
+        
+        .modern-table thead th::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .modern-table tbody tr {
+            transition: all 0.3s ease;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .modern-table tbody tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .modern-table tbody td {
+            padding: 16px 12px;
+            border: none;
+            vertical-align: middle;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        /* 美化状态徽章 */
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .status-badge.pending {
+            background: linear-gradient(135deg, #ffc107 0%, #ffeb3b 100%);
+            color: #856404;
+        }
+        
+        .status-badge.processing {
+            background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .status-badge.completed {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .status-badge.cancelled {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+            color: white;
+        }
+        
+        /* 美化操作按钮 */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        }
+        
+        .action-btn-view {
+            background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .action-btn-edit {
+            background: linear-gradient(135deg, #ffc107 0%, #ffeb3b 100%);
+            color: #856404;
+        }
+        
+        .action-btn-delete {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+            color: white;
+        }
+        
+        /* 美化空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 64px;
+            color: #dee2e6;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .empty-state h4 {
+            color: #6c757d;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        .empty-state p {
+            color: #adb5bd;
+            margin-bottom: 0;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .modern-card {
+                border-radius: 16px;
+                margin: 10px;
+            }
+            
+            .modern-btn {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+            
+            .filter-section {
+                padding: 15px;
+            }
+            
+            .modern-table {
+                font-size: 13px;
+            }
+            
+            .modern-table thead th,
+            .modern-table tbody td {
+                padding: 12px 8px;
+            }
+            
+            /* 操作按钮响应式 */
+            .operation-buttons {
+                flex-direction: column;
+                gap: 6px;
+            }
+            
+            .operation-btn {
+                min-width: 100%;
+                height: 60px;
+                flex-direction: row;
+                justify-content: flex-start;
+                padding: 12px 16px;
+                gap: 12px;
+            }
+            
+            .operation-btn i {
+                font-size: 18px;
+                margin-bottom: 0;
+            }
+            
+            .operation-btn span {
+                font-size: 14px;
+                text-align: left;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .operation-btn {
+                height: 55px;
+                padding: 10px 12px;
+            }
+            
+            .operation-btn i {
+                font-size: 16px;
+            }
+            
+            .operation-btn span {
+                font-size: 13px;
+            }
+        }
+        
+        
+        /* 美化分页 */
+        .pagination {
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .page-link {
+            border: none;
+            border-radius: 8px;
+            margin: 0 2px;
+            padding: 8px 12px;
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .page-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        .page-item.active .page-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 美化统计卡片 */
+        .stats-card {
+            background: rgba(255,255,255,0.95);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        .stats-card .stats-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .stats-card .stats-icon.orders {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .stats-card .stats-icon.revenue {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+        
+        .stats-card .stats-icon.customers {
+            background: linear-gradient(135deg, #45b7d1 0%, #96ceb4 100%);
+        }
+        
+        .stats-card .stats-number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        
+        .stats-card .stats-label {
+            color: #6c757d;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .modern-card .card-body {
+                padding: 20px;
+            }
+            
+            .filter-section {
+                padding: 15px;
+            }
+            
+            .modern-table thead th,
+            .modern-table tbody td {
+                padding: 12px 8px;
+                font-size: 13px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .action-btn {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+        
+        /* 修复布局遮挡问题 */
+        .page-content {
+            padding: calc(70px + 12px) 15px 60px 15px !important;
+            min-height: 800px;
+            max-width: none !important; 
+        }
+        
+        .container-fluid {
+            padding: 0;
+            margin: 0;
+            max-width: none !important;
+        }
+        
+        .main-content {
+            padding: 0;
+            max-width: none !important;
+        }
+        
+        #layout-wrapper {
+            margin: 0;
+            padding: 0;
+        }
+        
+        .modern-card {
+            margin: 0;
+            width: 100%;
+            max-width: none;
+        }
+        
+        .modern-table {
+            width: 100%;
+            table-layout: auto;
+        }
+        
+        .modern-table th,
+        .modern-table td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .filter-section {
+            margin-bottom: 15px;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        
+        #page-topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1002;
+        }
+        
+        @media (max-width: 991px) {
+            .page-content {
+                padding: calc(70px + 12px) 10px 60px 10px !important;
+            }
+        }
+        
+        
+        /* 消息提示样式 */
+        .message-toast {
+            border: none;
+            font-weight: 500;
+            animation: slideDown 0.3s ease-out;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .message-toast.alert-success {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        
+        .message-toast.alert-danger {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .message-toast.alert-info {
+            background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .message-toast.alert-warning {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 订单详情弹窗样式 */
+        .order-detail-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+        
+        .order-detail-modal.show {
+            display: flex;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 1200px;
+            overflow: hidden;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            padding: 0;
+            max-height: calc(90vh - 80px);
+            overflow-y: auto;
+        }
+        
+        .order-detail-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .order-detail-tab {
+            flex: 1;
+            padding: 15px 20px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-weight: 500;
+            color: #6c757d;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .order-detail-tab.active {
+            color: #667eea;
+            background: white;
+        }
+        
+        .order-detail-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .order-detail-tab:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 25px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        
+        .detail-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .detail-label {
+            font-size: 12px;
+            color: #6c757d;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .detail-value {
+            font-size: 14px;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .detail-value.highlight {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .detail-value.success {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .detail-value.warning {
+            color: #ffc107;
+            font-weight: 600;
+        }
+        
+        .detail-value.danger {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        .order-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .order-items-table th,
+        .order-items-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .order-items-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 13px;
+        }
+        
+        .order-items-table td {
+            font-size: 14px;
+        }
+        
+        .order-items-table tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .product-image {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .product-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        
+        .product-title {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .product-variant {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .product-sku {
+            font-size: 11px;
+            color: #adb5bd;
+            font-family: monospace;
+        }
+        
+        .address-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .address-name {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        
+        .address-details {
+            color: #6c757d;
+            line-height: 1.5;
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .summary-row:last-child {
+            border-bottom: none;
+            font-weight: 600;
+            font-size: 16px;
+            color: #495057;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid #667eea;
+        }
+        
+        .summary-label {
+            color: #6c757d;
+        }
+        
+        .summary-value {
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .summary-value.total {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95vw;
+                max-height: 95vh;
+            }
+            
+            .order-detail-tabs {
+                flex-direction: column;
+            }
+            
+            .order-detail-tab {
+                text-align: left;
+                padding: 12px 15px;
+            }
+            
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .order-items-table {
+                font-size: 12px;
+            }
+            
+            .order-items-table th,
+            .order-items-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card modern-card">
+                            <div class="card-header">
+                                <h3 class="page-title">
+                                    <i class="mdi mdi-package-variant me-2"></i>Shopify订单管理
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <!-- 统计卡片 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <div class="stats-card">
+                                            <div class="stats-icon orders">
+                                                <i class="mdi mdi-package-variant"></i>
+                                            </div>
+                                            <div class="stats-number" id="totalOrders">0</div>
+                                            <div class="stats-label">总订单数</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="stats-card">
+                                            <div class="stats-icon revenue">
+                                                <i class="mdi mdi-currency-usd"></i>
+                                            </div>
+                                            <div class="stats-number" id="totalRevenue">¥0</div>
+                                            <div class="stats-label">总销售额</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="stats-card">
+                                            <div class="stats-icon customers">
+                                                <i class="mdi mdi-account-group"></i>
+                                            </div>
+                                            <div class="stats-number" id="totalCustomers">0</div>
+                                            <div class="stats-label">客户数量</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 搜索筛选区域 -->
+                                <div class="filter-section">
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-store me-1"></i>选择店铺
+                                            </label>
+                                            <select class="form-select" id="shopFilter">
+                                                <option value="">🏪 所有店铺</option>
+                                                <!-- 店铺选项将通过JavaScript动态加载 -->
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-calendar-start me-1"></i>开始日期
+                                            </label>
+                                            <input type="date" class="form-control" id="startDate" placeholder="开始日期">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-calendar-end me-1"></i>结束日期
+                                            </label>
+                                            <input type="date" class="form-control" id="endDate" placeholder="结束日期">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-format-list-numbered me-1"></i>每页显示
+                                            </label>
+                                            <select class="form-select" id="pageSizeSelect" onchange="changePageSize()">
+                                                <option value="10">10 条</option>
+                                                <option value="20" selected>20 条</option>
+                                                <option value="50">50 条</option>
+                                                <option value="100">100 条</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 操作工具栏 -->
+                                <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-primary d-flex align-items-center" onclick="filterOrders()" title="筛选订单">
+                                            <i class="mdi mdi-magnify me-2"></i>
+                                            <span>筛选订单</span>
+                                        </button>
+                                        <button class="btn btn-outline-secondary d-flex align-items-center" id="clearFiltersBtn" onclick="clearFilters()" title="清除所有筛选条件" disabled>
+                                            <i class="mdi mdi-filter-remove me-2"></i>
+                                            <span>清除筛选</span>
+                                        </button>
+                                        <acl source="FlashForge_ShopifyOrderManager::order_export">
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-success d-flex align-items-center" onclick="exportOrders()" title="导出订单">
+                                                    <i class="mdi mdi-download me-2"></i>
+                                                    <span>导出订单</span>
+                                                </button>
+                                                <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <span class="visually-hidden">快速导出</span>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="quickExport('week'); return false;">
+                                                        <i class="mdi mdi-calendar-week me-2"></i>导出这周
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="quickExport('month'); return false;">
+                                                        <i class="mdi mdi-calendar-month me-2"></i>导出这一个月
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="quickExport('quarter'); return false;">
+                                                        <i class="mdi mdi-calendar-range me-2"></i>导出这个季度
+                                                    </a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportOrders(); return false;">
+                                                        <i class="mdi mdi-cog me-2"></i>自定义导出
+                                                    </a></li>
+                                                </ul>
+                                            </div>
+                                        </acl>
+                                    </div>
+                                    <div class="text-muted">
+                                        <i class="mdi mdi-information-outline me-1"></i>
+                                        使用筛选条件查找特定订单
+                                    </div>
+                                </div>
+                                
+                                <!-- 订单表格 -->
+                                <div class="table-responsive">
+                                    <table class="table modern-table" id="ordersTable">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 15%;"><i class="mdi mdi-receipt me-1"></i>订单号</th>
+                                                <th style="width: 15%;"><i class="mdi mdi-store me-1"></i>店铺</th>
+                                                <th style="width: 20%;"><i class="mdi mdi-account me-1"></i>客户</th>
+                                                <th style="width: 12%;"><i class="mdi mdi-currency-usd me-1"></i>总金额</th>
+                                                <th style="width: 12%;"><i class="mdi mdi-toggle-switch me-1"></i>状态</th>
+                                                <th style="width: 15%;"><i class="mdi mdi-calendar me-1"></i>创建时间</th>
+                                                <th style="width: 11%;"><i class="mdi mdi-cog me-1"></i>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="7" class="empty-state">
+                                                    <i class="mdi mdi-package-variant-closed"></i>
+                                                    <h4>暂无订单数据</h4>
+                                                    <p>请选择店铺或调整筛选条件来查看订单信息</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- 分页信息 -->
+                                <div class="d-flex justify-content-between align-items-center mt-4" id="paginationInfo">
+                                    <div class="text-muted">
+                                        显示第 <span id="currentRange">1-20</span> 条，共 <span id="totalCount">0</span> 条记录
+                                    </div>
+                                    <div class="text-muted">
+                                        第 <span id="currentPage">1</span> 页，共 <span id="totalPages">1</span> 页
+                                    </div>
+                                </div>
+                                
+                                <!-- 分页 -->
+                                <div class="d-flex justify-content-center mt-3" id="paginationContainer">
+                                    <nav aria-label="订单分页">
+                                        <ul class="pagination" id="paginationList">
+                                            <!-- 分页将通过JavaScript动态生成 -->
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- container-fluid end -->
+        </div> <!-- page-content end -->
+    </div> <!-- main-content end -->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+
+<!-- 订单详情弹窗 -->
+<div class="order-detail-modal" id="orderDetailModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <i class="mdi mdi-package-variant me-2"></i>
+                <span id="modalOrderTitle">订单详情</span>
+            </h3>
+            <button class="modal-close" onclick="closeOrderDetailModal()">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="text-center p-4" id="orderDetailLoading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-3 mb-0 text-muted">正在加载订单详情...</p>
+            </div>
+            
+            <div id="orderDetailContent" style="display: none;">
+                <!-- 标签页导航 -->
+                <div class="order-detail-tabs">
+                    <button class="order-detail-tab active" onclick="switchTab('basic')">
+                        <i class="mdi mdi-information me-1"></i>基本信息
+                    </button>
+                    <button class="order-detail-tab" onclick="switchTab('items')">
+                        <i class="mdi mdi-package-variant me-1"></i>商品明细
+                    </button>
+                    <button class="order-detail-tab" onclick="switchTab('address')">
+                        <i class="mdi mdi-map-marker me-1"></i>地址信息
+                    </button>
+                    <button class="order-detail-tab" onclick="switchTab('summary')">
+                        <i class="mdi mdi-calculator me-1"></i>费用汇总
+                    </button>
+                </div>
+                
+                <!-- 基本信息标签页 -->
+                <div class="tab-content active" id="tab-basic">
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-receipt me-1"></i>订单信息
+                        </h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">订单号</span>
+                                <span class="detail-value highlight" id="detailOrderNumber">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">店铺名称</span>
+                                <span class="detail-value" id="detailShopName">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">订单状态</span>
+                                <span class="detail-value" id="detailOrderStatus">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">支付状态</span>
+                                <span class="detail-value" id="detailFinancialStatus">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">发货状态</span>
+                                <span class="detail-value" id="detailFulfillmentStatus">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">创建时间</span>
+                                <span class="detail-value" id="detailCreatedAt">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">更新时间</span>
+                                <span class="detail-value" id="detailUpdatedAt">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">货币</span>
+                                <span class="detail-value" id="detailCurrency">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-account me-1"></i>客户信息
+                        </h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">客户姓名</span>
+                                <span class="detail-value" id="detailCustomerName">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">客户邮箱</span>
+                                <span class="detail-value" id="detailCustomerEmail">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">客户电话</span>
+                                <span class="detail-value" id="detailCustomerPhone">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">客户ID</span>
+                                <span class="detail-value" id="detailCustomerId">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">支付方式</span>
+                                <span class="detail-value" id="detailPaymentMethod">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 商品明细标签页 -->
+                <div class="tab-content" id="tab-items">
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-package-variant me-1"></i>商品列表
+                        </h4>
+                        <table class="order-items-table" id="orderItemsTable">
+                            <thead>
+                                <tr>
+                                    <th>商品信息</th>
+                                    <th>SKU</th>
+                                    <th>数量</th>
+                                    <th>销售价格</th>
+                                    <th>单价×数量</th>
+                                    <th>小计</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderItemsBody">
+                                <!-- 商品数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 地址信息标签页 -->
+                <div class="tab-content" id="tab-address">
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-truck-delivery me-1"></i>配送地址
+                        </h4>
+                        <div class="address-card" id="shippingAddressCard">
+                            <div class="address-name" id="shippingAddressName">-</div>
+                            <div class="address-details" id="shippingAddressDetails">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-credit-card me-1"></i>账单地址
+                        </h4>
+                        <div class="address-card" id="billingAddressCard">
+                            <div class="address-name" id="billingAddressName">-</div>
+                            <div class="address-details" id="billingAddressDetails">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 费用汇总标签页 -->
+                <div class="tab-content" id="tab-summary">
+                    <div class="detail-section">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-calculator me-1"></i>费用明细
+                        </h4>
+                        <div class="summary-card">
+                            <div class="summary-row">
+                                <span class="summary-label">商品小计（折扣后）</span>
+                                <span class="summary-value" id="summarySubtotal">¥0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">运费</span>
+                                <span class="summary-value" id="summaryShipping">¥0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">税费</span>
+                                <span class="summary-value" id="summaryTax">¥0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">总折扣</span>
+                                <span class="summary-value" id="summaryDiscount">-¥0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">订单总计</span>
+                                <span class="summary-value total" id="summaryTotal">¥0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section" id="discountSection" style="display: none;">
+                        <h4 class="detail-section-title">
+                            <i class="mdi mdi-tag me-1"></i>优惠券信息
+                        </h4>
+                        <div id="discountCodesList">
+                            <!-- 优惠券信息将通过JavaScript动态填充 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 分页相关全局变量
+let currentPage = 1;
+let totalPages = 1;
+let pageSize = 20;
+let totalCount = 0;
+
+// 模拟订单数据
+const mockOrders = [
+    {
+        id: 'SO-2024-001',
+        shop: '测试店铺1',
+        customer: '张三',
+        amount: '¥299.00',
+        status: 'completed',
+        statusText: '已完成',
+        createTime: '2024-01-15 14:30:25'
+    },
+    {
+        id: 'SO-2024-002',
+        shop: '测试店铺2',
+        customer: '李四',
+        amount: '¥599.00',
+        status: 'processing',
+        statusText: '处理中',
+        createTime: '2024-01-15 16:45:12'
+    },
+    {
+        id: 'SO-2024-003',
+        shop: '测试店铺1',
+        customer: '王五',
+        amount: '¥199.00',
+        status: 'pending',
+        statusText: '待处理',
+        createTime: '2024-01-15 18:20:33'
+    }
+];
+
+// 模拟统计数据
+const mockStats = {
+    totalOrders: 156,
+    totalRevenue: '¥45,680.00',
+    totalCustomers: 89
+};
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadShops();
+    loadOrders();
+    updateStats();
+    
+    // 为筛选表单添加事件监听器
+    setupFilterEventListeners();
+});
+
+// 设置筛选表单事件监听器
+function setupFilterEventListeners() {
+    const shopFilter = document.getElementById('shopFilter');
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    // 为所有筛选输入框添加change事件监听器
+    [shopFilter, startDate, endDate].forEach(element => {
+        if (element) {
+            element.addEventListener('change', updateClearButtonState);
+            element.addEventListener('input', updateClearButtonState);
+        }
+    });
+    
+    // 初始化清除按钮状态
+    updateClearButtonState();
+}
+
+// 加载店铺列表
+function loadShops() {
+    console.log('Loading shops...');
+    // 从真实API获取店铺数据
+    fetch('<?= $this->getUrl("shopify/backend/shop/getlist") ?>')
+        .then(response => {
+            console.log('Shop API response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Shop API data:', data);
+            const shopFilter = document.getElementById('shopFilter');
+            
+            if (data.code === 0 && data.data && data.data.length > 0) {
+                data.data.forEach(shop => {
+                    const option = document.createElement('option');
+                    option.value = shop.shop_id;
+                    option.textContent = shop.shop_name;
+                    shopFilter.appendChild(option);
+                });
+                console.log('Shops loaded successfully:', data.data.length);
+            } else {
+                // 如果没有店铺数据，显示提示
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '暂无店铺数据';
+                option.disabled = true;
+                shopFilter.appendChild(option);
+                console.log('No shop data available');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading shops:', error);
+            const shopFilter = document.getElementById('shopFilter');
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '加载店铺失败';
+            option.disabled = true;
+            shopFilter.appendChild(option);
+        });
+}
+
+// 加载订单数据
+function loadOrders(page = 1) {
+    showLoading();
+    
+    // 更新当前页码
+    currentPage = page;
+    
+    // 获取筛选参数
+    const shopId = document.getElementById('shopFilter').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    console.log('Filter parameters:', { shopId, startDate, endDate, page });
+    
+    // 构建请求参数
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', shopId);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    params.append('page', page);
+    params.append('limit', pageSize);
+    
+    const apiUrl = `<?= $this->getUrl("shopify/backend/order/getlist") ?>?${params.toString()}`;
+    console.log('Order API URL:', apiUrl);
+    
+    // 发送AJAX请求获取真实数据
+    fetch(apiUrl)
+        .then(response => {
+            console.log('Order API response status:', response.status);
+            
+            // 检查是否需要登录
+            if (response.status === 302 || response.status === 401) {
+                hideLoading();
+                showMessage('error', '请先登录系统');
+                // 重定向到登录页面
+                setTimeout(() => {
+                    window.location.href = '<?= $this->getUrl("admin/user/login") ?>';
+                }, 2000);
+                return;
+            }
+            
+            // 检查响应是否为JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('响应不是有效的JSON格式');
+            }
+            
+            return response.json();
+        })
+        .then(data => {
+            console.log('Order API data:', data);
+            hideLoading();
+            
+            if (data && data.code === 0) {
+                displayOrders(data.data);
+                
+                // 更新分页信息
+                totalCount = data.count || 0;
+                totalPages = Math.ceil(totalCount / pageSize);
+                updatePagination();
+                
+                // 使用API返回的统计数据
+                if (data.stats) {
+                    updateStatsFromApi(data.stats);
+                } else {
+                    // 如果没有统计数据，使用返回的数据计算（兼容性）
+                    updateStatsFromData(data.data);
+                }
+                console.log('Orders loaded successfully:', data.data.length, 'Total:', totalCount, 'Pages:', totalPages);
+            } else {
+                const errorMsg = data ? data.msg : '未知错误';
+                showMessage('error', '获取订单数据失败: ' + errorMsg);
+                displayEmptyState();
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error loading orders:', error);
+            showMessage('error', '网络错误，请稍后重试: ' + error.message);
+            displayEmptyState();
+        });
+}
+
+// 显示订单数据
+function displayOrders(orders) {
+    const tbody = document.querySelector('#ordersTable tbody');
+    
+    if (!orders || orders.length === 0) {
+        displayEmptyState();
+        return;
+    }
+    
+    // 调试信息：打印第一个订单的数据结构
+    if (orders.length > 0) {
+        console.log('First order data structure:', orders[0]);
+        console.log('Available order fields:', Object.keys(orders[0]));
+    }
+    
+    tbody.innerHTML = orders.map(order => `
+        <tr>
+            <td>
+                <strong>${order.order_number || order.shopify_order_number || 'N/A'}</strong>
+            </td>
+            <td>${order.shop_name || '未知店铺'}</td>
+            <td>${order.customer_name || order.customer_email || 'N/A'}</td>
+            <td>
+                <span class="text-success fw-bold">¥${parseFloat(order.total_price || 0).toFixed(2)}</span>
+            </td>
+            <td>
+                <span class="status-badge ${getStatusClass(order.order_status || order.fulfillment_status)}">
+                    <i class="mdi mdi-${getStatusIcon(order.order_status || order.fulfillment_status)}"></i>
+                    ${getStatusText(order.order_status || order.fulfillment_status)}
+                </span>
+            </td>
+            <td>${formatDateTime(order.shopify_created_at || order.created_at)}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="action-btn action-btn-view" onclick="viewOrder('${order.order_id || order.id || order.shopify_order_id || 'unknown'}')" title="查看详情">
+                        <i class="mdi mdi-eye"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// 显示空状态
+function displayEmptyState() {
+    const tbody = document.querySelector('#ordersTable tbody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" class="empty-state">
+                <i class="mdi mdi-package-variant-closed"></i>
+                <h4>暂无订单数据</h4>
+                <p>请选择店铺或调整筛选条件来查看订单信息</p>
+            </td>
+        </tr>
+    `;
+}
+
+// 获取状态图标
+function getStatusIcon(status) {
+    const icons = {
+        'pending': 'clock-outline',
+        'processing': 'cog',
+        'completed': 'check-circle',
+        'cancelled': 'close-circle',
+        'fulfilled': 'check-circle',
+        'unfulfilled': 'clock-outline',
+        'partial': 'cog',
+        'open': 'clock-outline',
+        'closed': 'check-circle'
+    };
+    return icons[status] || 'help-circle';
+}
+
+// 获取状态样式类
+function getStatusClass(status) {
+    const classes = {
+        'pending': 'pending',
+        'processing': 'processing',
+        'completed': 'completed',
+        'cancelled': 'cancelled',
+        'fulfilled': 'completed',
+        'unfulfilled': 'pending',
+        'partial': 'processing',
+        'open': 'pending',
+        'closed': 'completed'
+    };
+    return classes[status] || 'pending';
+}
+
+// 获取状态文本
+function getStatusText(status) {
+    const texts = {
+        'pending': '待处理',
+        'processing': '处理中',
+        'completed': '已完成',
+        'cancelled': '已取消',
+        'fulfilled': '已发货',
+        'unfulfilled': '未发货',
+        'partial': '部分发货',
+        'open': '开放',
+        'closed': '已关闭'
+    };
+    return texts[status] || status || '未知';
+}
+
+// 格式化日期时间
+function formatDateTime(dateTime) {
+    if (!dateTime) return 'N/A';
+    
+    try {
+        const date = new Date(dateTime);
+        return date.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    } catch (e) {
+        return dateTime;
+    }
+}
+
+// 从API统计数据更新统计
+function updateStatsFromApi(stats) {
+    document.getElementById('totalOrders').textContent = stats.totalOrders || '0';
+    document.getElementById('totalRevenue').textContent = `¥${stats.totalRevenue || '0.00'}`;
+    document.getElementById('totalCustomers').textContent = stats.customerCount || '0';
+}
+
+// 从真实数据更新统计（兼容性方法）
+function updateStatsFromData(orders) {
+    if (!orders || orders.length === 0) {
+        document.getElementById('totalOrders').textContent = '0';
+        document.getElementById('totalRevenue').textContent = '¥0.00';
+        document.getElementById('totalCustomers').textContent = '0';
+        return;
+    }
+    
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
+    const uniqueCustomers = new Set(orders.map(order => order.customer_email || order.customer_name)).size;
+    
+    document.getElementById('totalOrders').textContent = totalOrders;
+    document.getElementById('totalRevenue').textContent = `¥${totalRevenue.toFixed(2)}`;
+    document.getElementById('totalCustomers').textContent = uniqueCustomers;
+}
+
+// 更新统计数据
+function updateStats() {
+    document.getElementById('totalOrders').textContent = mockStats.totalOrders;
+    document.getElementById('totalRevenue').textContent = mockStats.totalRevenue;
+    document.getElementById('totalCustomers').textContent = mockStats.totalCustomers;
+}
+
+// 更新分页显示
+function updatePagination() {
+    const paginationList = document.getElementById('paginationList');
+    const paginationContainer = document.getElementById('paginationContainer');
+    const paginationInfo = document.getElementById('paginationInfo');
+    
+    // 更新分页信息
+    if (paginationInfo) {
+        const startRecord = (currentPage - 1) * pageSize + 1;
+        const endRecord = Math.min(currentPage * pageSize, totalCount);
+        
+        document.getElementById('currentRange').textContent = `${startRecord}-${endRecord}`;
+        document.getElementById('totalCount').textContent = totalCount;
+        document.getElementById('currentPage').textContent = currentPage;
+        document.getElementById('totalPages').textContent = totalPages;
+        
+        paginationInfo.style.display = totalCount > 0 ? 'flex' : 'none';
+    }
+    
+    if (!paginationList || totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        return;
+    }
+    
+    paginationContainer.style.display = 'flex';
+    paginationList.innerHTML = '';
+    
+    // 上一页按钮
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${currentPage - 1}); return false;">上一页</a>`;
+    paginationList.appendChild(prevLi);
+    
+    // 页码按钮
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    // 第一页
+    if (startPage > 1) {
+        const firstLi = document.createElement('li');
+        firstLi.className = 'page-item';
+        firstLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(1); return false;">1</a>`;
+        paginationList.appendChild(firstLi);
+        
+        if (startPage > 2) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            paginationList.appendChild(ellipsisLi);
+        }
+    }
+    
+    // 中间页码
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${i}); return false;">${i}</a>`;
+        paginationList.appendChild(li);
+    }
+    
+    // 最后一页
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            paginationList.appendChild(ellipsisLi);
+        }
+        
+        const lastLi = document.createElement('li');
+        lastLi.className = 'page-item';
+        lastLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>`;
+        paginationList.appendChild(lastLi);
+    }
+    
+    // 下一页按钮
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="javascript:void(0)" onclick="goToPage(${currentPage + 1}); return false;">下一页</a>`;
+    paginationList.appendChild(nextLi);
+}
+
+// 跳转到指定页面
+function goToPage(page) {
+    if (page < 1 || page > totalPages || page === currentPage) {
+        return;
+    }
+    loadOrders(page);
+}
+
+// 改变页面大小
+function changePageSize() {
+    const newPageSize = parseInt(document.getElementById('pageSizeSelect').value);
+    pageSize = newPageSize;
+    loadOrders(1); // 改变页面大小时重置到第一页
+}
+
+// 清除所有筛选条件
+function clearFilters() {
+    // 检查是否有筛选条件
+    const shopId = document.getElementById('shopFilter').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    if (!shopId && !startDate && !endDate) {
+        showMessage('info', '当前没有筛选条件需要清除');
+        return;
+    }
+    
+    // 确认对话框
+    if (!confirm('确定要清除所有筛选条件吗？')) {
+        return;
+    }
+    
+    // 清除店铺筛选
+    document.getElementById('shopFilter').value = '';
+    
+    // 清除日期筛选
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    
+    // 重置页面大小到默认值
+    document.getElementById('pageSizeSelect').value = '20';
+    pageSize = 20;
+    
+    // 更新清除按钮状态
+    updateClearButtonState();
+    
+    // 重新加载订单数据
+    loadOrders(1);
+    
+    // 显示成功提示
+    showMessage('success', '筛选条件已清除，显示所有订单');
+}
+
+// 更新清除按钮状态
+function updateClearButtonState() {
+    const clearBtn = document.getElementById('clearFiltersBtn');
+    const shopId = document.getElementById('shopFilter').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    // 如果有任何筛选条件，启用按钮；否则禁用
+    const hasFilters = shopId || startDate || endDate;
+    clearBtn.disabled = !hasFilters;
+    
+    if (hasFilters) {
+        clearBtn.classList.remove('btn-outline-secondary');
+        clearBtn.classList.add('btn-outline-warning');
+        clearBtn.title = '清除所有筛选条件';
+    } else {
+        clearBtn.classList.remove('btn-outline-warning');
+        clearBtn.classList.add('btn-outline-secondary');
+        clearBtn.title = '当前没有筛选条件';
+    }
+}
+
+// 筛选订单
+function filterOrders() {
+    loadOrders(1); // 筛选时重置到第一页
+}
+
+// 导出订单
+function exportOrders() {
+    // 获取当前筛选条件，添加空值检查
+    const shopFilter = document.getElementById('shopFilter');
+    const startDateEl = document.getElementById('startDate');
+    const endDateEl = document.getElementById('endDate');
+    
+    const shopId = shopFilter ? shopFilter.value : '';
+    const startDate = startDateEl ? startDateEl.value : '';
+    const endDate = endDateEl ? endDateEl.value : '';
+    const orderStatus = ''; // 页面中没有订单状态筛选
+    const orderNumber = ''; // 页面中没有订单号筛选
+    
+    // 验证必填字段
+    if (!startDate || !endDate) {
+        showMessage('error', '请选择导出时间范围！');
+        return;
+    }
+    
+    // 验证日期范围
+    if (new Date(startDate) > new Date(endDate)) {
+        showMessage('error', '开始日期不能大于结束日期！');
+        return;
+    }
+    
+    // 验证时间范围限制
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    const timeDiff = endDateObj.getTime() - startDateObj.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1; // 包含开始和结束日期
+    
+    // 检查是否超过一个季度（90天）
+    if (daysDiff > 90) {
+        showMessage('error', '导出时间范围不能超过一个季度（90天）！请缩小时间范围。');
+        return;
+    }
+    
+    // 显示导出格式选择对话框
+    showExportFormatDialog(shopId, startDate, endDate, orderStatus, orderNumber, daysDiff);
+}
+
+// 快速导出
+function quickExport(period) {
+    const now = new Date();
+    let startDate, endDate, periodName;
+    
+    switch (period) {
+        case 'week':
+            // 这周：周一到周日
+            const dayOfWeek = now.getDay();
+            const monday = new Date(now);
+            monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            monday.setHours(0, 0, 0, 0);
+            
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            sunday.setHours(23, 59, 59, 999);
+            
+            startDate = formatDate(monday);
+            endDate = formatDate(sunday);
+            periodName = '这周';
+            break;
+            
+        case 'month':
+            // 这一个月：从今天往前推30天
+            const monthStart = new Date(now);
+            monthStart.setDate(now.getDate() - 30);
+            monthStart.setHours(0, 0, 0, 0);
+            
+            const monthEnd = new Date(now);
+            monthEnd.setHours(23, 59, 59, 999);
+            
+            startDate = formatDate(monthStart);
+            endDate = formatDate(monthEnd);
+            periodName = '这一个月';
+            break;
+            
+        case 'quarter':
+            // 这个季度：从今天往前推90天
+            const quarterStart = new Date(now);
+            quarterStart.setDate(now.getDate() - 90);
+            quarterStart.setHours(0, 0, 0, 0);
+            
+            const quarterEnd = new Date(now);
+            quarterEnd.setHours(23, 59, 59, 999);
+            
+            startDate = formatDate(quarterStart);
+            endDate = formatDate(quarterEnd);
+            periodName = '这个季度';
+            break;
+            
+        default:
+            showMessage('error', '无效的时间范围！');
+            return;
+    }
+    
+    // 获取当前店铺筛选
+    const shopFilter = document.getElementById('shopFilter');
+    const shopId = shopFilter ? shopFilter.value : '';
+    
+    // 计算天数差
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    const timeDiff = endDateObj.getTime() - startDateObj.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+    
+    // 显示确认对话框
+    const confirmMessage = `确定要导出${periodName}的订单数据吗？\n\n时间范围：${startDate} 至 ${endDate}\n预计天数：${daysDiff}天\n\n注意：导出时间范围不能超过90天，数量不能超过10万条。`;
+    
+    if (confirm(confirmMessage)) {
+        // 直接显示导出格式选择对话框
+        showExportFormatDialog(shopId, startDate, endDate, '', '', daysDiff);
+    }
+}
+
+// 格式化日期为 YYYY-MM-DD 格式
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 显示导出格式选择对话框
+function showExportFormatDialog(shopId, startDate, endDate, orderStatus, orderNumber, daysDiff) {
+    const modalHtml = `
+        <div class="modal fade" id="exportFormatModal" tabindex="-1" aria-labelledby="exportFormatModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exportFormatModalLabel">
+                            <i class="mdi mdi-download me-2"></i>选择导出格式
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">导出格式：</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="exportFormat" id="formatCsv" value="csv" checked>
+                                <label class="form-check-label" for="formatCsv">
+                                    <i class="mdi mdi-file-document-outline me-1"></i>CSV格式
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="exportFormat" id="formatExcel" value="excel">
+                                <label class="form-check-label" for="formatExcel">
+                                    <i class="mdi mdi-file-excel-outline me-1"></i>Excel格式
+                                </label>
+                            </div>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="mdi mdi-information-outline me-1"></i>
+                            <strong>导出说明：</strong><br>
+                            • 导出时间范围：${startDate} 至 ${endDate}（共${daysDiff}天）<br>
+                            • 导出内容：订单基本信息 + 商品明细<br>
+                            • 时间限制：最多一个季度（90天）<br>
+                            • 数量限制：最多10万条记录
+                        </div>
+                        <div class="alert alert-warning">
+                            <i class="mdi mdi-alert-circle me-1"></i>
+                            <strong>重要提醒：</strong><br>
+                            • 如果数据量较大，导出可能需要较长时间<br>
+                            • 建议在非高峰时段进行导出操作<br>
+                            • 导出过程中请勿关闭浏览器窗口
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-success" onclick="confirmExport('${shopId}', '${startDate}', '${endDate}', '${orderStatus}', '${orderNumber}')">
+                            <i class="mdi mdi-download me-1"></i>开始导出
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('exportFormatModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 添加新的模态框
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('exportFormatModal'));
+    modal.show();
+}
+
+// 确认导出
+function confirmExport(shopId, startDate, endDate, orderStatus, orderNumber) {
+    const format = document.querySelector('input[name="exportFormat"]:checked').value;
+    
+    // 关闭模态框
+    const modal = bootstrap.Modal.getInstance(document.getElementById('exportFormatModal'));
+    modal.hide();
+    
+    // 开始导出
+    performExport(shopId, startDate, endDate, orderStatus, orderNumber, format);
+}
+
+// 执行导出
+function performExport(shopId, startDate, endDate, orderStatus, orderNumber, format) {
+    // 显示框架加载动画
+    showLoading();
+    
+    // 构建导出URL
+    const params = new URLSearchParams({
+        shop_id: shopId,
+        start_date: startDate,
+        end_date: endDate,
+        format: format
+    });
+    
+    if (orderStatus) {
+        params.append('order_status', orderStatus);
+    }
+    if (orderNumber) {
+        params.append('order_number', orderNumber);
+    }
+    
+    const exportUrl = `<?= $this->getUrl('shopify/backend/order/export') ?>?${params.toString()}`;
+    
+    // 创建隐藏的下载链接
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    // 监听下载完成
+    link.addEventListener('click', function() {
+        setTimeout(() => {
+            hideLoading();
+            showMessage('success', `🎉 订单数据导出成功！格式：${format.toUpperCase()}`);
+            document.body.removeChild(link);
+        }, 1000);
+    });
+    
+    // 触发下载
+    link.click();
+    
+    // 如果下载没有触发，显示错误信息
+    setTimeout(() => {
+        if (document.body.contains(link)) {
+            hideLoading();
+            showMessage('error', '❌ 导出失败，请检查网络连接或联系管理员');
+            document.body.removeChild(link);
+        }
+    }, 10000);
+}
+
+
+// 查看订单详情
+function viewOrder(orderId) {
+    openOrderDetailModal(orderId);
+}
+
+
+// 编辑订单
+function editOrder(orderId) {
+    showMessage('info', `编辑订单：${orderId}`);
+    // 这里应该打开订单编辑页面或模态框
+}
+
+// 删除订单
+function deleteOrder(orderId) {
+    if (confirm(`确定要删除订单 ${orderId} 吗？此操作不可恢复！`)) {
+        showLoading();
+        
+        // 模拟删除过程
+        setTimeout(() => {
+            hideLoading();
+            showMessage('success', `订单 ${orderId} 删除成功！`);
+            // 重新加载订单列表
+            loadOrders();
+        }, 1000);
+    }
+}
+
+// 显示加载动画 - 使用框架标准方法
+function showLoading() {
+    if (typeof $ !== 'undefined' && $('#loading').length) {
+        $('#loading').show();
+    }
+}
+
+// 隐藏加载动画 - 使用框架标准方法
+function hideLoading() {
+    if (typeof $ !== 'undefined' && $('#loading').length) {
+        $('#loading').hide();
+    }
+}
+
+// 显示消息提示
+function showMessage(type, message) {
+    // 查找页面头部容器
+    let headerContainer = document.querySelector('.card-header') || 
+                         document.querySelector('.modern-card .card-header');
+    
+    // 如果没有找到合适的头部容器，使用页面顶部
+    if (!headerContainer) {
+        headerContainer = document.querySelector('.container-fluid') || document.body;
+    }
+    
+    // 创建提示元素
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : type} alert-dismissible fade show message-toast`;
+    alertDiv.style.marginBottom = '15px';
+    alertDiv.style.borderRadius = '12px';
+    alertDiv.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+    alertDiv.innerHTML = `
+        <i class="mdi mdi-${type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'information'} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // 在头部容器顶部插入提示
+    if (headerContainer === document.body) {
+        headerContainer.insertBefore(alertDiv, headerContainer.firstChild);
+    } else {
+        headerContainer.insertBefore(alertDiv, headerContainer.firstChild);
+    }
+    
+    // 自动移除提示
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.classList.remove('show');
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.parentNode.removeChild(alertDiv);
+                }
+            }, 300);
+        }
+    }, 4000);
+}
+
+// ==================== 订单详情弹窗相关函数 ====================
+
+// 打开订单详情弹窗
+function openOrderDetailModal(orderId) {
+    const modal = document.getElementById('orderDetailModal');
+    const loading = document.getElementById('orderDetailLoading');
+    const content = document.getElementById('orderDetailContent');
+    
+    // 显示弹窗
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    
+    // 显示加载状态
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    
+    // 重置标签页到第一个
+    switchTab('basic');
+    
+    // 加载订单详情数据
+    loadOrderDetail(orderId);
+}
+
+// 关闭订单详情弹窗
+function closeOrderDetailModal() {
+    const modal = document.getElementById('orderDetailModal');
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+// 切换标签页
+function switchTab(tabName) {
+    // 移除所有标签页的active类
+    document.querySelectorAll('.order-detail-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // 激活选中的标签页
+    document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+}
+
+// 加载订单详情数据
+function loadOrderDetail(orderId) {
+    console.log('Loading order detail for ID:', orderId);
+    
+    if (!orderId || orderId === 'undefined' || orderId === 'null') {
+        const loading = document.getElementById('orderDetailLoading');
+        loading.innerHTML = `
+            <div class="text-danger">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                错误：订单ID无效 (${orderId})
+            </div>
+        `;
+        return;
+    }
+    
+    const url = `<?= $this->getUrl("shopify/backend/order/getdetail") ?>?id=${orderId}`;
+    console.log('Request URL:', url);
+    
+    fetch(url)
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            const loading = document.getElementById('orderDetailLoading');
+            const content = document.getElementById('orderDetailContent');
+            
+            if (data.code === 0) {
+                // 隐藏加载状态，显示内容
+                loading.style.display = 'none';
+                content.style.display = 'block';
+                
+                // 填充订单详情数据
+                fillOrderDetailData(data.data);
+            } else {
+                loading.innerHTML = `
+                    <div class="text-danger">
+                        <i class="mdi mdi-alert-circle me-2"></i>
+                        加载失败: ${data.msg}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading order detail:', error);
+            const loading = document.getElementById('orderDetailLoading');
+            loading.innerHTML = `
+                <div class="text-danger">
+                    <i class="mdi mdi-alert-circle me-2"></i>
+                    网络错误，请稍后重试
+                </div>
+            `;
+        });
+}
+
+// 填充订单详情数据
+function fillOrderDetailData(data) {
+    const order = data.order;
+    const shop = data.shop;
+    const orderItems = data.orderItems;
+    const shippingAddress = data.shippingAddress;
+    const billingAddress = data.billingAddress;
+    const discountCodes = data.discountCodes;
+    
+    // 设置弹窗标题
+    document.getElementById('modalOrderTitle').textContent = `订单详情 - ${order.order_number || order.shopify_order_number || 'N/A'}`;
+    
+    // 填充基本信息
+    document.getElementById('detailOrderNumber').textContent = order.order_number || order.shopify_order_number || 'N/A';
+    document.getElementById('detailShopName').textContent = shop.shop_name || '未知店铺';
+    document.getElementById('detailOrderStatus').innerHTML = `<span class="status-badge ${getStatusClass(order.order_status)}">${getStatusText(order.order_status)}</span>`;
+    document.getElementById('detailFinancialStatus').innerHTML = `<span class="status-badge ${getStatusClass(order.financial_status)}">${getStatusText(order.financial_status)}</span>`;
+    document.getElementById('detailFulfillmentStatus').innerHTML = `<span class="status-badge ${getStatusClass(order.fulfillment_status)}">${getStatusText(order.fulfillment_status)}</span>`;
+    document.getElementById('detailCreatedAt').textContent = formatDateTime(order.shopify_created_at || order.created_at);
+    document.getElementById('detailUpdatedAt').textContent = formatDateTime(order.shopify_updated_at || order.updated_at);
+    document.getElementById('detailCurrency').textContent = order.currency || 'CNY';
+    
+    // 填充客户信息
+    document.getElementById('detailCustomerName').textContent = order.customer_name || order.customer_first_name + ' ' + order.customer_last_name || 'N/A';
+    document.getElementById('detailCustomerEmail').textContent = order.customer_email || 'N/A';
+    document.getElementById('detailCustomerPhone').textContent = order.customer_phone || 'N/A';
+    document.getElementById('detailCustomerId').textContent = order.customer_id || 'N/A';
+    
+    // 填充支付方式
+    let paymentMethod = 'N/A';
+    if (order.payment_gateway_names && order.payment_gateway_names.trim() !== '') {
+        paymentMethod = order.payment_gateway_names;
+    } else if (order.gateway && order.gateway.trim() !== '') {
+        paymentMethod = order.gateway;
+    } else if (order.payment_method_name && order.payment_method_name.trim() !== '') {
+        paymentMethod = order.payment_method_name;
+    }
+    document.getElementById('detailPaymentMethod').textContent = paymentMethod;
+    
+    // 填充商品明细
+    fillOrderItems(orderItems);
+    
+    // 填充地址信息
+    fillAddressInfo(shippingAddress, billingAddress);
+    
+    // 填充费用汇总
+    fillOrderSummary(order, discountCodes);
+}
+
+// 填充商品明细
+function fillOrderItems(orderItems) {
+    const tbody = document.getElementById('orderItemsBody');
+    
+    // 清空现有内容，防止重复显示
+    tbody.innerHTML = '';
+    
+    if (!orderItems || orderItems.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    <i class="mdi mdi-package-variant-closed me-2"></i>
+                    暂无商品信息
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // 去重处理：基于shopify_item_id和product_title去重
+    const uniqueItems = [];
+    const seenItems = new Set();
+    
+    orderItems.forEach(item => {
+        const key = `${item.shopify_item_id || item.item_id}_${item.product_title}_${item.sku}`;
+        if (!seenItems.has(key)) {
+            seenItems.add(key);
+            uniqueItems.push(item);
+        }
+    });
+    
+    console.log(`原始项目数量: ${orderItems.length}, 去重后数量: ${uniqueItems.length}`);
+    
+    tbody.innerHTML = uniqueItems.map(item => {
+        // 使用数据库中存储的真实价格信息
+        const originalPrice = parseFloat(item.original_price || 0);
+        const realUnitPrice = parseFloat(item.price || 0); // 真实销售单价
+        const quantity = parseInt(item.quantity || 1);
+        const totalDiscount = parseFloat(item.total_discount || 0);
+        const totalTax = parseFloat(item.total_tax || 0);
+        
+        // 计算单件折扣
+        const unitDiscount = quantity > 0 ? totalDiscount / quantity : 0;
+        
+        // 计算单件税费（从总税费按数量分摊）
+        const unitTax = quantity > 0 ? totalTax / quantity : 0;
+        
+        // 计算小计（真实单价 × 数量，不包含税费）
+        const subtotal = realUnitPrice * quantity;
+        
+        // 计算折扣百分比
+        const discountPercent = originalPrice > 0 ? Math.round((unitDiscount / originalPrice) * 100) : 0;
+        
+        return `
+            <tr>
+                <td>
+                    <div class="product-info">
+                        <div class="product-title">${item.product_title || 'N/A'}</div>
+                        ${item.variant_title ? `<div class="product-variant">${item.variant_title}</div>` : ''}
+                        ${item.sku ? `<div class="product-sku">SKU: ${item.sku}</div>` : ''}
+                    </div>
+                </td>
+                <td>${item.sku || 'N/A'}</td>
+                <td>${quantity}</td>
+                <td>
+                    <div class="price-info">
+                        ${originalPrice > realUnitPrice ? `
+                            <div class="original-price" style="text-decoration: line-through; color: #999; font-size: 12px;">
+                                ¥${originalPrice.toFixed(2)}
+                            </div>
+                        ` : ''}
+                        <div class="real-price" style="color: #e74c3c; font-weight: bold;">
+                            ¥${realUnitPrice.toFixed(2)}
+                        </div>
+                        ${discountPercent > 0 ? `
+                            <div class="discount-badge" style="background: #e74c3c; color: white; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-top: 2px;">
+                                -${discountPercent}%
+                            </div>
+                        ` : ''}
+                    </div>
+                </td>
+                <td>
+                    <div class="quantity-info" style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #e74c3c; font-weight: bold;">¥${realUnitPrice.toFixed(2)}</span>
+                        <span style="background: #f8f9fa; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #666;">x ${quantity}</span>
+                    </div>
+                </td>
+                <td class="fw-bold" style="color: #2c3e50;">
+                    <div class="subtotal-price" style="color: #2c3e50; font-weight: bold;">
+                        ¥${subtotal.toFixed(2)}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// 填充地址信息
+function fillAddressInfo(shippingAddress, billingAddress) {
+    // 配送地址
+    if (shippingAddress && Object.keys(shippingAddress).length > 0) {
+        const name = `${shippingAddress.first_name || ''} ${shippingAddress.last_name || ''}`.trim() || 'N/A';
+        const details = [
+            shippingAddress.address1,
+            shippingAddress.address2,
+            shippingAddress.city,
+            shippingAddress.province,
+            shippingAddress.country,
+            shippingAddress.zip
+        ].filter(Boolean).join(', ') || 'N/A';
+        
+        document.getElementById('shippingAddressName').textContent = name;
+        document.getElementById('shippingAddressDetails').textContent = details;
+    } else {
+        document.getElementById('shippingAddressName').textContent = 'N/A';
+        document.getElementById('shippingAddressDetails').textContent = '暂无配送地址信息';
+    }
+    
+    // 账单地址
+    if (billingAddress && Object.keys(billingAddress).length > 0) {
+        const name = `${billingAddress.first_name || ''} ${billingAddress.last_name || ''}`.trim() || 'N/A';
+        const details = [
+            billingAddress.address1,
+            billingAddress.address2,
+            billingAddress.city,
+            billingAddress.province,
+            billingAddress.country,
+            billingAddress.zip
+        ].filter(Boolean).join(', ') || 'N/A';
+        
+        document.getElementById('billingAddressName').textContent = name;
+        document.getElementById('billingAddressDetails').textContent = details;
+    } else {
+        document.getElementById('billingAddressName').textContent = 'N/A';
+        document.getElementById('billingAddressDetails').textContent = '暂无账单地址信息';
+    }
+}
+
+// 填充费用汇总
+function fillOrderSummary(order, discountCodes) {
+    const subtotal = parseFloat(order.subtotal_price || 0);
+    const shipping = parseFloat(order.total_shipping_price_set?.shop_money?.amount || order.shipping_price || 0);
+    const tax = parseFloat(order.total_tax || 0);
+    const discount = parseFloat(order.total_discounts || 0);
+    const total = parseFloat(order.total_price || 0);
+    
+    // 计算折扣百分比
+    const originalSubtotal = subtotal + discount;
+    const discountPercent = originalSubtotal > 0 ? Math.round((discount / originalSubtotal) * 100) : 0;
+    
+    document.getElementById('summarySubtotal').innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: flex-end;">
+            ${originalSubtotal > subtotal ? `
+                <div style="text-decoration: line-through; color: #999; font-size: 12px;">
+                    ¥${originalSubtotal.toFixed(2)}
+                </div>
+            ` : ''}
+            <div style="color: #2c3e50; font-weight: bold;">
+                ¥${subtotal.toFixed(2)}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('summaryShipping').textContent = `¥${shipping.toFixed(2)}`;
+    document.getElementById('summaryTax').textContent = `¥${tax.toFixed(2)}`;
+    
+    document.getElementById('summaryDiscount').innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: flex-end;">
+            <div style="color: #e74c3c; font-weight: bold;">
+                -¥${discount.toFixed(2)}
+            </div>
+            ${discountPercent > 0 ? `
+                <div style="font-size: 11px; color: #e74c3c;">
+                    ${discountPercent}% 折扣
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    document.getElementById('summaryTotal').innerHTML = `
+        <div style="color: #667eea; font-weight: 700; font-size: 18px;">
+            ¥${total.toFixed(2)}
+        </div>
+    `;
+    
+    // 填充优惠券信息
+    if (discountCodes && discountCodes.length > 0) {
+        const discountSection = document.getElementById('discountSection');
+        const discountList = document.getElementById('discountCodesList');
+        
+        discountSection.style.display = 'block';
+        discountList.innerHTML = discountCodes.map(code => `
+            <div class="address-card">
+                <div class="address-name">${code.code || 'N/A'}</div>
+                <div class="address-details">
+                    类型: ${code.type || 'N/A'}<br>
+                    金额: ¥${parseFloat(code.amount || 0).toFixed(2)}
+                </div>
+            </div>
+        `).join('');
+    } else {
+        document.getElementById('discountSection').style.display = 'none';
+    }
+}
+
+// 点击弹窗外部关闭弹窗
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('orderDetailModal');
+    if (event.target === modal) {
+        closeOrderDetailModal();
+    }
+});
+
+// ESC键关闭弹窗
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modal = document.getElementById('orderDetailModal');
+        if (modal.classList.contains('show')) {
+            closeOrderDetailModal();
+        }
+    }
+});
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

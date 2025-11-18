@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!--
+     * Meta模块不定义事件，只触发I18n模块的事件
+     * Meta模块通过触发 Weline_I18n::collect_translations 事件来提交翻译词
+     * I18n模块监听该事件并处理翻译词的存储
+     -->
+</config>
+

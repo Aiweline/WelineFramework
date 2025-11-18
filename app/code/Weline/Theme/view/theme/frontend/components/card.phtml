@@ -1,0 +1,70 @@
+<?php
+/**
+ * 组件：Card
+ * 
+ * 卡片组件，用于展示结构化内容
+ * 字段
+ * @info description 描述：卡片组件，用于展示结构化内容
+ * @info name 名称：Card卡片组件
+ * @param title 卡片标题
+ * @param subtitle 副标题
+ * @param content 卡片内容（HTML字符串，必填）
+ * @param footer 卡片底部内容
+ * @param class 额外CSS类
+ * @param id 元素ID
+ * @param headerActions 标题栏操作按钮
+ * @param image 卡片图片URL
+ * @param imageAlt 图片alt文本
+ */
+$title = $this->getData('title') ?? '';
+$subtitle = $this->getData('subtitle') ?? '';
+$content = $this->getData('content') ?? '';
+$footer = $this->getData('footer') ?? '';
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? '';
+$headerActions = $this->getData('headerActions') ?? [];
+$image = $this->getData('image') ?? '';
+$imageAlt = $this->getData('imageAlt') ?? '';
+
+// 构建CSS类
+$cardClass = 'card';
+if ($class) {
+    $cardClass .= ' ' . htmlspecialchars($class);
+}
+?>
+<div class="<?= $cardClass ?>" <?= $id ? 'id="' . htmlspecialchars($id) . '"' : '' ?>>
+    <?php if ($image): ?>
+        <img src="<?= htmlspecialchars($image) ?>" 
+             alt="<?= htmlspecialchars($imageAlt) ?>" 
+             class="card-image">
+    <?php endif; ?>
+    
+    <?php if ($title || $subtitle || !empty($headerActions)): ?>
+        <div class="card-header">
+            <?php if ($title): ?>
+                <h3 class="card-title"><?= htmlspecialchars($title) ?></h3>
+            <?php endif; ?>
+            <?php if ($subtitle): ?>
+                <p class="card-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($headerActions)): ?>
+                <div class="card-actions">
+                    <?php foreach ($headerActions as $action): ?>
+                        <?= $action ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    
+    <div class="card-body">
+        <?= $content ?>
+    </div>
+    
+    <?php if ($footer): ?>
+        <div class="card-footer">
+            <?= $footer ?>
+        </div>
+    <?php endif; ?>
+</div>
+

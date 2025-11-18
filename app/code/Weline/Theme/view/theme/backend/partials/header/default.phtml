@@ -1,0 +1,65 @@
+<?php
+/**
+ * 片段：Backend Header - 默认风格
+ * 
+ * 后端管理界面的默认头部
+ * 字段
+ * @info description 描述：后端管理界面的默认头部
+ * @info name 名称：Header头部片段
+ * @param logo Logo URL
+ * @param logoText Logo文字
+ * @param navItems 导航项数组
+ * @param showUserMenu 是否显示用户菜单
+ * @param class 额外CSS类
+ */
+$logo = $this->getData('logo') ?? '';
+$logoText = $this->getData('logoText') ?? __('Weline Admin');
+$navItems = $this->getData('navItems') ?? [];
+$showUserMenu = $this->getData('showUserMenu') ?? true;
+$class = $this->getData('class') ?? '';
+
+$baseUrl = $this->request->getBaseUrl();
+$backendUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
+?>
+<header class="backend-header <?= htmlspecialchars($class) ?>">
+    <div class="header-container">
+        <!-- Logo -->
+        <div class="header-logo">
+            <a href="<?= $backendUrl ?>" title="<?= __('管理后台') ?>">
+                <?php if ($logo): ?>
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('后台Logo') ?>">
+                <?php else: ?>
+                    <span class="logo-text"><?= htmlspecialchars($logoText) ?></span>
+                <?php endif; ?>
+            </a>
+        </div>
+
+        <!-- 导航菜单 -->
+        <?php if (!empty($navItems)): ?>
+            <nav class="header-nav">
+                <ul class="nav-list">
+                    <?php foreach ($navItems as $item): ?>
+                        <li class="nav-item">
+                            <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="nav-link">
+                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+
+        <!-- 右侧功能区 -->
+        <?php if ($showUserMenu): ?>
+            <div class="header-actions">
+                <div class="header-action-item header-account">
+                    <a href="<?= $backendUrl ?>account" class="account-link" title="<?= __('我的账户') ?>">
+                        <i class="fas fa-user"></i>
+                        <span class="account-text"><?= __('账户') ?></span>
+                    </a>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</header>
+

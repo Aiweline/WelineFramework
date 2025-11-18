@@ -1,0 +1,31 @@
+<a class='input-group-text link-info gap-1' style='cursor: pointer' type='button' data-bs-toggle='offcanvas'
+        data-bs-target='#{{id}}' aria-controls='{{id}}'>
+    <i class='ri-translate'></i><lang>{{target_button_text}}</lang>
+</a>
+<!-- {{id}} -->
+<div class='offcanvas w-75 {{class_names}}' tabindex='-1' id='{{id}}'
+     aria-labelledby='{{id}}Label'>
+    <div class='offcanvas-header'>
+        <h5 id='{{id}}Label'>
+            <lang>{{title}}</lang>
+        </h5>
+        <has name="close_button_show">
+            <button type='button' class='btn-close text-reset' data-bs-dismiss='offcanvas'
+                    aria-label='{{close_button_text}}'></button>
+        </has>
+    </div>
+    <div class='offcanvas-body'>
+        <div class='position-relative w-100 h-100 '>
+            <iframe id='{{id}}Iframe' class='w-100 h-100'
+                    data-src="{{action}}"
+                    frameborder='0'></iframe>
+        </div>
+    </div>
+</div>
+<script>
+    //show.bs.offcanvas
+    $('#{{id}}').on('show.bs.offcanvas', function () {
+        let Iframe = $('#{{id}}Iframe')
+        Iframe.attr('src', Iframe.attr('data-src'))
+    })
+</script>

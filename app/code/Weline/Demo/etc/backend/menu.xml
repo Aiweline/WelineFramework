@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <add source="Weline_Demo::weline_demo" name="weline_demo" title="We" action="weline_demo/backend/helloword" parent="Weline_Backend::system_module" icon=", " order="99999"/>
+</menus>

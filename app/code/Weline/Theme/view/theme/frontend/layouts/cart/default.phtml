@@ -1,0 +1,68 @@
+<?php
+/**
+ * 布局：购物车 - 默认布局
+ * 
+ * 购物车页面默认布局，包含商品列表、价格汇总等
+ * 字段
+ * @info description 描述：购物车页面默认布局，包含商品列表、价格汇总等
+ * @info name 名称：购物车默认布局
+ * @param title 页面标题（默认：购物车）
+ * @param content 主要内容（HTML字符串）
+ * @param summary 价格汇总区域（HTML字符串）
+ * @param breadcrumb 面包屑导航（可选）
+ * @param continueShopping 继续购物链接（可选）
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('购物车');
+$content = $this->getData('content') ?? '';
+$summary = $this->getData('summary') ?? '';
+$breadcrumb = $this->getData('breadcrumb') ?? '';
+$continueShopping = $this->getData('continueShopping') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <?php if ($breadcrumb): ?>
+        <nav class="breadcrumb-nav">
+            <?= $breadcrumb ?>
+        </nav>
+    <?php endif; ?>
+    
+    <main class="cart-main <?= htmlspecialchars($class) ?>">
+        <div class="cart-container">
+            <div class="cart-header">
+                <h1 class="cart-title"><?= __('购物车') ?></h1>
+                <?php if ($continueShopping): ?>
+                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="continue-shopping-link">
+                        <?= __('继续购物') ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+            
+            <div class="cart-content-wrapper">
+                <div class="cart-items">
+                    <?= $content ?>
+                </div>
+                
+                <?php if ($summary): ?>
+                    <aside class="cart-summary">
+                        <?= $summary ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

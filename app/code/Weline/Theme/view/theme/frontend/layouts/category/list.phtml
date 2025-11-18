@@ -1,0 +1,57 @@
+<?php
+/**
+ * 布局：分类页 - 列表页布局
+ * 
+ * 分类列表页布局，包含分类筛选、产品展示等
+ * 字段
+ * @info description 描述：分类列表页布局，包含分类筛选、产品展示等
+ * @info name 名称：分类列表页布局
+ * @param title 页面标题
+ * @param content 主要内容（HTML字符串）
+ * @param categoryNav 分类导航
+ * @param filters 筛选器内容
+ * @param class 额外CSS类
+ */
+$title = $this->getData('title') ?? __('分类');
+$content = $this->getData('content') ?? '';
+$categoryNav = $this->getData('categoryNav') ?? '';
+$filters = $this->getData('filters') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="category-list-main <?= htmlspecialchars($class) ?>">
+        <div class="category-list-container">
+            <?php if ($categoryNav): ?>
+                <nav class="category-nav">
+                    <?= $categoryNav ?>
+                </nav>
+            <?php endif; ?>
+            
+            <div class="category-content-wrapper">
+                <?php if ($filters): ?>
+                    <aside class="category-filters">
+                        <?= $filters ?>
+                    </aside>
+                <?php endif; ?>
+                
+                <div class="category-content">
+                    <?= $content ?>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+
