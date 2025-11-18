@@ -85,7 +85,9 @@ class Data extends AbstractHelper
                         continue;
                     }
                     $apiDirArray = explode(Handle::api_DIR, $api_class);
-                    $baseRouter = str_replace('\\', '/', array_pop($apiDirArray));
+                    // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元素
+                    $baseRouterPart = empty(end($apiDirArray)) && count($apiDirArray) > 1 ? $apiDirArray[count($apiDirArray) - 2] : array_pop($apiDirArray);
+                    $baseRouter = str_replace('\\', '/', $baseRouterPart);
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
                     $baseRouter = '';
                     foreach ($baseRouterArr as $baseRouterKey => $baseRouter_) {
@@ -263,7 +265,9 @@ class Data extends AbstractHelper
                         continue;
                     }
                     $pcDirArray = explode(Handle::pc_DIR, $pc_class);
-                    $baseRouter = str_replace('\\', '/', array_pop($pcDirArray));
+                    // 如果最后一个元素是空字符串（类名以Controller结尾），取倒数第二个元素
+                    $baseRouterPart = empty(end($pcDirArray)) && count($pcDirArray) > 1 ? $pcDirArray[count($pcDirArray) - 2] : array_pop($pcDirArray);
+                    $baseRouter = str_replace('\\', '/', $baseRouterPart);
                     $baseRouterArr = preg_split('/(?=[A-Z])/', $baseRouter);
                     $baseRouter = '';
                     foreach ($baseRouterArr as $baseRouterKey => $baseRouter_) {

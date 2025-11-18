@@ -55,8 +55,41 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        /**@var \Weline\Framework\Router\Core $route */
+        // 从事件中获取 route 对象
+        // 事件数据格式：['route' => $routeObject]
+        // 由于 Event 类将数据直接存储在 _data 中（而不是 _data['data']），
+        // 需要直接从事件数据中获取 route
         $route = $event->getData('route');
+        
+        // 如果 getData('route') 返回的是数组，可能是整个事件数据
+        // 尝试从事件数据的 'route' 键获取
+        if (is_array($route)) {
+            if (isset($route['route']) && is_object($route['route'])) {
+                $route = $route['route'];
+            } else {
+                // 尝试从事件的所有数据中获取 route（Event 的 _data 直接包含 route）
+                $allData = $event->getData();
+                if (is_array($allData)) {
+                    if (isset($allData['route']) && is_object($allData['route'])) {
+                        $route = $allData['route'];
+                    } elseif (isset($allData['data']['route']) && is_object($allData['data']['route'])) {
+                        // 如果数据存储在 data 键下
+                        $route = $allData['data']['route'];
+                    } else {
+                        // 如果还是数组，说明事件数据格式有问题，直接返回
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            }
+        }
+        
+        // 确保 route 是对象且具有 getRequest 方法
+        if (!is_object($route) || !method_exists($route, 'getRequest')) {
+            return;
+        }
+        
         $request = $route->getRequest();
 
         // 处理后台和后台API请求
@@ -383,6 +416,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         
         // 检查是否在白名单内
         $uri = trim($request->getRouteUrlPath(), '/');
+
         if (in_array(strtolower($uri), $white_lists)) {
             // 在白名单内，跳过登录验证
             return;

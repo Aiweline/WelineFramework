@@ -13,8 +13,11 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\ConsoleException;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Helper\Data;
+use Weline\Framework\Uninstall\UninstallService;
 
 class Remove extends CommandAbstract
 {
@@ -102,6 +105,41 @@ class Remove extends CommandAbstract
                 }
                 foreach ($args as $module) {
                     $this->printer->note(__('执行 ') . $module . __(' 卸载程序...'));
+                    
+                    // 通过事件通知卸载服务执行卸载（备份）
+                    $eventManager = ObjectManager::getInstance(EventsManager::class);
+                    $eventData = [
+                        'type' => UninstallService::TYPE_MODULE,
+                        'name' => $module,
+                        'auto_backup' => true,
+                    ];
+                    $eventManager->dispatch('Framework_UninstallService::uninstall', $eventData);
+                    
+                    // 获取卸载结果
+                    $uninstallResult = $eventData['uninstall_result'] ?? null;
+                    if ($uninstallResult && isset($uninstallResult['success'])) {
+                        if ($uninstallResult['success']) {
+                            $this->printer->success(__('模块 %{1} 备份成功', [$module]));
+                            if (!empty($uninstallResult['backup_path'])) {
+                                $this->printer->note(__('备份路径：%{1}', [$uninstallResult['backup_path']]));
+                            }
+                            // 显示卸载步骤
+                            if (!empty($uninstallResult['steps'])) {
+                                foreach ($uninstallResult['steps'] as $step) {
+                                    if (isset($step['message'])) {
+                                        $this->printer->note('  - ' . $step['message']);
+                                    }
+                                }
+                            }
+                        } else {
+                            $this->printer->warning(__('模块 %{1} 备份失败：%{2}', [
+                                $module,
+                                $uninstallResult['message'] ?? __('未知错误')
+                            ]));
+                        }
+                    }
+                    
+                    // 执行实际的卸载逻辑（数据库操作等）
                     $this->handle->remove($module);
                     // 卸载数组中模块
                     unset($module_list[$module]);

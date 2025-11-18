@@ -38,7 +38,7 @@ class I18nManager
      * @var array
      */
     private array $supportedLocales = [
-        'zh_CN' => '简体中文',
+        'zh_Hans_CN' => '简体中文',
         'zh_TW' => '繁体中文',
         'en_US' => 'English',
         'ja_JP' => '日本語',
@@ -55,14 +55,14 @@ class I18nManager
      * 
      * @var string
      */
-    private string $defaultLocale = 'zh_CN';
+    private string $defaultLocale = 'zh_Hans_CN';
 
     /**
      * 当前语言
      * 
      * @var string
      */
-    private string $currentLocale = 'zh_CN';
+    private string $currentLocale = 'zh_Hans_CN';
 
     /**
      * 构造函数
@@ -296,7 +296,7 @@ class I18nManager
 
         // 检查中文字符
         if (preg_match('/[\x{4e00}-\x{9fff}]/u', $content)) {
-            return 'zh_CN';
+            return 'zh_Hans_CN';
         }
 
         // 检查日文字符

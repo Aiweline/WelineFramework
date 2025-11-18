@@ -42,4 +42,9 @@
     <event name="Weline_Module::controller_attributes">
         <observer name="Weline_Framework_Api::validate_api_spec" instance="Weline\Framework\Api\Observer\ControllerAttributes" disabled="false" shared="true" sort="10"/>
     </event>
+    
+    <!-- 卸载通知事件：其他模块通过此事件通知卸载服务执行卸载操作 -->
+    <event name="Framework_UninstallService::uninstall">
+        <observer name="Weline_Framework_UninstallService::uninstall_observer" instance="Weline\Framework\Uninstall\Observer\UninstallObserver" disabled="false" shared="true" sort="10"/>
+    </event>
 </config>

@@ -312,6 +312,7 @@ class Template extends DataObject
             //如果缓存文件不存在则 编译 或者文件修改了也编译
             $content = file_get_contents($tplFile);
             $repContent = $this->tmp_replace($content, $comFileName);                   //得到模板文件 并替换占位符 并得到替换后的文件
+            
             // 检查是否显示模板位置注释（默认不显示，可通过配置 template.show_comments 控制）
             $showTemplateComments = Env::getInstance()->getConfig('template.show_comments', false);
             if ($showTemplateComments === true || $showTemplateComments === '1' || $showTemplateComments === 1) {
@@ -330,6 +331,20 @@ class Template extends DataObject
                 // 当 template.show_comments 为 false 时，移除所有 HTML 注释
                 $repContent = preg_replace('/\<!--([\s\S]*?)-->/', '', $repContent);
             }
+            
+            // 触发模板编译后事件，允许 Observer 处理内容（如提取 JS 模块声明和翻译词）
+            // 在所有编译处理完成后、写入文件之前触发，这样观察者可以处理最终的内容
+            /**@var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = new DataObject([
+                'content' => $repContent,
+                'comFileName' => $comFileName,
+                'tplFile' => $tplFile,
+                'template' => $this,
+            ]);
+            $eventsManager->dispatch('Framework_Template::after_compile', $eventData);
+            $repContent = $eventData->getData('content');
+            
             file_put_contents($comFileName, $repContent);                               //将替换后的文件写入定义的缓存文件中
         }
         return $comFileName;

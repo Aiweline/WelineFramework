@@ -45,6 +45,12 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
+        // 如果是 iframe 请求，不显示面板
+        if ($this->request->getParam('isIframe') === 'true' || 
+            $this->request->getGet('isIframe') === 'true') {
+            return;
+        }
+
         try {
             // 检查已发送的 headers 中是否有 Content-Type: application/json
             $headers = headers_list();

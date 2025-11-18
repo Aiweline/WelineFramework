@@ -283,6 +283,96 @@ Website Maintenance
 - 支持动态参数
 - 根据运行时语言环境翻译
 
+## 最佳实践
+
+### 优先使用 `<lang>` 标签
+
+在 `.phtml` 模板文件中，**应优先使用 `<lang>` 标签**，而不是 `__()` PHP 函数：
+
+**推荐做法**：
+- ✅ **HTML 内容中**：使用 `<lang>` 标签
+  ```html
+  <button><lang>保存</lang></button>
+  <h1><lang>用户管理</lang></h1>
+  <span><lang>共 %{count} 条记录</lang></span>
+  ```
+
+- ✅ **HTML 属性中**：使用 `<lang>` 标签（框架会自动处理）
+  ```html
+  <input type="text" placeholder="<lang>请输入用户名</lang>" />
+  <a href="#" title="<lang>删除</lang>"><lang>删除</lang></a>
+  ```
+
+- ✅ **页面内联 JavaScript（`.phtml` 模板中的 `<script>` 标签）**：直接使用 `@lang()` 标签
+  ```html
+  <script>
+  // 页面内联 JavaScript 中直接使用 @lang() 标签
+  throw new Error('@lang(请求失败)');
+  alert('@lang(操作成功)');
+  $('#select').select2({
+      placeholder: '@lang(选择目标语言)'
+  });
+  </script>
+  ```
+
+- ✅ **外部引入的 JavaScript 文件（`.js` 文件）**：在页面中定义全局翻译变量
+  ```html
+  <!-- 在 .phtml 模板中定义全局翻译变量供外部 JS 使用 -->
+  <script>
+  window.i18nTexts = {
+      save: '<?= __('保存') ?>',
+      delete: '<?= __('删除') ?>',
+      requestFailed: '<?= __('请求失败') ?>'
+  };
+  </script>
+  <script src="external.js"></script>
+  ```
+  
+  ```javascript
+  // external.js 中使用全局翻译变量
+  alert(window.i18nTexts.save);
+  throw new Error(window.i18nTexts.requestFailed);
+  ```
+
+**不推荐做法**：
+- ❌ 在 HTML 内容中使用 `<?= __('保存') ?>`
+  ```html
+  <button><?= __('保存') ?></button>  <!-- 不推荐 -->
+  ```
+
+- ❌ 在 HTML 属性中使用 `<?= __('文本') ?>`
+  ```html
+  <input placeholder="<?= __('请输入用户名') ?>" />  <!-- 不推荐 -->
+  ```
+
+- ❌ 在页面内联 JavaScript 中定义 i18nTexts 变量
+  ```javascript
+  // ❌ 错误：页面内联 JavaScript 中不应定义 i18nTexts 变量
+  <script>
+  const i18nTexts = {
+      save: '<?= __('保存') ?>'
+  };
+  alert(i18nTexts.save);  // 错误：应直接使用 @lang()
+  </script>
+  ```
+
+- ❌ 在外部引入的 JS 文件中直接使用 `@lang()`
+  ```javascript
+  // ❌ 错误：外部 JS 文件不会被模板引擎处理，无法使用 @lang()
+  // external.js
+  alert('@lang(保存)');  // 错误：应使用 window.i18nTexts.save
+  ```
+
+**原因**：
+1. `<lang>` 标签在编译时翻译（无参数时），性能更好
+2. 代码更简洁，可读性更强
+3. 符合模板标签的使用规范
+4. 框架会自动处理 `<lang>` 标签的编译和翻译
+
+**例外情况**：
+- 在 PHP 代码块中（`<?php ?>`）必须使用 `__()` 函数
+- 需要动态参数且无法使用 `<lang args="">` 时，可以使用 `__()` 函数
+
 ## 注意事项
 
 ### 1. 引号处理

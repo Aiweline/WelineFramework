@@ -249,6 +249,11 @@ class CurrencyImportService
             ->select()
             ->fetchOrigin();
 
+        // 如果查询失败或没有数据，返回空数组
+        if ($currencies === false || !is_array($currencies)) {
+            $currencies = [];
+        }
+
         $result['total_count'] = count($currencies);
 
         // 获取新旧基准货币的汇率（相对于旧基准货币）

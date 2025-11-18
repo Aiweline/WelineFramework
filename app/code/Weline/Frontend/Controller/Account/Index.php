@@ -22,7 +22,6 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     ) {
         $this->session = $session;
         $this->template = $template;
-        parent::__construct();
     }
 
     /**
@@ -41,8 +40,11 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         /** @var FrontendUser $user */
         $user = $this->session->getLoginUser();
         
-        $this->template->assign('user', $user);
-        return $this->template->setFile('Weline_Frontend::account/index.phtml')->toHtml();
+        // 使用主题仪表盘布局
+        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/dashboard.phtml', [
+            'title' => __('个人中心'),
+            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/index.phtml', ['user' => $user])
+        ]);
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Frontend\Controller\Account;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
@@ -27,7 +28,6 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     ) {
         $this->session = $session;
         $this->template = $template;
-        parent::__construct();
     }
 
     /**
@@ -46,7 +46,11 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             $this->session->setData('login_referer', $referer);
         }
 
-        return $this->template->setFile('Weline_Frontend::account/login.phtml')->toHtml();
+        // 使用主题认证布局
+        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/auth.phtml', [
+            'title' => __('用户登录'),
+            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/login.phtml')
+        ]);
     }
 
     /**
@@ -62,9 +66,23 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             ]);
         }
 
-        $username = $this->request->getPost('username');
-        $password = $this->request->getPost('password');
-        $rememberDuration = (int)$this->request->getPost('remember_duration', 0);
+        $username = $this->request->getBodyParam('username');
+        if ($username === null) {
+            $username = $this->request->getPost('username');
+        }
+        $username = is_string($username) ? trim($username) : '';
+
+        $password = $this->request->getBodyParam('password');
+        if ($password === null) {
+            $password = $this->request->getPost('password');
+        }
+        $password = is_string($password) ? $password : '';
+
+        $rememberDuration = $this->request->getBodyParam('remember_duration');
+        if ($rememberDuration === null) {
+            $rememberDuration = $this->request->getPost('remember_duration', 0);
+        }
+        $rememberDuration = (int)$rememberDuration;
 
         if (empty($username) || empty($password)) {
             return $this->json([
@@ -111,6 +129,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 ->setLoginIp($this->request->clientIP())
                 ->resetAttemptTimes()
                 ->save();
+            $this->syncSandboxCookie($user->isSandboxAccount());
 
             // 处理"记住我"功能
             if ($rememberDuration > 0) {
@@ -139,6 +158,16 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 Cookie::set('frontend_user_token', $token, $rememberDuration, ['path' => '/']);
             }
 
+            // 派发登录成功事件
+            /** @var EventsManager $eventManager */
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = new \Weline\Framework\DataObject\DataObject([
+                'user' => $user,
+                'request' => $this->request,
+                'session' => $this->session
+            ]);
+            $eventManager->dispatch('Frontend_Account_Login::login_after', $eventData);
+
             // 获取来源URL
             $referer = $this->session->getData('login_referer');
             $this->session->delete('login_referer');
@@ -152,7 +181,13 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             return $this->json([
                 'success' => true,
                 'message' => '登录成功',
-                'redirect' => $redirectUrl
+                'redirect' => $redirectUrl,
+                'user' => [
+                    'user_id' => $user->getId(),
+                    'username' => $user->getUsername(),
+                    'email' => $user->getEmail(),
+                    'is_sandbox' => $user->isSandboxAccount(),
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -161,6 +196,16 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 'success' => false,
                 'message' => '登录失败：' . $e->getMessage()
             ]);
+        }
+    }
+
+    private function syncSandboxCookie(bool $enabled): void
+    {
+        $lifetime = $enabled ? 0 : -1;
+        Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/']);
+        $adminPath = Env::getInstance()->getConfig('admin') ?? '';
+        if (!empty($adminPath)) {
+            Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/' . ltrim($adminPath, '/')]);
         }
     }
 

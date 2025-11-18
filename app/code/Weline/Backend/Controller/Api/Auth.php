@@ -26,9 +26,23 @@ class Auth extends BackendRestController
     public function login()
     {
         try {
-            $username = $this->request->getPost('username');
-            $password = $this->request->getPost('password');
-            $expireTime = (int)$this->request->getPost('expire_time', 0);
+            $username = $this->request->getBodyParam('username');
+            if ($username === null) {
+                $username = $this->request->getPost('username');
+            }
+            $username = is_string($username) ? trim($username) : '';
+
+            $password = $this->request->getBodyParam('password');
+            if ($password === null) {
+                $password = $this->request->getPost('password');
+            }
+            $password = is_string($password) ? trim($password) : '';
+
+            $expireTime = $this->request->getBodyParam('expire_time');
+            if ($expireTime === null) {
+                $expireTime = $this->request->getPost('expire_time', 0);
+            }
+            $expireTime = (int)$expireTime;
 
             if (empty($username) || empty($password)) {
                 return $this->error(__('用户名和密码不能为空'), '', 400);
@@ -92,7 +106,11 @@ class Auth extends BackendRestController
                 return $this->error(__('Token不能为空'), '', 400);
             }
 
-            $expireTime = (int)$this->request->getPost('expire_time', 0);
+            $expireTime = $this->request->getBodyParam('expire_time');
+            if ($expireTime === null) {
+                $expireTime = $this->request->getPost('expire_time', 0);
+            }
+            $expireTime = (int)$expireTime;
             $newToken = $this->apiSession->refreshToken($token, $expireTime);
 
             if (!$newToken) {

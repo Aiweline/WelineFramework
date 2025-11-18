@@ -36,6 +36,8 @@ class WelineTheme extends Model
 
     public const fields_IS_ACTIVE = 'is_active';
 
+    public const fields_CONFIG = 'config';
+
 //    protected $table = Install::table_THEME; # 如果需要设置特殊表名 需要加前缀
 
     private ?WelineTheme $theme = null;
@@ -127,6 +129,100 @@ class WelineTheme extends Model
         $this->setData(self::fields_PARENT_ID, $value);
 
         return $this;
+    }
+
+    /**
+     * 获取父主题对象
+     * 
+     * @return WelineTheme|null 父主题对象，如果没有父主题则返回null
+     */
+    public function getParentTheme(): ?WelineTheme
+    {
+        $parentId = $this->getParentId();
+        if (!$parentId) {
+            return null;
+        }
+
+        // 尝试从缓存获取
+        $cacheKey = 'theme_parent_' . $parentId;
+        if ($cached = $this->_cache->get($cacheKey)) {
+            /** @var WelineTheme $parentTheme */
+            $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+            return $parentTheme->setData($cached);
+        }
+
+        // 从数据库加载
+        try {
+            /** @var WelineTheme $parentTheme */
+            $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+            $parentTheme->load($parentId);
+            
+            if ($parentTheme->getId()) {
+                // 缓存父主题数据
+                $this->_cache->set($cacheKey, $parentTheme->getData(), static::cache_TIME);
+                return $parentTheme;
+            }
+        } catch (\Exception $e) {
+            // 加载失败，返回null
+        }
+
+        return null;
+    }
+
+    /**
+     * 获取完整的主题继承链（从基础到当前）
+     * 
+     * @return WelineTheme[] 主题继承链数组，第一个是基础主题，最后一个是当前主题
+     */
+    public function getThemeChain(): array
+    {
+        $cacheKey = 'theme_chain_' . $this->getId();
+        
+        // 尝试从缓存获取
+        if ($cached = $this->_cache->get($cacheKey)) {
+            $chain = [];
+            foreach ($cached as $themeData) {
+                /** @var WelineTheme $theme */
+                $theme = ObjectManager::getInstance(WelineTheme::class);
+                $chain[] = $theme->setData($themeData);
+            }
+            return $chain;
+        }
+
+        $chain = [];
+        $visited = [];
+        $currentTheme = $this;
+
+        // 递归收集父主题
+        while ($currentTheme && $currentTheme->getId()) {
+            $themeId = $currentTheme->getId();
+            
+            // 防止循环引用
+            if (in_array($themeId, $visited)) {
+                break;
+            }
+            $visited[] = $themeId;
+
+            // 将父主题添加到链的前面（保证顺序：基础 → 父 → 子）
+            array_unshift($chain, $currentTheme);
+
+            // 获取父主题
+            $parentTheme = $currentTheme->getParentTheme();
+            if ($parentTheme) {
+                $currentTheme = $parentTheme;
+            } else {
+                break;
+            }
+        }
+
+        // 缓存继承链数据
+        $chainData = [];
+        foreach ($chain as $theme) {
+            $chainData[] = $theme->getData();
+        }
+        $this->_cache->set($cacheKey, $chainData, static::cache_TIME);
+
+        return $chain;
     }
 
     public function isActive()
@@ -239,11 +335,78 @@ class WelineTheme extends Model
                 null,
                 'NOT NULL DEFAULT CURRENT_TIMESTAMP',
                 '更新时间'
+            )->addColumn(
+                'config',
+                TableInterface::column_type_TEXT,
+                null,
+                '',
+                '主题配置（JSON格式，存储partials选择等）'
             )->addIndex(
                 TableInterface::index_type_DEFAULT,
                 'parent_id',
                 'parent_id'
             )->create();
+        } else {
+            // 如果表已存在，检查是否需要添加 config 字段
+            if (!$setup->hasField('config')) {
+                $setup->getPrinting()->warning('添加字段：config');
+                $setup->alterTable()
+                    ->addColumn('config', 'update_time', TableInterface::column_type_TEXT, '', '', '主题配置（JSON格式，存储partials选择等）')
+                    ->alter();
+            }
         }
+    }
+    
+    /**
+     * 获取主题配置
+     * @return array
+     */
+    public function getConfig(): array
+    {
+        $config = $this->getData(self::fields_CONFIG);
+        if (empty($config)) {
+            return [];
+        }
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return is_array($config) ? $config : [];
+    }
+    
+    /**
+     * 设置主题配置
+     * @param array $config
+     * @return $this
+     */
+    public function setConfig(array $config): static
+    {
+        $this->setData(self::fields_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
+        return $this;
+    }
+    
+    /**
+     * 获取配置项
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getConfigValue(string $key, $default = null)
+    {
+        $config = $this->getConfig();
+        return $config[$key] ?? $default;
+    }
+    
+    /**
+     * 设置配置项
+     * @param string $key
+     * @param mixed $value
+     * @return $this
+     */
+    public function setConfigValue(string $key, $value): static
+    {
+        $config = $this->getConfig();
+        $config[$key] = $value;
+        return $this->setConfig($config);
     }
 }

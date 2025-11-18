@@ -59,6 +59,7 @@ class AiModel extends Model
     public const fields_SELF_CONFIG_TEST_TIME = 'self_config_test_time';  // 自配置测试时间
     public const fields_PROVIDER_TEST_STATUS = 'provider_test_status';  // 供应商测试状态
     public const fields_PROVIDER_TEST_TIME = 'provider_test_time';  // 供应商测试时间
+    public const fields_MODEL_SOURCE = 'model_source';  // 模型来源：local（本地）或 remote（远程第三方）
     public const fields_CREATED_AT = 'created_at';
     public const fields_UPDATED_AT = 'updated_at';
 
@@ -68,6 +69,12 @@ class AiModel extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_DEPRECATED = 'deprecated';
     public const STATUS_MAINTENANCE = 'maintenance';
+
+    /**
+     * Model source constants
+     */
+    public const SOURCE_LOCAL = 'local';  // 本地模型
+    public const SOURCE_REMOTE = 'remote';  // 远程第三方模型
 
     /**
      * Initialize model
@@ -173,6 +180,14 @@ class AiModel extends Model
             ");
         }
 
+        // 添加模型来源字段
+        if (!$setup->hasField(self::fields_MODEL_SOURCE)) {
+            $setup->query("
+                ALTER TABLE {$this->getTable()}
+                ADD " . self::fields_MODEL_SOURCE . " VARCHAR(20) DEFAULT 'remote' NULL COMMENT '模型来源: local(本地)或remote(远程第三方)' AFTER provider_test_time;
+            ");
+        }
+
         // 调整唯一索引：将 唯一(supplier, model_code) 改为 唯一(model_code)
         try {
             // 尝试删除旧的联合唯一索引（若存在）
@@ -228,6 +243,7 @@ class AiModel extends Model
                 // 供应商测试字段
                 ->addColumn(self::fields_PROVIDER_TEST_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'pending'", '供应商测试状态: pending/success/failed')
                 ->addColumn(self::fields_PROVIDER_TEST_TIME, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '供应商测试时间戳')
+                ->addColumn(self::fields_MODEL_SOURCE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'remote'", '模型来源: local(本地)或remote(远程第三方)')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
                 ->addIndex(self::fields_MODEL_CODE, '', 'UNIQUE', 'idx_model_code')
@@ -275,6 +291,39 @@ class AiModel extends Model
     public function canDelete(): bool
     {
         return $this->isCopy();
+    }
+
+    /**
+     * Check if this is a local model
+     *
+     * @return bool
+     */
+    public function isLocal(): bool
+    {
+        $source = $this->getData(self::fields_MODEL_SOURCE);
+        return $source === self::SOURCE_LOCAL;
+    }
+
+    /**
+     * Check if this is a remote model
+     *
+     * @return bool
+     */
+    public function isRemote(): bool
+    {
+        $source = $this->getData(self::fields_MODEL_SOURCE);
+        return $source === self::SOURCE_REMOTE || empty($source);
+    }
+
+    /**
+     * Get model source
+     *
+     * @return string
+     */
+    public function getModelSource(): string
+    {
+        $source = $this->getData(self::fields_MODEL_SOURCE);
+        return $source ?: self::SOURCE_REMOTE;
     }
 
     /**

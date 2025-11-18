@@ -312,6 +312,20 @@ class Compiler
     }
 
     /**
+     * 获取编译后的文件路径
+     *
+     * @param string $targetModule 目标模块
+     * @param string $targetFile 目标文件路径
+     * @param string $type 类型 (module/theme)
+     * @param string|null $themeName 主题名（如果是主题类型）
+     * @return string
+     */
+    public function getCompiledFilePath(string $targetModule, string $targetFile, string $type = 'module', ?string $themeName = null): string
+    {
+        return $this->getOutputPath($targetModule, $targetFile, $type, $themeName);
+    }
+
+    /**
      * 从模块 base_path 提取模块路径名
      * 例如: app/code/Weline/Sticker -> Weline/Sticker
      *

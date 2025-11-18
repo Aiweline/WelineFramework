@@ -39,18 +39,37 @@ class Compiler implements CompilerInterface
     public function compile(string $source_file = '', string $out_file = '')
     {
         $config_resources = $this->reader->getResourceFiles();
-        foreach ($config_resources as $area => $config_resource) {
-            $data = new DataObject(
-                [
-                    'area' => $area,
-                    'type' => $this->reader->getSourceType(),
-                    'resources' => $config_resource
-                ]
-            );
-            $this->getEventManager()->dispatch(
-                'Framework_Resource::compiler',
-                $data
-            );
+        
+        // 如果没有找到任何资源，也要触发事件，让 Observer 生成空文件
+        if (empty($config_resources)) {
+            // 为 frontend 和 backend 都触发事件
+            foreach (['frontend', 'backend'] as $area) {
+                $data = new DataObject(
+                    [
+                        'area' => $area,
+                        'type' => $this->reader->getSourceType(),
+                        'resources' => ''
+                    ]
+                );
+                $this->getEventManager()->dispatch(
+                    'Framework_Resource::compiler',
+                    $data
+                );
+            }
+        } else {
+            foreach ($config_resources as $area => $config_resource) {
+                $data = new DataObject(
+                    [
+                        'area' => $area,
+                        'type' => $this->reader->getSourceType(),
+                        'resources' => $config_resource
+                    ]
+                );
+                $this->getEventManager()->dispatch(
+                    'Framework_Resource::compiler',
+                    $data
+                );
+            }
         }
     }
 }

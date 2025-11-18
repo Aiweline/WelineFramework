@@ -26,4 +26,13 @@
     <event name="Framework_Module::module_install_after">
         <observer name="Weline_I18n::module_install_observer" instance="Weline\I18n\Observer\SystemUpdateObserver" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Framework_View::fetch_file">
+        <observer name="Weline_I18n::template_fetch_js_words" instance="Weline\I18n\Observer\TemplateFetchFile" disabled="false" shared="true" sort="50"/>
+    </event>
+    <event name="Framework_Template::after_compile">
+        <observer name="Weline_I18n::template_compile_extract_js_modules" instance="Weline\I18n\Observer\TemplateCompile" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Framework_Resource::compiler">
+        <observer name="Weline_I18n::resource_compiler_collect_translations" instance="Weline\I18n\Observer\ResourceCompiler" disabled="false" shared="true" sort="50"/>
+    </event>
 </config>

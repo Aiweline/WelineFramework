@@ -74,19 +74,28 @@ class EventsManager
     public function scanEvents()
     {
         if (empty($this->eventsObservers)) {
+            // 先收集所有模块的观察者，不做排序
             foreach ($this->reader->read() as $module_and_file => $eventObservers) {
                 foreach ($eventObservers as $event_name => $eventObserver) {
-                    // 二维数组$eventObserver根据sort字段排序
-                    usort($eventObserver, function ($a, $b) {
-                        return strnatcasecmp($a['sort'], $b['sort']);
-                    });
                     if (isset($this->eventsObservers[$event_name])) {
                         $this->eventsObservers[$event_name] = array_merge($this->eventsObservers[$event_name], $eventObserver);
                     } else {
                         $this->eventsObservers[$event_name] = $eventObserver;
                     }
                 }
-//                $this->eventsObservers = array_merge($this->eventsObservers, $eventObservers);
+            }
+            
+            // 所有模块的观察者合并完成后，对每个事件的观察者数组按sort值排序
+            // 使用整数比较，实现"越小越优先"
+            // 只有当观察者数量大于1时才排序，节省性能
+            foreach ($this->eventsObservers as $event_name => $eventObserver) {
+                if (count($this->eventsObservers[$event_name]) > 1) {
+                    usort($this->eventsObservers[$event_name], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
             }
         }
 

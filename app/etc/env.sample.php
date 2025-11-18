@@ -188,4 +188,36 @@ return [
     // 调试配置（可选）
     'debug' => false,           // 是否启用调试模式
     'debug_key' => null,        // 调试密钥（用于URL调试）
+    
+    // 翻译配置
+    'translation' => [
+        // ⚠️ 性能警告：online 模式会严重影响性能！
+        // - online 模式：每次请求都会检测CSV文件变更并重新收集翻译（开发模式使用）
+        // - default 模式：直接读取生成的词典文件，性能最优（生产环境推荐）
+        'mode' => 'default',  // 翻译模式：default（推荐）, online（开发模式，影响性能）
+        
+        // 在线翻译配置（预留配置，目前未使用）
+        'online' => [
+            'enabled' => true,   // 是否启用在线翻译服务（预留，暂未实现）
+            'api_key' => '',     // API密钥（如果使用付费翻译服务，预留）
+            'provider' => 'google',  // 翻译服务提供商：google, baidu 等（预留）
+        ],
+        
+        // 翻译缓存配置（预留配置，目前未使用）
+        'cache' => [
+            'enabled' => false,  // 是否启用翻译缓存（预留，暂未实现）
+            'ttl' => 3600,       // 缓存有效期（秒，预留）
+        ],
+        
+        // 自动注册配置（已实现）
+        // 用途：当页面中使用 __() 函数或 <lang> 标签时，自动将翻译词注册到数据库
+        // 使用位置：I18n/Controller/Backend/Dictionary.php::isAutoRegisterEnabled()
+        // 注意：需要在 online 模式下，通过 footer.phtml hook 收集 JS 翻译词
+        'auto_register' => true,  // 是否自动注册新翻译词到数据库（true=启用，false=禁用）
+    ],
+    
+    // 国际化配置（旧版配置，建议使用 translation 配置）
+    'i18n' => [
+        'translate_mode' => 'default',  // 翻译模式：default, online（已废弃，请使用 translation.mode）
+    ],
 ];

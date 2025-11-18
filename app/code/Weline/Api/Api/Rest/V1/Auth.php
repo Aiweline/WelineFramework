@@ -46,7 +46,7 @@ class Auth extends FrontendRestController
      * @Document(summary='用户登录', description='使用用户名和密码登录，返回访问令牌和刷新令牌', tags=['认证', '登录'], category='认证接口')
      * @example
      * Method: POST
-     * Path: /api/rest/v1/weline_api/auth/login
+     * Path: /api/rest/v1/auth/login
      * Header:
      * - Content-Type: application/json
      * Body:
@@ -86,11 +86,11 @@ class Auth extends FrontendRestController
 
             /** @var ApiUser $user */
             $user = ObjectManager::getInstance(ApiUser::class);
-            $user->where('username', $username)
-                ->where('is_deleted', 0)
+            $user->clear()
+                ->where(ApiUser::fields_username, $username)
+                ->where(ApiUser::fields_is_deleted, 0)
                 ->find()
                 ->fetch();
-
             if (!$user->getId()) {
                 return $this->error(__('用户不存在'), '', 401);
             }
@@ -122,6 +122,7 @@ class Auth extends FrontendRestController
                     'id' => $user->getId(),
                     'username' => $user->getUsername(),
                     'email' => $user->getEmail(),
+                    'is_sandbox' => $user->isSandboxAccount(),
                 ],
             ]);
 
@@ -345,6 +346,7 @@ class Auth extends FrontendRestController
                     'username' => $user->getUsername(),
                     'email' => $user->getEmail(),
                     'is_enabled' => $user->getIsEnabled(),
+                    'is_sandbox' => $user->isSandboxAccount(),
                 ]
             ]);
 
@@ -436,17 +438,19 @@ class Auth extends FrontendRestController
     /**
      * 成功响应
      */
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200)
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 
     /**
      * 错误响应
      */
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404)
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 }
 

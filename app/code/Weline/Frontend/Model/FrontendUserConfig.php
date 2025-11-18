@@ -53,7 +53,7 @@ class FrontendUserConfig extends Model
                 ->addColumn(self::fields_UPDATED_AT, TableInterface::column_type_TIMESTAMP, 0, 'default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', '更新时间')
                 ->addIndex(TableInterface::index_type_KEY, 'idx_user_config', [self::fields_USER_ID, self::fields_CONFIG_KEY])
                 ->create();
-        }
+        } 
     }
     
     /**

@@ -1,0 +1,494 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$customers = $customers ?? [];
+$customersJson = $customers_json ?? '[]';
+$total = (int)($total ?? 0);
+$page = (int)($page ?? 1);
+$limit = (int)($limit ?? 20);
+$totalPages = (int)($total_pages ?? 0);
+$keyword = $keyword ?? '';
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('前端客户') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? '' ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><?= __('前端客户') ?></h4>
+                            <button type="button" class="btn btn-success btn-sm" onclick="openCreateModal()">
+                                <i class="mdi mdi-account-plus me-2"></i><?= __('新增客户') ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                        <div id="page-message-container"></div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <form method="get" action="<?= $this->getBackendUrl('customer/backend/customer/index') ?>" class="row g-3 align-items-end">
+                                    <div class="col-md-9">
+                                        <label class="form-label"><?= __('搜索关键字') ?></label>
+                                        <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>"
+                                               placeholder="<?= __('用户名模糊查询') ?>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">&nbsp;</label>
+                                        <div>
+                                            <button type="submit" class="btn btn-primary me-2">
+                                                <i class="mdi mdi-magnify me-1"></i><?= __('搜索') ?>
+                                            </button>
+                                            <a href="<?= $this->getBackendUrl('customer/backend/customer/index') ?>" class="btn btn-light">
+                                                <i class="mdi mdi-refresh me-1"></i><?= __('重置') ?>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="card-title"><?= __('客户列表') ?></h4>
+                                    <div class="text-muted">
+                                        <?= __('共') ?> <?= $total ?> <?= __('条记录') ?>
+                                    </div>
+                                </div>
+
+                                <?php if (!empty($customers)): ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle table-nowrap">
+                                            <thead class="table-light">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th><?= __('用户名') ?></th>
+                                                <th><?= __('最近登录IP') ?></th>
+                                                <th><?= __('尝试次数') ?></th>
+                                                <th><?= __('Session标识') ?></th>
+                                                <th><?= __('令牌数量') ?></th>
+                                                <th><?= __('沙盒') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php foreach ($customers as $customer): ?>
+                                                <tr>
+                                                    <td><?= (int)$customer['user_id'] ?></td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="avatar-sm me-3">
+                                                                <span class="avatar-title rounded-circle bg-soft-info text-info">
+                                                                    <?= strtoupper(substr($customer['username'] ?? '-', 0, 1)) ?>
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <h5 class="font-size-14 mb-1"><?= htmlspecialchars($customer['username'] ?? '-') ?></h5>
+                                                                <?php if (!empty($customer['avatar'])): ?>
+                                                                    <span class="text-muted font-size-12"><?= htmlspecialchars($customer['avatar']) ?></span>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td><?= htmlspecialchars($customer['login_ip'] ?? '-') ?: '-' ?></td>
+                                                    <td>
+                                                        <span class="badge bg-<?= ($customer['attempt_times'] ?? 0) > 5 ? 'danger' : 'secondary' ?>">
+                                                            <?= (int)($customer['attempt_times'] ?? 0) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <?php if (!empty($customer['sess_id'])): ?>
+                                                            <span class="badge bg-success"><?= __('在线') ?></span>
+                                                            <div class="text-muted small mt-1">
+                                                                <?= htmlspecialchars(substr($customer['sess_id'], 0, 24)) ?>
+                                                            </div>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary"><?= __('离线') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-info"><?= (int)($customer['token_count'] ?? 0) ?></span>
+                                                    </td>
+                                                    <td>
+                                                        <?php if (!empty($customer['is_sandbox'])): ?>
+                                                            <span class="badge bg-warning text-dark"><?= __('沙盒') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-light text-muted"><?= __('正式') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button type="button" class="btn btn-primary" onclick="openEditModal(<?= (int)$customer['user_id'] ?>)">
+                                                                <i class="mdi mdi-pencil"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-warning" onclick="openPasswordModal(<?= (int)$customer['user_id'] ?>)">
+                                                                <i class="mdi mdi-lock-reset"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-info" onclick="resetTokens(<?= (int)$customer['user_id'] ?>)">
+                                                                <i class="mdi mdi-refresh"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-danger" onclick="deleteCustomer(<?= (int)$customer['user_id'] ?>)">
+                                                                <i class="mdi mdi-delete"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <?php if ($totalPages > 1): ?>
+                                        <div class="row mt-3">
+                                            <div class="col-md-6">
+                                                <div class="text-muted">
+                                                    <?= __('显示') ?>
+                                                    <?= (($page - 1) * $limit + 1) ?>
+                                                    -
+                                                    <?= min($page * $limit, $total) ?>
+                                                    <?= __('条') ?>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <nav aria-label="pagination" class="float-end">
+                                                    <ul class="pagination pagination-rounded mb-0">
+                                                        <?php if ($page > 1): ?>
+                                                            <li class="page-item">
+                                                                <a class="page-link" href="?page=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>"><?= __('上一页') ?></a>
+                                                            </li>
+                                                        <?php endif; ?>
+                                                        <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                                            <li class="page-item <?= ($i === $page) ? 'active' : '' ?>">
+                                                                <a class="page-link" href="?page=<?= $i ?>&keyword=<?= urlencode($keyword) ?>"><?= $i ?></a>
+                                                            </li>
+                                                        <?php endfor; ?>
+                                                        <?php if ($page < $totalPages): ?>
+                                                            <li class="page-item">
+                                                                <a class="page-link" href="?page=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>"><?= __('下一页') ?></a>
+                                                            </li>
+                                                        <?php endif; ?>
+                                                    </ul>
+                                                </nav>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <div class="text-center text-muted py-5">
+                                        <i class="mdi mdi-account-off" style="font-size:48px;"></i>
+                                        <p class="mt-3"><?= __('暂无客户数据') ?></p>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+<!-- 新增/编辑客户 -->
+<div class="modal fade" id="customerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="customerModalTitle"><?= __('新增客户') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="customerForm" onsubmit="submitCustomerForm(event)">
+                <div class="modal-body">
+                    <input type="hidden" name="user_id" id="customer_id" value="0">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('用户名') ?> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="username" id="customer_username" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('密码') ?> <span class="text-danger" id="customer_password_required">*</span></label>
+                            <input type="text" class="form-control" name="password" id="customer_password" placeholder="<?= __('留空则不修改当前密码') ?>">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label"><?= __('头像') ?></label>
+                            <input type="text" class="form-control" name="avatar" id="customer_avatar" placeholder="https://example.com/avatar.png">
+                            <div class="form-text"><?= __('可填写图片URL或内联SVG标识') ?></div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="customer_reset_attempts" name="reset_attempts">
+                                <label class="form-check-label" for="customer_reset_attempts">
+                                    <?= __('重置尝试次数') ?>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" value="1" id="customer_is_sandbox" name="is_sandbox">
+                                <label class="form-check-label" for="customer_is_sandbox">
+                                    <?= __('沙盒账户') ?>
+                                </label>
+                                <div class="form-text"><?= __('启用后，该用户的所有业务请求将仅作用于沙盒数据库') ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                    <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 重置密码 -->
+<div class="modal fade" id="passwordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('重置密码') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="passwordForm" onsubmit="submitPasswordForm(event)">
+                <div class="modal-body">
+                    <input type="hidden" name="user_id" id="password_user_id">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('新密码') ?></label>
+                        <input type="text" class="form-control" name="new_password" id="password_new" placeholder="<?= __('留空则系统自动生成强密码') ?>">
+                    </div>
+                    <div class="alert alert-warning">
+                        <?= __('重置密码后将自动注销该客户的所有会话与令牌。') ?>
+                    </div>
+                    <div id="passwordResult" class="alert alert-info d-none">
+                        <strong><?= __('新密码：') ?></strong> <span id="passwordGenerated"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+                    <button type="submit" class="btn btn-primary"><?= __('提交') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const CUSTOMERS = <?= $customersJson ?>;
+const CUSTOMER_SAVE_URL = '<?= $this->getBackendUrl('customer/backend/customer/save') ?>';
+const CUSTOMER_DETAIL_URL = '<?= $this->getBackendUrl('customer/backend/customer/detail') ?>';
+const CUSTOMER_DELETE_URL = '<?= $this->getBackendUrl('customer/backend/customer/delete') ?>';
+const CUSTOMER_RESET_TOKEN_URL = '<?= $this->getBackendUrl('customer/backend/customer/resetToken') ?>';
+const CUSTOMER_RESET_PASSWORD_URL = '<?= $this->getBackendUrl('customer/backend/customer/resetPassword') ?>';
+
+let customerModalInstance = null;
+let passwordModalInstance = null;
+const MESSAGE_TYPE_MAP = {
+    success: 'success',
+    error: 'danger',
+    warning: 'warning',
+    info: 'info'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    customerModalInstance = new bootstrap.Modal(document.getElementById('customerModal'));
+    passwordModalInstance = new bootstrap.Modal(document.getElementById('passwordModal'));
+});
+
+function showPageMessage(type, message) {
+    const container = document.getElementById('page-message-container');
+    if (!container) {
+        console.warn('page message container not found');
+        return;
+    }
+    const alertType = MESSAGE_TYPE_MAP[type] || 'info';
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${alertType} alert-dismissible fade show`;
+    alert.setAttribute('role', 'alert');
+    alert.innerHTML = `
+        <span>${message}</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    container.appendChild(alert);
+    setTimeout(() => {
+        try {
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+            bsAlert.close();
+        } catch (e) {
+            alert.remove();
+        }
+    }, 4000);
+}
+
+function openCreateModal() {
+    document.getElementById('customerForm').reset();
+    document.getElementById('customer_id').value = '0';
+    document.getElementById('customer_password_required').classList.remove('text-muted');
+    document.getElementById('customer_is_sandbox').checked = false;
+    document.getElementById('customerModalTitle').textContent = '<?= __('新增客户') ?>';
+    customerModalInstance.show();
+}
+
+function openEditModal(userId) {
+    fetch(`${CUSTOMER_DETAIL_URL}?user_id=${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+                return;
+            }
+            const user = data.data.user;
+            document.getElementById('customer_id').value = user.user_id;
+            document.getElementById('customer_username').value = user.username;
+            document.getElementById('customer_avatar').value = user.avatar || '';
+            document.getElementById('customer_password').value = '';
+            document.getElementById('customer_reset_attempts').checked = false;
+            document.getElementById('customer_is_sandbox').checked = !!user.is_sandbox;
+            document.getElementById('customer_password_required').classList.add('text-muted');
+            document.getElementById('customerModalTitle').textContent = '<?= __('编辑客户') ?>';
+            customerModalInstance.show();
+        })
+        .catch(() => {
+            showPageMessage('error', '<?= __('操作失败') ?>');
+        });
+}
+
+function submitCustomerForm(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    fetch(CUSTOMER_SAVE_URL, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                customerModalInstance.hide();
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+            }
+        })
+        .catch(() => {
+            showPageMessage('error', '<?= __('操作失败') ?>');
+        });
+}
+
+function openPasswordModal(userId) {
+    document.getElementById('passwordForm').reset();
+    document.getElementById('password_user_id').value = userId;
+    document.getElementById('passwordResult').classList.add('d-none');
+    document.getElementById('passwordGenerated').textContent = '';
+    passwordModalInstance.show();
+}
+
+function submitPasswordForm(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    fetch(CUSTOMER_RESET_PASSWORD_URL, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                if (data.data && data.data.new_password) {
+                    document.getElementById('passwordGenerated').textContent = data.data.new_password;
+                    document.getElementById('passwordResult').classList.remove('d-none');
+                }
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+            }
+        })
+        .catch(() => {
+            showPageMessage('error', '<?= __('操作失败') ?>');
+        });
+}
+
+function resetTokens(userId) {
+    if (!confirm('<?= __('确定要重置该客户的令牌吗？此操作会强制该客户重新登录。') ?>')) {
+        return;
+    }
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    fetch(CUSTOMER_RESET_TOKEN_URL, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+            }
+        })
+        .catch(() => {
+            showPageMessage('error', '<?= __('操作失败') ?>');
+        });
+}
+
+function deleteCustomer(userId) {
+    if (!confirm('<?= __('确定要删除该客户吗？此操作不可撤销。') ?>')) {
+        return;
+    }
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    fetch(CUSTOMER_DELETE_URL, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+            }
+        })
+        .catch(() => {
+            showPageMessage('error', '<?= __('操作失败') ?>');
+        });
+}
+</script>
+
+</body>
+</html>
+

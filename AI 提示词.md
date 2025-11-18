@@ -267,6 +267,38 @@
 ### 主题和前端
 - 主题开发和继承
 - 静态资源管理
+- **模板加载规范（强制）**：
+  - **必须使用模板标签**：所有模板引用必须使用模板标签，禁止使用 `$this->fetch()` 或 `echo $this->fetch()` 方式加载模板
+  - **两种模板标签**：
+    - **`<w:template>`**：用于加载 `view/templates` 目录下的模板文件
+    - **`<w:theme:template>`**：用于加载 `view/theme` 目录下的主题文件
+  - **标签格式**：
+    - `<w:template>Module_Name::path/to/template.phtml</w:template>` - 路径相对于 `view/templates/`
+    - `<w:theme:template>Module_Name::path/to/theme.phtml</w:theme:template>` - 路径相对于 `view/theme/`（不需要包含 `theme/` 前缀）
+  - **使用场景**：
+    - **`<w:template>`**：适用于加载普通模板文件（`view/templates` 目录）
+    - **`<w:theme:template>`**：适用于加载主题组件、布局、部分文件（`view/theme` 目录）
+  - **禁止使用的方式**：
+    - ❌ `echo $this->fetch('Module::path/template.phtml')`
+    - ❌ `<?= $this->fetch('Module::path/template.phtml') ?>`
+    - ❌ `$this->fetch('Module::path/template.phtml')`
+  - **正确使用方式**：
+    - ✅ `<w:template>Weline_Frontend::templates/public/head.phtml</w:template>` - 加载普通模板
+    - ✅ `<w:theme:template>Weline_Theme::frontend/components/loading.phtml</w:theme:template>` - 加载主题组件（注意：路径不需要 `theme/` 前缀）
+    - ✅ `<w:theme:template>Weline_Theme::backend/components/loading.phtml</w:theme:template>` - 加载后台主题组件
+  - **示例代码**：
+    ```php
+    <!-- ✅ 正确：使用 w:template 加载普通模板 -->
+    <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
+    
+    <!-- ✅ 正确：使用 w:theme:template 加载主题组件 -->
+    <w:theme:template>Weline_Theme::frontend/components/loading.phtml</w:theme:template>
+    <w:theme:template>Weline_Theme::backend/components/loading.phtml</w:theme:template>
+    
+    <!-- ❌ 错误：使用 fetch() 方法 -->
+    <?php echo $this->fetch('Weline_Theme::theme/frontend/components/loading.phtml'); ?>
+    <?= $this->fetch('Weline_Frontend::templates/public/header.phtml') ?>
+    ```
 - **主题色系规范（重要）**：
   - **必须遵循主题色系**：所有开发必须使用 Weline Framework 主题规范的颜色变量，禁止自定义颜色值
   - **完整变量文档**：查看所有主题配色变量的完整列表和使用示例，请参考 `app/code/Weline/Admin/doc/主题配色变量文档.md`
@@ -522,7 +554,7 @@
   - **必须支持i18n**：所有模块必须支持国际化翻译，默认支持中英文（zh_Hans_CN 和 en_US）
   - **基础语言是中文**：所有提示信息、错误消息、成功消息、警告消息、按钮文本、标签文本、提示文本等用户可见文本的**基础语言必须是中文**
   - **模块翻译文件结构**：每个模块在 `i18n/` 目录下只需要创建 CSV 翻译文件，**不需要 register.php**：
-    - `i18n/zh_Hans_CN.csv` 或 `i18n/zh_CN.csv` - 中文翻译词条文件
+    - `i18n/zh_Hans_CN.csv` - 中文翻译词条文件（必须使用 `zh_Hans_CN.csv`，不能使用 `zh_CN.csv`）
     - `i18n/en_US.csv` - 英文翻译词条文件
   - **独立翻译包模块**：只有独立的翻译包模块（位于 `app/i18n/` 目录下）才需要 `register.php` 注册文件，使用 `Register::register(Register::I18N, __DIR__, '1.0.1', '简体中文翻译包')` 注册
   - **必须使用翻译函数**：所有用户界面文本必须使用 `__()` 翻译函数，禁止硬编码中文或英文文本
@@ -532,6 +564,99 @@
   - **参数传递格式**：单参数使用 `__('文本 %{1}', [$param])`，多参数使用 `__('文本 %{1} %{2}', [$param1, $param2])`，命名参数使用 `__('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count])`
   - **禁止硬编码文本**：禁止在代码中直接写 `'操作成功'`、`'操作失败'` 等文本，必须使用 `__('操作成功')`、`__('操作失败')` 等格式
   - **翻译文件格式**：CSV文件格式为 `"源文本","翻译文本"`，中文翻译文件中源文本和翻译文本相同，英文翻译文件中提供英文翻译
+  - **模板中的翻译标签（强制）**：
+    - **必须使用翻译标签**：模板文件（`.phtml`）中的所有用户可见文本必须使用 `<lang>` 标签或 `@lang()` 方式，禁止硬编码中文或英文文本
+    - **优先使用 `<lang>` 标签**：在 `.phtml` 模板中，**应优先使用 `<lang>` 标签**，而不是 `__()` PHP 函数
+    - **两种翻译标签格式**：
+      - **`<lang>` 标签**：`<lang>中文文本</lang>` - **推荐**，适用于 HTML 内容、属性值等
+      - **`@lang()` 函数**：`@lang('中文文本')` - 适用于需要简洁语法的场景
+      - **`__()` 函数**：`<?= __('中文文本') ?>` - **仅在 PHP 代码块中或特殊情况下使用**
+    - **使用场景**：
+      - **`<lang>` 标签（推荐）**：
+        - HTML 标签内的静态文本：`<button><lang>保存</lang></button>`
+        - HTML 属性值：`<input placeholder="<lang>请输入用户名</lang>" />`
+        - 带参数的文本：`<lang args="['name' => $name]">欢迎 %{name}</lang>`
+      - **`@lang()` 函数**：适用于需要简洁语法的场景
+      - **`__()` 函数**：仅在 PHP 代码块（`<?php ?>`）中或需要动态参数且无法使用 `<lang args="">` 时使用
+      - **页面内联 JavaScript（`.phtml` 模板中的 `<script>` 标签）**：直接使用 `@lang()` 标签
+        ```javascript
+        // ✅ 正确：页面内联 JavaScript 中直接使用 @lang()
+        throw new Error('@lang(请求失败)');
+        alert('@lang(操作成功)');
+        placeholder: '@lang(选择目标语言)',
+        ```
+      - **外部引入的 JavaScript 文件（`.js` 文件）**：在页面中定义翻译变量，通过全局变量传递
+        ```javascript
+        // 在 .phtml 模板中定义全局翻译变量
+        <script>
+        window.i18nTexts = {
+            save: '<?= __('保存') ?>',
+            delete: '<?= __('删除') ?>'
+        };
+        </script>
+        <script src="external.js"></script>
+        
+        // 在 external.js 中使用
+        alert(window.i18nTexts.save);
+        ```
+    - **禁止使用的方式**：
+      - ❌ 硬编码中文：`<button>保存</button>`
+      - ❌ 硬编码英文：`<button>Save</button>`
+      - ❌ 在 HTML 属性中硬编码：`title="删除"`、`placeholder="请输入名称"`
+      - ❌ 在 HTML 内容中使用 `<?= __('保存') ?>`：应使用 `<lang>保存</lang>`
+      - ❌ 在页面内联 JavaScript 中定义 i18nTexts 变量：应直接使用 `@lang()` 标签
+      - ❌ 在外部引入的 JS 文件中直接使用 `@lang()`：应使用全局翻译变量
+    - **正确使用方式**：
+      - ✅ `<lang>` 标签（推荐）：`<button><lang>保存</lang></button>`
+      - ✅ `<lang>` 标签在属性中：`<input placeholder="<lang>请输入用户名</lang>" />`
+      - ✅ `@lang()` 函数：`title="@lang('删除')"`
+      - ✅ 页面内联 JavaScript 中使用 `@lang()`：`throw new Error('@lang(请求失败)');`
+      - ✅ 外部 JS 文件中使用全局翻译变量：`alert(window.i18nTexts.save);`
+      - ✅ PHP 代码块中使用 `__()` 函数：`<?php echo __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]); ?>`
+    - **示例代码**：
+      ```php
+      <!-- ✅ 正确：优先使用 <lang> 标签 -->
+      <h1><lang>用户管理</lang></h1>
+      <button type="submit"><lang>保存</lang></button>
+      <span class="text-muted"><lang args="['count' => $count]">共 %{count} 条记录</lang></span>
+      
+      <!-- ✅ 正确：HTML 属性中使用 <lang> 标签 -->
+      <input type="text" placeholder="<lang>请输入用户名</lang>" />
+      <a href="#" title="<lang>删除</lang>"><lang>删除</lang></a>
+      
+      <!-- ✅ 正确：页面内联 JavaScript 中直接使用 @lang() -->
+      <script>
+      throw new Error('@lang(请求失败)');
+      alert('@lang(操作成功)');
+      $('#select').select2({
+          placeholder: '@lang(选择目标语言)'
+      });
+      </script>
+      
+      <!-- ✅ 正确：外部引入的 JS 文件需要使用全局翻译变量 -->
+      <script>
+      // 在页面中定义全局翻译变量供外部 JS 使用
+      window.i18nTexts = {
+          save: '<?= __('保存') ?>',
+          delete: '<?= __('删除') ?>'
+      };
+      </script>
+      <script src="external.js"></script>
+      
+      <!-- ✅ 正确：PHP 代码块中使用 __() 函数 -->
+      <?php
+      echo __('操作成功：%{message}', ['message' => $msg]);
+      ?>
+      
+      <!-- ⚠️ 可用但不推荐：在 HTML 中使用 __() 函数 -->
+      <div class="alert"><?= __('操作成功：%{message}', ['message' => $msg]) ?></div>
+      
+      <!-- ❌ 错误：硬编码文本 -->
+      <h1>用户管理</h1>
+      <button type="submit">保存</button>
+      <input type="text" placeholder="请输入用户名" />
+      <a href="#" title="删除">删除</a>
+      ```
   - **示例**：
     ```php
     // ✅ 正确：代码中使用中文作为基础语言

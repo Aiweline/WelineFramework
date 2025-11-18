@@ -128,11 +128,14 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
                     $modules_files[$name] = $app_need_file_or_dir;
                     continue;
                 }
-                //                $this->globFile($base_path.'')
-                //                $file_data = $this->scanDirTree($app_need_file_or_dir);
-                //                if (!empty($file_data)) {
-                //                    $modules_files[$name] = $file_data;
-                //                }
+                // 如果是目录，使用 scanDirTree 递归扫描
+                if (is_dir($app_need_file_or_dir)) {
+                    $this->__init();
+                    $file_data = $this->scanDirTree($app_need_file_or_dir);
+                    if (!empty($file_data)) {
+                        $modules_files[$name] = $file_data;
+                    }
+                }
             }
             if ($position === 'composer') {
                 # app模组代码没有才能添加
@@ -142,10 +145,14 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
                         $modules_files[$name] = $app_need_file_or_dir;
                         continue;
                     }
-                    /*$file_data = $this->scanDirTree($app_need_file_or_dir);
-                    if (!empty($file_data)) {
-                        $modules_files[$name] = $file_data;
-                    }*/
+                    // 如果是目录，使用 scanDirTree 递归扫描
+                    if (is_dir($app_need_file_or_dir)) {
+                        $this->__init();
+                        $file_data = $this->scanDirTree($app_need_file_or_dir);
+                        if (!empty($file_data)) {
+                            $modules_files[$name] = $file_data;
+                        }
+                    }
                 }
             }
             if ($position === 'framework') {
@@ -155,11 +162,14 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
                     $modules_files[$name] = $app_need_file_or_dir;
                     continue;
                 }
-
-                /*$file_data = $this->scanDirTree($app_need_file_or_dir);
-                if (!empty($file_data)) {
-                    $modules_files[$name] = $file_data;
-                }*/
+                // 如果是目录，使用 scanDirTree 递归扫描
+                if (is_dir($app_need_file_or_dir)) {
+                    $this->__init();
+                    $file_data = $this->scanDirTree($app_need_file_or_dir);
+                    if (!empty($file_data)) {
+                        $modules_files[$name] = $file_data;
+                    }
+                }
             }
             if ($position === 'system') {
                 # 系统模组代码没有才能添加
@@ -168,10 +178,14 @@ class Scanner extends \Weline\Framework\System\File\App\Scanner
                     $modules_files[$name] = $system_need_file_or_dir;
                     continue;
                 }
-                /*$file_data = $this->scanDirTree($system_need_file_or_dir);
-                if (!empty($file_data)) {
-                    $modules_files[$name] = $file_data;
-                }*/
+                // 如果是目录，使用 scanDirTree 递归扫描
+                if (is_dir($system_need_file_or_dir)) {
+                    $this->__init();
+                    $file_data = $this->scanDirTree($system_need_file_or_dir);
+                    if (!empty($file_data)) {
+                        $modules_files[$name] = $file_data;
+                    }
+                }
             }
         }
 

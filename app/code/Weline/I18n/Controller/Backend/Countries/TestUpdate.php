@@ -65,16 +65,16 @@ class TestUpdate extends BaseController
             $stats['test_countries'] = $localesByCountry;
             
             // 5. 测试获取一些区域名称
-            $testLocales = ['en_US', 'zh_CN', 'ja_JP', 'de_DE', 'fr_FR'];
+            $testLocales = ['en_US', 'zh_Hans_CN', 'ja_JP', 'de_DE', 'fr_FR'];
             $localeNames = [];
             
             foreach ($testLocales as $localeCode) {
                 try {
                     $name_en = $i18n->getLocaleName($localeCode, 'en');
-                    $name_zh = $i18n->getLocaleName($localeCode, 'zh_CN');
+                    $name_zh = $i18n->getLocaleName($localeCode, 'zh_Hans_CN');
                     $localeNames[$localeCode] = [
                         'en' => $name_en,
-                        'zh_CN' => $name_zh
+                        'zh_Hans_CN' => $name_zh
                     ];
                 } catch (\Exception $e) {
                     $localeNames[$localeCode] = 'Error: ' . $e->getMessage();

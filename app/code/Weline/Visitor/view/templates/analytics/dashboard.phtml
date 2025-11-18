@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素数据大屏展示</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: auto 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: 100vh;
+        }
+        .header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .header .time {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .stat-card h3 {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-card .change {
+            font-size: 14px;
+        }
+        .stat-card .change.positive {
+            color: #4ade80;
+        }
+        .stat-card .change.negative {
+            color: #f87171;
+        }
+        .chart-container {
+            grid-column: span 2;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .chart-container h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: calc(100% - 40px);
+        }
+        .controls {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+        }
+        .controls select,
+        .controls input {
+            padding: 8px 15px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .controls select option {
+            background: #1a1e37;
+            color: #fff;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 18px;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>像素数据实时大屏</h1>
+            <div class="time" id="current-time"></div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>当前价值</h3>
+            <div class="value" id="current-value">0</div>
+            <div class="change" id="current-change">--</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>当前事件数</h3>
+            <div class="value" id="current-events">0</div>
+            <div class="change" id="events-change">--</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>变化百分比</h3>
+            <div class="value" id="change-percentage">0%</div>
+            <div class="change" id="change-trend">--</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>数据更新时间</h3>
+            <div class="value" style="font-size: 18px;" id="update-time">--</div>
+            <div class="change pulse" id="update-status">实时更新中</div>
+        </div>
+        
+        <div class="chart-container">
+            <h3>价值趋势图</h3>
+            <div class="chart-wrapper">
+                <canvas id="value-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3>事件趋势图</h3>
+            <div class="chart-wrapper">
+                <canvas id="events-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <label>站点ID:</label>
+            <input type="number" id="website-id" value="0" min="0">
+            <label>时间间隔:</label>
+            <select id="interval">
+                <option value="10">10分钟</option>
+                <option value="30">30分钟</option>
+            </select>
+            <label>时间范围:</label>
+            <select id="hours">
+                <option value="1">最近1小时</option>
+                <option value="6">最近6小时</option>
+                <option value="12">最近12小时</option>
+                <option value="24" selected>最近24小时</option>
+                <option value="48">最近48小时</option>
+            </select>
+            <button onclick="refreshData()" style="padding: 8px 20px; background: #667eea; border: none; border-radius: 5px; color: #fff; cursor: pointer;">刷新</button>
+        </div>
+    </div>
+
+    <script>
+        let valueChart = null;
+        let eventsChart = null;
+        let updateInterval = null;
+
+        // 获取基础URL
+        function getBaseUrl() {
+            const protocol = window.location.protocol;
+            const host = window.location.host;
+            const pathname = window.location.pathname;
+            const pathParts = pathname.split('/').filter(p => p);
+            let basePath = '';
+            for (let i = 0; i < pathParts.length; i++) {
+                if (pathParts[i] === 'visitor') {
+                    basePath = '/' + pathParts.slice(0, i).join('/');
+                    break;
+                }
+            }
+            if (!basePath) {
+                basePath = pathname.substring(0, pathname.indexOf('/visitor') || pathname.length);
+            }
+            return protocol + '//' + host + basePath;
+        }
+
+        const baseUrl = getBaseUrl();
+        const apiBase = baseUrl + '/visitor/rest/v1/analytics';
+
+        // 初始化图表
+        function initCharts() {
+            const valueCtx = document.getElementById('value-chart').getContext('2d');
+            valueChart = new Chart(valueCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '价值',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+
+            const eventsCtx = document.getElementById('events-chart').getContext('2d');
+            eventsChart = new Chart(eventsCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '事件数',
+                        data: [],
+                        borderColor: '#764ba2',
+                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#fff' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#fff' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新图表数据
+        function updateCharts(data) {
+            const labels = data.data_points.map(p => {
+                const date = new Date(p.timestamp);
+                return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            });
+            const values = data.data_points.map(p => p.value);
+            const events = data.data_points.map(p => p.events);
+
+            valueChart.data.labels = labels;
+            valueChart.data.datasets[0].data = values;
+            valueChart.update('none');
+
+            eventsChart.data.labels = labels;
+            eventsChart.data.datasets[0].data = events;
+            eventsChart.update('none');
+        }
+
+        // 更新统计数据
+        function updateStats(data) {
+            const current = data.current_period;
+            if (current) {
+                document.getElementById('current-value').textContent = current.value.toLocaleString();
+                document.getElementById('current-events').textContent = current.events.toLocaleString();
+            }
+
+            const changePercent = data.change_percentage || 0;
+            const changeEl = document.getElementById('change-percentage');
+            changeEl.textContent = (changePercent >= 0 ? '+' : '') + changePercent.toFixed(2) + '%';
+            changeEl.className = 'value ' + (changePercent >= 0 ? 'positive' : 'negative');
+
+            document.getElementById('current-change').textContent = '相比上一时段';
+            document.getElementById('change-trend').textContent = changePercent >= 0 ? '↑ 上升' : '↓ 下降';
+            document.getElementById('update-time').textContent = new Date().toLocaleTimeString('zh-CN');
+        }
+
+        // 获取数据
+        async function fetchData() {
+            const websiteId = document.getElementById('website-id').value;
+            const interval = document.getElementById('interval').value;
+            const hours = document.getElementById('hours').value;
+
+            const params = new URLSearchParams({
+                interval: interval,
+                hours: hours
+            });
+            if (websiteId) {
+                params.append('websiteId', websiteId);
+            }
+
+            try {
+                const response = await fetch(apiBase + '/dashboard?' + params);
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    updateCharts(result.data);
+                    updateStats(result.data);
+                }
+            } catch (error) {
+                console.error('获取数据失败:', error);
+            }
+        }
+
+        // 刷新数据
+        function refreshData() {
+            fetchData();
+        }
+
+        // 更新时间
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
+        }
+
+        // 初始化
+        window.onload = function() {
+            initCharts();
+            updateTime();
+            setInterval(updateTime, 1000);
+            fetchData();
+            // 每30秒自动刷新
+            updateInterval = setInterval(fetchData, 30000);
+        };
+
+        // 页面卸载时清理
+        window.onbeforeunload = function() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        };
+    </script>
+</body>
+</html>
+

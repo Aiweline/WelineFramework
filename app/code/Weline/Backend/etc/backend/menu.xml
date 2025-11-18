@@ -5,46 +5,66 @@
     <!--顶层：面板-->
     <add source="Weline_Backend::dashboard" name="system_dashboard" title="面板" action="admin" parent=""
          icon="mdi mdi-monitor-dashboard" order="0"/>
+    
+    <!--面板子菜单-->
+    <add source="Weline_Backend::pixel_dashboard" name="pixel_dashboard" title="像素统计面板" action=""
+         parent="Weline_Backend::dashboard" icon="mdi mdi-chart-line" order="2"/>
+    <add source="Weline_Backend::data_statistics" name="data_statistics" title="数据统计" action="*/backend/statistics"
+         parent="Weline_Backend::dashboard" icon="mdi mdi-chart-bar" order="3"/>
 
-    <!--顶层：系统菜单-->
-    <add source="Weline_Backend::system_menu" name="system_menu" title="系统" action="" parent="" icon="ri-windows-line"
-         order="10000"/>
+    <!--顶层：业务模块-->
+    <add source="Weline_Backend::business_module" name="business_module" title="业务模块" action="" parent=""
+         icon="mdi mdi-briefcase" order="10000"/>
+    
+    <!--顶层：系统管理-->
+    <add source="Weline_Backend::system_menu" name="system_menu" title="系统管理" action="" parent="" icon="ri-windows-line"
+         order="20000"/>
+
+    <!--顶层：系统设置-->
+    <add source="Weline_Backend::system_settings" name="system_settings" title="系统设置" action="" parent=""
+         icon="mdi mdi-cog" order="25000"/>
+    
+    <!--系统设置分组菜单-->
+    <add source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/backend/settings/basic"
+         parent="Weline_Backend::system_settings" icon="mdi mdi-settings" order="10"/>
+    <add source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/backend/settings/email"
+         parent="Weline_Backend::system_settings" icon="mdi mdi-email" order="20"/>
+    <add source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage"
+         parent="Weline_Backend::system_settings" icon="mdi mdi-folder" order="30"/>
+    <!--顶层：系统服务-->
+    <add source="Weline_Backend::system_service" name="system_service" title="系统服务" action="" parent=""
+         icon="mdi mdi-server" order="30000"/>
+    <add source="Weline_Backend::system_maintenance" name="system_maintenance" title="系统维护" action="" parent="Weline_Backend::system_service"
+         icon="mdi mdi-tools" order="30500"/>
+    <add source="Weline_Backend::system_maintenance_mode" name="system_maintenance_mode" title="系统维护模式" action="*/backend/maintenance" parent="Weline_Backend::system_maintenance"
+         icon="mdi mdi-tools" order="10"/>
+    <add source="Weline_Backend::system_backup" name="system_backup" title="系统备份" action="*/backend/backup" parent="Weline_Backend::system_maintenance"
+         icon="mdi mdi-backup-restore" order="20"/>
+    <add source="Weline_Backend::monitor_log" name="monitor_log" title="监控与日志" action="" parent="Weline_Backend::system_service"
+         icon="mdi mdi-monitor-dashboard" order="30600"/>
+    <add source="Weline_Backend::system_monitor" name="system_monitor" title="系统监控" action="*/backend/monitor" parent="Weline_Backend::monitor_log"
+         icon="mdi mdi-monitor-dashboard" order="10"/>
+    <add source="Weline_Backend::access_log" name="access_log" title="访问日志" action="*/backend/access-log" parent="Weline_Backend::monitor_log"
+         icon="mdi mdi-file-document-outline" order="20"/>
 
     <!--顶层：模组-->
     <add source="Weline_Backend::system_module" name="system_module" title="模组" action="" parent=""
-         icon="ri-apps-2-line me-2" order="20000"/>
+         icon="ri-apps-2-line me-2" order="80000"/>
     
-    <!--DataTable模块菜单-->
-    <add source="Weline_DataTable::datatable_module" name="datatable_module" title="DataTable" action=""
-         parent="Weline_Backend::system_module" icon="mdi mdi-table" order="20001"/>
-    <add source="Weline_DataTable::datatable_test_index" name="datatable_test_index" title="测试首页" 
-         action="datatable/backend/test/index" parent="Weline_DataTable::datatable_module" icon="mdi mdi-home" order="20002"/>
-    <add source="Weline_DataTable::datatable_test_comprehensive" name="datatable_test_comprehensive" title="综合测试" 
-         action="datatable/backend/test/comprehensive/index" parent="Weline_DataTable::datatable_module" icon="mdi mdi-test-tube" order="20003"/>
-    <add source="Weline_DataTable::datatable_test_tag" name="datatable_test_tag" title="标签测试" 
-         action="datatable/backend/test/tag-test/index" parent="Weline_DataTable::datatable_module" icon="mdi mdi-tag" order="20004"/>
-    <add source="Weline_DataTable::datatable_doc" name="datatable_doc" title="文档说明" action=""
-         parent="Weline_DataTable::datatable_module" icon="mdi mdi-book-open-variant" order="20005"/>
-    <add source="Weline_DataTable::datatable_doc_quickstart" name="datatable_doc_quickstart" title="快速入门" 
-         action="datatable/backend/test/index/doc" parent="Weline_DataTable::datatable_doc" icon="mdi mdi-speedometer" order="20006"/>
-    <add source="Weline_DataTable::datatable_doc_guide" name="datatable_doc_guide" title="使用指南" 
-         action="datatable/backend/test/index/doc" parent="Weline_DataTable::datatable_doc" icon="mdi mdi-book-open-page-variant" order="20007"/>
-
-    <!--顶层：系统配置-->
-    <add source="Weline_Backend::system_configuration" name="system_configuration" title="系统配置" action="" parent=""
-         icon="dripicons-gear" order="80000"/>
-    <add source="Weline_Backend::user_config" name="system_configuration" title="用户配置" action=""
-         parent="Weline_Backend::system_configuration"
-         icon="dripicons-gear" order="80001"/>
-    <add source="Weline_Backend::user_config" name="system_configuration" title="后台配置" action=""
-         parent="Weline_Backend::system_configuration"
-         icon="dripicons-gear" order="80001"/>
-
-    <!--顶层：开发配置-->
-    <add source="Weline_Backend::system_dev_configuration" name="system_dev_configuration" title="开发配置" action=""
+    <!--顶层：开发工具-->
+    <add source="Weline_Backend::system_dev_configuration" name="system_dev_configuration" title="开发工具" action=""
          parent=""
          icon="ri-terminal-box-line" order="90000"/>
-    <!--开发工具-->
+    
+    <!--开发工具分组菜单-->
+    <add source="Weline_Backend::dev_workspace" name="dev_workspace" title="开发工作台" action="" parent="Weline_Backend::system_dev_configuration"
+         icon="mdi mdi-code-tags" order="90100"/>
+    <add source="Weline_Backend::template_management" name="template_management" title="模板管理" action="" parent="Weline_Backend::system_dev_configuration"
+         icon="mdi mdi-view-module" order="90200"/>
+    <add source="Weline_Backend::debug_tools" name="debug_tools" title="调试工具" action="" parent="Weline_Backend::system_dev_configuration"
+         icon="mdi mdi-bug" order="90300"/>
+    
+    <!--开发工具子菜单-->
     <add source="Weline_Backend::origin_template" name="origin-template" title="后端模板库" action=""
-         parent="Weline_Backend::system_dev_configuration" icon="mdi mdi-view-module" order="20002"/>
+         parent="Weline_Backend::template_management" icon="mdi mdi-view-module" order="10"/>
 </menus>

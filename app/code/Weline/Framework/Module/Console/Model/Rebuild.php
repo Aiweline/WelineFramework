@@ -88,9 +88,46 @@ class Rebuild extends CommandAbstract
         $moduleName = $args['module'] ?? $args['m'] ?? '';
         // 支持 --name/-n 参数
         $modelName = $args['name'] ?? $args['n'] ?? '';
+        
+        // 确保 moduleName 是字符串（如果传入的是数组，取第一个元素）
+        if (is_array($moduleName)) {
+            $moduleName = reset($moduleName) ?: '';
+        }
+        // 确保 modelName 是字符串（如果传入的是数组，取第一个元素）
+        if (is_array($modelName)) {
+            $modelName = reset($modelName) ?: '';
+        }
+        
+        // 从位置参数中提取模块名和模型名
+        $positionalArgs = [];
+        if (!empty($data)) {
+            foreach ($data as $value) {
+                if (is_string($value) && !empty($value)) {
+                    $positionalArgs[] = $value;
+                } elseif (is_array($value)) {
+                    foreach ($value as $v) {
+                        if (is_string($v) && !empty($v)) {
+                            $positionalArgs[] = $v;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果模块名为空，尝试从位置参数获取
+        if (empty($moduleName) && !empty($positionalArgs)) {
+            $moduleName = $positionalArgs[0];
+            // 如果有第二个参数，作为模型名
+            if (isset($positionalArgs[1])) {
+                $modelName = $positionalArgs[1];
+            }
+        } elseif (!empty($moduleName) && empty($modelName) && !empty($positionalArgs)) {
+            // 如果模块名已指定但模型名为空，从位置参数获取模型名
+            $modelName = $positionalArgs[0];
+        }
 
         // 如果没有指定模块名，显示帮助
-        if (empty($moduleName)) {
+        if (empty($moduleName) || !is_string($moduleName)) {
             $this->printer->error(__('错误：必须指定模块名！'));
             $this->printer->note(__('使用方法：php bin/w model:rebuild -m <模块名> -n <模型名>'));
             $this->printer->note(__('示例：php bin/w model:rebuild -m GuoLaiRen_PageBuilder -n Page'));
@@ -100,8 +137,8 @@ class Rebuild extends CommandAbstract
         // 获取所有模块
         $modules = $this->moduleHandle->getModules();
         
-        // 查找指定的模块
-        if (!isset($modules[$moduleName])) {
+        // 查找指定的模块（确保 $moduleName 是字符串且 $modules 是数组）
+        if (!is_array($modules) || !is_string($moduleName) || !isset($modules[$moduleName])) {
             $this->printer->error(__('错误：模块 %{1} 不存在！', [$moduleName]));
             $this->showAvailableModules($modules);
             return;

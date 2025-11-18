@@ -1,0 +1,60 @@
+<?php
+/**
+ * 组件：Table
+ * 
+ * 表格组件，用于展示结构化数据
+ * 字段
+ * @info description 描述：表格组件，用于展示结构化数据
+ * @info name 名称：Table表格组件
+ * @param headers 表头数组（必填）
+ * @param rows 数据行数组（必填）
+ * @param class 额外CSS类
+ * @param id 元素ID
+ * @param striped 是否条纹样式
+ * @param bordered 是否带边框
+ * @param hover 是否悬停效果
+ */
+$headers = $this->getData('headers') ?? [];
+$rows = $this->getData('rows') ?? [];
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? '';
+$striped = $this->getData('striped') ?? false;
+$bordered = $this->getData('bordered') ?? false;
+$hover = $this->getData('hover') ?? false;
+
+// 构建CSS类
+$tableClass = 'table';
+if ($striped) {
+    $tableClass .= ' table-striped';
+}
+if ($bordered) {
+    $tableClass .= ' table-bordered';
+}
+if ($hover) {
+    $tableClass .= ' table-hover';
+}
+if ($class) {
+    $tableClass .= ' ' . htmlspecialchars($class);
+}
+?>
+<table class="<?= $tableClass ?>" <?= $id ? 'id="' . htmlspecialchars($id) . '"' : '' ?>>
+    <?php if (!empty($headers)): ?>
+        <thead>
+            <tr>
+                <?php foreach ($headers as $header): ?>
+                    <th><?= htmlspecialchars($header) ?></th>
+                <?php endforeach; ?>
+            </tr>
+        </thead>
+    <?php endif; ?>
+    <tbody>
+        <?php foreach ($rows as $row): ?>
+            <tr>
+                <?php foreach ($row as $cell): ?>
+                    <td><?= is_array($cell) ? $cell['content'] : htmlspecialchars($cell) ?></td>
+                <?php endforeach; ?>
+            </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+

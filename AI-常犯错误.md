@@ -2214,6 +2214,168 @@ class YourController extends BaseController
 
 ---
 
+## OffCanvas action-params 参数格式错误（扣分记录）
+
+### 错误示例
+- ❌ **错误**：在 OffCanvas 的 `action-params` 属性中使用 JSON 格式：`action-params='{"id":<?= $website['website_id'] ?>}'`
+- ❌ **错误**：没有使用 `vars` 属性配合 `action-params`
+- ❌ **错误**：直接在 `action-params` 中使用 PHP 变量插值
+
+### 正确做法
+- ✅ **必须使用**：`action-params` 必须使用 `{paramName:varName.fieldName}` 格式
+- ✅ **必须配合**：必须使用 `vars` 属性指定变量名，例如 `vars="website"`
+- ✅ **格式示例**：
+  ```html
+  <!-- ✅ 正确：使用 vars 和 action-params 的正确格式 -->
+  <block class='Weline\Component\Block\OffCanvas'
+         action='*/admin/website/edit'
+         vars='website'
+         action-params='{id:website.website_id}'
+         ... />
+  
+  <!-- ❌ 错误：使用 JSON 格式 -->
+  <block class='Weline\Component\Block\OffCanvas'
+         action='*/admin/website/edit'
+         action-params='{"id":<?= $website['website_id'] ?>}'
+         ... />
+  ```
+
+### 格式说明
+- **vars 属性**：指定要传递的变量名，多个变量用逗号分隔，例如 `vars="website"` 或 `vars="log,lang"`
+- **action-params 格式**：`{paramName1:varName1.field1,paramName2:varName2.field2}`
+  - `paramName`：URL 参数名
+  - `varName`：vars 中指定的变量名
+  - `field`：变量的字段名（支持点号访问嵌套字段）
+- **示例**：
+  - 单参数：`action-params='{id:website.website_id}'`
+  - 多参数：`action-params='{code:demo.code,lang:lang.code}'`
+
+### 扣分记录
+- **时间**：2025年（Websites模块编辑网站功能）
+- **错误**：在 `table.phtml` 中使用错误的 JSON 格式：`action-params='{"id":<?= $website['website_id'] ?>}'`，没有使用 `vars` 属性
+- **影响**：参数无法正确传递，导致编辑功能无法正常工作
+- **修复**：已更正为正确的格式：`vars='website'` 和 `action-params='{id:website.website_id}'`
+
+### 要点
+- **绝对禁止**：在 `action-params` 中使用 JSON 格式或 PHP 变量插值
+- **必须使用**：`vars` 属性配合 `action-params` 的正确格式
+- **格式要求**：`{paramName:varName.fieldName}` 格式，不能使用 JSON 格式
+- **变量传递**：`vars` 中的变量名必须在模板作用域中可访问（包括 foreach 循环中的变量）
+
+---
+
+## 模块 i18n 翻译文件目录位置错误（扣分记录）
+
+### 错误示例
+- ❌ **错误**：将模块的 i18n 翻译文件放在 `app/i18n/Weline_ModuleName/` 目录下
+- ❌ **错误**：为模块的 i18n 文件创建 `register.php` 注册文件
+- ❌ **错误**：认为所有 i18n 文件都需要 register.php
+
+### 正确做法
+- ✅ **模块翻译文件位置**：模块的 i18n 翻译文件必须放在模块目录下的 `i18n/` 目录：
+  ```
+  app/code/Weline/ModuleName/
+  └── i18n/
+      ├── zh_Hans_CN.csv    # 中文翻译（必须使用 zh_Hans_CN.csv，不能使用 zh_CN.csv）
+      └── en_US.csv          # 英文翻译
+  ```
+- ✅ **只需要 CSV 文件**：模块的 i18n 目录下只需要 CSV 翻译文件，**不需要 register.php**
+- ✅ **独立翻译包才需要 register.php**：只有独立的翻译包模块（位于 `app/i18n/` 目录下）才需要 `register.php` 注册文件
+
+### 目录结构说明
+
+#### 模块翻译文件（正确位置）
+```
+app/code/Weline/Currency/
+└── i18n/
+    ├── zh_Hans_CN.csv    # 只需要 CSV 文件
+    └── en_US.csv          # 不需要 register.php
+```
+
+#### 独立翻译包（需要 register.php）
+```
+app/i18n/
+└── Weline/                    # 独立翻译包模块
+    ├── zh_Hans_CN/
+    │   ├── register.php      # 需要注册文件
+    │   └── zh_Hans_CN.csv
+    └── en_US/
+        ├── register.php      # 需要注册文件
+        └── en_US.csv
+```
+
+### 扣分记录
+- **时间**：2025年（Currency模块翻译文件创建）
+- **错误**：将 Currency 模块的翻译文件错误地放在 `app/i18n/Weline_Currency/` 目录，并创建了 register.php 文件
+- **影响**：翻译文件位置错误，框架无法正确加载模块翻译
+- **修复**：应将翻译文件放在 `app/code/Weline/Currency/i18n/` 目录下，删除 register.php 文件
+
+### 要点
+- **模块翻译文件**：必须放在 `app/code/Weline/ModuleName/i18n/` 目录
+- **只需要 CSV**：模块的 i18n 目录下只需要 CSV 文件，不需要 register.php
+- **独立翻译包**：只有 `app/i18n/` 目录下的独立翻译包才需要 register.php
+- **文件格式**：CSV 格式为 `"源文本","翻译文本"` 或 `源文本, 翻译：翻译文本`
+- **文件名规范**：中文翻译文件**必须使用 `zh_Hans_CN.csv`，禁止使用 `zh_CN.csv`**。所有模块的翻译文件都已统一重命名为 `zh_Hans_CN.csv`，以保持一致性
+
+---
+
+## 模板中 JavaScript 翻译使用错误
+
+### 错误示例
+```javascript
+// ❌ 错误：在页面内联 JavaScript 中定义 i18nTexts 变量
+<script>
+const i18nTexts = {
+    save: '<?= __('保存') ?>',
+    delete: '<?= __('删除') ?>'
+};
+throw new Error(i18nTexts.requestFailed);
+</script>
+```
+
+### 正确写法
+
+**页面内联 JavaScript（`.phtml` 模板中的 `<script>` 标签）**：直接使用 `@lang()` 标签
+
+```javascript
+// ✅ 正确：页面内联 JavaScript 中直接使用 @lang()
+<script>
+throw new Error('@lang(请求失败)');
+alert('@lang(操作成功)');
+$('#select').select2({
+    placeholder: '@lang(选择目标语言)'
+});
+</script>
+```
+
+**外部引入的 JavaScript 文件（`.js` 文件）**：在页面中定义全局翻译变量
+
+```html
+<!-- ✅ 正确：在 .phtml 模板中定义全局翻译变量供外部 JS 使用 -->
+<script>
+window.i18nTexts = {
+    save: '<?= __('保存') ?>',
+    delete: '<?= __('删除') ?>',
+    requestFailed: '<?= __('请求失败') ?>'
+};
+</script>
+<script src="external.js"></script>
+```
+
+```javascript
+// external.js 中使用全局翻译变量
+alert(window.i18nTexts.save);
+throw new Error(window.i18nTexts.requestFailed);
+```
+
+### 要点
+- **页面内联 JavaScript**：在 `.phtml` 模板的 `<script>` 标签中，**必须直接使用 `@lang()` 标签**，不要定义 i18nTexts 变量
+- **外部 JS 文件**：只有在外部引入的 `.js` 文件中才需要使用全局翻译变量（`window.i18nTexts`）
+- **原因**：页面内联 JavaScript 会被模板引擎处理，可以直接使用 `@lang()` 标签；外部 JS 文件不会被模板引擎处理，需要通过全局变量传递翻译文本
+- **HTML 属性中的 JavaScript**：同样直接使用 `@lang()` 标签，如 `onclick="alert('@lang(确认删除)')"`
+
+---
+
 *最后更新：2025-01-XX*
 *文档维护：AI 代码审查助手*
 *PHP 版本要求：PHP 8.2+*

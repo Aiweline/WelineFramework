@@ -1,0 +1,487 @@
+<?php
+/**
+ * Sticker 列表表格视图
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$stickers = $this->getData('stickers') ?: [];
+$total = (int)$this->getData('total');
+?>
+<div class="list-header">
+    <div class="list-info">
+        <span>共找到 <strong><?= $total ?></strong> 个Sticker</span>
+    </div>
+    <div class="list-actions">
+        <a href="<?= $this->getBackendUrl('*/backend/sticker/refresh') ?>" class="btn btn-sm btn-warning">
+            <i class="mdi mdi-refresh"></i> 刷新注册表
+        </a>
+    </div>
+</div>
+
+<?php if (empty($stickers)): ?>
+    <div class="empty-state">
+        <i class="mdi mdi-sticker-outline"></i>
+        <h3>暂无Sticker信息</h3>
+        <p>系统中还没有定义任何Sticker。请检查模块的extends目录。</p>
+    </div>
+<?php else: ?>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        <?php
+                        $currentSort = $this->getData('sort_by') ?? 'target_module';
+                        $currentOrder = $this->getData('sort_order') ?? 'asc';
+                        $newOrder = ($currentSort === 'target_module' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'search' => $this->getData('search') ?? '',
+                            'search_type' => $this->getData('search_type') ?? 'all',
+                            'target_module' => $this->getData('target_module') ?? '',
+                            'source_module' => $this->getData('source_module') ?? '',
+                            'sort' => 'target_module',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="target_module" data-order="<?= $newOrder ?>">
+                            目标模块
+                            <?php if ($currentSort === 'target_module'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>目标文件</th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'source_module' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'search' => $this->getData('search') ?? '',
+                            'search_type' => $this->getData('search_type') ?? 'all',
+                            'target_module' => $this->getData('target_module') ?? '',
+                            'source_module' => $this->getData('source_module') ?? '',
+                            'sort' => 'source_module',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="source_module" data-order="<?= $newOrder ?>">
+                            来源模块
+                            <?php if ($currentSort === 'source_module'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>Sticker文件</th>
+                    <th>规则数量</th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'is_active' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'search' => $this->getData('search') ?? '',
+                            'search_type' => $this->getData('search_type') ?? 'all',
+                            'target_module' => $this->getData('target_module') ?? '',
+                            'source_module' => $this->getData('source_module') ?? '',
+                            'sort' => 'is_active',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="is_active" data-order="<?= $newOrder ?>">
+                            状态
+                            <?php if ($currentSort === 'is_active'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'has_conflict' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'search' => $this->getData('search') ?? '',
+                            'search_type' => $this->getData('search_type') ?? 'all',
+                            'target_module' => $this->getData('target_module') ?? '',
+                            'source_module' => $this->getData('source_module') ?? '',
+                            'sort' => 'has_conflict',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="has_conflict" data-order="<?= $newOrder ?>">
+                            冲突
+                            <?php if ($currentSort === 'has_conflict'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($stickers as $sticker): ?>
+                    <tr>
+                        <td>
+                            <div class="sticker-module">
+                                <span class="badge badge-info"><?= htmlspecialchars($sticker['target_module']) ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-file">
+                                <code class="text-primary"><?= htmlspecialchars($sticker['target_file']) ?></code>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-module">
+                                <span class="badge badge-success"><?= htmlspecialchars($sticker['source_module']) ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-file-path">
+                                <code class="text-secondary"><?= htmlspecialchars($sticker['sticker_relative_path']) ?></code>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-actions-count">
+                                <span class="badge badge-warning"><?= $sticker['actions_count'] ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-status">
+                                <?php if ($sticker['is_active']): ?>
+                                    <span class="badge badge-success" title="Sticker已生效">
+                                        <i class="mdi mdi-check-circle"></i> 生效
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge badge-danger" title="<?= htmlspecialchars($sticker['error_message']) ?>">
+                                        <i class="mdi mdi-close-circle"></i> 未生效
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sticker-conflict">
+                                <?php if ($sticker['has_conflict']): ?>
+                                    <span class="badge badge-danger" title="存在冲突">
+                                        <i class="mdi mdi-alert-circle"></i> 有冲突
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge badge-success" title="无冲突">
+                                        <i class="mdi mdi-check-circle"></i> 无冲突
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-primary btn-view-detail" 
+                                        data-target-module="<?= htmlspecialchars($sticker['target_module']) ?>"
+                                        data-target-file="<?= htmlspecialchars($sticker['target_file']) ?>"
+                                        data-source-module="<?= htmlspecialchars($sticker['source_module']) ?>"
+                                        title="查看详情">
+                                    <i class="mdi mdi-eye"></i> 详情
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>
+
+<style>
+/* Sticker列表样式 */
+.sticker-module {
+    margin-bottom: 4px;
+}
+
+.sticker-file {
+    margin-bottom: 4px;
+}
+
+.sticker-file-path {
+    margin-bottom: 4px;
+}
+
+.sticker-actions-count {
+    margin-bottom: 4px;
+}
+
+.sticker-status {
+    margin-bottom: 4px;
+}
+
+.sticker-conflict {
+    margin-bottom: 4px;
+}
+
+/* Badge 样式 */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.badge-primary { 
+    background-color: #0bb197; 
+    color: white; 
+}
+
+.badge-info { 
+    background-color: #4aa3ff; 
+    color: white; 
+}
+
+.badge-success { 
+    background-color: #0ac074; 
+    color: white; 
+}
+
+.badge-warning { 
+    background-color: #fcb92c; 
+    color: #212529; 
+}
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
+
+.badge-danger { 
+    background-color: #ff3d60; 
+    color: white; 
+}
+
+.badge-secondary { 
+    background-color: #74788d; 
+    color: white; 
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.btn-outline-primary {
+    color: #0bb197;
+    border-color: #0bb197;
+    background: transparent;
+}
+
+.btn-outline-primary:hover {
+    background: #0bb197;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+}
+
+.btn-warning {
+    background: #fcb92c;
+    color: #212529;
+    border: 1px solid #fcb92c;
+}
+
+[data-theme-mode="dark"] .btn-warning {
+    color: #e9ecef;
+}
+
+.btn-warning:hover {
+    background: #fcb92c;
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+}
+
+/* 表格样式 */
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .table {
+    color: #e9ecef;
+}
+
+.table th,
+.table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eff2f7;
+    vertical-align: middle;
+}
+
+[data-theme-mode="dark"] .table th,
+[data-theme-mode="dark"] .table td {
+    border-bottom-color: #2d3448;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #212529;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+[data-theme-mode="dark"] .table th {
+    background-color: #1e2125;
+    color: #e9ecef;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease-in-out;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+[data-theme-mode="dark"] .table tbody tr:hover {
+    background-color: #1e2125;
+}
+
+/* 代码样式 */
+code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #0bb197;
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+/* 列表头部样式 */
+.list-header {
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eff2f7;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+[data-theme-mode="dark"] .list-header {
+    background: #1e2125;
+    border-bottom-color: #2d3448;
+}
+
+.list-info {
+    font-size: 14px;
+    color: #74788d;
+    line-height: 1.5;
+}
+
+[data-theme-mode="dark"] .list-info {
+    color: #8590a5;
+}
+
+.list-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.list-info strong {
+    color: #212529;
+    font-weight: 600;
+}
+
+[data-theme-mode="dark"] .list-info strong {
+    color: #e9ecef;
+}
+
+/* 排序链接样式 */
+.sort-link {
+    color: #212529;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .sort-link {
+    color: #e9ecef;
+}
+
+.sort-link:hover {
+    color: #0bb197;
+    text-decoration: none;
+}
+
+.sort-link i {
+    font-size: 14px;
+    color: #0bb197;
+}
+
+/* 空状态样式 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .empty-state {
+    color: #8590a5;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #eff2f7;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+[data-theme-mode="dark"] .empty-state i {
+    color: #2d3448;
+}
+
+.empty-state h3 {
+    color: #212529;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+[data-theme-mode="dark"] .empty-state h3 {
+    color: #e9ecef;
+}
+
+.empty-state p {
+    color: #74788d;
+    margin: 0;
+    line-height: 1.6;
+}
+
+[data-theme-mode="dark"] .empty-state p {
+    color: #8590a5;
+}
+</style>

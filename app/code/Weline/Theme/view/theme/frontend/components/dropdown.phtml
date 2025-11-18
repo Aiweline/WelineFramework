@@ -1,0 +1,58 @@
+<?php
+/**
+ * 组件：Dropdown
+ * 
+ * 下拉菜单组件，用于显示选项列表
+ * 字段
+ * @info description 描述：下拉菜单组件，用于显示选项列表
+ * @info name 名称：Dropdown下拉菜单组件
+ * @param id 下拉菜单ID（必填）
+ * @param trigger 触发器内容（HTML字符串，必填）
+ * @param items 菜单项数组（必填）
+ * @param position 位置 (left/right)
+ * @param class 额外CSS类
+ */
+$id = $this->getData('id') ?? '';
+$trigger = $this->getData('trigger') ?? '';
+$items = $this->getData('items') ?? [];
+$position = $this->getData('position') ?? 'left';
+$class = $this->getData('class') ?? '';
+
+// 构建CSS类
+$dropdownClass = 'dropdown';
+if ($position === 'right') {
+    $dropdownClass .= ' dropdown-right';
+}
+if ($class) {
+    $dropdownClass .= ' ' . htmlspecialchars($class);
+}
+?>
+<div class="<?= $dropdownClass ?>">
+    <button class="btn dropdown-toggle" 
+            type="button" 
+            id="<?= htmlspecialchars($id) ?>" 
+            data-toggle="dropdown" 
+            aria-haspopup="true" 
+            aria-expanded="false">
+        <?= $trigger ?>
+    </button>
+    <div class="dropdown-menu" aria-labelledby="<?= htmlspecialchars($id) ?>">
+        <?php foreach ($items as $item): ?>
+            <?php if (isset($item['divider']) && $item['divider']): ?>
+                <div class="dropdown-divider"></div>
+            <?php elseif (isset($item['header'])): ?>
+                <h6 class="dropdown-header"><?= htmlspecialchars($item['header']) ?></h6>
+            <?php else: ?>
+                <a class="dropdown-item" 
+                   href="<?= htmlspecialchars($item['url'] ?? '#') ?>"
+                   <?= isset($item['onclick']) ? 'onclick="' . htmlspecialchars($item['onclick']) . '"' : '' ?>>
+                    <?php if (isset($item['icon'])): ?>
+                        <i class="<?= htmlspecialchars($item['icon']) ?> me-2"></i>
+                    <?php endif; ?>
+                    <?= htmlspecialchars($item['text'] ?? '') ?>
+                </a>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+</div>
+

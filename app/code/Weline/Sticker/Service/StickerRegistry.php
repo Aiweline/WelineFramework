@@ -25,7 +25,7 @@ class StickerRegistry
 
     /**
      * 获取注册表内容
-     * 从 ExtendsData 读取数据并转换为 StickerRegistry 格式
+     * 优先从 generated/sticker.php 读取数据，如果不存在则从 ExtendsData 读取
      *
      * @param bool $forceReload 强制重新加载
      * @return array 返回格式：[$targetModule][$targetFile] = [...sticker信息...]
@@ -34,20 +34,22 @@ class StickerRegistry
     {
         // 内存缓存机制
         if (!$forceReload && $this->cachedRegistry !== null) {
-            $currentMtime = ExtendsData::getRegistryFileMtime();
-            if ($currentMtime === $this->cachedExtendsMtime) {
-                return $this->cachedRegistry;
-            }
+            return $this->cachedRegistry;
         }
 
-        // 从 ExtendsData 读取所有 Sticker 扩展信息
-        $allStickerExtensions = ExtendsData::getAllStickerExtensions($forceReload);
+        // 优先从 generated/sticker.php 读取数据
+        $registry = $this->loadFromLegacyStickerFile();
         
-        // 转换为 StickerRegistry 格式
-        $registry = $this->convertFromExtendsData($allStickerExtensions);
+        // 如果 sticker.php 不存在或为空，则尝试从 ExtendsData 读取
+        if (empty($registry)) {
+            // 从 ExtendsData 读取所有 Sticker 扩展信息
+            $allStickerExtensions = ExtendsData::getAllStickerExtensions($forceReload);
+            
+            // 转换为 StickerRegistry 格式
+            $registry = $this->convertFromExtendsData($allStickerExtensions);
+        }
 
         $this->cachedRegistry = $registry;
-        $this->cachedExtendsMtime = ExtendsData::getRegistryFileMtime();
 
         return $registry;
     }
@@ -206,6 +208,58 @@ class StickerRegistry
     {
         $registry = $this->getRegistry();
         return isset($registry[$targetModule]) && !empty($registry[$targetModule]);
+    }
+
+    /**
+     * 从旧的 generated/sticker.php 文件加载数据（向后兼容）
+     * 
+     * @return array
+     */
+    private function loadFromLegacyStickerFile(): array
+    {
+        $stickerFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'sticker.php';
+        
+        if (!file_exists($stickerFile)) {
+            return [];
+        }
+
+        try {
+            $legacyData = include $stickerFile;
+            if (!is_array($legacyData)) {
+                return [];
+            }
+
+            // 转换旧格式到新格式
+            // 旧格式: ['Weline_Sticker_view' => ['file/path.phtml' => [stickerInfo, ...]]]
+            // 新格式: ['Weline_Sticker' => ['view/templates/...' => [stickerInfo, ...]]]
+            $registry = [];
+            
+            foreach ($legacyData as $targetModule => $files) {
+                if (!isset($registry[$targetModule])) {
+                    $registry[$targetModule] = [];
+                }
+                
+                foreach ($files as $targetFile => $stickerInfos) {
+                    if (!is_array($stickerInfos)) {
+                        continue;
+                    }
+                    
+                    // 确保 $stickerInfos 是数组的数组
+                    if (isset($stickerInfos[0]) && is_array($stickerInfos[0])) {
+                        // 已经是正确的格式
+                        $registry[$targetModule][$targetFile] = $stickerInfos;
+                    } else {
+                        // 单个 sticker 信息，包装成数组
+                        $registry[$targetModule][$targetFile] = [$stickerInfos];
+                    }
+                }
+            }
+            
+            return $registry;
+        } catch (\Exception $e) {
+            // 如果读取失败，返回空数组
+            return [];
+        }
     }
 
     /**

@@ -86,7 +86,7 @@ class Assistant extends BackendController
             }
 
             $assistants = $query->pagination($page, $pageSize)
-                ->order('assistant_id', 'DESC')
+                ->order(AiAssistant::fields_ID, 'DESC')
                 ->select()
                 ->fetch();
 

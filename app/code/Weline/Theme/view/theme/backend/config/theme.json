@@ -1,0 +1,22 @@
+{
+    "name": "weline_backend",
+    "title": "Weline Backend Theme",
+    "version": "1.0.0",
+    "description": "Weline后端管理主题",
+    "author": "Aiweline",
+    "area": "backend",
+    "layouts": {
+        "default": "layouts/default.phtml",
+        "dashboard": "layouts/dashboard.phtml",
+        "minimal": "layouts/minimal.phtml"
+    },
+    "assets": {
+        "css": [
+            "assets/css/theme.css"
+        ],
+        "js": [
+            "assets/js/theme.js"
+        ]
+    }
+}
+

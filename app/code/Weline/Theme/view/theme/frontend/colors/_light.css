@@ -1,0 +1,30 @@
+/**
+ * Weline Frontend - 亮色主题颜色覆盖
+ * 
+ * 通常与 variables/_colors.css 中的默认值一致
+ * 可以省略，或明确指定以便理解
+ */
+
+[data-theme="light"],
+:root {
+    /* 文本色 */
+    --color-text-primary: #111;
+    --color-text-secondary: #767676;
+    --color-text-tertiary: #a6a6a6;
+    --color-text-disabled: #c7c7c7;
+    
+    /* 背景色 */
+    --color-bg-primary: #fff;
+    --color-bg-secondary: #f8f9fa;
+    --color-bg-tertiary: #e7e7e7;
+    --color-bg-dark: #232f3e;
+    
+    /* 边框色 */
+    --color-border-default: #ddd;
+    --color-border-emphasis: #a6a6a6;
+    --color-border-focus: #e77600;
+    
+    /* 品牌色通常不变 */
+    /* --color-primary: #f0c14b; */  /* 使用默认值 */
+}
+

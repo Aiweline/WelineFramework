@@ -43,9 +43,23 @@ class Auth extends AbstractRestController
     public function login()
     {
         try {
-            $username = trim($this->request->getPost('username') ?? '');
-            $password = trim($this->request->getPost('password') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            $username = $this->request->getBodyParam('username');
+            if ($username === null) {
+                $username = $this->request->getPost('username');
+            }
+            $username = trim((string)$username);
+
+            $password = $this->request->getBodyParam('password');
+            if ($password === null) {
+                $password = $this->request->getPost('password');
+            }
+            $password = trim((string)$password);
+
+            $expireTime = $this->request->getBodyParam('expire_time');
+            if ($expireTime === null) {
+                $expireTime = $this->request->getPost('expire_time');
+            }
+            $expireTime = (int)($expireTime ?? 0);
 
             if (empty($username) || empty($password)) {
                 return $this->error(__('用户名和密码不能为空'), '', 400);
@@ -105,9 +119,23 @@ class Auth extends AbstractRestController
     public function exchange()
     {
         try {
-            $apiKey = trim($this->request->getPost('api_key') ?? '');
-            $apiSecret = trim($this->request->getPost('api_secret') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            $apiKey = $this->request->getBodyParam('api_key');
+            if ($apiKey === null) {
+                $apiKey = $this->request->getPost('api_key');
+            }
+            $apiKey = trim((string)$apiKey);
+
+            $apiSecret = $this->request->getBodyParam('api_secret');
+            if ($apiSecret === null) {
+                $apiSecret = $this->request->getPost('api_secret');
+            }
+            $apiSecret = trim((string)$apiSecret);
+
+            $expireTime = $this->request->getBodyParam('expire_time');
+            if ($expireTime === null) {
+                $expireTime = $this->request->getPost('expire_time');
+            }
+            $expireTime = (int)($expireTime ?? 0);
 
             if (empty($apiKey) || empty($apiSecret)) {
                 return $this->error(__('API Key和API Secret不能为空'), '', 400);
@@ -135,9 +163,23 @@ class Auth extends AbstractRestController
     public function refresh()
     {
         try {
-            $accessToken = trim($this->request->getPost('access_token') ?? '');
-            $passToken = trim($this->request->getPost('pass_token') ?? '');
-            $expireTime = (int)($this->request->getPost('expire_time') ?? 0);
+            $accessToken = $this->request->getBodyParam('access_token');
+            if ($accessToken === null) {
+                $accessToken = $this->request->getPost('access_token');
+            }
+            $accessToken = trim((string)$accessToken);
+
+            $passToken = $this->request->getBodyParam('pass_token');
+            if ($passToken === null) {
+                $passToken = $this->request->getPost('pass_token');
+            }
+            $passToken = trim((string)$passToken);
+
+            $expireTime = $this->request->getBodyParam('expire_time');
+            if ($expireTime === null) {
+                $expireTime = $this->request->getPost('expire_time');
+            }
+            $expireTime = (int)($expireTime ?? 0);
 
             if (empty($accessToken) || empty($passToken)) {
                 return $this->error(__('访问令牌和通行令牌不能为空'), '', 400);
@@ -270,17 +312,19 @@ class Auth extends AbstractRestController
     /**
      * 成功响应
      */
-    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200)
+    protected function success(string $msg = '请求成功！', mixed $data = '', int $code = 200): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 
     /**
      * 错误响应
      */
-    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404)
+    protected function error(string $msg = '请求失败！', mixed $data = '', int $code = 404): string
     {
-        return $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        $result = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code]);
+        return $result ?: '';
     }
 }
 

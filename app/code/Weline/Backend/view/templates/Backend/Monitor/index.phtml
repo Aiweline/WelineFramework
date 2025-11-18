@@ -1,0 +1,103 @@
+<?php
+/**
+ * 系统监控页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $system_info
+ * @var array $performance_metrics
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$systemInfo = $system_info ?? [];
+$performanceMetrics = $performance_metrics ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>系统监控</lang></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18"><lang>系统监控</lang></h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 提示信息 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="mdi mdi-information me-2"></i>
+                            <strong><lang>提示</lang>:</strong> <lang>系统监控功能正在开发中，敬请期待。</lang>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统信息 -->
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>系统信息</lang></h4>
+                                
+                                <?php if (!empty($systemInfo)): ?>
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
+                                        <tbody>
+                                            <tr>
+                                                <th><lang>PHP版本</lang></th>
+                                                <td><?= htmlspecialchars($systemInfo['php_version'] ?? '-') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <th><lang>服务器软件</lang></th>
+                                                <td><?= htmlspecialchars($systemInfo['server_software'] ?? '-') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <th><lang>内存限制</lang></th>
+                                                <td><?= htmlspecialchars($systemInfo['memory_limit'] ?? '-') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <th><lang>最大执行时间</lang></th>
+                                                <td><?= htmlspecialchars($systemInfo['max_execution_time'] ?? '-') ?> <lang>秒</lang></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+</body>
+</html>
+

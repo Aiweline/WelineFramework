@@ -1,0 +1,211 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+?>
+<div class="register-form-container">
+    <h1 class="register-title"><?= __('创建账户') ?></h1>
+    
+    <form id="registerForm" class="register-form" novalidate>
+        <?php
+        // 使用主题错误提示组件
+        echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
+            'type' => 'error',
+            'id' => 'errorMessage',
+            'message' => '<span id="errorText"></span>',
+            'dismissible' => false,
+            'class' => 'd-none'
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题输入框组件 - 用户名
+        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+            'name' => 'username',
+            'type' => 'text',
+            'label' => __('用户名'),
+            'placeholder' => __('3-20个字符'),
+            'required' => true,
+            'autocomplete' => 'username',
+            'id' => 'username',
+            'help' => __('用户名长度必须在3-20个字符之间')
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题输入框组件 - 密码
+        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+            'name' => 'password',
+            'type' => 'password',
+            'label' => __('密码'),
+            'placeholder' => __('至少6位字符'),
+            'required' => true,
+            'autocomplete' => 'new-password',
+            'id' => 'password',
+            'help' => __('建议使用字母、数字和特殊字符组合')
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题输入框组件 - 确认密码
+        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
+            'name' => 'confirm_password',
+            'type' => 'password',
+            'label' => __('确认密码'),
+            'placeholder' => __('再次输入密码'),
+            'required' => true,
+            'autocomplete' => 'new-password',
+            'id' => 'confirm_password'
+        ]);
+        ?>
+        
+        <?php
+        // 使用主题按钮组件
+        echo $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+            'text' => __('注册'),
+            'type' => 'primary',
+            'size' => 'lg',
+            'class' => 'btn-register w-100',
+            'id' => 'registerBtn',
+            'attributes' => 'type="submit"'
+        ]);
+        ?>
+    </form>
+    
+    <div class="register-footer">
+        <p>
+            <?= __('已有账户？') ?> 
+            <a href="/frontend/account/login"><?= __('立即登录') ?></a>
+        </p>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    const $form = $('#registerForm');
+    const $username = $('#username');
+    const $password = $('#password');
+    const $confirmPassword = $('#confirm_password');
+    const $errorMsg = $('#errorMessage');
+    const $errorText = $('#errorText');
+    const $registerBtn = $('#registerBtn');
+    
+    // 创建注册文本和加载状态的容器
+    const $registerText = $('<span id="registerText"><?= __('注册') ?></span>');
+    const $registerSpinner = $('<span id="registerSpinner" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i><?= __('注册中...') ?></span>');
+    $registerBtn.append($registerText).append($registerSpinner);
+
+    // 用户名验证
+    $username.on('blur', function() {
+        const username = $(this).val().trim();
+        if (username.length === 0) {
+            $(this).removeClass('is-valid is-invalid');
+        } else if (username.length >= 3 && username.length <= 20) {
+            $(this).removeClass('is-invalid').addClass('is-valid');
+        } else {
+            $(this).removeClass('is-valid').addClass('is-invalid');
+        }
+    });
+
+    // 密码验证
+    $password.on('blur', function() {
+        const password = $(this).val();
+        if (password.length === 0) {
+            $(this).removeClass('is-valid is-invalid');
+        } else if (password.length >= 6) {
+            $(this).removeClass('is-invalid').addClass('is-valid');
+        } else {
+            $(this).removeClass('is-valid').addClass('is-invalid');
+        }
+    });
+
+    // 确认密码验证
+    $confirmPassword.on('input', function() {
+        const confirm = $(this).val();
+        const password = $password.val();
+        
+        if (confirm.length === 0) {
+            $(this).removeClass('is-valid is-invalid');
+        } else if (confirm === password && password.length >= 6) {
+            $(this).removeClass('is-invalid').addClass('is-valid');
+        } else {
+            $(this).removeClass('is-valid').addClass('is-invalid');
+        }
+    });
+    
+    $password.on('input', function() {
+        if ($confirmPassword.val().length > 0) {
+            $confirmPassword.trigger('input');
+        }
+    });
+
+    // 表单提交
+    $form.on('submit', function(e) {
+        e.preventDefault();
+        $errorMsg.addClass('d-none').removeClass('show');
+
+        if (!this.checkValidity()) {
+            e.stopPropagation();
+            $(this).addClass('was-validated');
+            return;
+        }
+
+        if ($password.val() !== $confirmPassword.val()) {
+            $confirmPassword.addClass('is-invalid');
+            $('html, body').animate({
+                scrollTop: $confirmPassword.offset().top - 100
+            }, 300);
+            return;
+        }
+
+        $registerBtn.prop('disabled', true);
+        $registerText.hide();
+        $registerSpinner.removeClass('d-none').show();
+
+        $.ajax({
+            url: '/frontend/account/register',
+            method: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $registerSpinner.addClass('d-none').hide();
+                    $registerText.text('<?= __('注册成功！') ?>').show();
+                    $registerBtn.removeClass('btn-primary').addClass('btn-success');
+                    setTimeout(function() {
+                        window.location.href = response.redirect || '/frontend/account';
+                    }, 500);
+                } else {
+                    const errorMsg = response.message || '<?= __('注册失败，请稍后重试') ?>';
+                    if (errorMsg.includes('用户名') || errorMsg.includes('username')) {
+                        $username.addClass('is-invalid');
+                    } else {
+                        $errorText.text(errorMsg);
+                        $errorMsg.removeClass('d-none').addClass('show');
+                        $('html, body').animate({
+                            scrollTop: $errorMsg.offset().top - 100
+                        }, 300);
+                    }
+                    $registerBtn.prop('disabled', false);
+                    $registerSpinner.addClass('d-none').hide();
+                    $registerText.text('<?= __('注册') ?>').show();
+                    $registerBtn.removeClass('btn-success').addClass('btn-primary');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = '<?= __('注册请求失败，请稍后重试') ?>';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                $errorText.text(errorMsg);
+                $errorMsg.removeClass('d-none').addClass('show');
+                $('html, body').animate({
+                    scrollTop: $errorMsg.offset().top - 100
+                }, 300);
+                $registerBtn.prop('disabled', false);
+                $registerSpinner.addClass('d-none').hide();
+                $registerText.text('<?= __('注册') ?>').show();
+                $registerBtn.removeClass('btn-success').addClass('btn-primary');
+            }
+        });
+    });
+});
+</script>

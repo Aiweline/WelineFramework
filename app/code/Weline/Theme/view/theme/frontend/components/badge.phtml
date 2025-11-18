@@ -1,0 +1,28 @@
+<?php
+/**
+ * 组件：Badge
+ * 
+ * 徽章组件，用于显示标签和状态
+ * 字段
+ * @info description 描述：徽章组件，用于显示标签和状态
+ * @info name 名称：Badge徽章组件
+ * @param text 徽章文字（必填）
+ * @param type 类型 (primary/secondary/success/danger/warning/info)
+ * @param class 额外CSS类
+ * @param id 元素ID
+ */
+$text = $this->getData('text') ?? '';
+$type = $this->getData('type') ?? 'primary';
+$class = $this->getData('class') ?? '';
+$id = $this->getData('id') ?? '';
+
+// 构建CSS类
+$badgeClass = 'badge badge-' . htmlspecialchars($type);
+if ($class) {
+    $badgeClass .= ' ' . htmlspecialchars($class);
+}
+?>
+<span class="<?= $badgeClass ?>" <?= $id ? 'id="' . htmlspecialchars($id) . '"' : '' ?>>
+    <?= htmlspecialchars($text) ?>
+</span>
+
