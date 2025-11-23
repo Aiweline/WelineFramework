@@ -18,6 +18,7 @@
 - [禁止使用 routes.xml 文件](#禁止使用-routesxml-文件)
 - [后端控制器必须使用 Weline_Admin 布局](#后端控制器必须使用-weline_admin-布局)
 - [详情或小型信息查看必须使用 Block Offcanvas](#详情或小型信息查看必须使用-block-offcanvas)
+- [lang 标签 args 属性使用错误](#lang-标签-args-属性使用错误)
 
 ---
 
@@ -2373,6 +2374,75 @@ throw new Error(window.i18nTexts.requestFailed);
 - **外部 JS 文件**：只有在外部引入的 `.js` 文件中才需要使用全局翻译变量（`window.i18nTexts`）
 - **原因**：页面内联 JavaScript 会被模板引擎处理，可以直接使用 `@lang()` 标签；外部 JS 文件不会被模板引擎处理，需要通过全局变量传递翻译文本
 - **HTML 属性中的 JavaScript**：同样直接使用 `@lang()` 标签，如 `onclick="alert('@lang(确认删除)')"`
+
+---
+
+## lang 标签 args 属性使用错误
+
+### 错误示例
+
+```html
+<!-- ❌ 错误1：在 args 属性中嵌入 PHP 代码 -->
+<lang args="htmlspecialchars($formatted_account_label ?? ...)">账户：%{1}</lang>
+
+<!-- ❌ 错误2：在 args 中使用字符串插值 -->
+<lang args="['account' => '<?= $account_label_display ?>']">账户：%{account}</lang>
+
+<!-- ❌ 错误3：占位符与参数不匹配 -->
+<lang args="$variable">账户：%{1}</lang>  <!-- 单个参数应使用 %{} -->
+```
+
+### 正确写法
+
+```html
+<!-- ✅ 正确1：先在 PHP 中处理变量，然后直接使用变量 -->
+<?php
+$account_label_display = $formatted_account_label ?? 'default';
+?>
+<lang args="$account_label_display">账户：%{}</lang>
+
+<!-- ✅ 正确2：使用命名参数（推荐） -->
+<?php
+$account_label_display = $formatted_account_label ?? 'default';
+?>
+<lang args="['account' => $account_label_display]">账户：%{account}</lang>
+
+<!-- ✅ 正确3：多个参数使用数组 -->
+<?php
+$name = 'John';
+$count = 5;
+?>
+<lang args="['name' => $name, 'count' => $count]">用户 %{name} 有 %{count} 条消息</lang>
+```
+
+### 要点
+
+1. **禁止在 args 中嵌入 PHP 代码**：
+   - ❌ 禁止：`args="htmlspecialchars($var)"`
+   - ❌ 禁止：`args="'<?= $var ?>'"`
+   - ✅ 正确：先在 PHP 中处理，然后使用变量：`args="$var"`
+
+2. **占位符格式**：
+   - 单个参数：使用 `%{}`，不是 `%{1}`
+   - 多个参数：使用 `%{1}`, `%{2}` 或命名参数 `%{name}`, `%{count}`
+   - 命名参数（推荐）：使用 `%{paramName}` 格式
+
+3. **变量处理**：
+   - 所有变量处理（如 `htmlspecialchars()`）必须在 PHP 代码块中完成
+   - `args` 属性只能直接使用变量名，不能包含函数调用
+
+4. **常见错误模式**：
+   - ❌ `args="htmlspecialchars($var)"` - 不能嵌入函数调用
+   - ❌ `args="'<?= $var ?>'"` - 不能嵌入 PHP 代码
+   - ❌ `args="$var">文本 %{1}</lang>` - 占位符不匹配
+   - ✅ `args="$var">文本 %{}</lang>` - 正确格式
+
+### 扣分记录
+
+- **时间**：2025年（TwoFactorAuth模块设置页面）
+- **错误**：在 `lang` 标签的 `args` 属性中嵌入 PHP 代码和函数调用，导致前端显示错误（显示"账户：1"而不是实际账户名称）
+- **影响**：翻译功能无法正常工作，用户界面显示错误信息
+- **修复**：先在 PHP 代码块中处理变量，然后在 `args` 属性中直接使用变量名
 
 ---
 
