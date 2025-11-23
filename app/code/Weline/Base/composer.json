@@ -1,62 +1,61 @@
 {
-  "name": "weline/base",
-  "description": "Weline Base模块 - 统一管理所有Weline模块依赖",
-  "type": "weline-module",
-  "license": "proprietary",
-  "authors": [
-    {
-      "name": "秋枫雁飞",
-      "email": "aiweline@qq.com"
+    "name": "weline/base",
+    "description": "Weline Base模块 - 统一管理所有Weline模块依赖",
+    "type": "weline-module",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "秋枫雁飞",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "weline/framework": "@dev",
+        "weline/two-factor-auth": "@dev",
+        "weline/module-acl": "@dev",
+        "weline/module-admin": "@dev",
+        "weline/module-ai": "@dev",
+        "weline/module-ali-ddns-server": "@dev",
+        "weline/module-backend": "@dev",
+        "weline/module-backend-activity": "@dev",
+        "weline/module-backend-theme-upzet": "@dev",
+        "weline/module-ck-editor-editor-manager": "@dev",
+        "weline/module-cache-manager": "@dev",
+        "weline/module-component": "@dev",
+        "weline/module-cron": "@dev",
+        "weline/module-visitor": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/module-data-table": "@dev",
+        "weline/deploy-module": "@dev",
+        "weline/module-developer-workspace": "@dev",
+        "weline/module-eav": "@dev",
+        "weline/module-editor-manager": "@dev",
+        "weline/module-el-finder-file-manager": "@dev",
+        "weline/module-file-manager": "@dev",
+        "weline/module-frontend": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-indexer": "@dev",
+        "weline/module-installer": "@dev",
+        "weline/module-maintenance": "@dev",
+        "weline/module-media-manager": "@dev",
+        "weline/module-module-manager": "@dev",
+        "weline/module-module-router": "@dev",
+        "weline/module-parts": "@dev",
+        "weline/module-queue": "@dev",
+        "weline/session-manager": "@dev",
+        "weline/module-smtp": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-taglib": "@dev",
+        "weline/module-theme": "@dev",
+        "weline/module-theme-fancy": "@dev",
+        "weline/module-url-manager": "@dev",
+        "weline/module-warm-cache": "@dev",
+        "weline/module-website-monitoring": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Base\\": ""
+        }
     }
-  ],
-  "require": {
-    "php": "^8.1",
-    "weline/framework": "@dev",
-    "weline/two-factor-auth": "@dev",
-    "weline/module-acl": "@dev",
-    "weline/module-admin": "@dev",
-    "weline/module-ai": "@dev",
-    "weline/module-ali-ddns-server": "@dev",
-    "weline/module-backend": "@dev",
-    "weline/module-backend-activity": "@dev",
-    "weline/module-backend-theme-upzet": "@dev",
-    "weline/module-ck-editor-editor-manager": "@dev",
-    "weline/module-cache-manager": "@dev",
-    "weline/module-component": "@dev",
-    "weline/module-cron": "@dev",
-    "weline/module-visitor": "@dev",
-    "weline/module-customer": "@dev",
-    "weline/module-data-table": "@dev",
-    "weline/deploy-module": "@dev",
-    "weline/module-developer-workspace": "@dev",
-    "weline/module-eav": "@dev",
-    "weline/module-editor-manager": "@dev",
-    "weline/module-el-finder-file-manager": "@dev",
-    "weline/module-file-manager": "@dev",
-    "weline/module-frontend": "@dev",
-    "weline/module-i18n": "@dev",
-    "weline/module-indexer": "@dev",
-    "weline/module-installer": "@dev",
-    "weline/module-maintenance": "@dev",
-    "weline/module-media-manager": "@dev",
-    "weline/module-module-manager": "@dev",
-    "weline/module-module-router": "@dev",
-    "weline/module-parts": "@dev",
-    "weline/module-queue": "@dev",
-    "weline/session-manager": "@dev",
-    "weline/module-smtp": "@dev",
-    "weline/module-system-config": "@dev",
-    "weline/module-taglib": "@dev",
-    "weline/module-theme": "@dev",
-    "weline/module-theme-fancy": "@dev",
-    "weline/module-url-manager": "@dev",
-    "weline/module-warm-cache": "@dev",
-    "weline/module-website-monitoring": "@dev"
-  },
-  "autoload": {
-    "psr-4": {
-      "Weline\\Base\\": ""
-    }
-  }
 }
-
