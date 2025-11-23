@@ -130,7 +130,9 @@ class TwoFactorAuthService
      */
     public function getQRCodeUri(string $secret, string $account, string $issuer = 'WelineFramework'): string
     {
-        return TwoFactorAuthHelper::getOtpAuthUri($secret, $account, $issuer);
+        // 开发环境添加 Dev- 前缀，格式化账户名为 Weline(账户) 格式
+        $formattedAccount = (defined('DEV') && DEV ? 'Dev-' : '') . 'Weline(' . $account . ')';
+        return TwoFactorAuthHelper::getOtpAuthUri($secret, $formattedAccount, $issuer);
     }
 
     /**
@@ -144,6 +146,7 @@ class TwoFactorAuthService
      */
     public function getQRCodeUrl(string $secret, string $account, string $issuer = 'WelineFramework', int $size = 250): string
     {
+        // 直接调用 getQRCodeUri，格式化逻辑已在其中处理
         $uri = $this->getQRCodeUri($secret, $account, $issuer);
         return TwoFactorAuthHelper::getQRCodeUrl($uri, $size);
     }

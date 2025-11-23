@@ -4,12 +4,12 @@
  * 
  * 页面头部区域（meta标签、CSS、JS初始化等）
  * 字段
- * @info description 描述：页面头部区域（meta标签、CSS、JS初始化等）
- * @info name 名称：Head头部片段
- * @param title 页面标题
- * @param description 页面描述
- * @param keywords 页面关键词
- * @param class 额外CSS类
+ * @meta.name {default="Head头部片段",name="Head头部片段",description="Head头部片段，用于描述片段的名称"}
+ * @meta.description {default="页面头部区域（meta标签、CSS、JS初始化等）",name="页面头部区域（meta标签、CSS、JS初始化等）",description="页面头部区域（meta标签、CSS、JS初始化等），用于描述片段的用途"}
+ * @param.title {default="欢迎使用WelineFramework框架！",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param.description {default="Weline Framework - 现代化的PHP框架",name="页面描述",description="页面描述，用于设置SEO描述"}
+ * @param.keywords {default="Weline, Framework, PHP",name="页面关键词",description="页面关键词，用于设置SEO关键词"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Frontend\Block\ThemeConfig $themeConfig */
@@ -115,11 +115,45 @@ try {
 <!-- 主题CSS -->
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <?php
-// 根据主题模式加载颜色主题
-$themeMode = $themeConfig->getThemeModel() ?: 'light';
+// 根据主题模式加载颜色主题（优先使用预览配置）
+$session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+$previewThemeId = $session->getData('preview_theme_id');
+$area = 'frontend';
+$requestPath = $this->request->getPathInfo() ?? '';
+if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
+    $area = 'backend';
+}
+
+if ($previewThemeId) {
+    // 预览模式：使用预览配置
+    $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+    $theme->load($previewThemeId);
+    if ($theme->getId()) {
+        $themeMode = \Weline\Theme\Helper\LayoutScanner::getColorConfig($theme, $area);
+    } else {
+        $themeMode = $themeConfig->getThemeModel() ?: 'light';
+    }
+} else {
+    // 正常模式：使用用户配置
+    $themeMode = $themeConfig->getThemeModel() ?: 'light';
+}
+
+// 加载色系CSS文件
 if ($themeMode && $themeMode !== 'light'): ?>
-<theme:css>Weline_Theme::theme/frontend/colors/_<?= $themeMode ?>.css</theme:css>
-<?php endif; ?>
+<theme:css>Weline_Theme::theme/<?= $area ?>/colors/_<?= $themeMode ?>.css</theme:css>
+<?php endif; 
+
+// 加载变量CSS文件（预览配置）
+if ($previewThemeId && isset($theme) && $theme->getId()) {
+    $variables = \Weline\Theme\Helper\LayoutScanner::getVariablesConfig($theme, $area);
+    foreach ($variables as $variable) {
+        if ($variable): ?>
+<theme:css>Weline_Theme::theme/<?= $area ?>/variables/_<?= $variable ?>.css</theme:css>
+<?php 
+        endif;
+    }
+}
+?>
 <!--JS-->
 <js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
 <?php if (DEV): ?>

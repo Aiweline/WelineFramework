@@ -86,16 +86,8 @@ class EventScanner
 
             // 验证事件名是否符合规范：必须以模块名开头
             // 格式：模块名::事件名 或 模块名_子模块::事件名
-            if (!$this->validateEventName($eventName, $moduleName)) {
-                $errorMessage = sprintf(
-                    '事件名 "%s" 不符合命名规范。事件名必须以模块名 "%s" 开头，格式：%s::事件名。文件：%s/event.php',
-                    $eventName,
-                    $moduleName,
-                    $moduleName,
-                    $basePath
-                );
-                throw new \RuntimeException($errorMessage);
-            }
+            // validateEventName 方法会直接致命错误退出，如果不符合规范
+            $this->validateEventName($eventName, $moduleName, $basePath);
 
             $docFileName = $eventConfig['doc'] ?? '';
             $hasDoc = false;
@@ -130,9 +122,10 @@ class EventScanner
      *
      * @param string $eventName 事件名
      * @param string $moduleName 模块名
+     * @param string $basePath 模块基础路径（用于错误提示）
      * @return bool
      */
-    private function validateEventName(string $eventName, string $moduleName): bool
+    private function validateEventName(string $eventName, string $moduleName, string $basePath): bool
     {
         // 动态事件模式（包含 {}）跳过验证
         if (str_contains($eventName, '{') && str_contains($eventName, '}')) {
@@ -141,15 +134,55 @@ class EventScanner
 
         // 检查事件名是否包含 ::
         if (!str_contains($eventName, '::')) {
-            return false;
+            $errorMessage = sprintf(
+                "\n\n[致命错误] 事件名不符合命名规范\n" .
+                "事件名：%s\n" .
+                "问题：事件名必须包含 \"::\" 分隔符\n" .
+                "正确格式：模块名::事件名\n" .
+                "文件位置：%s/event.php\n\n",
+                $eventName,
+                $basePath
+            );
+            fwrite(STDERR, $errorMessage);
+            exit(1);
         }
 
         // 提取事件名前缀（:: 之前的部分）
         $prefix = explode('::', $eventName)[0];
 
+        // 特殊处理：Framework_ 开头的事件视为 Weline_Framework 模块的事件
+        if ($moduleName === 'Weline_Framework' && str_starts_with($prefix, 'Framework_')) {
+            return true;
+        }
+
+        // 特殊处理：App:: 开头的事件视为 Weline_Framework 模块的事件
+        if ($moduleName === 'Weline_Framework' && str_starts_with($prefix, 'App')) {
+            return true;
+        }
+
         // 检查前缀是否以模块名开头
         // 支持：模块名 或 模块名_子模块 格式
-        return str_starts_with($prefix, $moduleName);
+        if (!str_starts_with($prefix, $moduleName)) {
+            $errorMessage = sprintf(
+                "\n\n[致命错误] 事件名不符合命名规范\n" .
+                "事件名：%s\n" .
+                "事件名前缀：%s\n" .
+                "模块名：%s\n" .
+                "问题：事件名前缀必须以模块名开头\n" .
+                "正确格式：%s::事件名 或 %s_子模块::事件名\n" .
+                "文件位置：%s/event.php\n\n",
+                $eventName,
+                $prefix,
+                $moduleName,
+                $moduleName,
+                $moduleName,
+                $basePath
+            );
+            fwrite(STDERR, $errorMessage);
+            exit(1);
+        }
+
+        return true;
     }
 }
 

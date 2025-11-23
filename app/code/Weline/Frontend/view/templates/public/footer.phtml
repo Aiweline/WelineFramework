@@ -1,6 +1,10 @@
-<w:block>Weline\Frontend\Block\Footer\Base</w:block>
-<?php
-/**@var \Weline\Framework\View\Template $this */
-echo $this->getFooter()->getHtml();
-?>
-</html>
+<has name="layoutType">
+    <w:theme:template layout="partials.footer">Weline_Theme::frontend/partials/footer/@meta{partials.footer.value|default}.phtml</w:theme:template>
+<else/>
+    <w:block>Weline\Frontend\Block\Footer\Base</w:block>
+    <?php
+    /**@var \Weline\Framework\View\Template $this */
+    echo $this->getFooter()->getHtml();
+    ?>
+    </html>
+</has>

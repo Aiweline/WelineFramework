@@ -629,23 +629,6 @@ class Taglib
                         };
                     }
             ],
-            'theme:template' => [
-                'tag' => 1,
-                'attr' => ['enable' => 0],
-                'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
-                        $enable = $attributes['enable'] ?? 1;
-                        if (!$enable or ($enable === 'false')) {
-                            $template_string = $tag_data[0] ?? '';
-                            $target_template = $tag_data[2] ?? '';
-                            return "<!-- 模块被禁用：{$target_template} 原始模板：{$template_string}-->";
-                        }
-                        return match ($tag_key) {
-                            'tag' => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, trim($tag_data[2]))),
-                            default => file_get_contents($template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, trim($tag_data[1])))
-                        };
-                    }
-            ],
             'js' => [
                 'tag' => 1,
                 'callback' =>

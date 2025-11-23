@@ -121,7 +121,7 @@ class Response implements ResponseInterface
     public function redirect(string $url, $code = 302): void
     {
         $data = new DataObject(['url' => $url, 'code' => $code]);
-        $this->getEvenManager()->dispatch('Weline_Framework_Http::response_redirect_before', $data);
+        $this->getEvenManager()->dispatch('Framework_Http::response_redirect_before', $data);
         $url = $data->getData('url');
         $code = $data->getData('code');
         http_response_code($code);

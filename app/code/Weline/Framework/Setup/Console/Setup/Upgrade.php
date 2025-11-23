@@ -16,6 +16,7 @@ namespace Weline\Framework\Setup\Console\Setup;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\Console\Server\Server;
+use Weline\Framework\Event\EventRegistry;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
@@ -71,17 +72,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             Env::getInstance()->setConfig('maintenance', true);
             $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
             
-            # 在升级前先注册事件
+            # 在升级前重建事件注册表，确保新事件能被正确收集
             try {
-                $this->printing->note(__('正在注册事件...'));
-                /**@var \Weline\Framework\Event\EventRegistry $eventRegistry */
-                $eventRegistry = ObjectManager::getInstance(\Weline\Framework\Event\EventRegistry::class);
-                $eventRegistry->refresh();
-                $this->printing->success(__('事件注册完成。'));
+                $this->printing->note(__('正在重建事件注册表...'));
+                /** @var EventRegistry $eventRegistry */
+                $eventRegistry = ObjectManager::getInstance(EventRegistry::class);
+                $ok = $eventRegistry->refresh();
+                if ($ok) {
+                    $this->printing->success(__('✓ 事件注册表已重建完成。'));
+                } else {
+                    $this->printing->warning(__('事件注册表重建失败，但将继续执行升级流程。'));
+                }
             } catch (\Exception $e) {
-                $this->printing->warning(__('事件注册失败：%{1}，继续执行升级...', [$e->getMessage()]));
+                # 事件重建失败不影响主流程，只记录警告
+                $this->printing->warning(__('事件注册表重建时发生错误：%{1}，但将继续执行升级流程。', [$e->getMessage()]));
             }
-            
             # 执行正常的升级流程
             /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
             $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);

@@ -142,6 +142,18 @@ return [
         'doc' => 'template/模板编译后.md',
     ],
     
+    // ========== 控制器事件 ==========
+    'Weline_Framework_Controller::fetch_file_before' => [
+        'name' => __('控制器模板获取前'),
+        'description' => __('在控制器获取模板文件前触发，允许其他模块修改模板文件路径或执行预处理操作。事件数据包含 fileName、controller、layoutType 等信息。'),
+        'doc' => 'controller/控制器模板获取前.md',
+    ],
+    'Weline_Framework_Controller::fetch_file_after' => [
+        'name' => __('控制器模板获取后'),
+        'description' => __('在控制器获取模板文件后触发，允许其他模块修改渲染后的模板内容。事件数据包含 fileName、content 等信息。'),
+        'doc' => 'controller/控制器模板获取后.md',
+    ],
+    
     // ========== 控制台事件 ==========
     'Weline_Framework_Console::compile' => [
         'name' => __('控制台编译'),
@@ -149,17 +161,6 @@ return [
         'doc' => 'console/控制台编译.md',
     ],
     
-    // ========== 控制器模板事件 ==========
-    'Weline_Framework::Controller::fetch_file_before' => [
-        'name' => __('控制器模板获取前'),
-        'description' => __('在控制器获取模板文件前触发，允许其他模块修改模板文件路径或执行预处理操作。'),
-        'doc' => 'controller/控制器模板获取前.md',
-    ],
-    'Weline_Framework::Controller::fetch_file_after' => [
-        'name' => __('控制器模板获取后'),
-        'description' => __('在控制器获取模板文件后触发，允许其他模块修改渲染后的模板内容。'),
-        'doc' => 'controller/控制器模板获取后.md',
-    ],
     
     // ========== REST控制器事件 ==========
     'Weline_Framework_RestController::init_before' => [
@@ -299,7 +300,7 @@ return [
         'description' => __('在响应无路由请求前触发，允许其他模块处理无路由请求。'),
         'doc' => 'http/响应无路由前.md',
     ],
-    'Weline_Framework_Http::response_redirect_before' => [
+    'Framework_Http::response_redirect_before' => [
         'name' => __('响应重定向前'),
         'description' => __('在HTTP响应重定向前触发，允许其他模块修改重定向URL。'),
         'doc' => 'http/响应重定向前.md',
@@ -310,6 +311,11 @@ return [
         'name' => __('资源编译器'),
         'description' => __('在编译资源文件时触发，允许其他模块监听并处理资源编译过程。事件数据包含区域、类型、资源列表等信息。'),
         'doc' => 'resource/资源编译器.md',
+    ],
+    'Framework_Resource::compiler_after' => [
+        'name' => __('资源编译后'),
+        'description' => __('在所有资源文件编译完成后触发，允许其他模块执行编译后的处理操作。事件数据包含资源类型和所有区域的资源内容。'),
+        'doc' => 'resource/资源编译后.md',
     ],
     
     // ========== 卸载服务事件 ==========

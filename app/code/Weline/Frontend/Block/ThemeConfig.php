@@ -53,6 +53,20 @@ class ThemeConfig extends \Weline\Framework\View\Block
 
     public function getThemeModel()
     {
+        // 优先检查预览配置
+        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+        $previewThemeId = $session->getData('preview_theme_id');
+        $previewThemeArea = $session->getData('preview_theme_area');
+        
+        if ($previewThemeId && $previewThemeArea === 'frontend') {
+            // 预览模式：使用预览色系配置
+            $previewColor = $session->getData('preview_color_frontend');
+            if ($previewColor) {
+                // light 模式返回空字符串，其他模式返回对应的值
+                return $previewColor === 'light' ? '' : $previewColor;
+            }
+        }
+        
         $data = '';
         if ($this->getThemeConfig('dark-mode-switch')) {
             $data = 'dark';
