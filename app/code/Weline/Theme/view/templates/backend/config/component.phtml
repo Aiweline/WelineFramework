@@ -1,0 +1,461 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+
+use Weline\Framework\Controller\PcController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\ComponentMetaParser;
+use Weline\Theme\Helper\ThemeConfigManager;
+use Weline\Framework\Event\EventsManager;
+
+/**@var \Weline\Theme\Model\WelineTheme $theme */
+/**@var string $area */
+/**@var string $component */
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= __('组件预览') ?> - <?= htmlspecialchars($component ?? '') ?></title>
+    
+    <?php
+    // 根据区域加载对应的资源
+    if (($area ?? 'frontend') === 'backend') {
+        // 后端资源
+        ?>
+        <css>Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
+        <css>Weline_Admin::backend/lib/font-awesome-4.7.0/css/font-awesome.min.css</css>
+        <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
+        <?php
+    } else {
+        // 前端资源
+        ?>
+        <css>Weline_Frontend::libs/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
+        <css>Weline_Frontend::/libs/font-awesome-4.7.0/css/font-awesome.min.css</css>
+        <js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
+        <?php
+    }
+    ?>
+    
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        .component-preview-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        .component-preview-header {
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .component-preview-header h1 {
+            font-size: 24px;
+            margin: 0;
+        }
+        .component-preview-content {
+            min-height: 200px;
+        }
+        .component-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .component-info-item {
+            margin-bottom: 8px;
+        }
+        .component-info-label {
+            font-weight: bold;
+            color: #666;
+            display: inline-block;
+            width: 100px;
+        }
+        .component-params {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .param-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .param-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .param-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .param-type {
+            font-size: 0.875rem;
+            color: #666;
+            margin-left: 10px;
+        }
+        .param-description {
+            color: #666;
+            font-size: 0.875rem;
+            margin-bottom: 10px;
+        }
+        .param-value-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .param-default-value {
+            font-size: 0.875rem;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="component-preview-container">
+        <div class="component-preview-header">
+            <h1><?= __('组件预览') ?></h1>
+            <div class="component-info">
+                <div class="component-info-item">
+                    <span class="component-info-label"><?= __('主题') ?>:</span>
+                    <span><?= htmlspecialchars($theme->getName() ?? '') ?></span>
+                </div>
+                <div class="component-info-item">
+                    <span class="component-info-label"><?= __('区域') ?>:</span>
+                    <span><?= htmlspecialchars($area ?? 'frontend') ?></span>
+                </div>
+                <div class="component-info-item">
+                    <span class="component-info-label"><?= __('组件') ?>:</span>
+                    <span><?= htmlspecialchars($component ?? '') ?></span>
+                </div>
+                <?php
+                // 解析组件 Meta 信息
+                $componentPath = 'Weline_Theme::' . ($area ?? 'frontend') . '/components/' . ($component ?? '') . '.phtml';
+                $templateFile = $this->getTemplateFile($componentPath);
+                $meta = ComponentMetaParser::parse($templateFile);
+                
+                // 获取主题配置中的组件参数值（scope=default）
+                $scope = 'default';
+                $componentConfig = ThemeConfigManager::getConfig($theme, 'components', $area ?? 'frontend');
+                $componentParams = $componentConfig[$component ?? ''] ?? [];
+                $componentParams = $componentParams[$scope] ?? [];
+                
+                if (!empty($meta['component']) || !empty($meta['description'])) {
+                    // 构建 meta key 路径
+                    $metaKeyPrefix = 'theme.component.' . strtolower($component ?? '');
+                    
+                    // 自动收集翻译词到字典表
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $translations = [];
+                    
+                    // 显示组件名称（可翻译）
+                    if (!empty($meta['component'])) {
+                        $nameKey = '@meta::' . $metaKeyPrefix . '.info.name';
+                        $translations[] = [
+                            'word' => $nameKey,
+                            'translate' => $meta['component'],
+                            'module' => 'Weline_Theme'
+                        ];
+                        ?>
+                        <div class="component-info-item">
+                            <span class="component-info-label"><?= __('名称') ?>:</span>
+                            <w:meta type="translate" prefix="<?= $metaKeyPrefix ?>" scope="<?= $scope ?>">info.name</w:meta>
+                        </div>
+                        <?php
+                    }
+                    
+                    // 显示组件描述（可翻译）
+                    if (!empty($meta['description'])) {
+                        $descKey = '@meta::' . $metaKeyPrefix . '.info.description';
+                        $translations[] = [
+                            'word' => $descKey,
+                            'translate' => $meta['description'],
+                            'module' => 'Weline_Theme'
+                        ];
+                        ?>
+                        <div class="component-info-item">
+                            <span class="component-info-label"><?= __('描述') ?>:</span>
+                            <w:meta type="translate" prefix="<?= $metaKeyPrefix ?>" scope="<?= $scope ?>">info.description</w:meta>
+                        </div>
+                        <?php
+                    }
+                    
+                    // 触发翻译收集事件
+                    if (!empty($translations)) {
+                        $eventsManager->dispatch('Weline_I18n::collect_translations', [
+                            'translations' => $translations,
+                            'module' => 'Weline_Theme'
+                        ]);
+                    }
+                }
+                ?>
+            </div>
+        </div>
+        
+        <?php if (!empty($meta['params'])): ?>
+        <div class="component-params">
+            <h3><?= __('组件参数') ?></h3>
+            <form id="componentParamsForm" method="post" action="<?= $this->getUrl('theme/backend/config/component/saveParams') ?>">
+                <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
+                <input type="hidden" name="component" value="<?= htmlspecialchars($component ?? '') ?>">
+                <input type="hidden" name="area" value="<?= htmlspecialchars($area ?? 'frontend') ?>">
+                <input type="hidden" name="scope" value="<?= $scope ?>">
+                
+                <?php foreach ($meta['params'] as $param): 
+                    $paramName = $param['name'] ?? '';
+                    $paramType = $param['type'] ?? 'mixed';
+                    $paramDesc = $param['description'] ?? '';
+                    $paramRequired = $param['required'] ?? false;
+                    $paramDefault = $param['default'] ?? null;
+                    
+                    // 获取当前参数值（优先使用配置值，否则使用默认值）
+                    $paramValue = $componentParams[$paramName] ?? $paramDefault;
+                    
+                    // 处理默认值（如果是 PHP 表达式，需要评估）
+                    if ($paramDefault !== null && (strpos($paramDefault, '$') !== false || strpos($paramDefault, '(') !== false)) {
+                        // PHP 表达式，在显示时使用原始值
+                        $displayDefault = $paramDefault;
+                    } else {
+                        $displayDefault = $paramDefault;
+                    }
+                    
+                    // 构建参数的 meta key（用于翻译参数描述）
+                    $paramMetaKey = $metaKeyPrefix . '.param.' . $paramName . '.description';
+                ?>
+                <div class="param-item">
+                    <div class="param-header">
+                        <div>
+                            <span class="param-name"><?= htmlspecialchars($paramName) ?></span>
+                            <span class="param-type">(<?= htmlspecialchars($paramType) ?>)</span>
+                            <?php if ($paramRequired): ?>
+                                <span class="badge bg-danger ms-2"><?= __('必填') ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="param-description">
+                        <?php if (!empty($paramDesc)): ?>
+                            <w:meta type="translate" prefix="<?= $metaKeyPrefix ?>" scope="<?= $scope ?>">param.<?= $paramName ?>.description</w:meta>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <?php
+                        // 根据参数类型显示不同的输入控件
+                        switch ($paramType) {
+                            case 'bool':
+                                ?>
+                                <select name="params[<?= htmlspecialchars($paramName) ?>]" class="param-value-input">
+                                    <option value="1" <?= ($paramValue === true || $paramValue === '1' || $paramValue === 1) ? 'selected' : '' ?>><?= __('是') ?></option>
+                                    <option value="0" <?= ($paramValue === false || $paramValue === '0' || $paramValue === 0 || $paramValue === '') ? 'selected' : '' ?>><?= __('否') ?></option>
+                                </select>
+                                <?php
+                                break;
+                            case 'int':
+                            case 'float':
+                                ?>
+                                <input type="number" 
+                                       name="params[<?= htmlspecialchars($paramName) ?>]" 
+                                       class="param-value-input"
+                                       value="<?= htmlspecialchars($paramValue ?? '') ?>"
+                                       <?= $paramRequired ? 'required' : '' ?>>
+                                <?php
+                                break;
+                            case 'array':
+                                ?>
+                                <textarea name="params[<?= htmlspecialchars($paramName) ?>]" 
+                                          class="param-value-input"
+                                          rows="3"
+                                          <?= $paramRequired ? 'required' : '' ?>><?= htmlspecialchars(is_array($paramValue) ? json_encode($paramValue, JSON_UNESCAPED_UNICODE) : ($paramValue ?? '')) ?></textarea>
+                                <small class="text-muted"><?= __('JSON格式，例如：["item1", "item2"]') ?></small>
+                                <?php
+                                break;
+                            default:
+                                ?>
+                                <input type="text" 
+                                       name="params[<?= htmlspecialchars($paramName) ?>]" 
+                                       class="param-value-input"
+                                       value="<?= htmlspecialchars($paramValue ?? '') ?>"
+                                       placeholder="<?= $displayDefault ? htmlspecialchars(__('默认值：%1', $displayDefault)) : '' ?>"
+                                       <?= $paramRequired ? 'required' : '' ?>>
+                                <?php
+                        }
+                        ?>
+                        <?php if ($displayDefault !== null): ?>
+                            <div class="param-default-value">
+                                <?= __('默认值') ?>: <code><?= htmlspecialchars($displayDefault) ?></code>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php 
+                // 收集参数描述的翻译词
+                if (!empty($paramDesc)) {
+                    if (!isset($paramTranslations)) {
+                        $paramTranslations = [];
+                    }
+                    $paramTranslations[] = [
+                        'word' => '@meta::' . $paramMetaKey,
+                        'translate' => $paramDesc,
+                        'module' => 'Weline_Theme'
+                    ];
+                }
+                endforeach; 
+                
+                // 合并参数翻译词
+                if (isset($paramTranslations) && !empty($paramTranslations)) {
+                    $translations = array_merge($translations ?? [], $paramTranslations);
+                }
+                
+                // 触发翻译收集事件
+                if (!empty($translations)) {
+                    $eventsManager->dispatch('Weline_I18n::collect_translations', [
+                        'translations' => $translations,
+                        'module' => 'Weline_Theme'
+                    ]);
+                }
+                ?>
+                
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-content-save"></i> <?= __('保存参数') ?>
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                        <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                    </button>
+                </div>
+            </form>
+            <script>
+                $(document).ready(function() {
+                    $('#componentParamsForm').on('submit', function(e) {
+                        e.preventDefault();
+                        
+                        const form = $(this);
+                        const submitBtn = form.find('button[type="submit"]');
+                        const originalText = submitBtn.html();
+                        
+                        // 禁用提交按钮
+                        submitBtn.prop('disabled', true);
+                        submitBtn.html('<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>');
+                        
+                        // 提交表单
+                        $.ajax({
+                            url: form.attr('action'),
+                            method: 'POST',
+                            data: form.serialize(),
+                            dataType: 'json',
+                            success: function(response) {
+                                if (response.status === 'success') {
+                                    alert(response.message || '<?= __('保存成功') ?>');
+                                    location.reload();
+                                } else {
+                                    alert(response.message || '<?= __('保存失败') ?>');
+                                    submitBtn.prop('disabled', false);
+                                    submitBtn.html(originalText);
+                                }
+                            },
+                            error: function() {
+                                alert('<?= __('保存失败，请重试') ?>');
+                                submitBtn.prop('disabled', false);
+                                submitBtn.html(originalText);
+                            }
+                        });
+                    });
+                });
+            </script>
+        </div>
+        <?php endif; ?>
+        
+        <div class="component-preview-content">
+            <?php
+            // 使用 w:theme:template 标签加载组件
+            // 路径格式：Weline_Theme::{area}/components/{component}.phtml
+            $componentPath = 'Weline_Theme::' . ($area ?? 'frontend') . '/components/' . ($component ?? '') . '.phtml';
+            
+            // 根据组件类型设置示例数据
+            // 优先使用配置的参数值，否则使用默认值
+            $componentData = [];
+            
+            // 如果有配置的参数值，使用配置的值
+            if (!empty($componentParams)) {
+                $componentData = $componentParams;
+            } else {
+                // 否则使用默认示例数据
+                switch ($component) {
+                    case 'alert':
+                        $componentData = [
+                            'type' => 'success',
+                            'message' => __('这是一个成功提示信息示例'),
+                            'title' => __('提示'),
+                            'dismissible' => true
+                        ];
+                        break;
+                    case 'button':
+                        $componentData = [
+                            'text' => __('按钮'),
+                            'type' => 'primary',
+                            'size' => 'md'
+                        ];
+                        break;
+                    case 'card':
+                        $componentData = [
+                            'title' => __('卡片标题'),
+                            'content' => __('这是卡片内容示例'),
+                            'footer' => __('卡片底部')
+                        ];
+                        break;
+                    default:
+                        $componentData = [];
+                }
+            }
+            
+            // 如果 Meta 中定义了参数，使用 Meta 的默认值补充
+            if (!empty($meta['params'])) {
+                foreach ($meta['params'] as $param) {
+                    $paramName = $param['name'] ?? '';
+                    if (!isset($componentData[$paramName]) && isset($param['default'])) {
+                        // 如果参数值未设置，使用 Meta 中的默认值
+                        $defaultValue = $param['default'];
+                        // 简单处理：如果是字符串字面量，直接使用
+                        if (is_string($defaultValue) && !str_starts_with($defaultValue, '$')) {
+                            $componentData[$paramName] = $defaultValue;
+                        }
+                    }
+                }
+            }
+            
+            // 设置组件数据
+            foreach ($componentData as $key => $value) {
+                $this->assign($key, $value);
+            }
+            $controller = ObjectManager::getInstance(PcController::class);
+            echo $controller->fetchThemeTemplate($componentPath, $componentData);
+            ?>
+        </div>
+    </div>
+    
+    <?php
+    // 根据区域加载对应的Bootstrap JS
+    if (($area ?? 'frontend') === 'backend') {
+        ?>
+        <js>Weline_Admin::backend/lib/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js</js>
+        <?php
+    } else {
+        ?>
+        <js>Weline_Frontend::libs/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js</js>
+        <?php
+    }
+    ?>
+</body>
+</html>
+
