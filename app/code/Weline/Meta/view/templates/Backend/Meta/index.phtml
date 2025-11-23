@@ -1,0 +1,452 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Meta\Model\Meta as MetaModel;
+
+$metas = $this->getData('metas') ?? [];
+$pagination = $this->getData('pagination') ?? '';
+$request = $this->getRequest();
+$namespaceFilter = trim((string)$request->getGet('namespace', ''));
+$typeFilter = trim((string)$request->getGet('type', ''));
+$searchKeyword = trim((string)$request->getGet('search', ''));
+
+$namespaceOptions = [];
+$typeOptions = [];
+foreach ($metas as $metaRow) {
+    if (!empty($metaRow[MetaModel::fields_NAMESPACE] ?? null)) {
+        $namespaceOptions[$metaRow[MetaModel::fields_NAMESPACE]] = true;
+    }
+    if (!empty($metaRow[MetaModel::fields_META_TYPE] ?? null)) {
+        $typeOptions[$metaRow[MetaModel::fields_META_TYPE]] = true;
+    }
+}
+
+if ($namespaceFilter && !isset($namespaceOptions[$namespaceFilter])) {
+    $namespaceOptions[$namespaceFilter] = true;
+}
+if ($typeFilter && !isset($typeOptions[$typeFilter])) {
+    $typeOptions[$typeFilter] = true;
+}
+ksort($namespaceOptions);
+ksort($typeOptions);
+
+$metaTotal = count($metas);
+$hasResults = $metaTotal > 0;
+$backendBase = $this->getBackendUrl('meta/backend/meta');
+$scannerUrl = $this->getBackendUrl('meta/backend/scanner');
+$createUrl = $this->getBackendUrl('meta/backend/meta/edit');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('元数据管理') ?></title>
+    <link href="@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)" rel="stylesheet"
+          type="text/css"/>
+    <style>
+        .meta-list .table thead th {
+            white-space: nowrap;
+        }
+
+        .meta-list .meta-name {
+            font-weight: 600;
+        }
+
+        .meta-list .meta-path {
+            font-family: "Fira Code", Monaco, Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .meta-list .badge-space {
+            text-transform: none;
+            font-size: 12px;
+        }
+
+        .meta-json-preview {
+            max-height: 65vh;
+            overflow: auto;
+            background: #0b1727;
+            color: #d1d5db;
+            border-radius: 0.75rem;
+            font-family: "Fira Code", Monaco, Consolas, monospace;
+            font-size: 13px;
+        }
+
+        .filter-card .form-control,
+        .filter-card .form-select {
+            border-radius: 999px;
+            padding-left: 1.2rem;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('元数据管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('元数据管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div class="avatar-sm bg-soft-primary rounded-circle d-flex align-items-center justify-content-center me-3">
+                                    <i class="mdi mdi-database-search text-primary fs-4"></i>
+                                </div>
+                                <div>
+                                    <p class="text-muted mb-1"><?= __('当前结果') ?></p>
+                                    <h4 class="mb-0"><?= $metaTotal ?></h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div class="avatar-sm bg-soft-success rounded-circle d-flex align-items-center justify-content-center me-3">
+                                    <i class="mdi mdi-shape text-success fs-4"></i>
+                                </div>
+                                <div>
+                                    <p class="text-muted mb-1"><?= __('命名空间') ?></p>
+                                    <h4 class="mb-0"><?= count($namespaceOptions) ?></h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div class="avatar-sm bg-soft-warning rounded-circle d-flex align-items-center justify-content-center me-3">
+                                    <i class="mdi mdi-view-grid text-warning fs-4"></i>
+                                </div>
+                                <div>
+                                    <p class="text-muted mb-1"><?= __('类型数量') ?></p>
+                                    <h4 class="mb-0"><?= count($typeOptions) ?></h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1"><?= __('快速操作') ?></p>
+                                    <div class="btn-group">
+                                        <a href="<?= $scannerUrl ?>" class="btn btn-soft-primary btn-sm">
+                                            <i class="mdi mdi-file-search-outline me-1"></i><?= __('扫描元数据') ?>
+                                        </a>
+                                        <a href="<?= $createUrl ?>" class="btn btn-primary btn-sm">
+                                            <i class="mdi mdi-plus-circle-outline me-1"></i><?= __('新增记录') ?>
+                                        </a>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-link text-muted" onclick="location.reload()"
+                                        title="<?= __('刷新') ?>">
+                                    <i class="mdi mdi-refresh"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card filter-card">
+                    <div class="card-body">
+                        <form class="row gy-3 gx-3 align-items-end" method="get" action="<?= $backendBase ?>">
+                            <div class="col-lg-3 col-md-6">
+                                <label class="form-label text-muted"><?= __('命名空间') ?></label>
+                                <select class="form-select" name="namespace">
+                                    <option value=""><?= __('全部命名空间') ?></option>
+                                    <?php foreach (array_keys($namespaceOptions) as $namespaceOption): ?>
+                                        <option value="<?= htmlspecialchars($namespaceOption) ?>" <?= $namespaceOption === $namespaceFilter ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($namespaceOption) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <label class="form-label text-muted"><?= __('类型') ?></label>
+                                <select class="form-select" name="type">
+                                    <option value=""><?= __('全部类型') ?></option>
+                                    <?php foreach (array_keys($typeOptions) as $typeOption): ?>
+                                        <option value="<?= htmlspecialchars($typeOption) ?>" <?= $typeOption === $typeFilter ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($typeOption) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-lg-4 col-md-8">
+                                <label class="form-label text-muted"><?= __('路径/标识关键词') ?></label>
+                                <div class="position-relative">
+                                    <i class="ri-search-line position-absolute top-50 start-0 translate-middle-y text-muted ms-3"></i>
+                                    <input type="text" class="form-control ps-5" name="search"
+                                           placeholder="<?= __('搜索文件路径、标识或说明...') ?>"
+                                           value="<?= htmlspecialchars($searchKeyword) ?>">
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-4 text-end">
+                                <div class="d-flex gap-2 justify-content-lg-end">
+                                    <button type="submit" class="btn btn-primary rounded-pill px-4">
+                                        <i class="ri-filter-3-line me-1"></i><?= __('筛选') ?>
+                                    </button>
+                                    <a href="<?= $backendBase ?>" class="btn btn-outline-secondary rounded-pill px-3"
+                                       title="<?= __('清空筛选') ?>">
+                                        <i class="ri-refresh-line"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card meta-list">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                            <div>
+                                <h4 class="card-title mb-1"><?= __('元数据列表') ?></h4>
+                                <p class="text-muted mb-0"><?= __('支持快速查看 JSON、跳转翻译与编辑数据。') ?></p>
+                            </div>
+                            <span class="badge bg-light text-dark">
+                                <?= __('当前筛选结果：') ?><strong><?= $metaTotal ?></strong>
+                            </span>
+                        </div>
+
+                        <?php if (!$hasResults): ?>
+                            <div class="text-center py-5">
+                                <img src="@static(Weline_Admin::assets/images/file-search.svg)" alt="empty"
+                                     class="img-fluid" style="max-width: 220px;">
+                                <h5 class="mt-4"><?= __('暂无匹配的元数据') ?></h5>
+                                <p class="text-muted"><?= __('尝试调整筛选条件或重新扫描。') ?></p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th><?= __('命名空间 / 类型') ?></th>
+                                        <th><?= __('识别信息') ?></th>
+                                        <th><?= __('文件路径') ?></th>
+                                        <th><?= __('描述信息') ?></th>
+                                        <th><?= __('操作') ?></th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($metas as $metaRow): ?>
+                                        <?php
+                                        $namespace = $metaRow[MetaModel::fields_NAMESPACE] ?? '-';
+                                        $type = $metaRow[MetaModel::fields_META_TYPE] ?? '-';
+                                        $identify = $metaRow[MetaModel::fields_META_IDENTIFY] ?? '-';
+                                        $area = $metaRow[MetaModel::fields_AREA] ?? '';
+                                        $category = $metaRow[MetaModel::fields_CATEGORY] ?? '';
+                                        $filePath = $metaRow[MetaModel::fields_FILE_PATH] ?? '';
+                                        $fullPath = $metaRow[MetaModel::fields_FILE_FULL_PATH] ?? '';
+                                        $metaDataRaw = $metaRow[MetaModel::fields_META_DATA] ?? '';
+                                        $metaDataDecoded = json_decode($metaDataRaw, true) ?: [];
+                                        $info = $metaDataDecoded['info'] ?? [];
+                                        $displayName = $info['name'] ?? __('未命名组件');
+                                        $description = $info['description'] ?? ($info['desc'] ?? '');
+                                        $translationKey = sprintf(
+                                            '@meta::%s.%s.%s.info.name',
+                                            $namespace,
+                                            $type,
+                                            $identify
+                                        );
+                                        $translationUrl = $this->getBackendUrl('meta/backend/taglib/meta', [
+                                            'key' => $translationKey,
+                                            'value' => $displayName,
+                                            'scope' => $namespace
+                                        ]);
+                                        $editUrl = $this->getBackendUrl('meta/backend/meta/edit', ['id' => $metaRow[MetaModel::fields_ID]]);
+                                        $jsonForAttr = htmlspecialchars($metaDataRaw ?: '{}', ENT_QUOTES, 'UTF-8');
+                                        $settingRaw = $metaRow[MetaModel::fields_SETTING] ?? '';
+                                        $settingPreview = $settingRaw ? htmlspecialchars($settingRaw, ENT_QUOTES, 'UTF-8') : '';
+                                        ?>
+                                        <tr>
+                                            <td class="fw-semibold text-muted">#<?= (int)$metaRow[MetaModel::fields_ID] ?></td>
+                                            <td>
+                                                <div class="d-flex flex-column gap-1">
+                                                    <span class="meta-name"><?= htmlspecialchars($namespace) ?></span>
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        <span class="badge bg-soft-primary text-primary badge-space"><?= htmlspecialchars($type) ?></span>
+                                                        <?php if ($area): ?>
+                                                            <span class="badge bg-soft-info text-info badge-space"><?= htmlspecialchars($area) ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if ($category): ?>
+                                                            <span class="badge bg-soft-secondary text-secondary badge-space"><?= htmlspecialchars($category) ?></span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="small text-muted mb-1"><?= __('标识') ?></div>
+                                                <div class="fw-semibold"><?= htmlspecialchars($identify) ?></div>
+                                                <?php if (!empty($info)): ?>
+                                                    <div class="text-muted small"><?= htmlspecialchars($displayName) ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="meta-path d-flex align-items-center gap-2">
+                                                    <i class="ri-folder-2-line text-warning"></i>
+                                                    <span title="<?= htmlspecialchars($filePath ?: $fullPath) ?>">
+                                                        <?= htmlspecialchars($filePath ?: $fullPath) ?>
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <?php if ($description): ?>
+                                                    <p class="mb-1 text-muted small" title="<?= htmlspecialchars($description) ?>">
+                                                        <?= htmlspecialchars(mb_strimwidth($description, 0, 80, '...', 'UTF-8')) ?>
+                                                    </p>
+                                                <?php else: ?>
+                                                    <span class="text-muted small"><?= __('暂无描述') ?></span>
+                                                <?php endif; ?>
+                                                <?php if ($settingRaw): ?>
+                                                    <span class="badge bg-soft-dark text-body badge-space" title="<?= $settingPreview ?>">
+                                                        <?= __('带自定义设置') ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a class="btn btn-outline-primary" href="<?= $editUrl ?>">
+                                                        <i class="ri-edit-2-line me-1"></i><?= __('编辑') ?>
+                                                    </a>
+                                                    <button type="button"
+                                                            class="btn btn-outline-secondary js-meta-json"
+                                                            data-meta-json="<?= $jsonForAttr ?>"
+                                                            data-meta-title="<?= htmlspecialchars($displayName) ?>">
+                                                        <i class="ri-code-box-line me-1"></i><?= __('JSON') ?>
+                                                    </button>
+                                                    <a class="btn btn-outline-info" href="<?= $translationUrl ?>" target="_blank">
+                                                        <i class="ri-translate me-1"></i><?= __('翻译') ?>
+                                                    </a>
+                                                </div>
+                                                <button type="button" class="btn btn-link p-0 mt-2 text-muted js-copy-key"
+                                                        data-clipboard-text="<?= htmlspecialchars($translationKey, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <small><i class="ri-file-copy-line me-1"></i><?= __('复制Key') ?></small>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <?php if (!empty($pagination)): ?>
+                                <div class="pt-3 border-top">
+                                    <?= $pagination ?>
+                                </div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<!-- JSON 预览 Modal -->
+<div class="modal fade" id="metaDetailModal" tabindex="-1" aria-labelledby="metaDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="metaDetailModalLabel"><?= __('元数据详情') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="meta-json-preview p-4" id="meta-json-content">{}</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+                <button type="button" class="btn btn-primary" id="copyMetaJson">
+                    <i class="ri-file-copy-line me-1"></i><?= __('复制 JSON') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const modalEl = document.getElementById('metaDetailModal');
+        const modalBody = document.getElementById('meta-json-content');
+        const copyBtn = document.getElementById('copyMetaJson');
+        let currentJson = '{}';
+        let metaModal;
+
+        const ensureModal = () => {
+            if (!metaModal) {
+                metaModal = new bootstrap.Modal(modalEl);
+            }
+            return metaModal;
+        };
+
+        document.querySelectorAll('.js-meta-json').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const raw = btn.getAttribute('data-meta-json') || '{}';
+                const title = btn.getAttribute('data-meta-title') || 'Meta';
+                try {
+                    const parsed = JSON.parse(raw);
+                    currentJson = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    currentJson = raw;
+                }
+                document.getElementById('metaDetailModalLabel').textContent = title;
+                modalBody.textContent = currentJson;
+                ensureModal().show();
+            });
+        });
+
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(currentJson).then(() => {
+                copyBtn.innerHTML = '<i class="ri-check-line me-1"></i><?= __('已复制') ?>';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="ri-file-copy-line me-1"></i><?= __('复制 JSON') ?>';
+                }, 1500);
+            });
+        });
+
+        document.querySelectorAll('.js-copy-key').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-clipboard-text');
+                if (!key) {
+                    return;
+                }
+                navigator.clipboard.writeText(key).then(() => {
+                    btn.innerHTML = '<small class="text-success"><i class="ri-check-line me-1"></i><?= __('已复制') ?></small>';
+                    setTimeout(() => {
+                        btn.innerHTML = '<small><i class="ri-file-copy-line me-1"></i><?= __('复制Key') ?></small>';
+                    }, 1500);
+                });
+            });
+        });
+    })();
+</script>
+</body>
+</html>
+

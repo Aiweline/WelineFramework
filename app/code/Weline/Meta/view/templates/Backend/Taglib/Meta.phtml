@@ -1,0 +1,93 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<!--
+ *@Author       秋枫雁飞
+ *@Email        aiweline@qq.com
+ *@Forum        https://bbs.aiweline.com
+ *@DESC         Meta翻译表单
+-->
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('Meta翻译') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+<!--页头工具条 开始-->
+@template(Weline_Admin::common/page/loading.phtml)
+<!--页头工具条 结束-->
+
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+
+    <!-- start page message -->
+    <div class='row'>
+        <template>Weline_Component::message.phtml</template>
+    </div> <!-- end message -->
+    <div class='row'>
+        <div class='col-12'>
+            <div class='card'>
+                <div class='card-header'>
+                    <h5><?= __('Meta翻译') ?></h5>
+                    <p class='text-muted mb-0'><small><?= htmlspecialchars($meta_key ?? '') ?></small></p>
+                </div>
+                <div class='card-body'>
+                    <form id="metaTranslationForm" role='form' class='needs-validation' novalidate=''
+                          action='{{action}}' method='post'>
+                        <!--基础信息-->
+                        <div class='row form-group'>
+                            <empty name="translations">
+                                <lang>请前往i18n模块收集词语后重试！或者开启实时收集词语功能！</lang>
+                            </empty>
+                            <foreach name="translations">
+                                <input type='hidden' name='translation[{{v.local_code}}][local_code]'
+                                       value='{{v.local_code}}'>
+                                <div class='col-lg-12'>
+                                    <div class='input-group mb-3'>
+                                        <div class='input-group-prepend'>
+                                            <span class='input-group-text' title='{{v.local.name}}'
+                                                  id='{{v.local_code}}-translate-input-addon'>
+                                                {{v.local.flag}}
+                                            </span>
+                                        </div>
+                                        <input class='form-control' type='text' id='{{v.local_code}}-translate-input'
+                                               placeholder='{{v.translate}}' aria-label='{{v.translate}}'
+                                               value='{{v.translate}}' name='translation[{{v.local_code}}][translate]'
+                                               required='required'
+                                               aria-describedby='{{v.local_code}}-translate-input-addon'>
+                                        <div class='valid-feedback'>
+                                            <lang>填写正确！</lang>
+                                        </div>
+                                        <div class='input-group-append'>
+                                            <span class='input-group-text' title='{{v.local.name}}'
+                                                  id='{{v.local_code}}-translate-input-addon'>
+                                                {{v.local.name}}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </foreach>
+                        </div>
+                        <div class="form-group">
+                            <button class='btn btn-primary' type='submit'>
+                                <lang>提交</lang>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div> <!-- end col -->
+    </div> <!-- end row -->
+</div>
+<!-- END layout-wrapper -->
+</body>
+</html>
+

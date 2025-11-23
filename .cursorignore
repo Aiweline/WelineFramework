@@ -1,3 +1,11 @@
 # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
 tpl
 
+<<<<<<< HEAD
+=======
+# 排除 dev 目录，但保留 dev/ai 目录和 dev/.gitignore
+dev/*
+!dev/ai/
+!dev/.gitignore
+
+>>>>>>> dev-new

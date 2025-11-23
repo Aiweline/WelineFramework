@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <?php
 /**@var \Weline\Framework\View\Template $this */
 $baseUrl = $this->request->getBaseUrl();
@@ -186,3 +187,191 @@ $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
 }
 </style>
 
+=======
+
+<if condition="layoutType">
+    <w:theme:template layout="partials.header">Weline_Theme::theme/frontend/partials/header/@meta{partials.header.value|default}.phtml</w:theme:template>
+</else>
+
+    <header class="weline-header-default">
+        <div class="header-container">
+            <!-- Logo -->
+            <div class="header-logo">
+                <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <span class="logo-text" style="display: none;"><?= __('Weline') ?></span>
+                </a>
+            </div>
+
+            <!-- 搜索框 -->
+            <div class="header-search">
+                <form action="<?= $frontendUrl ?>search" method="get" class="search-form">
+                    <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
+                    <button type="submit" class="search-button" title="<?= __('搜索') ?>">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 右侧功能区 -->
+            <div class="header-actions">
+                <!-- 语言切换 Hook -->
+                <div class="header-action-item" data-hook="header-language-switcher">
+                    <hook>header-language-switcher</hook>
+                </div>
+
+                <!-- 货币切换 Hook -->
+                <div class="header-action-item" data-hook="header-currency-switcher">
+                    <hook>header-currency-switcher</hook>
+                </div>
+
+                <!-- 购物车 Hook -->
+                <div class="header-action-item" data-hook="header-cart">
+                    <hook>header-cart</hook>
+                </div>
+
+                <!-- 个人中心 -->
+                <div class="header-action-item header-account">
+                    <a href="<?= $frontendUrl ?>account" class="account-link" title="<?= __('我的账户') ?>">
+                        <i class="fas fa-user"></i>
+                        <span class="account-text"><?= __('账户') ?></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <style>
+    .weline-header-default {
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0.75rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .header-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1rem;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+    }
+
+    .header-logo {
+        flex-shrink: 0;
+    }
+
+    .header-logo a {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+        color: #111;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .header-logo img {
+        height: 40px;
+        width: auto;
+    }
+
+    .logo-text {
+        color: #111;
+    }
+
+    .header-search {
+        flex: 1;
+        max-width: 600px;
+    }
+
+    .search-form {
+        display: flex;
+        width: 100%;
+    }
+
+    .search-input {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border: 2px solid #fbbf24;
+        border-right: none;
+        border-radius: 4px 0 0 4px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+
+    .search-input:focus {
+        border-color: #f59e0b;
+    }
+
+    .search-button {
+        padding: 0.5rem 1.25rem;
+        background: #fbbf24;
+        border: 2px solid #fbbf24;
+        border-radius: 0 4px 4px 0;
+        color: #111;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .search-button:hover {
+        background: #f59e0b;
+        border-color: #f59e0b;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .header-action-item {
+        display: flex;
+        align-items: center;
+    }
+
+    .header-account .account-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: #111;
+        font-size: 0.85rem;
+        gap: 0.25rem;
+    }
+
+    .header-account .account-link:hover {
+        color: #f59e0b;
+    }
+
+    .header-account .account-link i {
+        font-size: 1.25rem;
+    }
+
+    .account-text {
+        white-space: nowrap;
+    }
+
+    @media (max-width: 768px) {
+        .header-container {
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-search {
+            order: 3;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .account-text {
+            display: none;
+        }
+    }
+    </style>
+</if>
+>>>>>>> dev-new
