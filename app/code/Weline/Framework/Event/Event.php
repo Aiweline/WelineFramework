@@ -212,9 +212,9 @@ class Event extends \Weline\Framework\DataObject\DataObject
     private function printEventHeader(): void
     {
         echo "\n";
-        echo "事件名: {$this->getName()}\n";
+        echo __("Event Name: %{1}", [$this->getName()]) . "\n";
         echo str_repeat("-", 80) . "\n";
-        echo sprintf("%-50s %-15s %-15s %s\n", "类名", "开始时间", "结束时间", "耗时");
+        echo sprintf("%-50s %-15s %-15s %s\n", __("Class Name"), __("Start Time"), __("End Time"), __("Duration"));
         echo str_repeat("-", 80) . "\n";
     }
     
@@ -295,9 +295,9 @@ class Event extends \Weline\Framework\DataObject\DataObject
         
         // 写入事件头部信息
         $header = "\n" . str_repeat("=", 80) . "\n";
-        $header .= date('Y-m-d H:i:s') . " - 事件名: {$this->getName()}\n";
+        $header .= date('Y-m-d H:i:s') . " - " . __("Event Name: %{1}", [$this->getName()]) . "\n";
         $header .= str_repeat("-", 80) . "\n";
-        $header .= sprintf("%-50s %-15s %-15s %s\n", "类名", "开始时间", "结束时间", "耗时");
+        $header .= sprintf("%-50s %-15s %-15s %s\n", __("Class Name"), __("Start Time"), __("End Time"), __("Duration"));
         $header .= str_repeat("-", 80) . "\n";
         
         file_put_contents($logFile, $header, FILE_APPEND | LOCK_EX);

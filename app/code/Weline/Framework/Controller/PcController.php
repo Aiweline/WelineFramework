@@ -21,6 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Security\Token;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
+use Weline\Framework\DataObject\DataObject;
 use ReflectionObject;
 
 class PcController extends Core
@@ -190,6 +191,28 @@ class PcController extends Core
     }
 
     /**
+     * 渲染模板文件（通过事件系统）
+     * 
+     * @param string $fileName 模板文件路径
+     * @return string 渲染后的内容
+     */
+    private function fetchWithEvents(string $fileName): string
+    {
+        $eventData = new DataObject([
+            'fileName' => $fileName,
+            'content' => '',
+            'controller' => $this,
+            'layoutType' => $this->layoutType ?? null
+        ]);
+        $this->getEventManager()->dispatch('Weline_Framework::Controller::fetch_file_before', $eventData);
+        $fileName = $eventData->getData('fileName');
+        $content = $this->getTemplate()->fetch($fileName);
+        $eventData->setData('content', $content);
+        $this->getEventManager()->dispatch('Weline_Framework::Controller::fetch_file_after', $eventData);
+        return $eventData->getData('content');
+    }
+
+    /**
      * @DESC         |获取模板渲染
      *
      * 参数区：
@@ -209,7 +232,7 @@ class PcController extends Core
         # 如果指定了模板就直接读取
         if ($fileName) {
             if (is_int(strpos($fileName, '::'))) {
-                return $this->getTemplate()->fetch($fileName);
+                return $this->fetchWithEvents($fileName);
             }
             //            return $this->getTemplate()->fetch('templates' . DS .$fileName);
         }
@@ -225,7 +248,36 @@ class PcController extends Core
         } else {
             $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
         }
-        return $this->getTemplate()->fetch('templates' . DS . $fileName);
+        return $this->fetchWithEvents('templates' . DS . $fileName);
+    }
+
+    /**
+     * @DESC         |获取模板  原生模板，无事件处理
+     *
+     * 参数区：
+     *
+     * @param string $fileName
+     * @param array $data
+     *
+     * @return mixed
+     */
+    protected function template(string $fileName = '', array $data = []): mixed
+    {
+        if (!is_int(strpos($fileName, '::'))) {
+            $controller_class_name = $this->request->getRouterData('class/controller_name');
+            if ($fileName === '') {
+                if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
+                    $fileName = $controller_class_name;
+                } else {
+                    $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method');
+                }
+            } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
+                $fileName = $controller_class_name . DS . $fileName;
+            } else {
+                $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
+            }
+        }
+        return $this->getTemplate()->fetchHtml($fileName, $data);
     }
 
     /**
