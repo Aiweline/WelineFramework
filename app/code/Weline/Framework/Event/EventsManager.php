@@ -104,9 +104,8 @@ class EventsManager
 
     public function getEventObservers(string $eventName)
     {
-        $evenObserverLists = $this->scanEvents();
-
-        return $evenObserverLists[$eventName] ?? [];
+        // 从 EventData 静态类中提取事件观察者
+        return EventData::getEventObservers($eventName);
     }
 
     /**
@@ -127,22 +126,32 @@ class EventsManager
 
         try {
             // 检查事件是否有规约和文档
-            if (!$this->checkEventSpecAndDoc($eventName)) {
-                // 如果没有规约或文档，不执行事件
-                // 但仍然创建一个空的 Event 对象，以便 getEventData() 不会返回 null
-                if (is_array($data)) {
-                    $this->events[$eventName] = (new Event($data))->setName($eventName);
-                } else {
-                    $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => []]))->setName($eventName);
+            $this->checkEventSpecAndDoc($eventName);
+
+            // 获取事件监听器（观察者）
+            $observers = $this->getEventObservers($eventName);
+            
+            // 调试：检查观察者是否被正确获取
+            if (defined('DEV') && DEV && $eventName === 'Weline_Framework::Controller::fetch_file_before') {
+                error_log("【事件调试】事件名: {$eventName}");
+                error_log("【事件调试】观察者数量: " . count($observers));
+                error_log("【事件调试】观察者列表: " . json_encode($observers, JSON_UNESCAPED_UNICODE));
+            }
+            
+            // 检查是否有监听器（Weline_Admin::msg 事件除外，因为它用于发送错误消息）
+            if (empty($observers) && $eventName !== 'Weline_Admin::msg') {
+                // 如果没有监听器，直接跳过，不执行事件
+                if (defined('DEV') && DEV && $eventName === 'Weline_Framework::Controller::fetch_file_before') {
+                    error_log("【事件调试】观察者为空，跳过执行");
                 }
                 return $this;
             }
 
             if (is_array($data)) {
-                $data['observers'] = $this->getEventObservers($eventName);
+                $data['observers'] = $observers;
                 $this->events[$eventName] = (new Event($data))->setName($eventName);
             } else {
-                $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $this->getEventObservers($eventName)]))->setName($eventName);
+                $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
             }
             $this->events[$eventName]->dispatch();
         } finally {
@@ -157,7 +166,8 @@ class EventsManager
      * 检查事件是否有规约和文档
      *
      * @param string $eventName 事件名
-     * @return bool 如果有规约和文档返回 true，否则返回 false
+     * @return bool 如果有规约和文档返回 true，否则抛出致命错误
+     * @throws Exception 如果没有规约或文档，直接抛出致命错误
      */
     private function checkEventSpecAndDoc(string $eventName): bool
     {
@@ -208,8 +218,33 @@ class EventsManager
             // 发送系统消息（严重程度：超级严重）
             $this->sendSpecDocErrorMsg($eventName, $errorMessage, $eventInfo, $sourceModule);
 
-            // 返回 false，不执行事件
-            return false;
+            // 直接抛出致命错误，不允许执行没有规约的事件
+            $errorDetails = [
+                'eventName' => $eventName,
+                'error' => $errorMessage,
+                'sourceModule' => $sourceModule,
+                'eventInfo' => $eventInfo ? json_encode($eventInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : __('无')
+            ];
+            
+            $fullErrorMessage = sprintf(
+                "【致命错误】事件 '%s' 缺少规约或文档，不允许执行。\n\n" .
+                "错误详情：%s\n\n" .
+                "源模块：%s\n\n" .
+                "事件信息：%s\n\n" .
+                "请确保：\n" .
+                "1. 在提供该事件的模块根目录下创建 event.php 规约文件\n" .
+                "2. 在 doc/event/ 目录下创建对应的文档文件\n" .
+                "3. 运行 'php bin/w event:rebuild' 重建事件注册表\n\n" .
+                "参考示例：\n" .
+                "- 规约文件：app/code/Weline/Admin/event.php\n" .
+                "- 文档文件：app/code/Weline/Admin/doc/event/系统消息通知.md",
+                $errorDetails['eventName'],
+                $errorDetails['error'],
+                $errorDetails['sourceModule'],
+                $errorDetails['eventInfo']
+            );
+            // 致命报错
+            trigger_error($fullErrorMessage, E_USER_ERROR);
         } finally {
             // 清除检查标志
             self::$isCheckingEvent = false;
