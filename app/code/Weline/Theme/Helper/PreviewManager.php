@@ -1,0 +1,148 @@
+<?php
+
+/*
+ * 预览管理器
+ * 管理预览模式的session数据
+ */
+
+namespace Weline\Theme\Helper;
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Session;
+
+class PreviewManager
+{
+    const SESSION_KEY_PREFIX = 'preview_';
+    const SESSION_KEY_THEME_ID = 'preview_theme_id';
+    const SESSION_KEY_THEME_AREA = 'preview_theme_area';
+    
+    /**
+     * 设置预览配置
+     * 
+     * @param int $themeId 主题ID
+     * @param string $area 区域
+     * @param array $configs 配置数组 ['layouts' => [...], 'colors' => [...], ...]
+     * @return void
+     */
+    public static function setPreviewConfig(int $themeId, string $area, array $configs): void
+    {
+        $session = ObjectManager::getInstance(Session::class);
+        
+        // 设置主题ID和区域
+        $session->setData(self::SESSION_KEY_THEME_ID, $themeId);
+        $session->setData(self::SESSION_KEY_THEME_AREA, $area);
+        
+        // 设置各类配置
+        if (isset($configs['layouts'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'layouts_' . $area, $configs['layouts']);
+        }
+        if (isset($configs['headers'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'header_' . $area, $configs['headers']);
+        }
+        if (isset($configs['colors'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'color_' . $area, $configs['colors']);
+        }
+        if (isset($configs['partials'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'partials_' . $area, $configs['partials']);
+        }
+        if (isset($configs['variables'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'variables_' . $area, $configs['variables']);
+        }
+        if (isset($configs['component'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'component_' . $area, $configs['component']);
+        }
+        if (isset($configs['scope'])) {
+            $session->setData(self::SESSION_KEY_PREFIX . 'scope_' . $area, $configs['scope']);
+        }
+    }
+    
+    /**
+     * 获取预览配置
+     * 
+     * @param string $type 配置类型 (layouts|headers|colors|partials|variables|component)
+     * @param string $area 区域
+     * @return mixed 预览配置值，如果没有则返回null
+     */
+    public static function getPreviewConfig(string $type, string $area)
+    {
+        if (!self::isPreviewMode()) {
+            return null;
+        }
+        
+        $session = ObjectManager::getInstance(Session::class);
+        
+        // 构建session key
+        $sessionKey = self::SESSION_KEY_PREFIX . $type . '_' . $area;
+        
+        return $session->getData($sessionKey);
+    }
+    
+    /**
+     * 获取预览主题ID
+     * 
+     * @return int|null
+     */
+    public static function getPreviewThemeId(): ?int
+    {
+        $session = ObjectManager::getInstance(Session::class);
+        return $session->getData(self::SESSION_KEY_THEME_ID);
+    }
+    
+    /**
+     * 获取预览区域
+     * 
+     * @return string|null
+     */
+    public static function getPreviewArea(): ?string
+    {
+        $session = ObjectManager::getInstance(Session::class);
+        return $session->getData(self::SESSION_KEY_THEME_AREA);
+    }
+    
+    /**
+     * 清除预览配置
+     * 
+     * @return void
+     */
+    public static function clearPreviewConfig(): void
+    {
+        $session = ObjectManager::getInstance(Session::class);
+        
+        // 清除所有预览相关的session数据
+        $session->unsetData(self::SESSION_KEY_THEME_ID);
+        $session->unsetData(self::SESSION_KEY_THEME_AREA);
+        
+        // 清除各类配置
+        $areas = ['frontend', 'backend'];
+        $types = ['layouts', 'header', 'color', 'partials', 'variables', 'component'];
+        
+        foreach ($areas as $area) {
+            foreach ($types as $type) {
+                $session->unsetData(self::SESSION_KEY_PREFIX . $type . '_' . $area);
+            }
+            $session->unsetData(self::SESSION_KEY_PREFIX . 'scope_' . $area);
+        }
+    }
+    
+    /**
+     * 检查是否在预览模式
+     * 
+     * @return bool
+     */
+    public static function isPreviewMode(): bool
+    {
+        $session = ObjectManager::getInstance(Session::class);
+        $themeId = $session->getData(self::SESSION_KEY_THEME_ID);
+        return !empty($themeId);
+    }
+
+    public static function getPreviewScope(string $area): ?string
+    {
+        if (!self::isPreviewMode()) {
+            return null;
+        }
+        $session = ObjectManager::getInstance(Session::class);
+        return $session->getData(self::SESSION_KEY_PREFIX . 'scope_' . $area);
+    }
+}
+

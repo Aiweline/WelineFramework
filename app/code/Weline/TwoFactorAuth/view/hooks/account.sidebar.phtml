@@ -1,0 +1,37 @@
+<?php
+/**
+ * 两步验证侧边栏链接 Hook
+ * 
+ * 在账户侧边栏中添加两步验证管理链接
+ */
+/**@var \Weline\Framework\View\Template $this */
+
+// 获取当前用户（从模板数据中获取）
+$user = $this->getData('user');
+if (!$user) {
+    return;
+}
+
+$userId = $user->getId();
+
+// 获取两步验证服务
+try {
+    /** @var \Weline\TwoFactorAuth\Service\TwoFactorAuthService $twoFactorService */
+    $twoFactorService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\TwoFactorAuth\Service\TwoFactorAuthService::class);
+    $isEnabled = $twoFactorService->isEnabled($userId);
+    $twoFactorUrl = '/two-factor-auth/frontend/index';
+} catch (\Exception $e) {
+    // 如果服务不可用，不显示链接
+    return;
+}
+?>
+<a class="nav-link" href="<?= htmlspecialchars($twoFactorUrl) ?>" data-section="twofa">
+    <i class="ri-shield-keyhole-line"></i> 
+    <span><?= __('两步验证') ?></span>
+    <?php if ($isEnabled): ?>
+        <span class="badge badge-success" style="margin-left: auto; background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('已启用') ?></span>
+    <?php else: ?>
+        <span class="badge badge-secondary" style="margin-left: auto; background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;"><?= __('未启用') ?></span>
+    <?php endif; ?>
+</a>
+

@@ -129,6 +129,12 @@ class TwoFactorAuthHelper
         int $period = self::DEFAULT_PERIOD,
         ?int $timestamp = null
     ): string {
+<<<<<<< HEAD
+=======
+        // 清理密钥格式：移除空格、短横线、等号，并转换为大写
+        $secret = strtoupper(str_replace([' ', '-', '='], '', $secret));
+        
+>>>>>>> dev-new
         if ($timestamp === null) {
             $timestamp = time();
         }
@@ -174,6 +180,17 @@ class TwoFactorAuthHelper
         int $window = self::DEFAULT_WINDOW,
         ?int $timestamp = null
     ): bool {
+<<<<<<< HEAD
+=======
+        // 清理密钥格式：移除空格、短横线、等号，并转换为大写
+        $secret = strtoupper(str_replace([' ', '-', '='], '', $secret));
+        
+        // 验证密钥格式
+        if (!self::isValidSecret($secret)) {
+            return false;
+        }
+        
+>>>>>>> dev-new
         if ($timestamp === null) {
             $timestamp = time();
         }
@@ -183,7 +200,12 @@ class TwoFactorAuthHelper
         // 检查当前时间及前后时间窗口
         for ($i = -$window; $i <= $window; $i++) {
             $testTime = $timestamp + ($i * $period);
+<<<<<<< HEAD
             $generatedCode = self::generateCode($secret, $testTime);
+=======
+            // 调用 generateCode 时，参数顺序：secret, algorithm, digits, period, timestamp
+            $generatedCode = self::generateCode($secret, 'SHA1', self::DEFAULT_DIGITS, $period, $testTime);
+>>>>>>> dev-new
             
             // 使用时间安全的字符串比较
             if (hash_equals($generatedCode, $code)) {
@@ -195,6 +217,33 @@ class TwoFactorAuthHelper
     }
     
     /**
+<<<<<<< HEAD
+=======
+     * 获取格式化后的账户显示名称
+     * 根据开发环境添加前缀
+     * 
+     * @param string $account 账户名（通常是邮箱或用户名）
+     * @return string 格式化后的账户显示名称
+     */
+    public static function getFormattedAccountLabel(string $account): string
+    {
+        // 根据开发环境设置条目名称
+        // otpauth URI 格式：otpauth://totp/{issuer}:{label}?secret=...
+        // label 部分会显示在验证器应用中
+        // 注意：某些验证器可能会解析括号，提取邮箱部分
+        // 为了确保显示完整标签，将格式改为：Dev-Weline - 邮箱（开发环境）或 Weline - 邮箱（生产环境）
+        if (defined('DEV') && DEV) {
+            // 开发环境：添加 Dev- 前缀
+            // 使用空格和短横线分隔，避免验证器应用只提取邮箱部分
+            return sprintf('Dev-Weline - %s', $account);
+        } else {
+            // 生产环境：不加前缀
+            return sprintf('Weline - %s', $account);
+        }
+    }
+    
+    /**
+>>>>>>> dev-new
      * 生成otpauth URI
      * 用于生成二维码
      * 
@@ -212,6 +261,7 @@ class TwoFactorAuthHelper
         int $digits = self::DEFAULT_DIGITS,
         int $period = self::DEFAULT_PERIOD
     ): string {
+<<<<<<< HEAD
         $params = [
             'secret' => $secret,
             'issuer' => $issuer,
@@ -224,6 +274,32 @@ class TwoFactorAuthHelper
             'otpauth://totp/%s:%s?%s',
             rawurlencode($issuer),
             rawurlencode($account),
+=======
+        // 使用格式化后的账户标签
+        $label = self::getFormattedAccountLabel($account);
+        
+        // 只包含必要的参数，默认值（SHA1, 6位, 30秒）可以省略以缩短URI
+        $params = [
+            'secret' => $secret,
+            'issuer' => $issuer,
+        ];
+        
+        // 只在非默认值时添加参数
+        if ($digits !== self::DEFAULT_DIGITS) {
+            $params['digits'] = $digits;
+        }
+        if ($period !== self::DEFAULT_PERIOD) {
+            $params['period'] = $period;
+        }
+        
+        // otpauth URI 格式：otpauth://totp/{issuer}:{label}?secret=...
+        // label 部分会显示在验证器应用中
+        // 使用 rawurlencode 确保特殊字符（如括号）正确编码
+        $uri = sprintf(
+            'otpauth://totp/%s:%s?%s',
+            rawurlencode($issuer),
+            rawurlencode($label),
+>>>>>>> dev-new
             http_build_query($params)
         );
         
@@ -231,6 +307,7 @@ class TwoFactorAuthHelper
     }
     
     /**
+<<<<<<< HEAD
      * 生成二维码数据URL（使用Google Charts API）
      * 
      * @param string $otpAuthUri otpauth URI
@@ -274,6 +351,39 @@ class TwoFactorAuthHelper
     </text>
 </svg>
 SVG;
+=======
+     * 生成二维码数据URL（使用endroid/qr-code库）
+     * 
+     * 官方文档：https://github.com/endroid/qr-code
+     * 
+     * @param string $otpAuthUri otpauth URI
+     * @param int $size 二维码尺寸
+     * @return string 二维码图片Data URI（SVG格式）
+     * @throws \Exception 如果二维码生成失败
+     */
+    public static function getQRCodeUrl(string $otpAuthUri, int $size = 250): string
+    {
+        try {
+            // 使用 endroid/qr-code 库生成SVG格式的二维码
+            $qrCode = \Endroid\QrCode\QrCode::create($otpAuthUri)
+                ->setSize($size)
+                ->setMargin(10);
+            
+            // 生成SVG格式的二维码
+            $writer = new \Endroid\QrCode\Writer\SvgWriter();
+            $result = $writer->write($qrCode);
+            
+            // 获取SVG字符串
+            $svgString = $result->getString();
+            
+            // 转换为Data URI
+            $base64 = base64_encode($svgString);
+            return 'data:image/svg+xml;base64,' . $base64;
+        } catch (\Throwable $e) {
+            // 如果生成失败，抛出异常以便调试
+            throw new \Exception('二维码生成失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine(), 0, $e);
+        }
+>>>>>>> dev-new
     }
     
     /**

@@ -1,0 +1,241 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Theme\Model\WelineTheme $theme */
+/**@var array $frontendLayouts */
+/**@var array $backendLayouts */
+/**@var array $frontendLayoutConfig */
+/**@var array $backendLayoutConfig */
+?>
+<div class="theme-layout-config">
+    <div class="page-header">
+        <h1><?= __('主题布局配置') ?></h1>
+        <p class="text-muted"><?= __('主题：%1', $theme->getName()) ?></p>
+    </div>
+
+    <form id="layout-config-form" method="post" action="<?= $this->getUrl('theme/backend/config/layout/save') ?>">
+        <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>" id="theme-id">
+        
+        <div class="row">
+            <!-- 前端配置 -->
+            <div class="col-md-6">
+                <div class="card" id="frontend-config-card">
+                    <div class="card-header">
+                        <h3><?= __('前端配置') ?></h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- 布局配置 -->
+                        <div class="form-group mb-4">
+                            <label><strong><?= __('布局配置') ?></strong></label>
+                            <?php if (empty($frontendLayouts)): ?>
+                                <p class="text-muted"><?= __('该主题暂无前端布局选项') ?></p>
+                            <?php else: ?>
+                                <?php foreach ($frontendLayouts as $layoutType => $options): ?>
+                                    <div class="form-group mb-3">
+                                        <label for="layout-frontend-<?= $layoutType ?>"><?= ucfirst($layoutType) ?> <?= __('布局') ?></label>
+                                        <select name="frontend_layouts[<?= $layoutType ?>]" 
+                                                id="layout-frontend-<?= $layoutType ?>" 
+                                                class="form-control" 
+                                                data-area="frontend" 
+                                                data-layout-type="<?= $layoutType ?>">
+                                            <?php foreach ($options as $option): ?>
+                                                <option value="<?= htmlspecialchars($option) ?>" 
+                                                        <?= ($frontendLayoutConfig[$layoutType] ?? 'default') === $option ? 'selected' : '' ?>>
+                                                    <?= ucfirst($option) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 后端配置 -->
+            <div class="col-md-6">
+                <div class="card" id="backend-config-card">
+                    <div class="card-header">
+                        <h3><?= __('后端配置') ?></h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- 布局配置 -->
+                        <div class="form-group mb-4">
+                            <label><strong><?= __('布局配置') ?></strong></label>
+                            <?php if (empty($backendLayouts)): ?>
+                                <p class="text-muted"><?= __('该主题暂无后端布局选项') ?></p>
+                            <?php else: ?>
+                                <?php foreach ($backendLayouts as $layoutType => $options): ?>
+                                    <div class="form-group mb-3">
+                                        <label for="layout-backend-<?= $layoutType ?>"><?= ucfirst($layoutType) ?> <?= __('布局') ?></label>
+                                        <select name="backend_layouts[<?= $layoutType ?>]" 
+                                                id="layout-backend-<?= $layoutType ?>" 
+                                                class="form-control" 
+                                                data-area="backend" 
+                                                data-layout-type="<?= $layoutType ?>">
+                                            <?php foreach ($options as $option): ?>
+                                                <option value="<?= htmlspecialchars($option) ?>" 
+                                                        <?= ($backendLayoutConfig[$layoutType] ?? 'default') === $option ? 'selected' : '' ?>>
+                                                    <?= ucfirst($option) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions mt-4">
+            <button type="submit" class="btn btn-primary"><?= __('保存配置') ?></button>
+            <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-secondary"><?= __('返回') ?></a>
+        </div>
+    </form>
+</div>
+
+<script>
+// 处理表单提交
+document.getElementById('layout-config-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const themeId = document.getElementById('theme-id').value;
+    
+    // 收集前端配置
+    const frontendLayouts = {};
+    const frontendLayoutSelects = document.querySelectorAll('#frontend-config-card select[data-layout-type]');
+    frontendLayoutSelects.forEach(select => {
+        const layoutType = select.getAttribute('data-layout-type');
+        frontendLayouts[layoutType] = select.value;
+    });
+    
+    // 收集后端配置
+    const backendLayouts = {};
+    const backendLayoutSelects = document.querySelectorAll('#backend-config-card select[data-layout-type]');
+    backendLayoutSelects.forEach(select => {
+        const layoutType = select.getAttribute('data-layout-type');
+        backendLayouts[layoutType] = select.value;
+    });
+    
+    // 保存前端配置
+    const frontendData = new FormData();
+    frontendData.append('theme_id', themeId);
+    frontendData.append('area', 'frontend');
+    Object.keys(frontendLayouts).forEach(key => {
+        frontendData.append(`layouts[${key}]`, frontendLayouts[key]);
+    });
+    
+    // 保存后端配置
+    const backendData = new FormData();
+    backendData.append('theme_id', themeId);
+    backendData.append('area', 'backend');
+    Object.keys(backendLayouts).forEach(key => {
+        backendData.append(`layouts[${key}]`, backendLayouts[key]);
+    });
+    
+    // 先保存前端配置
+    fetch('<?= $this->getUrl('theme/backend/config/layout/save') ?>', {
+        method: 'POST',
+        body: frontendData
+    }).then(response => response.json()).then(data => {
+        if (data.status === 'success') {
+            // 再保存后端配置
+            return fetch('<?= $this->getUrl('theme/backend/config/layout/save') ?>', {
+                method: 'POST',
+                body: backendData
+            });
+        } else {
+            throw new Error(data.message || '<?= __('保存失败') ?>');
+        }
+    }).then(response => response.json()).then(data => {
+        if (data.status === 'success') {
+            alert('<?= __('配置保存成功') ?>');
+            location.reload();
+        } else {
+            alert(data.message || '<?= __('保存失败') ?>');
+        }
+    }).catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('保存失败') ?>: ' + error.message);
+    });
+});
+</script>
+
+<style>
+.theme-layout-config {
+    padding: 20px;
+}
+
+.page-header {
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.page-header h1 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background-color: #f9fafb;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    border-radius: 8px 8px 0 0;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.form-actions {
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.btn-secondary {
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    margin-left: 10px;
+}
+
+.btn-secondary:hover {
+    background-color: #4b5563;
+}
+</style>
+

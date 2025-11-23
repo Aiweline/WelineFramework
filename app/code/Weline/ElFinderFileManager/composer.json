@@ -5,7 +5,11 @@
   "type": "weline-module",
   "require": {
     "php": "^8.1",
+<<<<<<< HEAD
     "studio-42/elfinder": "2.1.62",
+=======
+    "studio-42/elfinder": "^2.1.65",
+>>>>>>> dev-new
     "weline/module-file-manager": "*"
   },
   "authors": [
