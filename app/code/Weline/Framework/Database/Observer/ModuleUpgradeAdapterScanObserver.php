@@ -18,15 +18,6 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Output\Cli\Printing;
 
 /**
-<<<<<<< HEAD
- * 模块升级后自动扫描数据库适配器 Observer
- * 
- * 功能：
- * - 监听模块升级事件
- * - 自动扫描数据库适配器
- * - 注册新发现的适配器
- * - 更新适配器信息到 driver.php
-=======
  * 系统升级后自动扫描数据库适配器 Observer
  * 
  * 功能：
@@ -36,7 +27,6 @@ use Weline\Framework\Output\Cli\Printing;
  * - 更新适配器信息到 driver.php
  * 
  * 注意：此观察者只在系统升级完成后执行一次，不会在每个模块升级时重复执行
->>>>>>> dev-new
  */
 class ModuleUpgradeAdapterScanObserver implements ObserverInterface
 {
@@ -51,15 +41,12 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
     private Printing $printing;
     
     /**
-<<<<<<< HEAD
-=======
      * 静态变量：记录是否已经扫描过适配器
      * 防止事件被多次触发时重复扫描
      */
     private static bool $hasScanned = false;
     
     /**
->>>>>>> dev-new
      * 构造函数
      * 
      * @param AdapterScanner $adapterScanner
@@ -82,22 +69,6 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
-<<<<<<< HEAD
-            // 从事件中获取数据
-            $eventData = $event->getData('data');
-            if (is_array($eventData)) {
-                $moduleName = $eventData['module_name'] ?? '';
-            } elseif (is_object($eventData) && method_exists($eventData, 'getData')) {
-                $moduleName = $eventData->getData('module_name') ?? '';
-            } else {
-                $moduleName = '';
-            }
-            
-            // 静默扫描，不输出信息，避免干扰升级流程
-            // 扫描所有适配器
-            $scannedAdapters = $this->adapterScanner->scanAllAdapters();
-            
-=======
             // 如果已经扫描过，直接返回，避免重复扫描和输出
             if (self::$hasScanned) {
                 return;
@@ -109,18 +80,13 @@ class ModuleUpgradeAdapterScanObserver implements ObserverInterface
             // 标记已扫描
             self::$hasScanned = true;
             
->>>>>>> dev-new
             // 只在有结果时输出
             if (!empty($scannedAdapters)) {
                 $this->printing->note(__('扫描到 %{count} 个数据库适配器', ['count' => count($scannedAdapters)]));
             }
             
         } catch (\Throwable $e) {
-<<<<<<< HEAD
-            // 捕获所有异常，静默处理，避免影响模块升级流程
-=======
             // 捕获所有异常，静默处理，避免影响系统升级流程
->>>>>>> dev-new
             error_log("数据库适配器扫描失败: " . $e->getMessage() . "\n" . $e->getTraceAsString());
             // 不输出错误信息，避免干扰升级流程
         }

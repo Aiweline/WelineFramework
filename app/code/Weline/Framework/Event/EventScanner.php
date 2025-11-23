@@ -84,8 +84,6 @@ class EventScanner
                 continue;
             }
 
-<<<<<<< HEAD
-=======
             // 验证事件名是否符合规范：必须以模块名开头
             // 格式：模块名::事件名 或 模块名_子模块::事件名
             if (!$this->validateEventName($eventName, $moduleName)) {
@@ -99,7 +97,6 @@ class EventScanner
                 throw new \RuntimeException($errorMessage);
             }
 
->>>>>>> dev-new
             $docFileName = $eventConfig['doc'] ?? '';
             $hasDoc = false;
             $docPath = '';
@@ -126,8 +123,6 @@ class EventScanner
 
         return !empty($result) ? $result : null;
     }
-<<<<<<< HEAD
-=======
 
     /**
      * 验证事件名是否符合规范
@@ -156,6 +151,5 @@ class EventScanner
         // 支持：模块名 或 模块名_子模块 格式
         return str_starts_with($prefix, $moduleName);
     }
->>>>>>> dev-new
 }
 
