@@ -2801,7 +2801,7 @@ USAGE;
                 'name' => $themeName,
                 'auto_backup' => true,
             ];
-            $eventManager->dispatch('Framework_UninstallService::uninstall', $eventData);
+            $eventManager->dispatch('Weline_Framework_UninstallService::uninstall', $eventData);
             
             // 获取卸载结果
             $uninstallResult = $eventData['uninstall_result'] ?? null;

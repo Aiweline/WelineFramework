@@ -179,7 +179,7 @@ abstract class RequestAbstract extends RequestFilter
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['area' => $area, 'path' => $this->area_router];
-        $eventManager->dispatch('WelineFramework_Http::process_area', $eventData);
+        $eventManager->dispatch('Weline_Framework_Http::process_area', $eventData);
         return $area;
     }
 

@@ -18,7 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 系统更新后观察者
- * 监听 Framework_Setup::upgrade_after 事件，自动扫描并更新扩展信息
+ * 监听 Weline_Framework_Setup::upgrade_after 事件，自动扫描并更新扩展信息
  */
 class SetupUpgradeAfter implements ObserverInterface
 {

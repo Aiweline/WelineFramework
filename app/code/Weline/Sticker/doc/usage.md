@@ -8,7 +8,7 @@
 - 源规则目录：`<你的模块>/extends/module/Weline_Sticker/<目标模块>/<相对路径>`
 - 生成目录（编译输出）：`generated/extends/module/Weline_Sticker/`
 - 注册表文件：`generated/sticker.php`
-- 事件拦截：`Framework_View::fetch_file`
+- 事件拦截：`Weline_Framework_View::fetch_file`
 - 不使用：`module.xml`、Plugin（插件）。全部用事件实现。
 
 ### 目录约定
@@ -94,7 +94,7 @@ php bin/w sticker:refresh Weline_Sticker
 
 ### 模板加载优先级
 
-- 监听 `Framework_View::fetch_file` 事件，在框架获取模板文件时：
+- 监听 `Weline_Framework_View::fetch_file` 事件，在框架获取模板文件时：
   1) 先判断该模板所属模块是否存在于注册表中
   2) 若存在且该文件有规则，优先使用 `generated/extends/module/Weline_Sticker/...` 下的编译产物
 

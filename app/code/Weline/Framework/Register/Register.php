@@ -68,7 +68,7 @@ class Register implements RegisterDataInterface
             ->setData('register_arguments', $install_params);
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Register::register_installer', $installerPathData);
+        $eventsManager->dispatch('Weline_Framework_Register::register_installer', $installerPathData);
         $installer_class = $installerPathData->getData('installer');
         /**@var RegisterInterface $installer */
         $installer = ObjectManager::getInstance($installer_class);

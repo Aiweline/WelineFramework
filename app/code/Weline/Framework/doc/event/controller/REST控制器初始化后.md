@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_RestController::init_after` 事件及其使用方法。该事件在REST控制器初始化后触发，允许其他模块在初始化后执行操作。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_RestController::init_after` 事件及其使用方法。该事件在REST控制器初始化后触发，允许其他模块在初始化后执行操作。
 
 ## 事件列表
 
-### 1. Framework_RestController::init_after - REST控制器初始化后事件
+### 1. Weline_Framework_RestController::init_after - REST控制器初始化后事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_RestController::init_after`
+- **事件名称**：`Weline_Framework_RestController::init_after`
 - **事件类型**：控制器生命周期事件
 - **触发时机**：在REST控制器初始化后
 - **触发位置**：`app/code/Weline/Framework/Controller/AbstractRestController.php` 第 29 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_RestController::init_after` 事件在REST控制器初始化后触发，此时：
+`Weline_Framework_RestController::init_after` 事件在REST控制器初始化后触发，此时：
 - 控制器已完全初始化
 - 父类构造函数已调用
 - 可以执行初始化后的操作
@@ -37,10 +37,10 @@ public function __construct()
 {
     # 设置前置事件
     $event = w_obj(EventsManager::class);
-    $event->dispatch('Framework_RestController::init_before', $this);
+    $event->dispatch('Weline_Framework_RestController::init_before', $this);
     parent::__construct();
     # 设置后置事件
-    $event->dispatch('Framework_RestController::init_after', $this);
+    $event->dispatch('Weline_Framework_RestController::init_after', $this);
 }
 ```
 
@@ -61,7 +61,7 @@ public function __construct()
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_RestController::init_after">
+    <event name="Weline_Framework_RestController::init_after">
         <observer name="Your_Module::rest_controller_init_after"
                   instance="Your\Module\Observer\RestControllerInitAfterObserver"
                   disabled="false"
@@ -101,7 +101,7 @@ class RestControllerInitAfterObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_RestController::init_after` 事件传递的数据：
+`Weline_Framework_RestController::init_after` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -127,5 +127,5 @@ $controller = $event->getData();
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_RestController::init_after` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_RestController::init_after` 事件文档
 

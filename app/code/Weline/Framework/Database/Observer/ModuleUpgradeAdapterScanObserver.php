@@ -21,7 +21,7 @@ use Weline\Framework\Output\Cli\Printing;
  * 系统升级后自动扫描数据库适配器 Observer
  * 
  * 功能：
- * - 监听系统升级完成事件（Framework_Setup::upgrade_after）
+ * - 监听系统升级完成事件（Weline_Framework_Setup::upgrade_after）
  * - 自动扫描数据库适配器
  * - 注册新发现的适配器
  * - 更新适配器信息到 driver.php
