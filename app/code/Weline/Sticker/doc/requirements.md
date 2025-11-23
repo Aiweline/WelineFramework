@@ -10,7 +10,7 @@
 - 匹配机制：去除多余空白的代码匹配，支持 `position`（all、N、N-M）
 - 输出目录：`generated/extends/module/Weline_Sticker/`
 - 注册表：`generated/sticker.php`，开发模式自动更新，生产模式用命令更新
-- 加载拦截：事件 `Framework_View::fetch_file`，优先使用编译产物
+- 加载拦截：事件 `Weline_Framework_View::fetch_file`，优先使用编译产物
 - 冲突检测：同一目标代码在相同索引的多处修改视作冲突
 - 日志记录：`Model/StickerLog.php` 保留，记录错误/告警
 - 管理后台：提供 Sticker 列表与详情页（筛选、查看规则来源与目标）
@@ -27,7 +27,7 @@
 
 - 事件：
   - `setup_upgrade_after`：升级后收集/检测并更新注册表
-  - `Framework_View::fetch_file`：模板加载拦截
+  - `Weline_Framework_View::fetch_file`：模板加载拦截
 - 命令：
   - 收集：更新注册表并冲突检测（示例：`php bin/w sticker:collect`）
   - 刷新：重新编译（示例：`php bin/w sticker:refresh`）

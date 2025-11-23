@@ -250,12 +250,12 @@ class User extends AbstractRestController
 
 ### 5.1 拦截时机
 
-在 `Weline_Module::controller_attributes` 事件中拦截，在路由注册之前验证。
+在 `Weline_Framework_Module::controller_attributes` 事件中拦截，在路由注册之前验证。
 
 ### 5.2 拦截流程
 
 ```
-1. 路由注册时触发 Weline_Module::controller_attributes 事件
+1. 路由注册时触发 Weline_Framework_Module::controller_attributes 事件
 2. ApiDocInterceptor 监听该事件
 3. 检查是否为API接口（type === 'api'）
 4. 如果是API接口，调用 ApiDocValidator 验证

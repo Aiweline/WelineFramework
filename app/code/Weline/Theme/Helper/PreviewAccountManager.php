@@ -78,7 +78,7 @@ class PreviewAccountManager
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $eventsManager->dispatch(
-                'Weline_Frontend_Account_Register::register_after',
+                'Weline_Weline_Frontend_Account_Register::register_after',
                 new DataObject([
                     'user' => $user,
                     'source' => 'theme_preview'

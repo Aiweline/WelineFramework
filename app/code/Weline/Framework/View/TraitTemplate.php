@@ -485,7 +485,7 @@ trait TraitTemplate
         /*---------观察者模式 检测文件是否被继承-----------*/
         $fileData = new DataObject(['filename' => $filename, 'type' => 'compile', 'object' => $this]);
         $this->eventsManager->dispatch(
-            'Framework_View::fetch_file',
+            'Weline_Framework_View::fetch_file',
             $fileData
         );
         $event_filename = $fileData->getData('filename');

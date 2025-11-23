@@ -22,7 +22,7 @@ class Compile extends \Weline\Framework\Console\CommandAbstract
         # 分配编译事件
         /**@var EventsManager $evenManager */
         $evenManager = ObjectManager::getInstance(EventsManager::class);
-        $evenManager->dispatch('Framework_Console::compile');
+        $evenManager->dispatch('Weline_Framework_Console::compile');
     }
 
     /**

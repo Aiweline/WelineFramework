@@ -44,7 +44,7 @@ class Listing implements \Weline\Framework\Console\CommandInterface
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $params = new DataObject(['args' => $args, 'break' => false]);
-        $eventManager->dispatch('Framework_Database::indexer_listing', $params);
+        $eventManager->dispatch('Weline_Framework_Database::indexer_listing', $params);
         if ($params->getData('break')) {
             return;
         }
