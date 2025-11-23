@@ -1,0 +1,78 @@
+<?php
+/**
+ * 布局：默认布局
+ * 
+ * 默认布局模板，适用于所有页面类型
+ * 字段
+ * @meta.name {default="默认布局",name="默认布局",description="默认布局，用于描述布局的名称"}
+ * @meta.description {default="默认布局，包含header、main、footer",name="默认布局，包含header、main、footer",description="默认布局，包含header、main、footer，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ */
+$title = $this->getData('title') ?? '';
+$content = $this->getData('content') ?? '';
+$showHeader = $this->getData('showHeader') ?? true;
+$showFooter = $this->getData('showFooter') ?? true;
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+if ($title) {
+    $this->assign('title', $title);
+}
+?>
+<!DOCTYPE html>
+<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<head>
+    @template(Weline_Frontend::templates/public/head.phtml)
+</head>
+<body>
+    <?php if ($showHeader): ?>
+        <?php
+        // 使用配置的 header partials
+        $partialsBlock = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
+        $headerPath = $partialsBlock->getPartialsPath('frontend', 'header', 'default');
+        if ($headerPath) {
+            echo $this->fetch($headerPath, [
+                'logo' => $this->getData('logo') ?? '',
+                'logoText' => $this->getData('logoText') ?? __('Weline'),
+                'navItems' => $this->getData('navItems') ?? [],
+                'showSearch' => $this->getData('showSearch') ?? true,
+                'showUserMenu' => $this->getData('showUserMenu') ?? true
+            ]);
+        }
+        ?>
+    <?php endif; ?>
+    
+    <main class="main-content <?= htmlspecialchars($class) ?>">
+        <?php
+        // 如果指定了 contentTemplate，优先渲染原模板
+        $contentTemplate = $this->getData('contentTemplate');
+        if ($contentTemplate) {
+            echo $this->fetch($contentTemplate);
+        } else {
+            // 否则使用 content 变量（HTML字符串）
+            echo $content;
+        }
+        ?>
+    </main>
+    
+    <?php if ($showFooter): ?>
+        <?php
+        // 使用配置的 footer partials
+        $footerPath = $partialsBlock->getPartialsPath('frontend', 'footer', 'default');
+        if ($footerPath) {
+            echo $this->fetch($footerPath, [
+                'copyright' => $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利'),
+                'links' => $this->getData('links') ?? [],
+                'showBackToTop' => $this->getData('showBackToTop') ?? true
+            ]);
+        }
+        ?>
+    <?php endif; ?>
+</body>
+</html>
+

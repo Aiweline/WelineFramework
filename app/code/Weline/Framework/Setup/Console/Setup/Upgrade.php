@@ -36,11 +36,37 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+<<<<<<< HEAD
+=======
+        # 获取锁文件路径
+        $lockFile = $this->getLockFile();
+        $lockHandle = null;
+        
+        # 尝试获取文件锁
+        try {
+            $lockHandle = $this->acquireLock($lockFile);
+            if ($lockHandle === null) {
+                # 锁已被占用，提示用户稍后再试
+                $this->printing->warning(__('系统升级命令正在执行中，请稍后再试。'));
+                $this->printing->note(__('如果确认没有其他升级进程在运行，可以手动删除锁文件：%{1}', [$lockFile]));
+                exit(1);
+            }
+        } catch (\Exception $e) {
+            $this->printing->error(__('获取升级锁失败：%{1}', [$e->getMessage()]));
+            exit(1);
+        }
+        
+>>>>>>> dev-new
         # 检查系统是否已安装
         $is_installed = $this->checkSystemInstalled();
         
         # 如果未安装，提供安装选项
         if (!$is_installed) {
+<<<<<<< HEAD
+=======
+            # 释放锁
+            $this->releaseLock($lockHandle, $lockFile);
+>>>>>>> dev-new
             $this->handleSystemNotInstalled();
             return;
         }
@@ -66,6 +92,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
             throw $e;
         } finally {
+<<<<<<< HEAD
+=======
+            # 释放锁
+            $this->releaseLock($lockHandle, $lockFile);
+            
+>>>>>>> dev-new
             # 升级完成后自动关闭维护模式
             try {
                 $result = Env::getInstance()->setConfig('maintenance', false);
@@ -80,6 +112,132 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
     }
+<<<<<<< HEAD
+=======
+    
+    /**
+     * 获取锁文件路径
+     * @return string
+     */
+    private function getLockFile(): string
+    {
+        $lockDir = BP . 'var' . DS . 'process';
+        if (!is_dir($lockDir)) {
+            mkdir($lockDir, 0755, true);
+        }
+        return $lockDir . DS . 'setup_upgrade.lock';
+    }
+    
+    /**
+     * 尝试获取文件锁
+     * @param string $lockFile 锁文件路径
+     * @return resource|null 返回文件句柄，如果获取失败返回null
+     */
+    private function acquireLock(string $lockFile)
+    {
+        # 检查锁文件是否存在，如果存在则检查进程是否还在运行
+        if (file_exists($lockFile)) {
+            $lockInfo = $this->readLockInfo($lockFile);
+            if ($lockInfo !== null && isset($lockInfo['pid'])) {
+                # 检查进程是否还在运行
+                if (!$this->isProcessRunning($lockInfo['pid'])) {
+                    # 进程已不存在，删除旧的锁文件
+                    @unlink($lockFile);
+                }
+            }
+        }
+        
+        # 打开锁文件（如果不存在则创建）
+        $handle = @fopen($lockFile, 'c+');
+        if ($handle === false) {
+            return null;
+        }
+        
+        # 尝试获取排他锁（非阻塞模式）
+        # LOCK_EX | LOCK_NB: 排他锁 + 非阻塞
+        if (flock($handle, LOCK_EX | LOCK_NB)) {
+            # 写入当前进程ID和时间戳
+            ftruncate($handle, 0);
+            fwrite($handle, json_encode([
+                'pid' => getmypid(),
+                'time' => date('Y-m-d H:i:s'),
+                'command' => 'setup:upgrade'
+            ], JSON_UNESCAPED_UNICODE));
+            fflush($handle);
+            return $handle;
+        }
+        
+        # 获取锁失败，关闭文件句柄
+        fclose($handle);
+        return null;
+    }
+    
+    /**
+     * 读取锁文件信息
+     * @param string $lockFile 锁文件路径
+     * @return array|null
+     */
+    private function readLockInfo(string $lockFile): ?array
+    {
+        if (!file_exists($lockFile)) {
+            return null;
+        }
+        
+        $content = @file_get_contents($lockFile);
+        if ($content === false || empty(trim($content))) {
+            return null;
+        }
+        
+        $info = @json_decode($content, true);
+        return is_array($info) ? $info : null;
+    }
+    
+    /**
+     * 检查进程是否还在运行
+     * @param int $pid 进程ID
+     * @return bool
+     */
+    private function isProcessRunning(int $pid): bool
+    {
+        if (IS_WIN) {
+            # Windows 系统：使用 tasklist 命令检查进程
+            $output = [];
+            $returnVar = 0;
+            exec("tasklist /FI \"PID eq $pid\" 2>NUL", $output, $returnVar);
+            if ($returnVar === 0 && !empty($output)) {
+                # 检查输出中是否包含进程ID
+                foreach ($output as $line) {
+                    if (strpos($line, (string)$pid) !== false) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } else {
+            # Linux/Unix 系统：使用 kill -0 检查进程
+            return posix_kill($pid, 0);
+        }
+    }
+    
+    /**
+     * 释放文件锁
+     * @param resource|null $handle 文件句柄
+     * @param string $lockFile 锁文件路径
+     */
+    private function releaseLock($handle, string $lockFile): void
+    {
+        if ($handle !== null && is_resource($handle)) {
+            # 释放锁
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+        
+        # 无论文件句柄是否有效，都尝试删除锁文件
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
+        }
+    }
+>>>>>>> dev-new
 
     /**
      * @inheritDoc

@@ -1,0 +1,287 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Meta\Model\Meta as MetaModel;
+
+/** @var \Weline\Meta\Model\Meta $meta */
+$meta = $this->getData('meta');
+$metaId = $meta?->getData(MetaModel::fields_ID);
+$metaDataRaw = (string)$meta?->getData(MetaModel::fields_META_DATA);
+$metaSettingRaw = (string)$meta?->getData(MetaModel::fields_SETTING);
+$metaDataArr = json_decode($metaDataRaw, true) ?: [];
+$metaInfo = $metaDataArr['info'] ?? [];
+$translationKeyPreview = $meta->getId()
+    ? $meta->generateTranslationKey()
+    : '@meta::{namespace}.{type}.{identify}.info.name';
+$pageTitle = $metaId ? __('编辑元数据 #%1', $metaId) : __('新增元数据');
+$saveUrl = $this->getBackendUrl('meta/backend/meta/save');
+$backUrl = $this->getBackendUrl('meta/backend/meta');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $pageTitle ?></title>
+    <style>
+        .json-textarea {
+            font-family: "Fira Code", Monaco, Consolas, monospace;
+            min-height: 260px;
+        }
+
+        .meta-info-card .list-group-item {
+            border: 0;
+            border-radius: 0.75rem;
+            background: #f8f9fb;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= $pageTitle ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="<?= $backUrl ?>"><?= __('元数据管理') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= $pageTitle ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <form action="<?= $saveUrl ?>" method="post" class="needs-validation" novalidate>
+                    <input type="hidden" name="<?= MetaModel::fields_ID ?>" value="<?= htmlspecialchars((string)$metaId) ?>">
+                    <div class="row g-4">
+                        <div class="col-lg-8">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h4 class="card-title mb-3"><?= __('基础信息') ?></h4>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label"><?= __('命名空间') ?></label>
+                                            <input type="text" class="form-control" required
+                                                   name="<?= MetaModel::fields_NAMESPACE ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_NAMESPACE)) ?>">
+                                            <div class="invalid-feedback"><?= __('请输入命名空间') ?></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label"><?= __('类型') ?></label>
+                                            <input type="text" class="form-control" required
+                                                   name="<?= MetaModel::fields_META_TYPE ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_META_TYPE)) ?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label"><?= __('标识') ?></label>
+                                            <input type="text" class="form-control" required
+                                                   name="<?= MetaModel::fields_META_IDENTIFY ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_META_IDENTIFY)) ?>">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label"><?= __('区域') ?></label>
+                                            <input type="text" class="form-control"
+                                                   name="<?= MetaModel::fields_AREA ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_AREA)) ?>">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label"><?= __('分类') ?></label>
+                                            <input type="text" class="form-control"
+                                                   name="<?= MetaModel::fields_CATEGORY ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_CATEGORY)) ?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label"><?= __('相对路径') ?></label>
+                                            <input type="text" class="form-control"
+                                                   name="<?= MetaModel::fields_FILE_PATH ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_FILE_PATH)) ?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label"><?= __('完整路径') ?></label>
+                                            <input type="text" class="form-control"
+                                                   name="<?= MetaModel::fields_FILE_FULL_PATH ?>"
+                                                   value="<?= htmlspecialchars((string)$meta?->getData(MetaModel::fields_FILE_FULL_PATH)) ?>">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <h4 class="card-title mb-0"><?= __('Meta 数据') ?></h4>
+                                            <p class="text-muted mb-0 small"><?= __('使用 JSON 格式定义完整的元数据结构') ?></p>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    id="beautifyMetaJson">
+                                                <i class="ri-magic-line me-1"></i><?= __('格式化') ?>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-info btn-sm"
+                                                    id="validateMetaJson">
+                                                <i class="ri-check-line me-1"></i><?= __('校验 JSON') ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <textarea class="form-control json-textarea mt-3" name="<?= MetaModel::fields_META_DATA ?>"
+                                              id="metaJsonTextarea" required><?= htmlspecialchars($metaDataRaw ?: json_encode([
+                                                'namespace' => $meta?->getData(MetaModel::fields_NAMESPACE),
+                                                'type' => $meta?->getData(MetaModel::fields_META_TYPE),
+                                                'identify' => $meta?->getData(MetaModel::fields_META_IDENTIFY),
+                                                'info' => $metaInfo ?: [
+                                                    'name' => '',
+                                                    'description' => ''
+                                                ]
+                                            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></textarea>
+                                    <div class="invalid-feedback"><?= __('请输入合法的 JSON') ?></div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <h4 class="card-title mb-0"><?= __('可选设置 (setting)') ?></h4>
+                                            <p class="text-muted mb-0 small"><?= __('存放表单默认值、展示参数等额外配置') ?></p>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="beautifySettingJson">
+                                            <i class="ri-magic-line me-1"></i><?= __('格式化') ?>
+                                        </button>
+                                    </div>
+                                    <textarea class="form-control json-textarea mt-3" rows="8"
+                                              name="<?= MetaModel::fields_SETTING ?>"
+                                              id="settingJsonTextarea"><?= htmlspecialchars($metaSettingRaw) ?></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div class="card meta-info-card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><?= __('信息预览') ?></h5>
+                                    <p class="text-muted mb-3"><?= __('从 JSON info 节点中解析出的可读信息，便于确认翻译内容。') ?></p>
+                                    <?php if (!empty($metaInfo)): ?>
+                                        <div class="list-group">
+                                            <?php foreach ($metaInfo as $key => $value): ?>
+                                                <div class="list-group-item">
+                                                    <div class="d-flex justify-content-between">
+                                                        <span class="text-muted text-uppercase small"><?= htmlspecialchars($key) ?></span>
+                                                        <span class="fw-semibold"><?= htmlspecialchars($value) ?></span>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="alert alert-warning mb-0">
+                                            <?= __('当前 JSON 中未找到 info.* 字段，建议补充 name、description 等信息。') ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><?= __('翻译 Key 预览') ?></h5>
+                                    <p class="text-muted small mb-2"><?= __('根据当前数据自动生成，可在 Taglib 翻译页中使用。') ?></p>
+                                    <div class="bg-light rounded p-3">
+                                        <code id="translationKeyPreview"><?= htmlspecialchars($translationKeyPreview) ?></code>
+                                        <button type="button" class="btn btn-sm btn-link float-end text-muted px-0"
+                                                id="copyTranslationKey">
+                                            <i class="ri-file-copy-line me-1"></i><?= __('复制') ?>
+                                        </button>
+                                    </div>
+                                    <hr>
+                                    <p class="text-muted small mb-2"><?= __('常用操作') ?></p>
+                                    <ul class="mb-0 ps-3 small text-muted">
+                                        <li><?= __('Meta JSON 中的 info.* 字段会自动收集为词条。') ?></li>
+                                        <li><?= __('保存后可在“元数据列表”页快速跳转翻译。') ?></li>
+                                        <li><?= __('Setting 字段建议保持 JSON 格式，方便扩展。') ?></li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-primary btn-lg">
+                                            <i class="ri-save-3-line me-1"></i><?= __('保存') ?>
+                                        </button>
+                                        <a href="<?= $backUrl ?>" class="btn btn-light">
+                                            <?= __('返回列表') ?>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+<script>
+    (function () {
+        const beautify = (textarea) => {
+            if (!textarea) {
+                return;
+            }
+            try {
+                const value = textarea.value.trim();
+                if (!value) {
+                    return;
+                }
+                textarea.value = JSON.stringify(JSON.parse(value), null, 2);
+            } catch (e) {
+                window.Toast && Toast.error('JSON 解析失败：' + e.message);
+            }
+        };
+
+        const metaJsonTextarea = document.getElementById('metaJsonTextarea');
+        const settingTextarea = document.getElementById('settingJsonTextarea');
+
+        document.getElementById('beautifyMetaJson').addEventListener('click', () => beautify(metaJsonTextarea));
+        document.getElementById('beautifySettingJson').addEventListener('click', () => beautify(settingTextarea));
+        document.getElementById('validateMetaJson').addEventListener('click', () => {
+            try {
+                JSON.parse(metaJsonTextarea.value);
+                window.Toast ? Toast.success('JSON 校验通过') : alert('JSON 校验通过');
+            } catch (e) {
+                window.Toast ? Toast.error(e.message) : alert(e.message);
+            }
+        });
+
+        const translationKeyPreview = document.getElementById('translationKeyPreview').textContent;
+        document.getElementById('copyTranslationKey').addEventListener('click', () => {
+            navigator.clipboard.writeText(translationKeyPreview).then(() => {
+                const btn = document.getElementById('copyTranslationKey');
+                btn.innerHTML = '<i class="ri-check-line me-1"></i><?= __('已复制') ?>';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="ri-file-copy-line me-1"></i><?= __('复制') ?>';
+                }, 1500);
+            });
+        });
+    })();
+</script>
+</body>
+</html>
+

@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "base_path": "Weline_Theme::view/theme/",
+    "theme": {
+      "default": "Weline_Theme",
+      "name": "主题命名空间",
+      "description": "主题命名空间，用于主题模块的命名空间",
+      "frontend": {
+        "default": "前端组",
+        "name": "前端组",
+        "description": "前端组，用于给元素据分组用的，方便维护",
+        "layouts": {
+          "name": "布局命名空间",
+          "description": "布局命名空间，用于描述布局的名称",
+          "options": {
+            "account": "个人中心布局",
+            "homepage": "首页布局",
+            "product": "产品布局",
+            "category": "分类布局",
+            "cart": "购物车布局",
+            "checkout": "结账布局",
+            "default": "默认布局"
+          },
+          "values": [
+            "account",
+            "homepage",
+            "product",
+            "category",
+            "cart",
+            "checkout",
+            "default"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择布局",
+          "show": true
+        },
+        "components": {
+          "name": "组件命名空间",
+          "description": "组件命名空间，用于描述组件的名称",
+          "options": {
+            "alert": "Alert提示组件",
+            "button": "Button按钮组件",
+            "pagination": "Pagination分页组件"
+          },
+          "values": [
+            "alert",
+            "button",
+            "pagination"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择组件",
+          "show": true
+        },
+        "partials": {
+          "name": "部件",
+          "description": "部件命名空间，用于描述部件的名称",
+          "options": {
+            "header": "头部部件",
+            "footer": "底部部件",
+            "sidebar": "侧边栏部件",
+            "breadcrumb": "面包屑部件"
+          },
+          "values": [
+            "header",
+            "footer",
+            "sidebar",
+            "breadcrumb"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择部件",
+          "show": true
+        }
+      },
+      "backend": {
+        "default": "后端组",
+        "name": "后端组",
+        "description": "后端组，用于给元素据分组用的，方便维护",
+        "layouts": {
+          "name": "布局命名空间",
+          "description": "布局命名空间，用于描述布局的名称",
+          "options": {
+            "dashboard": "仪表盘布局",
+            "default": "默认布局",
+            "minimal": "极简布局",
+            "fullscreen": "全屏布局"
+          },
+          "values": [
+            "dashboard",
+            "default",
+            "minimal",
+            "fullscreen"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择布局",
+          "show": true
+        },
+        "components": {
+          "name": "组件命名空间",
+          "description": "组件命名空间，用于描述组件的名称"
+        },
+        "partials": {
+          "name": "部件",
+          "description": "部件命名空间，用于描述部件的名称",
+          "options": {
+            "header": "头部部件",
+            "footer": "底部部件",
+            "sidebar": "侧边栏部件"
+          },
+          "values": [
+            "header",
+            "footer",
+            "sidebar"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": true,
+          "placeholder": "请选择部件",
+          "show": true
+        }
+      }
+    }
+  }
+}

@@ -30,6 +30,14 @@ return [
         'description' => __('系统升级完成后触发，允许其他模块执行升级后的操作。'),
         'doc' => 'setup/系统升级后.md',
     ],
+<<<<<<< HEAD
+=======
+    'Framework_System::system_update_after' => [
+        'name' => __('系统更新后'),
+        'description' => __('系统更新完成后触发，允许其他模块执行更新后的操作。'),
+        'doc' => 'system/系统更新后.md',
+    ],
+>>>>>>> dev-new
     
     // ========== 模块升级事件 ==========
     'Framework_Module::module_upgrade_before' => [
@@ -42,6 +50,14 @@ return [
         'description' => __('模块升级时触发，允许其他模块监听模块升级过程。'),
         'doc' => 'module/模块升级.md',
     ],
+<<<<<<< HEAD
+=======
+    'Framework_Module::module_install_after' => [
+        'name' => __('模块安装后'),
+        'description' => __('模块安装完成后触发，允许其他模块执行安装后的操作。'),
+        'doc' => 'module/模块安装后.md',
+    ],
+>>>>>>> dev-new
     
     // ========== 服务器事件 ==========
     'Framework_Server::start_after' => [
@@ -162,6 +178,29 @@ return [
         'description' => __('在后端控制器初始化后触发，允许其他模块在初始化后执行操作。'),
         'doc' => 'app/后端控制器初始化后.md',
     ],
+<<<<<<< HEAD
+=======
+    'Framework_FrontendController::init_before' => [
+        'name' => __('前端控制器初始化前'),
+        'description' => __('在前端控制器初始化前触发，允许其他模块在初始化前执行操作。'),
+        'doc' => 'controller/前端控制器初始化前.md',
+    ],
+    'Framework_FrontendController::init_after' => [
+        'name' => __('前端控制器初始化后'),
+        'description' => __('在前端控制器初始化后触发，允许其他模块在初始化后执行操作。'),
+        'doc' => 'controller/前端控制器初始化后.md',
+    ],
+    'Framework_FrontendRestController::init_before' => [
+        'name' => __('前端REST控制器初始化前'),
+        'description' => __('在前端REST控制器初始化前触发，允许其他模块在初始化前执行操作。'),
+        'doc' => 'controller/前端REST控制器初始化前.md',
+    ],
+    'Framework_FrontendRestController::init_after' => [
+        'name' => __('前端REST控制器初始化后'),
+        'description' => __('在前端REST控制器初始化后触发，允许其他模块在初始化后执行操作。'),
+        'doc' => 'controller/前端REST控制器初始化后.md',
+    ],
+>>>>>>> dev-new
     
     // ========== 模块事件 ==========
     'Weline_Module::controller_attributes' => [
@@ -269,4 +308,28 @@ return [
         'description' => __('在编译资源文件时触发，允许其他模块监听并处理资源编译过程。事件数据包含区域、类型、资源列表等信息。'),
         'doc' => 'resource/资源编译器.md',
     ],
+<<<<<<< HEAD
+=======
+    
+    // ========== 维护模式事件 ==========
+    'Weline_Framework::maintenance' => [
+        'name' => __('维护模式'),
+        'description' => __('在系统进入维护模式时触发，允许其他模块自定义维护模式的响应方式。例如：API请求可以统一返回JSON格式的维护提示。'),
+        'doc' => 'maintenance/维护模式.md',
+    ],
+    
+    // ========== 卸载服务事件 ==========
+    'Framework_UninstallService::uninstall' => [
+        'name' => __('卸载服务'),
+        'description' => __('在卸载服务执行卸载操作时触发，允许其他模块监听卸载过程并执行相应的清理操作。'),
+        'doc' => 'uninstall/卸载服务.md',
+    ],
+    
+    // ========== 部署模式事件 ==========
+    'Framework_Deploy_Mode_Set::prod_after' => [
+        'name' => __('部署模式切换到生产环境后'),
+        'description' => __('在部署模式切换到生产环境(prod)后触发，允许其他模块执行生产环境相关的操作，如生成加密token等。'),
+        'doc' => 'deploy/部署模式切换到生产环境后.md',
+    ],
+>>>>>>> dev-new
 ];

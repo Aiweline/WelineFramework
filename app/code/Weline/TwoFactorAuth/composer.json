@@ -19,7 +19,12 @@
     ],
     "require": {
         "php": ">=8.0",
+<<<<<<< HEAD
         "weline/framework": "^1.0"
+=======
+        "weline/framework": "@dev",
+        "endroid/qr-code": "^5.0"
+>>>>>>> dev-new
     },
     "require-dev": {
         "phpunit/phpunit": "^9.0",

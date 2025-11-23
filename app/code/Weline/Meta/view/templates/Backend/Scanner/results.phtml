@@ -1,0 +1,178 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$results = $this->getData('results') ?? ['success' => [], 'failed' => [], 'skipped' => []];
+$successCount = count($results['success'] ?? []);
+$failedCount = count($results['failed'] ?? []);
+$skippedCount = count($results['skipped'] ?? []);
+$backToScanner = $this->getBackendUrl('meta/backend/scanner');
+$backToList = $this->getBackendUrl('meta/backend/meta');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('扫描结果') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('扫描结果') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="<?= $backToScanner ?>"><?= __('扫描器') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('结果') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body text-center">
+                                <div class="avatar-sm bg-soft-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
+                                    <i class="ri-checkbox-circle-line text-success fs-4"></i>
+                                </div>
+                                <p class="text-muted mb-1"><?= __('成功解析') ?></p>
+                                <h3 class="mb-0 text-success"><?= $successCount ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body text-center">
+                                <div class="avatar-sm bg-soft-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
+                                    <i class="ri-error-warning-line text-danger fs-4"></i>
+                                </div>
+                                <p class="text-muted mb-1"><?= __('解析失败') ?></p>
+                                <h3 class="mb-0 text-danger"><?= $failedCount ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border shadow-sm h-100">
+                            <div class="card-body text-center">
+                                <div class="avatar-sm bg-soft-warning rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2">
+                                    <i class="ri-skip-forward-line text-warning fs-4"></i>
+                                </div>
+                                <p class="text-muted mb-1"><?= __('被跳过') ?></p>
+                                <h3 class="mb-0 text-warning"><?= $skippedCount ?></h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h4 class="card-title mb-0"><?= __('成功文件') ?></h4>
+                                    <span class="badge bg-soft-success text-success"><?= $successCount ?></span>
+                                </div>
+                                <?php if ($successCount === 0): ?>
+                                    <div class="alert alert-light mb-0"><?= __('暂无数据') ?></div>
+                                <?php else: ?>
+                                    <div class="list-group list-group-flush">
+                                        <?php foreach ($results['success'] as $path): ?>
+                                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="ri-checkbox-circle-line text-success"></i>
+                                                    <span class="small text-break"><?= htmlspecialchars($path) ?></span>
+                                                </div>
+                                                <span class="badge bg-success"><?= __('OK') ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h4 class="card-title mb-0"><?= __('失败文件') ?></h4>
+                                    <span class="badge bg-soft-danger text-danger"><?= $failedCount ?></span>
+                                </div>
+                                <?php if ($failedCount === 0): ?>
+                                    <div class="alert alert-light mb-0"><?= __('暂无失败记录') ?></div>
+                                <?php else: ?>
+                                    <div class="list-group list-group-flush">
+                                        <?php foreach ($results['failed'] as $failed): ?>
+                                            <div class="list-group-item">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="ri-close-circle-line text-danger"></i>
+                                                    <span class="small text-break flex-grow-1"><?= htmlspecialchars($failed['file']) ?></span>
+                                                    <span class="badge bg-danger"><?= __('失败') ?></span>
+                                                </div>
+                                                <div class="text-danger small mt-1">
+                                                    <?= htmlspecialchars($failed['error']) ?>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h4 class="card-title mb-0"><?= __('跳过文件 (无 @meta 标记)') ?></h4>
+                                    <span class="badge bg-soft-warning text-warning"><?= $skippedCount ?></span>
+                                </div>
+                                <?php if ($skippedCount === 0): ?>
+                                    <div class="alert alert-light mb-0"><?= __('全部文件均尝试解析，无跳过项。') ?></div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle">
+                                            <tbody>
+                                            <?php foreach ($results['skipped'] as $path): ?>
+                                                <tr>
+                                                    <td width="30"><i class="ri-skip-forward-line text-warning"></i></td>
+                                                    <td class="text-break"><?= htmlspecialchars($path) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="<?= $backToScanner ?>" class="btn btn-outline-secondary">
+                        <i class="ri-arrow-left-line me-1"></i><?= __('返回扫描器') ?>
+                    </a>
+                    <a href="<?= $backToList ?>" class="btn btn-primary">
+                        <i class="ri-database-2-line me-1"></i><?= __('查看元数据列表') ?>
+                    </a>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+</body>
+</html>
+
