@@ -1,5 +1,7 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
+// 设置页面标题
+$this->setData('title', __('用户登录'));
 ?>
 <style>
 .login-form-container {
@@ -496,6 +498,7 @@ $(document).ready(function() {
                 }
                 handleLoginError(errorMsg);
             }
+        });
         });
     });
 

@@ -4,13 +4,14 @@
  * 
  * 产品详情页布局，包含产品图片、信息、详情等区域
  * 字段
- * @info description 描述：产品详情页布局，包含产品图片、信息、详情等区域
- * @info name 名称：产品详情页布局
- * @param title 页面标题
- * @param content 主要内容（HTML字符串）
- * @param sidebar 侧边栏内容（相关产品推荐等）
- * @param breadcrumb 面包屑导航
- * @param class 额外CSS类
+ * @meta.name {default="产品详情页布局",name="产品详情页布局",description="产品详情页布局，用于描述布局的名称"}
+ * @meta.description {default="产品详情页布局，包含产品图片、信息、详情等区域",name="产品详情页布局，包含产品图片、信息、详情等区域",description="产品详情页布局，包含产品图片、信息、详情等区域，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="产品详情",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param sidebar {default="",name="侧边栏内容（相关产品推荐等）",description="侧边栏内容（相关产品推荐等），用于设置侧边栏内容"}
+ * @param breadcrumb {default="",name="面包屑导航",description="面包屑导航，用于设置面包屑导航"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $title = $this->getData('title') ?? __('产品详情');
 $content = $this->getData('content') ?? '';

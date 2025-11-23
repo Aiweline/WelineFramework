@@ -15,6 +15,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
 {
     private FrontendUserSession $session;
     private Template $template;
+    protected ?string $layoutType = 'account.dashboard';
 
     public function __construct(
         FrontendUserSession $session,
@@ -37,11 +38,18 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             return;
         }
 
+        // 获取登录用户
         /** @var FrontendUser $user */
         $user = $this->session->getLoginUser();
+        // 设置用户数据
+        $this->assign('user', $user);
         
-        // 使用主题仪表盘布局
-        return $this->fetch('Weline_Frontend::templates/frontend/account/index.phtml', ['user' => $user]);
+        // 使用 template() 方法渲染侧边栏（不触发事件），然后赋值给模板
+        $sidebar = $this->template('Weline_Frontend::templates/frontend/account/sidebar/side.phtml');
+        $this->assign('sidebar', $sidebar);
+        
+        // 直接返回主内容模板，ControllerFetchFileBefore 和 ControllerFetchFileAfter 观察者会自动处理布局包装
+        return $this->fetch('Weline_Frontend::templates/frontend/account/index.phtml');
     }
 
     /**

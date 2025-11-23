@@ -35,12 +35,38 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        /** @var DataObject $eventData */
-        $eventData = $event->getData('data');
+        // 强制立即写入日志（不使用缓冲）
+        file_put_contents(BP . 'var/log/event-debug.log', date('[Y-m-d H:i:s]') . " [DEBUG] ControllerFetchFileBefore.php:36 - 【ControllerFetchFileBefore】观察者开始执行 - 第1行\n", FILE_APPEND);
         
-        // dd($eventData); // 调试代码已注释，如需调试请取消注释
-        if (!$eventData instanceof DataObject) {
-            return;
+        try {
+            // 调试：记录到日志文件（立即写入，不使用缓冲）
+            Env::log('event-debug', "【ControllerFetchFileBefore】观察者开始执行 - 第1行", 'DEBUG');
+            
+            /** @var DataObject $eventData */
+            $eventData = $event->getData('data');
+            
+            Env::log('event-debug', "【ControllerFetchFileBefore】已获取 eventData - 第2行", 'DEBUG');
+            Env::log('event-debug', "【ControllerFetchFileBefore】eventData类型: " . gettype($eventData), 'DEBUG');
+            
+            if ($eventData instanceof DataObject) {
+                Env::log('event-debug', "【ControllerFetchFileBefore】eventData是DataObject实例", 'DEBUG');
+                $data = $eventData->getData();
+                Env::log('event-debug', "【ControllerFetchFileBefore】eventData数据键: " . implode(', ', array_keys($data)), 'DEBUG');
+                Env::log('event-debug', "【ControllerFetchFileBefore】eventData完整数据: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR), 'DEBUG');
+            } else {
+                Env::log('event-debug', "【ControllerFetchFileBefore】eventData不是DataObject实例，类型: " . gettype($eventData), 'WARNING');
+            }
+            
+            // dd($eventData); // 调试代码已注释，如需调试请取消注释
+            if (!$eventData instanceof DataObject) {
+                Env::log('event-debug', "【ControllerFetchFileBefore】eventData不是DataObject，提前返回", 'WARNING');
+                return;
+            }
+            
+            Env::log('event-debug', "【ControllerFetchFileBefore】继续执行后续逻辑", 'DEBUG');
+        } catch (\Throwable $e) {
+            Env::log('event-debug', "【ControllerFetchFileBefore】执行异常: " . $e->getMessage() . " | 文件: " . $e->getFile() . " | 行号: " . $e->getLine(), 'ERROR');
+            throw $e;
         }
 
         $layoutType = $eventData->getData('layoutType');

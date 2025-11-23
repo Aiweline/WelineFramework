@@ -4,12 +4,13 @@
  * 
  * 空购物车页面布局，提示用户购物车为空
  * 字段
- * @info description 描述：空购物车页面布局，提示用户购物车为空
- * @info name 名称：空购物车布局
- * @param title 页面标题（默认：购物车）
- * @param message 提示信息（可选）
- * @param continueShopping 继续购物链接
- * @param class 额外CSS类
+ * @meta.name {default="空购物车布局",name="空购物车布局",description="空购物车布局，用于描述布局的名称"}
+ * @meta.description {default="空购物车页面布局，提示用户购物车为空",name="空购物车页面布局，提示用户购物车为空",description="空购物车页面布局，提示用户购物车为空，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="购物车",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param message {default="您的购物车是空的",name="提示信息（可选）",description="提示信息（可选），用于设置提示信息"}
+ * @param continueShopping {default="/",name="继续购物链接",description="继续购物链接，用于设置继续购物链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $title = $this->getData('title') ?? __('购物车');
 $message = $this->getData('message') ?? __('您的购物车是空的');

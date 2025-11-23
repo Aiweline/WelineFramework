@@ -4,19 +4,62 @@
  * 
  * 页面底部区域（链接、版权信息等）
  * 字段
- * @info description 描述：页面底部区域（链接、版权信息等）
- * @info name 名称：Footer底部片段
- * @param copyright 版权信息
- * @param links 链接数组
- * @param showBackToTop 是否显示返回顶部
- * @param class 额外CSS类
+ * @meta.name {default="Footer底部片段",name="Footer底部片段",description="Footer底部片段，用于描述片段的名称"}
+ * @meta.description {default="页面底部区域（链接、版权信息等）",name="页面底部区域（链接、版权信息等）",description="页面底部区域（链接、版权信息等），用于描述片段的用途"}
+ * @param.copyright {default="© {year} Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
+ * @param.links {default=[{"title":"关于我们","items":[{"text":"公司简介","url":"/about"},{"text":"联系我们","url":"/contact"},{"text":"加入我们","url":"/careers"}]},{"title":"帮助中心","items":[{"text":"使用指南","url":"/help"},{"text":"常见问题","url":"/faq"},{"text":"服务条款","url":"/terms"}]},{"title":"客户服务","items":[{"text":"在线客服","url":"/support"},{"text":"意见反馈","url":"/feedback"},{"text":"隐私政策","url":"/privacy"}]}],name="链接数组",description="链接数组，用于设置页面底部的链接列表，格式：[{\"title\":\"标题\",\"items\":[{\"text\":\"链接文字\",\"url\":\"链接地址\"}]}]"}
+ * @param.showBackToTop {default=true,name="是否显示返回顶部",description="是否显示返回顶部按钮，用于控制返回顶部按钮的显示"}
+ * @param.socialMedia {default=[{"name":"微信公众号","icon":"fab fa-weixin","url":"#","color":"#07c160"},{"name":"微博","icon":"fab fa-weibo","url":"#","color":"#e6162d"},{"name":"抖音","icon":"fab fa-tiktok","url":"#","color":"#000000"},{"name":"B站","icon":"fab fa-bilibili","url":"#","color":"#fb7299"},{"name":"小红书","icon":"fab fa-instagram","url":"#","color":"#ff2442"}],name="官媒配置",description="官媒配置，用于设置官方社交媒体链接，格式：[{\"name\":\"名称\",\"icon\":\"图标类名\",\"url\":\"链接地址\",\"color\":\"主题色\"}]"}
+ * @param.showSocialMedia {default=true,name="是否显示官媒",description="是否显示官媒链接，用于控制官媒区域的显示"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
-$links = $this->getData('links') ?? [];
+$links = $this->getData('links') ?? [
+    [
+        'title' => __('关于我们'),
+        'items' => [
+            ['text' => __('公司简介'), 'url' => '/about'],
+            ['text' => __('联系我们'), 'url' => '/contact'],
+            ['text' => __('加入我们'), 'url' => '/careers'],
+        ]
+    ],
+    [
+        'title' => __('帮助中心'),
+        'items' => [
+            ['text' => __('使用指南'), 'url' => '/help'],
+            ['text' => __('常见问题'), 'url' => '/faq'],
+            ['text' => __('服务条款'), 'url' => '/terms'],
+        ]
+    ],
+    [
+        'title' => __('客户服务'),
+        'items' => [
+            ['text' => __('在线客服'), 'url' => '/support'],
+            ['text' => __('意见反馈'), 'url' => '/feedback'],
+            ['text' => __('隐私政策'), 'url' => '/privacy'],
+        ]
+    ],
+];
 $showBackToTop = $this->getData('showBackToTop') ?? true;
+$socialMedia = $this->getData('socialMedia') ?? [
+    ['name' => __('微信公众号'), 'icon' => 'fab fa-weixin', 'url' => '#', 'color' => '#07c160'],
+    ['name' => __('微博'), 'icon' => 'fab fa-weibo', 'url' => '#', 'color' => '#e6162d'],
+    ['name' => __('抖音'), 'icon' => 'fab fa-tiktok', 'url' => '#', 'color' => '#000000'],
+    ['name' => __('B站'), 'icon' => 'fab fa-bilibili', 'url' => '#', 'color' => '#fb7299'],
+    ['name' => __('小红书'), 'icon' => 'fab fa-instagram', 'url' => '#', 'color' => '#ff2442'],
+];
+$showSocialMedia = $this->getData('showSocialMedia') ?? true;
 $class = $this->getData('class') ?? '';
 ?>
-<footer class="weline-footer <?= htmlspecialchars($class) ?>">
+<footer id="footer" class="weline-footer <?= htmlspecialchars($class) ?>" data-layout="default" data-layout-type="default" data-layout-option="default">
+    <w:block>Weline\Frontend\Block\Footer\Base</w:block>
+    <?php
+    /**@var \Weline\Framework\View\Template $this */
+    echo $this->getFooter()->getHtml();
+    ?>
+    <!-- Footer Hooks -->
+    <hook>footer</hook>
+    
     <div class="footer-container">
         <?php if (!empty($links)): ?>
             <div class="footer-content">
@@ -41,13 +84,29 @@ $class = $this->getData('class') ?? '';
             </div>
         <?php endif; ?>
         
+        <?php if ($showSocialMedia && !empty($socialMedia)): ?>
+            <div class="footer-social-media">
+                <div class="social-media-title"><?= __('关注我们') ?></div>
+                <div class="social-media-links">
+                    <?php foreach ($socialMedia as $media): ?>
+                        <a href="<?= htmlspecialchars($media['url'] ?? '#') ?>" 
+                           class="social-media-link" 
+                           title="<?= htmlspecialchars($media['name'] ?? '') ?>"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           style="--social-color: <?= htmlspecialchars($media['color'] ?? '#3b82f6') ?>">
+                            <i class="<?= htmlspecialchars($media['icon'] ?? 'fas fa-link') ?>"></i>
+                            <span class="social-media-name"><?= htmlspecialchars($media['name'] ?? '') ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+        
         <div class="footer-bottom">
             <p><?= htmlspecialchars($copyright) ?></p>
         </div>
     </div>
-    
-    <!-- Footer Hooks -->
-    <hook>footer</hook>
     
     <?php if ($showBackToTop): ?>
         <button class="back-to-top" id="backToTop" title="<?= __('返回顶部') ?>">
@@ -56,3 +115,408 @@ $class = $this->getData('class') ?? '';
     <?php endif; ?>
 </footer>
 
+<style>
+.weline-footer {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #cbd5e1;
+    padding: 3rem 0 1.5rem;
+    margin-top: 4rem;
+    position: relative;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2.5rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    justify-items: center;
+    text-align: center;
+}
+
+.footer-section {
+    text-align: center;
+}
+
+.footer-section h3 {
+    color: #ffffff;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+.footer-section ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.footer-section li {
+    margin: 0;
+}
+
+.footer-section a {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    display: inline-block;
+    position: relative;
+    padding-left: 0;
+}
+
+.footer-section a::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    transition: width 0.3s ease;
+}
+
+.footer-section a:hover {
+    color: #3b82f6;
+    padding-left: 0.5rem;
+    transform: translateX(4px);
+}
+
+.footer-section a:hover::before {
+    width: 100%;
+}
+
+/* 官媒区域 */
+.footer-social-media {
+    text-align: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 1.5rem;
+}
+
+.social-media-title {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    letter-spacing: 0.5px;
+}
+
+.social-media-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.social-media-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.social-media-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--social-color);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 0;
+}
+
+.social-media-link i {
+    position: relative;
+    z-index: 1;
+    font-size: 1.125rem;
+    transition: transform 0.3s ease;
+}
+
+.social-media-link .social-media-name {
+    position: relative;
+    z-index: 1;
+    transition: color 0.3s ease;
+}
+
+.social-media-link:hover {
+    border-color: var(--social-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.social-media-link:hover::before {
+    opacity: 0.1;
+}
+
+.social-media-link:hover i {
+    transform: scale(1.15);
+    color: var(--social-color);
+}
+
+.social-media-link:hover .social-media-name {
+    color: var(--social-color);
+}
+
+.footer-bottom {
+    text-align: center;
+    padding-top: 1.5rem;
+}
+
+.footer-bottom p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+/* 返回顶部按钮 */
+.back-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: all 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 999;
+}
+
+.back-to-top.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+}
+
+.back-to-top:active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .footer-container {
+        padding: 0 1.5rem;
+    }
+    
+    .footer-content {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 2rem;
+    }
+    
+    .footer-social-media {
+        padding: 1.5rem 0;
+    }
+    
+    .social-media-links {
+        gap: 0.75rem;
+    }
+    
+    .social-media-link {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .weline-footer {
+        padding: 2rem 0 1rem;
+        margin-top: 2rem;
+    }
+    
+    .footer-container {
+        padding: 0 1rem;
+    }
+    
+    .footer-content {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+    }
+    
+    .footer-section h3 {
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .footer-section a {
+        font-size: 0.9rem;
+    }
+    
+    .footer-social-media {
+        padding: 1.25rem 0;
+        margin-bottom: 1.25rem;
+    }
+    
+    .social-media-title {
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+    }
+    
+    .social-media-links {
+        gap: 0.625rem;
+    }
+    
+    .social-media-link {
+        padding: 0.5rem 0.875rem;
+        font-size: 0.8rem;
+    }
+    
+    .social-media-link i {
+        font-size: 1rem;
+    }
+    
+    .back-to-top {
+        width: 44px;
+        height: 44px;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        font-size: 1.125rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+    
+    .footer-social-media {
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .social-media-title {
+        font-size: 0.9rem;
+        margin-bottom: 0.875rem;
+    }
+    
+    .social-media-links {
+        gap: 0.5rem;
+        justify-content: center;
+    }
+    
+    .social-media-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        flex: 0 0 auto;
+    }
+    
+    .social-media-link i {
+        font-size: 0.95rem;
+    }
+    
+    .social-media-link .social-media-name {
+        display: none;
+    }
+    
+    .footer-bottom p {
+        font-size: 0.85rem;
+    }
+    
+    .back-to-top {
+        width: 40px;
+        height: 40px;
+        bottom: 1rem;
+        right: 1rem;
+        font-size: 1rem;
+    }
+}
+
+/* 暗色模式支持（如果系统支持） */
+@media (prefers-color-scheme: light) {
+    .weline-footer {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: #475569;
+        border-top-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    .footer-section h3 {
+        color: #1e293b;
+    }
+    
+    .footer-section a {
+        color: #64748b;
+    }
+    
+    .footer-section a:hover {
+        color: #3b82f6;
+    }
+    
+    .footer-content {
+        border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    .footer-bottom p {
+        color: #94a3b8;
+    }
+}
+</style>
+
+<script>
+// 返回顶部按钮功能
+(function() {
+    const backToTopBtn = document.getElementById('backToTop');
+    if (!backToTopBtn) return;
+    
+    // 监听滚动事件
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 300) {
+            backToTopBtn.classList.add('show');
+        } else {
+            backToTopBtn.classList.remove('show');
+        }
+    });
+    
+    // 点击返回顶部
+    backToTopBtn.addEventListener('click', function() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+})();
+</script>

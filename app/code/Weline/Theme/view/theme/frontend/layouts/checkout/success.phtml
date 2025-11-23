@@ -4,15 +4,16 @@
  * 
  * 订单提交成功后的确认页面布局
  * 字段
- * @info description 描述：订单提交成功后的确认页面布局
- * @info name 名称：结账成功页面布局
- * @param title 页面标题（默认：订单确认）
- * @param content 主要内容（HTML字符串）
- * @param orderNumber 订单号
- * @param orderDetails 订单详情（HTML字符串，可选）
- * @param continueShopping 继续购物链接
- * @param viewOrder 查看订单链接（可选）
- * @param class 额外CSS类
+ * @meta.name {default="结账成功页面布局",name="结账成功页面布局",description="结账成功页面布局，用于描述布局的名称"}
+ * @meta.description {default="订单提交成功后的确认页面布局",name="订单提交成功后的确认页面布局",description="订单提交成功后的确认页面布局，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="订单确认",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param orderNumber {default="",name="订单号",description="订单号，用于显示订单号"}
+ * @param orderDetails {default="",name="订单详情（HTML字符串，可选）",description="订单详情（HTML字符串，可选），用于设置订单详情"}
+ * @param continueShopping {default="/",name="继续购物链接",description="继续购物链接，用于设置继续购物链接"}
+ * @param viewOrder {default="",name="查看订单链接（可选）",description="查看订单链接（可选），用于设置查看订单链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $title = $this->getData('title') ?? __('订单确认');
 $content = $this->getData('content') ?? '';

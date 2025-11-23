@@ -9,18 +9,14 @@
 
 namespace Weline\Theme\Observer;
 
-use think\db\exception\DataNotFoundException;
-use think\db\exception\DbException;
-use think\db\exception\ModelNotFoundException;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
-use Weline\Theme\Cache\ThemeCache;
 use Weline\Theme\Model\WelineTheme;
 
 class TemplateFetchFile implements ObserverInterface
@@ -46,22 +42,70 @@ class TemplateFetchFile implements ObserverInterface
     public function execute(Event &$event): void
     {
         /**
-         * @var $template Template
-         */
-        $template = $event->getData('object');
-        /**
          * @var $fileData DataObject
          */
         $fileData = $event->getData('data');
+        if (!$fileData instanceof DataObject) {
+            return;
+        }
 
         $module_file_path = $fileData->getData('filename');
+        if (empty($module_file_path)) {
+            return;
+        }
+
+        // 如果是编译文件路径（包含 com_ 前缀或已经是绝对路径且不在 app/code 或 app/design 下），不处理
+        // 编译文件路径应该保持原样，不应该被主题系统处理
+        if (strpos(basename($module_file_path), 'com_') === 0) {
+            // 这是编译文件，不处理
+            return;
+        }
+        
+        // 如果路径已经是绝对路径，检查是否在编译目录下
+        if (strpos($module_file_path, DS) === 0 || (strlen($module_file_path) > 2 && $module_file_path[1] === ':')) {
+            // 绝对路径，检查是否在编译目录或模板编译目录下
+            if (strpos($module_file_path, 'tpl' . DS) !== false || 
+                strpos($module_file_path, 'template_compile' . DS) !== false ||
+                strpos($module_file_path, 'generated' . DS . 'complicate' . DS) !== false) {
+                // 这是编译目录下的文件，不处理
+                return;
+            }
+        }
 
         # 开始分析主题路径
-        try {
-            $theme = $this->welineTheme->getActiveTheme();
-        } catch (\Exception $exception) {
-            throw  new Exception(__('主题异常：') . $exception->getMessage());
+        // 检查是否有预览主题（从请求参数获取）
+        $previewThemeId = 0;
+        if (!CLI) {
+            try {
+                $request = ObjectManager::getInstance(Request::class);
+                $previewThemeId = (int)$request->getParam('preview_theme', 0);
+            } catch (\Throwable $e) {
+                // 如果获取 Request 失败，忽略预览逻辑
+                $previewThemeId = 0;
+            }
         }
+        if ($previewThemeId) {
+            // 使用预览主题
+            $this->welineTheme->load($previewThemeId);
+            if ($this->welineTheme->getId()) {
+                $theme = $this->welineTheme;
+            } else {
+                // 预览主题不存在，使用激活的主题
+                try {
+                    $theme = $this->welineTheme->getActiveTheme();
+                } catch (\Exception $exception) {
+                    throw  new Exception(__('主题异常：') . $exception->getMessage());
+                }
+            }
+        } else {
+            // 正常流程：使用激活的主题
+            try {
+                $theme = $this->welineTheme->getActiveTheme();
+            } catch (\Exception $exception) {
+                throw  new Exception(__('主题异常：') . $exception->getMessage());
+            }
+        }
+        
         # 主题不存在且非开发环境
         if (PROD && !isset($theme)) {
             $theme = $this->welineTheme->setData(Env::default_theme_DATA);
@@ -124,7 +168,15 @@ class TemplateFetchFile implements ObserverInterface
             }
         }
         
-        // 4. 如果主题继承链中都没有找到，返回基础模块文件
+        // 4. 如果主题没有继承（没有父主题），且是布局或部分文件，尝试使用默认文件
+        if (!$parentId && $this->isThemeFile($modulePath)) {
+            $defaultThemePath = $this->getDefaultThemePath($modulePath);
+            if ($defaultThemePath && is_file($defaultThemePath)) {
+                return $defaultThemePath;
+            }
+        }
+        
+        // 5. 如果主题继承链中都没有找到，返回基础模块文件
         return $modulePath;
     }
     
@@ -154,21 +206,23 @@ class TemplateFetchFile implements ObserverInterface
         // 提取 view/theme/ 之后的部分
         $themeRelativePath = substr($modulePath, $themePos + strlen(DS . 'view' . DS . 'theme' . DS));
         
-        // 提取模块基础路径（view 之前的部分）
-        $moduleBasePath = substr($modulePath, 0, $themePos);
-        
         // 尝试查找当前请求的模块
-        $request = Env::getInstance()->getRequest();
-        if ($request) {
-            $currentModulePath = $request->getModulePath();
-            if ($currentModulePath) {
-                // 构建当前模块的 theme 路径
-                $currentModuleThemePath = rtrim($currentModulePath, DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
-                if (is_file($currentModuleThemePath)) {
-                    return $currentModuleThemePath;
+        if (!CLI) {
+            try {
+                $request = ObjectManager::getInstance(Request::class);
+                $currentModulePath = $request->getModulePath();
+                if ($currentModulePath) {
+                    // 构建当前模块的 theme 路径
+                    $currentModuleThemePath = rtrim($currentModulePath, DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
+                    if (is_file($currentModuleThemePath)) {
+                        return $currentModuleThemePath;
+                    }
                 }
+            } catch (\Throwable $e) {
+                // 如果获取 Request 失败，继续后续逻辑
             }
         }
+        
         
         // 如果当前模块没有，尝试查找 Weline_Frontend 模块（前端默认模块）
         $modules = Env::getInstance()->getModuleList();
@@ -201,5 +255,56 @@ class TemplateFetchFile implements ObserverInterface
         }
         
         return $themeFilePath;
+    }
+    
+    /**
+     * 判断是否是主题文件（布局或部分文件）
+     * 
+     * @param string $modulePath 模块文件路径
+     * @return bool
+     */
+    private function isThemeFile(string $modulePath): bool
+    {
+        // 检查路径中是否包含 theme/frontend/layouts、theme/backend/layouts、
+        // theme/frontend/partials 或 theme/backend/partials
+        return (strpos($modulePath, DS . 'theme' . DS . 'frontend' . DS . 'layouts') !== false) ||
+               (strpos($modulePath, DS . 'theme' . DS . 'backend' . DS . 'layouts') !== false) ||
+               (strpos($modulePath, DS . 'theme' . DS . 'frontend' . DS . 'partials') !== false) ||
+               (strpos($modulePath, DS . 'theme' . DS . 'backend' . DS . 'partials') !== false);
+    }
+    
+    /**
+     * 获取默认主题文件路径（从 Weline_Theme 模块）
+     * 支持布局文件和部分文件
+     * 
+     * @param string $modulePath 模块文件路径
+     * @return string|null 默认主题文件路径，如果不存在则返回null
+     */
+    private function getDefaultThemePath(string $modulePath): ?string
+    {
+        // 检查是否是 theme 目录下的布局或部分文件
+        if (!$this->isThemeFile($modulePath)) {
+            return null;
+        }
+        
+        // 查找 view/theme/ 的位置
+        $themePos = strpos($modulePath, DS . 'view' . DS . 'theme' . DS);
+        if ($themePos === false) {
+            return null;
+        }
+        
+        // 提取 view/theme/ 之后的部分（相对路径）
+        $themeRelativePath = substr($modulePath, $themePos + strlen(DS . 'view' . DS . 'theme' . DS));
+        
+        // 获取 Weline_Theme 模块路径
+        $modules = Env::getInstance()->getModuleList();
+        if (!isset($modules['Weline_Theme'])) {
+            return null;
+        }
+        
+        $themeModule = $modules['Weline_Theme'];
+        $defaultThemePath = rtrim($themeModule['base_path'], DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
+        
+        return $defaultThemePath;
     }
 }

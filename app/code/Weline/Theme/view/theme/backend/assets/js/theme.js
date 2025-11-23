@@ -1028,4 +1028,49 @@
         }
     })();
 
+    /**
+     * 监听postMessage消息，支持从父窗口切换主题色系（用于主题预览）
+     */
+    (function initThemeColorMessageListener() {
+        window.addEventListener('message', function(event) {
+            // 安全检查：只接受来自同源的消息（在预览场景中，父窗口和iframe是同源的）
+            if (event.data && event.data.type === 'switchThemeColor') {
+                const themeColor = event.data.themeColor;
+                if (themeColor) {
+                    // 后端使用setThemeConfig函数切换主题色系
+                    if (typeof window.setThemeConfig === 'function') {
+                        const themeMode = themeColor === 'dark' ? 'dark' : 'light';
+                        window.setThemeConfig({
+                            layouts: {
+                                'data-topbar': themeMode,
+                                'data-sidebar': themeMode,
+                            },
+                            'theme-mode-switch': themeMode,
+                        }, false); // false表示不重新加载页面
+                        
+                        // 发送确认消息回父窗口
+                        if (event.source && event.source !== window) {
+                            event.source.postMessage({
+                                type: 'themeColorSwitched',
+                                themeColor: themeColor
+                            }, '*');
+                        }
+                    } else {
+                        // 如果setThemeConfig不存在，尝试直接设置data属性
+                        document.documentElement.setAttribute('data-topbar', themeColor === 'dark' ? 'dark' : 'light');
+                        document.documentElement.setAttribute('data-sidebar', themeColor === 'dark' ? 'dark' : 'light');
+                        
+                        // 发送确认消息回父窗口
+                        if (event.source && event.source !== window) {
+                            event.source.postMessage({
+                                type: 'themeColorSwitched',
+                                themeColor: themeColor
+                            }, '*');
+                        }
+                    }
+                }
+            }
+        });
+    })();
+
 })(window, document);

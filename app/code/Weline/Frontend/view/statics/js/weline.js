@@ -126,13 +126,13 @@
                         resolve(module);
                     } else {
                         this.loadingModules.delete(moduleName);
-                        reject(new Error(`[Weline] 模块 ${moduleName} 加载失败：未找到 ${globalVarName}`));
+                        reject(new Error(`[Weline] ${__('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })}`));
                     }
                 };
 
                 script.onerror = () => {
                     this.loadingModules.delete(moduleName);
-                    reject(new Error(`[Weline] 模块 ${moduleName} 加载失败：无法加载 ${path}`));
+                    reject(new Error(`[Weline] ${__('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: path })}`));
                 };
 
                 document.head.appendChild(script);
@@ -168,6 +168,21 @@
     }
 
     const moduleLoader = new ModuleLoader();
+
+    /**
+     * 翻译函数辅助方法（简化调用）
+     * @param {string} key 翻译键
+     * @param {Object} params 参数对象
+     * @returns {string} 翻译后的文本
+     */
+    const __ = (key, params = {}) => {
+        // 如果 Weline 对象已存在，使用其翻译方法
+        if (window.Weline && window.Weline.i18n && window.Weline.i18n.translate) {
+            return window.Weline.i18n.translate(key, params);
+        }
+        // 否则返回原始键（Weline 对象初始化后会设置字典）
+        return key;
+    };
 
     /**
      * Weline 主对象
@@ -206,7 +221,7 @@
             // 加载所有模块
             const loadPromises = moduleList.map(moduleName => {
                 return moduleLoader.loadModule(moduleName).catch((error) => {
-                    console.warn(`[Weline] 预加载模块 ${moduleName} 失败:`, error.message);
+                    console.warn(`[Weline] ${__('预加载模块 %{1} 失败', { 1: moduleName })}:`, error.message);
                     // 不抛出错误，允许其他模块继续加载
                     return null;
                 });
@@ -424,6 +439,9 @@
     // 挂载到全局
     window.Weline = Weline;
 
+    // 将翻译函数也挂载到 Weline 对象上，方便后续更新
+    Weline.__ = __;
+
     // Account 旧方法命名兼容
     const accountLegacyMap = {
         checkFrontendLogin: 'checkFrontendUserLogin',
@@ -439,7 +457,7 @@
         if (typeof Weline.Account[newName] === 'function') {
             Weline.Account[oldName] = (...args) => {
                 if (runtimeConfig.debug) {
-                    console.warn(`[Weline] Weline.Account.${oldName} 已弃用，请使用 ${newName}`);
+                    console.warn(`[Weline] ${__('Weline.Account.%{1} 已弃用，请使用 %{2}', { 1: oldName, 2: newName })}`);
                 }
                 return Weline.Account[newName](...args);
             };
@@ -471,22 +489,22 @@
         // 登录/注册页面：预加载账户模块
         if (pathname.includes('/account/login') || pathname.includes('/account/register')) {
             modulesToLoad = 'account';
-            reason = '登录/注册页面';
+            reason = __('登录/注册页面');
         }
         // 用户中心/账户相关页面：预加载账户和API模块
         else if (pathname.includes('/account')) {
             modulesToLoad = ['api', 'account'];
-            reason = '用户中心/账户相关页面';
+            reason = __('用户中心/账户相关页面');
         }
         // API相关页面：预加载API模块
         else if (pathname.includes('/api') || pathname.includes('/rest/')) {
             modulesToLoad = 'api';
-            reason = 'API相关页面';
+            reason = __('API相关页面');
         }
         // 购物车相关页面：预加载API模块（用于购物车功能）
         else if (pathname.includes('/cart') || pathname.includes('/checkout')) {
             modulesToLoad = 'api';
-            reason = '购物车相关页面';
+            reason = __('购物车相关页面');
         }
 
         // 如果有需要预加载的模块
@@ -496,13 +514,13 @@
             // 开发模式下输出提示
             if (isDev) {
                 console.log(
-                    `%c[Weline] 自动预加载模块`,
+                    `%c[Weline] ${__('自动预加载模块')}`,
                     'color: #4CAF50; font-weight: bold; font-size: 12px;',
                     '\n',
-                    `页面: ${pathname}`,
-                    `\n原因: ${reason}`,
-                    `\n模块: ${moduleList.join(', ')}`,
-                    `\n时间: ${new Date().toLocaleTimeString()}`
+                    `${__('页面')}: ${pathname}`,
+                    `\n${__('原因')}: ${reason}`,
+                    `\n${__('模块')}: ${moduleList.join(', ')}`,
+                    `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
                 );
             }
 
@@ -511,30 +529,30 @@
                 .then(() => {
                     if (isDev) {
                         console.log(
-                            `%c[Weline] 模块预加载完成`,
+                            `%c[Weline] ${__('模块预加载完成')}`,
                             'color: #2196F3; font-weight: bold; font-size: 12px;',
-                            `\n模块: ${moduleList.join(', ')}`,
-                            `\n时间: ${new Date().toLocaleTimeString()}`
+                            `\n${__('模块')}: ${moduleList.join(', ')}`,
+                            `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
                         );
                     }
                 })
                 .catch((error) => {
                     if (isDev) {
                         console.warn(
-                            `%c[Weline] 模块预加载失败`,
+                            `%c[Weline] ${__('模块预加载失败')}`,
                             'color: #FF9800; font-weight: bold; font-size: 12px;',
-                            `\n模块: ${moduleList.join(', ')}`,
-                            `\n错误: ${error.message}`,
-                            `\n时间: ${new Date().toLocaleTimeString()}`
+                            `\n${__('模块')}: ${moduleList.join(', ')}`,
+                            `\n${__('错误')}: ${error.message}`,
+                            `\n${__('时间')}: ${new Date().toLocaleTimeString()}`
                         );
                     }
                 });
         } else if (isDev) {
             // 开发模式下，即使没有预加载也提示
             console.log(
-                `%c[Weline] 当前页面无需预加载模块`,
+                `%c[Weline] ${__('当前页面无需预加载模块')}`,
                 'color: #9E9E9E; font-size: 11px;',
-                `\n页面: ${pathname}`
+                `\n${__('页面')}: ${pathname}`
             );
         }
     })();

@@ -143,6 +143,7 @@ class Env extends DataObject
         'env' => 'local',
         'event'=>[
             'debug' => false,
+            'scan_enabled' => false, // 是否启用事件扫描回退机制，默认关闭以提升性能
         ],
         'cache' => self::default_CACHE,
         'session' => self::default_SESSION,

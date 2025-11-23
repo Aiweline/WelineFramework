@@ -22,16 +22,31 @@ class Event extends \Weline\Framework\DataObject\DataObject
     {
         if (isset($data['observers'])) {
             foreach ($data['observers'] as $key => $observer) {
-                $observer = ObjectManager::getInstance($observer['instance']);
+                // 如果已经是实例，直接使用
                 if ($observer instanceof ObserverInterface) {
-                    $data['observers'][$key] = $observer;
-                } elseif (DEV) {
-                    throw new Core(__('观察者必须继承于：') . ObserverInterface::class);
-                } else {
-                    $debug = ObjectManager::getInstance(Printing::class);
-                    $debug->debug(__('观察者必须继承于：') . ObserverInterface::class);
+                    continue;
+                }
+                
+                // 如果是配置数组，需要实例化
+                if (is_array($observer) && isset($observer['instance'])) {
+                    try {
+                        $observerInstance = ObjectManager::getInstance($observer['instance']);
+                        if ($observerInstance instanceof ObserverInterface) {
+                            $data['observers'][$key] = $observerInstance;
+                        } elseif (DEV) {
+                            throw new Core(__('观察者必须继承于：') . ObserverInterface::class);
+                        } else {
+                            $debug = ObjectManager::getInstance(Printing::class);
+                            $debug->debug(__('观察者必须继承于：') . ObserverInterface::class);
+                        }
+                    } catch (\Exception $e) {
+                        // 移除失败的观察者
+                        unset($data['observers'][$key]);
+                    }
                 }
             }
+            // 重新索引数组
+            $data['observers'] = array_values($data['observers']);
         }
         parent::__construct($data);
     }
@@ -157,6 +172,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
     {
         $observers = $this->getObservers();
         
+        // 确保观察者是数组
+        if (!is_array($observers)) {
+            $observers = [];
+        }
+        
         // 获取配置中的 event.debug 设置
         $eventDebugConfig = Env::getInstance()->getConfig('event.debug');
         
@@ -193,7 +213,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
             $this->initLogFile();
         }
         
-        foreach ($observers as $observer) {
+        foreach ($observers as $index => $observer) {
             if ($needDebug) {
                 $this->executeWithDebug($observer, $printToConsole, $needLog);
             } else {

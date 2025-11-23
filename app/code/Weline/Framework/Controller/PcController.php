@@ -30,6 +30,15 @@ class PcController extends Core
     protected ?Url $_url = null;
 
     private CacheInterface $controllerCache;
+    
+    /**
+     * 布局类型，用于 Theme 模块自动加载对应的布局模板
+     * 可选值：'default', 'homepage', 'account', 'product', 'category', 'cart', 'checkout' 等
+     * 如果设置为 null，则不使用主题布局，使用原始模板
+     * 
+     * @var string|null
+     */
+    protected ?string $layoutType = null;
 
     public function __init()
     {
@@ -204,11 +213,12 @@ class PcController extends Core
             'controller' => $this,
             'layoutType' => $this->layoutType ?? null
         ]);
-        $this->getEventManager()->dispatch('Weline_Framework::Controller::fetch_file_before', $eventData);
+        
+        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
         $fileName = $eventData->getData('fileName');
         $content = $this->getTemplate()->fetch($fileName);
         $eventData->setData('content', $content);
-        $this->getEventManager()->dispatch('Weline_Framework::Controller::fetch_file_after', $eventData);
+        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
         return $eventData->getData('content');
     }
 
@@ -232,9 +242,8 @@ class PcController extends Core
         # 如果指定了模板就直接读取
         if ($fileName) {
             if (is_int(strpos($fileName, '::'))) {
-                return $this->fetchWithEvents($fileName);
+                return $this->fetchTemplateWithEvents($fileName);
             }
-            //            return $this->getTemplate()->fetch('templates' . DS .$fileName);
         }
         $controller_class_name = $this->request->getRouterData('class/controller_name');
         if ($fileName === '') {
@@ -248,36 +257,81 @@ class PcController extends Core
         } else {
             $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
         }
-        return $this->fetchWithEvents('templates' . DS . $fileName);
+
+        return $this->fetchTemplateWithEvents('templates' . DS . $fileName);
+    }
+
+    protected function fetchThemeTemplate(string $fileName, array $data = []): mixed
+    {
+        if ($data) {
+            $this->assign($data);
+        }
+        # 如果指定了模板就直接读取
+        if ($fileName) {
+            if (is_int(strpos($fileName, '::'))) {
+                return $this->fetchTemplateWithEvents($fileName);
+            }
+        }
+        $controller_class_name = $this->request->getRouterData('class/controller_name');
+        if ($fileName === '') {
+            if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
+                $fileName = $controller_class_name;
+            } else {
+                $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method');
+            }
+        } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
+            $fileName = $controller_class_name . DS . $fileName;
+        } else {
+            $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
+        }
+
+        return $this->fetchTemplateWithEvents('themes' . DS . $fileName);
     }
 
     /**
-     * @DESC         |获取模板  原生模板，无事件处理
+     * 通过事件机制获取模板内容
+     * 触发 fetch_file_before 和 fetch_file_after 事件
      *
-     * 参数区：
-     *
-     * @param string $fileName
-     * @param array $data
-     *
-     * @return mixed
+     * @param string $fileName 模板文件名
+     * @return mixed 渲染后的模板内容
+     * @throws Exception
+     * @throws ReflectionException
      */
-    protected function template(string $fileName = '', array $data = []): mixed
+    protected function fetchTemplateWithEvents(string $fileName): mixed
     {
-        if (!is_int(strpos($fileName, '::'))) {
-            $controller_class_name = $this->request->getRouterData('class/controller_name');
-            if ($fileName === '') {
-                if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
-                    $fileName = $controller_class_name;
-                } else {
-                    $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method');
-                }
-            } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
-                $fileName = $controller_class_name . DS . $fileName;
-            } else {
-                $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method') . DS . $fileName;
-            }
+        // 触发Weline_Framework_Controller::fetch_file_before事件
+        $eventData = new DataObject([
+            'fileName' => $fileName, 
+            'content' => '',
+            'controller' => $this,
+            'layoutType' => $this?->layoutType
+        ]);
+        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
+        /**@var DataObject $eventData */
+        $fileName = $eventData->getData('fileName');
+        $content = $this->getTemplate()->fetch($fileName);
+        // 触发Weline_Framework_Controller::fetch_file_after事件
+        $eventData->setData('content', $content);
+        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
+        return $eventData->getData('content');
+    }
+
+    /**
+     * 渲染原生模板（不触发事件）
+     * 用于在控制器中直接渲染模板，不经过观察者处理
+     * 
+     * @param string $fileName 模板文件名（支持模块路径格式，如 Weline_Frontend::templates/...）
+     * @param array $data 传递给模板的数据
+     * @return string 渲染后的HTML内容
+     * @throws Exception
+     */
+    protected function template(string $fileName, array $data = []): string
+    {
+        if ($data) {
+            $this->getTemplate()->addData($data);
         }
-        return $this->getTemplate()->fetchHtml($fileName, $data);
+        // 直接调用 Template 的 fetchHtml 方法，不触发控制器事件
+        return $this->getTemplate()->fetchHtml($fileName);
     }
 
     /**

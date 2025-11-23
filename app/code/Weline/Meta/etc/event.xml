@@ -7,5 +7,23 @@
      * Meta模块通过触发 Weline_I18n::collect_translations 事件来提交翻译词
      * I18n模块监听该事件并处理翻译词的存储
      -->
+    
+    <!-- 模板编译后事件：提取 w:meta type="translate" 标签并提交翻译 -->
+    <event name="Weline_Framework_Template::after_compile">
+        <observer name="Weline_Meta::template_compile_extract_meta_translations" 
+                  instance="Weline\Meta\Observer\TemplateCompile" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="50"/>
+    </event>
+    
+    <!-- 系统升级后事件：自动扫描所有模块的元数据 -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Meta::setup_upgrade_after_scan_meta" 
+                  instance="Weline\Meta\Observer\SetupUpgradeAfter" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="300"/>
+    </event>
 </config>
 

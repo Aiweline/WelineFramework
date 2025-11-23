@@ -51,7 +51,45 @@ class Partials extends BackendController
         $this->assign('frontendConfig', $frontendConfig);
         $this->assign('backendConfig', $backendConfig);
 
-        return $this->fetch();
+        return $this->fetch('Weline_Theme::templates/backend/config/partials.phtml');
+    }
+
+    /**
+     * 获取部件配置数据（用于modal异步加载）
+     */
+    public function getConfigData()
+    {
+        $themeId = $this->request->getParam('theme_id');
+        if (!$themeId) {
+            return $this->fetchJson($this->error(__('请选择主题')));
+        }
+
+        /** @var WelineTheme $theme */
+        $theme = ObjectManager::getInstance(WelineTheme::class);
+        $theme->load($themeId);
+        
+        if (!$theme->getId()) {
+            return $this->fetchJson($this->error(__('主题不存在')));
+        }
+
+        // 扫描可用的 partials
+        $frontendPartials = PartialsScanner::scanPartials($theme, 'frontend');
+        $backendPartials = PartialsScanner::scanPartials($theme, 'backend');
+        
+        // 获取当前配置
+        $frontendConfig = PartialsScanner::getPartialsConfig($theme, 'frontend');
+        $backendConfig = PartialsScanner::getPartialsConfig($theme, 'backend');
+
+        return $this->fetchJson($this->success('', [
+            'theme' => [
+                'id' => $theme->getId(),
+                'name' => $theme->getName(),
+            ],
+            'frontendPartials' => $frontendPartials,
+            'backendPartials' => $backendPartials,
+            'frontendConfig' => $frontendConfig,
+            'backendConfig' => $backendConfig,
+        ]));
     }
 
     /**

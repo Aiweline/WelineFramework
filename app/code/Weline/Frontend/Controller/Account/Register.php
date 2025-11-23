@@ -38,10 +38,10 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         }
 
         // 使用主题认证布局
-        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/auth.phtml', [
-            'title' => __('用户注册'),
-            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/register.phtml')
-        ]);
+        return $this->renderAuthLayout(
+            'account/register.phtml',
+            __('用户注册')
+        );
     }
 
     /**
@@ -133,7 +133,10 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
             ]);
 
         } catch (\Exception $e) {
-            Printing::exception($e);
+            // 记录异常日志
+            if (defined('DEV') && DEV) {
+                error_log('注册异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            }
             return $this->json([
                 'success' => false,
                 'message' => '注册失败：' . $e->getMessage()

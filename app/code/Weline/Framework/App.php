@@ -139,15 +139,26 @@ class App
             define('SYSTEM_UMASK', 0022);
         }
         umask(SYSTEM_UMASK);
-        // 通用加载
-        \Weline\Framework\Common\Loader::load();
         // ############################# 环境配置 #####################
+        // 先加载环境配置，以便判断是否为开发者模式
         // 环境
         $config = [];
         $env_filename = APP_PATH . 'etc/env.php';
         if (is_file($env_filename)) {
             $config = require $env_filename;
         }
+        
+        // 开发者模式下提前关闭 OpCache，避免代码更新后缓存导致的问题
+        // 需要在加载代码之前执行，确保后续加载的代码不会被缓存
+        if (isset($config['deploy']) && $config['deploy'] === 'dev') {
+            if (function_exists('opcache_reset')) {
+                opcache_reset();
+            }
+            if (function_exists('opcache_get_status') && ini_get('opcache.enable')) {
+                ini_set('opcache.enable', '0');
+            }
+        }
+        
         // 调试模式
         if (!defined('DEBUG')) {
             if (isset($config['debug']) and $config['debug']) {
@@ -195,6 +206,9 @@ class App
             }
         }
 
+        // 通用加载（在关闭 OpCache 之后加载，确保代码不会被缓存）
+        \Weline\Framework\Common\Loader::load();
+        
         // 助手函数
         $handle_functions = APP_ETC_PATH . 'functions.php';
         if (is_file($handle_functions)) {
@@ -208,6 +222,7 @@ class App
         if (!defined('PROD')) {
             define('PROD', isset($config['deploy']) && $config['deploy'] === 'prod');
         };
+        
         // 代码美化模式
         if (!defined('PHP_CS')) {
             define('PHP_CS', $config['php-cs'] ?? false);

@@ -10,6 +10,7 @@
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Debug;
+use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\App\Exception;
@@ -104,8 +105,35 @@ class EventsManager
 
     public function getEventObservers(string $eventName)
     {
-        // 从 EventData 静态类中提取事件观察者
-        return EventData::getEventObservers($eventName);
+        // 优先从 generated/events.php 读取观察者（性能优化）
+        $registry = $this->eventRegistry->getRegistry();
+        
+        // 先检查精确匹配
+        if (isset($registry['events'][$eventName]['observers'])) {
+            return $registry['events'][$eventName]['observers'];
+        }
+        
+        // 检查是否匹配动态事件模式
+        $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
+        foreach ($dynamicPatterns as $pattern => $patternInfo) {
+            if ($this->eventRegistry->matchPattern($pattern, $eventName)) {
+                // 匹配到动态事件模式，返回该模式的观察者
+                return $patternInfo['observers'] ?? [];
+            }
+        }
+        
+        // 检查是否启用事件扫描回退机制（默认关闭以提升性能）
+        $scanEnabled = Env::getInstance()->getConfig('event.scan_enabled', false);
+        if (!$scanEnabled) {
+            // 如果扫描功能已关闭，直接返回空数组，不执行扫描
+            return [];
+        }
+        
+        // 如果 generated/events.php 中没有观察者信息，回退到扫描方式（兼容旧版本）
+        // 注意：动态事件模式的观察者注册在实际事件名上，所以通过扫描方式可以获取到
+        $evenObserverLists = $this->scanEvents();
+
+        return $evenObserverLists[$eventName] ?? [];
     }
 
     /**
@@ -131,22 +159,17 @@ class EventsManager
             // 获取事件监听器（观察者）
             $observers = $this->getEventObservers($eventName);
             
-            // 调试：检查观察者是否被正确获取
-            if (defined('DEV') && DEV && $eventName === 'Weline_Framework::Controller::fetch_file_before') {
-                error_log("【事件调试】事件名: {$eventName}");
-                error_log("【事件调试】观察者数量: " . count($observers));
-                error_log("【事件调试】观察者列表: " . json_encode($observers, JSON_UNESCAPED_UNICODE));
-            }
-            
             // 检查是否有监听器（Weline_Admin::msg 事件除外，因为它用于发送错误消息）
             if (empty($observers) && $eventName !== 'Weline_Admin::msg') {
                 // 如果没有监听器，直接跳过，不执行事件
-                if (defined('DEV') && DEV && $eventName === 'Weline_Framework::Controller::fetch_file_before') {
-                    error_log("【事件调试】观察者为空，跳过执行");
-                }
                 return $this;
             }
-
+            // 获取观察者 如果获取不到观察者则不执行事件
+            $observers = $this->getEventObservers($eventName);
+            if (empty($observers)) {
+                return $this;
+            }
+            
             if (is_array($data)) {
                 $data['observers'] = $observers;
                 $this->events[$eventName] = (new Event($data))->setName($eventName);

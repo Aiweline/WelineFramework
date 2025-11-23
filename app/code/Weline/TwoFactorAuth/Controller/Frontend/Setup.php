@@ -17,11 +17,14 @@ use Weline\TwoFactorAuth\Service\TwoFactorAuthService;
 class Setup extends FrontendController
 {
     private TwoFactorAuthService $twoFactorAuthService;
+    private FrontendUserSession $session;
 
     public function __construct(
-        TwoFactorAuthService $twoFactorAuthService
+        TwoFactorAuthService $twoFactorAuthService,
+        FrontendUserSession $session
     ) {
         $this->twoFactorAuthService = $twoFactorAuthService;
+        $this->session = $session;
     }
 
     /**
@@ -68,10 +71,14 @@ class Setup extends FrontendController
         $user = $session->getLoginUser();
         $userEmail = $user->getUsername().':'.$user->getEmail();
 
-        // 生成新的密钥和备份码
-        $data = $this->twoFactorAuthService->initialize($userId);
-        $secret = $data['secret'];
-        $backupCodes = $data['backup_codes'];
+            // 生成新的密钥和备份码
+            $data = $this->twoFactorAuthService->initialize($userId);
+            if (!isset($data['secret']) || !isset($data['backup_codes'])) {
+                throw new \Exception('初始化2FA失败：返回数据格式不正确');
+            }
+            
+            $secret = $data['secret'];
+            $backupCodes = $data['backup_codes'];
 
         // 生成格式化后的账户显示名称（先生成，确保在生成二维码时使用）
         $formattedAccountLabel = \Weline\TwoFactorAuth\Helper\TwoFactorAuthHelper::getFormattedAccountLabel($userEmail);
@@ -125,6 +132,9 @@ class Setup extends FrontendController
 
         $success = $this->twoFactorAuthService->enable($userId, $secret, $code, $backupCodes);
 
+        // 获取跳转地址
+        $referer = $this->request->getPost('referer') ?? '/frontend/account';
+        
         if ($success) {
             return $this->json([
                 'success' => true,
@@ -203,6 +213,15 @@ class Setup extends FrontendController
                 'message' => __('验证码错误')
             ]);
         }
+    }
+
+    /**
+     * 返回JSON响应
+     */
+    private function json(array $data): string
+    {
+        header('Content-Type: application/json');
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
 

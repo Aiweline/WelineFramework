@@ -21,7 +21,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 {
     private FrontendUserSession $session;
     private Template $template;
-    private string $layoutType='account.auth';
+
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         FrontendUserSession $session,
@@ -46,6 +47,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if ($referer && !str_contains($referer, '/account/login')) {
             $this->session->setData('login_referer', $referer);
         }
+
+        // 使用主题认证布局
         return $this->fetch('Weline_Frontend::templates/frontend/account/login.phtml');
     }
 
@@ -151,7 +154,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                     ->save();
                 
                 // 设置cookie
-                Cookie::set('frontend_user_token', $token, $rememberDuration, ['path' => '/']);
+                Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
             }
 
             // 派发登录成功事件
@@ -187,7 +190,10 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             ]);
 
         } catch (\Exception $e) {
-            Printing::exception($e);
+            // 记录异常日志
+            if (defined('DEV') && DEV) {
+                error_log('登录异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            }
             return $this->json([
                 'success' => false,
                 'message' => '登录失败：' . $e->getMessage()

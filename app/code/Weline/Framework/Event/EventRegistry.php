@@ -102,8 +102,11 @@ class EventRegistry
         // 扫描所有事件规约
         $scannedData = $this->scanner->scanAllEvents();
 
+        // 收集所有观察者信息
+        $observersData = $this->collectObservers();
+
         // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
-        $registry = $this->organizeRegistryData($scannedData);
+        $registry = $this->organizeRegistryData($scannedData, $observersData);
 
         // 扫描所有观察者并合并到事件信息中
         $this->mergeObserversIntoRegistry($registry);
@@ -111,16 +114,60 @@ class EventRegistry
         // 保存注册表
         return $this->saveRegistry($registry);
     }
+    
+    /**
+     * 收集所有观察者信息
+     * 
+     * @return array 观察者数据，格式：['EventName' => [observer1, observer2, ...]]
+     */
+    private function collectObservers(): array
+    {
+        $observersData = [];
+        
+        try {
+            /** @var \Weline\Framework\Event\Config\XmlReader $xmlReader */
+            $xmlReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\Config\XmlReader::class);
+            $eventObserversList = $xmlReader->read();
+            
+            // 合并所有模块的观察者
+            foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                foreach ($moduleEventObservers as $eventName => $eventObservers) {
+                    if (!isset($observersData[$eventName])) {
+                        $observersData[$eventName] = [];
+                    }
+                    // 合并观察者
+                    $observersData[$eventName] = array_merge($observersData[$eventName], $eventObservers);
+                }
+            }
+            
+            // 对每个事件的观察者按sort值排序
+            foreach ($observersData as $eventName => $observers) {
+                if (count($observers) > 1) {
+                    usort($observersData[$eventName], function ($a, $b) {
+                        $sortA = (int)($a['sort'] ?? 10000);
+                        $sortB = (int)($b['sort'] ?? 10000);
+                        return $sortA <=> $sortB;
+                    });
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果收集观察者失败，记录错误但不中断流程
+            error_log('收集观察者失败: ' . $e->getMessage());
+        }
+        
+        return $observersData;
+    }
 
     /**
      * 组织注册表数据
      * 将模块级别的事件信息转换为事件名索引的结构
      *
      * @param array $scannedData 扫描的数据
+     * @param array $observersData 观察者数据
      * @return array
      * @throws \RuntimeException 如果多个模块定义了相同的事件名
      */
-    private function organizeRegistryData(array $scannedData): array
+    private function organizeRegistryData(array $scannedData, array $observersData = []): array
     {
         $registry = [];
         // 快速查询：事件名到模块名的映射（用于性能优化）
@@ -133,6 +180,24 @@ class EventRegistry
                 // 检查是否是动态事件模式（包含 {}）
                 if ($this->isDynamicEventPattern($eventName)) {
                     // 动态事件模式，存储到 patterns 中
+                    // 查找所有匹配该动态事件模式的实际事件名的观察者
+                    $matchedObservers = [];
+                    foreach ($observersData as $actualEventName => $eventObservers) {
+                        if ($this->matchPattern($eventName, $actualEventName)) {
+                            // 匹配成功，合并观察者
+                            $matchedObservers = array_merge($matchedObservers, $eventObservers);
+                        }
+                    }
+                    
+                    // 对观察者按sort值排序
+                    if (count($matchedObservers) > 1) {
+                        usort($matchedObservers, function ($a, $b) {
+                            $sortA = (int)($a['sort'] ?? 10000);
+                            $sortB = (int)($b['sort'] ?? 10000);
+                            return $sortA <=> $sortB;
+                        });
+                    }
+                    
                     $dynamicEventPatterns[$eventName] = [
                         'name' => $eventInfo['name'] ?? $eventName,
                         'description' => $eventInfo['description'] ?? '',
@@ -142,6 +207,7 @@ class EventRegistry
                         'has_doc' => $eventInfo['has_doc'] ?? false,
                         'module' => $moduleName,
                         'pattern' => $eventName, // 存储原始模式
+                        'observers' => $matchedObservers, // 添加匹配的观察者
                     ];
                     continue; // 动态事件模式不添加到普通事件列表
                 }
@@ -172,7 +238,8 @@ class EventRegistry
                     'has_spec' => $eventInfo['has_spec'] ?? false,
                     'has_doc' => $eventInfo['has_doc'] ?? false,
                     'module' => $moduleName, // 定义该事件的模块
-                    'modules' => []
+                    'modules' => [],
+                    'observers' => $observersData[$eventName] ?? [] // 添加观察者信息
                 ];
                 // 添加到快速查询映射
                 $eventToModuleMap[$eventName] = $moduleName;
@@ -218,15 +285,28 @@ class EventRegistry
                     $registry['events'][$eventName]['observers'] = [];
                 }
                 
-                // 合并观察者（过滤掉禁用的观察者）
+                // 合并观察者（过滤掉禁用的观察者，并去重）
                 foreach ($observers as $observer) {
                     // 跳过禁用的观察者
                     if (($observer['disabled'] ?? 'false') === 'true') {
                         continue;
                     }
                     
-                    // 添加到观察者列表
-                    $registry['events'][$eventName]['observers'][] = $observer;
+                    // 检查是否已存在相同的观察者（根据 instance 和 name 判断）
+                    $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
+                    $isDuplicate = false;
+                    foreach ($registry['events'][$eventName]['observers'] as $existingObserver) {
+                        $existingKey = ($existingObserver['instance'] ?? '') . '::' . ($existingObserver['name'] ?? '');
+                        if ($observerKey === $existingKey && !empty($observerKey)) {
+                            $isDuplicate = true;
+                            break;
+                        }
+                    }
+                    
+                    // 如果不是重复的，添加到观察者列表
+                    if (!$isDuplicate) {
+                        $registry['events'][$eventName]['observers'][] = $observer;
+                    }
                 }
             }
         }
@@ -262,7 +342,7 @@ class EventRegistry
      */
     public function saveRegistry(array $registry): bool
     {
-        $content = "<?php return " . w_var_export($registry, true) . ";\n";
+        $content = "<?php return " . var_export($registry, true) . ";\n";
 
         // 确保目录存在
         $dir = dirname(self::REGISTRY_FILE);
@@ -567,7 +647,7 @@ class EventRegistry
      * @param string $eventName 实际事件名，如 "Framework_View::head"
      * @return bool
      */
-    private function matchPattern(string $pattern, string $eventName): bool
+    public function matchPattern(string $pattern, string $eventName): bool
     {
         // 将模式转换为正则表达式
         // 例如：Framework_View::{position} -> Framework_View::(.+)

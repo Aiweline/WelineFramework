@@ -4,16 +4,16 @@
  * 
  * 分页导航
  * 字段
- * @info description 描述：分页导航
- * @info name 名称：Pagination分页片段
- * @param currentPage 当前页码（必填）
- * @param totalPages 总页数（必填）
- * @param baseUrl 基础URL（必填）
- * @param pageParam 页码参数名
- * @param showFirstLast 是否显示首页/末页
- * @param showPrevNext 是否显示上一页/下一页
- * @param maxVisible 最大可见页码数
- * @param class 额外CSS类
+ * @meta.name {default="Pagination分页片段",name="Pagination分页片段",description="Pagination分页片段，用于描述片段的名称"}
+ * @meta.description {default="分页导航",name="分页导航",description="分页导航，用于描述片段的用途"}
+ * @param.currentPage {default=1,name="当前页码",description="当前页码，用于设置当前页码"}
+ * @param.totalPages {default=1,name="总页数",description="总页数，用于设置总页数"}
+ * @param.baseUrl {default="",name="基础URL",description="基础URL，用于设置分页链接的基础URL"}
+ * @param.pageParam {default="page",name="页码参数名",description="页码参数名，用于设置URL中页码参数的名称"}
+ * @param.showFirstLast {default=true,name="是否显示首页/末页",description="是否显示首页/末页按钮，用于控制首页/末页按钮的显示"}
+ * @param.showPrevNext {default=true,name="是否显示上一页/下一页",description="是否显示上一页/下一页按钮，用于控制上一页/下一页按钮的显示"}
+ * @param.maxVisible {default=5,name="最大可见页码数",description="最大可见页码数，用于设置同时显示的页码数量"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $currentPage = (int)($this->getData('currentPage') ?? 1);
 $totalPages = (int)($this->getData('totalPages') ?? 1);

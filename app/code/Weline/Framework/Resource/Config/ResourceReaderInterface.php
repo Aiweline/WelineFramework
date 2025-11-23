@@ -14,4 +14,6 @@ namespace Weline\Framework\Resource\Config;
 interface ResourceReaderInterface
 {
     public function getResourceFiles();
+    
+    public function getSourceType(): string;
 }

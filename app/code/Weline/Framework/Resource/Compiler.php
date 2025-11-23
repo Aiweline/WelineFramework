@@ -39,7 +39,6 @@ class Compiler implements CompilerInterface
     public function compile(string $source_file = '', string $out_file = '')
     {
         $config_resources = $this->reader->getResourceFiles();
-        
         // 如果没有找到任何资源，也要触发事件，让 Observer 生成空文件
         if (empty($config_resources)) {
             // 为 frontend 和 backend 都触发事件
@@ -71,5 +70,17 @@ class Compiler implements CompilerInterface
                 );
             }
         }
+        
+        // 增加编译后事件
+        $afterData = new DataObject(
+            [
+                'type' => $this->reader->getSourceType(),
+                'resources' => $config_resources
+            ]
+        );
+        $this->getEventManager()->dispatch(
+            'Framework_Resource::compiler_after',
+            $afterData
+        );
     }
 }

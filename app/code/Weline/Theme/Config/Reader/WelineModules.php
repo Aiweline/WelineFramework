@@ -15,11 +15,33 @@ use Weline\Framework\View\Template;
 
 class WelineModules extends ResourceReader
 {
-    private array $config_resources = [];
-
     public function __construct(string $path = 'view', string $file = 'weline.modules.js', $source_type = 'weline.modules.js', array $data = [])
     {
         parent::__construct($path, $file, $source_type, $data);
+    }
+
+    public function getResourceFiles(): array
+    {
+        $files = parent::getFileList();
+        $config_resources = [];
+        
+        // 按 area 分组文件，并读取文件内容
+        foreach ($files as $file) {
+            $area = $file['area'] ?? 'frontend';
+            if (!isset($config_resources[$area])) {
+                $config_resources[$area] = '';
+            }
+            
+            // 读取文件内容
+            if (isset($file['origin']) && is_file($file['origin'])) {
+                $content = file_get_contents($file['origin']);
+                if ($content) {
+                    $config_resources[$area] .= $content . "\n";
+                }
+            }
+        }
+        
+        return $config_resources;
     }
 
     public function getTheme()
@@ -27,54 +49,44 @@ class WelineModules extends ResourceReader
         return Env::getInstance()->getConfig('theme');
     }
 
-    public function getResourceFiles(): array
+    public function getResourceFileContent(string $area = 'frontend'): string
     {
+        $area = strtolower($area);
         # weline modules 配置
-        // 重置配置资源数组
-        $this->config_resources = [];
-        
         // 扫描所有模块的 view/statics 目录下的 weline.modules.js 文件
         // 路径应该是 view/statics/{frontend|backend}/weline.modules.js
-        $require_configs = $this->getFileList();
-        
-        // 如果没有找到任何文件，返回空数组
-        if (empty($require_configs)) {
-            return [];
+        // 读取指定区域的所有weline.modules.js文件
+        if($area == 'frontend'){
+            $module_info = Env::getInstance()->getModuleInfo('Weline_Frontend');
         }
-        
-        foreach ($require_configs as $require_config_js) {
-            $area = $require_config_js['area'];
-            if (!isset($this->config_resources[$area])) {
-                $this->config_resources[$area] = '';
-            }
-            
-            // 检查文件是否存在
-            if (!file_exists($require_config_js['origin'])) {
-                continue;
-            }
-            
-            $content = file_get_contents($require_config_js['origin']);
+        elseif($area == 'backend'){
+            $module_info = Env::getInstance()->getModuleInfo('Weline_Backend');
+        }
+        else{
+            return '';
+        }
+        $require_configs_file = realpath($module_info['base_path'].'view/statics/base/weline.modules.js');
+        if(!$require_configs_file){
+            return '';
+        }
+        $content = file_get_contents($require_configs_file);
 
-            # 替换模块的路径
-            // 直接替换模块名引用为实际URL路径
-            $module_name = $require_config_js['module'];
-            // 匹配模式：Module_Name::path（可能在引号内）
-            $pattern = '/(["\']?)' . preg_quote($module_name, '/') . '::([^"\']+)(["\']?)/';
-            $content = preg_replace_callback($pattern, function($matches) use ($module_name) {
-                $quote_before = $matches[1];
-                $path = $matches[2];
-                $quote_after = $matches[3];
-                
-                // 构建模块路径引用格式：Module_Name::path/to/file
-                $module_path = $module_name . '::' . $path;
-                // 获取实际URL路径（不是文件路径）
-                $url_path = $this->fetchFileUrl($module_path);
-                
-                return $quote_before . $url_path . $quote_after;
-            }, $content);
-            $this->config_resources[$area] .= $content;
-        }
-        return $this->config_resources;
+        $module_name = $module_info['name']??'';
+        // 匹配模式：Module_Name::path（可能在引号内）
+        $pattern = '/(["\']?)' . preg_quote($module_name, '/') . '::([^"\']+)(["\']?)/';
+        $content = preg_replace_callback($pattern, function($matches) use ($module_name) {
+            $quote_before = $matches[1];
+            $path = $matches[2];
+            $quote_after = $matches[3];
+            
+            // 构建模块路径引用格式：Module_Name::path/to/file
+            $module_path = $module_name . '::' . $path;
+            // 获取实际URL路径（不是文件路径）
+            $url_path = $this->fetchFileUrl($module_path);
+            
+            return $quote_before . $url_path . $quote_after;
+        }, $content);
+        return $content;
     }
 
     protected Template $template;
