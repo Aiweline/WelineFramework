@@ -124,7 +124,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
                 'request' => $this->request,
                 'session' => $this->session
             ]);
-            $eventManager->dispatch('Frontend_Account_Register::register_after', $eventData);
+            $eventManager->dispatch('Weline_Frontend_Account_Register::register_after', $eventData);
 
             return $this->json([
                 'success' => true,

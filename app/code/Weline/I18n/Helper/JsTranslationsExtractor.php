@@ -101,6 +101,9 @@ class JsTranslationsExtractor
         
         // 只解析 Vendor_Module::path/to/file.js 格式
         if (strpos($modulePath, '::') !== false) {
+            return null;
+        }
+        
         return null;
     }
     

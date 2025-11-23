@@ -143,7 +143,7 @@ class Set extends CommandAbstract
                     'deploy_version' => $this->getDeployModuleVersion(),
                     'printer' => $this->printer
                 ]);
-                $eventManager->dispatch('Framework_Deploy_Mode_Set::prod_after', $eventData);
+                $eventManager->dispatch('Weline_Framework_Deploy_Mode_Set::prod_after', $eventData);
                 break;
             case 'dev':
                 $this->cleanTplComDir();

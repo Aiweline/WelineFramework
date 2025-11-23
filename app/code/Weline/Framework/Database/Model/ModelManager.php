@@ -55,12 +55,12 @@ class ModelManager
                 $model = ObjectManager::getInstance($model_class);
                 if ($model instanceof AbstractModel) {
                     $data = new DataObject(['model' => $model, 'type' => $type, 'object' => $this, 'module' => $module]);
-                    $this->getEvenManager()->dispatch('Framework_Database::model_update_before', $data);
+                    $this->getEvenManager()->dispatch('Weline_Framework_Database::model_update_before', $data);
                     if (PROD) {
                         $this->printing->printing($model::class);
                     }
                     $this->setupModel($model, $type, $context);
-                    $this->getEvenManager()->dispatch('Framework_Database::model_update_after', $data);
+                    $this->getEvenManager()->dispatch('Weline_Framework_Database::model_update_after', $data);
                 }
             } else {
                 $this->printing->error($model_class, __('Model升级'));

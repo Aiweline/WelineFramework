@@ -42,7 +42,7 @@ class Reindex implements \Weline\Framework\Console\CommandInterface
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $params = new DataObject(['args' => $args, 'break' => false]);
-        $eventManager->dispatch('Framework_Database::indexer', $params);
+        $eventManager->dispatch('Weline_Framework_Database::indexer', $params);
         if ($params->getData('break')) {
             return;
         }

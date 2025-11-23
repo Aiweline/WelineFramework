@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_FrontendRestController::init_after` 事件及其使用方法。该事件在前端REST控制器初始化后触发，允许其他模块在初始化后执行操作。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_FrontendRestController::init_after` 事件及其使用方法。该事件在前端REST控制器初始化后触发，允许其他模块在初始化后执行操作。
 
 ## 事件列表
 
-### 1. Framework_FrontendRestController::init_after - 前端REST控制器初始化后事件
+### 1. Weline_Framework_FrontendRestController::init_after - 前端REST控制器初始化后事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_FrontendRestController::init_after`
+- **事件名称**：`Weline_Framework_FrontendRestController::init_after`
 - **事件类型**：控制器生命周期事件
 - **触发时机**：在前端REST控制器初始化后
 - **触发位置**：继承自 `AbstractRestController` 的构造函数
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_FrontendRestController::init_after` 事件在前端REST控制器初始化后触发，此时：
+`Weline_Framework_FrontendRestController::init_after` 事件在前端REST控制器初始化后触发，此时：
 - 控制器已完全初始化
 - 父类构造函数已调用
 - `__init()` 方法已执行
@@ -54,7 +54,7 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_FrontendRestController::init_after">
+    <event name="Weline_Framework_FrontendRestController::init_after">
         <observer name="Your_Module::frontend_rest_controller_init_after"
                   instance="Your\Module\Observer\FrontendRestControllerInitAfterObserver"
                   disabled="false"
@@ -94,7 +94,7 @@ class FrontendRestControllerInitAfterObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_FrontendRestController::init_after` 事件传递的数据：
+`Weline_Framework_FrontendRestController::init_after` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -121,5 +121,5 @@ $controller = $event->getData();
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_FrontendRestController::init_after` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_FrontendRestController::init_after` 事件文档
 

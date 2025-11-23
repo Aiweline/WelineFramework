@@ -4,7 +4,7 @@
 
 ### 关键点
 
-- 事件：`Framework_View::fetch_file`（模板加载时优先使用编译产物）
+- 事件：`Weline_Framework_View::fetch_file`（模板加载时优先使用编译产物）
 - 注册表：`generated/sticker.php`（内存缓存 + mtime 校验）
 - 规则扫描：`extends/module/Weline_Sticker` 目录递归
 - 规则解析：`w:sticker` 标签（`action`、`position`、`w:sticker:target`、`w:sticker:code`）

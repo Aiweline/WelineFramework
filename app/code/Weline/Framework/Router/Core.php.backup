@@ -432,7 +432,7 @@ class Core
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['route' => $this];
-        $eventManager->dispatch('Framework_Router::route_before', $eventData);
+        $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $dispatch = ObjectManager::getInstance($dispatch);
         $dispatch->__setModuleInfo($this->router);
 
@@ -445,7 +445,7 @@ class Core
         # ----------事件：处理url之前 开始------------
         $resultData = new DataObject(['result' => $result, 'route' => $this]);
         $eventData = ['data' => $resultData];
-        $eventManager->dispatch('Framework_Router::route_after', $eventData);
+        $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
 
 //        file_put_contents(__DIR__.'/'.$cache_key.'.html', $result);
         /** Get output buffer. */

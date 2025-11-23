@@ -33,7 +33,7 @@ class Init
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
             $data = new DataObject(['white_urls' => []]);
-            $event->dispatch('Weline_Framework::maintenance', $data);
+            $event->dispatch('Weline_Maintenance::maintenance', $data);
             $white_urls = $data->getData('white_urls');
             $white = false;
             foreach ($white_urls as $white_url_string) {

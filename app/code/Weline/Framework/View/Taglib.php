@@ -992,7 +992,7 @@ class Taglib
         /**@var EventsManager $event */
         $event = ObjectManager::getInstance(EventsManager::class);
         $data = (new DataObject(['template' => $template, 'tags' => $tags, 'Taglib' => $this]));
-        $event->dispatch('Framework_Template::after_tags_config', $data);
+        $event->dispatch('Weline_Framework_Template::after_tags_config', $data);
         $tags = $data->getData('tags') ?: $tags;
         
         # 构造w:tag，确保w:标签紧挨着原始标签且优先处理
