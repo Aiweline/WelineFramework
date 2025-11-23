@@ -23,21 +23,21 @@ class Import extends FrontendRestController
     public function parse()
     {
         if (!$this->request->isPost()) {
-            return $this->jsonError('无效的请求方法', 405);
+            return $this->jsonError(__('无效的请求方法'), 405);
         }
 
         $content = $this->request->getPost('content');
         $format = $this->request->getPost('format') ?? 'auto';
 
         if (!$content) {
-            return $this->jsonError('缺少备份内容', 400);
+            return $this->jsonError(__('缺少备份内容'), 400);
         }
 
         try {
             $accounts = BackupImporter::parse($content, $format);
 
             if (empty($accounts)) {
-                return $this->jsonError('未找到有效的账户数据', 400);
+                return $this->jsonError(__('未找到有效的账户数据'), 400);
             }
 
             // 验证账户
@@ -55,7 +55,7 @@ class Import extends FrontendRestController
             ]);
 
         } catch (\Exception $e) {
-            return $this->jsonError('解析失败：' . $e->getMessage(), 400);
+            return $this->jsonError(__('解析失败：%{}', $e->getMessage()), 400);
         }
     }
 
@@ -68,14 +68,14 @@ class Import extends FrontendRestController
     public function export()
     {
         if (!$this->request->isPost()) {
-            return $this->jsonError('无效的请求方法', 405);
+            return $this->jsonError(__('无效的请求方法'), 405);
         }
 
         $accounts = $this->request->getPost('accounts');
         $format = $this->request->getPost('format') ?? 'json';
 
         if (!$accounts) {
-            return $this->jsonError('缺少账户数据', 400);
+            return $this->jsonError(__('缺少账户数据'), 400);
         }
 
         // 如果是字符串，解析为数组
@@ -84,7 +84,7 @@ class Import extends FrontendRestController
         }
 
         if (!is_array($accounts)) {
-            return $this->jsonError('账户数据格式错误', 400);
+            return $this->jsonError(__('账户数据格式错误'), 400);
         }
 
         try {
@@ -104,7 +104,7 @@ class Import extends FrontendRestController
             ]);
 
         } catch (\Exception $e) {
-            return $this->jsonError('导出失败：' . $e->getMessage(), 500);
+            return $this->jsonError(__('导出失败：%{}', $e->getMessage()), 500);
         }
     }
 

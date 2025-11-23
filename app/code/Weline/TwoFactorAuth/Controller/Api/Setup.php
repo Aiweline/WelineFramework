@@ -31,14 +31,14 @@ class Setup extends FrontendRestController
     public function initialize()
     {
         if (!$this->request->isPost()) {
-            return $this->error('无效的请求方法', 405);
+            return $this->error(__('无效的请求方法'), 405);
         }
 
         $userId = (int)$this->request->getPost('user_id');
         $account = $this->request->getPost('account');
 
         if (!$userId || !$account) {
-            return $this->error('缺少必要参数', 400);
+            return $this->error(__('缺少必要参数'), 400);
         }
 
         $data = $this->twoFactorAuthService->initialize($userId);
@@ -66,7 +66,7 @@ class Setup extends FrontendRestController
     public function enable()
     {
         if (!$this->request->isPost()) {
-            return $this->error('无效的请求方法', 405);
+            return $this->error(__('无效的请求方法'), 405);
         }
 
         $userId = (int)$this->request->getPost('user_id');
@@ -75,7 +75,7 @@ class Setup extends FrontendRestController
         $backupCodes = $this->request->getPost('backup_codes');
 
         if (!$userId || !$secret || !$code) {
-            return $this->error('缺少必要参数', 400);
+            return $this->error(__('缺少必要参数'), 400);
         }
 
         // 解析备份码
@@ -87,10 +87,10 @@ class Setup extends FrontendRestController
 
         if ($success) {
             return $this->success([
-                'message' => '2FA已启用'
+                'message' => __('2FA已启用')
             ]);
         } else {
-            return $this->error('验证码错误', 400);
+            return $this->error(__('验证码错误'), 400);
         }
     }
 
@@ -103,24 +103,24 @@ class Setup extends FrontendRestController
     public function disable()
     {
         if (!$this->request->isPost()) {
-            return $this->error('无效的请求方法', 405);
+            return $this->error(__('无效的请求方法'), 405);
         }
 
         $userId = (int)$this->request->getPost('user_id');
         $code = $this->request->getPost('code');
 
         if (!$userId || !$code) {
-            return $this->error('缺少必要参数', 400);
+            return $this->error(__('缺少必要参数'), 400);
         }
 
         $success = $this->twoFactorAuthService->disable($userId, $code);
 
         if ($success) {
             return $this->success([
-                'message' => '2FA已禁用'
+                'message' => __('2FA已禁用')
             ]);
         } else {
-            return $this->error('验证码错误或未启用2FA', 400);
+            return $this->error(__('验证码错误或未启用2FA'), 400);
         }
     }
 
@@ -134,7 +134,7 @@ class Setup extends FrontendRestController
         $userId = (int)$this->request->getGet('user_id');
 
         if (!$userId) {
-            return $this->error('缺少用户ID', 400);
+            return $this->error(__('缺少用户ID'), 400);
         }
 
         $config = $this->twoFactorAuthService->getUserConfig($userId);
@@ -142,7 +142,7 @@ class Setup extends FrontendRestController
         if ($config) {
             return $this->success($config);
         } else {
-            return $this->error('未找到用户配置', 404);
+            return $this->error(__('未找到用户配置'), 404);
         }
     }
 }
