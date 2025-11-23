@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Observer;
 
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -28,7 +29,7 @@ class AutoLogin implements ObserverInterface
     /**
      * 执行自动登录
      */
-    public function execute(array &$data = []): void
+    public function execute(Event &$event): void
     {
         // 如果已经登录，跳过
         if ($this->session->isLogin()) {
@@ -36,7 +37,7 @@ class AutoLogin implements ObserverInterface
         }
 
         // 获取token cookie
-        $token = Cookie::get('frontend_user_token');
+        $token = Cookie::get('w_ut');
         if (empty($token)) {
             return;
         }
@@ -96,7 +97,7 @@ class AutoLogin implements ObserverInterface
      */
     private function clearTokenCookie(): void
     {
-        Cookie::set('frontend_user_token', '', -3600, ['path' => '/']);
+        Cookie::set('w_ut', '', -3600, ['path' => '/']);
     }
 }
 
