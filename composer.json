@@ -51,17 +51,6 @@
     "ecomphp/tiktokshop-php": "^2.6",
     "ardagnsrn/ollama-php": "^1.0",
     "dragonmantank/cron-expression": "^3.4",
-<<<<<<< HEAD
-    "studio-42/elfinder": "^2.1"
-  },
-  "opcache-autoloader": true,
-  "apcu-autoloader": true,
-  "optimize-autoloader": true,
-  "classmap-authoritative": true,
-  "autoload": {
-    "classmap": [
-      "app/code/",
-=======
     "studio-42/elfinder": "^2.1.65",
     "weline/two-factor-auth": "@dev",
     "weline/module-acl": "@dev",
@@ -119,7 +108,6 @@
   "optimize-autoloader": true,
   "autoload": {
     "classmap": [
->>>>>>> dev-new
       "extend/",
       "generated/code/"
     ],
@@ -129,25 +117,10 @@
         "generated/code/"
       ],
       "Weline\\": [
-<<<<<<< HEAD
-        "app/code/Weline/",
-        "vendor/weline/"
-      ],
-      "Weline\\Framework\\": [
-        "app/code/Weline/Framework",
-        "vendor/weline/framework"
-      ]
-    },
-    "psr-0": {
-      "": [
-        "app/code/",
-        "generated/code/"
-=======
         "app/code/Weline/"
       ],
       "Weline\\Framework\\": [
         "app/code/Weline/Framework"
->>>>>>> dev-new
       ]
     }
   },
@@ -165,8 +138,4 @@
       "php-http/discovery": true
     }
   }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> dev-new
