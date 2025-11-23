@@ -114,9 +114,13 @@ class Handle implements RegisterInterface
                 }
                 $routers = [];
                 if ($path) {
-                    if (is_file($path)) {
+                    // 批量模式下，从属性读取；否则从文件读取
+                    if ($this->helper->isBatchMode()) {
+                        $routers = $this->helper->getBatchRouters($path);
+                    } elseif (is_file($path)) {
                         $routers = require $path;
                     }
+                    
                     $router = [
                         'module' => $param['module'],
                         'module_path' => $param['module_path'],
@@ -130,7 +134,7 @@ class Handle implements RegisterInterface
                         ],
                     ];
                     $routers[$param['router']] = $router;
-                    // 写入路由文件
+                    // 写入路由文件（批量模式下会缓存，否则立即写入）
                     $this->helper->updatePcRouters($path, $routers);
                 }
                 return $routers;

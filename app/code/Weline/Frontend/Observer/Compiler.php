@@ -221,9 +221,9 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
         // 添加所有模块配置
         $moduleLines = [];
         foreach ($allModules as $moduleName => $moduleConfig) {
-            // 清理配置内容，移除末尾的逗号和空白字符
-            $configContent = rtrim(trim($moduleConfig), ',');
-            $moduleLines[] = "        " . $moduleName . ": {" . $configContent . "}";
+            // 解析并转换模块配置
+            $processedConfig = $this->processModuleConfig($moduleConfig, $moduleName);
+            $moduleLines[] = "        " . $moduleName . ": " . $processedConfig;
         }
         $output[] = implode(",\n", $moduleLines);
         
@@ -243,6 +243,212 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
         $output[] = "})();";
         
         return implode("\n", $output);
+    }
+
+    /**
+     * 处理模块配置，添加 origin_path 并转换 paths 为环境 URL
+     * 
+     * @param string $moduleConfig 原始模块配置字符串
+     * @param string $moduleName 模块名
+     * @return string 处理后的 JavaScript 配置对象字符串
+     */
+    protected function processModuleConfig(string $moduleConfig, string $moduleName): string
+    {
+        // 解析 paths 数组
+        $pathsPattern = '/paths:\s*\[([^\]]+)\]/s';
+        if (!preg_match($pathsPattern, $moduleConfig, $pathsMatch)) {
+            // 如果没有 paths，直接返回原配置
+            $configContent = rtrim(trim($moduleConfig), ',');
+            return "{" . $configContent . "}";
+        }
+        
+        $pathsStr = $pathsMatch[1];
+        $pathsArray = [];
+        $originPaths = [];
+        
+        // 提取所有路径（支持单引号、双引号）
+        if (preg_match_all('/["\']([^"\']+)["\']/', $pathsStr, $pathMatches)) {
+            foreach ($pathMatches[1] as $path) {
+                // 跳过 CDN 资源
+                if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+                    $pathsArray[] = $path;
+                    $originPaths[] = null; // CDN 资源没有 origin_path
+                    continue;
+                }
+                
+                // 解析模块路径格式：Weline_Module::path/to/file.js
+                if (strpos($path, '::') !== false) {
+                    $parts = explode('::', $path, 2);
+                    if (count($parts) === 2) {
+                        $moduleNamePart = trim($parts[0]);
+                        $filePath = trim($parts[1], '/');
+                        
+                        // 获取模块信息
+                        $modules = \Weline\Framework\App\Env::getInstance()->getModuleList();
+                        if (isset($modules[$moduleNamePart])) {
+                            $module = $modules[$moduleNamePart];
+                            $basePath = $module['base_path'] ?? '';
+                            
+                            if ($basePath && is_string($basePath)) {
+                                // 计算 origin_path（相对于项目根目录）
+                                $basePathNormalized = str_replace('\\', '/', rtrim($basePath, '/\\'));
+                                $projectRootNormalized = str_replace('\\', '/', rtrim(BP, '/\\'));
+                                $originPath = str_replace($projectRootNormalized . '/', '', $basePathNormalized) . '/view/statics/' . $filePath;
+                                
+                                // 转换模块名为 URL 格式（Weline_Module -> Weline/Module）
+                                $moduleParts = explode('_', $moduleNamePart, 2);
+                                $vendorName = $moduleParts[0];
+                                $moduleNameUrl = isset($moduleParts[1]) ? $moduleParts[1] : '';
+                                
+                                // 根据环境生成 URL
+                                $isDev = defined('DEV') && DEV;
+                                if ($isDev) {
+                                    // 开发模式：/Weline/Frontend/view/statics/js/weline.js
+                                    $urlPath = '/' . $vendorName . '/' . $moduleNameUrl . '/view/statics/' . $filePath;
+                                } else {
+                                    // 生产模式：/static/Weline/Frontend/js/weline.js
+                                    $urlPath = '/static/' . $vendorName . '/' . $moduleNameUrl . '/' . $filePath;
+                                }
+                                
+                                $pathsArray[] = $urlPath;
+                                $originPaths[] = $originPath;
+                            } else {
+                                // 无法获取模块信息，保持原路径
+                                $pathsArray[] = $path;
+                                $originPaths[] = null;
+                            }
+                        } else {
+                            // 模块不存在，保持原路径
+                            $pathsArray[] = $path;
+                            $originPaths[] = null;
+                        }
+                    } else {
+                        // 格式不正确，保持原路径
+                        $pathsArray[] = $path;
+                        $originPaths[] = null;
+                    }
+                } else {
+                    // 不是模块路径格式，保持原路径
+                    $pathsArray[] = $path;
+                    $originPaths[] = null;
+                }
+            }
+        }
+        
+        // 构建新的配置对象
+        $newConfig = [];
+        
+        // 添加 origin_paths（过滤掉 null 值）
+        $validOriginPaths = array_filter($originPaths, function($path) {
+            return $path !== null;
+        });
+        if (!empty($validOriginPaths)) {
+            $newConfig[] = 'origin_paths: [' . implode(', ', array_map(function($path) {
+                return '"' . addslashes($path) . '"';
+            }, $validOriginPaths)) . ']';
+        }
+        
+        // 添加转换后的 paths
+        $newConfig[] = 'paths: [' . implode(', ', array_map(function($path) {
+            return '"' . addslashes($path) . '"';
+        }, $pathsArray)) . ']';
+        
+        // 提取其他配置项（globalVar, description 等）
+        // 先移除 paths 和 origin_paths 数组内容，避免误匹配
+        $configWithoutPaths = $moduleConfig;
+        
+        // 移除 paths 数组（使用平衡括号匹配）
+        if (preg_match('/paths:\s*\[/', $configWithoutPaths, $pathsMatch, PREG_OFFSET_CAPTURE)) {
+            $pathsStart = (int)$pathsMatch[0][1];
+            $pathsStr = substr($configWithoutPaths, $pathsStart);
+            $pathsArrayContent = $this->extractBalancedBrackets($pathsStr);
+            if ($pathsArrayContent !== '') {
+                $pathsFull = 'paths: [' . $pathsArrayContent . ']';
+                $configWithoutPaths = str_replace($pathsFull, '', $configWithoutPaths);
+            }
+        }
+        
+        // 移除 origin_paths 数组（使用平衡括号匹配）
+        if (preg_match('/origin_paths:\s*\[/', $configWithoutPaths, $originPathsMatch, PREG_OFFSET_CAPTURE)) {
+            $originPathsStart = (int)$originPathsMatch[0][1];
+            $originPathsStr = substr($configWithoutPaths, $originPathsStart);
+            $originPathsArrayContent = $this->extractBalancedBrackets($originPathsStr);
+            if ($originPathsArrayContent !== '') {
+                $originPathsFull = 'origin_paths: [' . $originPathsArrayContent . ']';
+                $configWithoutPaths = str_replace($originPathsFull, '', $configWithoutPaths);
+            }
+        }
+        
+        // 只匹配已知的配置项
+        $knownKeys = ['globalVar', 'description'];
+        $otherConfigPattern = '/(' . implode('|', $knownKeys) . '):\s*([^,\n}]+)/';
+        if (preg_match_all($otherConfigPattern, $configWithoutPaths, $otherMatches, PREG_SET_ORDER)) {
+            foreach ($otherMatches as $match) {
+                $key = trim($match[1]);
+                $value = trim($match[2]);
+                
+                // 处理值（移除引号，重新添加）
+                $value = trim($value, ' "\'');
+                if ($value === 'null') {
+                    $newConfig[] = $key . ': null';
+                } else {
+                    $newConfig[] = $key . ': "' . addslashes($value) . '"';
+                }
+            }
+        }
+        
+        return "{\n            " . implode(",\n            ", $newConfig) . "\n        }";
+    }
+    
+    /**
+     * 提取平衡的方括号内容
+     * 
+     * @param string $str 字符串（以 [ 开头）
+     * @return string 方括号内的内容（不包含方括号本身）
+     */
+    private function extractBalancedBrackets(string $str): string
+    {
+        if (empty($str) || $str[0] !== '[') {
+            return '';
+        }
+        
+        $depth = 0;
+        $start = 0;
+        $inString = false;
+        $stringChar = '';
+        
+        for ($i = 0; $i < strlen($str); $i++) {
+            $char = $str[$i];
+            $prevChar = $i > 0 ? $str[$i - 1] : '';
+            
+            // 处理字符串（跳过字符串内的方括号）
+            if (!$inString && ($char === '"' || $char === "'")) {
+                $inString = true;
+                $stringChar = $char;
+            } elseif ($inString && $char === $stringChar && $prevChar !== '\\') {
+                $inString = false;
+                $stringChar = '';
+            }
+            
+            if ($inString) {
+                continue;
+            }
+            
+            // 计算方括号深度
+            if ($char === '[') {
+                if ($depth === 0) {
+                    $start = $i + 1;
+                }
+                $depth++;
+            } elseif ($char === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($str, $start, $i - $start);
+                }
+            }
+        }
+        
+        return '';
     }
 
     protected string $generate_content = '';

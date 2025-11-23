@@ -16,7 +16,8 @@ use Weline\Frontend\Session\FrontendUserSession;
 class Logout extends \Weline\Framework\App\Controller\FrontendController
 {
     private FrontendUserSession $session;
-
+    protected ?string $layoutType = 'account.logout';
+    
     public function __construct(
         FrontendUserSession $session
     ) {
@@ -38,14 +39,14 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
         if ($userId) {
             /** @var FrontendUserToken $userToken */
             $userToken = ObjectManager::getInstance(FrontendUserToken::class);
-            $userToken->builder()
+            $userToken->reset()
                 ->where('user_id', $userId)
                 ->where('type', 'remember_me')
                 ->delete();
         }
         
         // 清除记住我的cookie
-        Cookie::set('frontend_user_token', '', -3600, ['path' => '/']);
+        Cookie::set('w_ut', '', -3600, ['path' => '/']);
         Cookie::set('w_sandbox', '', -3600, ['path' => '/']);
         $adminPath = Env::getInstance()->getConfig('admin') ?? '';
         if (!empty($adminPath)) {
@@ -69,7 +70,7 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
     {
         $this->logoutUser();
 
-        return $this->json([
+        return $this->fetchJson([
             'success' => true,
             'message' => __('退出成功'),
             'redirect' => '/frontend/account/login'

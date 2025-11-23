@@ -70,7 +70,60 @@ app/code/Weline/Theme/view/theme/frontend/partials/header/amazon.phtml
 
 ## 在模板中使用
 
-### 方法 1：使用 Partials Block（推荐）
+### 方法 1：使用 w:theme:template 标签（推荐，最简单）
+
+使用 `w:theme:template` 标签是最简单的方式，标签会自动从主题配置中获取对应的模板路径。
+
+```html
+<!-- 使用 layout 属性，从主题配置获取模板路径 -->
+<w:theme:template layout="partials.header">
+    Weline_Theme::theme/frontend/partials/header/default.phtml
+</w:theme:template>
+
+<!-- 不使用 layout 属性，使用默认路径 -->
+<w:theme:template>
+    Weline_Theme::theme/frontend/partials/header/default.phtml
+</w:theme:template>
+```
+
+**标签属性说明：**
+- **`layout`**（可选）：布局标识，如 `partials.header`、`partials.footer` 等
+  - 如果指定了 `layout` 属性，标签会从主题配置中获取对应的模板路径
+  - 如果主题配置中不存在该布局的配置，则使用标签内容中的默认路径
+- **`enable`**（可选）：是否启用标签，默认为 `1`（启用）
+
+**工作原理：**
+1. 如果指定了 `layout="partials.header"`，标签会从主题配置中查找 `partials.header` 的配置值
+2. 如果配置值为 `minimal`，则加载 `theme/frontend/partials/header/minimal.phtml`
+3. 如果配置不存在，则使用标签内容中的默认路径 `default.phtml`
+
+**完整示例：**
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>页面标题</title>
+</head>
+<body>
+    <!-- Header：从主题配置获取 -->
+    <w:theme:template layout="partials.header">
+        Weline_Theme::theme/frontend/partials/header/default.phtml
+    </w:theme:template>
+    
+    <main>
+        <!-- 页面内容 -->
+    </main>
+    
+    <!-- Footer：从主题配置获取 -->
+    <w:theme:template layout="partials.footer">
+        Weline_Theme::theme/frontend/partials/footer/default.phtml
+    </w:theme:template>
+</body>
+</html>
+```
+
+### 方法 2：使用 Partials Block
 
 ```php
 <?php

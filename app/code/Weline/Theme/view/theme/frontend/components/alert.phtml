@@ -4,14 +4,14 @@
  * 
  * 提示信息组件，支持多种类型和样式
  * 字段
- * @info description 描述：提示信息组件，支持多种类型和样式
- * @info name 名称：Alert提示组件
- * @param type 类型 (success/error/warning/info)
- * @param message 提示信息（必填）
- * @param title 标题
- * @param dismissible 是否可关闭
- * @param icon 自定义图标
- * @param class 额外CSS类
+ * @meta.name {default="Alert提示组件",name="Alert提示组件",description="Alert提示组件，用于描述组件的名称"}
+ * @meta.description {default="提示信息组件，支持多种类型和样式",name="提示信息组件，支持多种类型和样式",description="提示信息组件，支持多种类型和样式，用于描述组件的用途"}
+ * @param type {default="info",name="类型",description="类型，可选值：success/error/warning/info"}
+ * @param message {default="",name="提示信息",description="提示信息，必填参数"}
+ * @param title {default="",name="标题",description="标题，用于设置提示标题"}
+ * @param dismissible {default=false,name="是否可关闭",description="是否可关闭，用于控制提示是否可关闭"}
+ * @param icon {default="",name="自定义图标",description="自定义图标，用于设置自定义图标"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
  */
 $type = $this->getData('type') ?? 'info';
 $message = $this->getData('message') ?? '';

@@ -9,6 +9,7 @@ use Weline\Frontend\Session\FrontendUserSession;
 class CheckLogin extends \Weline\Framework\App\Controller\FrontendController
 {
     private FrontendUserSession $session;
+    protected ?string $layoutType = 'account.check_login';
 
     public function __construct(FrontendUserSession $session)
     {

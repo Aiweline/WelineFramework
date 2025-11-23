@@ -4,21 +4,21 @@
  * 
  * 按钮组件，支持多种样式和状态
  * 字段
- * @info description 描述：按钮组件，支持多种样式和状态
- * @info name 名称：Button按钮组件
- * @param text 按钮文字（必填）
- * @param type 按钮类型 (primary/secondary/danger/success/info)
- * @param size 按钮大小 (sm/md/lg)
- * @param icon 图标类名
- * @param iconPosition 图标位置 (left/right)
- * @param class 额外CSS类
- * @param id 元素ID
- * @param disabled 是否禁用
- * @param loading 是否显示加载状态
- * @param href 链接地址（如果提供，渲染为<a>标签）
- * @param onclick 点击事件
- * @param data data属性数组
- * @param attributes 额外的HTML属性字符串
+ * @meta.name {default="Button按钮组件",name="Button按钮组件",description="Button按钮组件，用于描述组件的名称"}
+ * @meta.description {default="按钮组件，支持多种样式和状态",name="按钮组件，支持多种样式和状态",description="按钮组件，支持多种样式和状态，用于描述组件的用途"}
+ * @param.text {default="",name="按钮文字",description="按钮文字，必填参数"}
+ * @param.type {default="primary",name="按钮类型",description="按钮类型，可选值：primary/secondary/danger/success/info"}
+ * @param.size {default="md",name="按钮大小",description="按钮大小，可选值：sm/md/lg"}
+ * @param.icon {default="",name="图标类名",description="图标类名，用于设置按钮图标"}
+ * @param.iconPosition {default="left",name="图标位置",description="图标位置，可选值：left/right"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.id {default="",name="元素ID",description="元素ID，用于设置按钮ID"}
+ * @param.disabled {default=false,name="是否禁用",description="是否禁用，用于控制按钮的禁用状态"}
+ * @param.loading {default=false,name="是否显示加载状态",description="是否显示加载状态，用于控制按钮的加载状态"}
+ * @param.href {default="",name="链接地址",description="链接地址，如果提供，渲染为<a>标签"}
+ * @param.onclick {default="",name="点击事件",description="点击事件，用于设置按钮点击事件"}
+ * @param.data {default=[],name="data属性数组",description="data属性数组，用于设置data属性"}
+ * @param.attributes {default="",name="额外的HTML属性字符串",description="额外的HTML属性字符串，用于设置额外的HTML属性"}
  */
 $text = $this->getData('text') ?? '';
 $type = $this->getData('type') ?? 'primary';

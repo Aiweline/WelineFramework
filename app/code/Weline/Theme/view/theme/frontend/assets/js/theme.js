@@ -1375,6 +1375,28 @@
     setupDeprecatedConfigAlias();
 
     /**
+     * 监听postMessage消息，支持从父窗口切换主题色系（用于主题预览）
+     */
+    (function initThemeColorMessageListener() {
+        window.addEventListener('message', function(event) {
+            // 安全检查：只接受来自同源的消息（在预览场景中，父窗口和iframe是同源的）
+            if (event.data && event.data.type === 'switchThemeColor') {
+                const themeColor = event.data.themeColor;
+                if (themeColor && Weline.Theme && typeof Weline.Theme.switch === 'function') {
+                    Weline.Theme.switch(themeColor);
+                    // 发送确认消息回父窗口
+                    if (event.source && event.source !== window) {
+                        event.source.postMessage({
+                            type: 'themeColorSwitched',
+                            themeColor: themeColor
+                        }, '*');
+                    }
+                }
+            }
+        });
+    })();
+
+    /**
      * 自动处理 data-weline-load 属性（异步，不阻塞）
      */
     (function autoLoadDataAttributes() {
