@@ -1,36 +1,32 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Frontend\Model\FrontendUser $user */
+$avatar = $user->getAvatar();
+$username = $user->getUsername();
+$email = $user->getEmail();
+$avatarInitial = strtoupper(mb_substr($username, 0, 1));
 ?>
-<div class="account-index-content">
-    <!-- 侧边栏导航 -->
-    <aside class="account-sidebar">
-        <nav class="nav flex-column">
-            <a class="nav-link active" href="#profile" data-section="profile">
-                <i class="ri-user-line"></i> <?= __('个人资料') ?>
-            </a>
-            <a class="nav-link" href="#security" data-section="security">
-                <i class="ri-lock-line"></i> <?= __('安全设置') ?>
-            </a>
-            <a class="nav-link" href="/twofa" target="_blank">
-                <i class="ri-shield-keyhole-line"></i> <?= __('两步验证') ?>
-            </a>
-            <a class="nav-link" href="/frontend/account/logout">
-                <i class="ri-logout-box-line"></i> <?= __('退出登录') ?>
-            </a>
-        </nav>
-    </aside>
-    
-    <!-- 主内容区 -->
-    <main class="account-main-content">
+<!-- 主内容区 -->
         <!-- 个人资料头部 -->
         <div class="profile-header">
-            <div class="avatar-large">
-                <?= strtoupper(mb_substr($user->getUsername(), 0, 1)) ?>
-            </div>
-            <div class="profile-info">
-                <h3><?= htmlspecialchars($user->getUsername()) ?></h3>
-                <p><?= __('欢迎回来！您可以在这里管理您的账户信息') ?></p>
+            <div class="profile-header-content">
+                <div class="avatar-large">
+                    <?php if ($avatar): ?>
+                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
+                    <?php else: ?>
+                        <div class="avatar-fallback"><?= $avatarInitial ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="profile-info">
+                    <h2><?= htmlspecialchars($username) ?></h2>
+                    <?php if ($email): ?>
+                        <p class="profile-email">
+                            <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
+                        </p>
+                    <?php endif; ?>
+                    <p class="profile-welcome"><?= __('欢迎回来！您可以在这里管理您的账户信息') ?></p>
+                </div>
             </div>
         </div>
 
@@ -60,10 +56,25 @@
 
                             <div class="col-12 mb-3">
                                 <label for="avatar" class="form-label">' . __('头像URL') . '</label>
-                                <input type="url" class="form-control" id="avatar" name="avatar" 
-                                       value="' . htmlspecialchars($user->getAvatar() ?: '') . '" 
-                                       placeholder="https://example.com/avatar.jpg">
+                                <div class="avatar-input-group">
+                                    <input type="url" class="form-control" id="avatar" name="avatar" 
+                                           value="' . htmlspecialchars($user->getAvatar() ?: '') . '" 
+                                           placeholder="https://example.com/avatar.jpg">
+                                    <button type="button" class="btn btn-outline-secondary" id="previewAvatarBtn">
+                                        <i class="ri-eye-line"></i> ' . __('预览') . '
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">' . __('输入头像图片的完整URL地址') . '</small>
                             </div>
+                            
+                            ' . ($email ? '
+                            <div class="col-12 mb-3">
+                                <label for="email" class="form-label">' . __('邮箱') . '</label>
+                                <input type="email" class="form-control" id="email" 
+                                       value="' . htmlspecialchars($email) . '" disabled>
+                                <small class="text-muted">' . __('邮箱不可修改') . '</small>
+                            </div>
+                            ' : '') . '
                         </div>
 
                         <div class="mt-4">
@@ -149,9 +160,9 @@
             ]);
             ?>
         </div>
-    </main>
-</div>
 
+        <!-- 拓展 Hooks -->
+        <hook>account.sidebar.content</hook>
 <script>
 $(document).ready(function() {
     // 侧边栏导航
@@ -234,5 +245,404 @@ $(document).ready(function() {
             }
         });
     });
+    
+    // 头像预览功能
+    $('#previewAvatarBtn').on('click', function() {
+        const avatarUrl = $('#avatar').val();
+        if (!avatarUrl) {
+            alert('<?= __('请输入头像URL') ?>');
+            return;
+        }
+        
+        // 验证URL格式
+        try {
+            new URL(avatarUrl);
+        } catch (e) {
+            alert('<?= __('请输入有效的URL地址') ?>');
+            return;
+        }
+        
+        // 更新预览
+        const $preview = $('#avatarPreview');
+        const $fallback = $('#avatarFallback');
+        
+        $preview.attr('src', avatarUrl);
+        $preview.css('display', 'block');
+        $fallback.css('display', 'none');
+        
+        // 如果图片加载失败，显示回退
+        $preview.on('error', function() {
+            $(this).css('display', 'none');
+            $fallback.css('display', 'flex');
+        });
+    });
+    
+    // 头像输入框变化时自动更新预览
+    $('#avatar').on('blur', function() {
+        const avatarUrl = $(this).val();
+        if (avatarUrl) {
+            try {
+                new URL(avatarUrl);
+                $('#previewAvatarBtn').click();
+            } catch (e) {
+                // URL格式无效，不更新预览
+            }
+        }
+    });
 });
 </script>
+
+<style>
+.account-dashboard {
+    display: flex;
+    gap: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    min-height: calc(100vh - 200px);
+}
+
+/* 侧边栏样式 */
+.account-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 2rem;
+}
+
+.sidebar-header {
+    text-align: center;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 1.5rem;
+}
+
+.sidebar-avatar {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1rem;
+    position: relative;
+}
+
+.sidebar-avatar img,
+.sidebar-avatar .avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sidebar-avatar .avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: #ffffff;
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.sidebar-user-info h4 {
+    margin: 0 0 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.sidebar-user-info p {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.account-sidebar .nav {
+    gap: 0.5rem;
+}
+
+.account-sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    color: #475569;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.account-sidebar .nav-link:hover {
+    background: rgba(59, 130, 246, 0.05);
+    color: #3b82f6;
+}
+
+.account-sidebar .nav-link.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
+}
+
+.account-sidebar .nav-link i {
+    font-size: 1.25rem;
+    width: 24px;
+    text-align: center;
+}
+
+.account-sidebar .nav-link.logout-link {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+    color: #ef4444;
+}
+
+.account-sidebar .nav-link.logout-link:hover {
+    background: rgba(239, 68, 68, 0.05);
+    color: #dc2626;
+}
+
+/* 主内容区样式 */
+.account-main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.profile-header-content {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+}
+
+.avatar-large {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.avatar-large img,
+.avatar-large .avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.avatar-large .avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: #ffffff;
+    font-size: 3rem;
+    font-weight: 600;
+}
+
+.profile-info h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.profile-email {
+    margin: 0.5rem 0;
+    color: #64748b;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-email i {
+    font-size: 1.125rem;
+}
+
+.profile-welcome {
+    margin: 0.75rem 0 0;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+/* 内容区域样式 */
+.content-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 表单样式 */
+.avatar-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.avatar-input-group .form-control {
+    flex: 1;
+}
+
+.avatar-input-group .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+}
+
+.form-control {
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.form-control:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.form-control:disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.alert {
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+.alert-danger {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .account-dashboard {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .account-sidebar {
+        width: 100%;
+        position: static;
+    }
+    
+    .sidebar-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        text-align: left;
+    }
+    
+    .sidebar-avatar {
+        margin: 0;
+        width: 60px;
+        height: 60px;
+    }
+    
+    .account-sidebar .nav {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .account-sidebar .nav-link {
+        flex: 1;
+        min-width: 120px;
+        justify-content: center;
+    }
+    
+    .account-sidebar .nav-link.logout-link {
+        margin-top: 0;
+        padding-top: 0.875rem;
+        border-top: none;
+        border-left: 1px solid #e5e7eb;
+    }
+}
+
+@media (max-width: 768px) {
+    .account-dashboard {
+        padding: 1rem 0.5rem;
+    }
+    
+    .profile-header {
+        padding: 1.5rem;
+    }
+    
+    .profile-header-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 1.5rem;
+    }
+    
+    .avatar-large {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .profile-info h2 {
+        font-size: 1.5rem;
+    }
+    
+    .account-sidebar {
+        padding: 1rem;
+    }
+    
+    .account-sidebar .nav {
+        flex-direction: column;
+    }
+    
+    .account-sidebar .nav-link.logout-link {
+        border-left: none;
+        border-top: 1px solid #e5e7eb;
+        margin-top: 0.5rem;
+        padding-top: 0.875rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .avatar-input-group {
+        flex-direction: column;
+    }
+    
+    .avatar-input-group .btn {
+        width: 100%;
+    }
+}
+</style>

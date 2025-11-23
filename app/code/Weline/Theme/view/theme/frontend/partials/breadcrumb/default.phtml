@@ -4,11 +4,11 @@
  * 
  * 面包屑导航
  * 字段
- * @info description 描述：面包屑导航
- * @info name 名称：Breadcrumb面包屑片段
- * @param items 面包屑项数组（必填）
- * @param separator 分隔符
- * @param class 额外CSS类
+ * @meta.name {default="Breadcrumb面包屑片段",name="Breadcrumb面包屑片段",description="Breadcrumb面包屑片段，用于描述片段的名称"}
+ * @meta.description {default="面包屑导航",name="面包屑导航",description="面包屑导航，用于描述片段的用途"}
+ * @param.items {default=[],name="面包屑项数组",description="面包屑项数组，用于设置面包屑导航项，格式：[{\"text\":\"文字\",\"url\":\"链接\"}]"}
+ * @param.separator {default="/",name="分隔符",description="分隔符，用于设置面包屑项之间的分隔符"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $items = $this->getData('items') ?? [];
 $separator = $this->getData('separator') ?? '/';

@@ -4,20 +4,13 @@
  * 
  * 登录/注册等认证页面的专用布局
  * 字段
- * @meta::theme Weline_Theme
- * @meta::group frontend
- * @meta::info frontend.description 描述：登录/注册等认证页面的专用布局
- * @meta::info frontend.name 名称：个人中心认证页面布局
- * @param title 页面标题
- * @param content 认证表单内容（HTML字符串）
- * @param class 额外CSS类
+ * @meta.name {default="个人中心认证页面布局",name="个人中心认证页面布局",description="个人中心认证页面布局，用于描述布局的名称"}
+ * @meta.description {default="登录/注册等认证页面的专用布局",name="登录/注册等认证页面的专用布局",description="登录/注册等认证页面的专用布局，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param.title {default="登录",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param.content {default="用于设置页面内容",name="认证表单内容（HTML字符串）",description="认证表单内容（HTML字符串），用于设置页面内容"}
  */
-$title = $this->getData('title') ?? __('登录');
-$content = $this->getData('content') ?? '';
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-$this->assign('title', $title);
 ?>
 <!DOCTYPE html>
 <html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
@@ -29,7 +22,16 @@ $this->assign('title', $title);
     
     <main class="account-auth-content <?= htmlspecialchars($class) ?>">
         <div class="auth-container">
-            <?= $content ?>
+            <?php
+            // 如果指定了 contentTemplate，优先渲染原模板
+            $contentTemplate = $this->getData('contentTemplate');
+            if ($contentTemplate) {
+                echo $this->fetch($contentTemplate);
+            } else {
+                // 否则使用 content 变量（HTML字符串）
+                echo $content;
+            }
+            ?>
         </div>
     </main>
     

@@ -136,10 +136,13 @@ class Upgrade extends CommandAbstract
             $modules = $module_handle->getModules();
             $this->printer->note(__('指定注册路由信息'));
             
+            // 启用批量写入模式，提高性能
+            /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+            $routerHelper->enableBatchMode();
+            
             // 如果指定了模块，先清除指定模块的旧路由
             if ($argsModule) {
-                /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
-                $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
                 $this->printer->note(__('清除指定模块的旧路由...'));
                 foreach (Env::router_files_PATH as $routerFilePath) {
                     try {
@@ -161,6 +164,11 @@ class Upgrade extends CommandAbstract
                 }
                 $module_handle->registerRoute(new Module($module));
             }
+            
+            // 所有模块路由注册完成后，一次性写入所有路由文件
+            $this->printer->note(__('正在写入路由文件...'));
+            $routerHelper->flushBatchRouters();
+            $this->printer->success(__('路由文件写入完成！'));
         }
         
         if ($appoint) {
@@ -350,10 +358,13 @@ class Upgrade extends CommandAbstract
         // 注册路由信息
         $this->printer->note(__('3)注册路由信息'));
         
+        // 启用批量写入模式，提高性能
+        /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
+        $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
+        $routerHelper->enableBatchMode();
+        
         // 如果指定了模块，先清除指定模块的旧路由
         if ($argsModule) {
-            /**@var \Weline\Framework\Router\Helper\Data $routerHelper */
-            $routerHelper = ObjectManager::getInstance(\Weline\Framework\Router\Helper\Data::class);
             $this->printer->note(__('清除指定模块的旧路由...'));
             foreach (Env::router_files_PATH as $routerFilePath) {
                 try {
@@ -364,12 +375,18 @@ class Upgrade extends CommandAbstract
             }
         }
         
+        // 注册所有模块的路由（批量模式下会缓存，不立即写入）
         foreach ($modules as $module_name => $module) {
             if ($argsModule and !in_array($module_name, $argsModule)) {
                 continue;
             }
             $module_handle->registerRoute(new Module($module));
         }
+        
+        // 所有模块路由注册完成后，一次性写入所有路由文件
+        $this->printer->note(__('正在写入路由文件...'));
+        $routerHelper->flushBatchRouters();
+        $this->printer->success(__('路由文件写入完成！'));
         if ($argsModule) {
             $this->printer->note(__('指定模块 %{1} 更新完毕！', [implode(', ', $argsModule)]));
         } else {

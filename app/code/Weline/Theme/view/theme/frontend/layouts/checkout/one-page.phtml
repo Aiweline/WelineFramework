@@ -4,13 +4,14 @@
  * 
  * 单页结账布局，所有步骤在一个页面完成
  * 字段
- * @info description 描述：单页结账布局，所有步骤在一个页面完成
- * @info name 名称：结账页单页布局
- * @param title 页面标题（默认：结账）
- * @param content 主要内容（HTML字符串）
- * @param orderSummary 订单摘要（HTML字符串）
- * @param breadcrumb 面包屑导航（可选）
- * @param class 额外CSS类
+ * @meta.name {default="结账页单页布局",name="结账页单页布局",description="结账页单页布局，用于描述布局的名称"}
+ * @meta.description {default="单页结账布局，所有步骤在一个页面完成",name="单页结账布局，所有步骤在一个页面完成",description="单页结账布局，所有步骤在一个页面完成，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="结账",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param orderSummary {default="",name="订单摘要（HTML字符串）",description="订单摘要（HTML字符串），用于设置订单摘要区域"}
+ * @param breadcrumb {default="",name="面包屑导航（可选）",description="面包屑导航（可选），用于设置面包屑导航"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $title = $this->getData('title') ?? __('结账');
 $content = $this->getData('content') ?? '';

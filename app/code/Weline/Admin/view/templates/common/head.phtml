@@ -45,6 +45,34 @@ endif;
 <!-- App Css-->
 <link href="<?= $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/css/app' . ($themeConfig->getThemeModel() ? '-' . $themeConfig->getThemeModel() : '') . '.min.css') ?>"
       rel="stylesheet" type="text/css"/>
+<?php
+// 加载主题色系和变量CSS文件（预览配置）
+$session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+$previewThemeId = $session->getData('preview_theme_id');
+$previewThemeArea = $session->getData('preview_theme_area');
+
+if ($previewThemeId && $previewThemeArea === 'backend') {
+    $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+    $theme->load($previewThemeId);
+    if ($theme->getId()) {
+        // 加载色系CSS文件
+        $themeMode = \Weline\Theme\Helper\LayoutScanner::getColorConfig($theme, 'backend');
+        if ($themeMode && $themeMode !== 'light'): ?>
+<theme:css>Weline_Theme::theme/backend/colors/_<?= $themeMode ?>.css</theme:css>
+<?php 
+        endif;
+        
+        // 加载变量CSS文件
+        $variables = \Weline\Theme\Helper\LayoutScanner::getVariablesConfig($theme, 'backend');
+        foreach ($variables as $variable) {
+            if ($variable): ?>
+<theme:css>Weline_Theme::theme/backend/variables/_<?= $variable ?>.css</theme:css>
+<?php 
+            endif;
+        }
+    }
+}
+?>
 <!--JS-->
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
 <?php if (DEV): ?>

@@ -27,7 +27,7 @@ class JsTranslationsExtractor
      * @param string $area 区域：frontend 或 backend
      * @return array 模块配置数组，格式：['moduleName' => ['paths' => [...], 'globalVar' => '...']]
      */
-    public static function parseModulesConfig(string $area = 'frontend'): array
+    public static function parseModulesConfig(string $area = 'frontend', array $moduleNames = []): array
     {
         $modules = [];
         
@@ -35,13 +35,10 @@ class JsTranslationsExtractor
             // 读取所有模块的 weline.modules.js 文件
             /**@var \Weline\Theme\Config\Reader\WelineModules $reader */
             $reader = ObjectManager::getInstance(\Weline\Theme\Config\Reader\WelineModules::class);
-            $configResources = $reader->getResourceFiles();
-            
-            if (!isset($configResources[$area])) {
+            $content     = $reader->getResourceFileContent($area);
+            if (!$content) {
                 return $modules;
             }
-            
-            $content = $configResources[$area];
             
             // 使用正则表达式提取模块配置
             // 匹配格式：moduleName: { paths: [...], globalVar: "..." }
@@ -261,9 +258,10 @@ class JsTranslationsExtractor
         if (empty($moduleNames)) {
             return $allWords;
         }
+
         
         // 1. 解析模块配置
-        $modules = self::parseModulesConfig($area);
+        $modules = self::parseModulesConfig($area,$moduleNames);
         
         // 2. 遍历指定的模块，解析每个模块的JS文件
         foreach ($moduleNames as $moduleName) {

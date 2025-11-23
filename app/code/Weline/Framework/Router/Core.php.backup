@@ -184,7 +184,7 @@ class Core
             /**@var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);
             $routerData = new DataObject(['path' => $url, 'rule' => []]);
-            $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
+            $eventManager->dispatch('Weline_Weline_Framework::Router:process_uri_before', $routerData);
             $url = $routerData->getData('path');
             $rule = $routerData->getData('rule');
 

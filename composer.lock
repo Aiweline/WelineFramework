@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "479718af938beed11d750a5156811d74",
+    "content-hash": "832f1e0c8caacf10c5a386f7eaae1631",
     "packages": [
         {
             "name": "ardagnsrn/ollama-php",
@@ -6911,66 +6911,73 @@
             "time": "2025-11-17T20:03:58+00:00"
         },
         {
-            "name": "weline/ai-module",
+            "name": "weline/base",
             "version": "dev-main",
             "dist": {
                 "type": "path",
-                "url": "app/code/Weline/Ai",
-                "reference": "d1b4b4e3d3b606bfdfb6b44dd02de8cece44f7c9"
+                "url": "app/code/Weline/Base",
+                "reference": "d763cc307c5c5327e4e8b157e6e0208a790f3d25"
             },
             "require": {
-                "php": ">=8.0",
-                "weline/framework": "@dev"
-            },
-            "require-dev": {
-                "friendsofphp/php-cs-fixer": "^3.0",
-                "phpstan/phpstan": "^1.0",
-                "phpunit/phpunit": "^9.0"
+                "php": "^8.1",
+                "weline/deploy-module": "@dev",
+                "weline/framework": "@dev",
+                "weline/module-acl": "@dev",
+                "weline/module-admin": "@dev",
+                "weline/module-ai": "@dev",
+                "weline/module-ali-ddns-server": "@dev",
+                "weline/module-backend": "@dev",
+                "weline/module-backend-activity": "@dev",
+                "weline/module-backend-theme-upzet": "@dev",
+                "weline/module-cache-manager": "@dev",
+                "weline/module-ck-editor-editor-manager": "@dev",
+                "weline/module-component": "@dev",
+                "weline/module-cron": "@dev",
+                "weline/module-customer": "@dev",
+                "weline/module-data-table": "@dev",
+                "weline/module-developer-workspace": "@dev",
+                "weline/module-eav": "@dev",
+                "weline/module-editor-manager": "@dev",
+                "weline/module-el-finder-file-manager": "@dev",
+                "weline/module-file-manager": "@dev",
+                "weline/module-frontend": "@dev",
+                "weline/module-i18n": "@dev",
+                "weline/module-indexer": "@dev",
+                "weline/module-installer": "@dev",
+                "weline/module-maintenance": "@dev",
+                "weline/module-media-manager": "@dev",
+                "weline/module-module-manager": "@dev",
+                "weline/module-module-router": "@dev",
+                "weline/module-parts": "@dev",
+                "weline/module-queue": "@dev",
+                "weline/module-smtp": "@dev",
+                "weline/module-system-config": "@dev",
+                "weline/module-taglib": "@dev",
+                "weline/module-theme": "@dev",
+                "weline/module-theme-fancy": "@dev",
+                "weline/module-url-manager": "@dev",
+                "weline/module-visitor": "@dev",
+                "weline/module-warm-cache": "@dev",
+                "weline/module-website-monitoring": "@dev",
+                "weline/session-manager": "@dev",
+                "weline/two-factor-auth": "@dev"
             },
             "type": "weline-module",
             "autoload": {
                 "psr-4": {
-                    "Weline\\Ai\\": ""
+                    "Weline\\Base\\": ""
                 }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "Weline\\Ai\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "phpunit"
-                ],
-                "test-coverage": [
-                    "phpunit --coverage-html coverage"
-                ],
-                "cs-fix": [
-                    "php-cs-fixer fix"
-                ],
-                "cs-check": [
-                    "php-cs-fixer fix --dry-run --diff"
-                ],
-                "stan": [
-                    "phpstan analyse"
-                ],
-                "quality": [
-                    "@cs-check",
-                    "@stan",
-                    "@test"
-                ]
             },
             "license": [
-                "MIT"
+                "proprietary"
             ],
             "authors": [
                 {
-                    "name": "Aiweline",
-                    "email": "aiweline@qq.com",
-                    "homepage": "https://aiweline.com"
+                    "name": "秋枫雁飞",
+                    "email": "aiweline@qq.com"
                 }
             ],
-            "description": "AI助手工具模块 - 统一的AI模型管理和助手工具平台",
+            "description": "Weline Base模块 - 统一管理所有Weline模块依赖",
             "transport-options": {
                 "symlink": false,
                 "relative": true
@@ -7133,6 +7140,72 @@
                 }
             ],
             "description": "WelineFramework admin module",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        },
+        {
+            "name": "weline/module-ai",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "app/code/Weline/Ai",
+                "reference": "46b83aa64c8c230868d2bba6479ba6d0a6508379"
+            },
+            "require": {
+                "php": ">=8.0",
+                "weline/framework": "@dev"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.0",
+                "phpstan/phpstan": "^1.0",
+                "phpunit/phpunit": "^9.0"
+            },
+            "type": "weline-module",
+            "autoload": {
+                "psr-4": {
+                    "Weline\\Ai\\": ""
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Weline\\Ai\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ],
+                "test-coverage": [
+                    "phpunit --coverage-html coverage"
+                ],
+                "cs-fix": [
+                    "php-cs-fixer fix"
+                ],
+                "cs-check": [
+                    "php-cs-fixer fix --dry-run --diff"
+                ],
+                "stan": [
+                    "phpstan analyse"
+                ],
+                "quality": [
+                    "@cs-check",
+                    "@stan",
+                    "@test"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Aiweline",
+                    "email": "aiweline@qq.com",
+                    "homepage": "https://aiweline.com"
+                }
+            ],
+            "description": "AI助手工具模块 - 统一的AI模型管理和助手工具平台",
             "transport-options": {
                 "symlink": false,
                 "relative": true
@@ -8613,51 +8686,11 @@
         }
     ],
     "aliases": [],
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "stability-flags": {
-        "weline/ai-module": 20,
-        "weline/deploy-module": 20,
-        "weline/framework": 20,
-        "weline/module-acl": 20,
-        "weline/module-admin": 20,
-        "weline/module-ali-ddns-server": 20,
-        "weline/module-backend": 20,
-        "weline/module-backend-activity": 20,
-        "weline/module-backend-theme-upzet": 20,
-        "weline/module-cache-manager": 20,
-        "weline/module-ck-editor-editor-manager": 20,
-        "weline/module-component": 20,
-        "weline/module-cron": 20,
-        "weline/module-customer": 20,
-        "weline/module-data-table": 20,
-        "weline/module-developer-workspace": 20,
-        "weline/module-eav": 20,
-        "weline/module-editor-manager": 20,
-        "weline/module-el-finder-file-manager": 20,
-        "weline/module-file-manager": 20,
-        "weline/module-frontend": 20,
-        "weline/module-i18n": 20,
-        "weline/module-indexer": 20,
-        "weline/module-installer": 20,
-        "weline/module-maintenance": 20,
-        "weline/module-media-manager": 20,
-        "weline/module-module-manager": 20,
-        "weline/module-module-router": 20,
-        "weline/module-parts": 20,
-        "weline/module-queue": 20,
-        "weline/module-smtp": 20,
-        "weline/module-system-config": 20,
-        "weline/module-taglib": 20,
-        "weline/module-theme": 20,
-        "weline/module-theme-fancy": 20,
-        "weline/module-url-manager": 20,
-        "weline/module-visitor": 20,
-        "weline/module-warm-cache": 20,
-        "weline/module-website-monitoring": 20,
-        "weline/session-manager": 20,
-        "weline/two-factor-auth": 20
+        "weline/base": 20
     },
-    "prefer-stable": false,
+    "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.1",
