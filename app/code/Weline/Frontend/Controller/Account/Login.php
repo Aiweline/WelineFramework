@@ -21,6 +21,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 {
     private FrontendUserSession $session;
     private Template $template;
+    private string $layoutType='account.auth';
 
     public function __construct(
         FrontendUserSession $session,
@@ -45,12 +46,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if ($referer && !str_contains($referer, '/account/login')) {
             $this->session->setData('login_referer', $referer);
         }
-
-        // 使用主题认证布局
-        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/auth.phtml', [
-            'title' => __('用户登录'),
-            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/login.phtml')
-        ]);
+        return $this->fetch('Weline_Frontend::templates/frontend/account/login.phtml');
     }
 
     /**

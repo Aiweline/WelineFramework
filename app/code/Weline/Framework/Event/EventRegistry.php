@@ -22,11 +22,14 @@ class EventRegistry
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
     private EventScanner $scanner;
+    private Config\XmlReader $xmlReader;
 
     public function __construct(
-        EventScanner $scanner
+        EventScanner $scanner,
+        Config\XmlReader $xmlReader
     ) {
         $this->scanner = $scanner;
+        $this->xmlReader = $xmlReader;
     }
 
     /**
@@ -101,6 +104,9 @@ class EventRegistry
 
         // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
         $registry = $this->organizeRegistryData($scannedData);
+
+        // 扫描所有观察者并合并到事件信息中
+        $this->mergeObserversIntoRegistry($registry);
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -186,6 +192,55 @@ class EventRegistry
             'event_to_module' => $eventToModuleMap, // 快速查询：事件名 => 模块名
             'dynamic_patterns' => $dynamicEventPatterns // 动态事件模式
         ];
+    }
+
+    /**
+     * 合并观察者到注册表中
+     *
+     * @param array $registry 注册表数据（引用传递，会修改原数组）
+     * @return void
+     */
+    private function mergeObserversIntoRegistry(array &$registry): void
+    {
+        // 扫描所有观察者
+        $observersData = $this->xmlReader->read();
+        
+        // 合并所有观察者到对应的事件中
+        foreach ($observersData as $module_and_file => $eventObservers) {
+            foreach ($eventObservers as $eventName => $observers) {
+                // 如果事件不存在，跳过（可能是动态事件或未定义的事件）
+                if (!isset($registry['events'][$eventName])) {
+                    continue;
+                }
+                
+                // 初始化观察者数组
+                if (!isset($registry['events'][$eventName]['observers'])) {
+                    $registry['events'][$eventName]['observers'] = [];
+                }
+                
+                // 合并观察者（过滤掉禁用的观察者）
+                foreach ($observers as $observer) {
+                    // 跳过禁用的观察者
+                    if (($observer['disabled'] ?? 'false') === 'true') {
+                        continue;
+                    }
+                    
+                    // 添加到观察者列表
+                    $registry['events'][$eventName]['observers'][] = $observer;
+                }
+            }
+        }
+        
+        // 对所有事件的观察者按 sort 值排序
+        foreach ($registry['events'] as $eventName => &$eventInfo) {
+            if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
+                usort($eventInfo['observers'], function ($a, $b) {
+                    $sortA = (int)($a['sort'] ?? 10000);
+                    $sortB = (int)($b['sort'] ?? 10000);
+                    return $sortA <=> $sortB;
+                });
+            }
+        }
     }
 
     /**

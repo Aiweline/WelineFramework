@@ -71,6 +71,17 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             Env::getInstance()->setConfig('maintenance', true);
             $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
             
+            # 在升级前先注册事件
+            try {
+                $this->printing->note(__('正在注册事件...'));
+                /**@var \Weline\Framework\Event\EventRegistry $eventRegistry */
+                $eventRegistry = ObjectManager::getInstance(\Weline\Framework\Event\EventRegistry::class);
+                $eventRegistry->refresh();
+                $this->printing->success(__('事件注册完成。'));
+            } catch (\Exception $e) {
+                $this->printing->warning(__('事件注册失败：%{1}，继续执行升级...', [$e->getMessage()]));
+            }
+            
             # 执行正常的升级流程
             /**@var \Weline\Framework\Module\Console\Module\Upgrade $moduleUpdate */
             $moduleUpdate = ObjectManager::getInstance(\Weline\Framework\Module\Console\Module\Upgrade::class);
