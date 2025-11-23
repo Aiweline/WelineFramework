@@ -192,6 +192,65 @@ class EventData
     }
 
     /**
+     * 获取事件的观察者（监听器）列表
+     * 优先从 generated/events.php 文件中提取观察者信息
+     * 如果是动态事件或未找到，则从 EventsManager 实时扫描
+     *
+     * @param string $eventName 事件名
+     * @return array 观察者配置数组
+     */
+    public static function getEventObservers(string $eventName): array
+    {
+        $registry = self::getRegistry();
+        $events = $registry['events'] ?? [];
+        
+        // 先检查精确匹配
+        if (isset($events[$eventName]) && isset($events[$eventName]['observers'])) {
+            return $events[$eventName]['observers'];
+        }
+        
+        // 检查动态事件模式匹配
+        $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
+        $isDynamicEvent = false;
+        foreach ($dynamicPatterns as $pattern => $patternInfo) {
+            if (self::matchDynamicEventPattern($pattern, $eventName)) {
+                $isDynamicEvent = true;
+                break;
+            }
+        }
+        
+        // 如果是动态事件或未在注册表中找到，从 EventsManager 实时扫描
+        if ($isDynamicEvent || !isset($events[$eventName])) {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $allObservers = $eventsManager->scanEvents();
+            return $allObservers[$eventName] ?? [];
+        }
+        
+        // 事件存在但没有观察者
+        return [];
+    }
+
+    /**
+     * 匹配动态事件模式
+     *
+     * @param string $pattern 模式，如 "Framework_View::{position}"
+     * @param string $eventName 实际事件名，如 "Framework_View::head"
+     * @return bool
+     */
+    private static function matchDynamicEventPattern(string $pattern, string $eventName): bool
+    {
+        // 将模式转换为正则表达式
+        $regex = preg_quote($pattern, '/');
+        // 将转义后的 {变量名} 替换为正则表达式的 (.+)
+        $regex = preg_replace('/\\\\\\{[^}]+\\\\\\}/', '(.+)', $regex);
+        // 匹配整个字符串
+        $regex = '/^' . $regex . '$/';
+        
+        return (bool) preg_match($regex, $eventName);
+    }
+
+    /**
      * 清除缓存（当注册表更新后调用）
      *
      * @return void
