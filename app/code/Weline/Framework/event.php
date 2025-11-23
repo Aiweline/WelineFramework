@@ -149,6 +149,18 @@ return [
         'doc' => 'console/控制台编译.md',
     ],
     
+    // ========== 控制器模板事件 ==========
+    'Weline_Framework::Controller::fetch_file_before' => [
+        'name' => __('控制器模板获取前'),
+        'description' => __('在控制器获取模板文件前触发，允许其他模块修改模板文件路径或执行预处理操作。'),
+        'doc' => 'controller/控制器模板获取前.md',
+    ],
+    'Weline_Framework::Controller::fetch_file_after' => [
+        'name' => __('控制器模板获取后'),
+        'description' => __('在控制器获取模板文件后触发，允许其他模块修改渲染后的模板内容。'),
+        'doc' => 'controller/控制器模板获取后.md',
+    ],
+    
     // ========== REST控制器事件 ==========
     'Weline_Framework_RestController::init_before' => [
         'name' => __('REST控制器初始化前'),
@@ -312,5 +324,5 @@ return [
         'name' => __('部署模式切换到生产环境后'),
         'description' => __('在部署模式切换到生产环境(prod)后触发，允许其他模块执行生产环境相关的操作，如生成加密token等。'),
         'doc' => 'deploy/部署模式切换到生产环境后.md',
-    ],
+    ]
 ];
