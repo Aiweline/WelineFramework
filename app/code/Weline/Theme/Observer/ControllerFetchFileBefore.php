@@ -37,6 +37,8 @@ class ControllerFetchFileBefore implements ObserverInterface
     {
         /** @var DataObject $eventData */
         $eventData = $event->getData('data');
+        
+        // dd($eventData); // 调试代码已注释，如需调试请取消注释
         if (!$eventData instanceof DataObject) {
             return;
         }

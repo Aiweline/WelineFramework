@@ -14,4 +14,10 @@
     <event name="Weline_Framework_Module::module_upgrade">
         <observer name="Weline_Frontend::compiler_upgrade" instance="Weline\Theme\Observer\UpgradeCompiler" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework::Controller::fetch_file_before">
+        <observer name="Weline_Theme::controller_fetch_file_before" instance="Weline\Theme\Observer\ControllerFetchFileBefore" disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Framework::Controller::fetch_file_after">
+        <observer name="Weline_Theme::controller_fetch_file_after" instance="Weline\Theme\Observer\ControllerFetchFileAfter" disabled="false" shared="true" sort="10"/>
+    </event>
 </config>
