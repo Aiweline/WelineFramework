@@ -182,7 +182,7 @@ class Data extends AbstractHelper
                                 $data->setData('type', 'api');
                                 $data->setData('controller_data', $ctl_data);
                                 $data->setData('params', $params);
-                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                             }
                             // 路由注册+
                             Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -214,7 +214,7 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'api');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $params);
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -244,7 +244,7 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'api');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $full_method_params);
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);
@@ -357,7 +357,7 @@ class Data extends AbstractHelper
                                 $data->setData('type', 'pc');
                                 $data->setData('controller_data', $ctl_data);
                                 $data->setData('params', $params);
-                                $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                             }
                             // 路由注册+
                             Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -389,7 +389,7 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'pc');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $params);
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $params);
@@ -419,7 +419,7 @@ class Data extends AbstractHelper
                                     $data->setData('type', 'pc');
                                     $data->setData('controller_data', $ctl_data);
                                     $data->setData('params', $full_method_params);
-                                    $this->getEvenManager()->dispatch('Weline_Module::controller_attributes', $data);
+                                    $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
                                 Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);

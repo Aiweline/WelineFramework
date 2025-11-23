@@ -96,7 +96,7 @@ class Start implements CommandInterface
                     'force' => true,
                     'reason' => 'force_restart'
                 ];
-                $eventManager->dispatch('Framework_Server::stop_after', $stopEventData);
+                $eventManager->dispatch('Weline_Framework_Server::stop_after', $stopEventData);
                 
             } else {
                 // 非强制模式：显示现有服务器信息
@@ -239,7 +239,7 @@ class Start implements CommandInterface
                 'start_time' => time(),
                 'force' => $force
             ];
-            $eventManager->dispatch('Framework_Server::start_after', $eventData);
+            $eventManager->dispatch('Weline_Framework_Server::start_after', $eventData);
             
             if ($backend) {
                 $this->printer->success(__('服务器已在后台启动成功！进程ID：%{1}', [$pid]));

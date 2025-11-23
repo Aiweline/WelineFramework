@@ -87,7 +87,7 @@ class Cookie
         $data->setData('lang', self::getLang());
         $data->setData('currency', self::getCurrency());
         $data->setData('lang_local', self::getLang());
-        ObjectManager::getInstance(EventsManager::class)->dispatch('Framework_Cookie::lang_local', $data);
+        ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Framework_Cookie::lang_local', $data);
         return $data->getData('lang_local');
     }
 

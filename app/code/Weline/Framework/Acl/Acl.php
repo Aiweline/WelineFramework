@@ -193,7 +193,7 @@ use Weline\Framework\Manager\ObjectManager;
         // ACL控制器事件分配
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Acl::dispatch', $this);
+        $eventsManager->dispatch('Weline_Framework_Acl::dispatch', $this);
         return $this->getResult();
     }
 

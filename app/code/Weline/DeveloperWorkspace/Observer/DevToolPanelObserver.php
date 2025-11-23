@@ -17,7 +17,7 @@ use Weline\Framework\Http\Request;
 
 /**
  * 开发工具面板 Observer
- * 监听 App::run_after 事件，在页面输出前注入开发工具面板
+ * 监听 Weline_Framework::App::run_after 事件，在页面输出前注入开发工具面板
  */
 class DevToolPanelObserver implements ObserverInterface
 {

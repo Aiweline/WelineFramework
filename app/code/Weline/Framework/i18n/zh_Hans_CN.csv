@@ -927,7 +927,7 @@
 "  - 总事件数：%{count}（普通事件：%{normal}，动态事件模式：%{dynamic}）","  - 总事件数：%{count}（普通事件：%{normal}，动态事件模式：%{dynamic}）"
 "  - 有文档：%{count}","  - 有文档：%{count}"
 "  - 缺少文档：%{count}","  - 缺少文档：%{count}"
-"EventsManager Warning: No observer found for Weline_Framework::msg","EventsManager Warning: No observer found for Weline_Framework::msg"
+"EventsManager Warning: No observer found for Weline_Admin::msg","EventsManager Warning: No observer found for Weline_Admin::msg"
 "请确认开发服务器是否已启动（php bin/w server:start -b）","请确认开发服务器是否已启动（php bin/w server:start -b）"
 "  ⚠️  安全警告：此命令仅允许在开发环境中运行！","  ⚠️  安全警告：此命令仅允许在开发环境中运行！"
 "  dev=true","  dev=true"

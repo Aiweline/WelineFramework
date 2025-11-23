@@ -23,13 +23,13 @@ class BackendController extends PcController
 
     public function __init()
     {
-        $this->getEventManager()->dispatch('Framework_App::backend_controller_init_before');
+        $this->getEventManager()->dispatch('Weline_Framework_App::backend_controller_init_before');
         $this->cache = $this->getControllerCache();
         if (!isset($this->session)) {
             $this->session = ObjectManager::getInstance(BackendSession::class);
         }
         parent::__init();
-        $this->getEventManager()->dispatch('Framework_App::backend_controller_init_after');
+        $this->getEventManager()->dispatch('Weline_Framework_App::backend_controller_init_after');
         $this->loginCheck();
     }
 
@@ -43,7 +43,7 @@ class BackendController extends PcController
                 /**@var EventsManager $evenManager */
                 $evenManager = ObjectManager::getInstance(EventsManager::class);
                 $whitelistUrlData = new DataObject(['whitelist_url' => []]);
-                $evenManager->dispatch('Framework_Router::backend_whitelist_url', $whitelistUrlData);
+                $evenManager->dispatch('Weline_Framework_Router::backend_whitelist_url', $whitelistUrlData);
                 $whitelist_url = $whitelistUrlData->getData('whitelist_url');
                 $this->cache->set($whitelist_url_cache_key, $whitelist_url);
             }
@@ -54,7 +54,7 @@ class BackendController extends PcController
                     /**@var EventsManager $evenManager */
                     $evenManager = ObjectManager::getInstance(EventsManager::class);
                     $noLoginRedirectUrl = new DataObject(['no_login_redirect_url' => []]);
-                    $evenManager->dispatch('Framework_Router::backend_no_login_redirect_url', $noLoginRedirectUrl);
+                    $evenManager->dispatch('Weline_Framework_Router::backend_no_login_redirect_url', $noLoginRedirectUrl);
                     $no_login_redirect_url = $noLoginRedirectUrl->getData('no_login_redirect_url');
                     $this->cache->set($no_login_url_cache_key, $this->_url->getUri($no_login_redirect_url));
                 }

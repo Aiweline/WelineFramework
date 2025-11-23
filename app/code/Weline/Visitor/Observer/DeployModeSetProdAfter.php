@@ -20,7 +20,7 @@ use Weline\Visitor\Service\PixelEncryptionService;
 /**
  * 部署模式切换到prod后的观察者
  * 
- * 监听 Framework_Deploy_Mode_Set::prod_after 事件
+ * 监听 Weline_Framework_Deploy_Mode_Set::prod_after 事件
  * 在切换到prod模式时，自动生成基于Deploy版本号的加密token
  */
 class DeployModeSetProdAfter implements ObserverInterface

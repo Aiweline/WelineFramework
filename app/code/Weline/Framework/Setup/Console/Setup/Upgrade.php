@@ -79,7 +79,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             # 触发系统升级后事件
             /**@var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventsManager->dispatch('Framework_Setup::upgrade_after');
+            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
             
             $this->printing->success(__('系统升级完成！'));
         } catch (\Exception $e) {
@@ -470,7 +470,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         # 触发系统升级后事件
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Setup::upgrade_after');
+        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
         
         $this->printing->success(__('系统识别到您初次安装！已为您初始化安装参数。'), __('安装'));
         $this->printing->success(__('您的后台入口地址密钥：%{1} ', Env::get('admin')), __('安装'));

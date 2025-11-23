@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_Url::seo_decode` 事件及其使用方法。该事件在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_Url::seo_decode` 事件及其使用方法。该事件在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。
 
 ## 事件列表
 
-### 1. Framework_Url::seo_decode - SEO解码事件
+### 1. Weline_Framework_Url::seo_decode - SEO解码事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_Url::seo_decode`
+- **事件名称**：`Weline_Framework_Url::seo_decode`
 - **事件类型**：URL解析事件
 - **触发时机**：在URL SEO解码时
 - **触发位置**：`app/code/Weline/Framework/Http/Url.php` 第 798 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_Url::seo_decode` 事件在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。可以将SEO友好的URL解码为系统可识别的URL格式。
+`Weline_Framework_Url::seo_decode` 事件在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。可以将SEO友好的URL解码为系统可识别的URL格式。
 
 该事件主要用于：
 - 自定义SEO解码逻辑
@@ -30,7 +30,7 @@
 
 ```php
 // app/code/Weline/Framework/Http/Url.php
-$event->dispatch('Framework_Url::seo_decode', $url);
+$event->dispatch('Weline_Framework_Url::seo_decode', $url);
 ```
 
 #### 使用场景
@@ -51,7 +51,7 @@ $event->dispatch('Framework_Url::seo_decode', $url);
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_Url::seo_decode">
+    <event name="Weline_Framework_Url::seo_decode">
         <observer name="Your_Module::seo_decode_url"
                   instance="Your\Module\Observer\SeoDecodeUrlObserver"
                   disabled="false"
@@ -96,7 +96,7 @@ class SeoDecodeUrlObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_Url::seo_decode` 事件传递的数据：
+`Weline_Framework_Url::seo_decode` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -206,7 +206,7 @@ class MultilanguageUrlDecodeObserver implements ObserverInterface
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_Url::seo_decode` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_Url::seo_decode` 事件文档
 
 ## 相关资源
 

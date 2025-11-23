@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Ai 模块提供的 `ai_monitoring_alert` 事件及其使用方法。该事件在AI模型监控触发告警时触发。
+本文档详细说明了 Weline Ai 模块提供的 `Weline_Ai::ai_monitoring_alert` 事件及其使用方法。该事件在AI模型监控触发告警时触发。
 
 ## 事件列表
 
-### 1. ai_monitoring_alert - AI监控告警事件
+### 1. Weline_Ai::ai_monitoring_alert - AI监控告警事件
 
 #### 基本信息
 
-- **事件名称**：`ai_monitoring_alert`
+- **事件名称**：`Weline_Ai::ai_monitoring_alert`
 - **事件类型**：AI监控事件
 - **触发时机**：在AI模型监控触发告警时
 - **触发位置**：`app/code/Weline/Ai/Service/MonitoringService.php` 第 257 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`ai_monitoring_alert` 事件在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。
+`Weline_Ai::ai_monitoring_alert` 事件在AI模型监控触发告警时触发，允许其他模块监听并处理告警通知。事件数据包含告警信息、监控数据、模型代码、租户ID等。
 
 该事件主要用于：
 - 发送告警通知（短信、钉钉、飞书等）
@@ -36,7 +36,7 @@ $eventData = [
     'model_code' => $monitoring->getData('model_code'),
     'tenant_id' => $monitoring->getData('tenant_id'),
 ];
-$this->eventsManager->dispatch('ai_monitoring_alert', $eventData);
+$this->eventsManager->dispatch('Weline_Ai::ai_monitoring_alert', $eventData);
 ```
 
 #### 使用场景
@@ -57,8 +57,8 @@ $this->eventsManager->dispatch('ai_monitoring_alert', $eventData);
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="ai_monitoring_alert">
-        <observer name="Your_Module::ai_monitoring_alert"
+    <event name="Weline_Ai::ai_monitoring_alert">
+        <observer name="Your_Module::Weline_Ai::ai_monitoring_alert"
                   instance="Your\Module\Observer\AiMonitoringAlertObserver"
                   disabled="false"
                   shared="true"
@@ -101,7 +101,7 @@ class AiMonitoringAlertObserver implements ObserverInterface
 
 #### 事件数据
 
-`ai_monitoring_alert` 事件传递的数据：
+`Weline_Ai::ai_monitoring_alert` 事件传递的数据：
 
 ```php
 [
@@ -132,5 +132,5 @@ class AiMonitoringAlertObserver implements ObserverInterface
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `ai_monitoring_alert` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Ai::ai_monitoring_alert` 事件文档
 

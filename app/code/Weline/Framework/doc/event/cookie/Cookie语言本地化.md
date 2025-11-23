@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_Cookie::lang_local` 事件及其使用方法。该事件在设置Cookie语言本地化时触发，允许其他模块自定义语言本地化逻辑。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_Cookie::lang_local` 事件及其使用方法。该事件在设置Cookie语言本地化时触发，允许其他模块自定义语言本地化逻辑。
 
 ## 事件列表
 
-### 1. Framework_Cookie::lang_local - Cookie语言本地化事件
+### 1. Weline_Framework_Cookie::lang_local - Cookie语言本地化事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_Cookie::lang_local`
+- **事件名称**：`Weline_Framework_Cookie::lang_local`
 - **事件类型**：Cookie事件
 - **触发时机**：在设置Cookie语言本地化时
 - **触发位置**：`app/code/Weline/Framework/Http/Cookie.php` 第 90 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_Cookie::lang_local` 事件在设置Cookie语言本地化时触发，允许其他模块自定义语言本地化逻辑。可以修改 `lang_local` 字段来改变语言本地化值。
+`Weline_Framework_Cookie::lang_local` 事件在设置Cookie语言本地化时触发，允许其他模块自定义语言本地化逻辑。可以修改 `lang_local` 字段来改变语言本地化值。
 
 该事件主要用于：
 - 自定义语言本地化逻辑
@@ -34,7 +34,7 @@ $data = new DataObject();
 $data->setData('lang', self::getLang());
 $data->setData('currency', self::getCurrency());
 $data->setData('lang_local', self::getLang());
-ObjectManager::getInstance(EventsManager::class)->dispatch('Framework_Cookie::lang_local', $data);
+ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Framework_Cookie::lang_local', $data);
 return $data->getData('lang_local');
 ```
 
@@ -55,7 +55,7 @@ return $data->getData('lang_local');
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_Cookie::lang_local">
+    <event name="Weline_Framework_Cookie::lang_local">
         <observer name="Your_Module::custom_lang_local"
                   instance="Your\Module\Observer\CustomLangLocalObserver"
                   disabled="false"
@@ -105,7 +105,7 @@ class CustomLangLocalObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_Cookie::lang_local` 事件传递的数据：
+`Weline_Framework_Cookie::lang_local` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -137,5 +137,5 @@ $event->setData('lang_local', $customLangLocal);
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_Cookie::lang_local` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_Cookie::lang_local` 事件文档
 

@@ -21,7 +21,7 @@ use Weline\Sticker\Service\StickerRegistry;
 
 /**
  * 模板文件加载观察者
- * 监听 Framework_View::fetch_file 事件，检查 Sticker 注册表
+ * 监听 Weline_Framework_View::fetch_file 事件，检查 Sticker 注册表
  * 如果文件有 Sticker，则替换为编译文件路径
  */
 class TemplateFetchFile implements ObserverInterface

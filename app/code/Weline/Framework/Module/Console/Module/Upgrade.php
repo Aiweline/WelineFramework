@@ -65,7 +65,7 @@ class Upgrade extends CommandAbstract
     {
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Module::module_upgrade_before');
+        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade_before');
         $appoint = false;
         // 支持 --module 和 -m 两种写法，以及位置参数
         $argsModule = $args['module'] ?? $args['m'] ?? [];
@@ -450,7 +450,7 @@ class Upgrade extends CommandAbstract
         // 清理其他
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Framework_Module::module_upgrade');
+        $eventsManager->dispatch('Weline_Framework_Module::module_upgrade');
     }
 
     /**
