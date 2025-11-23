@@ -93,7 +93,7 @@ class Response implements ResponseInterface
                     $msg = 'Unknown Error';
             }
         }
-        $this->getEvenManager()->dispatch('Weline_Framework_http_response_no_router_before');
+        $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before');
         if (DEV || CLI) {
             if (!headers_sent()) {
                 http_response_code($code);

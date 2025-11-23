@@ -54,7 +54,7 @@ class EventData
     /**
      * 获取事件名到模块名的映射（快速查询）
      *
-     * @return array 格式：['Weline_Framework::msg' => 'Weline_Admin', ...]
+     * @return array 格式：['Weline_Admin::msg' => 'Weline_Admin', ...]
      */
     public static function getEventToModuleMap(): array
     {

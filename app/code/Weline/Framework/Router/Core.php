@@ -588,7 +588,7 @@ class Core
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['route' => $this];
-        $eventManager->dispatch('Framework_Router::route_before', $eventData);
+        $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
 
@@ -605,7 +605,7 @@ class Core
             # ----------事件：处理url之前 开始------------
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
-            $eventManager->dispatch('Framework_Router::route_after', $eventData);
+            $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
             
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             $output = ob_get_clean();

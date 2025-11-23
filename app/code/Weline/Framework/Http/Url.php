@@ -45,7 +45,7 @@ class Url implements UrlInterface
         ]);
         /** @var EventsManager $eventManager */
         $eventManager = w_obj(EventsManager::class);
-        $eventManager->dispatch('Framework_Url::detect_language', $data);
+        $eventManager->dispatch('Weline_Framework_Url::detect_language', $data);
         if ($data->getData('result')) {
             if (str_starts_with($uri, '/' . $code)) {
                 $uri = substr($uri, strlen('/' . $code));
@@ -70,7 +70,7 @@ class Url implements UrlInterface
         ]);
         /** @var EventsManager $eventManager */
         $eventManager = w_obj(EventsManager::class);
-        $eventManager->dispatch('Framework_Url::detect_currency', $detect_currency_data);
+        $eventManager->dispatch('Weline_Framework_Url::detect_currency', $detect_currency_data);
         $uri_ = $detect_currency_data->getData('uri');
 
         if ($detect_currency_data->getData('result')) {
@@ -370,7 +370,7 @@ class Url implements UrlInterface
         if (Env::get('seo')) {
             /** @var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);
-            $eventManager->dispatch('Framework_Url::url_generate_rewrite', $url);
+            $eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite', $url);
         }
         return $url;
     }
@@ -534,7 +534,7 @@ class Url implements UrlInterface
                 'get_sites' => true
             ]);
             $eventManager = w_obj(EventsManager::class);
-            $eventManager->dispatch('Framework_Url::detect_website', $detect_website_data);
+            $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
             $sites = $detect_website_data->getData('sites');
             # 找出站点链接最长的，依次写入self::$parserMatchs
             $tmp = [];
@@ -844,7 +844,7 @@ class Url implements UrlInterface
             /**@var EventsManager $event */
             $event = ObjectManager::getInstance(EventsManager::class);
             $origin_url = $url;
-            $event->dispatch('Framework_Url::seo_decode', $url);
+            $event->dispatch('Weline_Framework_Url::seo_decode', $url);
             
             // 缓存原始URL到解码后URL的映射
             self::$decode_urls[$origin_url] = $url;

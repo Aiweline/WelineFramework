@@ -25,7 +25,7 @@ class EventScanner
      * @return array 返回格式：
      * [
      *   'Weline_Admin' => [
-     *     'Weline_Framework::msg' => [
+     *     'Weline_Admin::msg' => [
      *       'name' => '系统消息通知',
      *       'description' => '...',
      *       'doc' => '系统消息通知.md',

@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_Router::backend_whitelist_url` 事件及其使用方法。该事件在后端控制器初始化时触发，允许其他模块添加后端白名单URL。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_Router::backend_whitelist_url` 事件及其使用方法。该事件在后端控制器初始化时触发，允许其他模块添加后端白名单URL。
 
 ## 事件列表
 
-### 1. Framework_Router::backend_whitelist_url - 后端白名单URL事件
+### 1. Weline_Framework_Router::backend_whitelist_url - 后端白名单URL事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_Router::backend_whitelist_url`
+- **事件名称**：`Weline_Framework_Router::backend_whitelist_url`
 - **事件类型**：路由配置事件
 - **触发时机**：在后端控制器初始化时
 - **触发位置**：`app/code/Weline/Framework/App/Controller/BackendController.php` 第 46 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_Router::backend_whitelist_url` 事件在后端控制器初始化时触发，用于收集后端白名单URL列表。白名单URL是指不需要登录即可访问的后端URL。
+`Weline_Framework_Router::backend_whitelist_url` 事件在后端控制器初始化时触发，用于收集后端白名单URL列表。白名单URL是指不需要登录即可访问的后端URL。
 
 该事件主要用于：
 - 添加后端白名单URL
@@ -30,7 +30,7 @@
 ```php
 // app/code/Weline/Framework/App/Controller/BackendController.php
 $whitelistUrlData = new DataObject(['whitelist_url' => []]);
-$evenManager->dispatch('Framework_Router::backend_whitelist_url', $whitelistUrlData);
+$evenManager->dispatch('Weline_Framework_Router::backend_whitelist_url', $whitelistUrlData);
 $whitelist_url = $whitelistUrlData->getData('whitelist_url');
 ```
 
@@ -52,7 +52,7 @@ $whitelist_url = $whitelistUrlData->getData('whitelist_url');
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_Router::backend_whitelist_url">
+    <event name="Weline_Framework_Router::backend_whitelist_url">
         <observer name="Your_Module::add_whitelist_url"
                   instance="Your\Module\Observer\AddWhitelistUrlObserver"
                   disabled="false"
@@ -95,7 +95,7 @@ class AddWhitelistUrlObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_Router::backend_whitelist_url` 事件传递的数据：
+`Weline_Framework_Router::backend_whitelist_url` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -202,7 +202,7 @@ class AddPublicApiToWhitelistObserver implements ObserverInterface
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_Router::backend_whitelist_url` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_Router::backend_whitelist_url` 事件文档
 
 ## 相关资源
 

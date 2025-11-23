@@ -52,7 +52,7 @@ class Compiler implements CompilerInterface
                     ]
                 );
                 $this->getEventManager()->dispatch(
-                    'Framework_Resource::compiler',
+                    'Weline_Framework_Resource::compiler',
                     $data
                 );
             }
@@ -66,7 +66,7 @@ class Compiler implements CompilerInterface
                     ]
                 );
                 $this->getEventManager()->dispatch(
-                    'Framework_Resource::compiler',
+                    'Weline_Framework_Resource::compiler',
                     $data
                 );
             }

@@ -41,10 +41,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         $user = $this->session->getLoginUser();
         
         // 使用主题仪表盘布局
-        return $this->fetch('Weline_Theme::theme/frontend/layouts/account/dashboard.phtml', [
-            'title' => __('个人中心'),
-            'content' => $this->fetch('Weline_Frontend::templates/frontend/account/index.phtml', ['user' => $user])
-        ]);
+        return $this->fetch('Weline_Frontend::templates/frontend/account/index.phtml', ['user' => $user]);
     }
 
     /**

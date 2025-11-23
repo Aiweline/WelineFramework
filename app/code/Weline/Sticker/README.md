@@ -124,7 +124,7 @@ Sticker 模块旨在通过以下方式解决上述问题：
 ### 7. 模板拦截（TemplateFetchFile Observer）
 
 - **功能**：在模板加载时拦截，使用编译后的文件
-- **事件**：`Framework_View::fetch_file`
+- **事件**：`Weline_Framework_View::fetch_file`
 - **逻辑**：
   1. 检查文件是否有 Sticker 规则
   2. 检查编译文件是否存在
@@ -254,7 +254,7 @@ php bin/w sticker:refresh
 ### 3. 运行时阶段
 
 **流程**：
-1. 框架触发 `Framework_View::fetch_file` 事件
+1. 框架触发 `Weline_Framework_View::fetch_file` 事件
 2. `TemplateFetchFile` Observer 拦截
 3. 检查文件是否有 Sticker 规则
 4. 检查编译文件是否存在

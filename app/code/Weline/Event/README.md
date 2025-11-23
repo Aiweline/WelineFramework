@@ -186,7 +186,7 @@ $service = ObjectManager::getInstance(EventDataService::class);
 $allEvents = $service->getAllEvents();
 
 // 获取单个事件详情
-$eventDetail = $service->getEventDetail('Weline_Framework::msg');
+$eventDetail = $service->getEventDetail('Weline_Admin::msg');
 
 // 获取事件统计
 $stats = $service->getEventStats();

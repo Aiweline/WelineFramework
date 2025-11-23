@@ -18,7 +18,7 @@ use Weline\Theme\Model\WelineTheme;
 
 /**
  * 系统升级后观察者
- * 监听 Framework_Setup::upgrade_after 事件，清除主题缓存并刷新主题信息
+ * 监听 Weline_Framework_Setup::upgrade_after 事件，清除主题缓存并刷新主题信息
  */
 class SetupUpgradeAfter implements ObserverInterface
 {

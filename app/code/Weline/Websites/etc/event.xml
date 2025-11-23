@@ -3,19 +3,19 @@
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
     <!--控制器注解属性-->
-    <event name="Framework_Url::detect_website">
+    <event name="Weline_Framework_Url::detect_website">
         <observer name="Weline_Websites::detect_website" instance="Weline\Websites\Observer\DetectWebsite"
                   disabled="false"
                   shared="true" sort="0"/>
     </event>
     <!--货币验证观察者：在网站检测之后验证货币是否被允许-->
-    <event name="Framework_Url::detect_currency">
+    <event name="Weline_Framework_Url::detect_currency">
         <observer name="Weline_Websites::validate_currency" instance="Weline\Websites\Observer\ValidateCurrency"
                   disabled="false"
                   shared="true" sort="100"/>
     </event>
     <!--语言验证观察者：在网站检测之后验证语言是否被允许-->
-    <event name="Framework_Url::detect_language">
+    <event name="Weline_Framework_Url::detect_language">
         <observer name="Weline_Websites::validate_language" instance="Weline\Websites\Observer\ValidateLanguage"
                   disabled="false"
                   shared="true" sort="100"/>

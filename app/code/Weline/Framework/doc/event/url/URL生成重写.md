@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `Framework_Url::url_generate_rewrite` 事件及其使用方法。该事件在生成URL重写规则时触发，允许其他模块自定义URL重写规则。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework_Url::url_generate_rewrite` 事件及其使用方法。该事件在生成URL重写规则时触发，允许其他模块自定义URL重写规则。
 
 ## 事件列表
 
-### 1. Framework_Url::url_generate_rewrite - URL生成重写事件
+### 1. Weline_Framework_Url::url_generate_rewrite - URL生成重写事件
 
 #### 基本信息
 
-- **事件名称**：`Framework_Url::url_generate_rewrite`
+- **事件名称**：`Weline_Framework_Url::url_generate_rewrite`
 - **事件类型**：URL生成事件
 - **触发时机**：在生成URL重写规则时
 - **触发位置**：`app/code/Weline/Framework/Http/Url.php` 第 364 行
@@ -18,7 +18,7 @@
 
 #### 功能说明
 
-`Framework_Url::url_generate_rewrite` 事件在生成URL重写规则时触发，允许其他模块自定义URL重写规则。可以修改URL对象来改变生成的URL。
+`Weline_Framework_Url::url_generate_rewrite` 事件在生成URL重写规则时触发，允许其他模块自定义URL重写规则。可以修改URL对象来改变生成的URL。
 
 该事件主要用于：
 - 自定义URL重写规则
@@ -30,7 +30,7 @@
 
 ```php
 // app/code/Weline/Framework/Http/Url.php
-$eventManager->dispatch('Framework_Url::url_generate_rewrite', $url);
+$eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite', $url);
 ```
 
 #### 使用场景
@@ -51,7 +51,7 @@ $eventManager->dispatch('Framework_Url::url_generate_rewrite', $url);
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_Url::url_generate_rewrite">
+    <event name="Weline_Framework_Url::url_generate_rewrite">
         <observer name="Your_Module::rewrite_url"
                   instance="Your\Module\Observer\RewriteUrlObserver"
                   disabled="false"
@@ -96,7 +96,7 @@ class RewriteUrlObserver implements ObserverInterface
 
 #### 事件数据
 
-`Framework_Url::url_generate_rewrite` 事件传递的数据：
+`Weline_Framework_Url::url_generate_rewrite` 事件传递的数据：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -207,7 +207,7 @@ class AddLanguagePrefixObserver implements ObserverInterface
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `Framework_Url::url_generate_rewrite` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework_Url::url_generate_rewrite` 事件文档
 
 ## 相关资源
 

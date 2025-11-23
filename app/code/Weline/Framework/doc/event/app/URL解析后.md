@@ -2,15 +2,15 @@
 
 ## 概述
 
-本文档详细说明了 Weline Framework 模块提供的 `App::url_parsed_after` 事件及其使用方法。该事件在 URL 解析完成后触发，允许其他模块在路由处理前执行必要的检查或操作。
+本文档详细说明了 Weline Framework 模块提供的 `Weline_Framework::App::url_parsed_after` 事件及其使用方法。该事件在 URL 解析完成后触发，允许其他模块在路由处理前执行必要的检查或操作。
 
 ## 事件列表
 
-### 1. App::url_parsed_after - URL 解析后事件
+### 1. Weline_Framework::App::url_parsed_after - URL 解析后事件
 
 #### 基本信息
 
-- **事件名称**：`App::url_parsed_after`
+- **事件名称**：`Weline_Framework::App::url_parsed_after`
 - **事件类型**：应用生命周期事件
 - **触发时机**：在 `App::run()` 方法中，URL 解析完成后，路由处理前
 - **触发位置**：`app/code/Weline/Framework/App.php` 第 328 行
@@ -19,7 +19,7 @@
 
 #### 功能说明
 
-`App::url_parsed_after` 事件在 URL 解析完成后触发，此时：
+`Weline_Framework::App::url_parsed_after` 事件在 URL 解析完成后触发，此时：
 - URL 解析已完成
 - `$_SERVER` 变量已更新（包含 `WELINE_AREA`、`WELINE_IS_BACKEND` 等）
 - Cookie 已设置（语言、货币、网站信息等）
@@ -53,7 +53,7 @@ public static function run(): string
         
         // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）
         if (PROD && !($_SERVER['WELINE_IS_BACKEND'] ?? false)) {
-            $eventManager->dispatch('App::url_parsed_after');  // ← 事件在此处触发
+            $eventManager->dispatch('Weline_Framework::App::url_parsed_after');  // ← 事件在此处触发
         }
     }
     
@@ -81,7 +81,7 @@ public static function run(): string
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="App::url_parsed_after">
+    <event name="Weline_Framework::App::url_parsed_after">
         <observer name="Your_Module::your_observer_name"
                   instance="Your\Module\Observer\YourObserver"
                   disabled="false"
@@ -132,7 +132,7 @@ class YourObserver implements ObserverInterface
 
 #### 事件数据
 
-`App::url_parsed_after` 事件不传递额外的数据，观察者可以通过以下方式获取信息：
+`Weline_Framework::App::url_parsed_after` 事件不传递额外的数据，观察者可以通过以下方式获取信息：
 
 1. **通过 `Request` 对象**：
    ```php
@@ -392,9 +392,9 @@ class UrlRedirectObserver implements ObserverInterface
    - 仅在 `PROD` 为 `true` 时触发
    - 仅在非后端请求时触发（`!$_SERVER['WELINE_IS_BACKEND']`）
 
-#### 与 App::run_before 的区别
+#### 与 Weline_Framework::App::run_before 的区别
 
-| 特性 | App::run_before | App::url_parsed_after |
+| 特性 | Weline_Framework::App::run_before | Weline_Framework::App::url_parsed_after |
 |------|----------------|----------------------|
 | 触发时机 | URL 解析前 | URL 解析后 |
 | `$_SERVER['WELINE_IS_BACKEND']` | 未设置 | 已设置 |
@@ -430,21 +430,21 @@ class UrlRedirectObserver implements ObserverInterface
 ##### 问题：无法生成正确的缓存键
 
 **可能原因：**
-1. 在 `App::run_before` 中尝试生成缓存键（此时 URL 未解析）
+1. 在 `Weline_Framework::App::run_before` 中尝试生成缓存键（此时 URL 未解析）
 2. `Request` 对象未正确初始化
 
 **解决方法：**
-1. 在 `App::url_parsed_after` 事件中生成缓存键
+1. 在 `Weline_Framework::App::url_parsed_after` 事件中生成缓存键
 2. 确保 `Request` 对象已正确初始化
 
 ##### 问题：权限检查不生效
 
 **可能原因：**
-1. 在 `App::run_before` 中检查权限（此时无法判断是否是后端请求）
+1. 在 `Weline_Framework::App::run_before` 中检查权限（此时无法判断是否是后端请求）
 2. `Request` 对象未正确初始化
 
 **解决方法：**
-1. 在 `App::url_parsed_after` 事件中检查权限
+1. 在 `Weline_Framework::App::url_parsed_after` 事件中检查权限
 2. 使用 `$request->isBackend()` 方法判断是否是后端请求
 
 ## 扩展开发
@@ -459,7 +459,7 @@ class UrlRedirectObserver implements ObserverInterface
 
 ## 更新日志
 
-- **2024-12-19**：初始版本，添加 `App::url_parsed_after` 事件文档
+- **2024-12-19**：初始版本，添加 `Weline_Framework::App::url_parsed_after` 事件文档
 
 ## 相关资源
 

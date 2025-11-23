@@ -41,7 +41,7 @@ class EventsManager
     private static array $currentEventStack = [];
 
     /**
-     * 循环检测：记录每个事件名调用 Weline_Framework::msg 的次数
+     * 循环检测：记录每个事件名调用 Weline_Admin::msg 的次数
      * 格式：['Weline_Demo::demo' => 3]
      */
     private static array $msgCallCounts = [];
@@ -161,9 +161,9 @@ class EventsManager
      */
     private function checkEventSpecAndDoc(string $eventName): bool
     {
-        // Weline_Framework::msg 事件特殊处理：只检查循环，不检查规约和文档
+        // Weline_Admin::msg 事件特殊处理：只检查循环，不检查规约和文档
         // 因为我们需要用它来发送错误消息，即使它本身没有规约和文档
-        if ($eventName === 'Weline_Framework::msg') {
+        if ($eventName === 'Weline_Admin::msg') {
             return $this->checkCircularCall();
         }
 
@@ -190,7 +190,7 @@ class EventsManager
             // 获取事件信息
             $eventInfo = $this->eventRegistry->getEventInfo($eventName);
             // 从事件注册表中获取模块信息
-            // 注意：这里调用 __() 可能会触发 Framework_phrase::get_words_file 事件
+            // 注意：这里调用 __() 可能会触发 Weline_Framework::get_words_file 事件
             // 但由于设置了 $isCheckingEvent 标志，该事件会直接返回 true，避免循环
             $sourceModule = EventData::getEventModule($eventName) ?? __('未知模块');
             
@@ -217,8 +217,8 @@ class EventsManager
     }
 
     /**
-     * 检查循环调用（仅用于 Weline_Framework::msg 事件）
-     * 检测触发 Weline_Framework::msg 的事件名，防止循环调用
+     * 检查循环调用（仅用于 Weline_Admin::msg 事件）
+     * 检测触发 Weline_Admin::msg 的事件名，防止循环调用
      *
      * @return bool 如果没有循环返回 true，否则返回 false
      */
@@ -227,15 +227,15 @@ class EventsManager
         // 获取当前正在执行的事件名（栈中倒数第二个，因为最后一个是我们自己）
         $stackCount = count(self::$currentEventStack);
         if ($stackCount < 2) {
-            // 如果栈中只有 Weline_Framework::msg，说明是直接调用，允许执行
+            // 如果栈中只有 Weline_Admin::msg，说明是直接调用，允许执行
             return true;
         }
 
-        // 获取触发 Weline_Framework::msg 的事件名（栈中倒数第二个）
+        // 获取触发 Weline_Admin::msg 的事件名（栈中倒数第二个）
         $sourceEventName = self::$currentEventStack[$stackCount - 2];
 
-        // 如果触发事件是 Weline_Framework::msg 本身，允许执行（避免误判）
-        if ($sourceEventName === 'Weline_Framework::msg') {
+        // 如果触发事件是 Weline_Admin::msg 本身，允许执行（避免误判）
+        if ($sourceEventName === 'Weline_Admin::msg') {
             return true;
         }
 
@@ -338,11 +338,11 @@ class EventsManager
 
             $title = __('【超级严重】检测到事件循环调用');
             $content = __(
-                "检测到事件 '%{sourceEventName}' 循环调用 Weline_Framework::msg 事件。\n\n" .
+                "检测到事件 '%{sourceEventName}' 循环调用 Weline_Admin::msg 事件。\n\n" .
                 "该事件已被阻止执行，以防止系统阻塞。\n\n" .
                 "调用次数：%{count}\n\n" .
                 "请检查该事件的代码，确保：\n" .
-                "1. 事件处理逻辑中不会再次触发 Weline_Framework::msg 事件\n" .
+                "1. 事件处理逻辑中不会再次触发 Weline_Admin::msg 事件\n" .
                 "2. 错误处理逻辑不会导致无限循环\n" .
                 "3. 条件判断逻辑正确，避免重复触发\n\n" .
                 "修复后，需要重启应用以清除循环检测状态。",
@@ -374,12 +374,12 @@ class EventsManager
     {
         try {
             // 获取观察者
-            $observers = $this->getEventObservers('Weline_Framework::msg');
+            $observers = $this->getEventObservers('Weline_Admin::msg');
             
             if (empty($observers)) {
                 // 如果没有观察者，记录到错误日志
                 if (defined('DEV') && DEV) {
-                    error_log(__('EventsManager Warning: No observer found for Weline_Framework::msg'));
+                    error_log(__('EventsManager Warning: No observer found for Weline_Admin::msg'));
                 }
                 return;
             }
@@ -396,7 +396,7 @@ class EventsManager
                 ],
                 'observers' => $observers
             ]);
-            $event->setName('Weline_Framework::msg');
+            $event->setName('Weline_Admin::msg');
 
             // 直接执行观察者，不通过 dispatch 方法（避免再次检查）
             foreach ($observers as $observerConfig) {

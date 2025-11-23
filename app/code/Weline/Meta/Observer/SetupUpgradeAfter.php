@@ -21,7 +21,7 @@ use Weline\Meta\Console\Meta\ScanConvention;
  * 系统更新后自动扫描元数据 Observer
  * 
  * 功能：
- * - 监听系统升级完成事件（Framework_Setup::upgrade_after）
+ * - 监听系统升级完成事件（Weline_Framework_Setup::upgrade_after）
  * - 自动扫描所有模块的 @meta.json 规约文件
  * - 存储元数据到数据库
  * 

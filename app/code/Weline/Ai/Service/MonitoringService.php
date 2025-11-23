@@ -254,7 +254,7 @@ class MonitoringService
             'model_code' => $monitoring->getData('model_code'),
             'tenant_id' => $monitoring->getData('tenant_id'),
         ];
-        $this->eventsManager->dispatch('ai_monitoring_alert', $eventData);
+        $this->eventsManager->dispatch('Weline_Ai::ai_monitoring_alert', $eventData);
 
         // 记录告警日志
         error_log(sprintf(
