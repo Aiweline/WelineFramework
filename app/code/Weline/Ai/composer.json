@@ -1,5 +1,5 @@
 {
-    "name": "weline/ai-module",
+    "name": "weline/module-ai",
     "description": "AI助手工具模块 - 统一的AI模型管理和助手工具平台",
     "type": "weline-module",
     "license": "MIT",

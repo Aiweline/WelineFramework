@@ -13,7 +13,8 @@
     "php8"
   ],
   "type": "project",
-  "minimum-stability": "stable",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
   "license": "proprietary",
   "authors": [
     {
@@ -52,47 +53,7 @@
     "ardagnsrn/ollama-php": "^1.0",
     "dragonmantank/cron-expression": "^3.4",
     "studio-42/elfinder": "^2.1.65",
-    "weline/two-factor-auth": "@dev",
-    "weline/module-acl": "@dev",
-    "weline/module-admin": "@dev",
-    "weline/ai-module": "@dev",
-    "weline/module-ali-ddns-server": "@dev",
-    "weline/module-backend": "@dev",
-    "weline/module-backend-activity": "@dev",
-    "weline/module-backend-theme-upzet": "@dev",
-    "weline/module-ck-editor-editor-manager": "@dev",
-    "weline/module-cache-manager": "@dev",
-    "weline/module-component": "@dev",
-    "weline/module-cron": "@dev",
-    "weline/module-visitor": "@dev",
-    "weline/module-customer": "@dev",
-    "weline/module-data-table": "@dev",
-    "weline/deploy-module": "@dev",
-    "weline/module-developer-workspace": "@dev",
-    "weline/module-eav": "@dev",
-    "weline/module-editor-manager": "@dev",
-    "weline/module-el-finder-file-manager": "@dev",
-    "weline/module-file-manager": "@dev",
-    "weline/framework": "@dev",
-    "weline/module-frontend": "@dev",
-    "weline/module-i18n": "@dev",
-    "weline/module-indexer": "@dev",
-    "weline/module-installer": "@dev",
-    "weline/module-maintenance": "@dev",
-    "weline/module-media-manager": "@dev",
-    "weline/module-module-manager": "@dev",
-    "weline/module-module-router": "@dev",
-    "weline/module-parts": "@dev",
-    "weline/module-queue": "@dev",
-    "weline/session-manager": "@dev",
-    "weline/module-smtp": "@dev",
-    "weline/module-system-config": "@dev",
-    "weline/module-taglib": "@dev",
-    "weline/module-theme": "@dev",
-    "weline/module-theme-fancy": "@dev",
-    "weline/module-url-manager": "@dev",
-    "weline/module-warm-cache": "@dev",
-    "weline/module-website-monitoring": "@dev"
+    "weline/base": "@dev"
   },
   "repositories": [
     {
@@ -112,15 +73,15 @@
       "generated/code/"
     ],
     "psr-4": {
-      "": [
-        "app/code/",
-        "generated/code/"
+      "Weline\\Framework\\": [
+        "app/code/Weline/Framework/"
       ],
       "Weline\\": [
         "app/code/Weline/"
       ],
-      "Weline\\Framework\\": [
-        "app/code/Weline/Framework"
+      "": [
+        "app/code/",
+        "generated/code/"
       ]
     }
   },

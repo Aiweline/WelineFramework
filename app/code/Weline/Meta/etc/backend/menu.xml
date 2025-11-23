@@ -8,11 +8,11 @@
          icon="mdi mdi-file-document-edit" order="20410"/>
     
     <add source="Weline_Meta::meta_list" name="meta_list" title="元数据列表" 
-         action="/meta/backend/meta" parent="Weline_Meta::meta_manager"
+         action="meta/backend/meta" parent="Weline_Meta::meta_manager"
          icon="mdi mdi-format-list-bulleted" order="1"/>
     
     <add source="Weline_Meta::meta_scanner" name="meta_scanner" title="扫描元数据" 
-         action="/meta/backend/scanner" parent="Weline_Meta::meta_manager"
+         action="meta/backend/scanner" parent="Weline_Meta::meta_manager"
          icon="mdi mdi-file-search" order="2"/>
 </menus>
 

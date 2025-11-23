@@ -4,14 +4,15 @@
  * 
  * 首页默认布局，包含header、banner、main、footer
  * 字段
- * @info description 描述：首页默认布局，包含header、banner、main、footer
- * @info name 名称：首页默认布局
- * @param title 页面标题
- * @param content 主要内容（HTML字符串）
- * @param banner Banner内容（HTML字符串）
- * @param showHeader 是否显示header
- * @param showFooter 是否显示footer
- * @param class 额外CSS类
+ * @meta.name {default="首页默认布局",name="首页默认布局",description="首页默认布局，用于描述布局的名称"}
+ * @meta.description {default="首页默认布局，包含header、banner、main、footer",name="首页默认布局，包含header、banner、main、footer",description="首页默认布局，包含header、banner、main、footer，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="首页",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param banner {default="",name="Banner内容（HTML字符串）",description="Banner内容（HTML字符串），用于设置Banner区域内容"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $title = $this->getData('title') ?? __('首页');
 $content = $this->getData('content') ?? '';
@@ -53,7 +54,16 @@ $this->assign('title', $title);
     <?php endif; ?>
     
     <main class="homepage-main <?= htmlspecialchars($class) ?>">
-        <?= $content ?>
+        <?php
+        // 如果指定了 contentTemplate，优先渲染原模板
+        $contentTemplate = $this->getData('contentTemplate');
+        if ($contentTemplate) {
+            echo $this->fetch($contentTemplate);
+        } else {
+            // 否则使用 content 变量（HTML字符串）
+            echo $content;
+        }
+        ?>
     </main>
     
     <?php if ($showFooter): ?>

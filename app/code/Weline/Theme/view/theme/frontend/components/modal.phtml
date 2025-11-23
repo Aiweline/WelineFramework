@@ -4,16 +4,16 @@
  * 
  * 模态框组件，用于弹窗展示内容
  * 字段
- * @info description 描述：模态框组件，用于弹窗展示内容
- * @info name 名称：Modal模态框组件
- * @param id 模态框ID（必填）
- * @param title 模态框标题
- * @param content 内容（HTML字符串，必填）
- * @param footer 底部内容（按钮等）
- * @param size 尺寸 (sm/md/lg/xl)
- * @param backdrop 是否显示背景遮罩
- * @param keyboard 是否支持ESC关闭
- * @param closeButton 是否显示关闭按钮
+ * @meta.name {default="Modal模态框组件",name="Modal模态框组件",description="Modal模态框组件，用于描述组件的名称"}
+ * @meta.description {default="模态框组件，用于弹窗展示内容",name="模态框组件，用于弹窗展示内容",description="模态框组件，用于弹窗展示内容，用于描述组件的用途"}
+ * @param.id {default="",name="模态框ID",description="模态框ID，必填参数，用于设置模态框ID"}
+ * @param.title {default="",name="模态框标题",description="模态框标题，用于设置模态框标题"}
+ * @param.content {default="",name="内容（HTML字符串）",description="内容（HTML字符串），必填参数，用于设置模态框内容"}
+ * @param.footer {default="",name="底部内容（按钮等）",description="底部内容（按钮等），用于设置模态框底部内容"}
+ * @param.size {default="md",name="尺寸",description="尺寸，可选值：sm/md/lg/xl，用于设置模态框尺寸"}
+ * @param.backdrop {default=true,name="是否显示背景遮罩",description="是否显示背景遮罩，用于控制背景遮罩的显示"}
+ * @param.keyboard {default=true,name="是否支持ESC关闭",description="是否支持ESC关闭，用于控制ESC键关闭功能"}
+ * @param.closeButton {default=true,name="是否显示关闭按钮",description="是否显示关闭按钮，用于控制关闭按钮的显示"}
  */
 $id = $this->getData('id') ?? '';
 $title = $this->getData('title') ?? '';
