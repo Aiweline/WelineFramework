@@ -12,12 +12,20 @@
     ],
     "require": {
         "php": ">=8.0",
+<<<<<<< HEAD
         "weline/framework": "^1.0"
+=======
+        "weline/framework": "@dev"
+>>>>>>> dev-new
     },
     "autoload": {
         "psr-4": {
             "Weline\\Deploy\\": ""
         }
     }
+<<<<<<< HEAD
 }
 
+=======
+}
+>>>>>>> dev-new

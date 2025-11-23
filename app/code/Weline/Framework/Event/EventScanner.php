@@ -84,6 +84,22 @@ class EventScanner
                 continue;
             }
 
+<<<<<<< HEAD
+=======
+            // 验证事件名是否符合规范：必须以模块名开头
+            // 格式：模块名::事件名 或 模块名_子模块::事件名
+            if (!$this->validateEventName($eventName, $moduleName)) {
+                $errorMessage = sprintf(
+                    '事件名 "%s" 不符合命名规范。事件名必须以模块名 "%s" 开头，格式：%s::事件名。文件：%s/event.php',
+                    $eventName,
+                    $moduleName,
+                    $moduleName,
+                    $basePath
+                );
+                throw new \RuntimeException($errorMessage);
+            }
+
+>>>>>>> dev-new
             $docFileName = $eventConfig['doc'] ?? '';
             $hasDoc = false;
             $docPath = '';
@@ -110,5 +126,36 @@ class EventScanner
 
         return !empty($result) ? $result : null;
     }
+<<<<<<< HEAD
+=======
+
+    /**
+     * 验证事件名是否符合规范
+     * 事件名必须以模块名开头，格式：模块名::事件名
+     *
+     * @param string $eventName 事件名
+     * @param string $moduleName 模块名
+     * @return bool
+     */
+    private function validateEventName(string $eventName, string $moduleName): bool
+    {
+        // 动态事件模式（包含 {}）跳过验证
+        if (str_contains($eventName, '{') && str_contains($eventName, '}')) {
+            return true;
+        }
+
+        // 检查事件名是否包含 ::
+        if (!str_contains($eventName, '::')) {
+            return false;
+        }
+
+        // 提取事件名前缀（:: 之前的部分）
+        $prefix = explode('::', $eventName)[0];
+
+        // 检查前缀是否以模块名开头
+        // 支持：模块名 或 模块名_子模块 格式
+        return str_starts_with($prefix, $moduleName);
+    }
+>>>>>>> dev-new
 }
 
