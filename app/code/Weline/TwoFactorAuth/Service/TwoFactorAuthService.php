@@ -142,7 +142,7 @@ class TwoFactorAuthService
      * @param int $size 尺寸
      * @return string
      */
-    public function getQRCodeUrl(string $secret, string $account, string $issuer = 'WelineFramework', int $size = 200): string
+    public function getQRCodeUrl(string $secret, string $account, string $issuer = 'WelineFramework', int $size = 250): string
     {
         $uri = $this->getQRCodeUri($secret, $account, $issuer);
         return TwoFactorAuthHelper::getQRCodeUrl($uri, $size);

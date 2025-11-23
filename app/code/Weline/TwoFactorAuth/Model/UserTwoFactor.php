@@ -161,6 +161,8 @@ class UserTwoFactor extends \Weline\Framework\Database\Model
             $existing->save();
             return $existing;
         } else {
+            // 清除之前的数据，确保创建新记录时不会包含旧数据
+            $this->clearData();
             $this->setData(self::fields_USER_ID, $userId);
             $this->setData(self::fields_SECRET, $secret);
             $this->setData(self::fields_IS_ENABLED, 1);
