@@ -12,11 +12,7 @@
     ],
     "require": {
         "php": ">=8.0",
-<<<<<<< HEAD
-        "weline/framework": "^1.0"
-=======
         "weline/framework": "@dev"
->>>>>>> dev-new
     },
     "require-dev": {
         "phpunit/phpunit": "^9.0",
@@ -51,8 +47,4 @@
             "composer/installers": true
         }
     }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> dev-new

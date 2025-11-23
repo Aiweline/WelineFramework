@@ -35,10 +35,7 @@
     <event name="Framework_Resource::compiler">
         <observer name="Weline_I18n::resource_compiler_collect_translations" instance="Weline\I18n\Observer\ResourceCompiler" disabled="false" shared="true" sort="50"/>
     </event>
-<<<<<<< HEAD
-=======
     <event name="Weline_I18n::collect_translations">
         <observer name="Weline_I18n::collect_translations" instance="Weline\I18n\Observer\CollectTranslations" disabled="false" shared="true" sort="10"/>
     </event>
->>>>>>> dev-new
 </config>

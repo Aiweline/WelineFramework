@@ -1,9 +1,6 @@
 {
   "name": "weline/framework",
-<<<<<<< HEAD
-=======
   "version": "1.9.2",
->>>>>>> dev-new
   "description": "微蓝WelineFramework框架！",
   "keywords": [
     "weline",
@@ -50,8 +47,4 @@
     "guzzlehttp/guzzle": "^7.4",
     "friendsofphp/php-cs-fixer": "^3.8"
   }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> dev-new

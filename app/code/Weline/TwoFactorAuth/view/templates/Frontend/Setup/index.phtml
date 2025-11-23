@@ -16,11 +16,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<<<<<<< HEAD
-    <title>启用双因素身份验证</title>
-=======
     <title><lang>启用双因素身份验证</lang></title>
->>>>>>> dev-new
     <style>
         * {
             margin: 0;
@@ -290,40 +286,12 @@
     <div class="container">
         <div class="card">
             <div class="header">
-<<<<<<< HEAD
-                <h1>🔐 启用双因素身份验证</h1>
-                <p>按照以下步骤完成设置，增强您的账户安全</p>
-=======
                 <h1>🔐 <lang>启用双因素身份验证</lang></h1>
                 <p><lang>按照以下步骤完成设置，增强您的账户安全</lang></p>
->>>>>>> dev-new
             </div>
 
             <!-- 步骤1：选择验证器 -->
             <div class="step">
-<<<<<<< HEAD
-                <h3><span class="step-number">1</span>选择验证器应用</h3>
-                <p>您可以使用以下任意一种验证器应用：</p>
-                
-                <div class="app-options">
-                    <div class="app-option">
-                        <strong>🔷 我们的验证器</strong>
-                        <small>完全自主开发</small>
-                        <br>
-                        <a href="/twofa-app/" target="_blank" style="font-size: 12px; color: #007bff;">打开应用</a>
-                    </div>
-                    <div class="app-option">
-                        <strong>🔴 Google Authenticator</strong>
-                        <small>适用于iOS/Android</small>
-                    </div>
-                    <div class="app-option">
-                        <strong>🔵 Microsoft Authenticator</strong>
-                        <small>适用于iOS/Android</small>
-                    </div>
-                    <div class="app-option">
-                        <strong>🟢 其他TOTP应用</strong>
-                        <small>任何标准验证器</small>
-=======
                 <h3><span class="step-number">1</span><lang>选择验证器应用</lang></h3>
                 <p><lang>您可以使用以下任意一种验证器应用：</lang></p>
                 
@@ -349,50 +317,29 @@
                     <div class="app-option">
                         <strong>🟢 <lang>其他TOTP应用</lang></strong>
                         <small><lang>任何标准验证器</lang></small>
->>>>>>> dev-new
                     </div>
                 </div>
             </div>
 
             <!-- 步骤2：扫描二维码 -->
             <div class="step">
-<<<<<<< HEAD
-                <h3><span class="step-number">2</span>扫描二维码</h3>
-                <p>在验证器应用中选择"添加账户"或"扫描二维码"，然后扫描下方二维码：</p>
-=======
                 <h3><span class="step-number">2</span><lang>扫描二维码</lang></h3>
                 <p><lang>在验证器应用中选择"添加账户"或"扫描二维码"，然后扫描下方二维码：</lang></p>
->>>>>>> dev-new
                 
                 <div class="qr-code">
                     <img src="<?= $qr_code_url ?>" alt="2FA QR Code">
                     <p style="color: #666; margin-top: 10px; font-size: 14px;">
-<<<<<<< HEAD
-                        账户：<?= htmlspecialchars($user_email) ?>
-=======
                         <?php
                         // 准备账户标签用于翻译
                         $account_label_display = $formatted_account_label ?? (defined('DEV') && DEV ? 'Dev-Weline(' . ($user_email ?? 'user@example.com') . ')' : 'Weline(' . ($user_email ?? 'user@example.com') . ')');
                         ?>
                         <lang args="$account_label_display">账户：%{}</lang>
->>>>>>> dev-new
                     </p>
                 </div>
             </div>
 
             <!-- 步骤3：手动输入密钥（可选） -->
             <div class="step">
-<<<<<<< HEAD
-                <h3><span class="step-number">3</span>或者手动输入密钥（可选）</h3>
-                <p>如果无法扫描二维码，可以手动输入以下密钥：</p>
-                
-                <div class="secret-box">
-                    <p style="color: #666; margin-bottom: 10px;">点击密钥可复制</p>
-                    <div class="secret-text" onclick="copySecret()" id="secretText">
-                        <?= $formatted_secret ?>
-                    </div>
-                    <button class="copy-btn" onclick="copySecret()">📋 复制密钥</button>
-=======
                 <h3><span class="step-number">3</span><lang>或者手动输入密钥（可选）</lang></h3>
                 <p><lang>如果无法扫描二维码，可以手动输入以下密钥：</lang></p>
                 
@@ -402,21 +349,14 @@
                         <?= $formatted_secret ?>
                     </div>
                     <button class="copy-btn" onclick="copySecret()">📋 <lang>复制密钥</lang></button>
->>>>>>> dev-new
                 </div>
             </div>
 
             <!-- 备份码 -->
             <div class="backup-codes">
-<<<<<<< HEAD
-                <h4>⚠️ 备份码（请妥善保存）</h4>
-                <p style="color: #856404; margin-bottom: 10px;">
-                    当您无法获取验证器时，可以使用这些一次性备份码登录。每个备份码只能使用一次。
-=======
                 <h4>⚠️ <lang>备份码（请妥善保存）</lang></h4>
                 <p style="color: #856404; margin-bottom: 10px;">
                     <lang>当您无法获取验证器时，可以使用这些一次性备份码登录。每个备份码只能使用一次。</lang>
->>>>>>> dev-new
                 </p>
                 
                 <div class="backup-codes-grid">
@@ -425,16 +365,6 @@
                     <?php endforeach; ?>
                 </div>
                 
-<<<<<<< HEAD
-                <button class="copy-btn" onclick="copyBackupCodes()" style="margin-top: 15px;">
-                    📋 复制所有备份码
-                </button>
-            </div>
-
-            <div class="warning">
-                <strong>⚠️ 重要提示：</strong>
-                请务必保存好备份码！如果丢失手机且没有备份码，您将无法登录账户。
-=======
                 <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
                     <button class="copy-btn" onclick="copyBackupCodes()">
                         📋 <lang>复制所有备份码</lang>
@@ -448,20 +378,13 @@
             <div class="warning">
                 <strong>⚠️ <lang>重要提示：</lang></strong>
                 <lang>请务必保存好备份码！如果丢失手机且没有备份码，您将无法登录账户。</lang>
->>>>>>> dev-new
             </div>
 
             <!-- 步骤4：验证 -->
             <div class="verify-section">
-<<<<<<< HEAD
-                <h3><span class="step-number">4</span>验证并启用</h3>
-                <p style="color: #155724; margin-bottom: 20px;">
-                    在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：
-=======
                 <h3><span class="step-number">4</span><lang>验证并启用</lang></h3>
                 <p style="color: #155724; margin-bottom: 20px;">
                     <lang>在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：</lang>
->>>>>>> dev-new
                 </p>
                 
                 <div class="form-group">
@@ -476,13 +399,8 @@
                 </div>
                 
                 <div>
-<<<<<<< HEAD
-                    <a href="/two-factor-auth/frontend" class="btn btn-secondary">取消</a>
-                    <button class="btn btn-primary" onclick="enableTwoFactor()">确认启用</button>
-=======
                     <a href="/two-factor-auth/frontend" class="btn btn-secondary"><lang>取消</lang></a>
                     <button class="btn btn-primary" onclick="enableTwoFactor()"><lang>确认启用</lang></button>
->>>>>>> dev-new
                 </div>
             </div>
         </div>
@@ -492,8 +410,6 @@
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
 
     <script>
-<<<<<<< HEAD
-=======
         // PWA 安装功能
         let deferredPrompt;
         
@@ -593,16 +509,11 @@
             operationFailed: '<?= addslashes('<lang>操作失败，请重试</lang>') ?>',
         };
 
->>>>>>> dev-new
         // 复制密钥
         function copySecret() {
             const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
             navigator.clipboard.writeText(text).then(() => {
-<<<<<<< HEAD
-                alert('密钥已复制到剪贴板');
-=======
                 alert(translations.secretCopied);
->>>>>>> dev-new
             });
         }
 
@@ -611,12 +522,6 @@
             const codes = <?= json_encode($backup_codes) ?>;
             const text = codes.join('\n');
             navigator.clipboard.writeText(text).then(() => {
-<<<<<<< HEAD
-                alert('备份码已复制到剪贴板\n请妥善保存！');
-            });
-        }
-
-=======
                 alert(translations.backupCodesCopied);
             });
         }
@@ -662,7 +567,6 @@ ${translations.finalNote}`;
             alert(translations.fileDownloaded);
         }
 
->>>>>>> dev-new
         // 自动格式化验证码输入
         document.getElementById('verifyCode').addEventListener('input', function(e) {
             this.value = this.value.replace(/[^0-9]/g, '');
@@ -675,11 +579,7 @@ ${translations.finalNote}`;
             const backupCodes = document.getElementById('backupCodesJson').value;
 
             if (!code || code.length !== 6) {
-<<<<<<< HEAD
-                alert('请输入6位验证码');
-=======
                 alert(translations.enter6DigitCode);
->>>>>>> dev-new
                 return;
             }
 
@@ -695,15 +595,6 @@ ${translations.finalNote}`;
                 const result = await response.json();
                 
                 if (result.success) {
-<<<<<<< HEAD
-                    alert('✅ 双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。');
-                    window.location.href = '/two-factor-auth/frontend';
-                } else {
-                    alert('❌ ' + result.message + '\n\n请检查验证码是否正确，注意验证码每30秒会更新。');
-                }
-            } catch (error) {
-                alert('操作失败，请重试');
-=======
                     alert('✅ ' + translations.enableSuccess);
                     window.location.href = '/two-factor-auth/frontend';
                 } else {
@@ -711,7 +602,6 @@ ${translations.finalNote}`;
                 }
             } catch (error) {
                 alert(translations.operationFailed);
->>>>>>> dev-new
                 console.error(error);
             }
         }

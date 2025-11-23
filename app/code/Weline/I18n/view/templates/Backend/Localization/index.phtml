@@ -2,21 +2,14 @@
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-<<<<<<< HEAD
-=======
 $themeMode = $themeConfig->getThemeModel();
->>>>>>> dev-new
 $countries = $this->getData('countries') ?? [];
 $stats = $this->getData('stats') ?? [];
 $filter = $this->getData('filter') ?? 'all';
 $search = $this->getData('search') ?? '';
 ?>
 <!DOCTYPE html>
-<<<<<<< HEAD
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-=======
 <html lang='en' <?= ('rtl' === $themeMode) ? " dir=\"rtl\"" : '' ?><?= ($themeMode === 'dark') ? ' data-theme="dark"' : '' ?>>
->>>>>>> dev-new
 <head>
     @template(Weline_Admin::common/head.phtml)
     <title><lang>区域管理</lang></title>
@@ -152,17 +145,10 @@ $search = $this->getData('search') ?? '';
                 </div>
 
                                 <!-- 全球语言包覆盖地图 -->
-<<<<<<< HEAD
-                                <div class="bg-white rounded-3 shadow-sm border mb-4">
-                                    <div class="p-4">
-                                        <div class="d-flex align-items-center justify-content-between mb-3">
-                                            <h5 class="mb-0 fw-semibold">
-=======
                                 <div class="rounded-3 shadow-sm border mb-4" style="border-color: var(--border-color, #dee2e6);">
                                     <div class="p-4">
                                         <div class="d-flex align-items-center justify-content-between mb-3">
                                             <h5 class="mb-0 fw-semibold" style="color: var(--text-color, inherit);">
->>>>>>> dev-new
                                                 <i class="ri-global-line me-2 text-primary"></i>
                                                 全球语言包覆盖情况
                                             </h5>
@@ -188,13 +174,8 @@ $search = $this->getData('search') ?? '';
                                 </div>
 
                                 <!-- Tab 导航 -->
-<<<<<<< HEAD
-                                <div class="bg-white rounded-3 shadow-sm border mb-4">
-                                    <div class="p-4 border-bottom">
-=======
                                 <div class="rounded-3 shadow-sm border mb-4" style="border-color: var(--border-color, #dee2e6);">
                                     <div class="p-4 border-bottom" style="border-bottom-color: var(--border-color, #dee2e6);">
->>>>>>> dev-new
                                         <ul class="nav nav-tabs nav-tabs-custom" id="localizationTabs" role="tablist">
                                             <li class="nav-item" role="presentation">
                                                 <button class="nav-link active" id="regions-tab" data-bs-toggle="tab" 
@@ -222,42 +203,24 @@ $search = $this->getData('search') ?? '';
                                     <!-- 区域列表 Tab -->
                                     <div class="tab-pane fade show active" id="regions" role="tabpanel" aria-labelledby="regions-tab">
                                         <!-- 搜索和筛选 -->
-<<<<<<< HEAD
-                                        <div class="bg-white rounded-3 shadow-sm border mb-4">
-                                    <form method="get" action="@backend-url('*/backend/localization')">
-                                        <div class="p-4">
-                                            <div class="row align-items-center">
-                                    <!-- 搜索框 -->
-                                    <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
-=======
                                         <div class="rounded-3 shadow-sm border mb-4" style="border-color: var(--border-color, #dee2e6);">
                                     <form method="get" action="@backend-url('*/backend/localization')">
                                         <div class="p-4">
                                             <div class="row g-3 align-items-end">
                                     <!-- 搜索框 -->
                                     <div class="col-xl-3 col-lg-4 col-md-6">
->>>>>>> dev-new
                                         <div class="position-relative">
                                             <i class="ri-search-line position-absolute top-50 start-0 translate-middle-y text-muted ms-3"></i>
                                             <input type="text" name="search" class="form-control ps-5 border-0 bg-light rounded-pill" 
                                                    placeholder="搜索区域代码或名称..." 
-<<<<<<< HEAD
-                                                   value="<?= htmlspecialchars($search) ?>">
-=======
                                                    value="<?= htmlspecialchars($search) ?>"
                                                    style="color: var(--text-color, inherit);">
->>>>>>> dev-new
                                         </div>
                                     </div>
                                     
                                     <!-- 国家筛选 -->
-<<<<<<< HEAD
-                                    <div class="col-lg-2 col-md-6 mb-3 mb-lg-0">
-                                        <select name="country_filter" class="form-select border-0 bg-light rounded-pill">
-=======
                                     <div class="col-xl-2 col-lg-3 col-md-6">
                                         <select name="country_filter" class="form-select border-0 bg-light rounded-pill" style="color: var(--text-color, inherit);">
->>>>>>> dev-new
                                             <option value="">全部国家</option>
                                             <?php foreach ($countries as $code => $name): ?>
                                                 <option value="<?= $code ?>" <?= $country_filter === $code ? 'selected' : '' ?>>
@@ -268,13 +231,8 @@ $search = $this->getData('search') ?? '';
                                     </div>
                                     
                                     <!-- 状态筛选 -->
-<<<<<<< HEAD
-                                    <div class="col-lg-2 col-md-6 mb-3 mb-lg-0">
-                                        <select name="filter" class="form-select border-0 bg-light rounded-pill">
-=======
                                     <div class="col-xl-2 col-lg-3 col-md-6">
                                         <select name="filter" class="form-select border-0 bg-light rounded-pill" style="color: var(--text-color, inherit);">
->>>>>>> dev-new
                                             <option value="installed" <?= $filter === 'installed' ? 'selected' : '' ?>>已安装</option>
                                             <option value="active" <?= $filter === 'active' ? 'selected' : '' ?>>已激活</option>
                                             <option value="inactive" <?= $filter === 'inactive' ? 'selected' : '' ?>>已停用</option>
@@ -284,21 +242,12 @@ $search = $this->getData('search') ?? '';
                                     </div>
                                             
                                             <!-- 操作按钮 -->
-<<<<<<< HEAD
-                                            <div class="col-lg-5">
-                                                <div class="d-flex align-items-center justify-content-end gap-2">
-                                                    <button type="submit" class="btn btn-primary rounded-pill px-4">
-                                                        <i class="ri-search-line me-2"></i>搜索
-                                                    </button>
-                                                    <a href="@backend-url('*/backend/localization')" class="btn btn-outline-secondary rounded-pill px-3">
-=======
                                             <div class="col-xl-5 col-lg-12">
                                                 <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
                                                     <button type="submit" class="btn btn-primary rounded-pill px-4">
                                                         <i class="ri-search-line me-2"></i>搜索
                                                     </button>
                                                     <a href="@backend-url('*/backend/localization')" class="btn btn-outline-secondary rounded-pill px-3" title="刷新">
->>>>>>> dev-new
                                                         <i class="ri-refresh-line"></i>
                                                     </a>
                                                     <a href="@backend-url('*/backend/localization/syncNames')" class="btn btn-outline-info rounded-pill px-3" title="同步区域名称数据">
@@ -313,11 +262,7 @@ $search = $this->getData('search') ?? '';
                                                     <a href="@backend-url('*/backend/localization/cleanupLocales')" class="btn btn-outline-danger rounded-pill px-3" title="清理不属于已安装国家的区域数据" onclick="return confirm('确定要清理不属于已安装国家的区域数据吗？这将删除大量冗余数据。')">
                                                         <i class="ri-delete-bin-line"></i>
                                                     </a>
-<<<<<<< HEAD
-                                                    <div class="vr"></div>
-=======
                                                     <div class="vr d-none d-md-block"></div>
->>>>>>> dev-new
                                                     <button type="button" class="btn btn-success rounded-pill px-3" onclick="batchAction('activate')" title="批量激活">
                                                         <i class="ri-play-line me-1"></i>激活
                                                     </button>
@@ -332,11 +277,7 @@ $search = $this->getData('search') ?? '';
                                 </div>
 
                                 <!-- 区域列表 -->
-<<<<<<< HEAD
-                                <div class="bg-white rounded-3 shadow-sm border">
-=======
                                 <div class="rounded-3 shadow-sm border" style="border-color: var(--border-color, #dee2e6);">
->>>>>>> dev-new
                                     <div class="table-responsive">
                                         <table class="table table-hover mb-0">
                                             <thead class="table-light">
@@ -386,11 +327,7 @@ $search = $this->getData('search') ?? '';
                                                     <td>
                                                         <div class="d-flex align-items-center">
                                                             <div>
-<<<<<<< HEAD
-                                                                <div class="fw-medium text-dark">
-=======
                                                                 <div class="fw-medium" style="color: var(--text-color, #212529);">
->>>>>>> dev-new
                                                                     <?= $locale['display_name'] ?? $locale['code'] ?>
                                                                 </div>
                                                             </div>
@@ -488,11 +425,7 @@ $search = $this->getData('search') ?? '';
 
                                     <!-- 未启用提醒 Tab -->
                                     <div class="tab-pane fade" id="warnings" role="tabpanel" aria-labelledby="warnings-tab">
-<<<<<<< HEAD
-                                        <div class="bg-white rounded-3 shadow-sm border">
-=======
                                         <div class="rounded-3 shadow-sm border" style="border-color: var(--border-color, #dee2e6);">
->>>>>>> dev-new
                                             <div class="p-4">
                                                 <div class="d-flex align-items-center justify-content-between mb-3">
                                                     <h6 class="mb-0 fw-semibold text-warning">
@@ -795,19 +728,11 @@ function initWarningsList() {
                         ${country.code}
                     </span>
                 </td>
-<<<<<<< HEAD
-                <td>
-                    <div class="fw-medium text-dark">
-                        ${country.display_name || country.code}
-                    </div>
-                </td>
-=======
                  <td>
                      <div class="fw-medium" style="color: var(--text-color, #212529);">
                          ${country.display_name || country.code}
                      </div>
                  </td>
->>>>>>> dev-new
                 <td>
                     <span class="badge bg-warning bg-opacity-10 text-warning px-2 py-1 rounded-pill">
                         <i class="ri-alert-line me-1"></i>已安装未启用任何区域
@@ -846,20 +771,12 @@ function initWarningsList() {
 
 /* 全局样式 */
 body {
-<<<<<<< HEAD
-    background-color: #f8f9fa;
-=======
     background-color: var(--bg-color, #f8f9fa);
->>>>>>> dev-new
 }
 
 /* 卡片样式 */
 .bg-white {
-<<<<<<< HEAD
-    background-color: #ffffff !important;
-=======
     background-color: var(--card-bg, #ffffff) !important;
->>>>>>> dev-new
 }
 
 .rounded-3 {
@@ -880,39 +797,26 @@ body {
     border: none;
     font-weight: 600;
     font-size: 0.875rem;
-<<<<<<< HEAD
-    color: #495057;
-    background-color: #f8f9fa;
-=======
     color: var(--text-color, #495057);
     background-color: var(--bg-color, #f8f9fa);
->>>>>>> dev-new
     padding: 1rem 0.75rem;
 }
 
 .table td {
     padding: 1rem 0.75rem;
-<<<<<<< HEAD
-    border-top: 1px solid #f1f3f4;
-    vertical-align: middle;
-=======
     border-top: 1px solid var(--border-color, #f1f3f4);
     vertical-align: middle;
     color: var(--text-color, inherit);
->>>>>>> dev-new
 }
 
 .table-hover tbody tr:hover {
     background-color: rgba(13, 110, 253, 0.04);
 }
 
-<<<<<<< HEAD
-=======
 [data-theme="dark"] .table-hover tbody tr:hover {
     background-color: rgba(13, 110, 253, 0.15);
 }
 
->>>>>>> dev-new
 /* 徽章样式 */
 .badge {
     font-size: 0.75rem;
@@ -940,32 +844,21 @@ body {
 
 /* 表单样式 */
 .form-control, .form-select {
-<<<<<<< HEAD
-    border: 1px solid #e9ecef;
-=======
     border: 1px solid var(--border-color, #e9ecef);
     background-color: var(--card-bg, #ffffff);
     color: var(--text-color, inherit);
->>>>>>> dev-new
     transition: all 0.2s ease-in-out;
 }
 
 .form-control:focus, .form-select:focus {
     border-color: #86b7fe;
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
-<<<<<<< HEAD
-}
-
-.bg-light {
-    background-color: #f8f9fa !important;
-=======
     background-color: var(--card-bg, #ffffff);
     color: var(--text-color, inherit);
 }
 
 .bg-light {
     background-color: var(--bg-color, #f8f9fa) !important;
->>>>>>> dev-new
 }
 
 /* 统计卡片 */
@@ -981,22 +874,14 @@ body {
 /* 分隔线 */
 .vr {
     width: 1px;
-<<<<<<< HEAD
-    background-color: #dee2e6;
-=======
     background-color: var(--border-color, #dee2e6);
->>>>>>> dev-new
     margin: 0 0.5rem;
 }
 
 /* 世界地图样式 */
 #world-map-markers {
     position: relative;
-<<<<<<< HEAD
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-=======
     background: linear-gradient(135deg, var(--bg-color, #f8f9fa) 0%, var(--border-color, #e9ecef) 100%);
->>>>>>> dev-new
     border-radius: 0.5rem;
     overflow: hidden;
     /* 禁用用户选择和缩放 */
@@ -1098,10 +983,6 @@ body {
     }
 }
 
-<<<<<<< HEAD
-
-<style>
-=======
 /* 暗色主题覆盖 */
 [data-theme="dark"] {
     --bg-color: #1e2125;
@@ -1115,7 +996,6 @@ body {
 }
 
 </style>
->>>>>>> dev-new
 
 </body>
 </html>
