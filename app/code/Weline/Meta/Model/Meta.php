@@ -18,7 +18,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Meta extends AbstractModel
 {
-    public const table = 'wl_meta';
+    public const table = 'w_meta';
     
     const fields_ID = 'meta_id';
     const fields_NAMESPACE = 'namespace';
@@ -29,6 +29,7 @@ class Meta extends AbstractModel
     const fields_AREA = 'area';
     const fields_CATEGORY = 'category';
     const fields_META_DATA = 'meta_data';
+    const fields_SETTING = 'setting';
 
     /**
      * 主键字段
@@ -111,18 +112,11 @@ class Meta extends AbstractModel
                     '元数据JSON（存储所有字段的原始值）'
                 )
                 ->addColumn(
-                    'created_at',
-                    TableInterface::column_type_DATETIME,
+                    self::fields_SETTING,
+                    TableInterface::column_type_TEXT,
                     null,
-                    'default current_timestamp',
-                    '创建时间'
-                )
-                ->addColumn(
-                    'updated_at',
-                    TableInterface::column_type_DATETIME,
-                    null,
-                    'default current_timestamp on update current_timestamp',
-                    '更新时间'
+                    'default null',
+                    '设置JSON（存储参数配置，如 param: {title: ""}）'
                 )
                 // 唯一索引：防止重复
                 ->addIndex(
@@ -175,11 +169,44 @@ class Meta extends AbstractModel
     }
 
     /**
+     * 设置表结构（开发模式下每次都会执行）
+     */
+    public function setup(ModelSetup $setup, Context $context): void
+    {
+        // 在开发模式下，如果表已存在，先删除再重建（确保包含最新的字段）
+        if (defined('DEV') && DEV && $setup->tableExist()) {
+            $setup->dropTable();
+        }
+        $this->install($setup, $context);
+    }
+
+    /**
      * 升级表结构
      */
     public function upgrade(ModelSetup $setup, Context $context): void
     {
-        // TODO: 实现升级逻辑
+        // 检查表是否存在
+        if (!$setup->tableExist()) {
+            return;
+        }
+        
+        // 检查字段是否存在
+        if ($setup->hasField(self::fields_SETTING)) {
+            return;
+        }
+        
+        // 使用 SQL 直接添加 setting 字段（在 meta_data 字段之后）
+        $tableName = $setup->getTable();
+        $sql = "ALTER TABLE {$tableName} ADD `" . self::fields_SETTING . "` TEXT NULL DEFAULT NULL COMMENT '设置JSON（存储参数配置，如 param: {title: \"\"}）' AFTER `" . self::fields_META_DATA . "`";
+        try {
+            $setup->query($sql);
+        } catch (\Exception $e) {
+            // 如果字段已存在，忽略错误
+            if (strpos($e->getMessage(), 'Duplicate column name') === false && 
+                strpos($e->getMessage(), 'already exists') === false) {
+                throw $e;
+            }
+        }
     }
 
     /**

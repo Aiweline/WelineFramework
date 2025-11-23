@@ -4,10 +4,10 @@
  * 
  * 极简风格的页面底部，只包含版权信息
  * 字段
- * @info description 描述：极简风格的页面底部，只包含版权信息
- * @info name 名称：Footer极简风格片段
- * @param copyright 版权信息
- * @param class 额外CSS类
+ * @meta.name {default="Footer极简风格片段",name="Footer极简风格片段",description="Footer极简风格片段，用于描述片段的名称"}
+ * @meta.description {default="极简风格的页面底部，只包含版权信息",name="极简风格的页面底部，只包含版权信息",description="极简风格的页面底部，只包含版权信息，用于描述片段的用途"}
+ * @param.copyright {default="© {year} Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
 $class = $this->getData('class') ?? '';

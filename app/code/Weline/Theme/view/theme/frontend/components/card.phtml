@@ -4,17 +4,17 @@
  * 
  * 卡片组件，用于展示结构化内容
  * 字段
- * @info description 描述：卡片组件，用于展示结构化内容
- * @info name 名称：Card卡片组件
- * @param title 卡片标题
- * @param subtitle 副标题
- * @param content 卡片内容（HTML字符串，必填）
- * @param footer 卡片底部内容
- * @param class 额外CSS类
- * @param id 元素ID
- * @param headerActions 标题栏操作按钮
- * @param image 卡片图片URL
- * @param imageAlt 图片alt文本
+ * @meta.name {default="Card卡片组件",name="Card卡片组件",description="Card卡片组件，用于描述组件的名称"}
+ * @meta.description {default="卡片组件，用于展示结构化内容",name="卡片组件，用于展示结构化内容",description="卡片组件，用于展示结构化内容，用于描述组件的用途"}
+ * @param.title {default="",name="卡片标题",description="卡片标题，用于设置卡片标题"}
+ * @param.subtitle {default="",name="副标题",description="副标题，用于设置卡片副标题"}
+ * @param.content {default="",name="卡片内容（HTML字符串）",description="卡片内容（HTML字符串），必填参数，用于设置卡片内容"}
+ * @param.footer {default="",name="卡片底部内容",description="卡片底部内容，用于设置卡片底部内容"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.id {default="",name="元素ID",description="元素ID，用于设置卡片ID"}
+ * @param.headerActions {default=[],name="标题栏操作按钮",description="标题栏操作按钮，用于设置标题栏操作按钮"}
+ * @param.image {default="",name="卡片图片URL",description="卡片图片URL，用于设置卡片图片"}
+ * @param.imageAlt {default="",name="图片alt文本",description="图片alt文本，用于设置图片alt属性"}
  */
 $title = $this->getData('title') ?? '';
 $subtitle = $this->getData('subtitle') ?? '';

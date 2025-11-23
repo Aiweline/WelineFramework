@@ -4,12 +4,12 @@
  * 
  * 侧边栏导航
  * 字段
- * @info description 描述：侧边栏导航
- * @info name 名称：Sidebar侧边栏片段
- * @param items 菜单项数组（必填）
- * @param activeItem 当前激活项
- * @param collapsed 是否折叠
- * @param class 额外CSS类
+ * @meta.name {default="Sidebar侧边栏片段",name="Sidebar侧边栏片段",description="Sidebar侧边栏片段，用于描述片段的名称"}
+ * @meta.description {default="侧边栏导航",name="侧边栏导航",description="侧边栏导航，用于描述片段的用途"}
+ * @param.items {default=[],name="菜单项数组",description="菜单项数组，用于设置侧边栏菜单项，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\",\"icon\":\"图标类名\",\"children\":[...]}]"}
+ * @param.activeItem {default="",name="当前激活项",description="当前激活项，用于设置当前激活的菜单项URL"}
+ * @param.collapsed {default=false,name="是否折叠",description="是否折叠，用于控制侧边栏的折叠状态"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
 $items = $this->getData('items') ?? [];
 $activeItem = $this->getData('activeItem') ?? '';

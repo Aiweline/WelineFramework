@@ -505,7 +505,7 @@ a.click();
 use Weline\TwoFactorAuth\Helper\TwoFactorAuthHelper;
 
 // 生成自定义时间步长的验证码
-$code = TwoFactorAuthHelper::generateCode($secret, time(), 60, 8);
+$code = TwoFactorAuthHelper::generateCode($secret, 'SHA1', 8, 60, time());
 
 // 验证码位数：8位
 // 时间步长：60秒
