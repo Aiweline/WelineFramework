@@ -36,8 +36,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-<<<<<<< HEAD
-=======
         # 获取锁文件路径
         $lockFile = $this->getLockFile();
         $lockHandle = null;
@@ -56,17 +54,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             exit(1);
         }
         
->>>>>>> dev-new
         # 检查系统是否已安装
         $is_installed = $this->checkSystemInstalled();
         
         # 如果未安装，提供安装选项
         if (!$is_installed) {
-<<<<<<< HEAD
-=======
             # 释放锁
             $this->releaseLock($lockHandle, $lockFile);
->>>>>>> dev-new
             $this->handleSystemNotInstalled();
             return;
         }
@@ -92,12 +86,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->error(__('系统升级过程中发生错误：%{1}', [$e->getMessage()]));
             throw $e;
         } finally {
-<<<<<<< HEAD
-=======
             # 释放锁
             $this->releaseLock($lockHandle, $lockFile);
             
->>>>>>> dev-new
             # 升级完成后自动关闭维护模式
             try {
                 $result = Env::getInstance()->setConfig('maintenance', false);
@@ -112,8 +103,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
     }
-<<<<<<< HEAD
-=======
     
     /**
      * 获取锁文件路径
@@ -237,7 +226,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             @unlink($lockFile);
         }
     }
->>>>>>> dev-new
 
     /**
      * @inheritDoc
