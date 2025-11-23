@@ -64,7 +64,7 @@ class Compiler
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-error-warning-line'): void
     {
         try {
-            $this->getEventsManager()->dispatch('Weline_Framework::msg', [
+            $this->getEventsManager()->dispatch('Weline_Admin::msg', [
                 'data' => [
                     'title' => $title,
                     'content' => $content,

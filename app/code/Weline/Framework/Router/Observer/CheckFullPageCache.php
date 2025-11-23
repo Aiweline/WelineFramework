@@ -21,7 +21,7 @@ use Weline\Framework\Router\Cache\RouterCache;
 
 /**
  * 检查全页缓存 Observer
- * 在 App::run_before 事件后立即检查全页缓存，如果存在则直接返回，避免运行到更深的位置
+ * 在 Weline_Framework::App::run_before 事件后立即检查全页缓存，如果存在则直接返回，避免运行到更深的位置
  * 
  * 注意：此 Observer 在 URL 解析之前执行，使用原始 REQUEST_URI
  */
@@ -66,10 +66,10 @@ class CheckFullPageCache implements ObserverInterface
 
         // 检查 URL 是否已经解析完成
         // 如果 WELINE_IS_BACKEND 未设置，说明 URL 解析未完成，此时无法生成正确的缓存键
-        // 应该跳过检查，等待 App::url_parsed_after 事件触发
+        // 应该跳过检查，等待 Weline_Framework::App::url_parsed_after 事件触发
         if (!isset($_SERVER['WELINE_IS_BACKEND'])) {
             // URL 解析未完成，无法生成正确的缓存键，直接返回
-            // 等待 App::url_parsed_after 事件触发时再检查
+            // 等待 Weline_Framework::App::url_parsed_after 事件触发时再检查
             return;
         }
         

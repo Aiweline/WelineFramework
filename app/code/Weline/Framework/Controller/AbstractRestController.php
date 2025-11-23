@@ -23,11 +23,11 @@ abstract class AbstractRestController extends Core
     {
         # 设置前置事件
         $event = w_obj(EventsManager::class);
-        $event->dispatch('Framework_RestController::init_before', $this);
+        $event->dispatch('Weline_Framework_RestController::init_before', $this);
         # 初始化父类（Core类没有构造函数，使用__init方法）
         $this->__init();
         # 设置后置事件
-        $event->dispatch('Framework_RestController::init_after', $this);
+        $event->dispatch('Weline_Framework_RestController::init_after', $this);
     }
 
     /**

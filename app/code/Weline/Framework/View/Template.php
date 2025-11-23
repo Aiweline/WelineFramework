@@ -342,7 +342,7 @@ class Template extends DataObject
                 'tplFile' => $tplFile,
                 'template' => $this,
             ]);
-            $eventsManager->dispatch('Framework_Template::after_compile', $eventData);
+            $eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
             $repContent = $eventData->getData('content');
             
             file_put_contents($comFileName, $repContent);                               //将替换后的文件写入定义的缓存文件中

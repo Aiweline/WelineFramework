@@ -272,7 +272,7 @@ class App
         $_SERVER['WELINE_IS_MEDIA'] = false;  // 是否媒体资源
         /**@var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        $eventManager->dispatch('App::run_before');
+        $eventManager->dispatch('Weline_Framework::App::run_before');
         $result = '';
         # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
         if (!CLI) {
@@ -325,7 +325,7 @@ class App
                 
                 // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）
                 if (PROD && !($_SERVER['WELINE_IS_BACKEND'] ?? false)) {
-                    $eventManager->dispatch('App::url_parsed_after');
+                    $eventManager->dispatch('Weline_Framework::App::url_parsed_after');
                 }
             }
             if (PROD) {
@@ -339,7 +339,7 @@ class App
             }
         }
         $data = new DataObject(['result' => $result]);
-        $eventManager->dispatch('App::run_after', $data);
+        $eventManager->dispatch('Weline_Framework::App::run_after', $data);
         $result = $data->getData('result');
         if(is_array($result)) {
             $result = json_encode($result);
