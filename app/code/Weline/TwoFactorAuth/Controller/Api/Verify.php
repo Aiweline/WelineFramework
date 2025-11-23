@@ -31,22 +31,14 @@ class Verify extends FrontendRestController
     public function execute()
     {
         if (!$this->request->isPost()) {
-<<<<<<< HEAD
-            return $this->error('无效的请求方法', 405);
-=======
             return $this->error(__('无效的请求方法'), 405);
->>>>>>> dev-new
         }
 
         $userId = (int)$this->request->getPost('user_id');
         $code = $this->request->getPost('code');
 
         if (!$userId || !$code) {
-<<<<<<< HEAD
-            return $this->error('缺少必要参数', 400);
-=======
             return $this->error(__('缺少必要参数'), 400);
->>>>>>> dev-new
         }
 
         // 先尝试验证TOTP码
@@ -60,17 +52,10 @@ class Verify extends FrontendRestController
         if ($success) {
             return $this->success([
                 'verified' => true,
-<<<<<<< HEAD
-                'message' => '验证成功'
-            ]);
-        } else {
-            return $this->error('验证码错误', 401);
-=======
                 'message' => __('验证成功')
             ]);
         } else {
             return $this->error(__('验证码错误'), 401);
->>>>>>> dev-new
         }
     }
 
@@ -84,11 +69,7 @@ class Verify extends FrontendRestController
         $userId = (int)$this->request->getGet('user_id');
 
         if (!$userId) {
-<<<<<<< HEAD
-            return $this->error('缺少用户ID', 400);
-=======
             return $this->error(__('缺少用户ID'), 400);
->>>>>>> dev-new
         }
 
         $isEnabled = $this->twoFactorAuthService->isEnabled($userId);

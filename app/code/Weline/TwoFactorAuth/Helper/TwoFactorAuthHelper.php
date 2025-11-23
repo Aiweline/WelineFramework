@@ -129,12 +129,9 @@ class TwoFactorAuthHelper
         int $period = self::DEFAULT_PERIOD,
         ?int $timestamp = null
     ): string {
-<<<<<<< HEAD
-=======
         // 清理密钥格式：移除空格、短横线、等号，并转换为大写
         $secret = strtoupper(str_replace([' ', '-', '='], '', $secret));
         
->>>>>>> dev-new
         if ($timestamp === null) {
             $timestamp = time();
         }
@@ -180,8 +177,6 @@ class TwoFactorAuthHelper
         int $window = self::DEFAULT_WINDOW,
         ?int $timestamp = null
     ): bool {
-<<<<<<< HEAD
-=======
         // 清理密钥格式：移除空格、短横线、等号，并转换为大写
         $secret = strtoupper(str_replace([' ', '-', '='], '', $secret));
         
@@ -190,7 +185,6 @@ class TwoFactorAuthHelper
             return false;
         }
         
->>>>>>> dev-new
         if ($timestamp === null) {
             $timestamp = time();
         }
@@ -200,12 +194,8 @@ class TwoFactorAuthHelper
         // 检查当前时间及前后时间窗口
         for ($i = -$window; $i <= $window; $i++) {
             $testTime = $timestamp + ($i * $period);
-<<<<<<< HEAD
-            $generatedCode = self::generateCode($secret, $testTime);
-=======
             // 调用 generateCode 时，参数顺序：secret, algorithm, digits, period, timestamp
             $generatedCode = self::generateCode($secret, 'SHA1', self::DEFAULT_DIGITS, $period, $testTime);
->>>>>>> dev-new
             
             // 使用时间安全的字符串比较
             if (hash_equals($generatedCode, $code)) {
@@ -217,8 +207,6 @@ class TwoFactorAuthHelper
     }
     
     /**
-<<<<<<< HEAD
-=======
      * 获取格式化后的账户显示名称
      * 根据开发环境添加前缀
      * 
@@ -243,7 +231,6 @@ class TwoFactorAuthHelper
     }
     
     /**
->>>>>>> dev-new
      * 生成otpauth URI
      * 用于生成二维码
      * 
@@ -261,20 +248,6 @@ class TwoFactorAuthHelper
         int $digits = self::DEFAULT_DIGITS,
         int $period = self::DEFAULT_PERIOD
     ): string {
-<<<<<<< HEAD
-        $params = [
-            'secret' => $secret,
-            'issuer' => $issuer,
-            'algorithm' => 'SHA1',
-            'digits' => $digits,
-            'period' => $period
-        ];
-        
-        $uri = sprintf(
-            'otpauth://totp/%s:%s?%s',
-            rawurlencode($issuer),
-            rawurlencode($account),
-=======
         // 使用格式化后的账户标签
         $label = self::getFormattedAccountLabel($account);
         
@@ -299,7 +272,6 @@ class TwoFactorAuthHelper
             'otpauth://totp/%s:%s?%s',
             rawurlencode($issuer),
             rawurlencode($label),
->>>>>>> dev-new
             http_build_query($params)
         );
         
@@ -307,51 +279,6 @@ class TwoFactorAuthHelper
     }
     
     /**
-<<<<<<< HEAD
-     * 生成二维码数据URL（使用Google Charts API）
-     * 
-     * @param string $otpAuthUri otpauth URI
-     * @param int $size 二维码尺寸
-     * @return string 二维码图片URL
-     */
-    public static function getQRCodeUrl(string $otpAuthUri, int $size = 200): string
-    {
-        return sprintf(
-            'https://chart.googleapis.com/chart?chs=%dx%d&chld=M|0&cht=qr&chl=%s',
-            $size,
-            $size,
-            urlencode($otpAuthUri)
-        );
-    }
-    
-    /**
-     * 生成二维码SVG（纯PHP实现，简化版）
-     * 实际应用可以使用更完整的QR码生成库
-     * 
-     * @param string $data 要编码的数据
-     * @return string SVG代码
-     */
-    public static function generateQRCodeSVG(string $data): string
-    {
-        // 这里返回一个占位SVG
-        // 实际应用中建议使用完整的QR码生成算法
-        $encoded = htmlspecialchars($data);
-        
-        return <<<SVG
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-    <rect fill="white" width="200" height="200"/>
-    <text x="100" y="90" text-anchor="middle" font-size="12" fill="#666">
-        请使用二维码扫描器扫描
-    </text>
-    <text x="100" y="110" text-anchor="middle" font-size="10" fill="#999">
-        或手动输入密钥
-    </text>
-    <text x="100" y="130" text-anchor="middle" font-size="8" fill="#ccc" font-family="monospace">
-        {$encoded}
-    </text>
-</svg>
-SVG;
-=======
      * 生成二维码数据URL（使用endroid/qr-code库）
      * 
      * 官方文档：https://github.com/endroid/qr-code
@@ -383,7 +310,6 @@ SVG;
             // 如果生成失败，抛出异常以便调试
             throw new \Exception('二维码生成失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine(), 0, $e);
         }
->>>>>>> dev-new
     }
     
     /**

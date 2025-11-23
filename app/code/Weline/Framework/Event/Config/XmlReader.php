@@ -9,10 +9,7 @@
 
 namespace Weline\Framework\Event\Config;
 
-<<<<<<< HEAD
-=======
 use Weline\Framework\App\Env;
->>>>>>> dev-new
 use Weline\Framework\Cache\CacheInterface;
 use Weline\Framework\Event\Cache\EventCache;
 use Weline\Framework\System\File\Scanner;
@@ -63,8 +60,6 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         // 合并掉所有相同名字的事件的观察者，方便获取
         $event_observers_list = [];
         foreach ($configs as $module_and_file => $config) {
-<<<<<<< HEAD
-=======
             // 提取模块名（格式：ModuleName::path/to/file.xml）
             $moduleName = explode('::', $module_and_file)[0] ?? '';
             if (empty($moduleName)) {
@@ -72,7 +67,6 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 continue;
             }
 
->>>>>>> dev-new
             $module_event_observers = [];
             // 跳过没有正确格式的配置
             if (!isset($config['config']) || !is_array($config['config'])) {
@@ -91,17 +85,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             }
             // 检查 event 是否存在
             if (!isset($config['config']['_value']['event'])) {
-<<<<<<< HEAD
-                die(__('%{1} 事件配置文件缺少event节点', [$module_and_file]));
-            }
-=======
                 // 如果 event.xml 文件存在但没有 event 节点，说明该模块不定义事件，跳过处理
                 continue;
             }
 
             // 加载模块的 event.php 规约文件
             $eventSpecs = $this->loadModuleEventSpecs($moduleName);
->>>>>>> dev-new
             // 多个值
             $firstEventKey = array_key_first($config['config']['_value']['event']);
             if ($firstEventKey !== null && is_integer($firstEventKey)) {
@@ -109,15 +98,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                     if (!isset($event['_attribute']['name'])) {
                         die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
                     }
-<<<<<<< HEAD
-=======
                     
                     $eventName = $event['_attribute']['name'];
                     
                     // 验证事件名是否在规约文件中存在
                     $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
                     
->>>>>>> dev-new
                     // 检查 _value 是否存在
                     if (!isset($event['_value']) || !is_array($event['_value'])) {
                         die(__('%{1} 事件Event的_value格式错误', [$module_and_file]));
@@ -171,15 +157,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 if (!isset($config['config']['_value']['event']['_attribute']['name'])) {
                     die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
                 }
-<<<<<<< HEAD
-=======
                 
                 $eventName = $config['config']['_value']['event']['_attribute']['name'];
                 
                 // 验证事件名是否在规约文件中存在
                 $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
                 
->>>>>>> dev-new
                 // 检查 _value 是否存在
                 if (!isset($config['config']['_value']['event']['_value']) || !is_array($config['config']['_value']['event']['_value'])) {
                     die(__('%{1} 事件Event的_value格式错误', [$module_and_file]));
@@ -233,8 +216,6 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         $this->eventCache->set('event', $event_observers_list);
         return $event_observers_list;
     }
-<<<<<<< HEAD
-=======
 
     /**
      * 加载模块的 event.php 规约文件
@@ -398,5 +379,4 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         );
         throw new \RuntimeException($errorMessage);
     }
->>>>>>> dev-new
 }
