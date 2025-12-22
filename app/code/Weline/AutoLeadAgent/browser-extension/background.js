@@ -640,6 +640,110 @@ async function pingUrl(url, timeout = 5000) {
 // 存储需要发送日志的标签页ID（通常是任务管理页面）
 let logTargetTabId = null;
 
+// 日志去重机制：记录已发送的日志（基于内容+时间戳）
+const sentLogs = new Map(); // Map<logKey, timestamp>
+const LOG_DEDUP_WINDOW = 100; // 100ms窗口内相同日志只发送一次
+
+/**
+ * 生成日志去重键
+ */
+function getLogKey(type, message) {
+    return `${type}:${message}`;
+}
+
+/**
+ * 检查日志是否在去重窗口内
+ */
+function isLogDuplicate(type, message) {
+    const logKey = getLogKey(type, message);
+    const now = Date.now();
+    const lastSentTime = sentLogs.get(logKey);
+    
+    if (lastSentTime && (now - lastSentTime) < LOG_DEDUP_WINDOW) {
+        return true; // 在去重窗口内，跳过
+    }
+    
+    // 更新发送时间
+    sentLogs.set(logKey, now);
+    
+    // 清理过期的日志记录（超过1分钟的记录）
+    const oneMinuteAgo = now - 60000;
+    for (const [key, timestamp] of sentLogs.entries()) {
+        if (timestamp < oneMinuteAgo) {
+            sentLogs.delete(key);
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * 查找并缓存目标标签页ID
+ */
+async function findTargetTabId() {
+    // 如果已缓存且有效，直接返回
+    if (logTargetTabId) {
+        try {
+            await chrome.tabs.get(logTargetTabId);
+            return logTargetTabId;
+        } catch (e) {
+            // 标签页已关闭，清除缓存
+            logTargetTabId = null;
+        }
+    }
+    
+    // 查找任务管理页面
+    const tabs = await chrome.tabs.query({});
+    if (!tabs || tabs.length === 0) {
+        return null;
+    }
+    
+    // 优先查找任务管理页面（包含 auto-lead-agent 路径的页面）
+    const taskManagementTabs = tabs.filter(tab => {
+        // 跳过扩展自己的页面
+        if (tab.url && tab.url.startsWith('chrome-extension://')) {
+            return false;
+        }
+        // 只发送到任务管理页面（包含 auto-lead-agent 路径）
+        if (tab.url && (
+            tab.url.includes('/auto-lead-agent') ||
+            tab.url.includes('/autoleadagent') ||
+            tab.url.includes('auto_lead_agent')
+        )) {
+            return true;
+        }
+        return false;
+    });
+    
+    if (taskManagementTabs.length > 0) {
+        logTargetTabId = taskManagementTabs[0].id;
+        return logTargetTabId;
+    }
+    
+    // 如果没有找到任务管理页面，尝试发送到第一个非搜索结果页面
+    const searchEngines = [
+        'google.com/search',
+        'baidu.com/s',
+        'bing.com/search',
+        'yahoo.com/search',
+        'duckduckgo.com'
+    ];
+    
+    const nonSearchTabs = tabs.filter(tab => {
+        if (tab.url && tab.url.startsWith('chrome-extension://')) {
+            return false;
+        }
+        return !searchEngines.some(engine => tab.url && tab.url.includes(engine));
+    });
+    
+    if (nonSearchTabs.length > 0) {
+        logTargetTabId = nonSearchTabs[0].id;
+        return logTargetTabId;
+    }
+    
+    return null;
+}
+
 /**
  * 发送日志到前端
  * 只发送到任务管理页面，避免重复日志
@@ -648,85 +752,35 @@ function sendLogToFrontend(type, message) {
     try {
         // 同时输出到控制台（用于调试）
         console.log('[AutoLeadAgent Extension Log]', message);
-
-        let logSent = false;
-        let errorCount = 0;
-
-        // 只发送到任务管理页面（包含 auto-lead-agent 路径的页面），避免向搜索结果页面发送导致重复
-        chrome.tabs.query({}, (tabs) => {
-            if (chrome.runtime.lastError) {
-                console.warn('[AutoLeadAgent Extension] 查询标签页失败:', chrome.runtime.lastError);
+        
+        // 检查是否重复（去重机制）
+        if (isLogDuplicate(type, message)) {
+            return; // 跳过重复日志
+        }
+        
+        // 异步查找目标标签页并发送日志
+        findTargetTabId().then(targetTabId => {
+            if (!targetTabId) {
+                // 没有找到目标标签页，静默失败（不输出警告，避免日志污染）
                 return;
             }
-
-            if (!tabs || tabs.length === 0) {
-                console.warn('[AutoLeadAgent Extension] 没有找到标签页，无法发送日志');
-                return;
-            }
-
-            // 查找任务管理页面（包含 auto-lead-agent 路径的页面）
-            const taskManagementTabs = tabs.filter(tab => {
-                // 跳过扩展自己的页面
-                if (tab.url && tab.url.startsWith('chrome-extension://')) {
-                    return false;
+            
+            // 只发送到单一目标标签页
+            chrome.tabs.sendMessage(targetTabId, {
+                type: 'AUTOLEADAGENT_LOG',
+                logType: type,
+                message: message,
+                timestamp: new Date().toISOString()
+            }).catch((error) => {
+                // 发送失败时清除缓存的标签页ID，下次重新查找
+                if (error.message && error.message.includes('Could not establish connection')) {
+                    logTargetTabId = null;
                 }
-                // 只发送到任务管理页面（包含 auto-lead-agent 路径）
-                if (tab.url && (
-                    tab.url.includes('/auto-lead-agent') ||
-                    tab.url.includes('/autoleadagent') ||
-                    tab.url.includes('auto_lead_agent')
-                )) {
-                    return true;
-                }
-                return false;
+                // 静默处理错误，避免日志污染
             });
-
-            if (taskManagementTabs.length === 0) {
-                // 如果没有找到任务管理页面，尝试发送到第一个非搜索结果页面（只发送一次，避免重复）
-                // 排除常见的搜索引擎和搜索结果页面
-                const nonSearchTabs = tabs.filter(tab => {
-                    if (tab.url && tab.url.startsWith('chrome-extension://')) {
-                        return false;
-                    }
-                    // 排除搜索引擎页面
-                    const searchEngines = [
-                        'google.com/search',
-                        'baidu.com/s',
-                        'bing.com/search',
-                        'yahoo.com/search',
-                        'duckduckgo.com'
-                    ];
-                    return !searchEngines.some(engine => tab.url && tab.url.includes(engine));
-                });
-
-                // 只发送到第一个非搜索结果页面（避免重复）
-                if (nonSearchTabs.length > 0) {
-                    const targetTab = nonSearchTabs[0];
-                    chrome.tabs.sendMessage(targetTab.id, {
-                        type: 'AUTOLEADAGENT_LOG',
-                        logType: type,
-                        message: message,
-                        timestamp: new Date().toISOString()
-                    }).then(() => {
-                        logSent = true;
-                    }).catch((error) => {
-                        errorCount++;
-                    });
-                }
-            } else {
-                // 只发送到第一个任务管理页面（避免重复）
-                const targetTab = taskManagementTabs[0];
-                chrome.tabs.sendMessage(targetTab.id, {
-                    type: 'AUTOLEADAGENT_LOG',
-                    logType: type,
-                    message: message,
-                    timestamp: new Date().toISOString()
-                }).then(() => {
-                    logSent = true;
-                }).catch((error) => {
-                    errorCount++;
-                });
-            }
+        }).catch((error) => {
+            // 查找标签页失败，静默处理
+            console.warn('[AutoLeadAgent Extension] 查找目标标签页失败:', error);
         });
     } catch (error) {
         // 日志发送失败不影响主流程，但记录错误
@@ -812,8 +866,45 @@ async function searchInEngine(engine, query, maxResults, tabId = null, openedTab
         await waitForTabLoad(tab.id, 30000);
         sendLogToFrontend('crawl', '  ✓ ' + engine.name + '页面加载完成');
 
-        sendLogToFrontend('crawl', '  → 等待3秒让页面完全加载...');
-        await sleep(3000);
+        // 增加等待时间并添加动态检测页面加载完成的逻辑
+        sendLogToFrontend('crawl', '  → 等待5秒让页面完全加载（包括动态内容）...');
+        
+        // 动态检测页面是否完全加载（检查DOM是否稳定）
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: function() {
+                    return new Promise((resolve) => {
+                        let lastHeight = document.body.scrollHeight;
+                        let stableCount = 0;
+                        const checkInterval = setInterval(() => {
+                            const currentHeight = document.body.scrollHeight;
+                            if (currentHeight === lastHeight) {
+                                stableCount++;
+                                if (stableCount >= 3) {
+                                    // DOM高度稳定3次检查（约1.5秒），认为加载完成
+                                    clearInterval(checkInterval);
+                                    resolve();
+                                }
+                            } else {
+                                stableCount = 0;
+                                lastHeight = currentHeight;
+                            }
+                        }, 500);
+                        
+                        // 最多等待5秒
+                        setTimeout(() => {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }, 5000);
+                    });
+                }
+            });
+        } catch (e) {
+            // 如果动态检测失败，使用固定等待时间
+            await sleep(5000);
+        }
+        
         sendLogToFrontend('crawl', '  ✓ 等待完成');
 
         // 执行内容脚本提取URL列表（直接使用端侧模型获取结果）
@@ -1870,19 +1961,26 @@ async function handleCrawlRequest(request, sendResponse) {
 
                         const urlList = searchResult.urls || [];
 
-                        // 详细日志：显示提取到的结果详情
-                        console.log('[AutoLeadAgent Extension] 提取到的结果列表:', urlList);
+                        // 详细日志：显示提取到的结果详情（调试用）
+                        console.log('[AutoLeadAgent Extension] ===== 提取结果验证 =====');
+                        console.log('[AutoLeadAgent Extension] 提取到的结果列表长度:', urlList.length);
+                        console.log('[AutoLeadAgent Extension] 提取到的结果列表详情:', JSON.stringify(urlList.slice(0, 5), null, 2));
+                        
                         if (urlList.length > 0) {
                             sendLogToFrontend('crawl', '  ✓ [' + engine.name + '] 第' + currentPage + '/' + maxPages + '页提取到 ' + urlList.length + ' 个结果URL');
+                            sendLogToFrontend('crawl', '  🔍 [调试] urlList内容验证: 长度=' + urlList.length + ', 有效URL=' + urlList.filter(item => item.url).length);
+                            
                             // 显示前3个结果的预览
                             urlList.slice(0, 3).forEach((item, idx) => {
-                                sendLogToFrontend('crawl', `     ${idx + 1}. ${item.title || '无标题'} - ${item.url || '无URL'}`);
+                                const urlPreview = item.url ? (item.url.substring(0, 60) + (item.url.length > 60 ? '...' : '')) : '无URL';
+                                sendLogToFrontend('crawl', `     ${idx + 1}. ${item.title || '无标题'} - ${urlPreview}`);
                             });
                             if (urlList.length > 3) {
                                 sendLogToFrontend('crawl', `     ... 还有 ${urlList.length - 3} 个结果`);
                             }
                         } else {
                             sendLogToFrontend('crawl', '  ⚠️ [' + engine.name + '] 第' + currentPage + '页未提取到任何结果URL');
+                            sendLogToFrontend('crawl', '  🔍 [调试] urlList为空，深度爬取将无法执行');
 
                             // 如果第一页未能提取到任何结果，直接停止
                             if (currentPage === 1) {
@@ -1946,9 +2044,14 @@ async function handleCrawlRequest(request, sendResponse) {
 
                             // 添加调试日志
                             if (urlList.length > 0) {
-                                sendLogToFrontend('crawl', '  → 开始处理 ' + urlList.length + ' 个结果条目（先访问结果条目，然后深度爬取）...');
+                                sendLogToFrontend('crawl', '');
+                                sendLogToFrontend('crawl', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                sendLogToFrontend('crawl', '🚀 [' + engine.name + '] 开始处理 ' + urlList.length + ' 个结果条目');
+                                sendLogToFrontend('crawl', '  📋 处理流程: 1) 访问结果条目提取信息 2) 10层深度递归爬取');
+                                sendLogToFrontend('crawl', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                             } else {
-                                sendLogToFrontend('crawl', '  ⚠️ 未提取到结果，跳过结果条目处理');
+                                sendLogToFrontend('crawl', '  ⚠️ 未提取到结果，跳过结果条目处理和深度爬取');
+                                sendLogToFrontend('crawl', '  💡 提示: 请检查搜索引擎结果提取逻辑是否正常工作');
                             }
 
                             // 对每个URL进行处理：先访问结果条目，然后深度爬取
@@ -2151,7 +2254,13 @@ async function handleCrawlRequest(request, sendResponse) {
                                 }
 
                                 // 步骤2: 继续深度爬取该URL（10层深度）
-                                sendLogToFrontend('crawl', '   🔍 步骤2: 开始10层深度爬取...');
+                                sendLogToFrontend('crawl', '');
+                                sendLogToFrontend('crawl', '   🔍 步骤2: 开始10层深度递归爬取...');
+                                sendLogToFrontend('crawl', '   📍 目标URL: ' + targetUrl);
+                                sendLogToFrontend('crawl', '   🔢 最大深度: 10层');
+                                sendLogToFrontend('crawl', '   ⏳ 开始深度爬取（这可能需要几分钟）...');
+                                
+                                const deepCrawlStartTime = Date.now();
                                 const deepCrawlResults = await deepCrawlWebsite(
                                     targetUrl,
                                     10, // 最大深度10层
@@ -2159,6 +2268,10 @@ async function handleCrawlRequest(request, sendResponse) {
                                     0, // 从深度0开始
                                     sendLogToFrontend
                                 );
+                                
+                                const deepCrawlDuration = Math.floor((Date.now() - deepCrawlStartTime) / 1000);
+                                sendLogToFrontend('crawl', '   ✓ 深度爬取完成，耗时: ' + deepCrawlDuration + ' 秒');
+                                sendLogToFrontend('crawl', '   📊 深度爬取结果: 找到 ' + deepCrawlResults.length + ' 条客户信息');
 
                                 // 将深度爬取的结果转换为标准格式，并检查是否有有效客户
                                 // 注意：结果条目本身的信息已经在上一步添加，这里只处理深度爬取的结果
@@ -2988,33 +3101,72 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
         if (!isEmptyResult && pageText.length > 100) {
             // 方法1：直接使用Google搜索结果的选择器（最可靠）
             if (engine.name === 'Google') {
-                // Google搜索结果条目的常见class
-                items = document.querySelectorAll('.g, .tF2Cxc, .MjjYud, .g-blk, [data-ved]');
-                console.log('[AutoLeadAgent] Google选择器找到 ' + items.length + ' 个结果条目');
+                // Google搜索结果条目的多种选择器（按优先级）
+                const googleSelectors = [
+                    // 最新的选择器（2024年）
+                    'div[data-sokoban-feature]',
+                    'div[jscontroller]',
+                    'div[data-ved]',
+                    // 传统选择器
+                    '.g',
+                    '.tF2Cxc',
+                    '.MjjYud',
+                    '.g-blk',
+                    // 更通用的选择器
+                    'div[data-hveid]',
+                    'div[data-ved][data-hveid]'
+                ];
+                
+                // 尝试每个选择器，直到找到结果
+                for (const selector of googleSelectors) {
+                    try {
+                        items = document.querySelectorAll(selector);
+                        if (items.length > 0) {
+                            console.log('[AutoLeadAgent] Google选择器 "' + selector + '" 找到 ' + items.length + ' 个结果条目');
+                            break;
+                        }
+                    } catch (e) {
+                        // 选择器无效，继续下一个
+                        continue;
+                    }
+                }
 
                 // 如果标准选择器找不到，尝试查找所有包含外部链接的div
                 if (items.length === 0) {
                     console.log('[AutoLeadAgent] 标准选择器未找到，尝试查找包含外部链接的div...');
                     const allDivs = document.querySelectorAll('div');
                     const resultDivs = [];
+                    const seenDivs = new Set();
+                    
                     allDivs.forEach(div => {
+                        if (seenDivs.has(div)) return;
+                        
                         // 查找div内的所有a标签
                         const links = div.querySelectorAll('a[href]');
                         for (const link of links) {
                             let href = link.href || link.getAttribute('href') || '';
-                            // 处理Google的/url?q=重定向
+                            
+                            // 处理Google的/url?q=重定向（多种格式）
                             if (href.includes('/url?q=')) {
                                 try {
                                     const urlParams = new URLSearchParams(href.split('?')[1]);
                                     href = urlParams.get('q') || href;
                                 } catch (e) { }
                             }
+                            
+                            // 处理 data-href 和 data-url 属性
+                            if (!href || href.startsWith('javascript:')) {
+                                href = link.getAttribute('data-href') || link.getAttribute('data-url') || href;
+                            }
+                            
                             // 如果是外部链接（不是Google自己的），这个div就是结果条目
                             if (href && href.startsWith('http') &&
                                 !href.includes('google.com/search') &&
                                 !href.includes('google.com/url') &&
-                                !href.includes('google.com/maps')) {
+                                !href.includes('google.com/maps') &&
+                                !href.includes('google.com/images')) {
                                 resultDivs.push(div);
+                                seenDivs.add(div);
                                 break; // 找到一个链接就够了
                             }
                         }
@@ -3040,40 +3192,104 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                 const linkContainers = new Set();
                 const validLinksMap = new Map(); // 存储链接到容器的映射
                 let validLinksCount = 0;
+                
+                // 搜索引擎域名列表（用于过滤）
+                const searchEngineDomains = [
+                    'google.com', 'baidu.com', 'bing.com', 'yahoo.com',
+                    'duckduckgo.com', 'yandex.com', 'sogou.com', 'so.com'
+                ];
 
                 allLinks.forEach(link => {
                     let href = link.href || link.getAttribute('href') || '';
+                    const originalHref = href;
 
-                    // 处理Google的 /url?q= 重定向格式
+                    // 处理Google的 /url?q= 重定向格式（多种解析方式）
                     if (href.includes('/url?q=')) {
                         try {
                             const urlParams = new URLSearchParams(href.split('?')[1]);
                             href = urlParams.get('q') || href;
                         } catch (e) {
-                            // 解析失败，使用原始链接
+                            // 解析失败，尝试正则表达式提取
+                            const match = href.match(/[?&]q=([^&]+)/);
+                            if (match) {
+                                try {
+                                    href = decodeURIComponent(match[1]);
+                                } catch (e2) {
+                                    // 解码失败，使用原始链接
+                                }
+                            }
                         }
+                    }
+                    
+                    // 处理 data-href 和 data-url 属性（Google有时使用这些属性）
+                    if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
+                        href = link.getAttribute('data-href') || 
+                               link.getAttribute('data-url') || 
+                               link.getAttribute('data-ved') || 
+                               href;
                     }
 
                     // 处理相对链接
                     if (href.startsWith('/')) {
                         href = window.location.origin + href;
                     }
+                    
+                    // 处理协议相对URL
+                    if (href.startsWith('//')) {
+                        href = 'https:' + href;
+                    }
 
-                    // 排除搜索引擎自己的链接
-                    if (href &&
-                        href.startsWith('http') &&
-                        !href.includes('google.com/search') &&
-                        !href.includes('google.com/url') &&
-                        !href.includes('google.com/maps') &&
-                        !href.includes('baidu.com') &&
-                        !href.includes('bing.com') &&
-                        !href.startsWith('javascript:') &&
-                        !href.startsWith('#')) {
+                    // 验证URL有效性并排除搜索引擎自己的链接
+                    let isValidExternalLink = false;
+                    if (href && href.startsWith('http')) {
+                        try {
+                            const urlObj = new URL(href);
+                            const hostname = urlObj.hostname.toLowerCase();
+                            
+                            // 检查是否是搜索引擎域名
+                            const isSearchEngine = searchEngineDomains.some(domain => 
+                                hostname === domain || hostname.endsWith('.' + domain)
+                            );
+                            
+                            // 排除搜索引擎域名和常见的内链
+                            if (!isSearchEngine && 
+                                !hostname.includes('googleusercontent.com') &&
+                                !hostname.includes('gstatic.com') &&
+                                !urlObj.pathname.includes('/search') &&
+                                !urlObj.pathname.includes('/url')) {
+                                isValidExternalLink = true;
+                            }
+                        } catch (e) {
+                            // URL解析失败，跳过
+                        }
+                    }
+
+                    if (isValidExternalLink) {
                         validLinksCount++;
+                        
+                        // 计算链接的重要性评分（用于排序）
+                        const linkText = (link.textContent || link.innerText || '').trim();
+                        const linkTitle = link.getAttribute('title') || '';
+                        let importanceScore = 0;
+                        
+                        // 链接文本长度（合理的标题长度）
+                        if (linkText.length >= 10 && linkText.length <= 200) {
+                            importanceScore += 2;
+                        }
+                        
+                        // 链接位置（在页面中的位置，越靠前越重要）
+                        const rect = link.getBoundingClientRect();
+                        if (rect.top < window.innerHeight * 2) {
+                            importanceScore += 1;
+                        }
+                        
                         // 找到链接的父容器（向上查找5层，更深入）
                         let container = link.parentElement;
                         for (let i = 0; i < 5 && container; i++) {
-                            if (container.tagName === 'DIV' || container.tagName === 'ARTICLE' || container.tagName === 'SECTION' || container.tagName === 'LI') {
+                            if (container.tagName === 'DIV' || 
+                                container.tagName === 'ARTICLE' || 
+                                container.tagName === 'SECTION' || 
+                                container.tagName === 'LI') {
                                 // 确保容器有足够的文本内容（至少20个字符）
                                 const containerText = container.textContent || container.innerText || '';
                                 if (containerText.length >= 20) {
@@ -3084,13 +3300,23 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                                     }
                                     validLinksMap.get(container).push({
                                         element: link,
-                                        href: href
+                                        href: href,
+                                        importanceScore: importanceScore,
+                                        linkText: linkText || linkTitle
                                     });
                                     break;
                                 }
                             }
                             container = container.parentElement;
                         }
+                    }
+                });
+                
+                // 按重要性评分排序链接
+                linkContainers.forEach(container => {
+                    const links = validLinksMap.get(container);
+                    if (links && links.length > 0) {
+                        links.sort((a, b) => b.importanceScore - a.importanceScore);
                     }
                 });
 
@@ -3410,42 +3636,87 @@ function extractSearchEngineResults(engine, platformConfig, maxResults, platform
                         let href = link.href || link.getAttribute('href') || '';
                         const originalHref = href;
 
-                        // 处理Google的/url?q=重定向格式（这是关键！）
+                        // 处理Google的/url?q=重定向格式（多种解析方式）
                         if (href.includes('/url?q=')) {
                             try {
                                 const urlParams = new URLSearchParams(href.split('?')[1]);
                                 href = urlParams.get('q') || href;
                                 console.log('[AutoLeadAgent] 解析重定向链接: ' + originalHref + ' -> ' + href);
                             } catch (e) {
-                                console.warn('[AutoLeadAgent] 解析重定向链接失败:', e);
+                                // 解析失败，尝试正则表达式提取
+                                const match = href.match(/[?&]q=([^&]+)/);
+                                if (match) {
+                                    try {
+                                        href = decodeURIComponent(match[1]);
+                                        console.log('[AutoLeadAgent] 使用正则解析重定向链接: ' + originalHref + ' -> ' + href);
+                                    } catch (e2) {
+                                        console.warn('[AutoLeadAgent] 解析重定向链接失败:', e2);
+                                    }
+                                } else {
+                                    console.warn('[AutoLeadAgent] 解析重定向链接失败:', e);
+                                }
                             }
                         }
+                        
+                        // 处理 data-href 和 data-url 属性
+                        if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
+                            href = link.getAttribute('data-href') || 
+                                   link.getAttribute('data-url') || 
+                                   href;
+                        }
 
-                        // 过滤掉Google自己的链接，只保留外部链接
-                        if (href &&
-                            (href.startsWith('http') || href.startsWith('//')) &&
-                            !href.includes('google.com/search') &&
-                            !href.includes('google.com/url') &&
-                            !href.includes('google.com/maps') &&
-                            !href.startsWith('javascript:') &&
-                            !href.startsWith('#')) {
-                            // 处理协议相对URL
-                            if (href.startsWith('//')) {
-                                href = 'https:' + href;
+                        // 处理协议相对URL
+                        if (href.startsWith('//')) {
+                            href = 'https:' + href;
+                        }
+                        
+                        // 处理相对链接
+                        if (href.startsWith('/') && !href.startsWith('//')) {
+                            href = window.location.origin + href;
+                        }
+
+                        // 验证URL有效性并过滤掉Google自己的链接
+                        let isValidExternalLink = false;
+                        if (href && href.startsWith('http')) {
+                            try {
+                                const urlObj = new URL(href);
+                                const hostname = urlObj.hostname.toLowerCase();
+                                
+                                // 排除Google域名和常见的内链
+                                if (!hostname.includes('google.com') &&
+                                    !hostname.includes('googleusercontent.com') &&
+                                    !hostname.includes('gstatic.com') &&
+                                    !urlObj.pathname.includes('/search') &&
+                                    !urlObj.pathname.includes('/url') &&
+                                    !urlObj.pathname.includes('/maps')) {
+                                    isValidExternalLink = true;
+                                }
+                            } catch (e) {
+                                // URL解析失败，跳过
                             }
+                        }
+                        
+                        if (isValidExternalLink) {
                             resultItem.url = href;
                             console.log('[AutoLeadAgent] 提取到链接: ' + href);
 
                             // 如果还没有标题，尝试从链接文本获取
                             if (!resultItem.title) {
-                                const linkText = link.textContent.trim();
+                                const linkText = (link.textContent || link.innerText || '').trim();
+                                const linkTitle = link.getAttribute('title') || '';
+                                
                                 if (linkText && linkText.length > 5 && linkText.length < 200) {
                                     resultItem.title = linkText;
+                                } else if (linkTitle && linkTitle.length > 5 && linkTitle.length < 200) {
+                                    resultItem.title = linkTitle;
                                 } else {
                                     // 尝试从父元素获取标题
                                     const parentTitle = link.closest('h1, h2, h3, h4, h5, h6');
                                     if (parentTitle) {
-                                        resultItem.title = parentTitle.textContent.trim();
+                                        const parentText = (parentTitle.textContent || parentTitle.innerText || '').trim();
+                                        if (parentText && parentText.length > 5 && parentText.length < 200) {
+                                            resultItem.title = parentText;
+                                        }
                                     }
                                 }
                             }
