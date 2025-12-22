@@ -1,0 +1,155 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $rules
+ * @var \Weline\Framework\Pagination\Pagination $pagination
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <title><lang>营销规则管理</lang></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+<!--加载中组件 开始-->
+<w:template>Weline_Admin::common/page/loading.phtml</w:template>
+<!-- 开始 页面 -->
+<div id="layout-wrapper">
+
+    <!--页头工具条 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <!--页头工具条 结束-->
+
+    <!-- ========== Topnav Start ========== -->
+    <!--页头菜单栏 开始-->
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    <!--页头菜单栏 结束-->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    <!--左侧菜单栏 开始-->
+    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
+    <!--左侧菜单栏 结束-->
+
+    <!-- ============================================================== -->
+    <!-- Start right Content here -->
+    <!-- ============================================================== -->
+    <div class='main-content'>
+        <div class='page-content'>
+            <div class='container-fluid'>
+                <div class='row'>
+                    <!--消息-->
+                    <template>Weline_Component::message.phtml</template>
+                </div>
+                <!-- start page title -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+                            <h4 class='mb-sm-0'>
+                                <lang>营销规则</lang>
+                            </h4>
+                            <div class='page-title-right'>
+                                <ol class='breadcrumb m-0'>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>后台</lang></a></li>
+                                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>营销</lang></a></li>
+                                    <li class='breadcrumb-item active'><lang>规则管理</lang></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title -->
+
+                <!-- start page content -->
+                <div class='row'>
+                    <div class='col-12'>
+                        <div class='card'>
+                            <div class='card-header d-flex justify-content-between align-items-center'>
+                                <h5 class='card-title mb-0'><lang>规则列表</lang></h5>
+                                <a href="<?= $this->getUrl('marketing/backend/rule/getAdd') ?>" class="btn btn-primary btn-sm">
+                                    <i class="ri-add-line me-1"></i><lang>添加规则</lang>
+                                </a>
+                            </div>
+                            <div class='card-body'>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th><?= __('ID') ?></th>
+                                                <th><?= __('规则名称') ?></th>
+                                                <th><?= __('类型') ?></th>
+                                                <th><?= __('状态') ?></th>
+                                                <th><?= __('优先级') ?></th>
+                                                <th><?= __('使用次数') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($rules)): ?>
+                                            <tr>
+                                                <td colspan="7" class="text-center text-muted py-4">
+                                                    <i class="ri-inbox-line fs-3 d-block mb-2"></i>
+                                                    <lang>暂无数据</lang>
+                                                </td>
+                                            </tr>
+                                            <?php else: ?>
+                                            <?php foreach ($rules as $rule): ?>
+                                            <?php $this->assign('rule', $rule); ?>
+                                            <tr>
+                                                <td><?= $rule['id'] ?></td>
+                                                <td>
+                                                    <?php if (isset($rule['id']) && $rule['id']): ?>
+                                                        <local model="Weline\Marketing\Model\Rule\LocalDescription" 
+                                                               field="name" 
+                                                               id="rule.id" 
+                                                               name="rule-name">{{rule.local_name|rule.name}}</local>
+                                                    <?php else: ?>
+                                                        <?= $this->escapeHtml($rule['name'] ?? '') ?>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><?= $this->escapeHtml($rule['rule_type'] ?? '') ?></td>
+                                                <td>
+                                                    <?php if (($rule['status'] ?? '') == '1' || ($rule['status'] ?? '') == 'active'): ?>
+                                                        <span class="badge bg-success"><lang>启用</lang></span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><?= $rule['priority'] ?? 0 ?></td>
+                                                <td><?= $rule['usage_count'] ?? 0 ?></td>
+                                                <td>
+                                                    <a href="<?= $this->getUrl('marketing/backend/rule/getEdit', ['id' => $rule['id']]) ?>" 
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="ri-edit-line"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <?= $this->getChildHtml('pagination') ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end page content -->
+
+            </div> <!-- container-fluid -->
+        </div>
+        <!-- End Page-content -->
+    </div>
+    <!-- end main content-->
+
+</div>
+<!-- END layout-wrapper -->
+
+<!--右边栏-->
+@template(Weline_Admin::common/right-sidebar.phtml)
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>

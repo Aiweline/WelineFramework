@@ -1,0 +1,280 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Customer\Model\Customer $user */
+$avatar = $user->getAvatar();
+$username = $user->getUsername();
+$email = $user->getEmail();
+$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+?>
+<!-- 主内容区 -->
+        <!-- 个人资料头部 -->
+        <div class="profile-header">
+            <div class="profile-header-content">
+                <div class="avatar-large">
+                    <?php if ($avatar): ?>
+                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
+                    <?php else: ?>
+                        <div class="avatar-fallback"><?= $avatarInitial ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="profile-info">
+                    <h2><?= htmlspecialchars($username) ?></h2>
+                    <?php if ($email): ?>
+                        <p class="profile-email">
+                            <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
+                        </p>
+                    <?php endif; ?>
+                    <p class="profile-welcome"><lang>欢迎回来！您可以在这里管理您的账户信息</lang></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 个人资料部分 -->
+        <div class="content-section" id="profile-section">
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('个人资料'),
+                'content' => '
+                    <div class="alert alert-success d-none" id="profileSuccessMsg"></div>
+                    <div class="alert alert-danger d-none" id="profileErrorMsg"></div>
+
+                    <form id="profileForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="username" class="form-label">' . __('用户名') . '</label>
+                                <input type="text" class="form-control" id="username" 
+                                       value="' . htmlspecialchars($user->getUsername()) . '" disabled>
+                                <small class="text-muted">' . __('用户名不可修改') . '</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="userId" class="form-label">' . __('用户ID') . '</label>
+                                <input type="text" class="form-control" id="userId" 
+                                       value="' . $user->getId() . '" disabled>
+                            </div>
+
+                            <div class="col-12 mb-3">
+                                <label for="avatar" class="form-label">' . __('头像URL') . '</label>
+                                <div class="avatar-input-group">
+                                    <input type="url" class="form-control" id="avatar" name="avatar" 
+                                           value="' . htmlspecialchars($user->getAvatar() ?: '') . '" 
+                                           placeholder="https://example.com/avatar.jpg">
+                                    <button type="button" class="btn btn-outline-secondary" id="previewAvatarBtn">
+                                        <i class="ri-eye-line"></i> ' . __('预览') . '
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">' . __('输入头像图片的完整URL地址') . '</small>
+                            </div>
+                            
+                            ' . ($email ? '
+                            <div class="col-12 mb-3">
+                                <label for="email" class="form-label">' . __('邮箱') . '</label>
+                                <input type="email" class="form-control" id="email" 
+                                       value="' . htmlspecialchars($email) . '" disabled>
+                                <small class="text-muted">' . __('邮箱不可修改') . '</small>
+                            </div>
+                            ' : '') . '
+                        </div>
+
+                        <div class="mt-4">
+                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+                                'text' => __('保存更改'),
+                                'type' => 'primary',
+                                'attributes' => 'type="submit"'
+                            ]) . '
+                        </div>
+                    </form>
+                '
+            ]);
+            ?>
+        </div>
+
+        <!-- 安全设置部分 -->
+        <div class="content-section d-none" id="security-section">
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('修改密码'),
+                'content' => '
+                    <div class="alert alert-success d-none" id="securitySuccessMsg"></div>
+                    <div class="alert alert-danger d-none" id="securityErrorMsg"></div>
+
+                    <form id="securityForm">
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label for="old_password" class="form-label">' . __('原密码') . '</label>
+                                <input type="password" class="form-control" id="old_password" name="old_password" 
+                                       placeholder="' . __('请输入原密码') . '" required>
+                                <small class="form-text text-muted">' . __('请输入当前密码以验证身份') . '</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="new_password" class="form-label">' . __('新密码') . '</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password" 
+                                       placeholder="' . __('至少6位字符') . '" minlength="6">
+                                <small class="form-text text-muted">' . __('建议使用字母、数字和特殊字符组合') . '</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="confirm_password" class="form-label">' . __('确认新密码') . '</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
+                                       placeholder="' . __('再次输入新密码') . '" minlength="6">
+                                <small class="form-text text-muted">' . __('再次输入新密码以确认') . '</small>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
+                                'text' => __('修改密码'),
+                                'type' => 'primary',
+                                'attributes' => 'type="submit"'
+                            ]) . '
+                        </div>
+                    </form>
+                '
+            ]);
+            ?>
+        </div>
+
+        <!-- 登录信息部分 -->
+        <div class="content-section d-none" id="login-info-section">
+            <?php
+            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
+                'title' => __('登录信息'),
+                'content' => '
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">' . __('最后登录IP') . '</label>
+                            <div class="form-control-plaintext">' . ($user->getLoginIp() ?: '<lang>未知</lang>') . '</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">"Session ID"</label>
+                            <div class="form-control-plaintext">' . ($user->getSessionId() ?: '<lang>未知</lang>') . '</div>
+                        </div>
+                    </div>
+                '
+            ]);
+            ?>
+        </div>
+
+<script>
+$(document).ready(function() {
+    // 标签页切换
+    $('.nav-link').on('click', function(e) {
+        e.preventDefault();
+        
+        // 移除所有活动状态
+        $('.nav-link').removeClass('active');
+        $('.content-section').addClass('d-none');
+        
+        // 添加当前活动状态
+        $(this).addClass('active');
+        
+        // 显示对应内容
+        const targetId = $(this).attr('href').substring(1);
+        $('#' + targetId + '-section').removeClass('d-none');
+    });
+    
+    // 头像预览
+    $('#previewAvatarBtn').on('click', function() {
+        const avatarUrl = $('#avatar').val();
+        if (avatarUrl) {
+            $('#avatarPreview').attr('src', avatarUrl).show();
+            $('#avatarFallback').hide();
+        }
+    });
+    
+    // 个人资料表单提交
+    $('#profileForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // 显示加载状态
+        const $btn = $(this).find('button[type="submit"]');
+        const originalText = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> ' + __('保存中...'));
+        
+        // 隐藏之前的消息
+        $('#profileSuccessMsg, #profileErrorMsg').addClass('d-none');
+        
+        // 发送AJAX请求
+        $.ajax({
+            url: '/customer/account/update',
+            method: 'POST',
+            data: $(this).serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $('#profileSuccessMsg').text(response.message).removeClass('d-none');
+                } else {
+                    $('#profileErrorMsg').text(response.message).removeClass('d-none');
+                }
+            },
+            error: function() {
+                $('#profileErrorMsg').text('<lang>更新失败，请稍后重试</lang>').removeClass('d-none');
+            },
+            complete: function() {
+                // 恢复按钮状态
+                $btn.prop('disabled', false).html(originalText);
+            }
+        });
+    });
+    
+    // 密码修改表单提交
+    $('#securityForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // 基本验证
+        const oldPassword = $('#old_password').val();
+        const newPassword = $('#new_password').val();
+        const confirmPassword = $('#confirm_password').val();
+        
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            $('#securityErrorMsg').text('<lang>请填写所有字段</lang>').removeClass('d-none');
+            return;
+        }
+        
+        if (newPassword.length < 6) {
+            $('#securityErrorMsg').text('<lang>新密码长度不能少于6位</lang>').removeClass('d-none');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            $('#securityErrorMsg').text('<lang>两次输入的新密码不一致</lang>').removeClass('d-none');
+            return;
+        }
+        
+        // 显示加载状态
+        const $btn = $(this).find('button[type="submit"]');
+        const originalText = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> ' + __('修改中...'));
+        
+        // 隐藏之前的消息
+        $('#securitySuccessMsg, #securityErrorMsg').addClass('d-none');
+        
+        // 发送AJAX请求
+        $.ajax({
+            url: '/customer/account/update',
+            method: 'POST',
+            data: $(this).serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    $('#securitySuccessMsg').text(response.message).removeClass('d-none');
+                    // 清空密码字段
+                    $('#old_password, #new_password, #confirm_password').val('');
+                } else {
+                    $('#securityErrorMsg').text(response.message).removeClass('d-none');
+                }
+            },
+            error: function() {
+                $('#securityErrorMsg').text('<lang>修改失败，请稍后重试</lang>').removeClass('d-none');
+            },
+            complete: function() {
+                // 恢复按钮状态
+                $btn.prop('disabled', false).html(originalText);
+            }
+        });
+    });
+});
+</script>

@@ -1,0 +1,593 @@
+<?php
+$hook = $this->getData('hook') ?? [];
+$hookName = $this->getData('hook_name') ?? '';
+?>
+
+<!-- Hook 信息概览 -->
+<div class="hook-overview">
+    <div class="hook-header">
+        <div class="hook-icon">
+            <i class="mdi mdi-hook"></i>
+        </div>
+        <div class="hook-info">
+            <h2><?= htmlspecialchars($hook['display_name'] ?? $hookName) ?></h2>
+            <div class="hook-code">
+                <code id="hook-code-value"><?= htmlspecialchars($hookName) ?></code>
+                <button type="button" class="btn-copy" onclick="copyHookName()" title="复制 Hook 名">
+                    <i class="mdi mdi-content-copy"></i>
+                </button>
+            </div>
+            <div class="hook-badges">
+                <?php if ($hook['has_spec'] ?? false): ?>
+                    <span class="badge badge-success">有规约</span>
+                <?php else: ?>
+                    <span class="badge badge-danger">无规约</span>
+                <?php endif; ?>
+                <?php if ($hook['has_doc'] ?? false): ?>
+                    <span class="badge badge-info">有文档</span>
+                <?php else: ?>
+                    <span class="badge badge-warning">无文档</span>
+                <?php endif; ?>
+                <?php if (($hook['file_count'] ?? 0) > 0): ?>
+                    <span class="badge badge-primary"><?= $hook['file_count'] ?> 个文件</span>
+                <?php else: ?>
+                    <span class="badge badge-secondary">无文件</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-cube-outline"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= htmlspecialchars($hook['module'] ?? '') ?></div>
+            <div class="stat-label">定义模块</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-file-multiple"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= $hook['file_count'] ?? 0 ?></div>
+            <div class="stat-label">实现文件数</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="mdi mdi-package-variant"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value"><?= $hook['using_module_count'] ?? 0 ?></div>
+            <div class="stat-label">使用模块数</div>
+        </div>
+    </div>
+</div>
+
+<!-- 详细信息 -->
+<div class="hook-details">
+    <!-- 基本信息 -->
+    <div class="detail-section">
+        <h3><i class="mdi mdi-information"></i> 基本信息</h3>
+        <div class="detail-content">
+            <div class="detail-item">
+                <label>Hook 名：</label>
+                <span><code><?= htmlspecialchars($hookName) ?></code></span>
+            </div>
+            <div class="detail-item">
+                <label>显示名：</label>
+                <span><?= htmlspecialchars($hook['display_name'] ?? $hookName) ?></span>
+            </div>
+            <div class="detail-item">
+                <label>定义模块：</label>
+                <span class="module-name"><?= htmlspecialchars($hook['module'] ?? '') ?></span>
+            </div>
+            <?php if (!empty($hook['area'])): ?>
+                <div class="detail-item">
+                    <label>区域：</label>
+                    <span><?= htmlspecialchars($hook['area']) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($hook['type'])): ?>
+                <div class="detail-item">
+                    <label>类型：</label>
+                    <span><?= htmlspecialchars($hook['type']) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($hook['component'])): ?>
+                <div class="detail-item">
+                    <label>组件：</label>
+                    <span><?= htmlspecialchars($hook['component']) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($hook['position'])): ?>
+                <div class="detail-item">
+                    <label>位置：</label>
+                    <span><?= htmlspecialchars($hook['position']) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($hook['description'])): ?>
+                <div class="detail-item">
+                    <label>描述：</label>
+                    <span><?= nl2br(htmlspecialchars($hook['description'] ?? '')) ?></span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($hook['doc_path'])): ?>
+                <div class="detail-item">
+                    <label>文档路径：</label>
+                    <span>
+                        <code><?= htmlspecialchars($hook['doc_path'] ?? '') ?></code>
+                        <?php if ($hook['has_doc'] ?? false): ?>
+                            <a href="/dev/tool/document?path=Weline/Theme/<?= urlencode($hook['doc_path']) ?>" target="_blank" class="btn-view-doc" title="查看文档">
+                                <i class="mdi mdi-open-in-new"></i> 查看文档
+                            </a>
+                        <?php endif; ?>
+                    </span>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- 实现文件信息 -->
+    <div class="detail-section">
+        <h3><i class="mdi mdi-file-multiple"></i> 实现文件</h3>
+        <?php
+        $files = $hook['files'] ?? [];
+        $filesByModule = [];
+        foreach ($files as $file) {
+            $fileModule = explode('::', $file)[0] ?? 'Unknown';
+            if (!isset($filesByModule[$fileModule])) {
+                $filesByModule[$fileModule] = [];
+            }
+            $filesByModule[$fileModule][] = $file;
+        }
+        ?>
+        <?php if (empty($files)): ?>
+            <div class="empty-state">
+                <i class="mdi mdi-file-remove"></i>
+                <p>该 Hook 暂无实现文件</p>
+            </div>
+        <?php else: ?>
+            <div class="files-list">
+                <?php foreach ($filesByModule as $moduleName => $moduleFiles): ?>
+                    <div class="file-module-group">
+                        <h4>
+                            <i class="mdi mdi-package-variant"></i> 
+                            <?= htmlspecialchars($moduleName) ?>
+                            <span class="badge badge-primary"><?= count($moduleFiles) ?></span>
+                        </h4>
+                        <div class="files-table">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>文件路径</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($moduleFiles as $file): ?>
+                                        <tr>
+                                            <td>
+                                                <code><?= htmlspecialchars($file) ?></code>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<style>
+.hook-overview {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    margin-bottom: 20px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .hook-overview {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.hook-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.hook-icon {
+    font-size: 48px;
+    color: #0bb197;
+}
+
+.hook-info h2 {
+    margin: 0 0 10px 0;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .hook-info h2 {
+    color: #e9ecef;
+}
+
+.hook-code {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hook-code code {
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #0bb197;
+    flex: 1;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .hook-code code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.btn-copy {
+    background: #f8f9fa;
+    border: 1px solid #eff2f7;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #74788d;
+    transition: all 0.2s ease-in-out;
+}
+
+[data-theme-mode="dark"] .btn-copy {
+    background: #1e2125;
+    border-color: #2d3448;
+    color: #8590a5;
+}
+
+.btn-copy:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .btn-copy:hover {
+    background: #2d3448;
+    color: #e9ecef;
+}
+
+.btn-copy i {
+    font-size: 16px;
+}
+
+.btn-view-doc {
+    margin-left: 8px;
+    color: #4aa3ff;
+    text-decoration: none;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-view-doc:hover {
+    text-decoration: underline;
+}
+
+.hook-badges {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .stat-card {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.stat-icon {
+    font-size: 32px;
+    color: #4aa3ff;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #212529;
+    margin-bottom: 4px;
+}
+
+[data-theme-mode="dark"] .stat-value {
+    color: #e9ecef;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .stat-label {
+    color: #8590a5;
+}
+
+.hook-details {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .hook-details {
+    background: #252b3b;
+    border-color: #2d3448;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.detail-section {
+    margin-bottom: 30px;
+}
+
+.detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.detail-section h3 {
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eff2f7;
+    color: #212529;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-theme-mode="dark"] .detail-section h3 {
+    border-bottom-color: #2d3448;
+    color: #e9ecef;
+}
+
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: #74788d;
+    min-width: 100px;
+}
+
+[data-theme-mode="dark"] .detail-item label {
+    color: #8590a5;
+}
+
+.detail-item span {
+    flex: 1;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .detail-item span {
+    color: #e9ecef;
+}
+
+.files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.file-module-group {
+    border: 1px solid #eff2f7;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+[data-theme-mode="dark"] .file-module-group {
+    border-color: #2d3448;
+}
+
+.file-module-group h4 {
+    margin: 0 0 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #212529;
+}
+
+[data-theme-mode="dark"] .file-module-group h4 {
+    color: #e9ecef;
+}
+
+.files-table {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] .table th,
+[data-theme-mode="dark"] .table td {
+    border-bottom-color: #2d3448;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+[data-theme-mode="dark"] .table th {
+    background-color: #1e2125;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #74788d;
+}
+
+[data-theme-mode="dark"] .empty-state {
+    color: #8590a5;
+}
+
+.empty-state i {
+    font-size: 48px;
+    color: #eff2f7;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+[data-theme-mode="dark"] .empty-state i {
+    color: #2d3448;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 12px;
+}
+
+.badge-primary { background-color: #0bb197; color: white; }
+.badge-info { background-color: #4aa3ff; color: white; }
+.badge-success { background-color: #0ac074; color: white; }
+.badge-warning { background-color: #fcb92c; color: #212529; }
+.badge-danger { background-color: #ff3d60; color: white; }
+.badge-secondary { background-color: #74788d; color: white; }
+
+[data-theme-mode="dark"] .badge-warning {
+    color: #e9ecef;
+}
+
+code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #0bb197;
+    border: 1px solid #eff2f7;
+}
+
+[data-theme-mode="dark"] code {
+    background-color: #1e2125;
+    border-color: #2d3448;
+}
+
+.text-primary {
+    color: #0bb197;
+}
+
+.module-name {
+    color: #4aa3ff;
+    font-weight: 500;
+}
+</style>
+
+<script>
+function copyHookName() {
+    const hookCode = document.getElementById('hook-code-value');
+    if (!hookCode) return;
+    
+    const text = hookCode.textContent;
+    
+    // 使用现代 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            showCopySuccess();
+        }).catch(function(err) {
+            console.error('复制失败:', err);
+            fallbackCopyText(text);
+        });
+    } else {
+        // 降级方案
+        fallbackCopyText(text);
+    }
+}
+
+function fallbackCopyText(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showCopySuccess();
+    } catch (err) {
+        console.error('复制失败:', err);
+        alert('复制失败，请手动复制');
+    }
+    document.body.removeChild(textArea);
+}
+
+function showCopySuccess() {
+    const btn = document.querySelector('.btn-copy');
+    if (!btn) return;
+    
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="mdi mdi-check"></i>';
+    btn.style.color = '#28a745';
+    setTimeout(function() {
+        btn.innerHTML = originalHTML;
+        btn.style.color = '';
+    }, 2000);
+}
+</script>

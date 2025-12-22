@@ -4,15 +4,15 @@
  * 
  * 表格组件，用于展示结构化数据
  * 字段
- * @info description 描述：表格组件，用于展示结构化数据
- * @info name 名称：Table表格组件
- * @param headers 表头数组（必填）
- * @param rows 数据行数组（必填）
- * @param class 额外CSS类
- * @param id 元素ID
- * @param striped 是否条纹样式
- * @param bordered 是否带边框
- * @param hover 是否悬停效果
+ * @meta.name {default="Table表格组件",name="Table表格组件",description="Table表格组件，用于描述组件的名称"}
+ * @meta.description {default="表格组件，用于展示结构化数据",name="表格组件，用于展示结构化数据",description="表格组件，用于展示结构化数据，用于描述组件的用途"}
+ * @param.headers {default=[],name="表头数组",description="表头数组，必填参数"}
+ * @param.rows {default=[],name="数据行数组",description="数据行数组，必填参数"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.id {default="",name="元素ID",description="元素ID，用于设置表格ID"}
+ * @param.striped {default=false,name="是否条纹样式",description="是否条纹样式，用于控制表格的条纹样式"}
+ * @param.bordered {default=false,name="是否带边框",description="是否带边框，用于控制表格的边框显示"}
+ * @param.hover {default=false,name="是否悬停效果",description="是否悬停效果，用于控制表格的悬停效果"}
  */
 $headers = $this->getData('headers') ?? [];
 $rows = $this->getData('rows') ?? [];

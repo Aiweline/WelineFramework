@@ -9,8 +9,5 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 return [
-    'router'       => '',
-    'dependencies' => [
-        'Weline_SystemConfig'
-    ]
+    'router'       => ''
 ];

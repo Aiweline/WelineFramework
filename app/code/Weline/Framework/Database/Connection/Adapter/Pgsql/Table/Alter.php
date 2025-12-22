@@ -33,7 +33,68 @@ class Alter extends AbstractTable implements AlterInterface
     public function forTable(string $table_name, string $primary_key, string $comment = '', string $new_table_name = ''): AlterInterface
     {
         # 开始表操作
+        # PostgreSQL 使用双引号而不是反引号
+        # 处理表名：将反引号转换为双引号，处理 schema.table 格式
+        # 在 PostgreSQL 中，如果表名包含点号，第一部分可能是数据库名（需要移除）或 schema 名
+        $dbName = $this->connector->getConfigProvider()->getDatabase();
+        
+        if (str_contains($table_name, '.')) {
+            $parts = explode('.', $table_name);
+            $firstPart = trim($parts[0], '`"');
+            
+            // 如果第一部分是数据库名，移除它，使用 public schema
+            if ($firstPart === $dbName) {
+                $tableName = trim($parts[1] ?? $parts[0], '`"');
+                $table_name = "public.\"{$tableName}\"";
+            } else {
+                // 第一部分是 schema 名，保持原样
+                $parts = array_map(function($part) {
+                    $part = trim($part, '`"');
+                    return "\"{$part}\"";
+                }, $parts);
+                $table_name = implode('.', $parts);
+            }
+        } else {
+            // 单个表名，使用 public schema
+            $tableName = trim($table_name, '`"');
+            $table_name = "public.\"{$tableName}\"";
+        }
+        
+        // 处理新表名
+        if ($new_table_name) {
+            if (str_contains($new_table_name, '.')) {
+                $parts = explode('.', $new_table_name);
+                $firstPart = trim($parts[0], '`"');
+                if ($firstPart === $dbName) {
+                    $newTableName = trim($parts[1] ?? $parts[0], '`"');
+                    $new_table_name = "public.\"{$newTableName}\"";
+                } else {
+                    $parts = array_map(function($part) {
+                        $part = trim($part, '`"');
+                        return "\"{$part}\"";
+                    }, $parts);
+                    $new_table_name = implode('.', $parts);
+                }
+            } else {
+                $newTableName = trim($new_table_name, '`"');
+                $new_table_name = "public.\"{$newTableName}\"";
+            }
+        }
+        
         $this->startTable($table_name, $comment, $primary_key, $new_table_name);
+        
+        # 确保 $this->table 使用正确的 PostgreSQL 格式
+        if (str_contains($this->table, '.')) {
+            $parts = explode('.', $this->table);
+            $parts = array_map(function($part) {
+                $part = trim($part, '`"');
+                return "\"{$part}\"";
+            }, $parts);
+            $this->table = implode('.', $parts);
+        } else {
+            $this->table = "public.\"" . trim($this->table, '`"') . "\"";
+        }
+        
         return $this;
     }
 
@@ -60,7 +121,25 @@ class Alter extends AbstractTable implements AlterInterface
         $type = strtolower($type);
         $pgType = $this->mapTypeToPostgres($type, $length);
         
-        $type_length = $length ? "{$pgType}({$length})" : $pgType;
+        // PostgreSQL 中，只有某些类型支持长度参数
+        // INTEGER, SMALLINT, BIGINT, REAL, DOUBLE PRECISION, TEXT, BYTEA, DATE, TIME, TIMESTAMP, JSONB 不支持长度
+        // VARCHAR, CHAR, NUMERIC, DECIMAL 支持长度
+        $typesWithoutLength = ['INTEGER', 'SMALLINT', 'BIGINT', 'REAL', 'DOUBLE PRECISION', 'TEXT', 'BYTEA', 'DATE', 'TIME', 'TIMESTAMP', 'JSONB', 'SERIAL', 'BIGSERIAL'];
+        $type_length = $pgType;
+        if ($length && !in_array(strtoupper($pgType), $typesWithoutLength)) {
+            $type_length = "{$pgType}({$length})";
+        }
+        
+        // 处理 UNSIGNED (PostgreSQL 不支持，需要移除)
+        $options = preg_replace('/\bunsigned\b/i', '', $options);
+        $options = trim($options);
+        
+        // 处理 ON UPDATE CURRENT_TIMESTAMP (PostgreSQL 不支持，需要移除)
+        $options = preg_replace('/\bon\s+update\s+current_timestamp\b/i', '', $options);
+        $options = trim($options);
+        
+        // 处理 default "" (PostgreSQL 不支持双引号空字符串，需要转换为单引号)
+        $options = preg_replace('/default\s+""/i', "default ''", $options);
         
         // PostgreSQL 使用双引号
         $field_name = str_replace(['`', '"'], '', $field_name);
@@ -150,6 +229,9 @@ class Alter extends AbstractTable implements AlterInterface
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = 'BTREE'): AlterInterface
     {
         $name = \Weline\Framework\Database\Helper\Standar::getIndexName($this->table, $name);
+        // 确保索引名称去除反引号，使用双引号
+        $name = trim(str_replace(['`', '"'], '', $name));
+        
         $type = strtoupper($type);
         $index_method = $index_method ? "USING {$index_method}" : '';
         
@@ -234,8 +316,26 @@ class Alter extends AbstractTable implements AlterInterface
             $type_length = $this->mapTypeToPostgres(strtolower($type), null);
         } else {
             $pgType = $this->mapTypeToPostgres(strtolower($type), $length);
-            $type_length = $length ? "{$pgType}({$length})" : $pgType;
+            // PostgreSQL 中，只有某些类型支持长度参数
+            // INTEGER, SMALLINT, BIGINT, REAL, DOUBLE PRECISION, TEXT, BYTEA, DATE, TIME, TIMESTAMP, JSONB 不支持长度
+            // VARCHAR, CHAR, NUMERIC, DECIMAL 支持长度
+            $typesWithoutLength = ['INTEGER', 'SMALLINT', 'BIGINT', 'REAL', 'DOUBLE PRECISION', 'TEXT', 'BYTEA', 'DATE', 'TIME', 'TIMESTAMP', 'JSONB', 'SERIAL', 'BIGSERIAL'];
+            $type_length = $pgType;
+            if ($length && !in_array(strtoupper($pgType), $typesWithoutLength)) {
+                $type_length = "{$pgType}({$length})";
+            }
         }
+        
+        // 处理 UNSIGNED (PostgreSQL 不支持，需要移除)
+        $options = preg_replace('/\bunsigned\b/i', '', $options);
+        $options = trim($options);
+        
+        // 处理 ON UPDATE CURRENT_TIMESTAMP (PostgreSQL 不支持，需要移除)
+        $options = preg_replace('/\bon\s+update\s+current_timestamp\b/i', '', $options);
+        $options = trim($options);
+        
+        // 处理 default "" (PostgreSQL 不支持双引号空字符串，需要转换为单引号)
+        $options = preg_replace('/default\s+""/i', "default ''", $options);
         
         $this->alter_fields[$old_field] = [
             'field_name' => $field_name, 
@@ -420,11 +520,27 @@ class Alter extends AbstractTable implements AlterInterface
         $references_table = str_replace(['`', '"'], '', $references_table);
         $references_field = str_replace(['`', '"'], '', $references_field);
         
-        if (!str_contains($references_table, '.')) {
-            $references_table = "public.\"{$references_table}\"";
-        } else {
+        // 处理表名：移除数据库名（如果存在），使用 public schema
+        $dbName = $this->connector->getConfigProvider()->getDatabase();
+        $schema = 'public';
+        
+        if (str_contains($references_table, '.')) {
             $parts = explode('.', $references_table);
-            $references_table = "\"{$parts[0]}\".\"{$parts[1]}\"";
+            $firstPart = trim($parts[0]);
+            
+            // 如果第一部分是数据库名，移除它，使用 public schema
+            if ($firstPart === $dbName) {
+                $tableName = trim($parts[1] ?? $parts[0]);
+                $references_table = "{$schema}.\"{$tableName}\"";
+            } else {
+                // 第一部分是 schema 名
+                $schema = $firstPart;
+                $tableName = trim($parts[1] ?? $parts[0]);
+                $references_table = "{$schema}.\"{$tableName}\"";
+            }
+        } else {
+            // 单个表名，使用 public schema
+            $references_table = "{$schema}.\"{$references_table}\"";
         }
         
         $this->foreign_keys[] = "ADD CONSTRAINT \"{$FK_Name}\" FOREIGN KEY (\"{$FK_Field}\") REFERENCES {$references_table} (\"{$references_field}\") {$on_delete_str} {$on_update_str}";

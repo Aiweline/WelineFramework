@@ -1,0 +1,62 @@
+<!--
+布局：个人中心 - 仪表盘布局
+
+个人中心仪表盘布局，包含侧边栏导航和主内容区
+字段
+@meta.name {default="个人中心仪表盘布局",name="个人中心仪表盘布局",description="个人中心仪表盘布局，用于描述布局的名称"}
+@meta.description {default="个人中心仪表盘布局，包含侧边栏导航和主内容区",name="个人中心仪表盘布局，包含侧边栏导航和主内容区",description="个人中心仪表盘布局，包含侧边栏导航和主内容区，用于描述布局的用途"}
+@preview.login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+@login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="个人中心的仪表盘布局，需要登录才能访问。"}
+@param.title {default="个人中心",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.sidebar {default="",name="侧边栏内容（HTML字符串）",description="侧边栏内容（HTML字符串），用于设置侧边栏HTML内容"}
+@param.sidebarCollapsed {default=false,name="侧边栏是否折叠",description="侧边栏是否折叠，用于控制侧边栏的折叠状态"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    
+    <div class="account-dashboard <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-dashboard" data-layout="account_dashboard">
+        <if condition="meta.sidebar">
+            <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
+            <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
+                {{meta.sidebar}}
+            </aside>
+            <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
+        </if>
+        
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
+        <main class="account-main-content" id="account-main-content" data-layout="account_main_content">
+            {{meta.content}}
+        </main>
+        <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    
+    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>
+

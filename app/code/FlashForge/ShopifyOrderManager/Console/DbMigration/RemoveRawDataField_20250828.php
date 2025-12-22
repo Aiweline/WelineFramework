@@ -76,7 +76,7 @@ class RemoveRawDataField_20250828
         $tableName = 'flashforge_shopify_order_manager_order';
         
         // 检查字段是否存在
-        if ($this->columnExists($tableName, 'raw_data')) {
+        if ($this->hasFields($tableName, 'raw_data')) {
             $sql = "ALTER TABLE `{$tableName}` DROP COLUMN `raw_data`";
             $this->connectionFactory->query($sql);
             
@@ -94,7 +94,7 @@ class RemoveRawDataField_20250828
         $tableName = 'flashforge_shopify_order_manager_order_item';
         
         // 检查字段是否存在
-        if ($this->columnExists($tableName, 'raw_data')) {
+        if ($this->hasFields($tableName, 'raw_data')) {
             $sql = "ALTER TABLE `{$tableName}` DROP COLUMN `raw_data`";
             $this->connectionFactory->query($sql);
             
@@ -112,7 +112,7 @@ class RemoveRawDataField_20250828
         $tableName = 'flashforge_shopify_order_manager_order';
         
         // 检查字段是否已存在
-        if (!$this->columnExists($tableName, 'raw_data')) {
+        if (!$this->hasFields($tableName, 'raw_data')) {
             $sql = "ALTER TABLE `{$tableName}` ADD COLUMN `raw_data` TEXT NULL COMMENT '原始数据JSON'";
             $this->connectionFactory->query($sql);
             
@@ -130,7 +130,7 @@ class RemoveRawDataField_20250828
         $tableName = 'flashforge_shopify_order_manager_order_item';
         
         // 检查字段是否已存在
-        if (!$this->columnExists($tableName, 'raw_data')) {
+        if (!$this->hasFields($tableName, 'raw_data')) {
             $sql = "ALTER TABLE `{$tableName}` ADD COLUMN `raw_data` TEXT NULL COMMENT '原始数据JSON'";
             $this->connectionFactory->query($sql);
             
@@ -143,7 +143,7 @@ class RemoveRawDataField_20250828
     /**
      * 检查表中是否存在指定字段
      */
-    private function columnExists(string $tableName, string $columnName): bool
+    private function hasFields(string $tableName, string $columnName): bool
     {
         try {
             // 使用SHOW COLUMNS查询字段是否存在

@@ -401,8 +401,14 @@ class MetaConfig extends AbstractModel
         $query = $this->reset()
             ->where(self::fields_NAMESPACE, $namespace)
             ->where(self::fields_CONFIG_KEY, $configKey)
-            ->where(self::fields_SCOPE, $scope)
-            ->where(self::fields_LOCALE, $locale);
+            ->where(self::fields_SCOPE, $scope);
+        
+        // 处理 locale 为 null 的情况（需要使用 IS NULL）
+        if ($locale === null) {
+            $query->where(self::fields_LOCALE . ' IS NULL');
+        } else {
+            $query->where(self::fields_LOCALE, $locale);
+        }
         
         // 优先使用 meta_id 或 meta_identify 查询
         if ($metaId !== null) {
@@ -417,14 +423,26 @@ class MetaConfig extends AbstractModel
         }
         
         // 先查找是否存在
-        $query->find()->fetch();
+        /** @var static $existing */
+        $existing = $query->find()->fetch();
         
-        if ($this->getId()) {
-            // 更新
-            $this->setData(self::fields_CONFIG_VALUE, $configValue)
-                 ->save();
+        if ($existing->getId()) {
+            // 更新现有记录
+            $existing->setData(self::fields_CONFIG_VALUE, $configValue);
+            
+            // 如果提供了 meta_id 或 meta_identify，也更新这些字段
+            if ($metaId !== null) {
+                $existing->setData(self::fields_META_ID, $metaId);
+            }
+            if ($metaIdentify !== null) {
+                $existing->setData(self::fields_META_IDENTIFY, $metaIdentify);
+            }
+            
+            $existing->save();
+            // 将更新后的数据同步到当前实例
+            $this->setData($existing->getData());
         } else {
-            // 插入
+            // 插入新记录
             $this->reset();
             if ($identifyId !== null) {
                 $this->setData(self::fields_IDENTIFY_ID, (string)$identifyId);
@@ -439,8 +457,49 @@ class MetaConfig extends AbstractModel
                  ->setData(self::fields_CONFIG_KEY, $configKey)
                  ->setData(self::fields_CONFIG_VALUE, $configValue)
                  ->setData(self::fields_SCOPE, $scope)
-                 ->setData(self::fields_LOCALE, $locale)
-                 ->save();
+                 ->setData(self::fields_LOCALE, $locale);
+            
+            // 使用 forceCheck 确保唯一索引检查
+            try {
+                $this->forceCheck()->save();
+            } catch (\Throwable $e) {
+                // 如果因为唯一索引冲突而失败，尝试更新现有记录
+                // 重新查询（可能在其他条件匹配的情况下）
+                $retryQuery = $this->reset()
+                    ->where(self::fields_NAMESPACE, $namespace)
+                    ->where(self::fields_CONFIG_KEY, $configKey)
+                    ->where(self::fields_SCOPE, $scope);
+                
+                if ($locale === null) {
+                    $retryQuery->where(self::fields_LOCALE . ' IS NULL');
+                } else {
+                    $retryQuery->where(self::fields_LOCALE, $locale);
+                }
+                
+                // 尝试使用不同的条件组合查找
+                if ($metaId !== null) {
+                    $retryQuery->where(self::fields_META_ID, $metaId);
+                }
+                if ($metaIdentify !== null) {
+                    $retryQuery->where(self::fields_META_IDENTIFY, $metaIdentify);
+                }
+                if ($identifyId !== null) {
+                    $retryQuery->where(self::fields_IDENTIFY_ID, (string)$identifyId);
+                }
+                
+                $retryExisting = $retryQuery->find()->fetch();
+                if ($retryExisting->getId()) {
+                    // 找到了现有记录，更新它
+                    $retryExisting->setData(self::fields_CONFIG_VALUE, $configValue)
+                                  ->save();
+                    $this->setData($retryExisting->getData());
+                } else {
+                    // 如果还是找不到，抛出异常
+                    throw new \Exception(__('保存配置失败：无法插入新记录，也无法找到现有记录。错误：%{error}', [
+                        'error' => $e->getMessage()
+                    ]));
+                }
+            }
         }
         
         return $this;
@@ -486,4 +545,3 @@ class MetaConfig extends AbstractModel
         return $this;
     }
 }
-

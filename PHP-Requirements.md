@@ -32,7 +32,24 @@
 - **用途**: SQLite 数据库支持
 - **代码位置**: SQLite 连接器使用
 
-#### 1.4 MySQLi
+#### 1.4 PDO PostgreSQL
+- **扩展名**: `ext-pdo_pgsql` 或 `pdo_pgsql`
+- **用途**: PostgreSQL 数据库支持（通过 PDO）
+- **代码位置**: 
+  - `app/code/Weline/Framework/Database/Connection/Adapter/Pgsql/Connector.php`
+- **状态**: 可选（使用 PostgreSQL 数据库时需要）
+- **Windows 安装**: 扩展文件通常包含在 PHP 安装包中（`php_pdo_pgsql.dll`）
+- **Linux 安装**: `apt-get install php-pgsql` 或 `yum install php-pgsql`
+
+#### 1.5 PostgreSQL
+- **扩展名**: `pgsql`
+- **用途**: PostgreSQL 数据库原生支持
+- **代码位置**: PostgreSQL 连接器使用
+- **状态**: 可选（使用 PostgreSQL 数据库时需要）
+- **Windows 安装**: 扩展文件通常包含在 PHP 安装包中（`php_pgsql.dll`）
+- **Linux 安装**: 通常与 `php-pgsql` 包一起安装
+
+#### 1.6 MySQLi
 - **扩展名**: `mysqli`
 - **用途**: MySQL 数据库扩展支持（部分功能需要）
 - **Dockerfile 安装**: `mysqli`
@@ -309,6 +326,12 @@
 13. `ext-gd` - 图像处理
 14. `ext-exif` - 图像元数据
 
+### 数据库扩展（根据使用的数据库选择）
+以下扩展根据实际使用的数据库类型选择安装：
+
+1. `ext-pdo_pgsql` - PostgreSQL 数据库支持（使用 PostgreSQL 时必需）
+2. `pgsql` - PostgreSQL 原生扩展（使用 PostgreSQL 时推荐）
+
 ### 推荐扩展 (Recommended)
 以下扩展强烈推荐安装，用于生产环境：
 
@@ -324,6 +347,8 @@
 1. `pcntl` - 进程控制（仅 Linux/Unix）
 2. `apcu` - 用户数据缓存
 3. `posix` - POSIX 函数（仅 Linux/Unix）
+4. `pdo_pgsql` - PostgreSQL PDO 驱动（使用 PostgreSQL 数据库时）
+5. `pgsql` - PostgreSQL 原生扩展（使用 PostgreSQL 数据库时）
 
 ---
 
@@ -360,11 +385,152 @@ opcache.revalidate_freq=2
 opcache.fast_shutdown=1
 ```
 
+### 扩展启用配置
+
+#### 数据库扩展配置
+
+**MySQL 扩展**（默认已启用）：
+```ini
+extension=pdo_mysql
+extension=mysqli
+```
+
+**SQLite 扩展**（默认已启用）：
+```ini
+extension=pdo_sqlite
+extension=sqlite3
+```
+
+**PostgreSQL 扩展**（使用 PostgreSQL 数据库时需要启用）：
+```ini
+; PostgreSQL PDO 驱动（必需）
+extension=pdo_pgsql
+
+; PostgreSQL 原生扩展（推荐）
+extension=pgsql
+```
+
+**注意**：
+- 在 Windows 上，扩展文件名可能为 `php_pdo_pgsql.dll` 和 `php_pgsql.dll`
+- 确保扩展文件存在于 `extension_dir` 指定的目录中
+- 如果扩展被注释（行首有 `;`），需要去掉分号来启用
+
 ---
 
-## 验证安装
+## 扩展安装和启用指南
 
-### 检查扩展是否加载
+### Windows 系统
+
+#### 1. 查找 PHP 配置文件
+
+运行以下命令查找 `php.ini` 文件位置：
+```powershell
+php -r "echo php_ini_loaded_file();"
+```
+
+或使用：
+```powershell
+php --ini
+```
+
+#### 2. 检查扩展文件
+
+确认扩展文件存在于扩展目录：
+```powershell
+php -r "echo ini_get('extension_dir');"
+```
+
+检查该目录中是否存在：
+- `php_pdo_pgsql.dll` 或 `pdo_pgsql.dll`（PostgreSQL PDO 驱动）
+- `php_pgsql.dll` 或 `pgsql.dll`（PostgreSQL 原生扩展）
+
+**如果扩展文件不存在**：
+1. 从 PHP 官网下载对应版本的扩展 DLL 文件
+2. 将 DLL 文件放到扩展目录（通常是 `ext` 文件夹）
+3. 确保 DLL 文件版本与 PHP 版本匹配
+
+#### 3. 启用扩展
+
+编辑 `php.ini` 文件，找到扩展配置区域（搜索 `extension=`），添加或取消注释：
+
+```ini
+; PostgreSQL 扩展（去掉分号启用）
+extension=pdo_pgsql
+extension=pgsql
+```
+
+**注意**：
+- 如果行首有分号 `;`，需要去掉分号来启用扩展
+- 扩展名不需要 `.dll` 后缀和完整路径
+- 确保 `extension_dir` 配置正确指向扩展目录
+
+#### 4. 重启服务
+
+修改配置后，需要重启：
+- Web 服务器（Apache/Nginx）
+- PHP-FPM 服务
+- 开发服务器（如果使用内置服务器）
+
+### Linux/Unix 系统
+
+#### 1. 安装 PostgreSQL 扩展
+
+**Ubuntu/Debian**：
+```bash
+sudo apt-get update
+sudo apt-get install php-pgsql
+```
+
+**CentOS/RHEL**：
+```bash
+sudo yum install php-pgsql
+# 或使用 dnf (Fedora/CentOS 8+)
+sudo dnf install php-pgsql
+```
+
+**编译安装**：
+```bash
+# 需要 PostgreSQL 开发库
+sudo apt-get install libpq-dev  # Ubuntu/Debian
+sudo yum install postgresql-devel  # CentOS/RHEL
+
+# 编译 PHP 时添加 --with-pdo-pgsql 和 --with-pgsql
+```
+
+#### 2. 启用扩展
+
+通常安装包会自动配置，检查 `php.ini` 或扩展配置文件：
+
+```bash
+# 查找扩展配置文件
+php --ini
+
+# 检查扩展是否已启用
+php -m | grep pgsql
+```
+
+如果未启用，在 `php.ini` 中添加：
+```ini
+extension=pdo_pgsql
+extension=pgsql
+```
+
+#### 3. 重启服务
+
+```bash
+# Apache
+sudo systemctl restart apache2  # Ubuntu/Debian
+sudo systemctl restart httpd    # CentOS/RHEL
+
+# PHP-FPM
+sudo systemctl restart php-fpm
+# 或
+sudo systemctl restart php8.4-fpm  # 根据 PHP 版本调整
+```
+
+### 验证扩展安装
+
+#### 检查扩展是否加载
 
 ```bash
 php -m
@@ -374,6 +540,8 @@ php -m
 - pdo
 - pdo_mysql
 - pdo_sqlite
+- pdo_pgsql（使用 PostgreSQL 时）
+- pgsql（使用 PostgreSQL 时）
 - json
 - curl
 - mbstring
@@ -390,6 +558,18 @@ php -m
 - intl (推荐)
 - opcache (推荐)
 - bcmath (推荐)
+
+#### 检查 PDO 驱动
+
+```bash
+php -r "print_r(PDO::getAvailableDrivers());"
+```
+
+应看到以下驱动（根据使用的数据库）：
+- `mysql` - MySQL 驱动
+- `sqlite` - SQLite 驱动
+- `pgsql` - PostgreSQL 驱动（使用 PostgreSQL 时）
+- `odbc` - ODBC 驱动（如果启用）
 
 ### 检查函数是否可用
 
@@ -418,6 +598,30 @@ $required_extensions = [
     'gd', 'zip', 'mbstring', 'fileinfo', 'exif',
     'dom', 'simplexml', 'libxml', 'iconv'
 ];
+
+// 可选扩展（根据使用的数据库）
+$optional_extensions = [
+    'pdo_pgsql',  // PostgreSQL PDO 驱动
+    'pgsql'       // PostgreSQL 原生扩展
+];
+
+echo "\n检查可选扩展（数据库相关）:\n";
+foreach ($optional_extensions as $ext) {
+    $status = extension_loaded($ext) ? '✓ 已加载' : '○ 未加载（可选）';
+    echo "  {$ext}: {$status}\n";
+}
+
+// 检查 PDO 驱动
+echo "\n检查 PDO 驱动:\n";
+$pdo_drivers = PDO::getAvailableDrivers();
+foreach ($pdo_drivers as $driver) {
+    echo "  - {$driver}\n";
+}
+if (in_array('pgsql', $pdo_drivers)) {
+    echo "\n✓ PostgreSQL PDO 驱动已可用\n";
+} else {
+    echo "\n○ PostgreSQL PDO 驱动未启用（使用 PostgreSQL 时需要）\n";
+}
 
 echo "\n检查必需扩展:\n";
 foreach ($required_extensions as $ext) {
@@ -457,8 +661,77 @@ php test_functions.php
 
 ---
 
+## 常见问题
+
+### PostgreSQL 扩展相关问题
+
+#### 问题 1：驱动不存在错误
+
+**错误信息**：
+```
+DB Error:驱动不存在：pgsql,可用驱动列表：mysql,odbc,sqlite
+```
+
+**解决方案**：
+1. 检查扩展是否已启用：
+   ```bash
+   php -m | grep pgsql
+   ```
+
+2. 检查 PDO 驱动：
+   ```bash
+   php -r "print_r(PDO::getAvailableDrivers());"
+   ```
+
+3. 如果扩展已加载但 PDO 驱动不可用：
+   - 确保 `pdo_pgsql` 扩展已启用（不仅仅是 `pgsql`）
+   - 检查 `php.ini` 中 `extension=pdo_pgsql` 未被注释
+   - 重启 Web 服务器或 PHP 服务
+
+4. 如果扩展文件不存在：
+   - Windows: 从 PHP 官网下载对应版本的扩展 DLL
+   - Linux: 安装 `php-pgsql` 包
+
+#### 问题 2：扩展文件找不到
+
+**Windows**：
+- 检查扩展目录：`php -r "echo ini_get('extension_dir');"`
+- 确认扩展文件存在且版本匹配
+- 检查 `extension_dir` 配置是否正确
+
+**Linux**：
+- 使用包管理器安装：`apt-get install php-pgsql` 或 `yum install php-pgsql`
+- 检查扩展配置文件：`/etc/php/8.4/mods-available/pgsql.ini`
+
+#### 问题 3：修改配置后无效
+
+**可能原因**：
+1. 修改了错误的 `php.ini` 文件（可能有多个配置文件）
+2. 服务未重启
+3. 扩展文件路径不正确
+
+**解决方案**：
+1. 确认修改的是正确的 `php.ini`：
+   ```bash
+   php -r "echo php_ini_loaded_file();"
+   ```
+
+2. 重启所有相关服务：
+   - Web 服务器（Apache/Nginx）
+   - PHP-FPM
+   - 开发服务器
+
+3. 检查 `extension_dir` 配置是否正确
+
+---
+
 ## 更新日志
 
+- **2025-01**: 添加 PostgreSQL 扩展安装和启用指南
+  - 添加 PDO PostgreSQL 和 PostgreSQL 扩展说明
+  - 添加 Windows 和 Linux 系统的安装步骤
+  - 添加扩展启用配置说明
+  - 添加常见问题解决方案
 - **2024-12**: 初始版本，基于框架代码分析整理
 - 基于 WelineFramework 代码库分析
 - 参考 composer.json、Dockerfile 和实际代码使用情况

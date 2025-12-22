@@ -317,10 +317,8 @@ abstract class AbstractModel extends DataObject
                 $class_file_name = substr($class_file_name, 0, strpos($class_file_name, 'Model'));
             }
             $table_name = $class_file_name;
-            $db_name = $this->getConnection()->getConfigProvider()->getDatabase();
             $this->origin_table_name = $this->_suffix . strtolower(implode('_', w_split_by_capital(lcfirst($table_name))));
-            $this->table = ($db_name ? "`$db_name`." : '') . "`{$this->origin_table_name}`";
-
+            $this->table = $this->origin_table_name;
         }
         if (empty($this->origin_table_name)) {
             $this->origin_table_name = $this->table;
@@ -377,9 +375,22 @@ abstract class AbstractModel extends DataObject
     public function getTable(string $table = ''): string
     {
         if (empty($table)) {
-            return $this->processTable();
+            $logical = $this->processTable();
+        } else {
+            $logical = $table;
+            if ($this->_suffix && !str_starts_with($logical, $this->_suffix)) {
+                $logical = $this->_suffix . $logical;
+            }
         }
-        return $this->getConnection()->getConfigProvider()->getPrefix() . $table;
+        try {
+            $connector = $this->getConnection()->getConnector();
+            if (method_exists($connector, 'formatTableName')) {
+                return $connector->formatTableName($logical);
+            }
+        } catch (\Throwable) {
+            // ignore and fallback
+        }
+        return $logical;
     }
 
     public function alias(string $alias): static

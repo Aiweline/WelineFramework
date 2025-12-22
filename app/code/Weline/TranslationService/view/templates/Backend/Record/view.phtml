@@ -1,0 +1,144 @@
+<?php
+/**
+ * 翻译记录详情页面
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\TranslationService\Model\TranslationRecord $record
+ * @var \Weline\TranslationService\Model\TranslationProvider $provider
+ */
+$record = $this->getData('record');
+$provider = $this->getData('provider');
+?>
+<div class="translation-record-view-page">
+    <div class="page-header mb-4">
+        <h1><?= __('翻译记录详情') ?></h1>
+        <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- 基本信息 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3><?= __('基本信息') ?></h3>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="150"><?= __('记录ID') ?></th>
+                            <td><?= $record->getId() ?></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('渠道') ?></th>
+                            <td>
+                                <span class="badge bg-primary"><?= htmlspecialchars($provider->getData('provider_name')) ?></span>
+                                <code><?= htmlspecialchars($record->getData('provider_code')) ?></code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('状态') ?></th>
+                            <td>
+                                <?php if ($record->isSuccess()): ?>
+                                    <span class="badge bg-success"><?= __('成功') ?></span>
+                                <?php elseif ($record->isFailed()): ?>
+                                    <span class="badge bg-danger"><?= __('失败') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning"><?= __('待处理') ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('语言') ?></th>
+                            <td>
+                                <span class="badge bg-secondary"><?= htmlspecialchars($record->getData('source_language')) ?></span>
+                                <i class="mdi mdi-arrow-right"></i>
+                                <span class="badge bg-primary"><?= htmlspecialchars($record->getData('target_language')) ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('字符数') ?></th>
+                            <td><?= number_format($record->getData('character_count') ?? 0) ?></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('成本') ?></th>
+                            <td>¥<?= number_format($record->getData('cost') ?? 0, 4) ?></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('响应时间') ?></th>
+                            <td><?= number_format($record->getData('response_time') ?? 0) ?>ms</td>
+                        </tr>
+                        <tr>
+                            <th><?= __('调用模块') ?></th>
+                            <td>
+                                <?php if ($record->getData('module_name')): ?>
+                                    <code><?= htmlspecialchars($record->getData('module_name')) ?></code>
+                                <?php else: ?>
+                                    <span class="text-muted">-</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('创建时间') ?></th>
+                            <td><?= htmlspecialchars($record->getData('created_at')) ?></td>
+                        </tr>
+                        <?php if ($record->isFailed() && $record->getData('error_message')): ?>
+                            <tr>
+                                <th><?= __('错误信息') ?></th>
+                                <td>
+                                    <div class="alert alert-danger mb-0">
+                                        <?= htmlspecialchars($record->getData('error_message')) ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 翻译内容 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3><?= __('翻译内容') ?></h3>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('源文本') ?></label>
+                        <div class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                            <?= nl2br(htmlspecialchars($record->getData('source_text'))) ?>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('翻译文本') ?></label>
+                        <div class="border p-3 bg-light" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                            <?= nl2br(htmlspecialchars($record->getData('translated_text'))) ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- 请求和响应数据 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3><?= __('请求数据') ?></h3>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3" style="max-height: 200px; overflow-y: auto; font-size: 12px;"><?= htmlspecialchars(json_encode($record->getRequestData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3><?= __('响应数据') ?></h3>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3" style="max-height: 200px; overflow-y: auto; font-size: 12px;"><?= htmlspecialchars(json_encode($record->getResponseData(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

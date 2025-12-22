@@ -3661,3 +3661,134 @@ input[switch="dark"]:checked + label {
 .error-text {
     text-shadow: -4px 4px rgba(11, 177, 151, 0.4);
 }
+
+/*********************
+    表格滚动条主题兼容样式
+**********************/
+/* 表格响应式容器滚动条 - 亮色主题 */
+.table-responsive,
+.table-responsive .table,
+div.table-responsive > div.dataTables_wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.table-responsive::-webkit-scrollbar,
+.table-responsive .table::-webkit-scrollbar,
+div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track,
+.table-responsive .table::-webkit-scrollbar-track,
+div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb,
+.table-responsive .table::-webkit-scrollbar-thumb,
+div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover,
+.table-responsive .table::-webkit-scrollbar-thumb:hover,
+div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.7);
+}
+
+/* 表格响应式容器滚动条 - 暗色主题 */
+body[data-sidebar="dark"] .table-responsive::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] .table-responsive::-webkit-scrollbar-thumb,
+body[data-sidebar="dark"] .table-responsive .table::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] .table-responsive .table::-webkit-scrollbar-thumb,
+body[data-sidebar="dark"] div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.4);
+}
+
+body[data-sidebar="dark"] .table-responsive::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] .table-responsive::-webkit-scrollbar-thumb:hover,
+body[data-sidebar="dark"] .table-responsive .table::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] .table-responsive .table::-webkit-scrollbar-thumb:hover,
+body[data-sidebar="dark"] div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] div.table-responsive > div.dataTables_wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.6);
+}
+
+body[data-sidebar="dark"] .table-responsive,
+body[data-topbar="dark"] .table-responsive,
+body[data-sidebar="dark"] .table-responsive .table,
+body[data-topbar="dark"] .table-responsive .table,
+body[data-sidebar="dark"] div.table-responsive > div.dataTables_wrapper,
+body[data-topbar="dark"] div.table-responsive > div.dataTables_wrapper {
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
+/* DataTable 表格滚动条 */
+.w-datatable,
+.datatable-content,
+.datatable-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.w-datatable::-webkit-scrollbar,
+.datatable-content::-webkit-scrollbar,
+.datatable-container::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.w-datatable::-webkit-scrollbar-track,
+.datatable-content::-webkit-scrollbar-track,
+.datatable-container::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.w-datatable::-webkit-scrollbar-thumb,
+.datatable-content::-webkit-scrollbar-thumb,
+.datatable-container::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.w-datatable::-webkit-scrollbar-thumb:hover,
+.datatable-content::-webkit-scrollbar-thumb:hover,
+.datatable-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.7);
+}
+
+/* DataTable 表格滚动条 - 暗色主题 */
+body[data-sidebar="dark"] .w-datatable::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] .w-datatable::-webkit-scrollbar-thumb,
+body[data-sidebar="dark"] .datatable-content::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] .datatable-content::-webkit-scrollbar-thumb,
+body[data-sidebar="dark"] .datatable-container::-webkit-scrollbar-thumb,
+body[data-topbar="dark"] .datatable-container::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.4);
+}
+
+body[data-sidebar="dark"] .w-datatable::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] .w-datatable::-webkit-scrollbar-thumb:hover,
+body[data-sidebar="dark"] .datatable-content::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] .datatable-content::-webkit-scrollbar-thumb:hover,
+body[data-sidebar="dark"] .datatable-container::-webkit-scrollbar-thumb:hover,
+body[data-topbar="dark"] .datatable-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.6);
+}
+
+body[data-sidebar="dark"] .w-datatable,
+body[data-topbar="dark"] .w-datatable,
+body[data-sidebar="dark"] .datatable-content,
+body[data-topbar="dark"] .datatable-content,
+body[data-sidebar="dark"] .datatable-container,
+body[data-topbar="dark"] .datatable-container {
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}

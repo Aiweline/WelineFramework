@@ -4,8 +4,10 @@ namespace WeShop\Store\Model;
 
 use Weline\Framework\Database\Api\Db\TableInterface;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Websites\Model\Website;
 
 class Store extends Model
 {
@@ -27,15 +29,18 @@ class Store extends Model
     public const fields_LONGITUDE = 'longitude';
     public const fields_LOCAL = 'local';
     public const fields_CURRENCY = 'currency'; # 默认货币
+    public const fields_META_TITLE = 'meta_title';
+    public const fields_META_DESCRIPTION = 'meta_description';
+    public const fields_META_KEYWORDS = 'meta_keywords';
+    public const fields_SORT_ORDER = 'sort_order';
+
+    // 状态常量
+    public const STATUS_ENABLED = 1;
+    public const STATUS_DISABLED = 0;
     
     public function setup(ModelSetup $setup, Context $context): void
     {
         $this->install($setup, $context);
-    }
-
-    public function upgrade(ModelSetup $setup, Context $context): void
-    {
-        // TODO: Implement upgrade() method.
     }
 
     public function install(ModelSetup $setup, Context $context): void
@@ -161,7 +166,237 @@ class Store extends Model
                     'not null',
                     '货币',
                 )
+                ->addColumn(
+                    self::fields_META_TITLE,
+                    TableInterface::column_type_VARCHAR,
+                    255,
+                    "default ''",
+                    'Meta标题'
+                )
+                ->addColumn(
+                    self::fields_META_DESCRIPTION,
+                    TableInterface::column_type_TEXT,
+                    0,
+                    '',
+                    'Meta描述'
+                )
+                ->addColumn(
+                    self::fields_META_KEYWORDS,
+                    TableInterface::column_type_VARCHAR,
+                    500,
+                    "default ''",
+                    'Meta关键词'
+                )
+                ->addColumn(
+                    self::fields_SORT_ORDER,
+                    TableInterface::column_type_INTEGER,
+                    11,
+                    'default 0',
+                    '排序'
+                )
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_website_id',
+                    self::fields_WEBSITE_ID,
+                    '网站ID索引'
+                )
+                ->addIndex(
+                    TableInterface::index_type_KEY,
+                    'idx_status',
+                    self::fields_STATUS,
+                    '状态索引'
+                )
                 ->create();
         }
+    }
+
+    public function upgrade(ModelSetup $setup, Context $context): void
+    {
+        // 添加新字段
+        if (!$setup->hasField(self::fields_META_TITLE)) {
+            $setup->alterTable()
+                ->addColumn(self::fields_META_TITLE, '', TableInterface::column_type_VARCHAR, 255, "default ''", 'Meta标题')
+                ->alter();
+        }
+        if (!$setup->hasField(self::fields_META_DESCRIPTION)) {
+            $setup->alterTable()
+                ->addColumn(self::fields_META_DESCRIPTION, '', TableInterface::column_type_TEXT, 0, '', 'Meta描述')
+                ->alter();
+        }
+        if (!$setup->hasField(self::fields_META_KEYWORDS)) {
+            $setup->alterTable()
+                ->addColumn(self::fields_META_KEYWORDS, '', TableInterface::column_type_VARCHAR, 500, "default ''", 'Meta关键词')
+                ->alter();
+        }
+        if (!$setup->hasField(self::fields_SORT_ORDER)) {
+            $setup->alterTable()
+                ->addColumn(self::fields_SORT_ORDER, '', TableInterface::column_type_INTEGER, 11, 'default 0', '排序')
+                ->alter();
+        }
+    }
+
+    /**
+     * 保存后触发事件
+     */
+    public function save_after(): void
+    {
+        parent::save_after();
+        $data = [
+            'store' => $this,
+            'store_id' => $this->getId()
+        ];
+        $this->getEventManager()->dispatch('WeShop_Store::store_save_after', $data);
+    }
+
+    /**
+     * 删除后触发事件
+     */
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        $data = [
+            'store_id' => $this->getOriginData(self::fields_ID)
+        ];
+        $this->getEventManager()->dispatch('WeShop_Store::store_delete_after', $data);
+    }
+
+    /**
+     * 获取事件管理器
+     */
+    protected function getEventManager(): \Weline\Framework\Event\EventsManager
+    {
+        return ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+    }
+
+    // ===== Getters and Setters =====
+
+    public function getName(): string
+    {
+        return (string)$this->getData(self::fields_NAME);
+    }
+
+    public function setName(string $name): static
+    {
+        return $this->setData(self::fields_NAME, $name);
+    }
+
+    public function getCode(): string
+    {
+        return (string)$this->getData(self::fields_CODE);
+    }
+
+    public function setCode(string $code): static
+    {
+        return $this->setData(self::fields_CODE, $code);
+    }
+
+    public function getWebsiteId(): int
+    {
+        return (int)$this->getData(self::fields_WEBSITE_ID);
+    }
+
+    public function setWebsiteId(int $websiteId): static
+    {
+        return $this->setData(self::fields_WEBSITE_ID, $websiteId);
+    }
+
+    public function getStatus(): int
+    {
+        return (int)$this->getData(self::fields_STATUS);
+    }
+
+    public function setStatus(int $status): static
+    {
+        return $this->setData(self::fields_STATUS, $status);
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->getStatus() === self::STATUS_ENABLED;
+    }
+
+    public function getLocal(): string
+    {
+        return (string)$this->getData(self::fields_LOCAL);
+    }
+
+    public function setLocal(string $local): static
+    {
+        return $this->setData(self::fields_LOCAL, $local);
+    }
+
+    public function getCurrency(): string
+    {
+        return (string)$this->getData(self::fields_CURRENCY);
+    }
+
+    public function setCurrency(string $currency): static
+    {
+        return $this->setData(self::fields_CURRENCY, $currency);
+    }
+
+    public function getDescription(): string
+    {
+        return (string)$this->getData(self::fields_DESCRIPTION);
+    }
+
+    public function getAddress(): string
+    {
+        return (string)$this->getData(self::fields_ADDRESS);
+    }
+
+    public function getPhone(): string
+    {
+        return (string)$this->getData(self::fields_PHONE);
+    }
+
+    public function getEmail(): string
+    {
+        return (string)$this->getData(self::fields_EMAIL);
+    }
+
+    public function getImage(): string
+    {
+        return (string)$this->getData(self::fields_IMAGE);
+    }
+
+    /**
+     * 获取关联的网站模型
+     */
+    public function getWebsite(): ?Website
+    {
+        $websiteId = $this->getWebsiteId();
+        if ($websiteId <= 0) {
+            return null;
+        }
+        /** @var Website $website */
+        $website = ObjectManager::getInstance(Website::class);
+        $website->load($websiteId);
+        return $website->getId() ? $website : null;
+    }
+
+    /**
+     * 获取启用的店铺列表
+     */
+    public function getEnabledStores(): array
+    {
+        return $this->reset()
+            ->where(self::fields_STATUS, self::STATUS_ENABLED)
+            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
+     * 根据网站ID获取店铺列表
+     */
+    public function getStoresByWebsiteId(int $websiteId): array
+    {
+        return $this->reset()
+            ->where(self::fields_WEBSITE_ID, $websiteId)
+            ->where(self::fields_STATUS, self::STATUS_ENABLED)
+            ->order(self::fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetchArray();
     }
 }

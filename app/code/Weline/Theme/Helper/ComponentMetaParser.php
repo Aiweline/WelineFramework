@@ -178,7 +178,12 @@ class ComponentMetaParser
                 }
                 
                 // 优先使用引号内的值，然后是花括号内的值，最后是不带引号的值
-                $value = trim($match[2] !== '' ? $match[2] : ($match[3] !== '' ? $match[3] : $match[4]));
+                // 注意：部分分组可能不存在，使用 null 合并运算符并统一转为字符串，避免 undefined index / trim(null) 警告
+                $v2 = $match[2] ?? '';
+                $v3 = $match[3] ?? '';
+                $v4 = $match[4] ?? '';
+                $rawValue = $v2 !== '' ? $v2 : ($v3 !== '' ? $v3 : $v4);
+                $value = trim((string)$rawValue);
                 
                 // 处理特殊值
                 if ($value === 'true') {

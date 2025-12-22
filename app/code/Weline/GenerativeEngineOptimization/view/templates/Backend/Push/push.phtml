@@ -1,0 +1,82 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $feeds
+ * @var array $platforms
+ */
+?>
+<div class="content-header">
+    <h1><?= __('一键推送') ?></h1>
+</div>
+
+<div class="content-body">
+    <form id="push-form" class="form-horizontal">
+        <div class="form-group">
+            <label class="control-label"><?= __('选择Feed') ?></label>
+            <select name="feed_id" class="form-control" required>
+                <option value=""><?= __('请选择Feed') ?></option>
+                <?php foreach ($feeds as $feed): ?>
+                    <option value="<?= $feed['id'] ?>"><?= htmlspecialchars($feed['feed_name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('选择平台') ?></label>
+            <div class="checkbox-group">
+                <?php foreach ($platforms as $platform): ?>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" name="platform_ids[]" value="<?= $platform['id'] ?>">
+                        <?= htmlspecialchars($platform['platform_name']) ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-send"></i> <?= __('开始推送') ?>
+            </button>
+        </div>
+    </form>
+
+    <div id="push-result" style="display: none; margin-top: 20px;"></div>
+</div>
+
+<script>
+document.getElementById('push-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const platformIds = Array.from(document.querySelectorAll('input[name="platform_ids[]"]:checked'))
+        .map(input => input.value);
+    
+    if (!formData.get('feed_id') || platformIds.length === 0) {
+        alert('<?= __('请选择Feed和至少一个平台') ?>');
+        return;
+    }
+    
+    formData.set('platform_ids', JSON.stringify(platformIds));
+    
+    fetch('<?= $this->getUrl('generativeengineoptimization/backend/push/execute') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultDiv = document.getElementById('push-result');
+        resultDiv.style.display = 'block';
+        
+        if (data.success) {
+            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger">' + data.message + '</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('推送失败') ?>');
+    });
+});
+</script>
+

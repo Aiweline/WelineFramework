@@ -20,19 +20,26 @@
  * @param.data {default=[],name="data属性数组",description="data属性数组，用于设置data属性"}
  * @param.attributes {default="",name="额外的HTML属性字符串",description="额外的HTML属性字符串，用于设置额外的HTML属性"}
  */
-$text = $this->getData('text') ?? '';
-$type = $this->getData('type') ?? 'primary';
-$size = $this->getData('size') ?? 'md';
-$icon = $this->getData('icon') ?? '';
-$iconPosition = $this->getData('iconPosition') ?? 'left';
-$class = $this->getData('class') ?? '';
-$id = $this->getData('id') ?? '';
-$disabled = $this->getData('disabled') ?? false;
-$loading = $this->getData('loading') ?? false;
-$href = $this->getData('href') ?? '';
-$onclick = $this->getData('onclick') ?? '';
-$data = $this->getData('data') ?? [];
-$attributes = $this->getData('attributes') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.button');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$text = $this->getData("meta.text") ?? '';
+$type = $this->getData("meta.type") ?? 'primary';
+$size = $this->getData("meta.size") ?? 'md';
+$icon = $this->getData("meta.icon") ?? '';
+$iconPosition = $this->getData("meta.iconPosition") ?? 'left';
+$class = $this->getData("meta.class") ?? '';
+$id = $this->getData("meta.id") ?? '';
+$disabled = $this->getData("meta.disabled") ?? false;
+$loading = $this->getData("meta.loading") ?? false;
+$href = $this->getData("meta.href") ?? '';
+$onclick = $this->getData("meta.onclick") ?? '';
+$data = $this->getData("meta.data") ?? [];
+$attributes = $this->getData("meta.attributes") ?? '';
 
 // 构建CSS类
 $btnClass = 'btn btn-' . htmlspecialchars($type) . ' btn-' . htmlspecialchars($size);

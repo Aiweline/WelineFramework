@@ -9,8 +9,15 @@
  * @param.copyright {default="© {year} Weline Framework. 保留所有权利",name="版权信息",description="版权信息，用于设置页面底部的版权文字"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.footer.minimal');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$copyright = $this->getData("meta.copyright") ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+$class = $this->getData("meta.class") ?? '';
 ?>
 <footer class="weline-footer minimal-footer <?= htmlspecialchars($class) ?>">
     <div class="footer-container">
@@ -20,6 +27,26 @@ $class = $this->getData('class') ?? '';
     </div>
     
     <!-- Footer Hooks -->
-    <hook>footer</hook>
+    <w:hook>footer</w:hook>
 </footer>
+
+<?php
+// 加载布局特定的JS文件（在footer中加载）
+// 从 theme 对象中读取所有主题相关数据
+$theme = $this->getData('theme') ?? [];
+$area = $theme['area'] ?? 'frontend';
+$layoutType = $theme['layoutType'] ?? $this->getData('layoutType') ?? '';
+$layoutOption = $theme['layoutOption'] ?? $this->getData('layoutOption') ?? 'default';
+$requestPath = $this->request->getPathInfo() ?? '';
+if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
+    $area = 'backend';
+}
+
+if ($layoutType && $layoutOption) {
+    $this->setData('area', $area);
+    ?>
+<theme:js>Weline_Theme::theme/{{area}}/assets/js/layouts/{{layoutType}}/{{layoutOption}}.js</theme:js>
+<?php
+}
+?>
 

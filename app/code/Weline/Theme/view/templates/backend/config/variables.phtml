@@ -1,0 +1,207 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $variables */
+/** @var array $palettes */
+/** @var string|null $currentPalette */
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$area = $area ?: 'frontend';
+$scope = $scope ?: 'default';
+
+// API URLs
+$saveUrl = $this->getUrl('theme/backend/config/variables/save');
+$applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
+?>
+<!DOCTYPE html>
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>CSS变量配置</lang> - <?= htmlspecialchars($theme->getName() ?? '主题') ?></title>
+    <style>
+        .variables-container {
+            padding: 20px;
+        }
+        .variable-group {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .variable-group-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007bff;
+        }
+        .variable-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .variable-item label {
+            min-width: 200px;
+            font-weight: 500;
+        }
+        .variable-item input[type="color"],
+        .variable-item input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .variable-item .variable-description {
+            font-size: 12px;
+            color: #666;
+            margin-left: 10px;
+        }
+        .palette-selector {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 4px;
+        }
+        .palette-selector select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+        .btn-save {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn-save:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <div class="variables-container">
+        <h1><lang>CSS变量配置</lang> - <?= htmlspecialchars($theme->getName() ?? '主题') ?></h1>
+        
+        <div class="palette-selector">
+            <label for="palette-select"><lang>选择色盘：</lang></label>
+            <select id="palette-select">
+                <option value=""><lang>不使用色盘</lang></option>
+                <?php foreach ($palettes as $palette): ?>
+                <option value="<?= htmlspecialchars($palette['name']) ?>" <?= ($currentPalette === $palette['name']) ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($palette['displayName']) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+            <button type="button" class="btn-save" onclick="applyPalette()"><lang>应用色盘</lang></button>
+        </div>
+        
+        <form id="variables-form">
+            <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
+            <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
+            <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+            
+            <?php foreach ($variables as $groupName => $group): ?>
+            <div class="variable-group">
+                <div class="variable-group-title"><?= htmlspecialchars($group['name']) ?></div>
+                
+                <?php foreach ($group['variables'] as $variable): ?>
+                <div class="variable-item">
+                    <label for="var-<?= htmlspecialchars($variable['name']) ?>">
+                        <?= htmlspecialchars($variable['cssName']) ?>
+                    </label>
+                    <?php if ($variable['type'] === 'color'): ?>
+                    <input type="color" 
+                           id="var-<?= htmlspecialchars($variable['name']) ?>"
+                           name="variables[variables.<?= htmlspecialchars($groupName) ?>.<?= htmlspecialchars($variable['name']) ?>.value]"
+                           value="<?= htmlspecialchars($variable['value'] ?: $variable['default']) ?>">
+                    <?php else: ?>
+                    <input type="text" 
+                           id="var-<?= htmlspecialchars($variable['name']) ?>"
+                           name="variables[variables.<?= htmlspecialchars($groupName) ?>.<?= htmlspecialchars($variable['name']) ?>.value]"
+                           value="<?= htmlspecialchars($variable['value'] ?: $variable['default']) ?>">
+                    <?php endif; ?>
+                    <?php if (!empty($variable['description'])): ?>
+                    <span class="variable-description"><?= htmlspecialchars($variable['description']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endforeach; ?>
+            
+            <div style="margin-top: 20px;">
+                <button type="button" class="btn-save" onclick="saveVariables()"><lang>保存配置</lang></button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        function saveVariables() {
+            const form = document.getElementById('variables-form');
+            const formData = new FormData(form);
+            
+            fetch('<?= $saveUrl ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    alert('保存成功！');
+                } else {
+                    alert('保存失败：' + (data.msg || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存失败：网络错误');
+            });
+        }
+        
+        function applyPalette() {
+            const paletteSelect = document.getElementById('palette-select');
+            const paletteName = paletteSelect.value;
+            
+            if (!paletteName) {
+                alert('请选择色盘');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('theme_id', '<?= $theme->getId() ?>');
+            formData.append('area', '<?= htmlspecialchars($area) ?>');
+            formData.append('scope', '<?= htmlspecialchars($scope) ?>');
+            formData.append('palette', paletteName);
+            
+            fetch('<?= $applyPaletteUrl ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    alert('色盘应用成功！页面将刷新。');
+                    location.reload();
+                } else {
+                    alert('应用失败：' + (data.msg || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('应用失败：网络错误');
+            });
+        }
+    </script>
+</body>
+</html>
+

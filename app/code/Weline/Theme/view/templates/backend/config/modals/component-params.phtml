@@ -1,0 +1,231 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var string $componentName */
+/** @var array $component 组件数据，包含params数组 */
+?>
+<?php
+$themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
+$saveUrl = $this->getUrl('theme/backend/config/layout/saveComponentParams');
+$params = $component['params'] ?? [];
+?>
+<div class="modal fade" id="componentParamsModal" tabindex="-1" aria-labelledby="componentParamsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="componentParamsModalLabel">
+                    <i class="mdi mdi-cog me-2"></i>
+                    <?= __('配置组件参数') ?>: <span id="component-modal-name"><?= htmlspecialchars($component['name'] ?? $componentName) ?></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <?php if (empty($params)): ?>
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information-outline"></i>
+                        <?= __('该组件没有可配置的参数') ?>
+                    </div>
+                <?php else: ?>
+                    <?php if (!empty($component['description'])): ?>
+                        <div class="alert alert-light mb-3">
+                            <i class="mdi mdi-information-outline me-1"></i>
+                            <?= htmlspecialchars($component['description']) ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- 参数配置表单 -->
+                    <form id="component-params-form">
+                        <input type="hidden" name="theme_id" value="<?= $themeId ?>">
+                        <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
+                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                        <input type="hidden" name="component_name" value="<?= htmlspecialchars($componentName) ?>">
+                        
+                        <div class="row g-3">
+                            <?php foreach ($params as $paramName => $param): 
+                                $paramValue = $param['value'] ?? $param['default'] ?? '';
+                                $paramDefault = $param['default'] ?? null;
+                                $paramType = $param['type'] ?? 'string';
+                                $paramDescription = $param['description'] ?? '';
+                                $paramRequired = $param['required'] ?? false;
+                            ?>
+                                <div class="col-12">
+                                    <label class="form-label">
+                                        <code><?= htmlspecialchars($paramName) ?></code>
+                                        <?php if ($paramRequired): ?>
+                                            <span class="text-danger">*</span>
+                                        <?php endif; ?>
+                                        <span class="badge bg-secondary ms-1"><?= htmlspecialchars($paramType) ?></span>
+                                    </label>
+                                    
+                                    <?php if ($paramType === 'bool' || $paramType === 'boolean'): ?>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   name="params[<?= htmlspecialchars($paramName) ?>]"
+                                                   value="1"
+                                                   <?= ($paramValue == '1' || $paramValue === true || $paramValue === 'true') ? 'checked' : '' ?>
+                                                   id="param-<?= htmlspecialchars($paramName) ?>">
+                                            <label class="form-check-label" for="param-<?= htmlspecialchars($paramName) ?>">
+                                                <?= $paramValue ? __('是') : __('否') ?>
+                                            </label>
+                                        </div>
+                                    <?php elseif ($paramType === 'array'): ?>
+                                        <textarea class="form-control" 
+                                                  name="params[<?= htmlspecialchars($paramName) ?>]"
+                                                  rows="3"
+                                                  placeholder='<?= __('JSON格式，例如：["item1", "item2"]') ?>'><?= htmlspecialchars(is_array($paramValue) ? json_encode($paramValue, JSON_UNESCAPED_UNICODE) : ($paramValue ?? '')) ?></textarea>
+                                        <small class="text-muted"><?= __('JSON格式，例如：["item1", "item2"] 或 {"key": "value"}') ?></small>
+                                    <?php elseif ($paramType === 'int' || $paramType === 'integer'): ?>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               name="params[<?= htmlspecialchars($paramName) ?>]"
+                                               value="<?= htmlspecialchars($paramValue) ?>" 
+                                               placeholder="<?= htmlspecialchars($paramDefault ?? '') ?>"
+                                               <?= $paramRequired ? 'required' : '' ?>>
+                                    <?php elseif ($paramType === 'float' || $paramType === 'double'): ?>
+                                        <input type="number" 
+                                               step="0.01"
+                                               class="form-control" 
+                                               name="params[<?= htmlspecialchars($paramName) ?>]"
+                                               value="<?= htmlspecialchars($paramValue) ?>" 
+                                               placeholder="<?= htmlspecialchars($paramDefault ?? '') ?>"
+                                               <?= $paramRequired ? 'required' : '' ?>>
+                                    <?php else: ?>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               name="params[<?= htmlspecialchars($paramName) ?>]"
+                                               value="<?= htmlspecialchars($paramValue) ?>" 
+                                               placeholder="<?= htmlspecialchars($paramDefault ?? '') ?>"
+                                               <?= $paramRequired ? 'required' : '' ?>>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($paramDescription)): ?>
+                                        <small class="text-muted d-block mt-1"><?= htmlspecialchars($paramDescription) ?></small>
+                                    <?php endif; ?>
+                                    
+                                    <?php if ($paramDefault !== null && $paramValue !== $paramDefault): ?>
+                                        <small class="text-info d-block mt-1">
+                                            <i class="mdi mdi-information-outline"></i>
+                                            <?= __('默认值') ?>: <code><?= htmlspecialchars(is_array($paramDefault) ? json_encode($paramDefault, JSON_UNESCAPED_UNICODE) : (string)$paramDefault) ?></code>
+                                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 reset-to-default" 
+                                                    data-param-name="<?= htmlspecialchars($paramName) ?>"
+                                                    data-default-value="<?= htmlspecialchars(is_array($paramDefault) ? json_encode($paramDefault, JSON_UNESCAPED_UNICODE) : (string)$paramDefault) ?>">
+                                                <?= __('重置') ?>
+                                            </button>
+                                        </small>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </form>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="mdi mdi-close me-1"></i>
+                    <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-warning" id="reset-all-params-btn">
+                    <i class="mdi mdi-restore me-1"></i>
+                    <?= __('重置为默认值') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="save-component-params-btn">
+                    <i class="mdi mdi-content-save me-1"></i>
+                    <?= __('保存配置') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const saveUrl = <?= json_encode($saveUrl) ?>;
+    const modal = document.getElementById('componentParamsModal');
+    if (!modal) return;
+    
+    // 重置为默认值
+    modal.querySelectorAll('.reset-to-default').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const paramName = this.getAttribute('data-param-name');
+            const defaultValue = this.getAttribute('data-default-value');
+            const input = modal.querySelector(`input[name="params[${paramName}]"], textarea[name="params[${paramName}]"]`);
+            
+            if (input) {
+                if (input.type === 'checkbox') {
+                    input.checked = defaultValue === '1' || defaultValue === 'true';
+                } else {
+                    input.value = defaultValue;
+                }
+            }
+        });
+    });
+    
+    // 重置所有参数
+    const resetAllBtn = document.getElementById('reset-all-params-btn');
+    if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', function() {
+            if (confirm('<?= __('确定要重置所有参数为默认值吗？') ?>')) {
+                modal.querySelectorAll('.reset-to-default').forEach(function(btn) {
+                    btn.click();
+                });
+            }
+        });
+    }
+    
+    // 保存配置
+    const saveBtn = document.getElementById('save-component-params-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            const form = document.getElementById('component-params-form');
+            if (!form) return;
+            
+            const formData = new FormData(form);
+            
+            // 处理checkbox值
+            form.querySelectorAll('input[type="checkbox"]').forEach(function(checkbox) {
+                if (!checkbox.checked) {
+                    formData.set(checkbox.name, '0');
+                }
+            });
+            
+            const originalText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    if (typeof showSaveToast === 'function') {
+                        showSaveToast(data.msg || '<?= __('配置保存成功') ?>', 'success');
+                    } else {
+                        alert(data.msg || '<?= __('配置保存成功') ?>');
+                    }
+                    
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    if (bsModal) {
+                        bsModal.hide();
+                    }
+                } else {
+                    alert(data.msg || '<?= __('保存失败') ?>');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('<?= __('保存失败') ?>: ' + error.message);
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+            });
+        });
+    }
+})();
+</script>
+

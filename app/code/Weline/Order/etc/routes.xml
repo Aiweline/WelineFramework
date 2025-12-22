@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+        xsi:noNamespaceSchemaLocation="urn:weline:framework:router:etc/routes.xsd">
+    <!-- 后端REST API路由 -->
+    <router area="backend_rest_api">
+        <!-- 获取订单列表 -->
+        <route path="/weline_api/rest/v1/backend/order/list" method="GET">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>getList</action>
+        </route>
+        
+        <!-- 获取订单详情 -->
+        <route path="/weline_api/rest/v1/backend/order/:id" method="GET">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>getDetail</action>
+        </route>
+        
+        <!-- 创建订单 -->
+        <route path="/weline_api/rest/v1/backend/order/create" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postCreate</action>
+        </route>
+        
+        <!-- 更新订单 -->
+        <route path="/weline_api/rest/v1/backend/order/:id" method="PUT">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>putUpdate</action>
+        </route>
+        
+        <!-- 取消订单 -->
+        <route path="/weline_api/rest/v1/backend/order/:id/cancel" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postCancel</action>
+        </route>
+        
+        <!-- 更新订单状态 -->
+        <route path="/weline_api/rest/v1/backend/order/status" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postUpdateStatus</action>
+        </route>
+        
+        <!-- 处理支付 -->
+        <route path="/weline_api/rest/v1/backend/order/payment" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postPayment</action>
+        </route>
+        
+        <!-- 创建发货记录 -->
+        <route path="/weline_api/rest/v1/backend/order/shipment" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postShipment</action>
+        </route>
+        
+        <!-- 创建退款 -->
+        <route path="/weline_api/rest/v1/backend/order/refund" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postRefund</action>
+        </route>
+        
+        <!-- 生成发票 -->
+        <route path="/weline_api/rest/v1/backend/order/invoice" method="POST">
+            <module>Weline_Order</module>
+            <controller>Api\Order</controller>
+            <action>postInvoice</action>
+        </route>
+    </router>
+</config>
+

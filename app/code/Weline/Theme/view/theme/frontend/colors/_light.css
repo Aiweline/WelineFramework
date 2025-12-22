@@ -1,8 +1,11 @@
 /**
- * Weline Frontend - 亮色主题颜色覆盖
+ * 色系：亮色主题颜色
  * 
- * 通常与 variables/_colors.css 中的默认值一致
- * 可以省略，或明确指定以便理解
+ * 亮色主题的颜色覆盖文件
+ * 字段
+ * @meta.name {default="亮色主题颜色",name="亮色主题颜色",description="亮色主题颜色，用于描述色系的名称"}
+ * @meta.description {default="亮色主题的颜色覆盖，提供浅色背景和深色文本，通常与默认值一致",name="亮色主题的颜色覆盖，提供浅色背景和深色文本",description="亮色主题的颜色覆盖，提供浅色背景和深色文本，通常与默认值一致，用于描述色系的用途"}
+ * @meta.theme {default="light",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  */
 
 [data-theme="light"],
@@ -12,19 +15,42 @@
     --color-text-secondary: #767676;
     --color-text-tertiary: #a6a6a6;
     --color-text-disabled: #c7c7c7;
-    
+    --color-text-dark: #1e293b;
+    --color-text-muted: #475569;
+    --color-text-placeholder: #9ca3af;
+    --color-text-light: #f1f5f9;
+    --color-text-light-secondary: #cbd5e1;
+
     /* 背景色 */
     --color-bg-primary: #fff;
     --color-bg-secondary: #f8f9fa;
     --color-bg-tertiary: #e7e7e7;
     --color-bg-dark: #232f3e;
-    
+    --color-bg-dark-secondary: #1e293b;
+    --color-bg-dark-tertiary: #334155;
+
     /* 边框色 */
     --color-border-default: #ddd;
     --color-border-emphasis: #a6a6a6;
     --color-border-focus: #e77600;
-    
-    /* 品牌色通常不变 */
-    /* --color-primary: #f0c14b; */  /* 使用默认值 */
-}
+    --color-border-light: #e5e7eb;
 
+    /* 强调色（蓝色系，用于交互元素） */
+    --color-accent: #3b82f6;
+    --color-accent-hover: #2563eb;
+    --color-accent-light: rgba(59, 130, 246, 0.05);
+    --color-accent-medium: rgba(59, 130, 246, 0.1);
+    --color-accent-dark: rgba(59, 130, 246, 0.15);
+
+    /* 功能色 */
+    --color-success: #28a745;
+    --color-warning: #ffc107;
+    --color-error: #dc3545;
+    --color-error-hover: #ef4444;
+    --color-error-light: rgba(239, 68, 68, 0.05);
+    --color-info: #17a2b8;
+
+    /* 品牌色通常不变 */
+    /* --color-primary: #f0c14b; */
+    /* 使用默认值 */
+}

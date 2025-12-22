@@ -1,0 +1,109 @@
+<?php
+/**
+ * 营销工具 - 内容生成工具页面
+ *
+ * @var $this \Weline\Framework\View\Template
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>内容生成工具</lang></title>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
+    
+    <div class="sz-page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="sz-page-title">
+                    <i class="mdi mdi-auto-fix"></i>
+                    <lang>AI内容生成工具</lang>
+                </h1>
+                <p class="sz-page-subtitle"><lang>使用AI生成营销内容</lang></p>
+            </div>
+            <div>
+                <a href="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="sz-card">
+        <div class="sz-card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="content_type"><lang>内容类型</lang></label>
+                        <select class="form-control" id="content_type">
+                            <option value="email"><lang>营销邮件</lang></option>
+                            <option value="social"><lang>社交媒体</lang></option>
+                            <option value="ad"><lang>广告文案</lang></option>
+                            <option value="blog"><lang>博客文章</lang></option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="content_prompt"><lang>内容描述</lang></label>
+                        <textarea class="form-control" id="content_prompt" rows="6" placeholder="描述您想要生成的内容..."></textarea>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="generateContent()">
+                        <i class="mdi mdi-auto-fix"></i> <lang>生成内容</lang>
+                    </button>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="generated_content"><lang>生成的内容</lang></label>
+                        <textarea class="form-control" id="generated_content" rows="12" readonly placeholder="生成的内容将显示在这里..."></textarea>
+                    </div>
+                    
+                    <button type="button" class="btn btn-secondary" onclick="copyContent()" id="copy-btn" disabled>
+                        <i class="mdi mdi-content-copy"></i> <lang>复制内容</lang>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
+    
+    <script>
+        function generateContent() {
+            const contentType = document.getElementById('content_type').value;
+            const prompt = document.getElementById('content_prompt').value;
+            const generatedContent = document.getElementById('generated_content');
+            const copyBtn = document.getElementById('copy-btn');
+            
+            if (!prompt.trim()) {
+                alert('请输入内容描述');
+                return;
+            }
+            
+            generatedContent.value = '正在生成内容...';
+            copyBtn.disabled = true;
+            
+            // TODO: 调用AI服务生成内容
+            setTimeout(() => {
+                generatedContent.value = '这是生成的内容示例。\n\n实际功能需要集成AI服务。\n\n内容类型: ' + contentType + '\n描述: ' + prompt;
+                copyBtn.disabled = false;
+            }, 1000);
+        }
+        
+        function copyContent() {
+            const content = document.getElementById('generated_content');
+            content.select();
+            document.execCommand('copy');
+            alert('内容已复制到剪贴板');
+        }
+    </script>
+</body>
+</html>
+

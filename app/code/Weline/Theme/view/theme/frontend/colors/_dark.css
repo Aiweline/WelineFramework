@@ -1,7 +1,11 @@
 /**
- * Weline Frontend - 暗色主题颜色覆盖
+ * 色系：暗色主题颜色
  * 
- * 覆盖需要改变的颜色变量
+ * 暗色主题的颜色覆盖文件
+ * 字段
+ * @meta.name {default="暗色主题颜色",name="暗色主题颜色",description="暗色主题颜色，用于描述色系的名称"}
+ * @meta.description {default="暗色主题的颜色覆盖，提供深色背景和浅色文本",name="暗色主题的颜色覆盖，提供深色背景和浅色文本",description="暗色主题的颜色覆盖，提供深色背景和浅色文本，用于描述色系的用途"}
+ * @meta.theme {default="dark",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  */
 
 [data-theme="dark"] {
@@ -10,23 +14,45 @@
     --color-text-secondary: #a6a6a6;
     --color-text-tertiary: #767676;
     --color-text-disabled: #4a4a4a;
-    
+    --color-text-dark: #f1f5f9;
+    --color-text-muted: #cbd5e1;
+    --color-text-placeholder: #94a3b8;
+    --color-text-light: #f1f5f9;
+    --color-text-light-secondary: #cbd5e1;
+
     /* 背景色 - 需要变暗 */
     --color-bg-primary: #1a1a1a;
     --color-bg-secondary: #2d2d2d;
     --color-bg-tertiary: #3a3a3a;
     --color-bg-dark: #0f1419;
-    
+    --color-bg-dark-secondary: #1e293b;
+    --color-bg-dark-tertiary: #334155;
+
     /* 边框色 - 需要调整 */
     --color-border-default: #4a4a4a;
     --color-border-emphasis: #6a6a6a;
-    --color-border-focus: #ff9900;  /* 暗色下更亮的焦点色 */
-    
-    /* 功能色 - 可能需要调整 */
-    --color-success: #34ce57;  /* 暗色下更亮的成功色 */
-    --color-error: #f44336;    /* 暗色下更亮的错误色 */
-    
-    /* 品牌色通常保持不变 */
-    /* --color-primary: #f0c14b; */  /* 使用默认值 */
-}
+    --color-border-focus: #3b82f6;
+    /* 暗色下使用蓝色焦点色 */
+    --color-border-light: rgba(255, 255, 255, 0.1);
 
+    /* 强调色（蓝色系，用于交互元素） */
+    --color-accent: #3b82f6;
+    --color-accent-hover: #60a5fa;
+    --color-accent-light: rgba(59, 130, 246, 0.15);
+    --color-accent-medium: rgba(59, 130, 246, 0.2);
+    --color-accent-dark: rgba(59, 130, 246, 0.25);
+
+    /* 功能色 - 可能需要调整 */
+    --color-success: #34ce57;
+    /* 暗色下更亮的成功色 */
+    --color-warning: #ffc107;
+    --color-error: #f44336;
+    /* 暗色下更亮的错误色 */
+    --color-error-hover: #ff5252;
+    --color-error-light: rgba(244, 67, 54, 0.15);
+    --color-info: #17a2b8;
+
+    /* 品牌色通常保持不变 */
+    /* --color-primary: #f0c14b; */
+    /* 使用默认值 */
+}

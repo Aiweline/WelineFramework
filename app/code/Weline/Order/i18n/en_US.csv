@@ -1,0 +1,229 @@
+获取订单列表成功,"Order list retrieved successfully"
+订单ID不能为空,"Order ID cannot be empty"
+获取订单详情成功,"Order details retrieved successfully"
+订单数据不能为空,"Order data cannot be empty"
+订单创建成功,"Order created successfully"
+更新数据不能为空,"Update data cannot be empty"
+订单更新成功,"Order updated successfully"
+订单取消成功,"Order cancelled successfully"
+参数错误,"Invalid parameters"
+订单状态更新成功,"Order status updated successfully"
+支付处理成功,"Payment processed successfully"
+发货记录创建成功,"Shipment record created successfully"
+退款申请创建成功,"Refund request created successfully"
+发票生成成功,"Invoice generated successfully"
+发票ID不能为空,"Invoice ID cannot be empty"
+退款成功,"Refund successful"
+退款ID不能为空,"Refund ID cannot be empty"
+退款处理成功,"Refund processed successfully"
+物流单号更新成功,"Tracking number updated successfully"
+发货ID不能为空,"Shipment ID cannot be empty"
+标记成功,"Marked successfully"
+状态不存在,"Status does not exist"
+状态代码和名称不能为空,"Status code and name cannot be empty"
+状态代码已存在,"Status code already exists"
+状态保存成功,"Status saved successfully"
+缺少状态ID,"Status ID is required"
+系统状态不能删除,"System status cannot be deleted"
+该状态正在被使用，不能删除,"This status is in use and cannot be deleted"
+状态删除成功,"Status deleted successfully"
+状态状态已更新,"Status updated successfully"
+订单创建后,订单创建后
+订单创建后触发，可用于处理订单创建后的相关操作。,订单创建后触发，可用于处理订单创建后的相关操作。
+订单更新后,订单更新后
+订单更新后触发，可用于处理订单更新后的相关操作。,订单更新后触发，可用于处理订单更新后的相关操作。
+订单状态变更前,订单状态变更前
+订单状态变更前触发，可用于验证或阻止状态变更。,订单状态变更前触发，可用于验证或阻止状态变更。
+订单状态变更后,订单状态变更后
+订单状态变更后触发，可用于处理状态变更后的相关操作。,订单状态变更后触发，可用于处理状态变更后的相关操作。
+订单状态转换规则检查,订单状态转换规则检查
+检查订单状态是否可以转换，允许其他模块扩展转换规则。,检查订单状态是否可以转换，允许其他模块扩展转换规则。
+订单状态保存前,订单状态保存前
+订单状态保存前触发，允许其他模块在状态保存前进行验证或修改。,订单状态保存前触发，允许其他模块在状态保存前进行验证或修改。
+订单状态保存后,订单状态保存后
+订单状态保存后触发，可用于处理状态保存后的相关操作。,订单状态保存后触发，可用于处理状态保存后的相关操作。
+订单状态删除前,订单状态删除前
+订单状态删除前触发，允许其他模块在状态删除前进行验证或阻止。,订单状态删除前触发，允许其他模块在状态删除前进行验证或阻止。
+订单状态删除后,订单状态删除后
+订单状态删除后触发，可用于处理状态删除后的相关操作。,订单状态删除后触发，可用于处理状态删除后的相关操作。
+订单支付后,订单支付后
+订单支付后触发，可用于处理支付后的相关操作。,订单支付后触发，可用于处理支付后的相关操作。
+订单发货后,订单发货后
+订单发货后触发，可用于处理发货后的相关操作。,订单发货后触发，可用于处理发货后的相关操作。
+订单完成后,订单完成后
+订单完成后触发，可用于处理完成后的相关操作。,订单完成后触发，可用于处理完成后的相关操作。
+订单取消后,订单取消后
+订单取消后触发，可用于处理取消后的相关操作。,订单取消后触发，可用于处理取消后的相关操作。
+订单退款后,订单退款后
+订单退款后触发，可用于处理退款后的相关操作。,订单退款后触发，可用于处理退款后的相关操作。
+获取订单状态标签,获取订单状态标签
+获取订单状态标签，允许其他模块扩展状态标签。,获取订单状态标签，允许其他模块扩展状态标签。
+获取订单状态CSS类,获取订单状态CSS类
+获取订单状态CSS类，允许其他模块扩展状态样式。,获取订单状态CSS类，允许其他模块扩展状态样式。
+获取支付状态标签,获取支付状态标签
+获取支付状态标签，允许其他模块扩展支付状态标签。,获取支付状态标签，允许其他模块扩展支付状态标签。
+获取发货状态标签,获取发货状态标签
+获取发货状态标签，允许其他模块扩展发货状态标签。,获取发货状态标签，允许其他模块扩展发货状态标签。
+解析完整状态信息,解析完整状态信息
+解析完整状态信息，允许其他模块扩展状态信息解析。,解析完整状态信息，允许其他模块扩展状态信息解析。
+订单详情页之前,"Before Order Details Page"
+在订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before order details page content, allowing other modules to add custom content at the top of the order details page."
+订单详情页之后,"After Order Details Page"
+在订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after order details page content, allowing other modules to add custom content at the bottom of the order details page."
+订单列表筛选器,"Order List Filters"
+在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
+前端订单创建前,"Before Frontend Order Creation"
+在前端订单创建之前注入内容，允许其他模块在订单创建前执行自定义逻辑。,"Inject content before frontend order creation, allowing other modules to execute custom logic before order creation."
+前端订单创建后,"After Frontend Order Creation"
+在前端订单创建之后注入内容，允许其他模块在订单创建后执行自定义逻辑。,"Inject content after frontend order creation, allowing other modules to execute custom logic after order creation."
+待处理,Pending
+处理中,Processing
+已支付,Paid
+已发货,Fulfilled
+已完成,Completed
+已取消,Cancelled
+已退款,Refunded
+待支付,"Pending Payment"
+部分支付,"Partial Payment"
+待发货,"Pending Shipment"
+部分发货,"Partial Shipment"
+已送达,Delivered
+支付方式不支持优惠方式：%s,支付方式不支持优惠方式：%s
+只有已支付的订单才能发货,"Only paid orders can be shipped"
+订单已发货,"Order shipped"
+发货记录不存在,"Shipment record does not exist"
+订单已完成,"Order completed"
+订单已生成发票,"Invoice already generated for this order"
+发票不存在,"Invoice does not exist"
+订单已创建,"Order created"
+订单已更新,"Order updated"
+订单当前状态不允许取消,"Order cannot be cancelled in current status"
+订单不存在,"Order does not exist"
+订单项,"Order Items"
+%{1}不能为空,"%{1} cannot be empty"
+订单项不能为空,"Order items cannot be empty"
+商品名称不能为空,"Product name cannot be empty"
+商品数量不能为空,"Product quantity cannot be empty"
+商品价格不能为空,"Product price cannot be empty"
+"订单状态不能从 %{1} 转换到 %{2}","Order status cannot transition from %{1} to %{2}"
+状态转换被阻止,状态转换被阻止
+支付金额不能为空,"Payment amount cannot be empty"
+支付方式不能为空,"Payment method cannot be empty"
+支付金额不能超过订单总额,"Payment amount cannot exceed order total"
+订单已支付,"Order paid"
+支付记录不存在,"Payment record does not exist"
+只有已支付的记录才能退款,"Only paid records can be refunded"
+退款金额不能超过支付金额,"Refund amount cannot exceed payment amount"
+订单当前状态不允许退款,"Order cannot be refunded in current status"
+退款金额不能为空,"Refund amount cannot be empty"
+退款金额不能超过订单总额,"Refund amount cannot exceed order total"
+退款总额不能超过订单总额,"Total refund amount cannot exceed order total"
+退款记录不存在,"Refund record does not exist"
+只有待处理的退款才能处理,"Only pending refunds can be processed"
+订单已退款,"Order refunded"
+编辑订单,"Edit Order"
+新建订单,"Create Order"
+系统,System
+订单管理,"Order Management"
+客户ID,"Customer ID"
+客户姓名,"Customer Name"
+客户邮箱,"Customer Email"
+客户电话,"Customer Phone"
+支付方式,"Payment Method"
+配送方式,"Shipping Method"
+订单备注,"Order Notes"
+商品名称,"Product Name"
+SKU,SKU
+数量,Quantity
+单价,Price
+删除,Delete
+添加订单项,"Add Order Item"
+取消,Cancel
+保存,Save
+订单列表,"Order List"
+搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
+全部状态,"All Status"
+全部支付状态,"All Payment Status"
+全部发货状态,"All Fulfillment Status"
+搜索,Search
+重置,Reset
+订单号,"Order Number"
+客户,Customer
+订单总额,"Grand Total"
+订单状态,"Order Status"
+支付状态,"Payment Status"
+发货状态,"Fulfillment Status"
+创建时间,"Created At"
+操作,Actions
+暂无数据,"No Data"
+查看详情,"View Details"
+编辑,Edit
+上一页,"Previous Page"
+下一页,"Next Page"
+订单详情,"Order Details"
+订单基本信息,"Order Information"
+商品小计,Subtotal
+运费,"Shipping Amount"
+税费,"Tax Amount"
+折扣,Discount
+状态操作,"Status Actions"
+备注,Comment
+更新状态,"Update Status"
+行总计,"Row Total"
+暂无订单项,"No Order Items"
+支付记录,"Payment Records"
+支付金额,"Payment Amount"
+交易ID,"Transaction ID"
+状态,Status
+支付时间,"Paid At"
+暂无支付记录,"No Payment Records"
+发货记录,"Shipment Records"
+物流单号,"Tracking Number"
+承运商,Carrier
+发货时间,"Shipped At"
+送达时间,"Delivered At"
+暂无发货记录,"No Shipment Records"
+订单历史,"Order History"
+是否通知客户,"Customer Notified"
+时间,Time
+暂无历史记录,"No History Records"
+是,Yes
+否,No
+新建状态,"Create Status"
+编辑状态,"Edit Status"
+状态代码,"Status Code"
+"只能包含小写字母和下划线，如：pending, processing","只能包含小写字母和下划线，如：pending, processing"
+状态名称,"Status Name"
+默认语言（中文）的状态名称,默认语言（中文）的状态名称
+状态颜色,"Status Color"
+状态图标,"Status Icon"
+"Material Design Icons 类名，如：mdi-check-circle","Material Design Icons 类名，如：mdi-check-circle"
+状态描述,"Status Description"
+是否启用,是否启用
+启用,Enabled
+禁用,Disabled
+排序,排序
+是否系统状态,"Is System Status"
+多语言翻译,多语言翻译
+"英文 (en_US)","英文 (en_US)"
+英文状态名称,英文状态名称
+英文状态描述,英文状态描述
+状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。,状态名称会通过翻译系统自动翻译。如果在此处填写了翻译，将优先使用数据库中的翻译；否则使用翻译文件中的翻译。
+返回,返回
+保存成功,保存成功
+保存失败,保存失败
+订单状态管理,"Order Status Management"
+颜色,颜色
+图标,图标
+是否系统,是否系统
+暂无状态,"No Status"
+操作失败,操作失败
+"确定要删除状态 %{code} 吗？","确定要删除状态 %{code} 吗？"
+删除失败,删除失败
+当需要获取订单状态的翻译文本时触发，允许观察者提供自定义的状态翻译。事件数据包含状态代码，观察者应将翻译结果写入事件数据。,当需要获取订单状态的翻译文本时触发，允许观察者提供自定义的状态翻译。事件数据包含状态代码，观察者应将翻译结果写入事件数据。
+当需要获取订单状态的CSS类名时触发，允许观察者提供自定义的状态样式类。事件数据包含状态代码，观察者应将CSS类名写入事件数据。,当需要获取订单状态的CSS类名时触发，允许观察者提供自定义的状态样式类。事件数据包含状态代码，观察者应将CSS类名写入事件数据。
+当需要获取支付状态的翻译文本时触发，允许观察者提供自定义的支付状态翻译。,当需要获取支付状态的翻译文本时触发，允许观察者提供自定义的支付状态翻译。
+当需要获取发货状态的翻译文本时触发，允许观察者提供自定义的发货状态翻译。,当需要获取发货状态的翻译文本时触发，允许观察者提供自定义的发货状态翻译。
+解析订单状态信息,解析订单状态信息
+当需要获取订单状态的完整信息（标签、CSS类、图标等）时触发，允许观察者一次性提供所有状态相关信息。,当需要获取订单状态的完整信息（标签、CSS类、图标等）时触发，允许观察者一次性提供所有状态相关信息。
+更新时间,"Updated At"

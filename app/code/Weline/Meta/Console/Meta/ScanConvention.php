@@ -328,13 +328,20 @@ class ScanConvention extends CommandAbstract
                 $this->printer->success(__('模块 %{1} 扫描完成：成功 %{2}，失败 %{3}', [$currentModuleName, $results['stored'], $results['failed']]));
 
             } catch (\Exception $e) {
-                $this->printer->error(__('模块 %{1} 扫描失败：%{2}', [$currentModuleName, $e->getMessage()]));
+                // 输出详细的错误信息
+                $this->printer->error("\n" . str_repeat('=', 60));
+                $this->printer->error(__('【扫描失败】模块：%{1}', [$currentModuleName]));
+                $this->printer->error(str_repeat('-', 60));
+                $this->printer->error($e->getMessage());
+                $this->printer->error(str_repeat('=', 60) . "\n");
+                
                 $totalResults['failed']++;
                 if ($verbose) {
+                    $this->printer->note(__('堆栈跟踪：'));
                     $this->printer->printing($e->getTraceAsString() . "\n");
                 }
-                // 继续处理下一个模块，不中断循环
-                continue;
+                // 验证失败不允许跳过，直接抛出异常停止扫描
+                throw $e;
             }
         }
 
@@ -385,7 +392,7 @@ class ScanConvention extends CommandAbstract
         );
 
         /** @var Meta $metaModel */
-        $metaModel = ObjectManager::getInstance(Meta::class);
+        $metaModel = ObjectManager::make(Meta::class);
 
         // 存储已扫描的目录结构（用于构建 group 层级）
         $scannedGroups = [];
@@ -394,11 +401,39 @@ class ScanConvention extends CommandAbstract
         $scanPathNormalized = rtrim(str_replace('\\', '/', $scanPath), '/');
 
         foreach ($iterator as $file) {
-            if ($file->isFile() && $file->getExtension() === 'phtml') {
+            // 只处理文件，跳过目录
+            if (!$file->isFile()) {
+                continue;
+            }
+            
+            // 支持扫描 .phtml 和 .css 文件
+            // CSS 文件只扫描 colors 和 variables 目录下的（用于色系和变量配置）
+            // 排除 assets/css 目录下的 CSS 文件（这些是样式文件，不是配置）
+            $extension = strtolower($file->getExtension());
+            if ($extension !== 'phtml' && $extension !== 'css') {
+                continue;
+            }
+            
                 $filePath = $file->getPathname();
-                // 统一路径分隔符为 /，并处理 Windows 路径
                 $filePathNormalized = str_replace('\\', '/', $filePath);
                 $relativePath = str_replace($scanPathNormalized . '/', '', $filePathNormalized);
+            
+            // 对于 CSS 文件，只扫描 colors 和 variables 目录下的
+            if ($extension === 'css') {
+                // 检查路径中是否包含 colors 或 variables 目录
+                $tempPathParts = explode('/', $relativePath);
+                $hasColorsOrVariables = false;
+                foreach ($tempPathParts as $part) {
+                    if ($part === 'colors' || $part === 'variables') {
+                        $hasColorsOrVariables = true;
+                        break;
+                    }
+                }
+                // 如果不在 colors 或 variables 目录下，跳过这个 CSS 文件
+                if (!$hasColorsOrVariables) {
+                    continue;
+                }
+            }
                 
                 // 构建路径部分（只包含相对路径部分，不包含完整绝对路径）
                 $pathParts = explode('/', $relativePath);
@@ -425,22 +460,40 @@ class ScanConvention extends CommandAbstract
                 // 收集 @meta.xxx 格式的字段定义（简化格式，目录结构由文件路径确定）
                 $metaFields = $this->collectMetaFields($fileContent, $metaKey, $namespace, $convention);
                 
-                // 验证字段是否在规约中允许
+            // 验证字段是否在规约中允许（如果文件没有 meta 字段，仍然允许存储 group 信息）
+            if (!empty($metaFields)) {
                 $validationResult = $this->validateMetaFields($metaFields, $filePath, $metaKey, $namespace, $convention);
                 
                 if (!$validationResult['valid']) {
-                    $results['failed']++;
-                    $results['errors'][] = [
-                        'file' => $filePath,
-                        'errors' => $validationResult['errors']
-                    ];
+                    // 构建详细的错误信息
+                    $errorDetails = [];
+                    $errorDetails[] = __('【文件验证失败】');
+                    $errorDetails[] = __('文件路径：%{1}', [$filePath]);
+                    $errorDetails[] = __('Meta Key：%{1}', [$metaKey]);
+                    $errorDetails[] = __('命名空间：%{1}', [$namespace]);
+                    $errorDetails[] = '';
+                    $errorDetails[] = __('验证错误详情：');
+                    
+                    foreach ($validationResult['errors'] as $index => $error) {
+                        $errorDetails[] = __('  %{1}. %{2}', [$index + 1, $error]);
+                    }
+                    
+                    $errorDetails[] = '';
+                    $errorDetails[] = __('解决方案：');
+                    $errorDetails[] = __('  1. 检查 @meta.json 规约文件，确保定义了对应的 meta key');
+                    $errorDetails[] = __('  2. 或者从文件中移除未定义的 @meta.xxx 字段');
+                    $errorDetails[] = __('  3. 或者更新规约文件，添加缺失的 meta key 定义');
                     
                     if ($verbose) {
                         foreach ($validationResult['errors'] as $error) {
                             $results['details'][] = __('错误：%{1} - %{2}', [$filePath, $error]);
                         }
                     }
-                    continue;
+                    
+                    // 验证失败不允许跳过，直接抛出异常
+                    $errorMessage = implode("\n", $errorDetails);
+                    throw new \Exception($errorMessage);
+                }
                 }
                 
                 // 收集其他 @ 标记（如 @param.xxx, @preview.login 等）
@@ -469,7 +522,6 @@ class ScanConvention extends CommandAbstract
                     
                     if ($verbose) {
                         $results['details'][] = __('存储 Group：%{1} -> %{2}', [$groupKey, $filePath]);
-                    }
                 }
             }
         }
@@ -486,9 +538,14 @@ class ScanConvention extends CommandAbstract
         $tags = [];
         $setting = [];
         
-        // 收集 @param.xxx 格式的参数标记（存储到 setting 中）
-        if (preg_match_all('/@param\.(\w+(?:\.\w+)*)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
+        // 收集 @param.xxx 或 @param xxx 格式的参数标记（存储到 setting 中）
+        // 支持两种格式：
+        // 1. @param.title {default="",name="",description=""} （带点）
+        // 2. @param title {default="",name="",description=""} （不带点，空格分隔）
             $params = [];
+        
+        // 匹配 @param.xxx 格式（带点）
+        if (preg_match_all('/@param\.(\w+(?:\.\w+)*)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $paramName = trim($match[1]); // 如：title, sidebar.collapsed
                 $attributesStr = trim($match[2]);
@@ -506,9 +563,40 @@ class ScanConvention extends CommandAbstract
                 // 合并属性到最终节点
                 $current = array_merge($current, $attributes);
             }
+        }
+        
+        // 匹配 @param xxx 格式（不带点，空格分隔）
+        if (preg_match_all('/@param\s+(\w+(?:\.\w+)*)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $paramName = trim($match[1]); // 如：title, showHeader
+                $attributesStr = trim($match[2]);
+                $attributes = $this->parseAttributes($attributesStr);
+                
+                // 对于不带点的格式，直接使用参数名作为键（扁平结构）
+                // 如果参数名包含点，则构建嵌套结构
+                if (strpos($paramName, '.') !== false) {
+                    $paramParts = explode('.', $paramName);
+                    $current = &$params;
+                    foreach ($paramParts as $part) {
+                        if (!isset($current[$part])) {
+                            $current[$part] = [];
+                        }
+                        $current = &$current[$part];
+                    }
+                    // 合并属性到最终节点
+                    $current = array_merge($current, $attributes);
+                } else {
+                    // 扁平结构，直接使用参数名作为键
+                    if (!isset($params[$paramName])) {
+                        $params[$paramName] = [];
+                    }
+                    $params[$paramName] = array_merge($params[$paramName], $attributes);
+                }
+            }
+        }
+        
             if (!empty($params)) {
                 $setting['param'] = $params;
-            }
         }
         
         // 收集 @preview.login 标记
@@ -517,12 +605,18 @@ class ScanConvention extends CommandAbstract
             $tags['preview_login'] = $attributes;
         }
         
-        // 收集其他 @ 标记（除了 @meta::, @meta.xxx, @param.xxx）
+        // 收集其他 @ 标记（除了 @meta::, @meta.xxx, @param.xxx, @param xxx）
+        // 注意：正则表达式 @(\w+(?:\.\w+)*)\s*\{ 只会匹配 @xxx { 格式，不会匹配 @param xxx { 格式
+        // 因为 @param xxx { 中，param 后面是空格和 xxx，不符合 \w+ 后面直接是 \s*\{ 的模式
         if (preg_match_all('/@(\w+(?:\.\w+)*)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $tagName = trim($match[1]);
-                // 跳过 @meta::, @meta.xxx, @param.xxx 标记
-                if (strpos($tagName, 'meta::') === 0 || strpos($tagName, 'meta.') === 0 || strpos($tagName, 'param.') === 0) {
+                // 跳过 @meta::, @meta.xxx, @param.xxx, @param 标记
+                // 注意：@param xxx 格式已经在上面处理过了，不会被这个正则匹配到
+                if (strpos($tagName, 'meta::') === 0 || 
+                    strpos($tagName, 'meta.') === 0 || 
+                    strpos($tagName, 'param.') === 0 ||
+                    $tagName === 'param') {
                     continue;
                 }
                 
@@ -642,7 +736,15 @@ class ScanConvention extends CommandAbstract
             
             // 验证完整的 meta key 是否在规约文件中定义
             if (!$this->isMetaKeyDefinedInConvention($fullMetaKey, $namespace, $convention)) {
-                $errors[] = __('Meta 字段 \'%{1}\'（完整路径：%{2}）在规约文件中未定义', [$fieldName, $fullMetaKey]);
+                // 构建详细的错误信息
+                $errorParts = [];
+                $errorParts[] = __('字段名称：%{1}', [$fieldName]);
+                $errorParts[] = __('完整 Meta Key：%{1}', [$fullMetaKey]);
+                $errorParts[] = __('命名空间：%{1}', [$namespace]);
+                $errorParts[] = __('错误原因：该 Meta Key 在规约文件（@meta.json）中未定义');
+                $errorParts[] = __('说明：文件中的 @meta.%{1} 字段对应的完整路径 %{2} 在规约文件中找不到对应的定义', [$fieldName, $fullMetaKey]);
+                
+                $errors[] = implode("\n    ", $errorParts);
                 continue;
             }
         }
@@ -707,7 +809,7 @@ class ScanConvention extends CommandAbstract
                 // 如果当前层级是数组，检查是否只有配置字段（如 default, name, description 等）
                 // 如果是，说明这是字段定义，允许所有子层级
                 if (is_array($current)) {
-                    $configKeys = ['default', 'name', 'description', 'options', 'values', 'type', 'required', 'placeholder', 'show'];
+                    $configKeys = ['default', 'name', 'description', 'label', 'desc', 'options', 'values', 'type', 'required', 'placeholder', 'show'];
                     $hasOnlyConfig = true;
                     foreach (array_keys($current) as $key) {
                         if (!in_array($key, $configKeys)) {
@@ -736,7 +838,7 @@ class ScanConvention extends CommandAbstract
                 // 如果当前层级是数组，检查是否只有配置字段（如 default, name, description 等）
                 // 如果是，说明这是字段定义，允许所有子层级
                 if (is_array($current)) {
-                    $configKeys = ['default', 'name', 'description', 'options', 'values', 'type', 'required', 'placeholder', 'show'];
+                    $configKeys = ['default', 'name', 'description', 'label', 'desc', 'options', 'values', 'type', 'required', 'placeholder', 'show'];
                     $hasOnlyConfig = true;
                     foreach (array_keys($current) as $key) {
                         if (!in_array($key, $configKeys)) {
@@ -770,25 +872,39 @@ class ScanConvention extends CommandAbstract
         $area = null;
 
         // 尝试从路径中提取类型和区域
+        $foundType = false;
         foreach ($pathParts as $part) {
             if ($part === 'layouts') {
                 $type = 'layout';
+                $foundType = true;
             } elseif ($part === 'components') {
                 $type = 'component';
+                $foundType = true;
             } elseif ($part === 'partials') {
                 $type = 'partial';
+                $foundType = true;
+            } elseif ($part === 'colors') {
+                $type = 'colors';
+                $foundType = true;
+            } elseif ($part === 'variables') {
+                $type = 'variable';
+                $foundType = true;
             } elseif ($part === 'frontend') {
                 $area = 'frontend';
             } elseif ($part === 'backend') {
                 $area = 'backend';
-            } elseif ($type === 'layout' && !$category) {
-                // 布局类型下的第一个非类型目录作为分类
+            } elseif ($foundType && !$category) {
+                // 类型目录下的第一个非类型目录作为分类（如 homepage, product 等）
+                // 对于 colors 和 variables 类型，category 应该为空（因为这些目录本身就是类型目录）
+                if ($type !== 'colors' && $type !== 'variable') {
                 $category = $part;
+                }
             }
         }
 
-        // 使用 meta key 作为标识（保持点分隔格式）
-        $identify = $metaKey;
+        // 使用 meta key + 文件名作为标识（保持点分隔格式）
+        // 这样同一目录下的不同文件会有不同的 identify，避免相互覆盖
+        $identify = $metaKey . '.' . $fileName;
 
         // 计算文件相对于扫描路径的相对路径
         $filePathNormalized = str_replace('\\', '/', $filePath);
@@ -827,7 +943,10 @@ class ScanConvention extends CommandAbstract
         }
 
         // 检查是否已存在（使用 namespace + type + identify 作为唯一键）
-        $existing = $metaModel->reset()
+        // 使用新实例查询，避免状态污染
+        /** @var Meta $queryModel */
+        $queryModel = ObjectManager::make(Meta::class);
+        $existing = $queryModel->reset()
                               ->where(Meta::fields_NAMESPACE, $namespace)
                               ->where(Meta::fields_META_TYPE, $type)
                               ->where(Meta::fields_META_IDENTIFY, $identify)
@@ -839,22 +958,26 @@ class ScanConvention extends CommandAbstract
         
         $savedMeta = null;
         if ($existing && $existing->getId()) {
-            // 更新
-            $existing->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $existing->setData(Meta::fields_SETTING, $settingJson);
-            $existing->setData(Meta::fields_FILE_PATH, $metaDataArray['file_path']);
-            $existing->setData(Meta::fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
+            // 更新 - 使用新实例加载记录，避免状态污染
+            /** @var Meta $updateModel */
+            $updateModel = ObjectManager::make(Meta::class);
+            $updateModel->load($existing->getId());
+            $updateModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $updateModel->setData(Meta::fields_SETTING, $settingJson);
+            $updateModel->setData(Meta::fields_FILE_PATH, $metaDataArray['file_path']);
+            $updateModel->setData(Meta::fields_FILE_FULL_PATH, $metaDataArray['file_full_path']);
             if ($area) {
-                $existing->setData(Meta::fields_AREA, $area);
+                $updateModel->setData(Meta::fields_AREA, $area);
             }
             if ($category) {
-                $existing->setData(Meta::fields_CATEGORY, $category);
+                $updateModel->setData(Meta::fields_CATEGORY, $category);
             }
-            $existing->save();
-            $savedMeta = $existing;
+            $updateModel->save();
+            $savedMeta = $updateModel;
         } else {
             // 创建新记录，使用 forceCheck 确保唯一键检查
-            $newMeta = ObjectManager::getInstance(Meta::class);
+            /** @var Meta $newMeta */
+            $newMeta = ObjectManager::make(Meta::class);
             $newMeta->reset();
             $newMeta->setData(Meta::fields_NAMESPACE, $namespace);
             $newMeta->setData(Meta::fields_META_TYPE, $type);
@@ -900,14 +1023,18 @@ class ScanConvention extends CommandAbstract
         $category = null;
         $area = null;
         
-        // 尝试从路径中提取区域
+        // 尝试从路径中提取区域和分类
+        $foundType = false;
         foreach ($pathParts as $part) {
             if ($part === 'frontend') {
                 $area = 'frontend';
             } elseif ($part === 'backend') {
                 $area = 'backend';
-            } elseif (in_array($part, ['layouts', 'components', 'partials']) && !$category) {
-                // 布局/组件/部件类型下的第一个非类型目录作为分类
+            } elseif (in_array($part, ['layouts', 'components', 'partials'])) {
+                // 标记找到了类型目录
+                $foundType = true;
+            } elseif ($foundType && !$category) {
+                // 类型目录下的第一个非类型目录作为分类（如 homepage, product 等）
                 $category = $part;
             }
         }
@@ -946,7 +1073,10 @@ class ScanConvention extends CommandAbstract
         ];
         
         // 检查是否已存在（使用 namespace + type + identify 作为唯一键）
-        $existing = $metaModel->reset()
+        // 使用新实例查询，避免状态污染
+        /** @var Meta $queryModel */
+        $queryModel = ObjectManager::make(Meta::class);
+        $existing = $queryModel->reset()
                               ->where(Meta::fields_NAMESPACE, $namespace)
                               ->where(Meta::fields_META_TYPE, $type)
                               ->where(Meta::fields_META_IDENTIFY, $identify)
@@ -955,15 +1085,25 @@ class ScanConvention extends CommandAbstract
         
         $savedMeta = null;
         if ($existing && $existing->getId()) {
-            // 更新
-            $existing->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
-            $existing->setData(Meta::fields_FILE_PATH, $filePathFormatted);
-            $existing->setData(Meta::fields_FILE_FULL_PATH, $fileFullPathFormatted);
-            $existing->save();
-            $savedMeta = $existing;
+            // 更新 - 使用新实例加载记录，避免状态污染
+            /** @var Meta $updateModel */
+            $updateModel = ObjectManager::make(Meta::class);
+            $updateModel->load($existing->getId());
+            $updateModel->setData(Meta::fields_META_DATA, json_encode($metaDataArray, JSON_UNESCAPED_UNICODE));
+            $updateModel->setData(Meta::fields_FILE_PATH, $filePathFormatted);
+            $updateModel->setData(Meta::fields_FILE_FULL_PATH, $fileFullPathFormatted);
+            if ($area) {
+                $updateModel->setData(Meta::fields_AREA, $area);
+            }
+            if ($category) {
+                $updateModel->setData(Meta::fields_CATEGORY, $category);
+            }
+            $updateModel->save();
+            $savedMeta = $updateModel;
         } else {
-            // 新建
-            $newMeta = clone $metaModel;
+            // 新建 - 使用 ObjectManager::make 创建新实例，确保状态干净
+            /** @var Meta $newMeta */
+            $newMeta = ObjectManager::make(Meta::class);
             $newMeta->reset();
             $newMeta->setData(Meta::fields_NAMESPACE, $namespace);
             $newMeta->setData(Meta::fields_META_TYPE, $type);

@@ -42,7 +42,7 @@ class MetaTranslation
         /** @var Dictionary $localeDict */
         $localeDict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load($md5, Dictionary::fields_MD5);
+        $localeDict->load(Dictionary::fields_MD5, $md5);
         
         if ($localeDict->getId()) {
             $translation = $localeDict->getData(Dictionary::fields_TRANSLATE);
@@ -81,7 +81,7 @@ class MetaTranslation
         /** @var Dictionary $localeDict */
         $localeDict = ObjectManager::getInstance(Dictionary::class);
         $md5 = Dictionary::generateMd5($translationKey, $locale);
-        $localeDict->load($md5, Dictionary::fields_MD5);
+        $localeDict->load(Dictionary::fields_MD5, $md5);
         
         $translation = '';
         if ($localeDict->getId()) {
@@ -91,7 +91,7 @@ class MetaTranslation
         // 如果没有找到带scope的翻译，尝试不带scope的
         if (empty($translation) && $scope !== 'default') {
             $md5Default = Dictionary::generateMd5('@meta::' . $metaKey, $locale);
-            $localeDict->load($md5Default, Dictionary::fields_MD5);
+            $localeDict->load(Dictionary::fields_MD5, $md5Default);
             if ($localeDict->getId()) {
                 $translation = $localeDict->getData(Dictionary::fields_TRANSLATE);
             }
@@ -99,6 +99,42 @@ class MetaTranslation
         
         // 如果没有翻译，返回默认值
         return $translation ?: ($defaultValue ?? '');
+    }
+
+    /**
+     * 设置meta值的翻译（支持scope）
+     * 
+     * @param string $metaKey meta键
+     * @param string $scope scope值，如 'default'
+     * @param string|null $locale 语言代码
+     * @param string $value 翻译值
+     * @return bool 是否保存成功
+     */
+    public static function setTranslatedValueWithScope(string $metaKey, string $scope = 'default', ?string $locale = null, string $value): bool
+    {
+        // 构建带scope的翻译键
+        $translationKey = '@meta::' . $metaKey;
+        if ($scope !== 'default') {
+            $translationKey .= '|scope:' . $scope;
+        }
+
+        // 获取当前语言
+        if ($locale === null) {
+            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        }
+
+        // 保存到I18n Dictionary
+        /** @var Dictionary $localeDict */
+        $localeDict = ObjectManager::getInstance(Dictionary::class);
+        $md5 = Dictionary::generateMd5($translationKey, $locale);
+        $localeDict->load(Dictionary::fields_MD5, $md5);
+
+        $localeDict->setData(Dictionary::fields_MD5, $md5);
+        $localeDict->setData(Dictionary::fields_WORD, $translationKey);
+        $localeDict->setData(Dictionary::fields_LOCALE_CODE, $locale);
+        $localeDict->setData(Dictionary::fields_TRANSLATE, $value);
+
+        return $localeDict->save();
     }
 }
 

@@ -1,0 +1,108 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\GenerativeEngineOptimization\Model\Platform $platform
+ * @var array $supported_platforms
+ */
+$isEdit = $platform->getId() > 0;
+?>
+<div class="content-header">
+    <h1><?= $isEdit ? __('编辑平台') : __('添加平台') ?></h1>
+</div>
+
+<div class="content-body">
+    <form id="platform-form" class="form-horizontal">
+        <input type="hidden" name="id" value="<?= $platform->getId() ?>">
+        
+        <div class="form-group">
+            <label class="control-label"><?= __('平台代码') ?> <span class="required">*</span></label>
+            <select name="platform_code" class="form-control" required>
+                <option value=""><?= __('请选择') ?></option>
+                <?php foreach ($supported_platforms as $code): ?>
+                    <option value="<?= $code ?>" <?= $platform->getData('platform_code') === $code ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($code) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('平台名称') ?> <span class="required">*</span></label>
+            <input type="text" name="platform_name" class="form-control" 
+                   value="<?= htmlspecialchars($platform->getData('platform_name') ?? '') ?>" required>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('API端点') ?></label>
+            <input type="text" name="api_endpoint" class="form-control" 
+                   value="<?= htmlspecialchars($platform->getData('api_endpoint') ?? '') ?>" 
+                   placeholder="https://api.example.com/endpoint">
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('Feed格式') ?></label>
+            <select name="feed_format" class="form-control">
+                <option value="json_feed" <?= ($platform->getData('feed_format') ?? 'json_feed') === 'json_feed' ? 'selected' : '' ?>>
+                    JSON Feed
+                </option>
+                <option value="xml" <?= ($platform->getData('feed_format') ?? '') === 'xml' ? 'selected' : '' ?>>
+                    XML
+                </option>
+                <option value="rss" <?= ($platform->getData('feed_format') ?? '') === 'rss' ? 'selected' : '' ?>>
+                    RSS
+                </option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('是否启用') ?></label>
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" name="is_enabled" value="1" 
+                           <?= $platform->getData('is_enabled') ? 'checked' : '' ?>>
+                    <?= __('启用') ?>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('配置（JSON）') ?></label>
+            <textarea name="config" class="form-control" rows="5"><?= htmlspecialchars($platform->getData('config') ?? '{}') ?></textarea>
+        </div>
+
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+            </button>
+            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>" class="btn btn-secondary">
+                <?= __('取消') ?>
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('platform-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch('<?= $this->getUrl('generativeengineoptimization/backend/platform/save') ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('保存成功') ?>');
+            window.location.href = '<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>';
+        } else {
+            alert(data.message || '<?= __('保存失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('保存失败') ?>');
+    });
+});
+</script>

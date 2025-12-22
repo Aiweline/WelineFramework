@@ -1,0 +1,200 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Cms\Model\FormSubmission $submission */
+$submission = $this->getData('submission');
+$page = $this->getData('page');
+?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <?= $this->getData('page_title') ?: __('提交详情') ?>
+            </h4>
+
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="<?= $this->getBackendUrl('*/backend/submission/index') ?>">
+                            <?= $this->getData('breadcrumb_parent') ?: __('表单提交管理') ?>
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">
+                        <?= $this->getData('breadcrumb_current') ?: __('提交详情') ?>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- 基本信息 -->
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="mdi mdi-information-outline"></i> <?= __('基本信息') ?>
+                </h4>
+
+                <table class="table table-borderless mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%;"><?= __('提交ID') ?>:</th>
+                            <td><?= $submission->getId() ?></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('关联页面') ?>:</th>
+                            <td>
+                                <?php if ($page): ?>
+                                    <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $page->getId()]) ?>">
+                                        <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
+                                    </a>
+                                <?php else: ?>
+                                    <?= __('无') ?>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('邮箱') ?>:</th>
+                            <td>
+                                <?php if ($submission->getData('email')): ?>
+                                    <a href="mailto:<?= htmlspecialchars((($submission->getData('email') ?? '')) ?? '') ?>">
+                                        <?= htmlspecialchars((($submission->getData('email') ?? '')) ?? '') ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="text-muted"><?= __('未提供') ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('电话') ?>:</th>
+                            <td>
+                                <?php if ($submission->getData('phone')): ?>
+                                    <?= htmlspecialchars((($submission->getData('phone') ?? '')) ?? '') ?>
+                                <?php else: ?>
+                                    <span class="text-muted"><?= __('未提供') ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?= __('IP地址') ?>:</th>
+                            <td><?= htmlspecialchars((($submission->getData('ip_address') ?? '')) ?? '') ?></td>
+                        </tr>
+                        <tr>
+                            <th><?= __('提交时间') ?>:</th>
+                            <td><?= htmlspecialchars((($submission->getData('submitted_at') ?? '')) ?? '') ?></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 额外字段 -->
+        <?php 
+        $extraFields = $submission->getExtraFields();
+        if (!empty($extraFields)): 
+        ?>
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-text-box-multiple"></i> <?= __('额外字段') ?>
+                    </h4>
+
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 30%;"><?= __('字段名') ?></th>
+                                <th><?= __('字段值') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($extraFields as $key => $value): ?>
+                                <tr>
+                                    <td><strong><?= htmlspecialchars($key ?? '') ?></strong></td>
+                                    <td>
+                                        <?php if (is_array($value)): ?>
+                                            <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;"><?= htmlspecialchars(json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars($value ?? '') ?>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- 请求信息 -->
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="mdi mdi-information"></i> <?= __('请求信息') ?>
+                </h4>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('User Agent') ?>:</label>
+                    <div class="p-2 bg-light rounded" style="word-break: break-all; font-size: 12px;">
+                        <?= htmlspecialchars(($submission->getData('user_agent') ?? '') ?: __('无')) ?>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('来源页面') ?>:</label>
+                    <div class="p-2 bg-light rounded" style="word-break: break-all; font-size: 12px;">
+                        <?php if ($submission->getData('referer')): ?>
+                            <a href="<?= htmlspecialchars((($submission->getData('referer') ?? '')) ?? '') ?>" target="_blank">
+                                <?= htmlspecialchars((($submission->getData('referer') ?? '')) ?? '') ?>
+                            </a>
+                        <?php else: ?>
+                            <?= __('无') ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作 -->
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="mdi mdi-cog"></i> <?= __('操作') ?>
+                </h4>
+
+                <div class="d-grid gap-2">
+                    <a href="<?= $this->getBackendUrl('*/backend/submission/index') ?>" class="btn btn-secondary">
+                        <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                    </a>
+                    
+                    <acl source="Weline_Cms::form_submissions_delete">
+                        <form action="<?= $this->getBackendUrl('*/backend/submission/delete') ?>" 
+                              method="post"
+                              onsubmit="return confirm('<?= __('确定要删除这条记录吗？') ?>');">
+                            <input type="hidden" name="form_key" value="<?= $this->getFormKey() ?>">
+                            <input type="hidden" name="id" value="<?= $submission->getId() ?>">
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="mdi mdi-delete"></i> <?= __('删除记录') ?>
+                            </button>
+                        </form>
+                    </acl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>
+

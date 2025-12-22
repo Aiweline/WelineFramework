@@ -81,8 +81,13 @@ class DocumentScanner
             'new' => 0,
             'updated' => 0,
             'deleted' => 0,
+            'cleaned_duplicates' => 0,
             'modules' => []
         ];
+        
+        // 首先清理已存在的重复文档（无论是否强制重新扫描）
+        $cleanedCount = $this->cleanupDuplicateDocuments();
+        $result['cleaned_duplicates'] = $cleanedCount;
         
         // 如果强制重新扫描，先删除所有自动导入的文档和分类
         if ($forceRescan) {
@@ -983,6 +988,10 @@ class DocumentScanner
      * 导入文档文件
      * 注意：自动导入的文档不保存内容，只保存路径和元数据，内容从文件系统实时读取
      * 
+     * 优化策略：使用"先查后更新/插入"的逻辑
+     * 1. 先删除所有重复记录（保留ID最小的一条）
+     * 2. 然后更新或插入文档
+     * 
      * @param string $relativePath 相对于模块根目录的路径（如：doc/event/维护模式.md 或 extends.md）
      */
     private function importDocumentFile(string $filePath, string $fileName, string $moduleName, Catalog $catalog, string $relativePath, array &$result, array &$scannedDocumentKeys): void
@@ -1004,13 +1013,40 @@ class DocumentScanner
         $documentKey = $this->buildDocumentKey($moduleName, $relativePath);
         $scannedDocumentKeys[] = $documentKey;
         
-        // 检查是否已存在（基于模块名+文件路径）
-        $existingDoc = $this->documentModel->clear()
+        // 查找所有匹配的文档（可能有多条重复记录）
+        $existingDocs = $this->documentModel->clear()
             ->where(Document::fields_MODULE_NAME, $moduleName)
             ->where(Document::fields_FILE_PATH, $relativePath)
             ->where(Document::fields_IS_AUTO_IMPORTED, 1)
-            ->find()
-            ->fetch();
+            ->select()
+            ->fetchArray();
+        
+        // 处理重复记录：保留ID最小的一条，删除其他
+        $existingDoc = null;
+        if (!empty($existingDocs)) {
+            // 按ID排序，保留最小的
+            usort($existingDocs, function($a, $b) {
+                return (int)$a[Document::fields_ID] - (int)$b[Document::fields_ID];
+            });
+            
+            // 第一条是要保留的
+            $keepId = (int)$existingDocs[0][Document::fields_ID];
+            
+            // 如果有多条，删除多余的
+            if (count($existingDocs) > 1) {
+                $idsToDelete = [];
+                for ($i = 1; $i < count($existingDocs); $i++) {
+                    $idsToDelete[] = (int)$existingDocs[$i][Document::fields_ID];
+                }
+                $this->documentModel->clear()
+                    ->where(Document::fields_ID, $idsToDelete, 'in')
+                    ->delete()
+                    ->fetch();
+            }
+            
+            // 加载要保留的文档
+            $existingDoc = $this->documentModel->clear()->load($keepId);
+        }
         
         if ($existingDoc && $existingDoc->getId()) {
             // 更新现有文档（不更新内容，内容从文件系统实时读取）
@@ -1786,6 +1822,177 @@ class DocumentScanner
             ->where(Catalog::fields_ID, $catalogId)
             ->delete()
             ->fetch();
+    }
+    
+    /**
+     * 清理重复的自动导入文档
+     * 保留每组重复文档中 ID 最小的那条，删除其他重复记录
+     * 
+     * @return int 删除的重复记录数量
+     */
+    public function cleanupDuplicateDocuments(): int
+    {
+        $this->progress(__('正在检查并清理重复文档...'), 'info');
+        
+        $totalDeleted = 0;
+        
+        // ========== 第一步：清理自动导入的重复文档（基于 module_name + file_path）==========
+        $allAutoImportedDocs = $this->documentModel->clear()
+            ->where(Document::fields_IS_AUTO_IMPORTED, 1)
+            ->select()
+            ->fetchArray();
+        
+        if (!empty($allAutoImportedDocs)) {
+            // 按 module_name + file_path 分组
+            $groupedDocs = [];
+            foreach ($allAutoImportedDocs as $doc) {
+                $moduleName = $doc[Document::fields_MODULE_NAME] ?? '';
+                $filePath = $doc[Document::fields_FILE_PATH] ?? '';
+                $key = $moduleName . '|' . $filePath;
+                
+                if (!isset($groupedDocs[$key])) {
+                    $groupedDocs[$key] = [];
+                }
+                $groupedDocs[$key][] = $doc;
+            }
+            
+            // 找出重复的文档并删除（保留 ID 最小的那条）
+            $idsToDelete = [];
+            
+            foreach ($groupedDocs as $key => $docs) {
+                if (count($docs) > 1) {
+                    // 有重复，按 ID 排序，保留最小的
+                    usort($docs, function($a, $b) {
+                        return (int)$a[Document::fields_ID] - (int)$b[Document::fields_ID];
+                    });
+                    
+                    // 跳过第一个（ID最小），删除其他
+                    for ($i = 1; $i < count($docs); $i++) {
+                        $idsToDelete[] = (int)$docs[$i][Document::fields_ID];
+                    }
+                    
+                    $this->progress(__('发现重复文档(自动导入): %{key}，共 %{count} 条，将删除 %{delete} 条', [
+                        'key' => $key,
+                        'count' => count($docs),
+                        'delete' => count($docs) - 1
+                    ]), 'warning');
+                }
+            }
+            
+            // 批量删除重复记录
+            if (!empty($idsToDelete)) {
+                $this->documentModel->clear()
+                    ->where(Document::fields_ID, $idsToDelete, 'in')
+                    ->delete()
+                    ->fetch();
+                
+                $totalDeleted += count($idsToDelete);
+                $this->progress(__('已删除 %{count} 条自动导入的重复文档', ['count' => count($idsToDelete)]), 'success');
+            }
+        }
+        
+        // ========== 第二步：清理非自动导入的重复文档（基于 title + category_id）==========
+        // 这些可能是历史遗留的手动创建或旧版本导入的重复文档
+        $allNonAutoImportedDocs = $this->documentModel->clear()
+            ->where(Document::fields_IS_AUTO_IMPORTED, 0)
+            ->select()
+            ->fetchArray();
+        
+        if (!empty($allNonAutoImportedDocs)) {
+            // 按 title + category_id 分组（对于非自动导入的文档，使用标题+分类来判断重复）
+            $groupedByTitle = [];
+            foreach ($allNonAutoImportedDocs as $doc) {
+                $title = $doc[Document::fields_TITLE] ?? '';
+                $categoryId = $doc[Document::fields_CATEGORY_ID] ?? '';
+                $key = $title . '|' . $categoryId;
+                
+                if (!isset($groupedByTitle[$key])) {
+                    $groupedByTitle[$key] = [];
+                }
+                $groupedByTitle[$key][] = $doc;
+            }
+            
+            // 找出重复的文档并删除（保留 ID 最小的那条）
+            $idsToDelete = [];
+            
+            foreach ($groupedByTitle as $key => $docs) {
+                if (count($docs) > 1) {
+                    // 有重复，按 ID 排序，保留最小的
+                    usort($docs, function($a, $b) {
+                        return (int)$a[Document::fields_ID] - (int)$b[Document::fields_ID];
+                    });
+                    
+                    // 跳过第一个（ID最小），删除其他
+                    for ($i = 1; $i < count($docs); $i++) {
+                        $idsToDelete[] = (int)$docs[$i][Document::fields_ID];
+                    }
+                    
+                    $this->progress(__('发现重复文档(手动创建): %{key}，共 %{count} 条，将删除 %{delete} 条', [
+                        'key' => $key,
+                        'count' => count($docs),
+                        'delete' => count($docs) - 1
+                    ]), 'warning');
+                }
+            }
+            
+            // 批量删除重复记录
+            if (!empty($idsToDelete)) {
+                $this->documentModel->clear()
+                    ->where(Document::fields_ID, $idsToDelete, 'in')
+                    ->delete()
+                    ->fetch();
+                
+                $totalDeleted += count($idsToDelete);
+                $this->progress(__('已删除 %{count} 条手动创建的重复文档', ['count' => count($idsToDelete)]), 'success');
+            }
+        }
+        
+        // ========== 第三步：清理关联到不存在分类的文档 ==========
+        $this->progress(__('正在检查关联到不存在分类的文档...'), 'info');
+        
+        // 获取所有有效的分类ID
+        $allCatalogs = $this->catalogModel->clear()->select()->fetchArray();
+        $validCatalogIds = [];
+        foreach ($allCatalogs as $cat) {
+            $validCatalogIds[] = (int)($cat[Catalog::fields_ID] ?? 0);
+        }
+        
+        // 查找所有文档，检查其分类是否存在
+        $allDocs = $this->documentModel->clear()->select()->fetchArray();
+        $orphanDocIds = [];
+        
+        foreach ($allDocs as $doc) {
+            $categoryId = (int)($doc[Document::fields_CATEGORY_ID] ?? 0);
+            if ($categoryId > 0 && !in_array($categoryId, $validCatalogIds)) {
+                $orphanDocIds[] = (int)$doc[Document::fields_ID];
+                $this->progress(__('发现孤立文档: %{title} (ID: %{id})，其分类 %{cat_id} 不存在', [
+                    'title' => $doc[Document::fields_TITLE] ?? '',
+                    'id' => $doc[Document::fields_ID] ?? '',
+                    'cat_id' => $categoryId
+                ]), 'warning');
+            }
+        }
+        
+        // 删除孤立文档
+        if (!empty($orphanDocIds)) {
+            $this->documentModel->clear()
+                ->where(Document::fields_ID, $orphanDocIds, 'in')
+                ->delete()
+                ->fetch();
+            
+            $totalDeleted += count($orphanDocIds);
+            $this->progress(__('已删除 %{count} 条关联到不存在分类的文档', ['count' => count($orphanDocIds)]), 'success');
+        } else {
+            $this->progress(__('没有发现孤立文档'), 'success');
+        }
+        
+        if ($totalDeleted === 0) {
+            $this->progress(__('没有发现需要清理的文档'), 'success');
+        } else {
+            $this->progress(__('共清理 %{count} 条文档', ['count' => $totalDeleted]), 'success');
+        }
+        
+        return $totalDeleted;
     }
 }
 

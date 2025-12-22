@@ -13,43 +13,36 @@
  * @param showFooter 是否显示footer（默认：true）
  * @param class 额外CSS类
  */
-$title = $this->getData('title') ?? '';
-$content = $this->getData('content') ?? '';
-$sidebar = $this->getData('sidebar') ?? '';
-$showHeader = $this->getData('showHeader') ?? true;
-$showFooter = $this->getData('showFooter') ?? true;
-$class = $this->getData('class') ?? '';
 
-// 设置页面标题
-if ($title) {
-    $this->assign('title', $title);
-}
+// 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+// 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+// 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="{{htmlLang}}">
 <head>
     @template(Weline_Backend::templates/public/head.phtml)
 </head>
 <body>
-    <?php if ($showHeader): ?>
+    <if condition="meta.showHeader">
         @template(Weline_Backend::blocks/header/base.phtml)
-    <?php endif; ?>
+    </if>
     
-    <div class="backend-layout <?= htmlspecialchars($class) ?>">
-        <?php if ($sidebar): ?>
+    <div class="backend-layout <?= htmlspecialchars(($meta['class'] ?? '')) ?>">
+        <if condition="meta.sidebar">
             <aside class="backend-sidebar">
-                <?= $sidebar ?>
+                {{meta.sidebar}}
             </aside>
-        <?php endif; ?>
+        </if>
         
         <main class="backend-main-content">
-            <?= $content ?>
+            {{meta.content}}
         </main>
     </div>
     
-    <?php if ($showFooter): ?>
+    <if condition="meta.showFooter">
         @template(Weline_Backend::blocks/footer/base.phtml)
-    <?php endif; ?>
+    </if>
 </body>
 </html>
 

@@ -22,6 +22,7 @@ use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\ModuleManager\Service\ModuleBackupService;
 
 class Reinstall extends CommandAbstract
 {
@@ -114,7 +115,10 @@ class Reinstall extends CommandAbstract
         // 4. 检查是否强制模式（-f 或 --force）
         $force = isset($args['f']) || isset($args['force']);
         
-        // 5. 显示警告信息并要求确认（除非是强制模式）
+        // 5. 是否在重装完成后尝试从卸载备份中恢复数据
+        $restoreFromBackup = isset($args['restore']);
+
+        // 6. 显示警告信息并要求确认（除非是强制模式）
         if (!$force) {
             $this->printer->error('');
             $this->printer->error('╔════════════════════════════════════════════════════════════════╗');
@@ -152,12 +156,12 @@ class Reinstall extends CommandAbstract
             $this->printer->note(__('强制模式：跳过确认，直接执行重装...'));
         }
 
-        // 6. 生成统一的备份批次时间戳
+        // 7. 生成统一的备份批次时间戳
         $this->backupTimestamp = date('Y_m_d_H_i_s');
         $this->printer->note('');
         $this->printer->setup(__('备份批次时间戳：%{1}', [$this->backupTimestamp]));
         
-        // 7. 开始重新安装流程
+        // 8. 开始重新安装流程
         $this->printer->note('');
         $this->printer->note('═══════════════════════════════════════════════════════════════');
         $this->printer->setup(__('开始重新安装模块...'));
@@ -167,7 +171,7 @@ class Reinstall extends CommandAbstract
             $this->reinstallModule($moduleName, $modules[$moduleName]);
         }
 
-        // 7. 执行 module:upgrade 重新安装模块
+        // 9. 执行 module:upgrade 重新安装模块
         $this->printer->note('');
         $this->printer->setup(__('开始重新安装模块...'));
         
@@ -240,6 +244,22 @@ class Reinstall extends CommandAbstract
                 
                 // 3. 更新模块注册信息（标记为已安装）
                 $this->updateModuleRegistration($moduleName, $moduleData);
+
+                // 4. 如指定 --restore，则尝试从卸载备份中恢复数据表
+                if ($restoreFromBackup && class_exists(ModuleBackupService::class)) {
+                    /** @var ModuleBackupService $backupService */
+                    $backupService = ObjectManager::getInstance(ModuleBackupService::class);
+                    $this->printer->note(__('检测模块 %{1} 是否存在卸载备份记录...', [$moduleName]));
+                    $backupResult = $backupService->restoreModuleTables($moduleName, null);
+                    if (!empty($backupResult['success'])) {
+                        $this->printer->success(__('模块 %{1} 数据表已从卸载备份中恢复', [$moduleName]));
+                    } else {
+                        $this->printer->warning(__('模块 %{1} 未从卸载备份中恢复：%{2}', [
+                            $moduleName,
+                            $backupResult['message'] ?? '',
+                        ]));
+                    }
+                }
                 
                 $this->printer->success(__('模块 %{1} 安装完成！', [$moduleName]));
             } catch (\Exception $e) {
@@ -337,37 +357,24 @@ class Reinstall extends CommandAbstract
                     continue;
                 }
 
-                // 检查表是否存在（使用 PDO 直接查询，确保正确检查带前缀的表名）
+                // 检查表是否存在（使用适配器的 tableExist 方法）
                 $connector = $model->getConnection()->getConnector();
-                $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
-                $fullTableName = $prefix . $originTableName;
                 
-                // 使用 PDO 直接查询表是否存在
-                if (method_exists($connector, 'getLink')) {
-                    /** @var \PDO $pdo */
-                    $pdo = call_user_func([$connector, 'getLink']);
-                    $dbName = $model->getConnection()->getConfigProvider()->getDatabase();
-                    $checkSql = "SHOW TABLES LIKE '{$fullTableName}'";
-                    if ($dbName) {
-                        $checkSql = "SHOW TABLES FROM `{$dbName}` LIKE '{$fullTableName}'";
-                    }
-                    $stmt = $pdo->query($checkSql);
-                    $tableExists = $stmt->rowCount() > 0;
-                } else {
-                    // 降级方案：使用 tableExist 方法
+                // 先尝试带前缀的表名，如果不存在，再尝试不带前缀的
+                $tableExists = $connector->tableExist($tableName);
+                if (!$tableExists) {
+                    // 如果带前缀的表不存在，尝试不带前缀的
                     $tableExists = $connector->tableExist($originTableName);
                     if ($tableExists) {
-                        $fullTableName = $prefix . $originTableName;
+                        // 如果使用原始表名找到了，使用原始表名
+                        $tableName = $originTableName;
                     }
                 }
                 
                 if (!$tableExists) {
-                    $this->printer->warning(__('  表 %{1} (完整名: %{2}) 不存在，跳过。', [$originTableName, $fullTableName]));
+                    $this->printer->warning(__('  表 %{1} (或 %{2}) 不存在，跳过。', [$tableName, $originTableName]));
                     continue;
                 }
-                
-                // 使用带前缀的完整表名
-                $tableName = $fullTableName;
 
                 // 备份表到文件（使用原始表名，不带数据库前缀）
                 $this->printer->note(__('  备份表到文件：%{1}...', [$originTableName]));
@@ -379,9 +386,49 @@ class Reinstall extends CommandAbstract
                         mkdir($backupDir, 0777, true);
                     }
                     
-                    // 使用模型的查询对象进行备份
-                    $model->clearQuery()->backup('', $originTableName);
-                    $backupFile = $model->getQuery()->backup_file ?? 'var/backup/db/' . $originTableName;
+                    // 使用适配器的 getCreateTableSql 方法获取建表语句（由适配器处理数据库差异）
+                    $createTableSql = $connector->getCreateTableSql($tableName);
+                    
+                    if (empty($createTableSql)) {
+                        throw new \Exception(__('无法获取表的建表语句'));
+                    }
+                    
+                    // 生成备份文件路径
+                    $backupFile = $backupDir . $originTableName . DS . $originTableName . '_' . date('Y-m-d_H-i-s') . '.sql';
+                    if (!is_dir(dirname($backupFile))) {
+                        mkdir(dirname($backupFile), 0777, true);
+                    }
+                    
+                    // 写入备份文件
+                    $file = fopen($backupFile, 'w');
+                    if (!$file) {
+                        throw new \Exception(__('无法创建备份文件：%{1}', [$backupFile]));
+                    }
+                    
+                    // 写入建表语句
+                    fwrite($file, "-- {$originTableName} 建表语句" . PHP_EOL);
+                    fwrite($file, $createTableSql . ';' . PHP_EOL);
+                    
+                    // 获取表数据并写入备份文件
+                    $dataSql = "SELECT * FROM {$tableName}";
+                    $dataResults = $connector->query($dataSql)->fetch();
+                    
+                    if (!empty($dataResults)) {
+                        fwrite($file, PHP_EOL);
+                        fwrite($file, "-- {$originTableName} 数据 " . PHP_EOL);
+                        foreach ($dataResults as $result) {
+                            // 单引号转义
+                            foreach ($result as $key => $item) {
+                                if (is_string($item)) {
+                                    $result[$key] = str_replace("'", "\\'", $item);
+                                }
+                            }
+                            $values = implode("','", array_values($result));
+                            fwrite($file, "INSERT INTO {$originTableName} VALUES ('{$values}');" . PHP_EOL);
+                        }
+                    }
+                    
+                    fclose($file);
                     $this->printer->success(__('  ✓ 备份文件：%{1}', [$backupFile]));
                 } catch (\Exception $backupException) {
                     $this->printer->warning(__('  备份失败：%{1}', [$backupException->getMessage()]));
@@ -394,24 +441,56 @@ class Reinstall extends CommandAbstract
                 $this->printer->note(__('  复制表：%{1} → %{2}...', [$tableName, $backupTableName]));
                 
                 try {
-                    // 通过 Connector 获取 PDO 连接
-                    $connector = $model->getConnection()->getConnector();
-                    // getLink() 方法在具体的 Connector 实现类中存在（Mysql/Connector, Pgsql/Connector 等）
-                    // 使用 call_user_func 来避免 linter 错误
-                    if (method_exists($connector, 'getLink')) {
-                        /** @var \PDO $pdo */
-                        $pdo = call_user_func([$connector, 'getLink']);
-                    } else {
-                        throw new \Exception(__('无法获取数据库连接'));
+                    // 使用 ORM 方法复制表：获取建表语句 → 修改表名 → 执行建表 → 复制数据
+                    // 获取 connection 对象（ORM 接口）
+                    $connection = $model->getConnection();
+                    
+                    // 检查备份表是否已存在，如果存在则先删除（避免重复创建错误）
+                    if ($connector->tableExist($backupTableName)) {
+                        $this->printer->note(__('  备份表已存在，先删除旧表：%{1}...', [$backupTableName]));
+                        try {
+                            $modelSetup = ObjectManager::make(ModelSetup::class);
+                            $modelSetup->putModel($model);
+                            $modelSetup->dropTable($backupTableName);
+                            $this->printer->note(__('  ✓ 旧备份表已删除'));
+                        } catch (\Exception $dropException) {
+                            $this->printer->warning(__('  删除旧备份表失败：%{1}，将继续尝试创建', [$dropException->getMessage()]));
+                        }
                     }
                     
-                    // 复制表结构和数据（不删除旧备份，支持多次备份）
-                    // 使用实际存在的表名（$tableName）进行复制
-                    $createBackupSql = "CREATE TABLE `{$backupTableName}` LIKE `{$tableName}`";
-                    $pdo->exec($createBackupSql);
-                    
-                    $insertBackupSql = "INSERT INTO `{$backupTableName}` SELECT * FROM `{$tableName}`";
-                    $pdo->exec($insertBackupSql);
+                    // 方法1：先尝试使用 CREATE TABLE ... AS SELECT（PostgreSQL 和 MySQL 都支持）
+                    // 如果失败，使用方法2：分步创建表并复制数据
+                    try {
+                        // 方法1：使用 CREATE TABLE ... AS SELECT（PostgreSQL 和 MySQL 都支持）
+                        $copySql = "CREATE TABLE {$backupTableName} AS SELECT * FROM {$tableName}";
+                        $connection->query($copySql)->fetch();
+                    } catch (\Exception $e1) {
+                        // 方法2：如果方法1失败，先获取建表语句，修改表名后执行，再插入数据
+                        $createTableSql = $connector->getCreateTableSql($tableName);
+                        
+                        if (empty($createTableSql)) {
+                            throw new \Exception(__('无法获取表的建表语句：%{1}', [$e1->getMessage()]));
+                        }
+                        
+                        // 移除 IF NOT EXISTS
+                        $createTableSql = preg_replace('/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+/i', 'CREATE TABLE ', $createTableSql);
+                        
+                        // 提取并替换表名（支持各种引号格式）
+                        // 匹配 CREATE TABLE 后的表名（可能包含 schema.table 格式）
+                        $createTableSql = preg_replace(
+                            '/CREATE\s+TABLE\s+[^(\s]+/i',
+                            'CREATE TABLE ' . $backupTableName,
+                            $createTableSql,
+                            1
+                        );
+                        
+                        // 使用 connection->query() 执行建表语句（ORM 接口）
+                        $connection->query($createTableSql)->fetch();
+                        
+                        // 使用 connection->query() 复制数据（ORM 接口）
+                        $insertBackupSql = "INSERT INTO {$backupTableName} SELECT * FROM {$tableName}";
+                        $connection->query($insertBackupSql)->fetch();
+                    }
                     
                     // 记录备份表信息（保存 connector 以便后续使用）
                     $this->backupTables[] = [
@@ -428,11 +507,17 @@ class Reinstall extends CommandAbstract
 
                 // 删除原表（使用带前缀的完整表名）
                 $this->printer->note(__('  删除原表：%{1}...', [$tableName]));
-                $modelSetup = ObjectManager::make(ModelSetup::class);
-                $modelSetup->putModel($model);
-                // 使用完整表名（带前缀）删除表
-                $modelSetup->dropTable($tableName);
-                $this->printer->success(__('  ✓ 原表已删除：%{1}', [$tableName]));
+                try {
+                    $modelSetup = ObjectManager::make(ModelSetup::class);
+                    $modelSetup->putModel($model);
+                    // 使用完整表名（带前缀）删除表
+                    $modelSetup->dropTable($tableName);
+                    $this->printer->success(__('  ✓ 原表已删除：%{1}', [$tableName]));
+                } catch (\Exception $dropException) {
+                    $this->printer->error(__('  ✗ 删除表失败：%{1} - %{2}', [$tableName, $dropException->getMessage()]));
+                    $this->printer->note(__('  错误堆栈：%{1}', [$dropException->getTraceAsString()]));
+                    // 继续处理其他表，不中断流程
+                }
 
             } catch (\Exception $e) {
                 $this->printer->error(__('  错误：处理 %{1} 时发生异常：%{2}', [$modelClass, $e->getMessage()]));
@@ -611,29 +696,35 @@ class Reinstall extends CommandAbstract
         $allBackupTables = [];
         $connector = null;
         
+        // 只显示本次创建的备份表（不查询历史备份表，避免数据库类型判断）
         foreach ($this->backupTables as $backupInfo) {
             $connector = $backupInfo['connector'];
             $originalTable = $backupInfo['original'];
-            /** @var \PDO $pdo */
-            $pdo = method_exists($connector, 'getLink') ? call_user_func([$connector, 'getLink']) : null;
-            if (!$pdo) {
-                continue;
-            }
+            $backupTable = $backupInfo['backup'];
             
-            // 查找该表的所有备份表
-            $pattern = $originalTable . '_backup_%';
-            $stmt = $pdo->query("SHOW TABLES LIKE '{$pattern}'");
-            
-            while ($row = $stmt->fetch(\PDO::FETCH_NUM)) {
-                $backupTable = $row[0];
+            try {
+                // 检查备份表是否存在（使用适配器的 tableExist 方法）
+                if (!$connector->tableExist($backupTable)) {
+                    continue;
+                }
                 
-                // 获取表的记录数和创建时间
-                $countStmt = $pdo->query("SELECT COUNT(*) as cnt FROM `{$backupTable}`");
-                $count = $countStmt->fetch(\PDO::FETCH_ASSOC)['cnt'];
+                // 获取表的记录数（使用适配器的 query 方法）
+                $countSql = "SELECT COUNT(*) as cnt FROM {$backupTable}";
+                $countResult = $connector->query($countSql)->fetch();
+                $count = 0;
+                if (is_array($countResult)) {
+                    if (isset($countResult[0])) {
+                        $count = $countResult[0]['cnt'] ?? $countResult[0][0] ?? 0;
+                    } else {
+                        $count = $countResult['cnt'] ?? $countResult[0] ?? 0;
+                    }
+                }
                 
                 // 从表名提取时间戳
                 $timeStr = str_replace($originalTable . '_backup_', '', $backupTable);
-                $timeStr = str_replace('_', '-', substr($timeStr, 0, 10)) . ' ' . str_replace('_', ':', substr($timeStr, 11));
+                if (strlen($timeStr) >= 19) {
+                    $timeStr = str_replace('_', '-', substr($timeStr, 0, 10)) . ' ' . str_replace('_', ':', substr($timeStr, 11, 8));
+                }
                 
                 $allBackupTables[] = [
                     'original' => $originalTable,
@@ -642,6 +733,9 @@ class Reinstall extends CommandAbstract
                     'time' => $timeStr,
                     'module' => $backupInfo['module']
                 ];
+            } catch (\Exception $e) {
+                $this->printer->warning(__('查询备份表失败：%{1} - %{2}', [$backupTable, $e->getMessage()]));
+                continue;
             }
         }
 
@@ -829,19 +923,35 @@ class Reinstall extends CommandAbstract
             $connector = $model->getConnection()->getConnector();
             $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
             
-            if (method_exists($connector, 'getLink')) {
-                /** @var \PDO $pdo */
-                $pdo = call_user_func([$connector, 'getLink']);
-                
-                foreach ($matches[1] as $tableName) {
+            foreach ($matches[1] as $tableName) {
+                try {
+                    // 先尝试带前缀的表名，如果不存在，再尝试不带前缀的
                     $fullTableName = $prefix . $tableName;
-                    // 检查表是否存在
-                    $checkSql = "SHOW TABLES LIKE '{$fullTableName}'";
-                    $stmt = $pdo->query($checkSql);
-                    if ($stmt->rowCount() > 0) {
-                        $pdo->exec("DROP TABLE IF EXISTS `{$fullTableName}`");
-                        $this->printer->success(__('  ✓ 已删除表：%{1}', [$fullTableName]));
+                    $tableExists = $connector->tableExist($fullTableName);
+                    $actualTableName = $fullTableName;
+                    
+                    if (!$tableExists) {
+                        // 如果带前缀的表不存在，尝试不带前缀的
+                        $tableExists = $connector->tableExist($tableName);
+                        if ($tableExists) {
+                            $actualTableName = $tableName;
+                        }
                     }
+                    
+                    if ($tableExists) {
+                        $this->printer->note(__('  正在删除表：%{1}...', [$actualTableName]));
+                        // 使用 ModelSetup 的 dropTable 方法删除表（由适配器处理 SQL 差异）
+                        $modelSetup = ObjectManager::make(ModelSetup::class);
+                        $modelSetup->putModel($model);
+                        $modelSetup->dropTable($actualTableName);
+                        $this->printer->success(__('  ✓ 已删除表：%{1}', [$actualTableName]));
+                    } else {
+                        $this->printer->warning(__('  表 %{1} (或 %{2}) 不存在，跳过。', [$fullTableName, $tableName]));
+                    }
+                } catch (\Exception $dropException) {
+                    $this->printer->error(__('  ✗ 删除表失败：%{1} - %{2}', [$tableName, $dropException->getMessage()]));
+                    $this->printer->note(__('  错误堆栈：%{1}', [$dropException->getTraceAsString()]));
+                    // 继续处理其他表，不中断流程
                 }
             }
         } catch (\Exception $e) {
@@ -896,6 +1006,7 @@ class Reinstall extends CommandAbstract
             '重新安装模块（危险操作，仅限开发模式）',
             [
                 '-m, --module=<模块名>' => '指定要重新安装的模块（必填，支持多个模块用空格分隔）',
+                '--restore'            => '如果存在卸载备份记录，重装后尝试从数据库备份中恢复模块数据表',
                 '-h, --help' => '显示帮助信息',
             ],
             [

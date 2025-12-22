@@ -203,6 +203,7 @@
 - 框架升级机制：WelineFramework采用基于版本控制的升级机制，仅修改模型代码不会自动修改数据库结构，必须更新模块版本号并执行upgrade()方法才能触发数据库变更。升级流程：1)修改模型代码添加字段常量，2)在upgrade()方法中实现数据库变更逻辑，3)更新register.php中的版本号，4)执行php bin/w setup:upgrade --model命令触发升级
 - 框架加载方法：优先使用框架自带的showLoading()和hideLoading()方法，避免自定义复杂的加载动画
 - ORM链式调用：`save()`方法内部已包含数据库执行逻辑，直接调用即可，**不需要**链式调用`fetch()`。但`delete()`、`update()`、`insert()`等方法需要链式调用`->fetch()`来执行操作，如$model->delete()->fetch()、$model->update()->fetch()、$model->insert()->fetch()
+- ORM分页功能：**禁止手动计算分页**，必须使用ORM内置的`pagination()`方法。使用方式：`$model->pagination($page, $pageSize)->select()->fetch()`，然后通过`$model->getPagination()`获取分页HTML。ORM会自动计算总数、总页数并生成完整的分页组件，无需手动编写分页逻辑。
 - ACL权限控制：模板中使用<acl source="Module::permission">标签控制按钮显示，Controller中使用#[\Weline\Framework\Acl\Acl()]注解控制方法访问
 - 系统性能调优
 

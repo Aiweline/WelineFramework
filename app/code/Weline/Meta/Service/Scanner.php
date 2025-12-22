@@ -122,7 +122,7 @@ class Scanner
         
         // 创建或更新元数据
         /** @var Meta $meta */
-        $meta = ObjectManager::getInstance()->get(Meta::class);
+        $meta = ObjectManager::getInstance(Meta::class);
         $meta->where(Meta::fields_NAMESPACE, $finalNamespace)
              ->where(Meta::fields_META_TYPE, $metaData['type'])
              ->where(Meta::fields_META_IDENTIFY, $identify)
@@ -234,7 +234,7 @@ class Scanner
      */
     protected function getModulePath(string $moduleName): ?string
     {
-        $moduleManager = ObjectManager::getInstance()->get(\Weline\Framework\Module\Model\Module::class);
+        $moduleManager = ObjectManager::getInstance(\Weline\Framework\Module\Model\Module::class);
         $module = $moduleManager->load('name', $moduleName);
         return $module->getId() ? $module->getPath() : null;
     }

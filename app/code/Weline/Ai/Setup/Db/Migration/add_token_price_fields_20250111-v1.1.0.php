@@ -22,7 +22,7 @@ class add_token_price_fields_20250111 extends Base
         $table = $this->getTable('ai');
         
         // 添加 token_price_input 字段（输入价格）
-        if (!$table->columnExists('token_price_input')) {
+        if (!$table->hasFields('token_price_input')) {
             $table->addColumn(
                 'token_price_input',
                 'DECIMAL',
@@ -37,7 +37,7 @@ class add_token_price_fields_20250111 extends Base
         }
         
         // 添加 token_price_output 字段（输出价格）
-        if (!$table->columnExists('token_price_output')) {
+        if (!$table->hasFields('token_price_output')) {
             $table->addColumn(
                 'token_price_output',
                 'DECIMAL',
@@ -64,11 +64,11 @@ class add_token_price_fields_20250111 extends Base
         $table = $this->getTable('ai');
         
         // 删除添加的字段
-        if ($table->columnExists('token_price_input')) {
+        if ($table->hasFields('token_price_input')) {
             $table->dropColumn('token_price_input');
         }
         
-        if ($table->columnExists('token_price_output')) {
+        if ($table->hasFields('token_price_output')) {
             $table->dropColumn('token_price_output');
         }
         

@@ -1,0 +1,156 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- 订单创建后 -->
+    <event name="Weline_Order::order_created">
+        <observer name="Weline_Order::order_created_observer" 
+                  instance="Weline\Order\Observer\OrderCreatedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单更新后 -->
+    <event name="Weline_Order::order_updated">
+        <observer name="Weline_Order::order_updated_observer" 
+                  instance="Weline\Order\Observer\OrderUpdatedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单状态变更前 -->
+    <event name="Weline_Order::order_status_change_before">
+        <observer name="Weline_Order::order_status_change_before_observer" 
+                  instance="Weline\Order\Observer\OrderStatusChangeBeforeObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单状态变更后 -->
+    <event name="Weline_Order::order_status_changed">
+        <observer name="Weline_Order::order_status_changed_observer" 
+                  instance="Weline\Order\Observer\OrderStatusChangedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单状态转换规则检查：Weline_Order::order_status_can_transition -->
+    <!-- 订单状态保存前：Weline_Order::order_status_save_before -->
+    
+    <!-- 订单状态保存后 -->
+    <event name="Weline_Order::order_status_saved">
+        <observer name="Weline_Order::order_status_saved_observer" 
+                  instance="Weline\Order\Observer\OrderStatusSavedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单状态删除前：Weline_Order::order_status_delete_before -->
+    
+    <!-- 订单状态删除后 -->
+    <event name="Weline_Order::order_status_deleted">
+        <observer name="Weline_Order::order_status_deleted_observer" 
+                  instance="Weline\Order\Observer\OrderStatusDeletedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单支付后 -->
+    <event name="Weline_Order::order_paid">
+        <observer name="Weline_Order::order_paid_observer" 
+                  instance="Weline\Order\Observer\OrderPaidObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单发货后 -->
+    <event name="Weline_Order::order_shipped">
+        <observer name="Weline_Order::order_shipped_observer" 
+                  instance="Weline\Order\Observer\OrderShippedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单完成后 -->
+    <event name="Weline_Order::order_completed">
+        <observer name="Weline_Order::order_completed_observer" 
+                  instance="Weline\Order\Observer\OrderCompletedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单取消后 -->
+    <event name="Weline_Order::order_cancelled">
+        <observer name="Weline_Order::order_cancelled_observer" 
+                  instance="Weline\Order\Observer\OrderCancelledObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 订单退款后 -->
+    <event name="Weline_Order::order_refunded">
+        <observer name="Weline_Order::order_refunded_observer" 
+                  instance="Weline\Order\Observer\OrderRefundedObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- ========== 订单状态查询事件 ========== -->
+    
+    <!-- 获取订单状态标签 -->
+    <event name="Weline_Order::query::get_status_label">
+        <observer name="Weline_Order::order_status_observer" 
+                  instance="Weline\Order\Observer\OrderStatusObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 获取订单状态CSS类 -->
+    <event name="Weline_Order::query::get_status_class">
+        <observer name="Weline_Order::order_status_observer" 
+                  instance="Weline\Order\Observer\OrderStatusObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 获取支付状态标签 -->
+    <event name="Weline_Order::query::get_payment_status_label">
+        <observer name="Weline_Order::order_status_observer" 
+                  instance="Weline\Order\Observer\OrderStatusObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 获取发货状态标签 -->
+    <event name="Weline_Order::query::get_fulfillment_status_label">
+        <observer name="Weline_Order::order_status_observer" 
+                  instance="Weline\Order\Observer\OrderStatusObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+    
+    <!-- 解析完整状态信息 -->
+    <event name="Weline_Order::domain::resolve_status_info">
+        <observer name="Weline_Order::order_status_observer" 
+                  instance="Weline\Order\Observer\OrderStatusObserver" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
+</config>
+

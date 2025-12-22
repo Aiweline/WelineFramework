@@ -25,5 +25,14 @@
                   shared="true" 
                   sort="300"/>
     </event>
+    
+    <!-- 元数据路径扫描事件：处理扫描任务 -->
+    <event name="Weline_Meta::scan_path">
+        <observer name="Weline_Meta::scan_path" 
+                  instance="Weline\Meta\Observer\ScanPath" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="10"/>
+    </event>
 </config>
 

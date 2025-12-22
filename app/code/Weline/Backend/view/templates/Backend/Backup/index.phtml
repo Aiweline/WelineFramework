@@ -151,7 +151,7 @@ function createBackup(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
     
-    fetch('<?= $this->getBackendUrl('*/backend/backup/create') ?>', {
+    fetch('<?= $this->getBackendUrl('*/backup/create') ?>', {
         method: 'POST',
         body: formData
     })

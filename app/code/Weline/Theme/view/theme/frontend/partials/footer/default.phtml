@@ -12,65 +12,67 @@
  * @param.socialMedia {default=[{"name":"微信公众号","icon":"fab fa-weixin","url":"#","color":"#07c160"},{"name":"微博","icon":"fab fa-weibo","url":"#","color":"#e6162d"},{"name":"抖音","icon":"fab fa-tiktok","url":"#","color":"#000000"},{"name":"B站","icon":"fab fa-bilibili","url":"#","color":"#fb7299"},{"name":"小红书","icon":"fab fa-instagram","url":"#","color":"#ff2442"}],name="官媒配置",description="官媒配置，用于设置官方社交媒体链接，格式：[{\"name\":\"名称\",\"icon\":\"图标类名\",\"url\":\"链接地址\",\"color\":\"主题色\"}]"}
  * @param.showSocialMedia {default=true,name="是否显示官媒",description="是否显示官媒链接，用于控制官媒区域的显示"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * - 参数配置由 Block\Partials 在渲染时自动加载
+ * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
  */
-$copyright = $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
-$links = $this->getData('links') ?? [
-    [
-        'title' => __('关于我们'),
-        'items' => [
-            ['text' => __('公司简介'), 'url' => '/about'],
-            ['text' => __('联系我们'), 'url' => '/contact'],
-            ['text' => __('加入我们'), 'url' => '/careers'],
-        ]
-    ],
-    [
-        'title' => __('帮助中心'),
-        'items' => [
-            ['text' => __('使用指南'), 'url' => '/help'],
-            ['text' => __('常见问题'), 'url' => '/faq'],
-            ['text' => __('服务条款'), 'url' => '/terms'],
-        ]
-    ],
-    [
-        'title' => __('客户服务'),
-        'items' => [
-            ['text' => __('在线客服'), 'url' => '/support'],
-            ['text' => __('意见反馈'), 'url' => '/feedback'],
-            ['text' => __('隐私政策'), 'url' => '/privacy'],
-        ]
-    ],
-];
-$showBackToTop = $this->getData('showBackToTop') ?? true;
-$socialMedia = $this->getData('socialMedia') ?? [
-    ['name' => __('微信公众号'), 'icon' => 'fab fa-weixin', 'url' => '#', 'color' => '#07c160'],
-    ['name' => __('微博'), 'icon' => 'fab fa-weibo', 'url' => '#', 'color' => '#e6162d'],
-    ['name' => __('抖音'), 'icon' => 'fab fa-tiktok', 'url' => '#', 'color' => '#000000'],
-    ['name' => __('B站'), 'icon' => 'fab fa-bilibili', 'url' => '#', 'color' => '#fb7299'],
-    ['name' => __('小红书'), 'icon' => 'fab fa-instagram', 'url' => '#', 'color' => '#ff2442'],
-];
-$showSocialMedia = $this->getData('showSocialMedia') ?? true;
-$class = $this->getData('class') ?? '';
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+$copyright = $meta['copyright'] ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+// 确保$links是数组
+$links = $meta['links'] ?? [];
+if (!is_array($links)) {
+    if (is_string($links)) {
+        $decoded = json_decode($links, true);
+        $links = is_array($decoded) ? $decoded : [];
+    } else {
+        $links = [];
+    }
+}
+$showBackToTop = $meta['showBackToTop'] ?? true;
+// 确保$socialMedia是数组
+$socialMedia = $meta['socialMedia'] ?? [];
+if (!is_array($socialMedia)) {
+    if (is_string($socialMedia)) {
+        $decoded = json_decode($socialMedia, true);
+        $socialMedia = is_array($decoded) ? $decoded : [];
+    } else {
+        $socialMedia = [];
+    }
+}
+$showSocialMedia = $meta['showSocialMedia'] ?? true;
+$class = $meta['class'] ?? '';
 ?>
 <footer id="footer" class="weline-footer <?= htmlspecialchars($class) ?>" data-layout="default" data-layout-type="default" data-layout-option="default">
+    <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
+    
     <w:block>Weline\Frontend\Block\Footer\Base</w:block>
     <?php
     /**@var \Weline\Framework\View\Template $this */
     echo $this->getFooter()->getHtml();
     ?>
     <!-- Footer Hooks -->
-    <hook>footer</hook>
+    <w:hook>footer</w:hook>
     
     <div class="footer-container">
-        <?php if (!empty($links)): ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::content-before</w:hook>
+        <?php if (!empty($links) && is_array($links)): ?>
             <div class="footer-content">
+                <w:hook>Weline_Theme::frontend::partials::footer::section-before</w:hook>
+                
                 <?php foreach ($links as $section): ?>
+                    <?php if (!is_array($section)) continue; ?>
                     <div class="footer-section">
                         <?php if (isset($section['title'])): ?>
                             <h3><?= htmlspecialchars($section['title']) ?></h3>
                         <?php endif; ?>
-                        <?php if (isset($section['items'])): ?>
+                        <?php if (isset($section['items']) && is_array($section['items'])): ?>
                             <ul>
                                 <?php foreach ($section['items'] as $item): ?>
+                                    <?php if (!is_array($item)) continue; ?>
                                     <li>
                                         <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>">
                                             <?= htmlspecialchars($item['text'] ?? '') ?>
@@ -81,14 +83,22 @@ $class = $this->getData('class') ?? '';
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
+                
+                <w:hook>Weline_Theme::frontend::partials::footer::section-after</w:hook>
             </div>
         <?php endif; ?>
         
-        <?php if ($showSocialMedia && !empty($socialMedia)): ?>
+        <w:hook>Weline_Theme::frontend::partials::footer::content-after</w:hook>
+        
+        <?php if ($showSocialMedia && !empty($socialMedia) && is_array($socialMedia)): ?>
+            <w:hook>Weline_Theme::frontend::partials::footer::social-media-before</w:hook>
             <div class="footer-social-media">
                 <div class="social-media-title"><?= __('关注我们') ?></div>
                 <div class="social-media-links">
+                    <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-before</w:hook>
+                    
                     <?php foreach ($socialMedia as $media): ?>
+                        <?php if (!is_array($media)) continue; ?>
                         <a href="<?= htmlspecialchars($media['url'] ?? '#') ?>" 
                            class="social-media-link" 
                            title="<?= htmlspecialchars($media['name'] ?? '') ?>"
@@ -99,12 +109,18 @@ $class = $this->getData('class') ?? '';
                             <span class="social-media-name"><?= htmlspecialchars($media['name'] ?? '') ?></span>
                         </a>
                     <?php endforeach; ?>
+                    
+                    <w:hook>Weline_Theme::frontend::partials::footer::social-media-links-after</w:hook>
                 </div>
             </div>
+            
+            <w:hook>Weline_Theme::frontend::partials::footer::social-media-after</w:hook>
         <?php endif; ?>
         
         <div class="footer-bottom">
+            <w:hook>Weline_Theme::frontend::partials::footer::copyright-before</w:hook>
             <p><?= htmlspecialchars($copyright) ?></p>
+            <w:hook>Weline_Theme::frontend::partials::footer::copyright-after</w:hook>
         </div>
     </div>
     
@@ -113,16 +129,42 @@ $class = $this->getData('class') ?? '';
             <i class="fas fa-arrow-up"></i>
         </button>
     <?php endif; ?>
+    
+    <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
 </footer>
 
+<?php
+// 加载布局特定的JS文件（在footer中加载）
+// 从 theme 对象中读取所有主题相关数据
+$theme = $this->getData('theme') ?? [];
+$area = $theme['area'] ?? 'frontend';
+$layoutType = $theme['layoutType'] ?? $this->getData('layoutType') ?? '';
+$layoutOption = $theme['layoutOption'] ?? $this->getData('layoutOption') ?? 'default';
+$requestPath = $this->request->getPathInfo() ?? '';
+if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
+    $area = 'backend';
+}
+
+if ($layoutType && $layoutOption) {
+    $this->setData('area', $area);
+    ?>
+<theme:js>Weline_Theme::theme/{{area}}/assets/js/layouts/{{layoutType}}/{{layoutOption}}.js</theme:js>
+<?php
+}
+?>
+
 <style>
+/* ========================================
+   Amazon风格 - Footer样式
+   ======================================== */
+
 .weline-footer {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    color: #cbd5e1;
+    background-color: #131921;
+    color: #fff;
     padding: 3rem 0 1.5rem;
     margin-top: 4rem;
     position: relative;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #3a4552;
 }
 
 .footer-container {
@@ -134,25 +176,22 @@ $class = $this->getData('class') ?? '';
 .footer-content {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2.5rem;
-    margin-bottom: 2.5rem;
+    gap: 2rem;
+    margin-bottom: 2rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    justify-items: center;
-    text-align: center;
+    border-bottom: 1px solid #3a4552;
 }
 
 .footer-section {
-    text-align: center;
+    text-align: left;
 }
 
 .footer-section h3 {
-    color: #ffffff;
-    font-size: 1.125rem;
-    font-weight: 600;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
     margin: 0 0 1rem;
     letter-spacing: 0.5px;
-    text-align: center;
 }
 
 .footer-section ul {
@@ -162,7 +201,6 @@ $class = $this->getData('class') ?? '';
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    align-items: center;
 }
 
 .footer-section li {
@@ -170,49 +208,31 @@ $class = $this->getData('class') ?? '';
 }
 
 .footer-section a {
-    color: #94a3b8;
+    color: #ddd;
     text-decoration: none;
-    font-size: 0.95rem;
-    transition: all 0.3s ease;
+    font-size: 0.875rem;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
     display: inline-block;
-    position: relative;
-    padding-left: 0;
-}
-
-.footer-section a::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: -2px;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-    transition: width 0.3s ease;
 }
 
 .footer-section a:hover {
-    color: #3b82f6;
-    padding-left: 0.5rem;
-    transform: translateX(4px);
+    color: #ff9900;
+    text-decoration: underline;
 }
 
-.footer-section a:hover::before {
-    width: 100%;
-}
-
-/* 官媒区域 */
+/* 官媒区域 - 亚马逊风格 */
 .footer-social-media {
     text-align: center;
     padding: 2rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #3a4552;
     margin-bottom: 1.5rem;
 }
 
 .social-media-title {
-    color: #ffffff;
+    color: #fff;
     font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
     letter-spacing: 0.5px;
 }
 
@@ -228,61 +248,24 @@ $class = $this->getData('class') ?? '';
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: #cbd5e1;
+    padding: 0.5rem 1rem;
+    background-color: #232f3e;
+    border: 1px solid #3a4552;
+    border-radius: 4px;
+    color: #ddd;
     text-decoration: none;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.social-media-link::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--social-color);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 0;
-}
-
-.social-media-link i {
-    position: relative;
-    z-index: 1;
-    font-size: 1.125rem;
-    transition: transform 0.3s ease;
-}
-
-.social-media-link .social-media-name {
-    position: relative;
-    z-index: 1;
-    transition: color 0.3s ease;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
 }
 
 .social-media-link:hover {
-    border-color: var(--social-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border-color: #ff9900;
+    color: #ff9900;
+    background-color: rgba(255, 153, 0, 0.1);
 }
 
-.social-media-link:hover::before {
-    opacity: 0.1;
-}
-
-.social-media-link:hover i {
-    transform: scale(1.15);
-    color: var(--social-color);
-}
-
-.social-media-link:hover .social-media-name {
-    color: var(--social-color);
+.social-media-link i {
+    font-size: 1rem;
 }
 
 .footer-bottom {
@@ -292,19 +275,19 @@ $class = $this->getData('class') ?? '';
 
 .footer-bottom p {
     margin: 0;
-    color: #64748b;
-    font-size: 0.9rem;
+    color: #ddd;
+    font-size: 0.875rem;
 }
 
-/* 返回顶部按钮 */
+/* 返回顶部按钮 - 亚马逊风格（橙色主题） */
 .back-to-top {
     position: fixed;
     bottom: 2rem;
     right: 2rem;
     width: 48px;
     height: 48px;
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: #ffffff;
+    background-color: #ff9900;
+    color: #111;
     border: none;
     border-radius: 50%;
     cursor: pointer;
@@ -312,8 +295,8 @@ $class = $this->getData('class') ?? '';
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.4);
+    transition: all 0.2s ease;
     opacity: 0;
     visibility: hidden;
     z-index: 999;
@@ -325,17 +308,17 @@ $class = $this->getData('class') ?? '';
 }
 
 .back-to-top:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    background-color: #e68900;
     transform: translateY(-4px);
-    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 6px 16px rgba(255, 153, 0, 0.5);
 }
 
 .back-to-top:active {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.4);
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 亚马逊风格 */
 @media (max-width: 1024px) {
     .footer-container {
         padding: 0 1.5rem;
@@ -343,20 +326,7 @@ $class = $this->getData('class') ?? '';
     
     .footer-content {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 2rem;
-    }
-    
-    .footer-social-media {
-        padding: 1.5rem 0;
-    }
-    
-    .social-media-links {
-        gap: 0.75rem;
-    }
-    
-    .social-media-link {
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
+        gap: 1.5rem;
     }
 }
 
@@ -373,40 +343,31 @@ $class = $this->getData('class') ?? '';
     .footer-content {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 1.5rem;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
         padding-bottom: 1.5rem;
     }
     
     .footer-section h3 {
-        font-size: 1rem;
+        font-size: 0.95rem;
         margin-bottom: 0.75rem;
     }
     
     .footer-section a {
-        font-size: 0.9rem;
+        font-size: 0.8125rem;
     }
     
     .footer-social-media {
-        padding: 1.25rem 0;
-        margin-bottom: 1.25rem;
-    }
-    
-    .social-media-title {
-        font-size: 0.95rem;
-        margin-bottom: 1rem;
+        padding: 1.5rem 0;
+        margin-bottom: 1.5rem;
     }
     
     .social-media-links {
-        gap: 0.625rem;
+        gap: 0.75rem;
     }
     
     .social-media-link {
         padding: 0.5rem 0.875rem;
-        font-size: 0.8rem;
-    }
-    
-    .social-media-link i {
-        font-size: 1rem;
+        font-size: 0.8125rem;
     }
     
     .back-to-top {
@@ -424,29 +385,26 @@ $class = $this->getData('class') ?? '';
         gap: 1.25rem;
     }
     
+    .footer-section {
+        text-align: center;
+    }
+    
+    .footer-section ul {
+        align-items: center;
+    }
+    
     .footer-social-media {
         padding: 1rem 0;
         margin-bottom: 1rem;
     }
     
-    .social-media-title {
-        font-size: 0.9rem;
-        margin-bottom: 0.875rem;
-    }
-    
     .social-media-links {
         gap: 0.5rem;
-        justify-content: center;
     }
     
     .social-media-link {
         padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
-        flex: 0 0 auto;
-    }
-    
-    .social-media-link i {
-        font-size: 0.95rem;
     }
     
     .social-media-link .social-media-name {
@@ -454,7 +412,7 @@ $class = $this->getData('class') ?? '';
     }
     
     .footer-bottom p {
-        font-size: 0.85rem;
+        font-size: 0.8125rem;
     }
     
     .back-to-top {
@@ -463,35 +421,6 @@ $class = $this->getData('class') ?? '';
         bottom: 1rem;
         right: 1rem;
         font-size: 1rem;
-    }
-}
-
-/* 暗色模式支持（如果系统支持） */
-@media (prefers-color-scheme: light) {
-    .weline-footer {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        color: #475569;
-        border-top-color: rgba(0, 0, 0, 0.1);
-    }
-    
-    .footer-section h3 {
-        color: #1e293b;
-    }
-    
-    .footer-section a {
-        color: #64748b;
-    }
-    
-    .footer-section a:hover {
-        color: #3b82f6;
-    }
-    
-    .footer-content {
-        border-bottom-color: rgba(0, 0, 0, 0.1);
-    }
-    
-    .footer-bottom p {
-        color: #94a3b8;
     }
 }
 </style>

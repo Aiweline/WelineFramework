@@ -16,6 +16,6 @@ Register::register(
     '1.0.0',
     '<a href="https://bbs.aiweline.com">前端模块</a>',
     [
-        'Weline_SystemConfig'
+        'Weline_Theme'
     ]
 );

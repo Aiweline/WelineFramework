@@ -1,0 +1,138 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+
+$area = $area ?: 'backend';
+$scope = $scope ?: 'default';
+
+// 当前 theme 的 Meta 都存放在统一 namespace=theme 下
+$baseNamespace = 'theme';
+$identityId = $theme->getId();
+
+// 先全部使用同一个命名空间，后续通过 meta_type / category 再细分
+$layoutNamespace   = $baseNamespace;
+$colorNamespace    = $baseNamespace;
+$partialsNamespace = $baseNamespace;
+$variableNamespace = $baseNamespace;
+$componentNamespace = $baseNamespace;
+
+// 说明：w:meta-manager 的属性值里写 $变量名，由 Taglib 自动解析为 PHP 输出
+?>
+
+<div class="theme-meta-manager-fragment p-2">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <strong><?= __('主题 Meta 配置') ?></strong>
+            <span class="text-muted ms-2" style="font-size: 11px;">
+                <?= sprintf('%s / %s / %s',
+                    htmlspecialchars($theme->getName() ?? ''),
+                    $area,
+                    $scope
+                ) ?>
+            </span>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs theme-meta-tabs" id="theme-meta-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-layouts"
+                    data-bs-toggle="tab" data-bs-target="#pane-layouts"
+                    type="button" role="tab" aria-controls="pane-layouts" aria-selected="true">
+                <?= __('布局') ?>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-colors"
+                    data-bs-toggle="tab" data-bs-target="#pane-colors"
+                    type="button" role="tab" aria-controls="pane-colors" aria-selected="false">
+                <?= __('色系') ?>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-partials"
+                    data-bs-toggle="tab" data-bs-target="#pane-partials"
+                    type="button" role="tab" aria-controls="pane-partials" aria-selected="false">
+                <?= __('部件') ?>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-variables"
+                    data-bs-toggle="tab" data-bs-target="#pane-variables"
+                    type="button" role="tab" aria-controls="pane-variables" aria-selected="false">
+                <?= __('变量') ?>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-components"
+                    data-bs-toggle="tab" data-bs-target="#pane-components"
+                    type="button" role="tab" aria-controls="pane-components" aria-selected="false">
+                <?= __('组件') ?>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-2">
+        <div class="tab-pane fade show active theme-meta-tab-pane" id="pane-layouts"
+             role="tabpanel" aria-labelledby="tab-layouts">
+            <w:meta-manager
+                    namespace="$layoutNamespace"
+                    area="$area"
+                    scope="$scope"
+                    identity-id="$identityId"
+                    type="layout"
+                    default-namespace="$layoutNamespace"
+                    show-filters="true"
+                    show-tree="true"/>
+        </div>
+        <div class="tab-pane fade theme-meta-tab-pane" id="pane-colors"
+             role="tabpanel" aria-labelledby="tab-colors">
+            <w:meta-manager
+                    namespace="$colorNamespace"
+                    area="$area"
+                    scope="$scope"
+                    identity-id="$identityId"
+                    type="color"
+                    default-namespace="$colorNamespace"
+                    show-filters="true"
+                    show-tree="true"/>
+        </div>
+        <div class="tab-pane fade theme-meta-tab-pane" id="pane-partials"
+             role="tabpanel" aria-labelledby="tab-partials">
+            <w:meta-manager
+                    namespace="$partialsNamespace"
+                    area="$area"
+                    scope="$scope"
+                    identity-id="$identityId"
+                    type="partial"
+                    default-namespace="$partialsNamespace"
+                    show-filters="true"
+                    show-tree="true"/>
+        </div>
+        <div class="tab-pane fade theme-meta-tab-pane" id="pane-variables"
+             role="tabpanel" aria-labelledby="tab-variables">
+            <w:meta-manager
+                    namespace="$variableNamespace"
+                    area="$area"
+                    scope="$scope"
+                    identity-id="$identityId"
+                    type="variable"
+                    default-namespace="$variableNamespace"
+                    show-filters="true"
+                    show-tree="true"/>
+        </div>
+        <div class="tab-pane fade theme-meta-tab-pane" id="pane-components"
+             role="tabpanel" aria-labelledby="tab-components">
+            <w:meta-manager
+                    namespace="$componentNamespace"
+                    area="$area"
+                    scope="$scope"
+                    identity-id="$identityId"
+                    type="component"
+                    default-namespace="$componentNamespace"
+                    show-filters="true"
+                    show-tree="true"/>
+        </div>
+    </div>
+</div>

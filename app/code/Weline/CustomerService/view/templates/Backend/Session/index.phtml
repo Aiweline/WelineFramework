@@ -1,0 +1,127 @@
+<?php
+/**
+ * 会话管理页面
+ */
+$sessions = $this->getData('sessions') ?? [];
+?>
+<div class="customer-service-session">
+    <div class="page-header">
+        <h1><?= __('会话管理') ?></h1>
+    </div>
+    
+    <div class="session-filters">
+        <select id="status-filter" class="form-control" onchange="filterSessions()">
+            <option value=""><?= __('全部状态') ?></option>
+            <option value="waiting"><?= __('等待中') ?></option>
+            <option value="active"><?= __('进行中') ?></option>
+            <option value="closed"><?= __('已关闭') ?></option>
+        </select>
+    </div>
+    
+    <div class="session-list">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th><?= __('会话ID') ?></th>
+                    <th><?= __('客户ID') ?></th>
+                    <th><?= __('客服') ?></th>
+                    <th><?= __('客户语言') ?></th>
+                    <th><?= __('客服语言') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('消息数') ?></th>
+                    <th><?= __('创建时间') ?></th>
+                    <th><?= __('操作') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($sessions)): ?>
+                    <tr>
+                        <td colspan="9" class="text-center"><?= __('暂无会话') ?></td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($sessions as $session): ?>
+                        <tr>
+                            <td><?= $session['session_id'] ?></td>
+                            <td><?= $session['customer_id'] ?: '-' ?></td>
+                            <td><?= htmlspecialchars($session['agent_name'] ?? '-') ?></td>
+                            <td><?= htmlspecialchars($session['customer_locale']) ?></td>
+                            <td><?= htmlspecialchars($session['agent_locale']) ?></td>
+                            <td>
+                                <?php
+                                $statusText = [
+                                    'waiting' => __('等待中'),
+                                    'active' => __('进行中'),
+                                    'closed' => __('已关闭')
+                                ];
+                                $statusClass = [
+                                    'waiting' => 'badge-warning',
+                                    'active' => 'badge-success',
+                                    'closed' => 'badge-secondary'
+                                ];
+                                ?>
+                                <span class="badge <?= $statusClass[$session['status']] ?? 'badge-secondary' ?>">
+                                    <?= $statusText[$session['status']] ?? $session['status'] ?>
+                                </span>
+                            </td>
+                            <td><?= $session['message_count'] ?? 0 ?></td>
+                            <td><?= $session['created_at'] ?></td>
+                            <td>
+                                <a href="<?= $this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']]) ?>" class="btn btn-sm btn-primary">
+                                    <?= __('查看') ?>
+                                </a>
+                                <?php if ($session['status'] !== 'closed'): ?>
+                                    <button class="btn btn-sm btn-danger" onclick="closeSession(<?= $session['session_id'] ?>)">
+                                        <?= __('关闭') ?>
+                                    </button>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function filterSessions() {
+    const status = document.getElementById('status-filter').value;
+    const url = new URL(window.location.href);
+    if (status) {
+        url.searchParams.set('status', status);
+    } else {
+        url.searchParams.delete('status');
+    }
+    window.location.href = url.toString();
+}
+
+function closeSession(sessionId) {
+    if (!confirm('<?= __('确定要关闭此会话吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl("customerservice/backend/session/close") ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            session_id: sessionId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('会话已关闭') ?>');
+            location.reload();
+        } else {
+            alert(data.message || '<?= __('关闭失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('关闭失败') ?>');
+    });
+}
+</script>
+

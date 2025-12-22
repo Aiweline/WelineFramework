@@ -1,0 +1,4368 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Cms\Model\Page $page */
+$page = $this->getData('page');
+$isEdit = $page && $page->getId();
+$selectedLocales = $this->getData('selected_locales') ?? [];
+$parentId = $this->getData('parent_id') ?? 0;
+
+// 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
+if ($isEdit && $page && $page->getId()) {
+    $visualPageId = $page->getId();
+    $visualStyleSettings = $page->getStyleSetting(); // 注意：方法名是单数形式
+    $pageDefaultLocale = ($page ? $page->getData('default_locale') : null) ?: \Weline\Framework\Http\Cookie::getLang();
+    $pageLocales = json_decode(($page ? ($page->getData('locales') ?? '') : ''), true) ?: [];
+} else {
+    $visualPageId = null;
+    $visualStyleSettings = [];
+    // 新建页面时，默认语言使用框架当前语言
+    $pageDefaultLocale = \Weline\Framework\Http\Cookie::getLang();
+    $pageLocales = [];
+}
+if (!is_array($pageLocales)) $pageLocales = [];
+
+// 确保默认语言在支持的语言列表中
+if ($pageDefaultLocale && !in_array($pageDefaultLocale, $pageLocales)) {
+    $pageLocales[] = $pageDefaultLocale;
+}
+
+// 确保 selectedLocales 包含默认语言
+if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
+    $selectedLocales[] = $pageDefaultLocale;
+}
+?>
+<w:template>Weline_Admin::Backend/page-layout/main-content-before.phtml</w:template>
+
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <?= $this->getData('page_title') ?: __('页面表单') ?>
+            </h4>
+
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item">
+                        <a href="<?= $this->getBackendUrl('*/backend/page/index') ?>">
+                            <?= $this->getData('breadcrumb_parent') ?: __('CMS内容管理系统') ?>
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">
+                        <?= $this->getData('breadcrumb_current') ?: __('页面表单') ?>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<form id="page-form" action="<?= $this->getData('action') ?>" method="post" class="needs-validation" novalidate>
+    <!-- 隐藏字段：父页面ID（用于创建子页面） -->
+    <?php if ($this->getData('parent_id')): ?>
+    <input type="hidden" name="parent_id" value="<?= $this->getData('parent_id') ?>">
+    <?php endif; ?>
+    
+    <div class="row">
+        <!-- 左侧主表单 -->
+        <div class="col-lg-8">
+            <!-- 基本信息卡片 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-information-outline"></i> <?= __('基本信息') ?>
+                    </h4>
+
+                    <!-- 页面句柄 -->
+                    <div class="mb-3">
+                        <label for="handle" class="form-label">
+                            <?= __('页面句柄') ?> <span class="text-danger">*</span>
+                        </label>
+                        <div class="position-relative">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="handle" 
+                                   name="handle" 
+                                  value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>"
+                                   placeholder="<?= __('例如：about-us, contact') ?>"
+                                   required
+                                   data-original-value="<?= htmlspecialchars(($page ? ($page->getData('handle') ?? '') : '')) ?>">
+                            <div id="handle-validation-icon" class="position-absolute top-50 end-0 translate-middle-y pe-3" style="display: none;">
+                                <span class="handle-checking"><i class="mdi mdi-loading mdi-spin text-primary"></i></span>
+                                <span class="handle-available"><i class="mdi mdi-check-circle text-success"></i></span>
+                                <span class="handle-unavailable"><i class="mdi mdi-close-circle text-danger"></i></span>
+                            </div>
+                        </div>
+                        <div class="form-text"><?= __('页面的唯一标识符，用于URL，只能包含小写字母、数字和连字符') ?></div>
+                        <div id="handle-validation-message" class="small mt-1" style="display: none;"></div>
+                        <div class="invalid-feedback"><?= __('请输入页面句柄') ?></div>
+                        
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                        <!-- 页面访问地址 -->
+                        <div class="alert alert-info mt-3 mb-0" role="alert">
+                            <div class="d-flex align-items-start">
+                                <i class="mdi mdi-link-variant fs-4 me-2"></i>
+                                <div class="flex-grow-1">
+                                    <h6 class="alert-heading mb-2">
+                                        <i class="mdi mdi-earth"></i> <?= __('页面访问地址') ?>
+                                    </h6>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" 
+                                               class="form-control bg-white" 
+                                               id="pageUrlDisplay" 
+                                              value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
+                                               readonly>
+                                        <button class="btn btn-outline-primary" 
+                                                type="button" 
+                                                onclick="copyPageUrl()"
+                                                title="<?= __('复制地址') ?>">
+                                            <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
+                                        </button>
+                                        <button class="btn btn-outline-success" 
+                                                type="button" 
+                                                onclick="openPageUrl()"
+                                                title="<?= __('在新窗口打开') ?>">
+                                            <i class="mdi mdi-open-in-new"></i> <?= __('打开') ?>
+                                        </button>
+                                    </div>
+                                    <small class="text-muted mt-2 d-block">
+                                        <i class="mdi mdi-information-outline"></i>
+                                        <?= __('这是页面的前端访问地址，修改句柄后需要保存才会更新') ?>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- 页面层级 -->
+                    <div class="mb-3">
+                        <label for="parent_id" class="form-label">
+                            <i class="mdi mdi-file-tree"></i> <?= __('父页面') ?>
+                        </label>
+                        <select class="form-select" id="parent_id" name="parent_id">
+                            <option value="0"><?= __('无（顶级页面）') ?></option>
+                            <?php 
+                            $currentParentId = $page ? $page->getData('parent_id') : $parentId;
+                            foreach ($this->getData('parent_pages') as $parentPage): 
+                            ?>
+                                <option value="<?= $parentPage->getId() ?>" 
+                                        <?= ($currentParentId == $parentPage->getId()) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars((($parentPage->getData('name') ?? '')) ?? '') ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text"><?= __('选择该页面的父页面（用于政策页面等依赖主页的场景）') ?></div>
+                    </div>
+
+                    <!-- 页面类型 -->
+                    <div class="mb-3">
+                        <label for="type" class="form-label">
+                            <?= __('页面类型') ?> <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="type" name="type" required>
+                            <option value=""><?= __('请选择页面类型') ?></option>
+                            <?php 
+                            // 检查是否有父页面（用于禁用"首页"类型）
+                            $hasParentPage = $this->getData('parent_id') && $this->getData('parent_id') != '0';
+                            
+                            foreach ($this->getData('page_types') as $typeValue => $typeName): 
+                                // 如果有父页面且是"首页"类型，禁用该选项
+                                $isLandingWithParent = $hasParentPage && $typeValue === 'home_page';
+                                $isSelected = ($page && $page->getData('type') == $typeValue && !$isLandingWithParent);
+                            ?>
+                                <option value="<?= $typeValue ?>" 
+                                        <?= $isSelected ? 'selected' : '' ?>
+                                        <?= $isLandingWithParent ? 'disabled' : '' ?>>
+                                    <?= $typeName ?><?= $isLandingWithParent ? ' ' . __('(子页面不能是主页)') : '' ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="invalid-feedback"><?= __('请选择页面类型') ?></div>
+                    </div>
+
+                    <!-- 页面名称 -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            <?= __('页面名称') ?> <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               value="{{page.local_name | page.name}}"
+                               placeholder="<?= __('输入页面名称') ?>"
+                               required>
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                            <div class="form-text">
+                                <local model="Weline\Cms\Model\Page\LocalDescription" 
+                                       field="name" 
+                                       id="page.page_id" 
+                                       name="page-name">{{page.local_name | page.name}}</local>
+                            </div>
+                        <?php endif; ?>
+                        <div class="invalid-feedback"><?= __('请输入页面名称') ?></div>
+                    </div>
+
+                    <!-- 页面标题 -->
+                    <div class="mb-3">
+                        <label for="title" class="form-label">
+                            <?= __('页面标题') ?> <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="title" 
+                               name="title" 
+                               value="{{page.local_title | page.title}}"
+                               placeholder="<?= __('输入页面标题') ?>"
+                               required>
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                            <div class="form-text">
+                                <local model="Weline\Cms\Model\Page\LocalDescription" 
+                                       field="title" 
+                                       id="page.page_id" 
+                                       name="page-title">{{page.local_title | page.title}}</local>
+                            </div>
+                        <?php else: ?>
+                        <div class="form-text"><?= __('显示在浏览器标签页的标题') ?></div>
+                        <?php endif; ?>
+                        <div class="invalid-feedback"><?= __('请输入页面标题') ?></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 自定义内容配置 -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="accordion" id="customContentAccordion">
+                        <div class="accordion-item border-0">
+                            <h2 class="accordion-header" id="customContentHeading">
+                                <button class="accordion-button collapsed bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#customContentCollapse" aria-expanded="false" aria-controls="customContentCollapse">
+                                    <i class="mdi mdi-file-document-edit me-2"></i>
+                                    <strong><?= __('内容配置') ?></strong>
+                                    <span class="badge bg-info ms-2"><?= __('我要自定义内容') ?></span>
+                                </button>
+                            </h2>
+                            <div id="customContentCollapse" class="accordion-collapse collapse" aria-labelledby="customContentHeading" data-bs-parent="#customContentAccordion">
+                                <div class="accordion-body">
+                                    <!-- 警告提示 -->
+                                    <div class="alert alert-warning d-flex align-items-start" role="alert">
+                                        <i class="mdi mdi-alert-circle-outline fs-4 me-2"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-2">
+                                                <i class="mdi mdi-information"></i> <?= __('重要提示') ?>
+                                            </h6>
+                                            <p class="mb-0">
+                                                <?= __('一旦在此处填写自定义内容，页面将使用此处的内容替代样式模板中的 <code>content.phtml</code> 文件。') ?>
+                                            </p>
+                                            <p class="mb-0 mt-2">
+                                                <i class="mdi mdi-check-circle text-success"></i> <?= __('保留：Header（头部）和 Footer（底部）模板') ?><br>
+                                                <i class="mdi mdi-close-circle text-danger"></i> <?= __('替换：Content（内容）模板将被下方的自定义内容替换') ?>
+                                            </p>
+                                            <hr class="my-2">
+                                            <small class="text-muted">
+                                                <i class="mdi mdi-lightbulb-on-outline"></i> 
+                                                <?= __('如果您想使用样式模板的默认内容布局，请保持此处为空。') ?>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 自定义内容编辑器 -->
+                                    <div class="mb-3">
+                                        <label for="custom_content" class="form-label">
+                                            <i class="mdi mdi-text-box"></i> <?= __('自定义页面内容') ?>
+                                            <span class="badge bg-secondary ms-2"><?= __('可选') ?></span>
+                                            <?php if ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1): ?>
+                                                <span class="badge bg-info ms-2">
+                                                    <i class="mdi mdi-information-outline"></i> <?= __('请在下方多语言tab中编辑') ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </label>
+                                        <textarea 
+                                            class="form-control tinymce-editor" 
+                                            id="custom_content" 
+                                            name="<?= ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1) ? '' : 'content' ?>" 
+                                            rows="15"
+                                            <?= ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1) ? 'readonly' : '' ?>
+                                            placeholder="<?= __('在此输入自定义 HTML 内容，留空则使用样式模板的默认 content.phtml...') ?>"><?= $isEdit && $page ? htmlspecialchars(($page->getData('content') ?? '') ?? '') : '' ?></textarea>
+                                        <div class="form-text">
+                                            <i class="mdi mdi-code-tags"></i>
+                                            <?php if ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1): ?>
+                                                <?= __('多语言模式下请在下方的语言tab中编辑各语言版本的内容。') ?>
+                                            <?php else: ?>
+                                                <?= __('支持 HTML 代码。使用可视化编辑器可以更方便地编辑内容。') ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <!-- 多语言内容翻译 Tab -->
+                                        <?php if ($isEdit && $page && $page->getId() && !empty($selectedLocales) && count($selectedLocales) > 1): ?>
+                                        <div class="mt-4 border-top pt-4">
+                                            <div class="d-flex align-items-center mb-3">
+                                                <i class="mdi mdi-translate text-primary fs-5 me-2"></i>
+                                                <strong><?= __('多语言内容翻译') ?></strong>
+                                                <span class="badge bg-info ms-2"><?= count($selectedLocales) ?> <?= __('种语言') ?></span>
+                                            </div>
+                                            
+                                            <!-- Tab 导航 -->
+                                            <ul class="nav nav-tabs nav-tabs-custom mb-3" id="contentLanguageTabs" role="tablist">
+                                                <?php 
+                                                $isFirst = true;
+                                                foreach ($this->getData('active_locales') as $locale): 
+                                                    if (!in_array($locale->getData('code'), $selectedLocales)) continue;
+                                                    $localeCode = $locale->getData('code');
+                                                    $localeName = $locale->getData('name');
+                                                    $isDefault = ($localeCode === $pageDefaultLocale);
+                                                    ?>
+                                                <li class="nav-item" role="presentation">
+                                                    <button class="nav-link <?= $isFirst ? 'active' : '' ?> <?= $isDefault ? 'fw-bold' : '' ?>" 
+                                                            id="content-lang-<?= $localeCode ?>-tab" 
+                                                            data-bs-toggle="tab" 
+                                                            data-bs-target="#content-lang-<?= $localeCode ?>" 
+                                                            type="button" 
+                                                            role="tab">
+                                                        <i class="mdi mdi-web"></i> <?= $localeName ?>
+                                                        <?php if ($isDefault): ?>
+                                                            <span class="badge bg-success ms-1"><?= __('默认') ?></span>
+                                                        <?php endif; ?>
+                                                    </button>
+                                                </li>
+                                                <?php 
+                                                    $isFirst = false;
+                                                endforeach; 
+                                                ?>
+                                            </ul>
+                                            
+                                            <!-- Tab 内容 -->
+                                            <div class="tab-content border rounded p-3 bg-light" id="contentLanguageTabsContent">
+                                                <?php 
+                                                $isFirst = true;
+                                                foreach ($this->getData('active_locales') as $locale): 
+                                                    if (!in_array($locale->getData('code'), $selectedLocales)) continue;
+                                                    $localeCode = $locale->getData('code');
+                                                    $localeName = $locale->getData('name');
+                                                    $isDefault = ($localeCode === $pageDefaultLocale);
+                                                    
+                                                    // 获取该语言的内容
+                                                    $languageContent = '';
+                                                    if ($isDefault) {
+                                                        // 默认语言使用主内容
+                                                        $languageContent = $page->getData('content') ?? '';
+                                                    } else {
+                                                        // 其他语言使用翻译内容
+                                                        $allLocalizedContents = $this->getData('localized_contents') ?? [];
+                                                        if (isset($allLocalizedContents[$localeCode]['content'])) {
+                                                            $languageContent = $allLocalizedContents[$localeCode]['content'];
+                                                        }
+                                                    }
+                                                    ?>
+                                                <div class="tab-pane fade <?= $isFirst ? 'show active' : '' ?>" 
+                                                     id="content-lang-<?= $localeCode ?>" 
+                                                     role="tabpanel">
+                                                    
+                                                    <!-- 语言提示 -->
+                                                    <div class="alert <?= $isDefault ? 'alert-success' : 'alert-light' ?> border mb-3">
+                                                        <div class="d-flex align-items-start">
+                                                            <i class="mdi <?= $isDefault ? 'mdi-check-circle' : 'mdi-information-outline' ?> <?= $isDefault ? 'text-success' : 'text-info' ?> fs-4 me-2"></i>
+                                                            <div class="flex-grow-1">
+                                                                <strong><?= __('正在编辑：%{1}', $localeName) ?></strong>
+                                                                <?php if ($isDefault): ?>
+                                                                    <span class="badge bg-success ms-2"><?= __('默认语言') ?></span>
+                                                                <?php endif; ?>
+                                                                <p class="mb-0 text-muted small mt-1">
+                                                                    <?php if ($isDefault): ?>
+                                                                        <?= __('这是默认语言的内容。修改此处会同步更新上方的主内容。') ?>
+                                                                    <?php else: ?>
+                                                                        <?= __('为 %{1} 语言版本提供自定义内容翻译。留空将使用默认语言内容。', $localeName) ?>
+                                                                    <?php endif; ?>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- 内容编辑器 -->
+                                                    <textarea class="form-control tinymce-editor" 
+                                                              id="content_<?= $localeCode ?>" 
+                                                              name="<?= $isDefault ? 'content' : 'content_' . $localeCode ?>" 
+                                                              rows="12"
+                                                              placeholder="<?= $isDefault ? __('在此输入默认语言的自定义内容...') : __('在此输入 %{1} 的自定义内容，留空则使用默认语言内容...', $localeName) ?>"><?= htmlspecialchars($languageContent ?? '') ?></textarea>
+                                                    <div class="form-text mt-2">
+                                                        <i class="mdi mdi-code-tags"></i>
+                                                        <?= __('支持 HTML 代码。') ?>
+                                                        <?php if ($isDefault): ?>
+                                                            <span class="badge bg-primary ms-2">
+                                                                <i class="mdi mdi-star"></i> <?= __('默认语言') ?>
+                                                            </span>
+                                                        <?php elseif (!empty($languageContent)): ?>
+                                                            <span class="badge bg-success ms-2">
+                                                                <i class="mdi mdi-check"></i> <?= __('已翻译') ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-warning ms-2">
+                                                                <i class="mdi mdi-alert"></i> <?= __('未翻译') ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                                <?php 
+                                                    $isFirst = false;
+                                                endforeach; 
+                                                ?>
+                                            </div>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <!-- 内容状态提示 -->
+                                    <div id="contentStatusAlert" class="alert alert-info d-none">
+                                        <i class="mdi mdi-information"></i>
+                                        <span id="contentStatusText"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 页面样式和配置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-palette"></i> <?= __('样式与配置') ?>
+                    </h4>
+
+                    <!-- 样式选择 -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <label class="form-label mb-0">
+                                <?= __('选择样式模板') ?> <span class="text-danger">*</span>
+                            </label>
+                            <?php if ($isEdit && $page && $page->getId()): ?>
+                                <w:template>Weline_Cms::Backend/Page/form_component/visual_config.phtml</w:template>
+                            <div class="d-flex gap-2">
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary" 
+                                        onclick="openVisualConfig((document.getElementById('handle')||{}).value||'')"
+                                        id="openVisualConfigBtn">
+                                    <i class="mdi mdi-monitor-edit"></i> <?= __('可视化配置') ?>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-sm btn-success" 
+                                        onclick="openFrontendPreview()"
+                                        id="frontendPreviewBtn">
+                                    <i class="mdi mdi-eye-outline"></i> <?= __('在线预览') ?>
+                                </button>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <!-- 隐藏的select用于表单提交 -->
+                        <select class="d-none" id="style" name="style" required>
+                            <option value=""><?= __('正在加载样式模板...') ?></option>
+                        </select>
+                        
+                        <!-- 搜索框 -->
+                        <div class="input-group mb-3">
+                            <span class="input-group-text">
+                                <i class="mdi mdi-magnify"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="styleSearchInput" 
+                                   placeholder="<?= __('搜索样式模板...') ?>"
+                                   autocomplete="off">
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    id="refreshStyleBtn" 
+                                    title="<?= __('刷新样式列表') ?>">
+                                <i class="mdi mdi-refresh"></i>
+                            </button>
+                    </div>
+
+                        <!-- 加载状态 -->
+                        <div id="styleCardsLoading" class="text-center py-5" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden"><?= __('加载中...') ?></span>
+                            </div>
+                            <div class="mt-2 text-muted"><?= __('正在加载样式模板...') ?></div>
+                        </div>
+                        
+                        <!-- 无结果提示 -->
+                        <div id="styleCardsEmpty" class="alert alert-warning" style="display: none;">
+                            <i class="mdi mdi-alert"></i>
+                            <?= __('没有找到匹配的样式模板') ?>
+                        </div>
+                        
+                        <!-- 样式卡片网格 -->
+                        <div id="styleCardsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+                            <!-- 样式卡片将动态加载到这里 -->
+                        </div>
+                        
+                        <div class="form-text mt-2">
+                            <i class="mdi mdi-information-outline"></i>
+                            <?= __('选择页面的样式模板（Header、Content、Footer）') ?>
+                        </div>
+                        <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
+                    </div>
+
+                    <!-- 样式配置区域（已移除） -->
+                </div>
+            </div>
+            
+            <!-- 页面关系树 -->
+            <?php if ($isEdit && $page && $page->getId()): ?>
+            <?php
+            $relatedPages = $this->getData('related_pages') ?? [];
+            $isChildPage = $this->getData('is_child_page') ?? false;
+            ?>
+            <?php if (!empty($relatedPages)): ?>
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-file-tree"></i> 
+                        <?php if ($isChildPage): ?>
+                            <?= __('同级页面') ?>
+                        <?php else: ?>
+                            <?= __('子页面') ?>
+                        <?php endif; ?>
+                        <span class="badge bg-primary ms-2"><?= count($relatedPages) ?></span>
+                    </h4>
+                    
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information"></i>
+                        <?php if ($isChildPage): ?>
+                            <?= __('这是一个子页面，以下是与它同级的其他子页面') ?>
+                        <?php else: ?>
+                            <?= __('以下是当前页面的所有子页面') ?>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- 页面列表 -->
+                    <div class="list-group">
+                        <?php foreach ($relatedPages as $relPage): ?>
+                        <?php
+                        $isCurrentPage = $relPage->getId() === $page->getId();
+                        $pageUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . ltrim($relPage->getData('handle'), '/');
+                        $isPublished = $relPage->getData('status') == 1;
+                        ?>
+                        <div class="list-group-item <?= $isCurrentPage ? 'bg-light border-primary' : '' ?>">
+                            <div class="d-flex align-items-start">
+                                <!-- 左侧图标和信息 -->
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <?php if ($isCurrentPage): ?>
+                                            <i class="mdi mdi-arrow-right-circle text-primary me-2" style="font-size: 20px;"></i>
+                                            <span class="badge bg-primary me-2">当前页面</span>
+                                        <?php else: ?>
+                                            <i class="mdi mdi-file-outline text-secondary me-2" style="font-size: 20px;"></i>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($isPublished): ?>
+                                            <span class="badge bg-success me-2">
+                                                <i class="mdi mdi-check"></i> 已发布
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary me-2">
+                                                <i class="mdi mdi-clock-outline"></i> 草稿
+                                            </span>
+                                        <?php endif; ?>
+                                        
+                                        <span class="badge bg-light text-dark">
+                                            ID: <?= $relPage->getId() ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <h6 class="mb-1">
+                                        <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $relPage->getId()]) ?>" 
+                                           class="text-decoration-none" 
+                                           target="_blank">
+                                            <?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>
+                                            <i class="mdi mdi-open-in-new ms-1"></i>
+                                        </a>
+                                    </h6>
+                                    
+                                    <div class="text-muted small mb-2">
+                                        <i class="mdi mdi-link-variant"></i>
+                                        <code class="text-dark clickable-handle" 
+                                              style="cursor: pointer; padding: 2px 6px; border-radius: 3px; background-color: #f8f9fa;"
+                                              data-handle="<?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>"
+                                              data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
+                                              title="<?= __('点击复制 Handle') ?>"
+                                              onmouseover="this.style.backgroundColor='#e9ecef'"
+                                              onmouseout="this.style.backgroundColor='#f8f9fa'">
+                                            <?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>
+                                        </code>
+                                    </div>
+                                    
+                                    <div class="text-muted small">
+                                        <i class="mdi mdi-web"></i>
+                                        <span class="clickable-url" 
+                                              style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;"
+                                              data-url="<?= htmlspecialchars($pageUrl ?? '') ?>"
+                                              data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
+                                              title="<?= __('点击复制链接') ?>"
+                                              onmouseover="this.style.color='#0d6efd'"
+                                              onmouseout="this.style.color=''">
+                                            <?= htmlspecialchars($pageUrl ?? '') ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 右侧操作按钮 -->
+                                <div class="d-flex flex-column gap-1 ms-2">
+                                    <!-- 复制 Handle 按钮 -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-secondary copy-handle-btn" 
+                                            data-handle="<?= htmlspecialchars((($relPage->getData('handle') ?? '')) ?? '') ?>"
+                                            data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
+                                            title="<?= __('复制 Handle') ?>">
+                                        <i class="mdi mdi-code-tags"></i> Handle
+                                    </button>
+                                    
+                                    <!-- 复制链接按钮 -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-primary copy-page-url-btn" 
+                                            data-url="<?= htmlspecialchars($pageUrl ?? '') ?>"
+                                            data-page-name="<?= htmlspecialchars((($relPage->getData('name') ?? '')) ?? '') ?>"
+                                            title="<?= __('复制页面链接') ?>">
+                                        <i class="mdi mdi-content-copy"></i> 链接
+                                    </button>
+                                    
+                                    <?php if ($isPublished): ?>
+                                    <!-- 预览按钮 -->
+                                    <a href="<?= $pageUrl ?>?preview=1" 
+                                       target="_blank" 
+                                       class="btn btn-sm btn-outline-info"
+                                       title="<?= __('预览页面') ?>">
+                                        <i class="mdi mdi-eye-outline"></i> 预览
+                                    </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    
+                    <div class="mt-3 text-muted small">
+                        <i class="mdi mdi-information"></i>
+                        <?= __('点击页面名称可在新标签页中编辑该页面') ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php endif; ?>
+        </div>
+        <!-- 右侧边栏 -->
+        <div class="col-lg-4">
+            <!-- 品牌资源 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-search-web"></i> <?= __('SEO设置') ?>
+                    </h4>
+
+                    <!-- SEO标题 -->
+                    <div class="mb-3">
+                        <label for="meta_title" class="form-label">
+                            <?= __('SEO标题') ?>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="meta_title" 
+                               name="meta_title" 
+                               value="{{page.local_meta_title | page.meta_title}}"
+                               placeholder="<?= __('输入SEO标题（留空则使用页面标题）') ?>">
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                            <div class="form-text">
+                                <local model="Weline\Cms\Model\Page\LocalDescription" 
+                                       field="meta_title" 
+                                       id="page.page_id" 
+                                       name="page-meta-title">{{page.meta_title|page.title}}</local>
+                            </div>
+                        <?php else: ?>
+                        <div class="form-text"><?= __('搜索引擎显示的标题，建议50-60个字符') ?></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- SEO描述 -->
+                    <div class="mb-3">
+                        <label for="meta_description" class="form-label">
+                            <?= __('SEO描述') ?>
+                        </label>
+                        <textarea class="form-control" 
+                                  id="meta_description" 
+                                  name="meta_description" 
+                                  rows="3"
+                                  placeholder="<?= __('输入SEO描述') ?>"><?= htmlspecialchars(($page ? ($page->getData('meta_description') ?? '') : '')) ?></textarea>
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                            <div class="form-text">
+                                <local model="Weline\Cms\Model\Page\LocalDescription" 
+                                       field="meta_description" 
+                                       id="page.page_id" 
+                                       name="page-meta-description">{{page.local_meta_description | page.meta_description}}</local>
+                            </div>
+                        <?php else: ?>
+                        <div class="form-text"><?= __('搜索引擎显示的描述，建议150-160个字符') ?></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- SEO关键词 -->
+                    <div class="mb-3">
+                        <label for="meta_keywords" class="form-label">
+                            <?= __('SEO关键词') ?>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="meta_keywords" 
+                               name="meta_keywords" 
+                               value="{{page.local_meta_keywords | page.meta_keywords}}"
+                               placeholder="<?= __('输入关键词，用逗号分隔') ?>">
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                            <div class="form-text">
+                                <local model="Weline\Cms\Model\Page\LocalDescription" 
+                                       field="meta_keywords" 
+                                       id="page.page_id" 
+                                       name="page-meta-keywords">{{page.local_meta_keywords | page.meta_keywords}}</local>
+                            </div>
+                        <?php else: ?>
+                        <div class="form-text"><?= __('用逗号分隔多个关键词') ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 跟踪代码 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-code-tags"></i> <?= __('跟踪代码') ?>
+                    </h4>
+
+                    <!-- GA4 ID -->
+                    <div class="mb-3">
+                        <label for="ga4_id" class="form-label"><?= __('Google Analytics 4 ID') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="ga4_id" 
+                               name="ga4_id" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('ga4_id') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：G-XXXXXXXXXX') ?>">
+                    </div>
+
+                    <!-- GTM ID -->
+                    <div class="mb-3">
+                        <label for="gtm_id" class="form-label"><?= __('Google Tag Manager ID') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="gtm_id" 
+                               name="gtm_id" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('gtm_id') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：GTM-XXXXXXX') ?>">
+                    </div>
+
+                    <!-- Facebook Pixel ID -->
+                    <div class="mb-3">
+                        <label for="fb_pixel_id" class="form-label"><?= __('Facebook Pixel ID') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="fb_pixel_id" 
+                               name="fb_pixel_id" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('fb_pixel_id') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：123456789012345') ?>">
+                    </div>
+
+                    <!-- CTA/Event 事件名称（来自 page 数据） -->
+                    <div class="mb-3">
+                        <label for="cta_event_name" class="form-label"><?= __('CTA 转化事件名称') ?></label>
+                        <input type="text"
+                               class="form-control"
+                               id="cta_event_name"
+                               name="cta_event_name"
+                               value="<?= htmlspecialchars(($page ? (($page->getData('cta_event_name') ?? '') ?: $page->getData('event_name') ?: '') : '')) ?>"
+                               placeholder="<?= __('留空将自动生成为 cta_{handle}_click') ?>">
+                        <small class="form-text text-muted">
+                            <?= __('用于 GTM / GA / Meta 事件上报；若留空，保存时默认生成为 cta_{handle}_click') ?>
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 表单提交设置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-form-select"></i> <?= __('表单提交设置') ?>
+                    </h4>
+
+                    <!-- 提交后跳转URL -->
+                    <div class="mb-3">
+                        <label for="redirect_url" class="form-label"><?= __('表单提交成功后跳转URL') ?></label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="redirect_url" 
+                               name="redirect_url" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('redirect_url') ?? '') : '')) ?>"
+                               placeholder="<?= __('例如：https://www.example.com/thank-you') ?>">
+                        <div class="form-text">
+                            <?= __('留空则不跳转。必须是完整的URL地址（包含 http:// 或 https://）') ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 发布设置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-publish"></i> <?= __('发布设置') ?>
+                    </h4>
+
+                    <!-- 状态 -->
+                    <div class="mb-3">
+                        <label for="status" class="form-label"><?= __('状态') ?></label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="0" <?= (!$page || $page->getData('status') == 0) ? 'selected' : '' ?>>
+                                <?= __('草稿') ?>
+                            </option>
+                            <option value="1" <?= ($page && $page->getData('status') == 1) ? 'selected' : '' ?>>
+                                <?= __('已发布') ?>
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- 快捷发布按钮 -->
+                    <div class="mb-3">
+                        <button type="button" 
+                                class="btn btn-success w-100" 
+                                onclick="publishPage()"
+                                id="publishPageBtn">
+                            <i class="mdi mdi-send"></i> <?= __('发布页面') ?>
+                        </button>
+                        <div class="form-text text-center">
+                            <i class="mdi mdi-information-outline"></i>
+                            <?= __('将状态设置为"已发布"并保存') ?>
+                        </div>
+                    </div>
+
+                    <!-- 保存按钮 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save"></i> <?= $isEdit ? __('更新页面') : __('创建页面') ?>
+                        </button>
+                        <a href="<?= $this->getBackendUrl('*/backend/page/index') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left"></i> <?= __('返回列表') ?>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 品牌资源 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-image"></i> <?= __('品牌资源') ?>
+                    </h4>
+
+                    <!-- Logo -->
+                    <div class="mb-3">
+                        <label for="logo" class="form-label"><?= __('Logo图片') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="logo" 
+                               name="logo" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('logo') ?? '') : '')) ?>"
+                               placeholder="<?= __('输入Logo图片URL') ?>">
+                    </div>
+
+                    <!-- Icon -->
+                    <div class="mb-3">
+                        <label for="icon" class="form-label"><?= __('网站图标') ?></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="icon" 
+                               name="icon" 
+                               value="<?= htmlspecialchars(($page ? ($page->getData('icon') ?? '') : '')) ?>"
+                               placeholder="<?= __('输入网站图标URL') ?>">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 多语言设置 -->
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-translate"></i> <?= __('多语言设置') ?>
+                    </h4>
+
+                    <!-- 默认语言选择 -->
+                    <div class="mb-3">
+                        <label for="default_locale" class="form-label">
+                            <?= __('默认语言') ?> <span class="text-danger">*</span>
+                        </label>
+                        
+                        <?php 
+                        // 获取默认语言：优先使用页面设置的语言，如果没有则使用框架当前语言
+                        $currentDefaultLocale = $pageDefaultLocale;
+                        
+                        // 获取当前默认语言的名称
+                        $currentDefaultLocaleName = '';
+                        foreach ($this->getData('active_locales') as $locale) {
+                            if ($locale->getData('code') == $currentDefaultLocale) {
+                                $currentDefaultLocaleName = $locale->getData('name');
+                                break;
+                            }
+                        }
+                        ?>
+                        
+                        <!-- 当前选中的默认语言显示 -->
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="defaultLocaleSearch"
+                                   placeholder="<?= __('搜索语言...') ?>"
+                                   autocomplete="off"
+                                   value="<?= $currentDefaultLocaleName ?> (<?= $currentDefaultLocale ?>)">
+                            <button class="btn btn-outline-secondary dropdown-toggle" 
+                                    type="button" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false"
+                                    id="defaultLocaleDropdownBtn">
+                                <?= __('选择') ?>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" 
+                                id="defaultLocaleDropdown"
+                                style="max-height: 300px; overflow-y: auto; width: 100%;">
+                                <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <li>
+                                    <a class="dropdown-item default-locale-option <?= ($locale->getData('code') == $currentDefaultLocale) ? 'active' : '' ?>" 
+                                       href="javascript:void(0)"
+                                       data-locale-code="<?= $locale->getData('code') ?>"
+                                       data-locale-name="<?= $locale->getData('name') ?>"
+                                       onclick="selectDefaultLocale('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')">
+                                        <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                        <?php if ($locale->getData('code') == $currentDefaultLocale): ?>
+                                            <i class="mdi mdi-check float-end"></i>
+                                        <?php endif; ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                        
+                        <!-- 隐藏的input用于表单提交 -->
+                        <input type="hidden" id="default_locale" name="default_locale" value="<?= $currentDefaultLocale ?>" required>
+                        
+                        <div class="form-text"><?= __('选择页面的主要语言版本') ?></div>
+                    </div>
+
+                    <hr>
+
+                    <!-- 多语言翻译选择 -->
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('支持的语言翻译') ?></label>
+                        
+                        <!-- 已选中的语言标签 -->
+                        <div id="selectedLocalesTags" class="mb-2" style="min-height: 38px; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f8f9fa;">
+                            <?php 
+                            $hasSelectedLocales = false;
+                            foreach ($this->getData('active_locales') as $locale): 
+                                if (in_array($locale->getData('code'), $selectedLocales)): 
+                                    $hasSelectedLocales = true;
+                                    ?>
+                                <span class="badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag" 
+                                      data-locale-code="<?= $locale->getData('code') ?>"
+                                      style="font-size: 0.875rem;">
+                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                    <i class="mdi mdi-close ms-1" 
+                                       style="cursor: pointer;"
+                                       onclick="removeLocaleTag('<?= $locale->getData('code') ?>')"></i>
+                                </span>
+                            <?php endif; 
+                            endforeach; 
+                            
+                            // 如果没有选择任何语言，显示提示
+                            if (!$hasSelectedLocales): ?>
+                                <div class="text-muted" id="noLocalesHint" style="font-size: 0.875rem;">
+                                    <i class="mdi mdi-information-outline me-1"></i>
+                                    <?= __('暂未选择支持的语言，请使用下方搜索框添加语言') ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <!-- 搜索添加语言 - 自定义下拉选择器 -->
+                        <div class="position-relative">
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="localeSearch"
+                                       placeholder="<?= __('搜索并选择语言...') ?>"
+                                       autocomplete="off">
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        id="localeDropdownBtn"
+                                        onclick="toggleLocaleDropdown()">
+                                    <i class="mdi mdi-chevron-down"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- 自定义下拉列表 -->
+                            <div id="localeDropdown" 
+<<<<<<< HEAD
+                                 class="border rounded bg-white shadow-sm position-absolute w-100 mt-1" 
+=======
+                                 class="border rounded shadow-sm position-absolute w-100 mt-1" 
+>>>>>>> dev-new
+                                 style="max-height: 300px; overflow-y: auto; display: none; z-index: 1050;">
+                                <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <div class="dropdown-item locale-option" 
+                                     data-locale-code="<?= $locale->getData('code') ?>"
+                                     data-locale-name="<?= $locale->getData('name') ?>"
+                                     onclick="addLocaleTag('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')"
+                                     style="cursor: pointer; padding: 0.5rem 1rem; <?= in_array($locale->getData('code'), $selectedLocales) ? 'display: none;' : '' ?>">
+                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
+                                </div>
+                                <?php endforeach; ?>
+                                <div id="noMatchHint" class="text-muted text-center py-2" style="display: none; font-size: 0.875rem;">
+                                    <?= __('未找到匹配的语言') ?>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 隐藏的checkbox用于表单提交 -->
+                        <div id="localeCheckboxes" style="display: none;">
+                            <?php foreach ($this->getData('active_locales') as $locale): ?>
+                                <input class="locale-checkbox" 
+                                       type="checkbox" 
+                                       name="locales[]" 
+                                       value="<?= $locale->getData('code') ?>"
+                                       id="locale_<?= $locale->getData('code') ?>"
+                                       <?= in_array($locale->getData('code'), $selectedLocales) ? 'checked' : '' ?>>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <div class="form-text"><?= __('选择后可点击字段旁边的翻译按钮进行翻译') ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- 样式预览模态框 -->
+<div id="stylePreviewModal" class="style-preview-modal">
+    <div class="style-preview-modal-content">
+        <div class="style-preview-modal-header">
+            <div class="style-preview-modal-title">
+                <i class="mdi mdi-eye" id="previewModalIcon"></i>
+                <span id="previewModalTitle">样式预览</span>
+            </div>
+            <div class="style-preview-modal-actions">
+                <div class="style-preview-device-buttons" id="deviceButtons">
+                    <div class="device-button active" onclick="switchPreviewDevice('desktop')" data-device="desktop" title="<?= __('电脑预览') ?>">
+                        <i class="mdi mdi-monitor"></i>
+                    </div>
+                    <div class="device-button" onclick="switchPreviewDevice('tablet')" data-device="tablet" title="<?= __('平板预览') ?>">
+                        <i class="mdi mdi-tablet"></i>
+                    </div>
+                    <div class="device-button" onclick="switchPreviewDevice('mobile')" data-device="mobile" title="<?= __('手机预览') ?>">
+                        <i class="mdi mdi-cellphone"></i>
+                    </div>
+                </div>
+                <div class="style-preview-modal-refresh" onclick="refreshStylePreview()" title="<?= __('刷新预览') ?>">
+                    <i class="mdi mdi-refresh"></i>
+                </div>
+                <div class="style-preview-modal-close" onclick="closeStylePreviewModal()">
+                    <i class="mdi mdi-close"></i>
+                </div>
+            </div>
+        </div>
+        <div class="style-preview-modal-body" id="previewModalBody">
+            <!-- 预览内容将动态加载到这里 -->
+        </div>
+    </div>
+</div>
+
+<!-- 悬浮操作按钮 -->
+<?php if ($isEdit): ?>
+<div class="floating-actions">
+    <!-- 可视化配置按钮已移除，改由组件内提供入口 -->
+    
+    <!-- 在线预览 -->
+    <button type="button" 
+            class="floating-btn floating-btn-preview" 
+            onclick="openFrontendPreview()" 
+            title="<?= __('在线预览') ?>">
+        <i class="mdi mdi-eye-outline"></i>
+        <span class="floating-btn-text"><?= __('在线预览') ?></span>
+    </button>
+    
+    <!-- 发布页面 -->
+    <button type="button" 
+            class="floating-btn floating-btn-publish" 
+            onclick="publishPage()" 
+            title="<?= __('发布页面') ?>">
+        <i class="mdi mdi-send"></i>
+        <span class="floating-btn-text"><?= __('发布页面') ?></span>
+    </button>
+    
+    <!-- 更新页面 -->
+    <button type="button" 
+            class="floating-btn floating-btn-save" 
+            onclick="document.getElementById('page-form').requestSubmit()" 
+            title="<?= __('更新页面') ?>">
+        <i class="mdi mdi-content-save"></i>
+        <span class="floating-btn-text"><?= __('更新页面') ?></span>
+    </button>
+    
+    <!-- 返回列表 -->
+    <a href="<?= $this->getBackendUrl('*/backend/page/index') ?>" 
+       class="floating-btn floating-btn-back" 
+       title="<?= __('返回列表') ?>">
+        <i class="mdi mdi-arrow-left"></i>
+        <span class="floating-btn-text"><?= __('返回列表') ?></span>
+    </a>
+</div>
+
+<style>
+/* 悬浮操作按钮样式 */
+.floating-actions {
+    position: fixed;
+    top: 50%;
+    right: 30px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+}
+
+.floating-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    min-width: 56px;
+    justify-content: center;
+}
+
+.floating-btn i {
+    font-size: 24px;
+    transition: transform 0.3s ease;
+}
+
+.floating-btn-text {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.floating-btn:hover {
+    transform: translateX(-5px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    padding-right: 24px;
+}
+
+.floating-btn:hover .floating-btn-text {
+    max-width: 200px;
+    opacity: 1;
+    margin-left: 5px;
+}
+
+.floating-btn:hover i {
+    transform: scale(1.1);
+}
+
+/* 不同按钮的颜色 */
+.floating-btn-visual {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.floating-btn-visual:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.floating-btn-publish {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.floating-btn-publish:hover {
+    background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+}
+
+.floating-btn-save {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.floating-btn-save:hover {
+    background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+}
+
+.floating-btn-preview {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.floating-btn-preview:hover {
+    background: linear-gradient(135deg, #38f9d7 0%, #43e97b 100%);
+}
+
+.floating-btn-back {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.floating-btn-back:hover {
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .floating-actions {
+        top: 50%;
+        right: 20px;
+        transform: translateY(-50%);
+        gap: 10px;
+    }
+    
+    .floating-btn {
+        min-width: 48px;
+        padding: 10px 16px;
+    }
+    
+    .floating-btn i {
+        font-size: 20px;
+    }
+    
+    .floating-btn:hover {
+        padding-right: 16px;
+    }
+    
+    .floating-btn-text {
+        display: none; /* 在手机上始终隐藏文本 */
+    }
+}
+
+/* 打印时隐藏 */
+@media print {
+    .floating-actions {
+        display: none;
+    }
+}
+</style>
+<?php endif; ?>
+
+<!-- CKEditor 5 本地文件 -->
+<script src="@static(Weline_Cms::libs/ckeditor5/ckeditor.js)"></script>
+<script src="@static(Weline_Cms::libs/ckeditor5/zh-cn.js)"></script>
+
+<!-- html2canvas for screenshot功能 -->
+<script src="@static(Weline_Cms::libs/html2canvas/html2canvas.min.js)"></script>
+
+<!-- 检查库是否加载成功 -->
+<script>
+if (typeof html2canvas === 'undefined') {
+    console.error('❌ html2canvas 未加载成功！预览功能将无法使用。');
+} else {
+    console.log('✓ html2canvas 已加载');
+}
+
+if (typeof ClassicEditor === 'undefined') {
+    console.error('❌ CKEditor 未加载成功！');
+} else {
+    console.log('✓ CKEditor 已加载');
+}
+</script>
+
+
+<style>
+/* ==================== 样式卡片选择器 ==================== */
+.style-card {
+    height: 100%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.style-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    transform: translateY(-2px);
+}
+
+.style-card.selected {
+    border-color: #667eea;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+    background-color: #f8f9ff;
+}
+
+.style-card-preview {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    background: #f5f5f5;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 预览操作按钮容器 */
+.style-card-preview-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.style-card:hover .style-card-preview-actions {
+    opacity: 1;
+}
+
+.style-card-preview-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.style-card-preview-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.style-card-preview-btn i {
+    font-size: 16px;
+}
+
+.style-card-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.style-card-preview canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+}
+
+.style-card-preview iframe {
+    /* iframe用于截图，隐藏显示 */
+    position: absolute !important;
+    left: -9999px !important;
+    visibility: hidden !important;
+}
+
+.style-card-preview-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.style-card-preview-placeholder {
+    text-align: center;
+    color: #999;
+}
+
+.style-card-preview-placeholder i {
+    font-size: 48px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.style-card-body {
+    padding: 16px;
+}
+
+.style-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.style-card-selected-badge {
+    display: none;
+    background: #667eea;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.style-card.selected .style-card-selected-badge {
+    display: inline-block;
+}
+
+.style-card-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.style-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #999;
+}
+.style-card-code {
+    font-family: 'Courier New', monospace;
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+/* ==================== 样式预览模态框 ==================== */
+.style-preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.style-preview-modal.active {
+    display: flex;
+}
+
+.style-preview-modal-content {
+    position: relative;
+    width: 90%;
+    max-width: 1400px;
+    height: 90%;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.style-preview-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border-radius: 12px 12px 0 0;
+}
+
+.style-preview-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.style-preview-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.style-preview-device-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 15px;
+    border-right: 1px solid #e0e0e0;
+}
+
+.device-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #666;
+}
+
+.device-button:hover {
+    background: #f0f9ff;
+    border-color: #0284c7;
+    color: #0284c7;
+}
+
+.device-button.active {
+    background: #0284c7;
+    border-color: #0284c7;
+    color: white;
+}
+
+.device-button i {
+    font-size: 18px;
+}
+
+.style-preview-modal-refresh,
+.style-preview-modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.style-preview-modal-refresh:hover {
+    background: #f0f9ff;
+    color: #0284c7;
+    border-color: #0284c7;
+}
+
+.style-preview-modal-refresh:active {
+    transform: rotate(180deg);
+}
+
+.style-preview-modal-close:hover {
+    background: #f5f5f5;
+    transform: rotate(90deg);
+}
+
+.style-preview-modal-body {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    background: #f5f5f5;
+    padding: 20px;
+}
+
+.style-preview-modal-body img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.style-preview-iframe-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    transition: all 0.3s ease;
+}
+
+.style-preview-modal-body iframe {
+    width: 100%;
+    height: calc(100vh - 120px);
+    border: none;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+/* 设备预览宽度 */
+.style-preview-modal-body.device-mobile iframe {
+    width: 375px;
+    max-width: 100%;
+}
+
+.style-preview-modal-body.device-tablet iframe {
+    width: 768px;
+    max-width: 100%;
+}
+
+.style-preview-modal-body.device-desktop iframe {
+    width: 100%;
+}
+
+.style-preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+/* 自定义下拉选择器样式优化 */
+#localeDropdown .locale-option {
+    transition: background-color 0.2s ease;
+}
+
+#localeDropdown .locale-option:hover {
+    background-color: #f0f0f0;
+}
+
+#localeDropdown .locale-option:active {
+    background-color: #e0e0e0;
+}
+
+/* 语言标签样式优化 */
+.selected-locale-tag {
+    transition: all 0.2s ease;
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+}
+
+.selected-locale-tag:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.selected-locale-tag .mdi-close {
+    transition: transform 0.2s ease;
+}
+
+.selected-locale-tag .mdi-close:hover {
+    transform: scale(1.2);
+}
+
+/* 搜索框聚焦效果 */
+#localeSearch:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 下拉列表滚动条样式 */
+#localeDropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+#localeDropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+#localeDropdown::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+#localeDropdown::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+</style>
+
+<script>
+// 全局 HTML 转义函数（供所有配置渲染函数使用）
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// CKEditor 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 存储所有编辑器实例
+    window.pageEditors = {};
+    
+    // 初始化所有带 tinymce-editor 类的 textarea
+    const editors = document.querySelectorAll('.tinymce-editor');
+    
+    editors.forEach(function(textarea) {
+        ClassicEditor
+            .create(textarea, {
+                language: 'zh-cn',
+                minHeight: '400px',
+                toolbar: [
+                    'heading', '|',
+                    'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|',
+                    'outdent', 'indent', '|',
+                    'imageUpload', 'blockQuote', 'insertTable', 'mediaEmbed', '|',
+                    'undo', 'redo', '|',
+                    'sourceEditing'
+                ],
+                heading: {
+                    options: [
+                        { model: 'paragraph', title: '段落', class: 'ck-heading_paragraph' },
+                        { model: 'heading1', view: 'h1', title: '标题 1', class: 'ck-heading_heading1' },
+                        { model: 'heading2', view: 'h2', title: '标题 2', class: 'ck-heading_heading2' },
+                        { model: 'heading3', view: 'h3', title: '标题 3', class: 'ck-heading_heading3' }
+                    ]
+                },
+                image: {
+                    toolbar: [
+                        'imageTextAlternative', 'imageStyle:inline', 'imageStyle:block', 'imageStyle:side'
+                    ]
+                },
+                table: {
+                    contentToolbar: [
+                        'tableColumn', 'tableRow', 'mergeTableCells'
+                    ]
+                }
+            })
+            .then(editor => {
+                // 保存编辑器实例
+                window.pageEditors[textarea.id] = editor;
+                
+                // 设置编辑器最小高度
+                const editableElement = editor.ui.view.editable.element;
+                if (editableElement) {
+                    editableElement.style.minHeight = '400px';
+                }
+                
+                console.log('CKEditor 初始化成功:', textarea.id);
+            })
+            .catch(error => {
+                console.error('CKEditor 初始化失败:', error);
+            });
+    });
+});
+
+// 表单验证和提交
+(function() {
+    'use strict';
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        // Handle 唯一性检查相关变量
+        let handleCheckTimeout = null;
+        let lastCheckedHandle = '';
+        let isHandleValid = false;
+        const handleInput = document.getElementById('handle');
+        const handleValidationIcon = document.getElementById('handle-validation-icon');
+        const handleValidationMessage = document.getElementById('handle-validation-message');
+        const currentPageId = <?= $isEdit && $page ? $page->getId() : 0 ?>;
+        
+        // Debounce 函数
+        function debounce(func, delay) {
+            return function(...args) {
+                clearTimeout(handleCheckTimeout);
+                handleCheckTimeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+        
+        // 检查 handle 唯一性
+        async function checkHandleUniqueness(handle) {
+            if (!handle || handle.trim() === '') {
+                hideHandleValidation();
+                return;
+            }
+            
+            // 编辑模式下，如果 handle 等于原始值，直接标记为可用（无需请求）
+            const originalValue = handleInput.getAttribute('data-original-value') || '';
+            if (currentPageId > 0 && handle === originalValue) {
+                console.log('✅ Handle 未改变，保持原值:', handle);
+                lastCheckedHandle = handle;
+                isHandleValid = true;
+                showHandleAvailable('<?= __('当前页面的句柄') ?>');
+                handleInput.classList.remove('is-invalid');
+                handleInput.classList.add('is-valid');
+                return;
+            }
+            
+            // 显示检查中状态
+            showHandleChecking();
+            
+            try {
+                const checkUrl = '<?= $this->getBackendUrl('cms/backend/page/checkHandle') ?>' +
+                    '?handle=' + encodeURIComponent(handle) +
+                    '&page_id=' + currentPageId;
+                
+                console.log('🔍 检查 handle 唯一性:', handle, '(页面ID:', currentPageId, ')');
+                
+                const response = await fetch(checkUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                const result = await response.json();
+                console.log('✅ 检查结果:', result);
+                
+                lastCheckedHandle = handle;
+                isHandleValid = result.available === true;
+                
+                if (result.available) {
+                    showHandleAvailable(result.message);
+                    handleInput.classList.remove('is-invalid');
+                    handleInput.classList.add('is-valid');
+                } else {
+                    showHandleUnavailable(result.message, result.existing_page);
+                    handleInput.classList.remove('is-valid');
+                    handleInput.classList.add('is-invalid');
+                }
+                
+            } catch (error) {
+                console.error('❌ 检查 handle 失败:', error);
+                showHandleUnavailable('<?= __('检查失败，请稍后重试') ?>');
+                isHandleValid = false;
+                handleInput.classList.remove('is-valid');
+                handleInput.classList.add('is-invalid');
+            }
+        }
+        
+        // 显示检查中状态
+        function showHandleChecking() {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-checking').style.display = 'inline';
+            handleValidationMessage.style.display = 'none';
+        }
+        
+        // 显示可用状态
+        function showHandleAvailable(message) {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-available').style.display = 'inline';
+            
+            handleValidationMessage.style.display = 'block';
+            handleValidationMessage.className = 'small mt-1 text-success';
+            handleValidationMessage.innerHTML = '<i class="mdi mdi-check me-1"></i>' + message;
+        }
+        
+        // 显示不可用状态
+        function showHandleUnavailable(message, existingPage) {
+            handleValidationIcon.style.display = 'block';
+            handleValidationIcon.querySelectorAll('span').forEach(s => s.style.display = 'none');
+            handleValidationIcon.querySelector('.handle-unavailable').style.display = 'inline';
+            
+            handleValidationMessage.style.display = 'block';
+            handleValidationMessage.className = 'small mt-1 text-danger';
+            
+            let messageHtml = '<i class="mdi mdi-alert me-1"></i>' + message;
+            if (existingPage) {
+                messageHtml += '<br><span class="text-muted">已被页面使用：' + 
+                    (existingPage.name || existingPage.title || 'ID:' + existingPage.id) + 
+                    '</span>';
+            }
+            handleValidationMessage.innerHTML = messageHtml;
+        }
+        
+        // 隐藏验证状态
+        function hideHandleValidation() {
+            handleValidationIcon.style.display = 'none';
+            handleValidationMessage.style.display = 'none';
+            handleInput.classList.remove('is-valid', 'is-invalid');
+            isHandleValid = false;
+        }
+        
+        // 监听 handle 输入（带 debounce）
+        const debouncedCheck = debounce(function(event) {
+            const handle = event.target.value.trim();
+            checkHandleUniqueness(handle);
+        }, 500); // 500ms 延迟
+        
+        handleInput.addEventListener('input', debouncedCheck);
+        
+        // 监听 handle 输入（实时格式化为小写）
+        handleInput.addEventListener('input', function(event) {
+            // 自动转换为小写并移除非法字符
+            let value = event.target.value.toLowerCase();
+            value = value.replace(/[^a-z0-9\-]/g, '');
+            if (value !== event.target.value) {
+                event.target.value = value;
+            }
+        });
+        
+        form.addEventListener('submit', function(event) {
+            // 同步所有 CKEditor 编辑器的内容到 textarea
+            if (window.pageEditors) {
+                for (let editorId in window.pageEditors) {
+                    const editor = window.pageEditors[editorId];
+                    const textarea = document.getElementById(editorId);
+                    if (textarea) {
+                        textarea.value = editor.getData();
+                    }
+                }
+            }
+            
+            // 检查 handle 唯一性
+            const currentHandle = handleInput.value.trim();
+            if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
+                event.preventDefault();
+                event.stopPropagation();
+                alert('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
+                handleInput.focus();
+                handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+            
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+                form.classList.add('was-validated');
+                return false;
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+
+// 页面句柄自动生成（可选）
+document.getElementById('name')?.addEventListener('blur', function() {
+    var handleInput = document.getElementById('handle');
+    if (!handleInput.value) {
+        var name = this.value.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+        handleInput.value = name;
+    }
+});
+
+/**
+ * ========================================
+ * 快捷发布页面功能
+ * ========================================
+ */
+window.publishPage = function() {
+    const statusSelect = document.getElementById('status');
+    const publishBtn = document.getElementById('publishPageBtn');
+    const form = document.getElementById('page-form');
+    
+    if (!statusSelect || !form) {
+        console.error('❌ 找不到状态选择器或表单');
+        alert('<?= __('系统错误，请刷新页面重试') ?>');
+        return;
+    }
+    
+    // 设置状态为已发布
+    statusSelect.value = '1';
+    
+    // 显示加载状态
+    const originalHTML = publishBtn.innerHTML;
+    publishBtn.disabled = true;
+    publishBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('发布中...') ?>';
+    
+    console.log('📤 正在发布页面...');
+    console.log('📊 状态已设置为: 已发布 (1)');
+    console.log('📋 表单ID:', form.id);
+    
+    // 提交表单
+    try {
+        form.submit();
+    } catch (error) {
+        console.error('❌ 发布失败:', error);
+        alert('<?= __('发布失败，请重试') ?>');
+        
+        // 恢复按钮状态
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = originalHTML;
+    }
+};
+
+/**
+ * ========================================
+ * 父页面与页面类型联动
+ * ========================================
+ */
+// 🚫 全局标志：正在应用继承配置，禁止自动保存
+window.isApplyingInheritance = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const parentIdSelect = document.getElementById('parent_id');
+    const typeSelect = document.getElementById('type');
+    
+    if (!parentIdSelect || !typeSelect) {
+        return;
+    }
+    
+    // 检查是否通过URL参数指定了父页面（用于"添加子页面"功能）
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlParentId = urlParams.get('parent_id');
+    const isFromAddChildPage = urlParentId && urlParentId !== '0';
+    
+    // 获取父页面数据（从PHP传递）
+    const parentPageData = <?= json_encode($this->getData('parent_page_data')) ?>;
+    
+    // 检查当前页面是否有父页面（编辑模式）
+    // 优先使用 PHP 传递的 parent_id 值，避免读取可能被修改的 select 值
+    const phpParentId = '<?= $this->getData('parent_id') ?? 0 ?>';
+    const currentParentId = phpParentId || (parentIdSelect ? parentIdSelect.value : '0');
+    const hasParentPage = (currentParentId && currentParentId !== '0') || isFromAddChildPage;
+    
+    console.log('🔍 父页面检查:', {
+        phpParentId: phpParentId,
+        currentParentId: currentParentId,
+        hasParentPage: hasParentPage,
+        hasParentData: !!parentPageData
+    });
+    
+    // 如果有父页面（创建或编辑子页面），锁定父页面选择器和继承配置
+    // 只执行一次，避免重复触发
+    if (hasParentPage && parentPageData && !document.querySelector('.parent-locked-notice')) {
+        // 🚫 开始应用继承配置，禁止自动保存
+        window.isApplyingInheritance = true;
+        console.log('🚫 开始应用继承配置，禁止自动保存');
+        // 1. 锁定父页面选择器
+        parentIdSelect.disabled = true;
+        parentIdSelect.classList.add('bg-light');
+        
+        // 在父页面选择器后添加提示信息
+        const parentFormGroup = parentIdSelect.closest('.mb-3');
+        if (parentFormGroup && !parentFormGroup.querySelector('.parent-locked-notice')) {
+            const notice = document.createElement('div');
+            notice.className = 'alert alert-info alert-dismissible fade show mt-2 parent-locked-notice';
+            const isEditMode = window.location.pathname.includes('/edit');
+            notice.innerHTML = `
+                <i class="mdi mdi-lock"></i> 
+                <strong><?= __('子页面配置继承') ?></strong><br>
+                <small>${isEditMode 
+                    ? '<?= __('该页面是子页面，已继承父页面的样式模板、默认语言、支持的语言列表、Logo和网站图标，无法单独修改。跟踪代码（GA4/GTM/FB Pixel）可修改。') ?>' 
+                    : '<?= __('子页面将继承父页面的样式模板、默认语言、支持的语言列表、Logo和网站图标。跟踪代码（GA4/GTM/FB Pixel）已继承但可修改。') ?>'
+                }</small>
+            `;
+            parentFormGroup.appendChild(notice);
+        }
+        
+        // 2. 锁定并设置样式模板
+        if (parentPageData.style) {
+            const styleSelect = document.getElementById('style');
+            if (styleSelect) {
+                // 🔒 先锁定 readonly，禁用自动保存
+                styleSelect.readOnly = true;
+                styleSelect.style.pointerEvents = 'none';
+                styleSelect.style.backgroundColor = '#e9ecef';
+                styleSelect.style.cursor = 'not-allowed';
+                
+                // ⚠️ 设置样式值（不触发 change 事件，避免自动保存导致刷新）
+                // 如果当前样式和父页面样式不同，才需要设置
+                if (styleSelect.value !== parentPageData.style) {
+                    styleSelect.value = parentPageData.style;
+                    console.log('🎨 样式已设置为父页面样式（不触发自动保存）:', parentPageData.style);
+                }
+                
+                // 禁用样式卡片选择（如果存在）
+                setTimeout(() => {
+                    const styleCards = document.querySelectorAll('.style-card');
+                    styleCards.forEach(card => {
+                        if (card.dataset.styleCode !== parentPageData.style) {
+                            card.style.opacity = '0.5';
+                            card.style.pointerEvents = 'none';
+                        } else {
+                            card.classList.add('selected');
+                            // 添加锁定标识
+                            if (!card.querySelector('.inherited-badge')) {
+                                const badge = document.createElement('div');
+                                badge.className = 'inherited-badge position-absolute top-0 end-0 m-2';
+                                badge.innerHTML = '<span class="badge bg-warning"><i class="mdi mdi-lock"></i> <?= __('继承') ?></span>';
+                                card.appendChild(badge);
+                            }
+                        }
+                    });
+                    
+                    // 自动触发选择样式，展开配置区域
+                    if (typeof selectStyle === 'function') {
+                        console.log('🎨 自动选择样式并展开配置...');
+                        selectStyle(parentPageData.style);
+                    }
+                }, 500);
+                
+                console.log('🎨 样式模板已锁定为父页面样式（值会随表单提交）:', parentPageData.style);
+            }
+        }
+        
+        // 3. 锁定语言选择和默认语言（完全继承父页面）
+        if (parentPageData.locales && parentPageData.default_locale) {
+            const parentLocales = JSON.parse(parentPageData.locales || '[]');
+            const parentDefaultLocale = parentPageData.default_locale;
+            
+            // 延迟执行以确保所有DOM元素已加载
+            setTimeout(() => {
+                // 3.1 锁定默认语言选择
+                const defaultLocaleInput = document.getElementById('default_locale');
+                if (defaultLocaleInput) {
+                    defaultLocaleInput.value = parentDefaultLocale;
+                    defaultLocaleInput.readOnly = true;
+                }
+                
+                // 禁用所有默认语言选择按钮（使用更通用的选择器）
+                const defaultLocaleButtons = document.querySelectorAll('[data-locale-code]');
+                console.log('🔍 找到默认语言按钮数量:', defaultLocaleButtons.length);
+                defaultLocaleButtons.forEach(btn => {
+                    // 检查是否在默认语言区域内
+                    const isInDefaultLocaleArea = btn.closest('.mb-3')?.querySelector('label')?.textContent.includes('<?= __('默认语言') ?>');
+                    if (isInDefaultLocaleArea) {
+                        btn.disabled = true;
+                        btn.style.pointerEvents = 'none';
+                        btn.style.opacity = '0.5';
+                        btn.style.cursor = 'not-allowed';
+                        btn.setAttribute('disabled', 'disabled');
+                        
+                        // 移除点击事件
+                        const newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        
+                        console.log('🔒 禁用默认语言按钮:', btn.dataset.localeCode);
+                    }
+                });
+                
+                // 禁用默认语言搜索框（查找所有可能的搜索框）
+                const searchInputs = document.querySelectorAll('input[type="text"][placeholder*="搜索"]');
+                searchInputs.forEach(input => {
+                    const isInDefaultLocaleArea = input.closest('.mb-3')?.querySelector('label')?.textContent.includes('<?= __('默认语言') ?>');
+                    if (isInDefaultLocaleArea) {
+                        input.disabled = true;
+                        input.classList.add('bg-light');
+                        input.style.cursor = 'not-allowed';
+                        input.readOnly = true;
+                        console.log('🔒 禁用默认语言搜索框');
+                    }
+                });
+                
+                // 3.2 锁定多语言翻译选择
+                // 找到"支持的语言翻译"区域
+                const localeLabels = Array.from(document.querySelectorAll('.form-label'));
+                const translationLabel = localeLabels.find(label => 
+                    label.textContent.includes('<?= __('支持的语言翻译') ?>')
+                );
+                
+                if (translationLabel) {
+                    const translationArea = translationLabel.closest('.mb-3');
+                    
+                    // 隐藏"添加语言"下拉框
+                    const localeDropdown = translationArea?.querySelector('.locale-dropdown');
+                    if (localeDropdown) {
+                        localeDropdown.style.display = 'none';
+                        console.log('🔒 隐藏添加语言下拉框');
+                    }
+                    
+                    // 禁用所有删除按钮
+                    const deleteButtons = translationArea?.querySelectorAll('.delete-locale-btn, button[onclick*="removeLocale"]');
+                    deleteButtons?.forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.display = 'none';
+                        console.log('🔒 隐藏删除语言按钮');
+                    });
+                    
+                    // 禁用语言标签点击
+                    const localeTags = translationArea?.querySelectorAll('.locale-tag, [onclick*="Locale"]');
+                    localeTags?.forEach(tag => {
+                        tag.style.pointerEvents = 'none';
+                        tag.style.opacity = '0.8';
+                        tag.style.cursor = 'not-allowed';
+                        // 移除onclick属性
+                        tag.removeAttribute('onclick');
+                        console.log('🔒 禁用语言标签点击');
+                    });
+                    
+                    // 禁用搜索框
+                    const localeSearch = translationArea?.querySelector('input[type="text"]');
+                    if (localeSearch) {
+                        localeSearch.disabled = true;
+                        localeSearch.classList.add('bg-light');
+                        localeSearch.style.cursor = 'not-allowed';
+                        console.log('🔒 禁用语言翻译搜索框');
+                    }
+                }
+                
+                // 3.3 添加继承提示（在"多语言设置"卡片的开头）
+                const languageCardTitle = Array.from(document.querySelectorAll('.card-title')).find(
+                    title => title.textContent.includes('<?= __('多语言设置') ?>')
+                );
+                
+                if (languageCardTitle && !languageCardTitle.parentElement.querySelector('.locale-inherited-notice')) {
+                    const notice = document.createElement('div');
+                    notice.className = 'alert alert-warning mb-3 locale-inherited-notice';
+                    notice.innerHTML = `
+                        <i class="mdi mdi-lock"></i>
+                        <strong><?= __('语言设置已继承') ?></strong><br>
+                        <small><?= __('子页面的默认语言和支持的语言列表继承自父页面，无法单独修改。如需调整，请在父页面中修改。') ?></small>
+                    `;
+                    languageCardTitle.parentElement.insertBefore(notice, languageCardTitle.nextSibling);
+                }
+                
+                console.log('✅ 语言设置已完全锁定（继承父页面）:', {
+                    defaultLocale: parentDefaultLocale,
+                    locales: parentLocales
+                });
+            }, 800); // 延迟800ms执行
+        }
+        
+        // 4. 锁定Logo和Favicon（Icon）
+        const logoInput = document.getElementById('logo');
+        const iconInput = document.getElementById('icon');
+        
+        if (logoInput && parentPageData.logo) {
+            logoInput.value = parentPageData.logo;
+            logoInput.readOnly = true;
+            logoInput.classList.add('bg-light');
+            logoInput.style.cursor = 'not-allowed';
+            
+            // 禁用选择按钮
+            const logoBtn = document.querySelector('[onclick*="selectLogo"]');
+            if (logoBtn) {
+                logoBtn.disabled = true;
+                logoBtn.classList.add('disabled');
+                logoBtn.style.pointerEvents = 'none';
+                logoBtn.style.opacity = '0.5';
+            }
+            
+            console.log('🖼️ Logo已锁定为父页面Logo（值会随表单提交）:', parentPageData.logo);
+        }
+        
+        if (iconInput && parentPageData.favicon) {
+            iconInput.value = parentPageData.favicon;
+            iconInput.readOnly = true;
+            iconInput.classList.add('bg-light');
+            iconInput.style.cursor = 'not-allowed';
+            
+            // 禁用选择按钮
+            const iconBtn = document.querySelector('[onclick*="selectIcon"]');
+            if (iconBtn) {
+                iconBtn.disabled = true;
+                iconBtn.classList.add('disabled');
+                iconBtn.style.pointerEvents = 'none';
+                iconBtn.style.opacity = '0.5';
+            }
+            
+            console.log('⭐ 网站图标已锁定为父页面图标（值会随表单提交）:', parentPageData.favicon);
+        }
+        
+        // 5. 继承跟踪代码（但保持可编辑）
+        const ga4Input = document.getElementById('ga4_id');
+        const gtmInput = document.getElementById('gtm_id');
+        const fbPixelInput = document.getElementById('fb_pixel_id');
+        
+        let trackingInherited = false;
+        
+        if (ga4Input && parentPageData.ga4_id) {
+            ga4Input.value = parentPageData.ga4_id;
+            trackingInherited = true;
+        }
+        
+        if (gtmInput && parentPageData.gtm_id) {
+            gtmInput.value = parentPageData.gtm_id;
+            trackingInherited = true;
+        }
+        
+        if (fbPixelInput && parentPageData.fb_pixel_id) {
+            fbPixelInput.value = parentPageData.fb_pixel_id;
+            trackingInherited = true;
+        }
+        
+        // 如果有任何跟踪代码被继承，显示提示信息
+        if (trackingInherited) {
+            // 查找跟踪代码的容器（可能是卡片或区域）
+            const trackingSection = ga4Input?.closest('.card-body') || ga4Input?.closest('.mb-3')?.parentElement;
+            if (trackingSection && !trackingSection.querySelector('.tracking-inherited-notice')) {
+                const notice = document.createElement('div');
+                notice.className = 'alert alert-info mt-2 tracking-inherited-notice';
+                notice.innerHTML = `
+                    <i class="mdi mdi-information-outline"></i>
+                    <strong><?= __('跟踪代码已继承') ?></strong><br>
+                    <small><?= __('Google Analytics、Google Tag Manager 和 Facebook Pixel ID 已从父页面继承，您可以根据需要修改。') ?></small>
+                `;
+                trackingSection.insertBefore(notice, trackingSection.firstChild);
+            }
+            
+            console.log('📊 跟踪代码已继承（可编辑）:', {
+                ga4: !!parentPageData.ga4_id,
+                gtm: !!parentPageData.gtm_id,
+                fbPixel: !!parentPageData.fb_pixel_id
+            });
+        }
+        
+        // 6. 锁定页面类型（禁用"首页"选项）
+        if (typeSelect) {
+            // 如果当前选中的是"首页"，清空选择
+            if (typeSelect.value === 'home_page') {
+                typeSelect.value = '';
+                console.log('🔒 已清除"首页"类型选择');
+            }
+            
+            // 禁用"首页"选项
+            Array.from(typeSelect.options).forEach(option => {
+                if (option.value === 'home_page') {
+                    option.disabled = true;
+                    const baseText = option.textContent.replace(/ \(.*?\)$/, '');
+                    option.textContent = baseText + ' <?= __('(子页面不能是主页)') ?>';
+                    console.log('🔒 "首页"类型已禁用');
+                }
+            });
+        }
+        
+        const mode = window.location.pathname.includes('/edit') ? '编辑' : '创建';
+        console.log(`🔒 ${mode}子页面：继承配置已应用`, {
+            parent_id: currentParentId || urlParentId,
+            mode: mode,
+            hasParentData: !!parentPageData
+        });
+        
+        // ✅ 继承配置已完成，允许正常操作（但继承的字段仍然锁定）
+        setTimeout(() => {
+            window.isApplyingInheritance = false;
+            console.log('✅ 继承配置已完成，解除自动保存禁令');
+        }, 1000); // 延迟1秒，确保所有DOM操作都完成
+    }
+    
+    // 更新页面类型选项的可用性
+    function updatePageTypeOptions() {
+        const parentId = parentIdSelect.value;
+        const isChildPage = parentId && parentId !== '0';
+        
+        // 如果选择了父页面且当前类型是"首页"，清空选择
+        if (isChildPage && typeSelect.value === 'home_page') {
+            typeSelect.value = '';
+            console.log('🔒 父页面已选择，已清除"首页"类型选择');
+        }
+        
+        // 遍历所有页面类型选项
+        Array.from(typeSelect.options).forEach(option => {
+            // 如果选择了父页面，禁用"主页"选项
+            if (isChildPage && option.value === 'home_page') {
+                option.disabled = true;
+                // 移除旧的提示文字，再添加新的
+                const baseText = option.textContent.replace(/ \(.*?\)$/, '');
+                option.textContent = baseText + ' <?= __('(子页面不能是主页)') ?>';
+            } else if (option.value === 'home_page') {
+                // 恢复主页选项
+                option.disabled = false;
+                const baseText = option.textContent.replace(/ \(.*?\)$/, '');
+                option.textContent = baseText;
+            }
+        });
+        
+        console.log('🔄 父页面联动:', {
+            parentId: parentId,
+            isChildPage: isChildPage,
+            currentType: typeSelect.value,
+            isLocked: isFromAddChildPage
+        });
+    }
+    
+    // 监听父页面选择变化（仅当未锁定时生效）
+    if (!isFromAddChildPage) {
+        parentIdSelect.addEventListener('change', function() {
+            updatePageTypeOptions();
+        });
+    }
+    
+    // 页面加载时立即初始化（确保子页面创建时类型限制生效）
+    updatePageTypeOptions();
+    
+    // 额外强制检查：如果有父页面，确保"首页"不被选中
+    if ((parentIdSelect.value && parentIdSelect.value !== '0') || isFromAddChildPage) {
+        setTimeout(() => {
+            if (typeSelect.value === 'home_page') {
+                typeSelect.value = '';
+                console.log('🔒 强制清除"首页"选择');
+            }
+            
+            // 确保"首页"选项被禁用
+            Array.from(typeSelect.options).forEach(option => {
+                if (option.value === 'home_page') {
+                    option.disabled = true;
+                    const baseText = option.textContent.replace(/ \(.*?\)$/, '');
+                    option.textContent = baseText + ' <?= __('(子页面不能是主页)') ?>';
+                }
+            });
+        }, 100);
+    }
+    
+    console.log('✅ 父页面与页面类型联动已初始化', {
+        isFromAddChildPage: isFromAddChildPage,
+        parentIdLocked: parentIdSelect.disabled,
+        currentType: typeSelect.value
+    });
+});
+
+// ==================== 默认语言选择功能 ====================
+
+/**
+ * 选择默认语言
+ */
+function selectDefaultLocale(localeCode, localeName) {
+    // 更新搜索框显示
+    document.getElementById('defaultLocaleSearch').value = `${localeName} (${localeCode})`;
+    
+    // 更新隐藏的input值
+    document.getElementById('default_locale').value = localeCode;
+    
+    // 更新下拉列表中的active状态
+    document.querySelectorAll('.default-locale-option').forEach(option => {
+        const optionCode = option.getAttribute('data-locale-code');
+        if (optionCode === localeCode) {
+            option.classList.add('active');
+            // 添加勾选图标
+            if (!option.querySelector('.mdi-check')) {
+                option.innerHTML += '<i class="mdi mdi-check float-end"></i>';
+            }
+        } else {
+            option.classList.remove('active');
+            // 移除勾选图标
+            const checkIcon = option.querySelector('.mdi-check');
+            if (checkIcon) {
+                checkIcon.remove();
+            }
+        }
+    });
+    
+    // 自动将默认语言添加到支持的语言列表
+    const localeCheckbox = document.getElementById('locale_' + localeCode);
+    if (localeCheckbox && !localeCheckbox.checked) {
+        localeCheckbox.checked = true;
+        // 添加标签
+        addLocaleTag(localeCode, localeName);
+    }
+    
+    // 更新所有语言标签的删除按钮状态（默认语言不能删除）
+    updateLocaleTagsDeleteButton();
+    
+    // 关闭下拉列表
+    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
+    if (dropdownBtn) {
+        const dropdown = bootstrap.Dropdown.getInstance(dropdownBtn);
+        if (dropdown) {
+            dropdown.hide();
+        }
+    }
+}
+
+/**
+ * 搜索默认语言
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('input', function() {
+    const searchText = this.value.toLowerCase();
+    const options = document.querySelectorAll('.default-locale-option');
+    
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const localeName = option.getAttribute('data-locale-name');
+        const text = `${localeName} ${localeCode}`.toLowerCase();
+        
+        // 根据搜索文本显示/隐藏
+        const parentLi = option.parentElement;
+        if (text.includes(searchText)) {
+            parentLi.style.display = 'block';
+        } else {
+            parentLi.style.display = 'none';
+        }
+    });
+});
+
+/**
+ * 点击搜索框时自动展开下拉列表
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('focus', function() {
+    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
+    if (dropdownBtn && !dropdownBtn.classList.contains('show')) {
+        dropdownBtn.click();
+    }
+});
+
+/**
+ * 清空搜索框时恢复当前选中的语言显示
+ */
+document.getElementById('defaultLocaleSearch')?.addEventListener('blur', function(e) {
+    // 延迟执行，避免点击下拉选项时被清空
+    setTimeout(() => {
+        const currentCode = document.getElementById('default_locale').value;
+        if (currentCode) {
+            const currentOption = document.querySelector(`.default-locale-option[data-locale-code="${currentCode}"]`);
+            if (currentOption) {
+                const localeName = currentOption.getAttribute('data-locale-name');
+                this.value = `${localeName} (${currentCode})`;
+            }
+        }
+    }, 200);
+});
+
+// ==================== 语言标签管理功能 ====================
+
+/**
+ * 添加语言标签
+ */
+function addLocaleTag(localeCode, localeName) {
+    // 检查是否已存在
+    if (document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`)) {
+        return;
+    }
+    
+    // 创建标签
+    const tag = document.createElement('span');
+    tag.className = 'badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag';
+    tag.setAttribute('data-locale-code', localeCode);
+    tag.style.fontSize = '0.875rem';
+    tag.innerHTML = `
+        ${localeName} (${localeCode})
+        <i class="mdi mdi-close ms-1" 
+           style="cursor: pointer;"
+           onclick="removeLocaleTag('${localeCode}')"></i>
+    `;
+    
+    // 添加到标签区域
+    document.getElementById('selectedLocalesTags').appendChild(tag);
+    
+    // 勾选对应的checkbox
+    const checkbox = document.getElementById('locale_' + localeCode);
+    if (checkbox) {
+        checkbox.checked = true;
+    }
+    
+    // 隐藏下拉列表中的选项
+    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
+    if (option) {
+        option.style.display = 'none';
+    }
+    
+    // 清空搜索框
+    const searchInput = document.getElementById('localeSearch');
+    searchInput.value = '';
+    
+    // 重置下拉列表显示
+    resetLocaleDropdown();
+    
+    // 隐藏提示信息（如果存在）
+    updateLocalesHint();
+    
+    // 更新删除按钮状态（如果是默认语言则禁用删除按钮）
+    updateLocaleTagsDeleteButton();
+    
+    // 保持下拉列表打开并聚焦搜索框，方便继续选择
+    const dropdown = document.getElementById('localeDropdown');
+    if (dropdown.style.display === 'block') {
+        searchInput.focus();
+    }
+}
+
+/**
+ * 移除语言标签
+ */
+function removeLocaleTag(localeCode) {
+    // 检查是否是默认语言，默认语言不能删除
+    const defaultLocale = document.getElementById('default_locale').value;
+    if (localeCode === defaultLocale) {
+        alert('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        return false;
+    }
+    
+    // 移除标签
+    const tag = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+    if (tag) {
+        tag.remove();
+    }
+    
+    // 取消勾选checkbox
+    const checkbox = document.getElementById('locale_' + localeCode);
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    
+    // 显示下拉列表中的选项
+    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
+    if (option) {
+        option.style.display = 'block';
+    }
+    
+    // 重置下拉列表显示
+    resetLocaleDropdown();
+    
+    // 更新提示信息（如果没有标签了则显示提示）
+    updateLocalesHint();
+}
+
+/**
+ * 更新语言选择提示信息的显示/隐藏
+ */
+function updateLocalesHint() {
+    const tagsContainer = document.getElementById('selectedLocalesTags');
+    const existingHint = document.getElementById('noLocalesHint');
+    const selectedTags = document.querySelectorAll('.selected-locale-tag');
+    
+    if (selectedTags.length === 0) {
+        // 没有选择任何语言，显示提示
+        if (!existingHint) {
+            const hint = document.createElement('div');
+            hint.className = 'alert alert-info py-2 px-3 mb-0';
+            hint.id = 'noLocalesHint';
+            hint.style.fontSize = '0.875rem';
+            hint.innerHTML = '<i class="mdi mdi-information-outline me-1"></i>暂未选择支持的语言，请使用下方搜索框添加语言';
+            tagsContainer.appendChild(hint);
+        }
+    } else {
+        // 已有选择的语言，隐藏提示
+        if (existingHint) {
+            existingHint.remove();
+        }
+    }
+}
+
+/**
+ * 更新语言标签的删除按钮状态
+ * 默认语言的删除按钮应该被禁用
+ */
+function updateLocaleTagsDeleteButton() {
+    const defaultLocale = document.getElementById('default_locale').value;
+    const allTags = document.querySelectorAll('.selected-locale-tag');
+    
+    allTags.forEach(tag => {
+        const localeCode = tag.getAttribute('data-locale-code');
+        const closeIcon = tag.querySelector('.mdi-close');
+        
+        if (localeCode === defaultLocale) {
+            // 默认语言：禁用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '0.3';
+                closeIcon.style.cursor = 'not-allowed';
+                closeIcon.title = '<?= __('默认语言不能删除') ?>';
+            }
+            // 添加一个标识符
+            tag.style.borderLeft = '3px solid #ffc107';
+        } else {
+            // 非默认语言：启用删除按钮
+            if (closeIcon) {
+                closeIcon.style.opacity = '1';
+                closeIcon.style.cursor = 'pointer';
+                closeIcon.title = '<?= __('移除此语言') ?>';
+            }
+            tag.style.borderLeft = 'none';
+        }
+    });
+}
+
+/**
+ * 切换语言下拉列表显示/隐藏
+ */
+function toggleLocaleDropdown() {
+    const dropdown = document.getElementById('localeDropdown');
+    const btn = document.getElementById('localeDropdownBtn');
+    const icon = btn.querySelector('i');
+    
+    if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+        dropdown.style.display = 'block';
+        icon.classList.remove('mdi-chevron-down');
+        icon.classList.add('mdi-chevron-up');
+        // 自动聚焦搜索框
+        document.getElementById('localeSearch').focus();
+    } else {
+        dropdown.style.display = 'none';
+        icon.classList.remove('mdi-chevron-up');
+        icon.classList.add('mdi-chevron-down');
+    }
+}
+
+/**
+ * 搜索语言功能
+ */
+document.getElementById('localeSearch')?.addEventListener('input', function() {
+    const searchText = this.value.toLowerCase();
+    const options = document.querySelectorAll('.locale-option');
+    const dropdown = document.getElementById('localeDropdown');
+    const noMatchHint = document.getElementById('noMatchHint');
+    
+    let hasVisibleOptions = false;
+    
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const localeName = option.getAttribute('data-locale-name');
+        const text = `${localeName} ${localeCode}`.toLowerCase();
+        
+        // 如果已被选中，不显示
+        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+        if (isSelected) {
+            option.style.display = 'none';
+            return;
+        }
+        
+        // 根据搜索文本显示/隐藏
+        if (text.includes(searchText)) {
+            option.style.display = 'block';
+            hasVisibleOptions = true;
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    // 显示/隐藏"未找到匹配"提示
+    if (!hasVisibleOptions && searchText) {
+        noMatchHint.style.display = 'block';
+    } else {
+        noMatchHint.style.display = 'none';
+    }
+    
+    // 自动展开下拉列表
+    if (dropdown.style.display === 'none' && searchText) {
+        dropdown.style.display = 'block';
+        const btn = document.getElementById('localeDropdownBtn');
+        const icon = btn.querySelector('i');
+        icon.classList.remove('mdi-chevron-down');
+        icon.classList.add('mdi-chevron-up');
+    }
+});
+
+/**
+ * 点击搜索框时自动展开下拉列表
+ */
+document.getElementById('localeSearch')?.addEventListener('focus', function() {
+    const dropdown = document.getElementById('localeDropdown');
+    const btn = document.getElementById('localeDropdownBtn');
+    const icon = btn.querySelector('i');
+    
+    // 先过滤一遍选项（隐藏已选中的）
+    resetLocaleDropdown();
+    
+    // 展开下拉列表
+    dropdown.style.display = 'block';
+    icon.classList.remove('mdi-chevron-down');
+    icon.classList.add('mdi-chevron-up');
+});
+
+/**
+ * 点击页面其他地方关闭下拉列表
+ */
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('localeDropdown');
+    const searchInput = document.getElementById('localeSearch');
+    const dropdownBtn = document.getElementById('localeDropdownBtn');
+    
+    // 如果点击的不是下拉列表、搜索框或按钮，则关闭下拉列表
+    if (dropdown && 
+        !dropdown.contains(event.target) && 
+        event.target !== searchInput && 
+        event.target !== dropdownBtn &&
+        !dropdownBtn.contains(event.target)) {
+        dropdown.style.display = 'none';
+        const btn = document.getElementById('localeDropdownBtn');
+        const icon = btn.querySelector('i');
+        icon.classList.remove('mdi-chevron-up');
+        icon.classList.add('mdi-chevron-down');
+        // 清空搜索框
+        if (searchInput) {
+            searchInput.value = '';
+            resetLocaleDropdown();
+        }
+    }
+});
+/**
+ * 重置下拉列表显示（过滤已选中的）
+ */
+function resetLocaleDropdown() {
+    const options = document.querySelectorAll('.locale-option');
+    options.forEach(option => {
+        const localeCode = option.getAttribute('data-locale-code');
+        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
+        
+        if (isSelected) {
+            option.style.display = 'none';
+        } else {
+            // 如果有搜索文本，按搜索文本过滤
+            const searchText = document.getElementById('localeSearch').value.toLowerCase();
+            if (searchText) {
+                const localeName = option.getAttribute('data-locale-name');
+                const text = `${localeName} ${localeCode}`.toLowerCase();
+                option.style.display = text.includes(searchText) ? 'block' : 'none';
+            } else {
+                option.style.display = 'block';
+            }
+        }
+    });
+}
+// 页面加载时初始化下拉列表
+document.addEventListener('DOMContentLoaded', function() {
+    resetLocaleDropdown();
+    // 初始化语言标签的删除按钮状态
+    updateLocaleTagsDeleteButton();
+});
+
+/**
+ * ========================================
+ * 样式配置动态加载功能
+ * ========================================
+ */
+
+// 页面ID（用于翻译功能）
+const pageIdForm = <?= ($isEdit && $page && $page->getId()) ? $page->getId() : 'null' ?>;
+
+// 样式选择器
+const styleSelect = document.getElementById('style');
+const styleDescContainer = document.getElementById('style-description-container');
+const styleDescText = document.getElementById('style-description-text');
+
+
+/**
+ * 通过AJAX加载样式列表
+ * 实时扫描样式目录并渲染为卡片
+ */
+let allStyles = []; // 存储所有样式数据用于搜索
+loadStyleList();
+async function loadStyleList() {
+    console.log('🚀 开始加载样式列表...');
+    
+    const styleSelect = document.getElementById('style');
+    const styleCardsContainer = document.getElementById('styleCardsContainer');
+    const styleCardsLoading = document.getElementById('styleCardsLoading');
+    const styleCardsEmpty = document.getElementById('styleCardsEmpty');
+    
+    if (!styleSelect || !styleCardsContainer) {
+        console.error('❌ 未找到必要的DOM元素');
+        return;
+    }
+    
+    const currentStyle = '<?= $page ? htmlspecialchars((($page->getData('style') ?? '')) ?? '') : '' ?>';
+    const currentPageId = '<?= $page ? $page->getId() : '' ?>';
+    console.log('🎯 当前选择的样式:', currentStyle || '(无)');
+    console.log('📄 当前页面ID:', currentPageId || '(新建)');
+    
+    try {
+        // 显示加载状态
+        styleCardsLoading.style.display = 'block';
+        styleCardsEmpty.style.display = 'none';
+        styleCardsContainer.innerHTML = '';
+        
+        // 构建请求 URL
+        const apiUrl = '<?= $this->getBackendUrl('cms/backend/page/getStyles') ?>';
+        console.log('📡 请求 URL:', apiUrl);
+        
+        // 发送AJAX请求
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        });
+        
+        console.log('📥 收到响应:', response.status, response.statusText);
+        
+        // 检查响应状态
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ HTTP错误响应:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // 解析JSON
+        const result = await response.json();
+        console.log('📦 解析响应数据:', result);
+        
+        if (result.success && result.data) {
+            allStyles = result.data; // 保存到全局变量
+            
+            // 更新隐藏的select（用于表单提交）
+            styleSelect.innerHTML = '<option value=""><?= __('请选择样式') ?></option>';
+            result.data.forEach(style => {
+                const option = document.createElement('option');
+                option.value = style.code;
+                option.textContent = style.name;
+                if (currentStyle && style.code === currentStyle) {
+                    option.selected = true;
+                }
+                styleSelect.appendChild(option);
+            });
+            
+            // 渲染样式卡片
+            renderStyleCards(result.data, currentStyle, currentPageId);
+        } else {
+            console.error('❌ 加载样式列表失败:', result);
+            styleCardsEmpty.innerHTML = '<i class="mdi mdi-alert"></i> ' + (result.message || '加载失败，请刷新重试');
+            styleCardsEmpty.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('❌ 加载样式列表异常:', error);
+        console.error('错误堆栈:', error.stack);
+        
+        // 显示详细的错误信息
+        const errorMessage = error.message || '未知错误';
+        styleCardsEmpty.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="mdi mdi-alert-circle"></i>
+                <strong>加载失败</strong><br>
+                <small>${errorMessage}</small><br>
+                <button class="btn btn-sm btn-outline-danger mt-2" onclick="loadStyleList()">
+                    <i class="mdi mdi-refresh"></i> 重试
+                </button>
+            </div>
+        `;
+        styleCardsEmpty.style.display = 'block';
+    } finally {
+        styleCardsLoading.style.display = 'none';
+    }
+}
+
+/**
+ * 渲染样式卡片
+ */
+function renderStyleCards(styles, currentStyle, currentPageId) {
+    const styleCardsContainer = document.getElementById('styleCardsContainer');
+    const styleCardsEmpty = document.getElementById('styleCardsEmpty');
+    
+    styleCardsContainer.innerHTML = '';
+    
+    if (!styles || styles.length === 0) {
+        styleCardsEmpty.style.display = 'block';
+        return;
+    }
+    
+    styleCardsEmpty.style.display = 'none';
+    
+    const previewImageUrl = '<?= $this->getBackendUrl('cms/backend/page/stylePreviewImage') ?>';
+    const previewFullUrl = '<?= $this->getBackendUrl('cms/backend/preview/full') ?>';
+    
+    styles.forEach(style => {
+        const col = document.createElement('div');
+        col.className = 'col';
+        
+        const isSelected = currentStyle && style.code === currentStyle;
+        const hasPreviewImage = style.preview_image && style.preview_image.trim() !== '';
+        
+        const card = document.createElement('div');
+        card.className = 'card style-card' + (isSelected ? ' selected' : '');
+        card.dataset.styleCode = style.code;
+        card.dataset.styleName = style.name;
+        card.dataset.styleDescription = style.description || '';
+        
+        // 预览区域
+        let previewHtml = '';
+        let previewActionsHtml = '';
+        
+        if (hasPreviewImage) {
+            // 有预览图，通过控制器获取图片
+            const imageUrl = `${previewImageUrl}?code=${encodeURIComponent(style.code)}`;
+            
+            // 预览操作按钮：放大预览 + 真实预览 + 默认预览
+            previewActionsHtml = currentPageId ? `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openImagePreview('${imageUrl}', '${style.name}')" 
+                         title="放大预览图">
+                        <i class="mdi mdi-magnify-plus"></i>
+                    </div>
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openRealPreview('${style.code}', '${style.name}', ${currentPageId})" 
+                         title="真实页面预览">
+                        <i class="mdi mdi-monitor"></i>
+                    </div>
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openDefaultPreview('${style.code}', '${style.name}')" 
+                         title="默认模板预览">
+                        <i class="mdi mdi-file-eye"></i>
+                    </div>
+                </div>
+            ` : `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openImagePreview('${imageUrl}', '${style.name}')" 
+                         title="放大预览图">
+                        <i class="mdi mdi-magnify-plus"></i>
+                    </div>
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openDefaultPreview('${style.code}', '${style.name}')" 
+                         title="默认模板预览">
+                        <i class="mdi mdi-file-eye"></i>
+                    </div>
+                </div>
+            `;
+            
+            previewHtml = `
+                <div class="style-card-preview">
+                    ${previewActionsHtml}
+                    <img src="${imageUrl}" 
+                         alt="${style.name}" 
+                         onerror="this.parentElement.innerHTML='<div class=\\'style-card-preview-placeholder\\'><i class=\\'mdi mdi-image-broken\\'></i><div>图片加载失败</div></div>'">
+                </div>
+            `;
+        } else if (currentPageId) {
+            // 没有预览图但有页面ID，使用iframe实时预览并转换为canvas
+            const iframeUrl = `${previewFullUrl}?page_id=${currentPageId}&style_code=${encodeURIComponent(style.code)}`;
+            const canvasId = `style-preview-canvas-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const iframeId = `style-preview-iframe-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            
+            // 预览操作按钮：真实预览 + 默认预览
+            previewActionsHtml = `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openRealPreview('${style.code}', '${style.name}', ${currentPageId})" 
+                         title="真实页面预览">
+                        <i class="mdi mdi-monitor"></i>
+                    </div>
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openDefaultPreview('${style.code}', '${style.name}')" 
+                         title="默认模板预览">
+                        <i class="mdi mdi-file-eye"></i>
+                    </div>
+                </div>
+            `;
+            
+            previewHtml = `
+                <div class="style-card-preview" id="preview-${style.code}">
+                    ${previewActionsHtml}
+                    <div class="style-card-preview-loading">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <div style="margin-top: 10px; font-size: 12px;">正在生成预览...</div>
+                    </div>
+                    <canvas id="${canvasId}" style="display: none; width: 100%; height: 100%;"></canvas>
+                    <iframe id="${iframeId}" 
+                            src="${iframeUrl}" 
+                            style="position: absolute; left: -9999px; width: 1200px; height: 800px; border: none;"
+                            onload="captureIframePreview('${iframeId}', '${canvasId}', 'preview-${style.code}')">
+                    </iframe>
+                </div>
+            `;
+        } else {
+            // 没有预览图也没有页面ID，使用默认模板预览生成实时预览
+            const defaultPreviewUrl = '<?= $this->getBackendUrl('cms/backend/preview/stylePreview') ?>?style_code=' + encodeURIComponent(style.code);
+            const canvasId = `style-preview-canvas-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const iframeId = `style-preview-iframe-${style.code.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            
+            // 预览操作按钮：默认预览
+            previewActionsHtml = `
+                <div class="style-card-preview-actions">
+                    <div class="style-card-preview-btn" 
+                         onclick="event.stopPropagation(); openDefaultPreview('${style.code}', '${style.name}')" 
+                         title="默认模板预览">
+                        <i class="mdi mdi-file-eye"></i>
+                    </div>
+                </div>
+            `;
+            
+            previewHtml = `
+                <div class="style-card-preview" id="preview-${style.code}">
+                    ${previewActionsHtml}
+                    <div class="style-card-preview-loading">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <div style="margin-top: 10px; font-size: 12px;">正在生成默认预览...</div>
+                    </div>
+                    <canvas id="${canvasId}" style="display: none; width: 100%; height: 100%;"></canvas>
+                    <iframe id="${iframeId}" 
+                            src="${defaultPreviewUrl}" 
+                            style="position: absolute; left: -9999px; width: 1200px; height: 800px; border: none;"
+                            onload="captureIframePreview('${iframeId}', '${canvasId}', 'preview-${style.code}')">
+                    </iframe>
+                </div>
+            `;
+        }
+        
+        // 卡片内容
+        card.innerHTML = `
+            ${previewHtml}
+            <div class="style-card-body">
+                <div class="style-card-title">
+                    <span>${style.name}</span>
+                    <span class="style-card-selected-badge">
+                        <i class="mdi mdi-check"></i> 已选择
+                    </span>
+                </div>
+                ${style.description ? `<div class="style-card-description">${style.description}</div>` : ''}
+                <div class="style-card-meta">
+                    <span class="style-card-code">${style.code}</span>
+                    ${hasPreviewImage ? '<i class="mdi mdi-image text-success" title="有预览图"></i>' : '<i class="mdi mdi-monitor text-muted" title="实时预览"></i>'}
+                </div>
+            </div>
+        `;
+        
+        // 点击卡片选择样式
+        card.addEventListener('click', () => selectStyle(style.code));
+        
+        col.appendChild(card);
+        styleCardsContainer.appendChild(col);
+    });
+}
+
+/**
+ * 选择样式
+ */
+async function selectStyle(styleCode) {
+    console.log('🎯 选择样式:', styleCode);
+    
+    const styleSelect = document.getElementById('style');
+    const oldStyle = styleSelect.value;
+    
+    // 更新隐藏的select
+    styleSelect.value = styleCode;
+    
+    // 更新卡片选中状态
+    document.querySelectorAll('.style-card').forEach(card => {
+        if (card.dataset.styleCode === styleCode) {
+            card.classList.add('selected');
+        } else {
+            card.classList.remove('selected');
+        }
+    });
+    
+    // 启用可视化配置按钮
+    const visualBtn = document.getElementById('openVisualConfigBtn');
+    if (visualBtn) {
+        visualBtn.disabled = false;
+    }
+    
+    // 🚫 如果正在应用继承配置，跳过自动保存
+    if (window.isApplyingInheritance) {
+        console.log('🚫 正在应用继承配置，跳过样式自动保存');
+        return;
+    }
+    
+    // 如果是编辑模式，自动保存样式切换
+    const pageIdForm = '<?= $isEdit && $page ? $page->getId() : '' ?>';
+    if (pageIdForm && styleCode !== oldStyle) {
+        await autoSaveStyleChange(styleCode);
+    }
+}
+
+/**
+ * 打开图片放大预览
+ * @param {string} imageUrl - 图片URL
+ * @param {string} styleName - 样式名称
+ */
+function openImagePreview(imageUrl, styleName) {
+    console.log('🖼️ 打开图片预览:', styleName);
+    
+    const modal = document.getElementById('stylePreviewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalIcon = document.getElementById('previewModalIcon');
+    const modalBody = document.getElementById('previewModalBody');
+    
+    // 设置标题和图标
+    modalTitle.textContent = `${styleName} - 预览图`;
+    modalIcon.className = 'mdi mdi-magnify-plus';
+    
+    // 显示图片
+    modalBody.innerHTML = `<img src="${imageUrl}" alt="${styleName}">`;
+    modalBody.className = 'style-preview-modal-body';
+    
+    // 隐藏设备按钮（图片预览不需要）
+    document.getElementById('deviceButtons').style.display = 'none';
+    
+    // 显示模态框
+    modal.classList.add('active');
+    
+    // 禁止body滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 打开真实页面预览
+ * @param {string} styleCode - 样式代码
+ * @param {string} styleName - 样式名称
+ * @param {number} pageIdForm - 页面ID
+ */
+function openRealPreview(styleCode, styleName, pageIdForm) {
+    console.log('🖥️ 打开真实预览:', styleName, styleCode);
+    
+    const modal = document.getElementById('stylePreviewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalIcon = document.getElementById('previewModalIcon');
+    const modalBody = document.getElementById('previewModalBody');
+    
+    // 设置标题和图标
+    modalTitle.textContent = `${styleName} - 真实预览`;
+    modalIcon.className = 'mdi mdi-monitor';
+    
+    // 构建iframe URL
+    const previewUrl = '<?= $this->getBackendUrl('cms/backend/preview/full') ?>?page_id=' + pageIdForm + '&style_code=' + encodeURIComponent(styleCode);
+    
+    // 保存URL用于刷新
+    currentPreviewUrl = previewUrl;
+    
+    // 显示加载状态和iframe
+    modalBody.innerHTML = `
+        <div class="style-preview-loading">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">正在加载预览...</div>
+        </div>
+        <iframe src="${previewUrl}" onload="this.previousElementSibling.style.display='none'"></iframe>
+    `;
+    
+    // 设置默认设备视图
+    modalBody.className = 'style-preview-modal-body device-desktop';
+    
+    // 显示设备按钮
+    document.getElementById('deviceButtons').style.display = 'flex';
+    
+    // 显示模态框
+    modal.classList.add('active');
+    
+    // 禁止body滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 打开默认模板预览（无页面参数）
+ * @param {string} styleCode - 样式代码
+ * @param {string} styleName - 样式名称
+ */
+function openDefaultPreview(styleCode, styleName) {
+    console.log('📄 打开默认预览:', styleName, styleCode);
+    
+    const modal = document.getElementById('stylePreviewModal');
+    const modalTitle = document.getElementById('previewModalTitle');
+    const modalIcon = document.getElementById('previewModalIcon');
+    const modalBody = document.getElementById('previewModalBody');
+    
+    // 设置标题和图标
+    modalTitle.textContent = `${styleName} - 默认模板预览`;
+    modalIcon.className = 'mdi mdi-file-eye';
+    
+    // 构建iframe URL（使用新的 stylePreview 路由，不需要 page_id）
+    const previewUrl = '<?= $this->getBackendUrl('cms/backend/preview/stylePreview') ?>?style_code=' + encodeURIComponent(styleCode);
+    
+    // 保存URL用于刷新
+    currentPreviewUrl = previewUrl;
+    
+    // 显示加载状态和iframe
+    modalBody.innerHTML = `
+        <div class="style-preview-loading">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">正在加载默认模板预览...</div>
+        </div>
+        <iframe src="${previewUrl}" onload="this.previousElementSibling.style.display='none'"></iframe>
+    `;
+    
+    // 设置默认设备视图
+    modalBody.className = 'style-preview-modal-body device-desktop';
+    
+    // 显示设备按钮
+    document.getElementById('deviceButtons').style.display = 'flex';
+    
+    // 显示模态框
+    modal.classList.add('active');
+    
+    // 禁止body滚动
+    document.body.style.overflow = 'hidden';
+}
+
+// 保存当前预览URL，用于刷新
+let currentPreviewUrl = '';
+let currentPreviewDevice = 'desktop';
+
+/**
+ * 切换预览设备
+ * @param {string} device - 设备类型: mobile, tablet, desktop
+ */
+function switchPreviewDevice(device) {
+    console.log('📱 切换设备预览:', device);
+    
+    const modalBody = document.getElementById('previewModalBody');
+    const deviceButtons = document.querySelectorAll('.device-button');
+    
+    // 更新按钮状态
+    deviceButtons.forEach(btn => {
+        if (btn.dataset.device === device) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // 更新modalBody的设备类
+    modalBody.className = 'style-preview-modal-body device-' + device;
+    currentPreviewDevice = device;
+}
+
+/**
+ * 刷新样式预览
+ */
+function refreshStylePreview() {
+    console.log('🔄 刷新预览');
+    
+    const modalBody = document.getElementById('previewModalBody');
+    const iframe = modalBody.querySelector('iframe');
+    
+    if (iframe && currentPreviewUrl) {
+        // 显示加载状态
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'style-preview-loading';
+        loadingDiv.innerHTML = `
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">正在刷新预览...</div>
+        `;
+        loadingDiv.style.display = 'flex';
+        modalBody.insertBefore(loadingDiv, iframe);
+        
+        // 重新加载iframe
+        iframe.src = currentPreviewUrl + '&_refresh=' + Date.now();
+        iframe.onload = function() {
+            loadingDiv.style.display = 'none';
+        };
+    }
+}
+/**
+ * 关闭样式预览模态框
+ */
+function closeStylePreviewModal() {
+    const modal = document.getElementById('stylePreviewModal');
+    modal.classList.remove('active');
+    
+    // 恢复body滚动
+    document.body.style.overflow = '';
+    
+    // 清空内容（移除iframe）
+    setTimeout(() => {
+        const modalBody = document.getElementById('previewModalBody');
+        modalBody.innerHTML = '';
+        modalBody.className = 'style-preview-modal-body device-desktop';
+        currentPreviewUrl = '';
+        currentPreviewDevice = 'desktop';
+        
+        // 重置设备按钮状态
+        const deviceButtons = document.querySelectorAll('.device-button');
+        deviceButtons.forEach(btn => {
+            if (btn.dataset.device === 'desktop') {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }, 300);
+}
+
+// 点击模态框背景关闭
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('stylePreviewModal');
+    if (e.target === modal) {
+        closeStylePreviewModal();
+    }
+});
+
+// ESC键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('stylePreviewModal');
+        if (modal && modal.classList.contains('active')) {
+            closeStylePreviewModal();
+        }
+    }
+});
+
+/**
+ * 截取iframe内容并转换为canvas预览
+ * 
+ * @param {string} iframeId - iframe元素ID
+ * @param {string} canvasId - canvas元素ID
+ * @param {string} previewId - 预览容器ID
+ */
+async function captureIframePreview(iframeId, canvasId, previewId) {
+    console.log('🎬 开始截取预览:', iframeId);
+    
+    const iframe = document.getElementById(iframeId);
+    const canvas = document.getElementById(canvasId);
+    const previewContainer = document.getElementById(previewId);
+    const loadingEl = previewContainer ? previewContainer.querySelector('.style-card-preview-loading') : null;
+    
+    if (!iframe || !canvas || !previewContainer) {
+        console.error('❌ 截图失败：找不到必要的DOM元素');
+        if (loadingEl) {
+            loadingEl.innerHTML = '<div class="text-danger small">预览生成失败</div>';
+        }
+        return;
+    }
+    
+    try {
+        // 等待iframe完全加载
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const iframeBody = iframeDoc.body;
+        
+        if (!iframeBody) {
+            throw new Error('无法访问iframe内容');
+        }
+        
+        console.log('📸 开始使用html2canvas截图...');
+        
+        // 使用html2canvas截取iframe内容
+        const screenshotCanvas = await html2canvas(iframeBody, {
+            allowTaint: true,
+            useCORS: true,
+            scale: 0.25, // 降低分辨率以提高性能
+            width: 1200,
+            height: 800,
+            logging: false,
+            removeContainer: false
+        });
+        
+        // 将截图绘制到目标canvas（调整尺寸以适应卡片）
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400; // 卡片宽度
+        canvas.height = 200; // 卡片高度
+        
+        // 计算缩放比例（保持宽高比）
+        const scale = Math.min(canvas.width / screenshotCanvas.width, canvas.height / screenshotCanvas.height);
+        const x = (canvas.width / 2) - (screenshotCanvas.width / 2) * scale;
+        const y = (canvas.height / 2) - (screenshotCanvas.height / 2) * scale;
+        
+        ctx.drawImage(screenshotCanvas, x, y, screenshotCanvas.width * scale, screenshotCanvas.height * scale);
+        
+        // 显示canvas，隐藏加载状态
+        canvas.style.display = 'block';
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
+        // 移除iframe（已经不需要了）
+        setTimeout(() => {
+            if (iframe.parentElement) {
+                iframe.remove();
+            }
+        }, 100);
+        
+        console.log('✅ 预览截图成功');
+        
+    } catch (error) {
+        console.error('❌ 截图失败:', error);
+        
+        // 显示错误提示
+        if (loadingEl) {
+            loadingEl.innerHTML = `
+                <div class="style-card-preview-placeholder">
+                    <i class="mdi mdi-alert-circle"></i>
+                    <div style="font-size: 12px; margin-top: 5px;">预览生成失败</div>
+                    <div style="font-size: 11px; color: #999; margin-top: 3px;">点击卡片可选择此样式</div>
+                </div>
+            `;
+        }
+        
+        // 移除iframe
+        if (iframe.parentElement) {
+            iframe.remove();
+        }
+    }
+}
+
+/**
+ * 搜索过滤样式
+ */
+function filterStyles(searchTerm) {
+    const term = searchTerm.toLowerCase().trim();
+    
+    if (!term) {
+        // 如果搜索框为空，显示所有样式
+        renderStyleCards(allStyles, document.getElementById('style').value, '<?= $page ? $page->getId() : '' ?>');
+        return;
+    }
+    
+    // 过滤样式：匹配名称、描述或代码
+    const filtered = allStyles.filter(style => {
+        const name = (style.name || '').toLowerCase();
+        const description = (style.description || '').toLowerCase();
+        const code = (style.code || '').toLowerCase();
+        return name.includes(term) || description.includes(term) || code.includes(term);
+    });
+    
+    // 渲染过滤后的结果
+    renderStyleCards(filtered, document.getElementById('style').value, '<?= $page ? $page->getId() : '' ?>');
+}
+
+// 搜索框事件
+const styleSearchInput = document.getElementById('styleSearchInput');
+if (styleSearchInput) {
+    // 实时搜索（防抖）
+    let searchTimeout;
+    styleSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            filterStyles(this.value);
+        }, 300); // 300ms 防抖
+    });
+    
+    // 清空搜索框时重置
+    styleSearchInput.addEventListener('search', function() {
+        if (this.value === '') {
+            filterStyles('');
+        }
+    });
+}
+
+// 刷新按钮点击事件
+const refreshStyleBtn = document.getElementById('refreshStyleBtn');
+if (refreshStyleBtn) {
+    refreshStyleBtn.addEventListener('click', async function() {
+        console.log('🔄 用户点击刷新样式配置按钮');
+        
+        // 禁用按钮并显示加载状态
+        this.disabled = true;
+        const icon = this.querySelector('i');
+        const originalClass = icon.className;
+        icon.className = 'mdi mdi-loading mdi-spin';
+        
+        try {
+            // 重新加载样式列表
+            await loadStyleList();
+            
+            // 如果当前选中了样式，重新加载其配置
+            const currentStyle = styleSelect.value;
+            if (currentStyle) {
+                await loadStyleConfig(currentStyle);
+            }
+            
+            console.log('✓ 样式配置刷新完成');
+            
+            // 显示成功提示
+            const toast = document.createElement('div');
+            toast.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
+            toast.style.zIndex = '11000';
+            toast.innerHTML = `
+                <i class="mdi mdi-check-circle me-2"></i>
+                样式配置已刷新
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+            
+        } catch (error) {
+            console.error('❌ 刷新失败:', error);
+            alert('刷新样式配置失败：' + error.message);
+        } finally {
+            // 恢复按钮状态
+            this.disabled = false;
+            icon.className = originalClass;
+        }
+    });
+}
+
+// 监听样式选择变化
+if (styleSelect) {
+    styleSelect.addEventListener('change', async function() {
+        // 🚫 如果正在应用继承配置，跳过自动保存
+        if (window.isApplyingInheritance) {
+            console.log('🚫 正在应用继承配置，跳过自动保存');
+            return;
+        }
+        
+        // 🔒 如果样式选择器被锁定（继承父页面），跳过自动保存
+        if (this.readOnly || this.style.pointerEvents === 'none') {
+            console.log('🔒 样式选择器已锁定，跳过自动保存');
+            return;
+        }
+        
+        const selectedStyle = this.value;
+        const selectedOption = this.options[this.selectedIndex];
+        
+        console.log('🎨 样式切换:', selectedStyle);
+        
+        // 显示样式描述
+        const descContainer = document.getElementById('style-description-container');
+        const descText = document.getElementById('style-description-text');
+        
+        if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
+            descText.textContent = selectedOption.dataset.description;
+            descContainer.style.display = 'block';
+        } else if (descContainer) {
+            descContainer.style.display = 'none';
+        }
+        
+        // 显示样式预览图
+        const previewContainer = document.getElementById('style-preview-container');
+        const previewImage = document.getElementById('style-preview-image');
+        
+        if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
+            const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/Weline/Cms/') ?>';
+            previewImage.src = baseUrl + selectedOption.dataset.previewImage;
+            previewContainer.style.display = 'block';
+            console.log('📷 显示预览图:', selectedOption.dataset.previewImage);
+        } else if (previewContainer) {
+            previewContainer.style.display = 'none';
+            console.log('ℹ️ 该样式没有预览图');
+        }
+        
+        // 加载样式配置
+        loadStyleConfig(selectedStyle);
+        
+        // 🔄 编辑模式下：自动保存样式切换
+        <?php if ($isEdit && $page && $page->getId()): ?>
+        if (selectedStyle) {
+            await autoSaveStyleChange(selectedStyle);
+        }
+        <?php endif; ?>
+    });
+}
+
+/**
+ * 显示通知消息
+ * @param {string} type - 消息类型: 'success', 'error', 'warning', 'info'
+ * @param {string} message - 消息内容
+ */
+function showMessage(type, message) {
+    // 类型到 Bootstrap 类的映射
+    const typeClassMap = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    };
+    
+    // 类型到图标的映射
+    const typeIconMap = {
+        'success': 'mdi-check-circle',
+        'error': 'mdi-alert-circle',
+        'warning': 'mdi-alert',
+        'info': 'mdi-information'
+    };
+    
+    const alertClass = typeClassMap[type] || 'alert-info';
+    const iconClass = typeIconMap[type] || 'mdi-information';
+    
+    // 创建 toast 通知
+    const toast = document.createElement('div');
+    toast.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    toast.style.zIndex = '11000';
+    toast.style.minWidth = '300px';
+    toast.innerHTML = `
+        <i class="mdi ${iconClass} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 3000);
+}
+
+/**
+ * 显示全局加载提示
+ */
+function showLoading() {
+    // 检查是否已经存在加载层
+    let loadingOverlay = document.getElementById('global-loading-overlay');
+    
+    if (!loadingOverlay) {
+        // 创建加载层
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'global-loading-overlay';
+        loadingOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        loadingOverlay.innerHTML = `
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden"><?= __('加载中...') ?></span>
+            </div>
+        `;
+        
+        document.body.appendChild(loadingOverlay);
+    }
+    
+    loadingOverlay.style.display = 'flex';
+}
+
+/**
+ * 隐藏全局加载提示
+ */
+function hideLoading() {
+    const loadingOverlay = document.getElementById('global-loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
+    }
+}
+
+/**
+ * 自动保存样式切换
+ * 当用户切换样式时，自动保存到后端，并刷新可视化编辑器
+ */
+async function autoSaveStyleChange(newStyle) {
+    // 🚫 如果正在应用继承配置，跳过自动保存
+    if (window.isApplyingInheritance) {
+        console.log('🚫 正在应用继承配置，跳过自动保存刷新');
+        return;
+    }
+    
+    console.log('💾 自动保存样式切换:', newStyle);
+    
+    // 显示保存提示
+    showLoading();
+    
+    try {
+        // 准备表单数据
+        const form = document.getElementById('page-form');
+        const formData = new FormData(form);
+        
+        // 更新样式字段
+        formData.set('style', newStyle);
+        
+        // 发送AJAX请求
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData,
+            credentials: 'same-origin'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ 样式保存成功');
+            
+            // 显示成功提示
+            showMessage('success', '<?= __('样式已保存，正在刷新页面...') ?>');
+            
+            // 延迟500ms后刷新页面，让用户看到成功提示
+            setTimeout(() => {
+                console.log('🔄 刷新页面以应用新样式');
+                window.location.reload();
+            }, 500);
+            
+        } else {
+            console.error('❌ 样式保存失败:', result.message);
+            showMessage('error', '<?= __('样式保存失败：') ?>' + (result.message || '<?= __('未知错误') ?>'));
+            
+            // 恢复原来的样式选择
+            if (result.old_style) {
+                styleSelect.value = result.old_style;
+            }
+        }
+    } catch (error) {
+        console.error('❌ 保存样式时发生错误:', error);
+        showMessage('error', '<?= __('网络错误，样式保存失败') ?>');
+    } finally {
+        hideLoading();
+    }
+}
+
+
+
+// 使用事件委托处理翻译按钮点击
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.style-config-translate-btn')) {
+        e.preventDefault();
+        const btn = e.target.closest('.style-config-translate-btn');
+        const configKey = btn.getAttribute('data-config-key');
+        const configLabel = btn.getAttribute('data-config-label');
+        const configValue = btn.getAttribute('data-config-value');
+        openStyleConfigTranslation(configKey, configLabel, configValue);
+    }
+});
+
+/**
+ * 打开样式配置项的翻译界面
+ * @param {string} configKey - 配置键（如 header.logo）
+ * @param {string} configLabel - 配置标签
+ * @param {string} currentValue - 当前值
+ */
+function openStyleConfigTranslation(configKey, configLabel, currentValue) {
+    if (!pageIdForm || pageIdForm === 'null') {
+        alert('<?= __('只有在编辑模式下才能翻译配置项') ?>');
+        return;
+    }
+    
+    // 转义特殊字符
+    currentValue = (currentValue || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    
+    // 生成唯一ID
+    const translationId = `style-config-translation-${configKey.replace(/\./g, '-')}`;
+    
+    // 检查是否已存在翻译界面
+    let existingOffcanvas = document.getElementById(translationId);
+    if (!existingOffcanvas) {
+        // 构建翻译界面的 URL
+        const translationUrl = '<?= $this->getBackendUrl('i18n/backend/taglib/local') ?>' +
+            '?model=<?= urlencode('Weline\\Cms\\Model\\Page\\LocalDescription') ?>' +
+            '&field=' + encodeURIComponent('config.' + configKey) +
+            '&id=' + pageIdForm +
+            '&value=' + encodeURIComponent(currentValue);
+        
+        console.log('🌐 打开翻译界面:', translationUrl);
+        
+        // 创建 Offcanvas HTML
+        const offcanvasHtml = `
+            <div class="offcanvas offcanvas-end w-75 h-100" tabindex="-1" id="${translationId}" 
+                 aria-labelledby="${translationId}Label">
+                <div class="offcanvas-header">
+                    <h5 id="${translationId}Label">
+                        <?= __('翻译配置项') ?>: ${configLabel}
+                    </h5>
+                    <div class="d-flex gap-2 ms-auto">
+                        <button id="${translationId}SubmitBtn" type="button" class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
+                        </button>
+                        <a id="${translationId}RefreshBtn" class="btn btn-info btn-sm" href="javascript:void(0)">
+                            <i class="mdi mdi-refresh me-1"></i><?= __('刷新') ?>
+                        </a>
+                        <button type="button" class="btn-close btn-sm" data-bs-dismiss="offcanvas"
+                                aria-label="<?= __('关闭') ?>"></button>
+                    </div>
+                </div>
+                <div class="offcanvas-body">
+                    <div class="position-relative w-100 h-100">
+                        <iframe id="${translationId}Iframe" class="w-100 h-100"
+                                data-src="${translationUrl}"
+                                frameborder="0"></iframe>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 添加到页面
+        document.body.insertAdjacentHTML('beforeend', offcanvasHtml);
+        existingOffcanvas = document.getElementById(translationId);
+        
+        // 绑定事件
+        const iframe = document.getElementById(`${translationId}Iframe`);
+        const submitBtn = document.getElementById(`${translationId}SubmitBtn`);
+        const refreshBtn = document.getElementById(`${translationId}RefreshBtn`);
+        
+        // 显示时加载 iframe
+        existingOffcanvas.addEventListener('show.bs.offcanvas', function() {
+            if (!iframe.src) {
+                iframe.src = iframe.getAttribute('data-src');
+            }
+        });
+        
+        // 刷新按钮
+        refreshBtn.addEventListener('click', function() {
+            iframe.src = iframe.getAttribute('data-src');
+        });
+        
+        // 提交按钮
+        submitBtn.addEventListener('click', function() {
+            const iframeDoc = iframe.contentWindow?.document;
+            if (!iframeDoc) {
+                console.error('❌ 无法访问 iframe 文档');
+                return;
+            }
+            
+            const form = iframeDoc.getElementById('localTranslationForm');
+            if (!form) {
+                console.error('❌ 未找到翻译表单');
+                return;
+            }
+            
+            // 防止重复提交
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${submitBtn.textContent}`;
+            
+            try {
+                form.submit();
+                
+                // 监听提交完成
+                iframe.addEventListener('load', function onLoad() {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>';
+                    iframe.removeEventListener('load', onLoad);
+                });
+            } catch (error) {
+                console.error('❌ 表单提交失败:', error);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>';
+            }
+        });
+    }
+    
+    // 显示 Offcanvas
+    const bsOffcanvas = new bootstrap.Offcanvas(existingOffcanvas);
+    bsOffcanvas.show();
+}
+</script>
+<script>
+
+/**
+ * 打开预览图模态框（查看大图）
+ */
+function openPreviewImageModal(imageSrc) {
+    // 创建模态框HTML
+    const modalHtml = `
+        <div id="previewImageModal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: zoom-out;
+        " onclick="closePreviewImageModal()">
+            <div style="
+                max-width: 95%;
+                max-height: 95%;
+                position: relative;
+            ">
+                <img src="${imageSrc}" 
+                     alt="<?= __('预览图') ?>" 
+                     style="
+                         max-width: 100%;
+                         max-height: 95vh;
+                         object-fit: contain;
+                         border-radius: 8px;
+                         box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+                     ">
+                <button onclick="closePreviewImageModal()" 
+                        style="
+                            position: absolute;
+                            top: -40px;
+                            right: 0;
+                            background: rgba(255, 255, 255, 0.9);
+                            border: none;
+                            border-radius: 50%;
+                            width: 36px;
+                            height: 36px;
+                            font-size: 20px;
+                            cursor: pointer;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        ">
+                    ×
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 禁止页面滚动
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 关闭预览图模态框
+ */
+function closePreviewImageModal() {
+    const modal = document.getElementById('previewImageModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // 恢复页面滚动
+    document.body.style.overflow = '';
+}
+
+// 添加ESC键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePreviewImageModal();
+    }
+});
+
+/**
+ * ========================================
+ * 自定义内容配置监听
+ * ========================================
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    const customContentTextarea = document.getElementById('custom_content');
+    const contentStatusAlert = document.getElementById('contentStatusAlert');
+    const contentStatusText = document.getElementById('contentStatusText');
+    const accordionButton = document.querySelector('#customContentHeading .accordion-button');
+    
+    if (!customContentTextarea) return;
+    
+    // 初始化：如果有内容，显示徽章
+    function updateContentStatus() {
+        const content = customContentTextarea.value.trim();
+        const badge = accordionButton.querySelector('.badge');
+        
+        if (content) {
+            // 有内容时更新徽章和状态
+            badge.textContent = '<?= __('已自定义') ?>';
+            badge.classList.remove('bg-info');
+            badge.classList.add('bg-success');
+            
+            // 显示状态提示
+            contentStatusAlert.classList.remove('d-none');
+            const wordCount = content.length;
+            contentStatusText.textContent = `<?= __('当前已填写 ') ?>${wordCount}<?= __(' 个字符。页面将使用此自定义内容替代 content.phtml 模板。') ?>`;
+        } else {
+            // 无内容时恢复默认
+            badge.textContent = '<?= __('我要自定义内容') ?>';
+            badge.classList.remove('bg-success');
+            badge.classList.add('bg-info');
+            
+            // 隐藏状态提示
+            contentStatusAlert.classList.add('d-none');
+        }
+    }
+    
+    // 页面加载时检查初始状态
+    updateContentStatus();
+    
+    // 监听内容变化
+    customContentTextarea.addEventListener('input', updateContentStatus);
+    customContentTextarea.addEventListener('change', updateContentStatus);
+    
+    // 监听折叠面板展开事件
+    const customContentCollapse = document.getElementById('customContentCollapse');
+    customContentCollapse.addEventListener('shown.bs.collapse', function() {
+        console.log('✅ 自定义内容配置面板已展开');
+        
+        // 聚焦到编辑器
+        setTimeout(() => {
+            customContentTextarea.focus();
+        }, 300);
+    });
+    
+    customContentCollapse.addEventListener('hidden.bs.collapse', function() {
+        console.log('ℹ️ 自定义内容配置面板已折叠');
+    });
+    
+    console.log('✅ 自定义内容配置监听器初始化完成');
+});
+</script>
+
+<!-- 多语言内容 Tab 样式 -->
+<style>
+.nav-tabs-custom {
+    border-bottom: 2px solid #dee2e6;
+}
+.nav-tabs-custom .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #6c757d;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    border-color: transparent;
+    color: #495057;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.nav-tabs-custom .nav-link.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background-color: transparent;
+    font-weight: 500;
+}
+
+.nav-tabs-custom .nav-link.fw-bold {
+    font-weight: 600 !important;
+}
+
+#contentLanguageTabsContent {
+    background-color: #f8f9fa;
+}
+
+#contentLanguageTabsContent .tab-pane {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+
+<!-- 全局Toast通知函数 -->
+<script>
+// ==================== Toast 通知函数（全局） ====================
+function showToast(type, title, message) {
+    // 检查是否有全局的 Toast 方法
+    if (typeof Toastify !== 'undefined') {
+        Toastify({
+            text: title + (message ? '<br>' + message : ''),
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: type === 'success' ? "#28a745" : "#dc3545",
+            escapeMarkup: false
+        }).showToast();
+    } else if (typeof toastr !== 'undefined') {
+        toastr[type](message || '', title);
+    } else {
+        // 降级为简单的通知元素
+        if (type === 'success') {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#28a745;color:white;padding:15px 20px;border-radius:5px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:11000;max-width:400px;';
+            toast.innerHTML = '<strong>' + title + '</strong><br>' + (message || '');
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.3s';
+                toast.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 3000);
+        } else {
+            alert(title + '\n' + (message || ''));
+        }
+    }
+}
+
+</script>
+
+<!-- 页面关系树复制功能 -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ==================== 点击 Handle 文本复制 ====================
+    const clickableHandles = document.querySelectorAll('.clickable-handle');
+    clickableHandles.forEach(function(element) {
+        element.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const handle = this.getAttribute('data-handle');
+            const pageName = this.getAttribute('data-page-name');
+            const originalBg = this.style.backgroundColor;
+            const originalText = this.textContent;
+            
+            // 添加 / 前缀
+            const handleWithSlash = '/' + handle;
+            
+            copyToClipboard(handleWithSlash, null, null, null, 
+                '<?= __("Handle 已复制") ?>', 
+                '<?= __("页面") ?>: ' + pageName + '<br><?= __("Handle") ?>: ' + handleWithSlash);
+            
+            // 视觉反馈
+            this.style.backgroundColor = '#d4edda';
+            this.textContent = '✓ ' + handleWithSlash;
+            setTimeout(() => {
+                this.style.backgroundColor = originalBg;
+                this.textContent = originalText;
+            }, 1500);
+        });
+    });
+    
+    // ==================== 点击链接文本复制 ====================
+    const clickableUrls = document.querySelectorAll('.clickable-url');
+    clickableUrls.forEach(function(element) {
+        element.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const url = this.getAttribute('data-url');
+            const pageName = this.getAttribute('data-page-name');
+            const originalColor = this.style.color;
+            const originalText = this.textContent;
+            
+            copyToClipboard(url, null, null, null, 
+                '<?= __("链接已复制") ?>', 
+                '<?= __("页面") ?>: ' + pageName + '<br><?= __("链接") ?>: ' + url);
+            
+            // 视觉反馈
+            this.style.color = '#198754';
+            this.style.fontWeight = 'bold';
+            this.textContent = '✓ ' + originalText;
+            setTimeout(() => {
+                this.style.color = originalColor;
+                this.style.fontWeight = '';
+                this.textContent = originalText;
+            }, 1500);
+        });
+    });
+    
+    // ==================== 复制 Handle 按钮功能 ====================
+    const copyHandleButtons = document.querySelectorAll('.copy-handle-btn');
+    copyHandleButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const handle = this.getAttribute('data-handle');
+            const pageName = this.getAttribute('data-page-name');
+            const originalHtml = this.innerHTML;
+            const originalClass = this.className;
+            
+            // 添加 / 前缀
+            const handleWithSlash = '/' + handle;
+            
+            copyToClipboard(handleWithSlash, this, originalHtml, originalClass, 
+                '<?= __("Handle 已复制") ?>', 
+                '<?= __("页面") ?>: ' + pageName + '<br><?= __("Handle") ?>: ' + handleWithSlash);
+        });
+    });
+    
+    // ==================== 复制链接按钮功能 ====================
+    const copyUrlButtons = document.querySelectorAll('.copy-page-url-btn');
+    copyUrlButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.getAttribute('data-url');
+            const pageName = this.getAttribute('data-page-name');
+            const originalHtml = this.innerHTML;
+            const originalClass = this.className;
+            
+            copyToClipboard(url, this, originalHtml, originalClass, 
+                '<?= __("链接已复制") ?>', 
+                '<?= __("页面") ?>: ' + pageName + '<br><?= __("链接") ?>: ' + url);
+        });
+    });
+    
+    // ==================== 复制到剪贴板的通用函数 ====================
+    function copyToClipboard(text, button, originalHtml, originalClass, successTitle, successMessage) {
+        // 使用现代 Clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showCopySuccess(button, originalHtml, originalClass, successTitle, successMessage);
+                })
+                .catch(err => {
+                    console.error('<?= __("复制失败") ?>:', err);
+                    fallbackCopy(text, button, originalHtml, originalClass, successTitle, successMessage);
+                });
+        } else {
+            // 降级方案
+            fallbackCopy(text, button, originalHtml, originalClass, successTitle, successMessage);
+        }
+    }
+    
+    // ==================== 降级复制方法 ====================
+    function fallbackCopy(text, button, originalHtml, originalClass, successTitle, successMessage) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showCopySuccess(button, originalHtml, originalClass, successTitle, successMessage);
+            } else {
+                throw new Error('execCommand failed');
+            }
+        } catch (err) {
+            console.error('<?= __("复制失败") ?>:', err);
+            // 最后降级方案：提示用户手动复制
+            prompt('<?= __("请手动复制以下内容") ?>:', text);
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    }
+    
+    // ==================== 显示复制成功状态 ====================
+    function showCopySuccess(button, originalHtml, originalClass, successTitle, successMessage) {
+        // Toast 通知
+        showToast('success', successTitle, successMessage);
+        
+        // 如果是按钮，更新按钮状态
+        if (button) {
+            button.innerHTML = '<i class="mdi mdi-check"></i> <?= __("已复制") ?>';
+            button.className = 'btn btn-sm btn-success copy-success-btn';
+            
+            // 2秒后恢复原状
+            setTimeout(() => {
+                button.innerHTML = originalHtml;
+                button.className = originalClass;
+            }, 2000);
+        }
+    }
+    
+    // ==================== 页面URL相关函数 ====================
+    // 复制页面URL
+    window.copyPageUrl = function(event) {
+        const urlInput = document.getElementById('pageUrlDisplay');
+        if (!urlInput) return;
+        
+        const url = urlInput.value;
+        if (!url) return;
+        
+        // 获取按钮元素
+        const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrl"]');
+        
+        // 使用通用复制函数
+        copyToClipboard(url, button, null, null, 
+            '<?= __("地址已复制") ?>', 
+            '<?= __("页面地址") ?>: ' + url);
+    };
+    
+    // 打开页面URL
+    window.openPageUrl = function() {
+        const urlInput = document.getElementById('pageUrlDisplay');
+        if (!urlInput || !urlInput.value) return;
+        
+        // 在新窗口打开
+        window.open(urlInput.value, '_blank');
+        console.log('🌐 打开页面:', urlInput.value);
+    };
+    
+    // ==================== Toast 通知函数（已在全局定义） ====================
+    // showToast 函数现在是全局函数，可以在任何地方调用
+});
+</script>
+<w:template>Weline_Admin::Backend/page-layout/main-content-after.phtml</w:template>

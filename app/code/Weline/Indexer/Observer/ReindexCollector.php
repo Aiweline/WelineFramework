@@ -49,6 +49,11 @@ class ReindexCollector implements \Weline\Framework\Event\ObserverInterface
             $models = $this->moduleFileReader->readClass($module, 'Model');
             foreach ($models as $model) {
                 if (class_exists($model)) {
+                    // 抽象类不能被实例化，这里跳过
+                    $reflection = new \ReflectionClass($model);
+                    if ($reflection->isAbstract()) {
+                        continue;
+                    }
                     $model = ObjectManager::getInstance($model);
                     if ($model instanceof AbstractModel && $indexer = $model::indexer) {
                         # 检测是否有indexer

@@ -29,6 +29,12 @@
             paths: ["/Weline/Frontend/view/statics/js/cookie.js"],
             globalVar: null,
             description: "Cookie操作工具函数"
+        },
+        geo: {
+            origin_paths: ["app/code/Weline/Geo/view/statics/statics/frontend/js/geo.js"],
+            paths: ["/Weline/Geo/view/statics/statics/frontend/js/geo.js"],
+            globalVar: "WelineGeo",
+            description: "Geo定位模块（浏览器定位和IP定位）"
         }
     });
 
@@ -40,6 +46,7 @@
         account: "weline-api-account",
         tokenStorage: "weline-api-token-storage",
         worker: "weline-api-worker",
-        switcher: "weline-switcher"
+        switcher: "weline-switcher",
+        geolocation: "geo"
     });
 })();

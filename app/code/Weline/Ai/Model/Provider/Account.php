@@ -117,9 +117,9 @@ class Account extends Model
                 ->addColumn(self::fields_CONFIG, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '额外配置JSON')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_PROVIDER_CODE, '', 'KEY', 'idx_provider_code')
-                ->addIndex(self::fields_IS_ACTIVE, '', 'KEY', 'idx_is_active')
-                ->addIndex(self::fields_PROVIDER_CODE . ',' . self::fields_IS_DEFAULT, '', 'KEY', 'idx_provider_default')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_provider_code', self::fields_PROVIDER_CODE)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_is_active', self::fields_IS_ACTIVE)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_provider_default', self::fields_PROVIDER_CODE . ',' . self::fields_IS_DEFAULT)
                 ->create();
         }
     }

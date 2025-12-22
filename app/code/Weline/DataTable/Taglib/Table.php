@@ -554,7 +554,8 @@ CSS;
         var script = document.createElement('script');
         script.id = scriptId;
         script.src = '{$jsUrl}';
-        script.async = true;
+        // 使用 defer 确保脚本按顺序执行且在 DOM 解析后执行
+        script.defer = true;
         document.head.appendChild(script);
     }
 })();
@@ -566,14 +567,37 @@ CSS;
 {$formHtml}
 <script>
 (function() {
+    var tableId = '{$id}';
+    var dtableFieldConfig = '{$dtableFieldConfig}';
+    
+    // 启用字段配置按钮
+    var enableFieldConfigBtn = function() {
+        var container = document.getElementById('w-datatable-' + tableId);
+        if (container) {
+            var btn = container.querySelector('.w-btn-field-config');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cog"></i> <span><?= __('字段配置') ?></span>';
+                btn.onclick = function() {
+                    if (window.DataTableManager && typeof DataTableManager.openFieldConfig === 'function') {
+                        DataTableManager.openFieldConfig(tableId);
+                    }
+                };
+            }
+        }
+    };
+    
     var initTable = function() {
         // 等待 DataTableManager 加载完成
         var checkManager = setInterval(function() {
             if (typeof window.DataTableManager !== "undefined" && window.DataTableManager.initTable) {
                 clearInterval(checkManager);
                 
+                // 启用字段配置按钮
+                enableFieldConfigBtn();
+                
                 // 初始化数据表格
-                window.DataTableManager.initTable('#{$id}', {
+                window.DataTableManager.initTable('#' + tableId, {
                     model: '{$modelJs}',
                     scope: '{$scope}',
                     join: '{$join}',
@@ -599,7 +623,7 @@ CSS;
                     var checkFormManager = setInterval(function() {
                         if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
                             clearInterval(checkFormManager);
-                            DataTableFormManager.addEditButtons('{$id}', {$formJs});
+                            DataTableFormManager.addEditButtons(tableId, {$formJs});
                         }
                     }, 50);
                     setTimeout(function() { clearInterval(checkFormManager); }, 5000);
@@ -610,6 +634,15 @@ CSS;
             clearInterval(checkManager);
             if (typeof window.DataTableManager === "undefined") {
                 console.error("DataTableManager 未加载，请检查 JS 文件是否正确引入");
+                // 更新按钮状态为错误
+                var container = document.getElementById('w-datatable-' + tableId);
+                if (container) {
+                    var btn = container.querySelector('.w-btn-field-config');
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span><?= __('加载失败') ?></span>';
+                        btn.classList.add('error');
+                    }
+                }
             }
         }, 10000);
     };
@@ -633,15 +666,15 @@ CSS;
                 </div>
                 <div class="w-toolbar-actions">
                     {$addButtonHtml}
-                    <button type="button" class="w-toolbar-btn primary" data-w-action="field-config" data-table="{$id}" onclick="DataTableManager.openFieldConfig('{$id}')" title="{$dtableFieldConfig}">
-                        <i class="fas fa-cog"></i>
-                        <?= __('字段配置') ?>
+                    <button type="button" class="w-toolbar-btn primary w-btn-field-config" data-w-action="field-config" data-table="{$id}" title="{$dtableFieldConfig}" disabled>
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span><?= __('加载中') ?>...</span>
                     </button>
-                    <button type="button" class="w-toolbar-btn success" onclick="DataTableManager.refreshData('{$id}')" title="<?= __('刷新数据') ?>">
+                    <button type="button" class="w-toolbar-btn success" onclick="window.DataTableManager &amp;&amp; DataTableManager.refreshData('{$id}')" title="<?= __('刷新数据') ?>">
                         <i class="fas fa-sync-alt"></i>
                         <?= __('刷新') ?>
                     </button>
-                    <button type="button" class="w-toolbar-btn warning" data-w-action="important-view" onclick="DataTableManager.toggleImportantView('{$id}')" title="<?= __('只显示重要数据') ?>">
+                    <button type="button" class="w-toolbar-btn warning" data-w-action="important-view" onclick="window.DataTableManager &amp;&amp; DataTableManager.toggleImportantView('{$id}')" title="<?= __('只显示重要数据') ?>">
                         <i class="fas fa-star"></i>
                         <?= __('只显示重要数据') ?>
                     </button>
@@ -657,20 +690,20 @@ CSS;
                                 </button>
                             <ul class="w-dropdown-menu">
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="DataTableManager.clearHeaderConfig('{$id}')" title="<?= __('重置表头字段配置') ?>">
+                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearHeaderConfig('{$id}')" title="<?= __('重置表头字段配置') ?>">
                                         <i class="fas fa-columns"></i>
                                         <?= __('重置表头') ?>
                                     </button>
                                 </li>
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="DataTableManager.clearFilterConfig('{$id}')" title="<?= __('重置筛选字段配置') ?>">
+                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearFilterConfig('{$id}')" title="<?= __('重置筛选字段配置') ?>">
                                         <i class="fas fa-filter"></i>
                                         <?= __('重置筛选') ?>
                                     </button>
                                 </li>
                                 <li><hr class="w-dropdown-divider"></li>
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="DataTableManager.clearAllConfig('{$id}')" title="<?= __('重置全部配置') ?>">
+                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearAllConfig('{$id}')" title="<?= __('重置全部配置') ?>">
                                         <i class="fas fa-trash"></i>
                                         <?= __('全部重置') ?>
                                     </button>
@@ -689,19 +722,19 @@ CSS;
                         </button>
                         <ul class="w-dropdown-menu">
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="DataTableManager.exportData('{$id}', 'excel')" title="<?= __('导出为Excel') ?>">
+                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'excel')" title="<?= __('导出为Excel') ?>">
                                     <i class="fas fa-file-excel"></i>
                                     <?= __('导出Excel') ?>
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="DataTableManager.exportData('{$id}', 'csv')" title="<?= __('导出为CSV') ?>">
+                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'csv')" title="<?= __('导出为CSV') ?>">
                                     <i class="fas fa-file-csv"></i>
                                     <?= __('导出CSV') ?>
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="DataTableManager.exportData('{$id}', 'json')" title="<?= __('导出为JSON') ?>">
+                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'json')" title="<?= __('导出为JSON') ?>">
                                     <i class="fas fa-file-code"></i>
                                     <?= __('导出JSON') ?>
                                 </button>
@@ -737,7 +770,7 @@ CSS;
             <h5 class="w-modal-title" id="w-field-config-modal-label-{$id}">
                 <i class="fas fa-cog"></i> <?= __('字段配置') ?>
             </h5>
-            <button type="button" class="w-btn-close" onclick="DataTableManager.closeFieldConfig('{$id}')" aria-label="Close">
+            <button type="button" class="w-btn-close" onclick="window.DataTableManager &amp;&amp; DataTableManager.closeFieldConfig('{$id}')" aria-label="Close">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -802,8 +835,8 @@ CSS;
             </div>
         </div>
         <div class="w-modal-footer">
-            <button type="button" class="w-btn w-btn-secondary" onclick="DataTableManager.closeFieldConfig('{$id}')"><?= __('取消') ?></button>
-            <button type="button" class="w-btn w-btn-primary" onclick="DataTableManager.saveFieldConfig('{$id}')"><?= __('保存配置') ?></button>
+            <button type="button" class="w-btn w-btn-secondary" onclick="window.DataTableManager &amp;&amp; DataTableManager.closeFieldConfig('{$id}')"><?= __('取消') ?></button>
+            <button type="button" class="w-btn w-btn-primary" onclick="window.DataTableManager &amp;&amp; DataTableManager.saveFieldConfig('{$id}')"><?= __('保存配置') ?></button>
         </div>
     </div>
 </div>
@@ -1457,6 +1490,8 @@ HTML;
     // 生成表单HTML（简化版）
     private static function generateFormHtml(string $formId, string $model, string $scope, string $mode, string $title): string
     {
+        // JavaScript 字符串中需要转义反斜杠，否则 \S, \M 等会被解释为转义字符
+        $modelJs = addslashes($model);
         $title = $title ?: ($mode === 'add' ? __('新增记录') : __('编辑记录'));
         $cancelText = __('取消');
         $saveText = __('保存');
@@ -1497,10 +1532,10 @@ HTML;
                     clearInterval(checkInterval);
                     if (document.readyState === "loading") {
                         document.addEventListener("DOMContentLoaded", function() {
-                            DataTableFormManager.initForm("' . $formId . '", {model: "' . $model . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
+                            DataTableFormManager.initForm("' . $formId . '", {model: "' . $modelJs . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
                         });
                     } else {
-                        DataTableFormManager.initForm("' . $formId . '", {model: "' . $model . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
+                        DataTableFormManager.initForm("' . $formId . '", {model: "' . $modelJs . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
                     }
                 }
             }, 50);
@@ -1512,12 +1547,12 @@ HTML;
         if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
-                    DataTableFormManager.initForm("' . $formId . '", {model: "' . $model . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
+                    DataTableFormManager.initForm("' . $formId . '", {model: "' . $modelJs . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
                 }
             });
         } else {
             if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
-                DataTableFormManager.initForm("' . $formId . '", {model: "' . $model . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
+                DataTableFormManager.initForm("' . $formId . '", {model: "' . $modelJs . '",scope: "' . $scope . '",mode: "' . $mode . '",recordId: "",autoFields: true,excludeFields: [],includeFields: []});
             }
         }
     }

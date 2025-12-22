@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
+         bootstrap="../../../../../app/bootstrap_phpunit.php"
+         cacheResultFile=".phpunit.result.cache"
+         executionOrder="depends,defects"
+         forceCoversAnnotation="false"
+         beStrictAboutCoversAnnotation="true"
+         beStrictAboutOutputDuringTests="true"
+         beStrictAboutTodoAnnotatedTests="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         verbose="true">
+    
+    <testsuites>
+        <testsuite name="Order Unit Tests">
+            <directory>Unit</directory>
+        </testsuite>
+        <testsuite name="Order Integration Tests">
+            <directory>Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage cacheDirectory=".phpunit.cache/code-coverage"
+              processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">../</directory>
+        </include>
+        <exclude>
+            <directory>../Test</directory>
+            <directory>../view</directory>
+            <file>../register.php</file>
+        </exclude>
+        <report>
+            <html outputDirectory="coverage-html"/>
+            <text outputFile="coverage.txt"/>
+            <clover outputFile="coverage.xml"/>
+        </report>
+    </coverage>
+
+    <logging>
+        <junit outputFile="test-results.xml"/>
+    </logging>
+
+    <php>
+        <ini name="error_reporting" value="-1"/>
+        <ini name="memory_limit" value="-1"/>
+        <server name="APP_ENV" value="testing"/>
+    </php>
+</phpunit>
+

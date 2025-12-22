@@ -33,6 +33,30 @@ class RouterRunBefore implements ObserverInterface
                 exit;
             }
         }
+        
+        # 匹配模块静态资源（开发环境下直接从模块目录加载）
+        # 路径格式: /Weline/ModuleName/view/statics/... 或 /Vendor/ModuleName/view/statics/...
+        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/statics/(.+)$#', $path, $matches)) {
+            $vendor = $matches[1];
+            $module = $matches[2];
+            $file = $matches[3];
+            
+            // 构建模块静态文件路径
+            $module_file_path = BP . '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
+            if(IS_WIN){
+                $module_file_path = str_replace('/','\\',$module_file_path);
+                $module_file_path = str_replace('\\\\','\\',$module_file_path);
+            }else{
+                $module_file_path = str_replace('//','/',$module_file_path);
+            }
+            if (is_file($module_file_path)) {
+                /**@var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
+                $core->StaticFile($static_url, true);
+                exit;
+            }
+        }
         # 匹配媒介资源
         if (str_starts_with($path, '/pub/media/')) {
             $file_path = BP.urldecode($path);

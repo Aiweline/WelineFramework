@@ -1,7 +1,11 @@
 /**
- * Weline Frontend - 间距变量定义
+ * 变量：间距变量定义
  * 
- * 定义统一的间距系统
+ * 定义统一的间距系统变量
+ * 字段
+ * @meta.name {default="间距变量",name="间距变量",description="间距变量，用于描述变量的名称"}
+ * @meta.description {default="定义统一的间距系统，包括基础间距、组件间距、布局间距等",name="定义统一的间距系统，包括基础间距、组件间距、布局间距等",description="定义统一的间距系统，包括基础间距、组件间距、布局间距等，用于描述变量的用途"}
+ * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
  */
 
 :root {

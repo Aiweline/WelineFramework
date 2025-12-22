@@ -1,0 +1,40 @@
+<!--
+布局：个人中心 - 认证页面布局
+
+登录/注册等认证页面的专用布局
+字段
+@meta.name {default="个人中心认证页面布局",name="个人中心认证页面布局",description="个人中心认证页面布局，用于描述布局的名称"}
+@meta.description {default="登录/注册等认证页面的专用布局",name="登录/注册等认证页面的专用布局",description="登录/注册等认证页面的专用布局，用于描述布局的用途"}
+@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+@login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+@param.title {default="登录",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="用于设置页面内容",name="认证表单内容（HTML字符串）",description="认证表单内容（HTML字符串），用于设置页面内容"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
+        <div class="auth-container">
+            <if condition="meta.contentTemplate">
+                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                <else/>
+                {{meta.content}}
+            </if>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

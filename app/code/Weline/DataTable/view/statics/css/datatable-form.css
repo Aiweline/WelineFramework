@@ -1,5 +1,6 @@
 /**
  * DataTable 表单样式
+ * 与 Form.php 中的内联样式同步
  */
 
 /* 模态框样式 */
@@ -34,12 +35,23 @@
 .w-form-modal-container {
     position: relative;
     width: 100%;
-    max-width: 800px;
-    max-height: 90vh;
-    overflow: hidden;
+    max-width: 560px;
+    max-height: calc(90vh - 40px);
+    display: flex;
+    flex-direction: column;
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: modalSlideIn 0.3s ease;
+}
+
+/* 字段较多时使用更宽的弹窗 */
+.w-form-modal-container.w-form-modal-wide {
+    max-width: 960px;
+}
+
+/* 字段特别多时使用超宽弹窗 */
+.w-form-modal-container.w-form-modal-extra-wide {
+    max-width: 1200px;
 }
 
 @keyframes modalSlideIn {
@@ -47,7 +59,6 @@
         opacity: 0;
         transform: scale(0.9) translateY(-20px);
     }
-
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -59,9 +70,11 @@
     background: #ffffff;
     border-radius: 12px;
     overflow: hidden;
-    max-height: 90vh;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    flex: 1;
 }
 
 /* 表单头部 */
@@ -125,24 +138,61 @@
 
 /* 表单主体 */
 .w-form-body {
-    padding: 32px 28px;
+    padding: 24px 28px;
     flex: 1;
     overflow-y: auto;
-    min-height: 200px;
+    min-height: 100px;
+    max-height: calc(70vh - 150px);
 }
 
+/* 表单字段容器 */
 .w-form-fields {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
 }
 
-/* 表单字段 */
-.w-form-field {
+/* 自动字段区域 - 流式布局 */
+.w-auto-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 20px;
+    align-items: flex-start;
+}
+
+/* 表单字段 - 流式布局下自动分配宽度 */
+.w-auto-fields .w-form-field {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 200px;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 4px;
+    gap: 8px;
+}
+
+/* 单列布局的字段容器 */
+.w-form-fields > .w-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* 占满整行的字段类型 */
+.w-auto-fields .w-form-field.w-field-full-width,
+.w-auto-fields .w-form-field[data-type="textarea"],
+.w-auto-fields .w-form-field[data-type="file"],
+.w-auto-fields .w-form-field[data-type="image"],
+.w-auto-fields .w-form-field.w-field-type-textarea,
+.w-auto-fields .w-form-field.w-field-type-file,
+.w-auto-fields .w-form-field.w-field-type-image {
+    flex: 1 1 100%;
+    max-width: 100%;
+}
+
+/* 字段类型样式 */
+.w-form-field.w-field-type-number .w-form-control {
+    font-variant-numeric: tabular-nums;
 }
 
 .w-field-label {
@@ -471,13 +521,8 @@ select.w-form-control {
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* 水平布局 */
@@ -498,32 +543,60 @@ select.w-form-control {
 }
 
 /* 响应式设计 */
+/* 中等屏幕：限制弹窗宽度 */
+@media (max-width: 1280px) {
+    .w-form-modal-container.w-form-modal-extra-wide {
+        max-width: 95%;
+    }
+}
+
+@media (max-width: 992px) {
+    .w-form-modal-container {
+        max-width: 95%;
+    }
+    .w-form-modal-container.w-form-modal-wide,
+    .w-form-modal-container.w-form-modal-extra-wide {
+        max-width: 95%;
+    }
+    /* 流式布局在小屏幕自动单列 */
+    .w-auto-fields .w-form-field {
+        flex: 1 1 100%;
+    }
+}
+
 @media (max-width: 768px) {
     .w-form-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+        padding: 16px 20px;
     }
-
     .w-form-actions {
         width: 100%;
         justify-content: flex-end;
     }
-
     .w-form-body {
-        padding: 16px;
+        padding: 16px 20px;
+        max-height: calc(60vh - 120px);
     }
-
+    .w-form-fields {
+        gap: 16px;
+    }
+    .w-auto-fields {
+        flex-direction: column;
+    }
+    .w-auto-fields .w-form-field {
+        flex: 1 1 100%;
+        min-width: 100%;
+    }
     .w-form-footer {
-        padding: 16px;
+        padding: 16px 20px;
     }
-
     .w-form-horizontal .w-form-field {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
     }
-
     .w-form-horizontal .w-field-label {
         min-width: auto;
         text-align: left;
@@ -536,69 +609,55 @@ select.w-form-control {
         background: #1f2937;
         border-color: #4b5563;
     }
-
     .w-form-header {
         background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
         border-bottom-color: #4b5563;
     }
-
     .w-form-title {
         color: #f9fafb;
     }
-
     .w-form-control {
         background: #374151;
         border-color: #4b5563;
         color: #f9fafb;
     }
-
     .w-form-control:focus {
         border-color: #3b82f6;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
     }
-
     .w-form-control:hover {
         border-color: #6b7280;
     }
-
     .w-form-control:disabled {
         background: #374151;
         color: #6b7280;
     }
-
     .w-form-control:readonly {
         background: #374151;
     }
-
     .w-field-label {
         color: #d1d5db;
     }
-
     .w-checkbox-item,
     .w-radio-item {
         color: #d1d5db;
     }
-
     .w-field-help {
         color: #9ca3af;
     }
-
     .w-form-footer {
         background: #374151;
         border-top-color: #4b5563;
     }
-
     .w-btn-secondary {
         background: #374151;
         color: #d1d5db;
         border-color: #4b5563;
     }
-
     .w-btn-secondary:hover:not(:disabled) {
         background: #4b5563;
         border-color: #6b7280;
     }
-
     .w-loading-fields {
         color: #9ca3af;
     }
@@ -747,7 +806,6 @@ body[data-topbar="dark"] .w-form-message-error {
         opacity: 0;
         transform: translateY(20px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
@@ -764,7 +822,6 @@ body[data-topbar="dark"] .w-form-message-error {
         opacity: 0;
         transform: translateX(-20px);
     }
-
     to {
         opacity: 1;
         transform: translateX(0);
@@ -781,7 +838,6 @@ body[data-topbar="dark"] .w-form-message-error {
         opacity: 0;
         transform: translateY(-10px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
@@ -796,29 +852,213 @@ body[data-topbar="dark"] .w-form-message-error {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     overflow: hidden;
     margin: 20px 0;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .w-form-inline-container .w-form-header {
     background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    padding: 24px 28px;
+    padding: 20px 24px;
     border-bottom: 1px solid #e5e7eb;
-    min-height: 64px;
+    min-height: 56px;
+    flex-shrink: 0;
 }
 
 .w-form-inline-container .w-form-body {
-    padding: 32px 28px;
-    min-height: 200px;
+    padding: 24px;
+    min-height: 150px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .w-form-inline-container .w-form-footer {
     background: #f9fafb;
-    padding: 24px 28px;
+    padding: 16px 24px;
     border-top: 1px solid #e5e7eb;
     display: flex;
     justify-content: flex-end;
     gap: 16px;
-    min-height: 72px;
+    min-height: 60px;
     align-items: center;
+    flex-shrink: 0;
+}
+
+/* 文件字段样式 */
+.w-file-field {
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f9fafb;
+    transition: all 0.2s ease;
+}
+
+.w-file-field:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+}
+
+.w-file-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.w-file-btn {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.w-file-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.w-file-info {
+    color: #6b7280;
+    font-size: 0.8125rem;
+}
+
+.w-file-list {
+    margin-top: 12px;
+}
+
+.w-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.w-file-name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-file-size {
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+.w-file-remove {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.w-file-remove:hover {
+    background: #fef2f2;
+}
+
+.w-file-placeholder {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+/* 图片字段样式 */
+.w-image-field {
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f9fafb;
+    transition: all 0.2s ease;
+}
+
+.w-image-field:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+}
+
+.w-image-preview {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.w-image-placeholder {
+    text-align: center;
+    padding: 24px;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.w-image-placeholder i {
+    font-size: 2.5rem;
+    color: #d1d5db;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.w-placeholder-text {
+    font-size: 0.9375rem;
+    margin-bottom: 4px;
+}
+
+.w-placeholder-info {
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+
+.w-image-preview-img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 6px;
+    object-fit: contain;
+}
+
+.w-image-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+}
+
+/* 上传进度条 */
+.w-upload-progress {
+    margin-top: 12px;
+}
+
+.w-progress-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.w-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.w-progress-text {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 4px;
 }
 
 /* 按钮组增强 */
@@ -897,4 +1137,60 @@ body[data-sidebar="dark"] .w-loading-fields,
 body[data-topbar="dark"] .w-loading-fields {
     background: #374151;
     border-color: #4b5563;
+}
+
+/* 暗色主题下的文件和图片字段 */
+body[data-sidebar="dark"] .w-file-field,
+body[data-topbar="dark"] .w-file-field,
+body[data-sidebar="dark"] .w-image-field,
+body[data-topbar="dark"] .w-image-field {
+    background: #374151;
+    border-color: #4b5563;
+}
+
+body[data-sidebar="dark"] .w-file-field:hover,
+body[data-topbar="dark"] .w-file-field:hover,
+body[data-sidebar="dark"] .w-image-field:hover,
+body[data-topbar="dark"] .w-image-field:hover {
+    border-color: #60a5fa;
+    background: #1f2937;
+}
+
+body[data-sidebar="dark"] .w-file-btn,
+body[data-topbar="dark"] .w-file-btn {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #d1d5db;
+}
+
+body[data-sidebar="dark"] .w-file-btn:hover,
+body[data-topbar="dark"] .w-file-btn:hover {
+    background: #374151;
+    border-color: #6b7280;
+}
+
+body[data-sidebar="dark"] .w-file-item,
+body[data-topbar="dark"] .w-file-item {
+    background: #1f2937;
+    border-color: #4b5563;
+}
+
+body[data-sidebar="dark"] .w-file-name,
+body[data-topbar="dark"] .w-file-name {
+    color: #d1d5db;
+}
+
+body[data-sidebar="dark"] .w-image-placeholder,
+body[data-topbar="dark"] .w-image-placeholder {
+    color: #9ca3af;
+}
+
+body[data-sidebar="dark"] .w-image-placeholder i,
+body[data-topbar="dark"] .w-image-placeholder i {
+    color: #6b7280;
+}
+
+body[data-sidebar="dark"] .w-progress-bar,
+body[data-topbar="dark"] .w-progress-bar {
+    background: #4b5563;
 }

@@ -1,0 +1,141 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\I18n\Model\Countries;
+use Weline\Shipping\Model\Region;
+
+$countries = $this->getData('countries') ?? [];
+$currentCountryCode = $this->getData('current_country_code') ?? '';
+$regionTree = $this->getData('region_tree') ?? [];
+
+$backendBase = $this->getBackendUrl('shipping/backend/region');
+$syncUrl = $this->getBackendUrl('shipping/backend/region/syncFromI18n');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('地区管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('地区管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('地区管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="card-title mb-0"><?= __('地区列表') ?></h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <form method="get" action="<?= $backendBase ?>" class="d-inline-flex align-items-center">
+                                            <label class="me-2 mb-0"><?= __('国家') ?>:</label>
+                                            <select name="country_code" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+                                                <?php /** @var Countries $country */ ?>
+                                                <?php foreach ($countries as $country): ?>
+                                                    <?php $code = $country->getData(Countries::fields_CODE); ?>
+                                                    <option value="<?= htmlspecialchars($code) ?>"
+                                                        <?= $code === $currentCountryCode ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars($code) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <a href="<?= $syncUrl ?>" class="btn btn-sm btn-secondary"
+                                               onclick="return confirm('<?= __('确定要从i18n同步国家数据吗？') ?>')">
+                                                <i class="mdi mdi-earth"></i> <?= __('从i18n同步国家') ?>
+                                            </a>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($regionTree)): ?>
+                                    <div class="alert alert-info mb-0">
+                                        <?= __('当前国家暂无地区数据，请先从i18n同步或手动添加。') ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover align-middle">
+                                            <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 50%;"><?= __('地区名称') ?></th>
+                                                <th><?= __('地区代码') ?></th>
+                                                <th><?= __('类型') ?></th>
+                                                <th><?= __('启用') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php
+                                            $renderNode = function (array $node, int $level = 0) use (&$renderNode) {
+                                                $indent = str_repeat('&mdash; ', $level);
+                                                ?>
+                                                <tr>
+                                                    <td><?= $indent . htmlspecialchars($node['region_name']) ?></td>
+                                                    <td><?= htmlspecialchars($node['region_code']) ?></td>
+                                                    <td><?= htmlspecialchars($node['region_type']) ?></td>
+                                                    <td>
+                                                        <?php if (!empty($node['is_active'])): ?>
+                                                            <span class="badge bg-success"><?= __('启用') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                                <?php if (!empty($node['children'])): ?>
+                                                    <?php foreach ($node['children'] as $child): ?>
+                                                        <?php $renderNode($child, $level + 1); ?>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                                <?php
+                                            };
+                                            ?>
+                                            <?php foreach ($regionTree as $rootNode): ?>
+                                                <?php $renderNode($rootNode, 0); ?>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+
+

@@ -23,6 +23,20 @@ if($area === 'frontend') {
 }
 $api_area = $_SERVER['WELINE_API_AREA'] ?? '';
 $api_admin_area = $_SERVER['WELINE_API_ADMIN_AREA'] ?? '';
+
+// 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
+$i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
+if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
+    try {
+        $jsWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
+        if (is_array($jsWords) && !empty($jsWords)) {
+            // JS 声明的词覆盖同 key 的默认翻译
+            $i18nWords = array_merge($i18nWords, $jsWords);
+        }
+    } catch (\Throwable $e) {
+        // 忽略异常，避免影响页面渲染
+    }
+}
 ?>
 <!--加载requirejs-->
 <?php if (DEV) : ?>
@@ -54,7 +68,8 @@ endif;
     });
 </script>
 <w:js>Weline_Frontend::/js/cookie.js</w:js>
-<script>
+<!-- Frontend配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<script data-no-extract="true">
     window.site = {
         user_id: '{{user_id}}',
         module: '{{current_module}}',
@@ -66,7 +81,7 @@ endif;
         lang: '{{$_SERVER.WELINE_USER_LANG}}',
         api_host: '{{api_host}}',
         base_router: '{{base_router}}',
-        i18n: <?= json_encode(Weline\Framework\Phrase\Parser::getWords())?>,
+        i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
         themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
     }
     window.path = (path) => {
@@ -359,4 +374,4 @@ endif;
 echo $this->getHeader()->getHtml();
 ?>
 <!--后台配置头部-->
-<hook>head</hook>
+<hook>Weline_Frontend::frontend::partials::head::before</hook>

@@ -14,6 +14,7 @@ use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Meta\Helper\MetaData;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\MetaTranslation;
@@ -295,6 +296,7 @@ class Index extends BackendController
         $area = $this->request->getParam('area', 'frontend');
         $type = $this->request->getParam('type', 'layouts'); // layouts, components, partials
         $identify = $this->request->getParam('identify', ''); // 如 default, account 等
+        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
         
         if (!$themeId) {
             return $this->fetchJson($this->error(__('请选择主题')));
@@ -312,103 +314,53 @@ class Index extends BackendController
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
 
-        // 构建meta_identify（格式：theme.frontend.layouts.default 或 theme.frontend.layouts.default.default）
+        // 构建meta_identify（格式：theme.frontend.layouts.default）
+        // 规则统一：{type}.{identify}，不再额外追加 .default 段
         $metaIdentify = "{$type}";
         if ($identify) {
             $metaIdentify .= ".{$identify}";
-            // 如果是布局，还需要添加布局选项（默认default）
-            if ($type === 'layouts') {
-                $metaIdentify .= ".default";
-            }
         }
 
-        // 使用 ThemeData 加载元数据信息
-        $metaDataObj = ThemeData::getMeta($metaIdentify);
+        // 使用 ThemeData 加载元数据信息（从缓存读取，不触发数据库查询）
+        $metaDataArr = ThemeData::getMeta($metaIdentify);
         $metaData = [];
         $params = [];
         
-        if ($metaDataObj && $metaDataObj->isLoaded()) {
-            // 获取 meta_data（支持多语言）
-            $allData = $metaDataObj->getAll();
-            $metaData = $allData['meta_data'] ?? [];
-            $params = $allData['param'] ?? [];
-        } else {
-            // 如果没找到，尝试查找group级别的meta
-            if ($identify) {
-                $groupIdentify = "{$type}.{$identify}";
-                $metaDataObj = ThemeData::getMeta($groupIdentify);
-                if ($metaDataObj && $metaDataObj->isLoaded()) {
-                    $allData = $metaDataObj->getAll();
-                    $metaData = $allData['meta_data'] ?? [];
-                    $params = $allData['param'] ?? [];
+        if ($metaDataArr) {
+            $metaData = $metaDataArr['meta_data'] ?? [];
+            $setting = $metaDataArr['setting'] ?? [];
+            $params = $setting['param'] ?? [];
+        }
+
+        // 如果 Meta 模块中没有找到定义，尝试从模板文件解析
+        if (empty($metaData) || empty($params)) {
+            $filePath = $this->resolveThemeFilePath($theme, $area, $type, $identify);
+            if ($filePath) {
+                $parsed = ComponentMetaParser::parse($filePath);
+                if (empty($metaData) && !empty($parsed['meta'])) {
+                    $metaData = $parsed['meta'];
+                }
+                if ((empty($params) || !is_array($params)) && !empty($parsed['params'])) {
+                    $params = $this->formatParsedParams($parsed['params']);
                 }
             }
         }
 
-        // 从 ThemeData 获取布局参数配置（使用 .value 后缀）
+        // 读取参数配置值（使用 ThemeData::get 从缓存读取）
         $themeConfig = [];
-        if ($type === 'layouts' && $identify) {
-            // 格式：layouts.{identify}.param.{paramKey}.value
-            $baseConfigKey = "layouts.{$identify}";
-            
-            // 获取所有参数配置
-            if (!empty($params)) {
-                foreach ($params as $paramKey => $paramValue) {
-                    $paramIdentify = "{$baseConfigKey}.param.{$paramKey}.value";
-                    $configValue = ThemeData::get($paramIdentify);
-                    if ($configValue !== null) {
-                        $themeConfig['param'][$paramKey] = $configValue;
-                    } else {
-                        $themeConfig['param'][$paramKey] = $paramValue; // 使用默认值
-                    }
-                }
-            }
-        } else {
-            // 使用 ThemeData 读取配置（替代旧的 setting 配置）
-            // 构建完整的 identify：{type}.{identify}.param.*.value
-            $baseIdentify = "{$type}";
-            if ($identify) {
-                $baseIdentify .= ".{$identify}";
-            }
-            
-            // 从 ThemeData 读取所有参数配置
-            $themeConfig = [];
-            if ($params) {
-                foreach ($params as $paramKey => $paramMeta) {
-                    $paramIdentify = "{$baseIdentify}.param.{$paramKey}.value";
-                    $paramValue = ThemeData::get($paramIdentify);
-                    if ($paramValue !== null) {
-                        // 将扁平化的配置转换为嵌套结构
-                        $parts = explode('.', $paramKey);
-                        $current = &$themeConfig;
-                        foreach ($parts as $part) {
-                            if (!isset($current[$part])) {
-                                $current[$part] = [];
-                            }
-                            $current = &$current[$part];
-                        }
-                        $current = $paramValue;
-                    } else {
-                        // 使用默认值
-                        $defaultValue = $paramMeta['default'] ?? null;
-                        if ($defaultValue !== null) {
-                            $parts = explode('.', $paramKey);
-                            $current = &$themeConfig;
-                            foreach ($parts as $part) {
-                                if (!isset($current[$part])) {
-                                    $current[$part] = [];
-                                }
-                                $current = &$current[$part];
-                            }
-                            $current = $defaultValue;
-                        }
-                    }
-                }
+        $baseIdentify = "{$type}";
+        if ($identify) {
+            $baseIdentify .= ".{$identify}";
+        }
+        
+        if ($params) {
+            foreach ($params as $paramKey => $paramMeta) {
+                $paramIdentify = "{$baseIdentify}.param.{$paramKey}.value";
+                $defaultValue = $paramMeta['default'] ?? null;
+                $paramValue = ThemeData::get($paramIdentify, $defaultValue);
+                $themeConfig[$paramKey] = $paramValue;
             }
         }
-
-        // 获取当前语言
-        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
 
         // 获取所有可用语言
         /** @var \Weline\I18n\Model\Locale $localeModel */
@@ -440,6 +392,7 @@ class Index extends BackendController
         $area = $this->request->getPost('area', 'frontend');
         $type = $this->request->getPost('type', 'layouts');
         $identify = $this->request->getPost('identify', '');
+        $locale = $this->request->getPost('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? null);
         $configJson = $this->request->getPost('config', '{}'); // JSON格式的配置数据
 
         if (!$themeId) {
@@ -473,12 +426,113 @@ class Index extends BackendController
         
         // 保存每个参数配置（使用 ThemeData::set()）
         foreach ($config as $key => $value) {
-            // 如果 key 是 param.title，保存为 {type}.{identify}.param.title.value
-            $fullIdentify = "{$baseConfigKey}.{$key}.value";
-            ThemeData::set($fullIdentify, (string)$value);
+            $normalizedKey = ltrim($key, '.');
+            $fullIdentify = "{$baseConfigKey}.param.{$normalizedKey}.value";
+            ThemeData::set($fullIdentify, (string)$value, 'default', $locale);
         }
 
         return $this->fetchJson($this->success(__('配置保存成功')));
+    }
+
+    /**
+     * 根据类型和标识解析模板文件路径
+     */
+    private function resolveThemeFilePath(WelineTheme $theme, string $area, string $type, string $identify): ?string
+    {
+        $relativePath = $this->buildRelativePath($area, $type, $identify);
+        if (!$relativePath) {
+            return null;
+        }
+        return $this->findFileInThemeHierarchy($theme, $relativePath);
+    }
+
+    private function buildRelativePath(string $area, string $type, string $identify): ?string
+    {
+        $area = strtolower($area);
+        $identify = trim($identify);
+
+        switch ($type) {
+            case 'layouts':
+                [$layoutType, $option] = array_pad(explode('.', $identify, 2), 2, 'default');
+                if (!$layoutType) {
+                    $layoutType = 'default';
+                }
+                if (!$option) {
+                    $option = 'default';
+                }
+                return 'view' . DS . 'theme' . DS . $area . DS . 'layouts' . DS . $layoutType . DS . $option . '.phtml';
+            case 'partials':
+                [$partialType, $option] = array_pad(explode('.', $identify, 2), 2, 'default');
+                if (!$partialType) {
+                    $partialType = 'default';
+                }
+                if (!$option) {
+                    $option = 'default';
+                }
+                return 'view' . DS . 'theme' . DS . $area . DS . 'partials' . DS . $partialType . DS . $option . '.phtml';
+            case 'components':
+                $component = $identify ?: 'default';
+                return 'view' . DS . 'theme' . DS . $area . DS . 'components' . DS . $component . '.phtml';
+            case 'colors':
+                $color = ltrim($identify, '_');
+                if ($color === '') {
+                    $color = 'default';
+                }
+                return 'view' . DS . 'theme' . DS . $area . DS . 'colors' . DS . '_' . $color . '.css';
+            case 'variables':
+                $variable = ltrim($identify, '_');
+                if ($variable === '') {
+                    $variable = 'colors';
+                }
+                return 'view' . DS . 'theme' . DS . $area . DS . 'variables' . DS . '_' . $variable . '.css';
+            default:
+                return null;
+        }
+    }
+
+    private function findFileInThemeHierarchy(WelineTheme $theme, string $relativePath): ?string
+    {
+        $currentTheme = $theme;
+        while ($currentTheme) {
+            $themePath = $currentTheme->getPath();
+            if ($themePath) {
+                $fullPath = rtrim($themePath, DS) . DS . $relativePath;
+                if (is_file($fullPath)) {
+                    return $fullPath;
+                }
+            }
+            $currentTheme = $currentTheme->getParentTheme();
+        }
+
+        $modules = Env::getInstance()->getModuleList();
+        if (isset($modules['Weline_Theme'])) {
+            $basePath = rtrim($modules['Weline_Theme']['base_path'], DS);
+            $fullPath = $basePath . DS . $relativePath;
+            if (is_file($fullPath)) {
+                return $fullPath;
+            }
+        }
+
+        return null;
+    }
+
+    private function formatParsedParams(array $parsedParams): array
+    {
+        $result = [];
+        foreach ($parsedParams as $param) {
+            $key = $param['name'] ?? '';
+            if ($key === '') {
+                continue;
+            }
+            $result[$key] = [
+                'name' => $param['name_label'] ?? $key,
+                'description' => $param['description'] ?? '',
+                'default' => $param['default'] ?? '',
+                'type' => $param['type'] ?? 'text',
+                'required' => (bool)($param['required'] ?? false),
+            ];
+        }
+        return $result;
     }
 }
 

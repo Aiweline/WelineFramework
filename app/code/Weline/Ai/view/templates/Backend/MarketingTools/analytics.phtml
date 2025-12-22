@@ -1,0 +1,153 @@
+<?php
+/**
+ * 营销工具 - 数据分析页面
+ *
+ * @var $this \Weline\Framework\View\Template
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$stats = $this->getData('stats') ?: [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>营销数据分析</lang></title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3rem;
+            opacity: 0.2;
+        }
+    </style>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
+    
+    <div class="sz-page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="sz-page-title">
+                    <i class="mdi mdi-chart-line"></i>
+                    <lang>营销数据分析</lang>
+                </h1>
+                <p class="sz-page-subtitle"><lang>查看营销活动的数据统计和分析</lang></p>
+            </div>
+            <div>
+                <a href="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label"><lang>总活动数</lang></div>
+                <div class="stat-number"><?= $stats['total_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-bullhorn stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card success">
+                <div class="stat-label"><lang>进行中</lang></div>
+                <div class="stat-number"><?= $stats['active_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-play-circle stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card warning">
+                <div class="stat-label"><lang>草稿</lang></div>
+                <div class="stat-number"><?= $stats['draft_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-file-document-outline stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card info">
+                <div class="stat-label"><lang>总预算</lang></div>
+                <div class="stat-number">¥<?= number_format($stats['total_budget'] ?? 0, 2) ?></div>
+                <i class="mdi mdi-currency-cny stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="sz-card">
+        <div class="sz-card-body">
+            <canvas id="analytics-chart" height="100"></canvas>
+        </div>
+    </div>
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
+    
+    <script>
+        const ctx = document.getElementById('analytics-chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                datasets: [{
+                    label: '活动数量',
+                    data: [12, 19, 15, 25, 22, 30],
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

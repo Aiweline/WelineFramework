@@ -87,6 +87,18 @@ $trends = $trends ?? [];
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0 font-size-18"><lang>像素统计面板</lang></h4>
+                            <div>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="refreshData()">
+                                    <i class="mdi mdi-refresh"></i> <lang>刷新</lang>
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm" onclick="exportData()">
+                                    <i class="mdi mdi-download"></i> <lang>导出</lang>
+                                </button>
+                                <label class="ms-2">
+                                    <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                                    <lang>自动刷新</lang>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -134,13 +146,26 @@ $trends = $trends ?? [];
                     </div>
                 </div>
 
-                <!-- 趋势图表 -->
+                <!-- 趋势图表和事件分布 -->
                 <div class="row">
-                    <div class="col-xl-12">
+                    <div class="col-xl-8">
                         <div class="card dashboard-card">
                             <div class="card-body">
-                                <h4 class="card-title mb-4"><lang>最近7天趋势</lang></h4>
+                                <h4 class="card-title mb-4">
+                                    <lang>最近7天趋势</lang>
+                                    <small class="text-muted ms-2">
+                                        <lang>总价值：</lang><span id="totalValue"><?= number_format($stats['total_value'] ?? 0) ?></span>
+                                    </small>
+                                </h4>
                                 <canvas id="trendChart" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>事件分布</lang></h4>
+                                <canvas id="eventDistributionChart" height="200"></canvas>
                             </div>
                         </div>
                     </div>
@@ -196,7 +221,7 @@ $trends = $trends ?? [];
 </div>
 
 <script>
-// 趋势图表
+// 趋势图表（支持双Y轴：记录数和价值）
 const trendCtx = document.getElementById('trendChart');
 if (trendCtx) {
     const trendData = <?= json_encode($trends) ?>;
@@ -206,11 +231,20 @@ if (trendCtx) {
             labels: trendData.map(item => item.date),
             datasets: [{
                 label: '<?= __('记录数') ?>',
-                data: trendData.map(item => item.count),
+                data: trendData.map(item => item.count || 0),
                 borderColor: 'rgb(102, 126, 234)',
                 backgroundColor: 'rgba(102, 126, 234, 0.1)',
                 tension: 0.4,
-                fill: true
+                fill: true,
+                yAxisID: 'y'
+            }, {
+                label: '<?= __('价值') ?>',
+                data: trendData.map(item => item.value || 0),
+                borderColor: 'rgb(17, 153, 142)',
+                backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y1'
             }]
         },
         options: {
@@ -223,17 +257,132 @@ if (trendCtx) {
             },
             scales: {
                 y: {
-                    beginAtZero: true
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: '<?= __('记录数') ?>'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: '<?= __('价值') ?>'
+                    }
                 }
             }
         }
     });
 }
 
-function viewWebsiteDetail(websiteId) {
-    // TODO: 实现查看站点详情功能
-    alert('<?= __('查看站点ID：') ?>' + websiteId);
+// 事件分布饼图
+const eventDistributionCtx = document.getElementById('eventDistributionChart');
+if (eventDistributionCtx) {
+    const topEvents = <?= json_encode($top_events ?? []) ?>;
+    const eventLabels = Object.keys(topEvents);
+    const eventData = Object.values(topEvents);
+    
+    new Chart(eventDistributionCtx, {
+        type: 'pie',
+        data: {
+            labels: eventLabels,
+            datasets: [{
+                data: eventData,
+                backgroundColor: [
+                    'rgba(102, 126, 234, 0.8)',
+                    'rgba(17, 153, 142, 0.8)',
+                    'rgba(240, 147, 251, 0.8)',
+                    'rgba(79, 172, 254, 0.8)',
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
+        }
+    });
 }
+
+// 实时数据刷新
+let autoRefreshInterval = null;
+
+function refreshData() {
+    // 刷新实时数据
+    const websiteIds = <?= json_encode($websiteIds ?? []) ?>;
+    if (websiteIds.length > 0) {
+        const firstWebsiteId = websiteIds[0];
+        fetch('<?= $this->getUrl("*/pixel_dashboard/getRealtimeData") ?>?websiteId=' + firstWebsiteId + '&interval=10&hours=24')
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200 && data.data) {
+                    // 更新实时数据
+                    if (data.data.current_period) {
+                        // 可以在这里更新实时数据卡片
+                        console.log('实时数据已更新', data.data);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('刷新数据失败:', error);
+            });
+    }
+}
+
+function toggleAutoRefresh() {
+    const checkbox = document.getElementById('autoRefresh');
+    if (checkbox.checked) {
+        // 开启自动刷新，每30秒刷新一次
+        autoRefreshInterval = setInterval(refreshData, 30000);
+    } else {
+        // 关闭自动刷新
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+}
+
+function exportData() {
+    const websiteIds = <?= json_encode($websiteIds ?? []) ?>;
+    const websiteId = websiteIds.length > 0 ? websiteIds[0] : 0;
+    const url = '<?= $this->getUrl("*/pixel_dashboard/export") ?>?websiteId=' + websiteId + '&format=csv';
+    window.open(url, '_blank');
+}
+
+function viewWebsiteDetail(websiteId) {
+    // 跳转到站点详情页面
+    window.location.href = '<?= $this->getUrl("*/pixel_dashboard/detail") ?>?websiteId=' + websiteId;
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 检查是否需要自动刷新
+    const autoRefreshCheckbox = document.getElementById('autoRefresh');
+    if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
+        toggleAutoRefresh();
+    }
+});
 </script>
 
 </body>

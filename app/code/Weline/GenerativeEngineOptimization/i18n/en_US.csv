@@ -1,0 +1,131 @@
+加载Feed列表失败：%{1},"Failed to load feed list: %{1}"
+Feed不存在,"Feed does not exist"
+内容,Content
+产品,Product
+文章,Article
+自定义,Custom
+数据库,Database
+API,API
+实时,Realtime
+每小时,Hourly
+每天,Daily
+每周,Weekly
+加载Feed失败：%{1},加载Feed失败：%{1}
+无效的请求方法,"Invalid request method"
+请填写Feed名称,"Please fill in feed name"
+保存成功,"Save Successful"
+保存失败：%{1},"Save failed: %{1}"
+请选择Feed,"Please select feed"
+生成成功,"Generate successful"
+生成失败：%{1},"Generate failed: %{1}"
+加载平台列表失败：%{1},"Failed to load platform list: %{1}"
+平台不存在,"Platform does not exist"
+加载平台失败：%{1},"Failed to load platform: %{1}"
+请填写平台代码和名称,"Please fill in platform code and name"
+请选择平台,"Please select platform"
+加载账户列表失败：%{1},"Failed to load account list: %{1}"
+请填写必填项,"Please fill in required fields"
+账户不存在,"Account does not exist"
+请选择账户,请选择账户
+平台适配器不存在,平台适配器不存在
+连接成功,"Connection successful"
+连接失败,"Connection failed"
+测试失败：%{1},"Test failed: %{1}"
+加载推送历史失败：%{1},"Failed to load push history: %{1}"
+加载推送页面失败：%{1},"Failed to load push page: %{1}"
+请选择推送平台,"Please select push platform"
+推送失败：%{1},"Push failed: %{1}"
+Feed条目添加,Feed条目添加
+Feed条目添加后触发，可用于处理Feed条目的相关操作。,Feed条目添加后触发，可用于处理Feed条目的相关操作。
+Feed条目更新,Feed条目更新
+Feed条目更新后触发，可用于处理Feed条目的相关操作。,Feed条目更新后触发，可用于处理Feed条目的相关操作。
+Feed条目删除,Feed条目删除
+Feed条目删除后触发，可用于处理Feed条目的相关操作。,Feed条目删除后触发，可用于处理Feed条目的相关操作。
+编辑Feed,"Edit Feed"
+添加Feed,"Add Feed"
+Feed名称,"Feed Name"
+Feed类型,"Feed Type"
+数据源类型,"Source Type"
+数据源配置（JSON）,"Source Config (JSON)"
+"Feed URL","Feed URL"
+更新频率,"Update Frequency"
+自动推送,"Auto Push"
+启用自动推送,"Enable Auto Push"
+是否启用,"Is Enabled"
+启用,Enabled
+配置（JSON）,"Config (JSON)"
+保存,Save
+取消,Cancel
+保存失败,"Save Failed"
+Feed管理,"Feed Management"
+ID,ID
+数据源,数据源
+状态,Status
+最后生成,"Last Generated"
+操作,Action
+暂无数据,"No Data"
+是,Yes
+否,No
+禁用,Disabled
+编辑,Edit
+平台账户管理,"Platform Account Management"
+添加账户,"Add Account"
+返回,Back
+账户名称,"Account Name"
+默认账户,"Default Account"
+激活状态,"Active Status"
+连接状态,"Connection Status"
+最后测试,"Last Test"
+激活,Active
+未激活,Inactive
+成功,Success
+失败,Failed
+待测试,"Pending Test"
+测试连接,"Test Connection"
+API密钥,"API Key"
+API密钥（可选）,"API Secret (Optional)"
+设为默认账户,"Set as Default Account"
+测试失败,测试失败
+编辑账户,编辑账户
+首页,首页
+平台管理,"Platform Management"
+留空则不修改,留空则不修改
+请输入API密钥,请输入API密钥
+API密钥将被加密存储,API密钥将被加密存储
+API密钥（Secret）,API密钥（Secret）
+"如果需要，请输入API Secret","如果需要，请输入API Secret"
+是否默认账户,是否默认账户
+设为默认,设为默认
+是否激活,是否激活
+编辑平台,"Edit Platform"
+添加平台,"Add Platform"
+平台代码,"Platform Code"
+请选择,"Please Select"
+平台名称,"Platform Name"
+API端点,"API Endpoint"
+Feed格式,"Feed Format"
+账户,Account
+推送历史,推送历史
+一键推送,"One-Click Push"
+"Feed ID","Feed ID"
+"平台 ID","Platform ID"
+推送类型,"Push Type"
+条目数,"Items Count"
+推送时间,"Push Time"
+待处理,Pending
+查看错误,"View Error"
+选择Feed,"Select Feed"
+选择平台,"Select Platform"
+开始推送,"Start Push"
+请选择Feed和至少一个平台,"Please select feed and at least one platform"
+推送失败,推送失败
+生成式搜索引擎优化,"Generative Engine Optimization"
+推送管理,"Push Management"
+查看平台列表,"View Platform List"
+保存平台,"Save Platform"
+查看Feed列表,"View Feed List"
+保存Feed,"Save Feed"
+生成Feed,"Generate Feed"
+查看推送历史,"View Push History"
+执行推送,"Execute Push"
+"推送完成：成功 %{1} 个，失败 %{2} 个","Push completed: %{1} successful"

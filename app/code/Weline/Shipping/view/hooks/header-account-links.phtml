@@ -1,0 +1,28 @@
+<?php
+/**
+ * Header Account Links Hook 实现
+ * 
+ * 在账户下拉菜单中显示发货地址和收货地址管理链接
+ */
+
+use Weline\Customer\Session\CustomerSession;
+use Weline\Framework\Manager\ObjectManager;
+
+// 获取 CustomerSession
+/** @var CustomerSession $session */
+$session = ObjectManager::getInstance(CustomerSession::class);
+
+// 获取前端URL（使用模板的 getUrl 方法更安全）
+$frontendUrl = $this->getUrl('');
+
+// 检查是否登录
+$isLoggedIn = $session->isLogin();
+?>
+
+<?php if ($isLoggedIn): ?>
+    <!-- 发货地址管理链接 -->
+    <li role="none"><a href="<?= $frontendUrl ?>shipping/address/index" role="menuitem"><?= __('发货地址管理') ?></a></li>
+    <!-- 收货地址管理链接 -->
+    <li role="none"><a href="<?= $frontendUrl ?>shipping/delivery/index" role="menuitem"><?= __('收货地址管理') ?></a></li>
+<?php endif; ?>
+

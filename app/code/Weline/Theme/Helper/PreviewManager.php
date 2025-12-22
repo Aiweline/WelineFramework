@@ -144,5 +144,88 @@ class PreviewManager
         $session = ObjectManager::getInstance(Session::class);
         return $session->getData(self::SESSION_KEY_PREFIX . 'scope_' . $area);
     }
+    
+    /**
+     * 清除预览相关的缓存
+     * 
+     * @param int|null $themeId 主题ID，如果为null则清除当前预览主题的缓存
+     * @param string|null $area 区域，如果为null则清除所有区域的缓存
+     * @return void
+     */
+    public static function clearPreviewCache(?int $themeId = null, ?string $area = null): void
+    {
+        try {
+            // 清除主题缓存
+            /** @var \Weline\Framework\Cache\CacheInterface $cache */
+            $cache = ObjectManager::getInstance(\Weline\Framework\Cache\CacheInterface::class . 'Factory');
+            
+            $cacheTags = ['theme', 'preview'];
+            if ($themeId) {
+                $cacheTags[] = "theme_{$themeId}";
+            }
+            if ($area) {
+                $cacheTags[] = "area_{$area}";
+            }
+            
+            $cache->clean($cacheTags);
+            
+            // 清除CSS编译缓存（通过删除生成的CSS文件）
+            if ($themeId) {
+                /** @var \Weline\Theme\Model\WelineTheme $theme */
+                $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+                $theme->load($themeId);
+                
+                if ($theme->getId()) {
+                    /** @var \Weline\Theme\Helper\LayoutAssetsManager $assetsManager */
+                    $assetsManager = ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+                    
+                    $areas = $area ? [$area] : ['frontend', 'backend'];
+                    $layoutTypes = ['homepage', 'account', 'default'];
+                    
+                    foreach ($areas as $areaItem) {
+                        foreach ($layoutTypes as $layoutType) {
+                            $cssPath = $assetsManager->getGeneratedCssPath($areaItem, $layoutType, 'default', $theme);
+                            if (is_file($cssPath)) {
+                                @unlink($cssPath);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // 清除缓存失败不影响其他操作
+            if (defined('DEV') && DEV) {
+                error_log('清除预览缓存失败: ' . $e->getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 生成带时间戳的预览URL
+     * 
+     * @param int $themeId 主题ID
+     * @param string $area 区域
+     * @param string|null $previewPath 预览路径，如果为null则使用默认路径
+     * @return string 预览URL
+     */
+    public static function refreshPreviewUrl(int $themeId, string $area, ?string $previewPath = null): string
+    {
+        // 构建基础预览URL
+        if ($previewPath === null) {
+            // 默认预览路径：根据area选择
+            if ($area === 'frontend') {
+                $previewPath = '/';
+            } else {
+                $previewPath = '/backend';
+            }
+        }
+        
+        // 添加预览参数和时间戳
+        $url = $previewPath . '?preview_theme=' . $themeId;
+        $url .= '&area=' . urlencode($area);
+        $url .= '&t=' . time(); // 时间戳，强制刷新
+        
+        return $url;
+    }
 }
 

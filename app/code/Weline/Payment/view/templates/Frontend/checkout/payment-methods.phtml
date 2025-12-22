@@ -1,0 +1,110 @@
+<?php
+/**
+ * 支付方式选择组件
+ * 
+ * 用于在结账界面展示可用的支付方式
+ */
+?>
+<div class="payment-methods">
+    <h3><?= __('选择支付方式') ?></h3>
+    
+    <w:hook>Weline_Payment::frontend::checkout::payment-methods-before</w:hook>
+    
+    <div class="payment-methods-list">
+        <?php
+        /** @var \Weline\Payment\Block\PaymentMethod $block */
+        $block = $this->getBlock(\Weline\Payment\Block\PaymentMethod::class);
+        $methods = $block->getAvailableMethods();
+        
+        if (empty($methods)): ?>
+            <div class="alert alert-info">
+                <?= __('暂无可用的支付方式') ?>
+            </div>
+        <?php else: ?>
+            <div class="row">
+                <?php foreach ($methods as $method): ?>
+                    <?php
+                    $provider = $block->getMethodManager()->getProviderInstance($method);
+                    $iconUrl = $provider ? $provider->getIconUrl() : null;
+                    ?>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="payment-method-card card">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" 
+                                           name="payment_method" 
+                                           id="payment_method_<?= htmlspecialchars($method->getData('code')) ?>" 
+                                           value="<?= htmlspecialchars($method->getData('code')) ?>">
+                                    <label class="form-check-label" for="payment_method_<?= htmlspecialchars($method->getData('code')) ?>">
+                                        <?php if ($iconUrl): ?>
+                                            <img src="<?= htmlspecialchars($iconUrl) ?>" 
+                                                 alt="<?= htmlspecialchars($method->getData('name')) ?>" 
+                                                 class="payment-method-icon">
+                                        <?php endif; ?>
+                                        <span class="payment-method-name"><?= htmlspecialchars($method->getData('name')) ?></span>
+                                    </label>
+                                </div>
+                                <?php if ($provider && $provider->getDescription()): ?>
+                                    <p class="payment-method-description text-muted small mt-2">
+                                        <?= htmlspecialchars($provider->getDescription()) ?>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <w:hook>Weline_Payment::frontend::checkout::payment-methods-after</w:hook>
+    
+    <w:hook>Weline_Payment::frontend::checkout::payment-form-before</w:hook>
+    
+    <div class="payment-form" id="payment-form" style="display: none;">
+        <!-- 支付表单将在这里动态加载 -->
+    </div>
+    
+    <w:hook>Weline_Payment::frontend::checkout::payment-form-after</w:hook>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const paymentMethods = document.querySelectorAll('input[name="payment_method"]');
+    const paymentForm = document.getElementById('payment-form');
+    
+    paymentMethods.forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            if (this.checked) {
+                const methodCode = this.value;
+                // TODO: 加载支付表单或跳转到支付页面
+                console.log('选择的支付方式:', methodCode);
+            }
+        });
+    });
+});
+</script>
+
+<style>
+.payment-method-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.payment-method-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.payment-method-icon {
+    max-width: 40px;
+    max-height: 40px;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+.payment-method-name {
+    font-weight: 500;
+}
+</style>
+

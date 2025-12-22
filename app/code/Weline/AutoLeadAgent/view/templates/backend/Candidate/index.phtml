@@ -1,0 +1,115 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\AutoLeadAgent\Model\LeadCandidate;
+
+$candidates = $this->getData('candidates') ?? [];
+$total = $this->getData('total') ?? 0;
+$page = $this->getData('page') ?? 1;
+$limit = $this->getData('limit') ?? 20;
+$totalPages = $this->getData('total_pages') ?? 1;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('潜在客户') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('潜在客户') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('潜在客户') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <?php if (empty($candidates)): ?>
+                                    <div class="alert alert-info mb-0">
+                                        <?= __('暂无潜在客户') ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover align-middle">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th><?= __('客户ID') ?></th>
+                                                    <th><?= __('店铺ID') ?></th>
+                                                    <th><?= __('评分') ?></th>
+                                                    <th><?= __('来源URL') ?></th>
+                                                    <th><?= __('状态') ?></th>
+                                                    <th><?= __('创建时间') ?></th>
+                                                    <th><?= __('操作') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($candidates as $candidate): ?>
+                                                    <tr>
+                                                        <td><?= $candidate->getId() ?></td>
+                                                        <td><?= $candidate->getData(LeadCandidate::fields_STORE_ID) ?></td>
+                                                        <td>
+                                                            <span class="badge bg-<?= $candidate->getData(LeadCandidate::fields_SCORE) >= 80 ? 'success' : ($candidate->getData(LeadCandidate::fields_SCORE) >= 60 ? 'warning' : 'secondary') ?>">
+                                                                <?= $candidate->getData(LeadCandidate::fields_SCORE) ?>
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <a href="<?= htmlspecialchars($candidate->getData(LeadCandidate::fields_SOURCE_URL)) ?>" target="_blank" class="text-truncate d-inline-block" style="max-width: 200px;">
+                                                                <?= htmlspecialchars($candidate->getData(LeadCandidate::fields_SOURCE_URL)) ?>
+                                                            </a>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-<?= $candidate->getData(LeadCandidate::fields_STATUS) === 'verified' ? 'success' : 'secondary' ?>">
+                                                                <?= __($candidate->getData(LeadCandidate::fields_STATUS)) ?>
+                                                            </span>
+                                                        </td>
+                                                        <td><?= $candidate->getData(LeadCandidate::fields_CREATED_AT) ?></td>
+                                                        <td>
+                                                            <a href="<?= $this->getBackendUrl('auto-lead-agent/backend/candidate/view/candidateId/' . $candidate->getId()) ?>" 
+                                                               class="btn btn-sm btn-outline-primary">
+                                                                <?= __('查看') ?>
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+

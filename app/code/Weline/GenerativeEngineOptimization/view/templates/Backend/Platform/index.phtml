@@ -1,0 +1,62 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $platforms
+ */
+?>
+<div class="content-header">
+    <h1><?= __('平台管理') ?></h1>
+    <div class="action-bar">
+        <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/edit') ?>" class="btn btn-primary">
+            <i class="mdi mdi-plus"></i> <?= __('添加平台') ?>
+        </a>
+    </div>
+</div>
+
+<div class="content-body">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('平台代码') ?></th>
+                <th><?= __('平台名称') ?></th>
+                <th><?= __('API端点') ?></th>
+                <th><?= __('Feed格式') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($platforms)): ?>
+                <tr>
+                    <td colspan="7" class="text-center"><?= __('暂无数据') ?></td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($platforms as $platform): ?>
+                    <tr>
+                        <td><?= $platform['id'] ?></td>
+                        <td><?= htmlspecialchars($platform['platform_code']) ?></td>
+                        <td><?= htmlspecialchars($platform['platform_name']) ?></td>
+                        <td><?= htmlspecialchars($platform['api_endpoint'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($platform['feed_format'] ?? 'json_feed') ?></td>
+                        <td>
+                            <?php if ($platform['is_enabled']): ?>
+                                <span class="badge badge-success"><?= __('启用') ?></span>
+                            <?php else: ?>
+                                <span class="badge badge-secondary"><?= __('禁用') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/edit', ['id' => $platform['id']]) ?>" class="btn btn-sm btn-primary">
+                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                            </a>
+                            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/account', ['platform_id' => $platform['id']]) ?>" class="btn btn-sm btn-info">
+                                <i class="mdi mdi-account"></i> <?= __('账户') ?>
+                            </a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>

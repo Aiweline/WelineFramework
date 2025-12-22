@@ -1,0 +1,990 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$tasks = $this->getData('tasks') ?? [];
+$candidate_count = $this->getData('candidate_count') ?? 0;
+$latest_active_task = $this->getData('latest_active_task');
+$stores = $this->getData('stores') ?? [];
+$paginationHtml = $this->getData('pagination_html') ?? '';
+
+$backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('自动寻客管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? '' ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('自动寻客管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('自动寻客') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="auto-lead-agent-index"
+                             data-has-active-task="<?= $latest_active_task && $latest_active_task->getId() ? '1' : '0' ?>"
+                             data-active-task-id="<?= $latest_active_task && $latest_active_task->getId() ? (int)$latest_active_task->getId() : 0 ?>">
+                            
+                            <!-- 统计卡片 -->
+                            <div class="row mb-4">
+                                <div class="col-md-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-2"><?= __('潜在客户总数') ?></h5>
+                                            <p class="stat-value h3 mb-0 text-primary"><?= (int)$candidate_count ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-2">
+                                                <i class="mdi mdi-robot text-info me-1"></i>
+                                                <?= __('模型状态') ?>
+                                            </h5>
+                                            <p class="mb-0" id="model-status-indicator">
+                                                <span class="badge bg-secondary">
+                                                    <i class="mdi mdi-sleep"></i> <?= __('待机') ?>
+                                                </span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-2">
+                                                <i class="mdi mdi-timer-outline text-warning me-1"></i>
+                                                <?= __('推理耗时') ?>
+                                            </h5>
+                                            <p class="mb-0" id="inference-time-indicator">
+                                                <span class="text-muted">-- ms</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-2">
+                                                <i class="mdi mdi-memory text-success me-1"></i>
+                                                <?= __('内存占用') ?>
+                                            </h5>
+                                            <p class="mb-0" id="memory-usage-indicator">
+                                                <span class="text-muted">-- MB</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 浏览器扩展状态提示 -->
+                            <div class="alert alert-warning d-flex align-items-center mb-4" id="extension-warning" role="alert">
+                                <i class="mdi mdi-puzzle-outline me-2 fs-4"></i>
+                                <div class="flex-grow-1">
+                                    <strong id="extension-warning-title"><?= __('浏览器扩展未检测到') ?></strong>
+                                    <p class="mb-0 small" id="extension-warning-desc"><?= __('请安装 AutoLeadAgent 浏览器扩展以启用真实社交媒体爬取功能。未安装扩展时将使用模拟数据。') ?></p>
+                                </div>
+                                <a href="javascript:;" class="btn btn-sm btn-warning ms-3" id="show-extension-install-guide">
+                                    <i class="mdi mdi-download me-1"></i><span id="extension-install-btn-text"><?= __('安装扩展') ?></span>
+                                </a>
+                            </div>
+                            
+                            <div class="alert alert-success d-flex align-items-center mb-4" id="extension-connected" style="display: none !important;" role="alert">
+                                <i class="mdi mdi-puzzle-check me-2 fs-4"></i>
+                                <div class="flex-grow-1">
+                                    <strong><?= __('浏览器扩展已连接') ?></strong>
+                                    <span class="badge bg-success ms-2" id="extension-version">v1.0.0</span>
+                                    <p class="mb-0 small"><?= __('扩展已就绪，将使用真实爬取功能搜索潜在客户。') ?></p>
+                                </div>
+                                <a href="javascript:;" class="btn btn-sm btn-info ms-3" id="show-extension-reinstall-guide" style="display: none;">
+                                    <i class="mdi mdi-refresh me-1"></i><?= __('重新安装扩展') ?>
+                                </a>
+                            </div>
+
+                            <!-- 任务运行详情面板 -->
+                            <div class="card mb-4" id="task-running-panel" style="display: none;">
+                                <div class="card-header bg-primary text-white">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <h5 class="card-title mb-0">
+                                                <i class="mdi mdi-robot me-2"></i>
+                                                <?= __('任务运行状态') ?>
+                                                <span class="badge bg-light text-dark ms-2" id="running-task-id">--</span>
+                                            </h5>
+                                            <div id="task-starting-status" class="mt-2" style="display: none;">
+                                                <small class="text-white-50">
+                                                    <i class="mdi mdi-loading mdi-spin"></i> <?= __('任务启动中...') ?>
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <span class="me-3" id="running-status-badge">
+                                                <span class="badge bg-secondary"><?= __('待机') ?></span>
+                                            </span>
+                                            <span class="me-3">
+                                                <i class="mdi mdi-account-multiple"></i>
+                                                <?= __('已找到') ?>: <strong id="running-found-count">0</strong> <?= __('个客户') ?>
+                                            </span>
+                                            <button type="button" class="btn btn-sm btn-outline-light me-1" id="pause-task-btn" title="<?= __('暂停') ?>">
+                                                <i class="mdi mdi-pause"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" id="stop-task-btn" title="<?= __('停止') ?>">
+                                                <i class="mdi mdi-stop"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="row g-0">
+                                        <!-- 推理日志 -->
+                                        <div class="col-md-6 border-end">
+                                            <div class="p-3 border-bottom bg-light">
+                                                <h6 class="mb-0">
+                                                    <i class="mdi mdi-brain text-info me-1"></i>
+                                                    <?= __('推理日志') ?>
+                                                    <span class="badge bg-info ms-2" id="inference-log-count">0</span>
+                                                </h6>
+                                            </div>
+                                            <div class="log-container" id="inference-log-container" style="height: 250px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
+                                            </div>
+                                        </div>
+                                        <!-- 爬取日志 -->
+                                        <div class="col-md-6">
+                                            <div class="p-3 border-bottom bg-light">
+                                                <h6 class="mb-0">
+                                                    <i class="mdi mdi-web text-success me-1"></i>
+                                                    <?= __('爬取日志') ?>
+                                                    <span class="badge bg-success ms-2" id="crawl-log-count">0</span>
+                                                </h6>
+                                            </div>
+                                            <div class="log-container" id="crawl-log-container" style="height: 250px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
+                                                <div class="p-3 text-muted text-center">
+                                                    <i class="mdi mdi-information-outline"></i> <?= __('等待爬取开始...') ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 任务列表卡片 -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <h5 class="card-title mb-0"><?= __('搜索任务列表') ?></h5>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <button type="button" class="btn btn-primary" id="auto-lead-agent-create-task-btn">
+                                                <i class="mdi mdi-plus-circle"></i> <?= __('新建寻找客户任务') ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="task-list-container">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                            </div>
+                                            <p class="mt-2 text-muted"><?= __('加载任务列表...') ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<!-- 引导对话框 -->
+<div class="modal fade" id="leadSearchGuideModal" tabindex="-1" aria-labelledby="leadSearchGuideModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="leadSearchGuideModalLabel">
+                    <i class="mdi mdi-account-search text-primary me-2"></i>
+                    <?= __('自动寻客任务') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 首次访问引导 -->
+                <div id="lead-search-guide-section">
+                    <h6><?= __('欢迎使用自动寻客功能') ?></h6>
+                    <p><?= __('自动寻客会根据店铺的描述和画像，自动在互联网上寻找潜在客户。') ?></p>
+                    <ul>
+                        <li><?= __('分析当前店铺的行业、目标客户、产品优势等信息；') ?></li>
+                        <li><?= __('智能生成搜索关键词并抓取潜在客户线索；') ?></li>
+                        <li><?= __('为每个潜在客户打分，帮助你快速筛选高价值客户。') ?></li>
+                    </ul>
+                </div>
+                
+                <!-- 未完成任务提示 -->
+                <div id="lead-search-resume-section" class="d-none">
+                    <div class="alert alert-info">
+                        <h6><?= __('检测到你有尚未完成的寻找客户任务。') ?></h6>
+                        <p><?= __('你可以选择继续执行上一次的任务，或创建一个新的任务。') ?></p>
+                    </div>
+                </div>
+                
+                <!-- 任务创建表单 -->
+                <div id="guide-content-form">
+                    <form id="auto-lead-agent-create-task-form">
+                        <div class="mb-3">
+                            <label for="auto-lead-agent-source-type-select" class="form-label">
+                                <?= __('选择来源类型') ?> <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="auto-lead-agent-source-type-select" name="source_type" required>
+                                <option value=""><?= __('请选择来源类型') ?></option>
+                            </select>
+                            <div class="form-text">
+                                <?= __('选择要寻找客户的来源类型，系统会基于该来源的描述和画像，自动寻找匹配的潜在客户。') ?>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="source-options-container" style="display: none;">
+                            <label for="auto-lead-agent-source-id-select" class="form-label">
+                                <?= __('选择具体项') ?> <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="auto-lead-agent-source-id-select" name="source_id" required>
+                                <option value=""><?= __('请先选择来源类型') ?></option>
+                            </select>
+                            <div class="form-text" id="source-options-description"></div>
+                        </div>
+                        
+                        <!-- 兼容字段：保留store_id用于向后兼容 -->
+                        <input type="hidden" id="auto-lead-agent-store-id" name="store_id" value="0">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <?= __('选择搜索引擎') ?> <span class="text-danger">*</span>
+                            </label>
+                            <div id="search-engines-container" class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                    </div>
+                                    <p class="mt-2 text-muted small"><?= __('正在加载搜索引擎列表...') ?></p>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                <?= __('至少选择一个搜索引擎进行搜索') ?>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <?= __('选择目标网站') ?> <span class="text-danger">*</span>
+                            </label>
+                            <div id="target-websites-container" class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                    </div>
+                                    <p class="mt-2 text-muted small"><?= __('正在加载目标网站列表...') ?></p>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                <?= __('至少选择一个目标网站进行搜索') ?>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><?= __('使用建议：') ?></h6>
+                            <ul class="small">
+                                <li><?= __('优先为核心店铺创建寻找客户任务；') ?></li>
+                                <li><?= __('在高峰时段建议减少并发任务数量；') ?></li>
+                                <li><?= __('可以在"潜在客户"列表中查看任务结果。') ?></li>
+                            </ul>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <?= __('以后再说') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="auto-lead-agent-resume-task-btn" style="display: none;">
+                    <i class="mdi mdi-play-circle"></i> <?= __('继续上一次任务') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="auto-lead-agent-start-task-btn">
+                    <i class="mdi mdi-magnify"></i> <?= __('立即开始寻找客户') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<js>Weline_AutoLeadAgent::js/task-runner.js</js>
+<js>Weline_AutoLeadAgent::js/backend-task-manager.js</js>
+
+<script>
+// 模型性能监控和日志面板
+(function() {
+    'use strict';
+    
+    var modelStatusEl = document.getElementById('model-status-indicator');
+    var inferenceTimeEl = document.getElementById('inference-time-indicator');
+    var memoryUsageEl = document.getElementById('memory-usage-indicator');
+    
+    // 日志面板元素
+    var taskRunningPanel = document.getElementById('task-running-panel');
+    var runningTaskIdEl = document.getElementById('running-task-id');
+    var runningStatusBadge = document.getElementById('running-status-badge');
+    var runningFoundCountEl = document.getElementById('running-found-count');
+    var inferenceLogContainer = document.getElementById('inference-log-container');
+    var crawlLogContainer = document.getElementById('crawl-log-container');
+    var inferenceLogCountEl = document.getElementById('inference-log-count');
+    var crawlLogCountEl = document.getElementById('crawl-log-count');
+    
+    var inferenceLogCount = 0;
+    var crawlLogCount = 0;
+    var currentDisplayedTaskId = null; // 当前显示的任务ID
+    
+    // 状态映射
+    var statusMap = {
+        'idle': { icon: 'mdi-sleep', text: '<?= __('待机') ?>', class: 'bg-secondary' },
+        'loading': { icon: 'mdi-information-outline', text: '<?= __('加载中') ?>', class: 'bg-warning' },
+        'inferring': { icon: 'mdi-brain mdi-spin', text: '<?= __('推理中') ?>', class: 'bg-info' },
+        'crawling': { icon: 'mdi-web mdi-spin', text: '<?= __('爬取中') ?>', class: 'bg-success' },
+        'running': { icon: 'mdi-cog mdi-spin', text: '<?= __('运行中') ?>', class: 'bg-primary' },
+        'paused': { icon: 'mdi-pause-circle', text: '<?= __('已暂停') ?>', class: 'bg-warning' },
+        'completed': { icon: 'mdi-check-circle', text: '<?= __('已完成') ?>', class: 'bg-success' },
+        'failed': { icon: 'mdi-alert-circle', text: '<?= __('失败') ?>', class: 'bg-danger' },
+        'success': { icon: 'mdi-check-circle', text: '<?= __('完成') ?>', class: 'bg-success' },
+        'error': { icon: 'mdi-alert-circle', text: '<?= __('错误') ?>', class: 'bg-danger' }
+    };
+    
+    // 更新模型状态显示
+    window.updateModelStatus = function(status, inferenceTime, memoryMB) {
+        if (modelStatusEl) {
+            var info = statusMap[status] || statusMap['idle'];
+            modelStatusEl.innerHTML = '<span class="badge ' + info.class + '">' +
+                '<i class="mdi ' + info.icon + '"></i> ' + info.text + '</span>';
+        }
+        
+        // 同步更新运行面板状态
+        if (runningStatusBadge) {
+            var info = statusMap[status] || statusMap['idle'];
+            runningStatusBadge.innerHTML = '<span class="badge ' + info.class + '">' +
+                '<i class="mdi ' + info.icon + '"></i> ' + info.text + '</span>';
+        }
+        
+        if (inferenceTimeEl && typeof inferenceTime === 'number') {
+            var timeText = inferenceTime < 1000 
+                ? inferenceTime.toFixed(0) + ' ms' 
+                : (inferenceTime / 1000).toFixed(2) + ' s';
+            inferenceTimeEl.innerHTML = '<span class="fw-bold text-warning">' + timeText + '</span>';
+        }
+        
+        if (memoryUsageEl && typeof memoryMB === 'number') {
+            var memoryText = memoryMB < 1024 
+                ? memoryMB.toFixed(1) + ' MB' 
+                : (memoryMB / 1024).toFixed(2) + ' GB';
+            var memoryClass = memoryMB < 512 ? 'text-success' : (memoryMB < 2048 ? 'text-warning' : 'text-danger');
+            memoryUsageEl.innerHTML = '<span class="fw-bold ' + memoryClass + '">' + memoryText + '</span>';
+        }
+    };
+    
+    // 添加日志条目
+    function addLogEntry(container, countEl, entry, type) {
+        if (!container) return;
+        
+        // 首次添加时清空占位内容（改进：检查多种可能的占位文本格式）
+        var placeholderElements = container.querySelectorAll('.text-muted.text-center, .text-center, [class*="loading"], [class*="等待"], .mdi-loading');
+        if (placeholderElements.length > 0) {
+            container.innerHTML = '';
+        }
+        
+        // 如果容器内容只有占位文本（通过文本内容判断）
+        var containerText = container.textContent || '';
+        if (containerText.indexOf('任务启动中') !== -1 || 
+            containerText.indexOf('等待爬取开始') !== -1 ||
+            containerText.indexOf('等待任务开始') !== -1 ||
+            containerText.indexOf('loading') !== -1 ||
+            containerText.trim() === '任务启动中...' ||
+            containerText.trim() === '等待爬取开始...' ||
+            containerText.trim() === '等待任务开始...') {
+            container.innerHTML = '';
+        }
+        
+        // 如果是第一条推理日志，隐藏"任务启动中..."提示
+        // 检查容器中是否已有日志条目（不包括占位文本）
+        if (type === 'inference') {
+            var existingLogs = container.querySelectorAll('.log-entry');
+            if (existingLogs.length === 0) {
+                var taskStartingStatus = document.getElementById('task-starting-status');
+                if (taskStartingStatus) {
+                    taskStartingStatus.style.display = 'none';
+                }
+            }
+        }
+        
+        var logDiv = document.createElement('div');
+        logDiv.className = 'log-entry px-3 py-1 border-bottom';
+        
+        // 根据内容添加不同样式
+        var textClass = 'text-dark';
+        if (entry.message.indexOf('✓') !== -1 || entry.message.indexOf('成功') !== -1) {
+            textClass = 'text-success';
+        } else if (entry.message.indexOf('失败') !== -1 || entry.message.indexOf('错误') !== -1 || entry.message.indexOf('❌') !== -1) {
+            textClass = 'text-danger';
+        } else if (entry.message.indexOf('正在') !== -1 || entry.message.indexOf('开始') !== -1 || entry.message.indexOf('【') !== -1) {
+            textClass = 'text-primary';
+        } else if (entry.message.indexOf('⚠️') !== -1 || entry.message.indexOf('💡') !== -1) {
+            textClass = 'text-warning';
+        }
+        
+        logDiv.innerHTML = '<span class="text-muted me-2">[' + entry.time + ']</span>' +
+            '<span class="' + textClass + '">' + escapeHtml(entry.message) + '</span>';
+        
+        container.appendChild(logDiv);
+        
+        // 自动滚动到底部
+        container.scrollTop = container.scrollHeight;
+        
+        // 更新计数（只更新爬取日志计数，推理日志计数由实际推理次数决定）
+        if (countEl) {
+            if (type === 'crawl') {
+                crawlLogCount++;
+                countEl.textContent = crawlLogCount;
+            }
+            // 推理日志计数不再基于日志条目数，而是基于实际的推理调用次数
+            // 实际推理次数通过 taskRunnerStatusChange 或 taskRunnerProgress 事件更新
+        }
+    }
+    
+    // HTML转义
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // 显示任务运行面板
+    window.showTaskRunningPanel = function(taskId) {
+        if (taskRunningPanel) {
+            taskRunningPanel.style.display = 'block';
+            if (runningTaskIdEl) {
+                runningTaskIdEl.textContent = '<?= __('任务') ?> #' + taskId;
+            }
+            
+            // 只在任务ID变化时清空日志（避免状态变化时清空已有日志）
+            var isNewTask = currentDisplayedTaskId !== taskId;
+            if (isNewTask) {
+                currentDisplayedTaskId = taskId;
+                // 显示任务启动中状态在row align-items-center内
+                var taskStartingStatus = document.getElementById('task-starting-status');
+                if (taskStartingStatus) {
+                    taskStartingStatus.style.display = 'block';
+                }
+                // 清空日志（新任务）
+                inferenceLogCount = 0;
+                crawlLogCount = 0;
+                if (inferenceLogContainer) {
+                    inferenceLogContainer.innerHTML = '';
+                }
+                if (crawlLogContainer) {
+                    crawlLogContainer.innerHTML = '<div class="p-3 text-muted text-center"><i class="mdi mdi-information-outline"></i> <?= __('等待爬取开始...') ?></div>';
+                }
+                if (inferenceLogCountEl) inferenceLogCountEl.textContent = '0';
+                if (crawlLogCountEl) crawlLogCountEl.textContent = '0';
+            }
+        }
+    };
+    
+    // 隐藏任务运行面板
+    window.hideTaskRunningPanel = function() {
+        if (taskRunningPanel) {
+            taskRunningPanel.style.display = 'none';
+            currentDisplayedTaskId = null; // 重置任务ID，下次显示时识别为新任务
+        }
+    };
+    
+    // 更新找到的客户数量
+    window.updateFoundCount = function(count) {
+        if (runningFoundCountEl) {
+            runningFoundCountEl.textContent = count;
+        }
+    };
+    
+    // 监听TaskRunner日志事件
+    window.addEventListener('taskRunnerLog', function(e) {
+        var detail = e.detail;
+        if (detail.type === 'inference') {
+            addLogEntry(inferenceLogContainer, inferenceLogCountEl, detail.entry, 'inference');
+        } else if (detail.type === 'crawl') {
+            addLogEntry(crawlLogContainer, crawlLogCountEl, detail.entry, 'crawl');
+        }
+    });
+    
+    // 监听状态变化事件
+    window.addEventListener('taskRunnerStatusChange', function(e) {
+        var detail = e.detail;
+        window.updateModelStatus(detail.status);
+        
+        if (detail.foundCount !== undefined) {
+            window.updateFoundCount(detail.foundCount);
+        }
+        
+        // 更新推理日志计数为实际的推理次数
+        if (detail.totalInferences !== undefined && inferenceLogCountEl) {
+            inferenceLogCount = detail.totalInferences;
+            inferenceLogCountEl.textContent = inferenceLogCount;
+        }
+        
+        // 如果任务开始运行，显示面板
+        if (detail.status === 'running' || detail.status === 'inferring' || 
+            detail.status === 'crawling' || detail.status === 'loading') {
+            if (detail.taskId) {
+                window.showTaskRunningPanel(detail.taskId);
+            }
+        }
+        
+        // 如果任务结束，延迟隐藏面板
+        if (detail.status === 'idle' || detail.status === 'completed' || detail.status === 'failed') {
+            // 保留面板显示，让用户查看日志
+        }
+    });
+    
+    // 监听进度更新事件
+    window.addEventListener('taskRunnerProgress', function(e) {
+        var detail = e.detail;
+        if (detail.foundCount !== undefined) {
+            window.updateFoundCount(detail.foundCount);
+        }
+        
+        // 更新推理日志计数为实际的推理次数
+        if (detail.totalInferences !== undefined && inferenceLogCountEl) {
+            inferenceLogCount = detail.totalInferences;
+            inferenceLogCountEl.textContent = inferenceLogCount;
+        }
+    });
+    
+    // 暂停按钮事件
+    var pauseBtn = document.getElementById('pause-task-btn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', function() {
+            if (typeof AutoLeadAgentTaskRunner !== 'undefined') {
+                AutoLeadAgentTaskRunner.pauseTask();
+            }
+        });
+    }
+    
+    // 停止按钮事件
+    var stopBtn = document.getElementById('stop-task-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+            if (confirm('<?= __('确定要停止当前任务吗？') ?>')) {
+                if (typeof AutoLeadAgentTaskRunner !== 'undefined') {
+                    AutoLeadAgentTaskRunner.stopTask();
+                }
+            }
+        });
+    }
+    
+    // 获取浏览器内存信息（如果可用）
+    function updateBrowserMemory() {
+        if (window.performance && performance.memory) {
+            var usedMB = performance.memory.usedJSHeapSize / 1024 / 1024;
+            if (memoryUsageEl) {
+                var memoryText = usedMB.toFixed(1) + ' MB';
+                var memoryClass = usedMB < 100 ? 'text-success' : (usedMB < 500 ? 'text-warning' : 'text-danger');
+                memoryUsageEl.innerHTML = '<span class="fw-bold ' + memoryClass + '">' + memoryText + '</span>';
+            }
+        }
+    }
+    
+    // 初始更新
+    updateBrowserMemory();
+    
+    // 定期更新内存信息
+    setInterval(updateBrowserMemory, 5000);
+    
+    // ========== 浏览器扩展检测 ==========
+    var extensionWarning = document.getElementById('extension-warning');
+    var extensionConnected = document.getElementById('extension-connected');
+    var extensionVersionEl = document.getElementById('extension-version');
+    var showInstallGuideBtn = document.getElementById('show-extension-install-guide');
+    var showReinstallGuideBtn = document.getElementById('show-extension-reinstall-guide');
+    var extensionWarningTitle = document.getElementById('extension-warning-title');
+    var extensionWarningDesc = document.getElementById('extension-warning-desc');
+    var extensionInstallBtnText = document.getElementById('extension-install-btn-text');
+    
+    // 检测是否为开发环境
+    function isDevEnvironment() {
+        var hostname = window.location.hostname;
+        return hostname === 'localhost' || 
+               hostname === '127.0.0.1' || 
+               hostname === '0.0.0.0' ||
+               hostname.startsWith('192.168.') ||
+               hostname.startsWith('10.') ||
+               hostname.startsWith('172.') ||
+               window.location.port !== ''; // 有端口号通常是开发环境
+    }
+    
+    var isDev = isDevEnvironment();
+    console.log('[Index] 开发环境检测:', isDev, 'hostname:', window.location.hostname);
+    
+    // 监听扩展就绪事件
+    window.addEventListener('taskRunnerExtensionReady', function(e) {
+        console.log('[Index] Extension ready:', e.detail);
+        
+        if (isDev) {
+            // 开发环境：即使扩展已连接，也显示重新安装提示
+            if (extensionWarning) {
+                extensionWarning.style.display = 'flex';
+                extensionWarning.style.cssText = 'display: flex !important;';
+                extensionWarning.className = 'alert alert-info d-flex align-items-center mb-4';
+                if (extensionWarningTitle) {
+                    extensionWarningTitle.textContent = '<?= __('开发模式：浏览器扩展已连接') ?>';
+                }
+                if (extensionWarningDesc) {
+                    extensionWarningDesc.textContent = '<?= __('扩展已就绪。开发模式下可随时重新安装扩展以更新代码。') ?>';
+                }
+                if (extensionInstallBtnText) {
+                    extensionInstallBtnText.textContent = '<?= __('重新安装扩展') ?>';
+                }
+            }
+            if (extensionConnected) {
+                extensionConnected.style.display = 'flex';
+                extensionConnected.style.cssText = 'display: flex !important;';
+                if (showReinstallGuideBtn) {
+                    showReinstallGuideBtn.style.display = 'block';
+                }
+            }
+        } else {
+            // 生产环境：正常隐藏警告，显示已连接
+            if (extensionWarning) {
+                extensionWarning.style.display = 'none';
+                extensionWarning.style.cssText = 'display: none !important;';
+            }
+            if (extensionConnected) {
+                extensionConnected.style.display = 'flex';
+                extensionConnected.style.cssText = 'display: flex !important;';
+            }
+        }
+        
+        if (extensionVersionEl && e.detail.version) {
+            extensionVersionEl.textContent = 'v' + e.detail.version;
+        }
+    });
+    
+    // 检查扩展状态
+    function checkExtensionStatus() {
+        var extensionAvailable = typeof AutoLeadAgentTaskRunner !== 'undefined' && AutoLeadAgentTaskRunner.isExtensionAvailable();
+        
+        if (extensionAvailable) {
+            if (isDev) {
+                // 开发环境：显示重新安装提示
+                if (extensionWarning) {
+                    extensionWarning.style.display = 'flex';
+                    extensionWarning.style.cssText = 'display: flex !important;';
+                    extensionWarning.className = 'alert alert-info d-flex align-items-center mb-4';
+                    if (extensionWarningTitle) {
+                        extensionWarningTitle.textContent = '<?= __('开发模式：浏览器扩展已连接') ?>';
+                    }
+                    if (extensionWarningDesc) {
+                        extensionWarningDesc.textContent = '<?= __('扩展已就绪。开发模式下可随时重新安装扩展以更新代码。') ?>';
+                    }
+                    if (extensionInstallBtnText) {
+                        extensionInstallBtnText.textContent = '<?= __('重新安装扩展') ?>';
+                    }
+                }
+                if (extensionConnected) {
+                    extensionConnected.style.display = 'flex';
+                    extensionConnected.style.cssText = 'display: flex !important;';
+                    if (showReinstallGuideBtn) {
+                        showReinstallGuideBtn.style.display = 'block';
+                    }
+                }
+            } else {
+                // 生产环境：正常显示
+                if (extensionWarning) {
+                    extensionWarning.style.display = 'none';
+                    extensionWarning.style.cssText = 'display: none !important;';
+                }
+                if (extensionConnected) {
+                    extensionConnected.style.display = 'flex';
+                    extensionConnected.style.cssText = 'display: flex !important;';
+                }
+            }
+        }
+    }
+    
+    // 延迟检查（给扩展时间响应）
+    setTimeout(checkExtensionStatus, 2000);
+    
+    // 安装扩展按钮点击
+    if (showInstallGuideBtn) {
+        showInstallGuideBtn.addEventListener('click', function() {
+            showExtensionInstallModal();
+        });
+    }
+    
+    // 重新安装扩展按钮点击
+    if (showReinstallGuideBtn) {
+        showReinstallGuideBtn.addEventListener('click', function() {
+            showExtensionInstallModal();
+        });
+    }
+    
+    // 显示扩展安装指南弹窗
+    function showExtensionInstallModal() {
+        var downloadUrl = '<?= $this->getBackendUrl('auto-lead-agent/backend/index/download-extension') ?>';
+        
+        var modalHtml = '<div class="modal fade" id="extensionInstallModal" tabindex="-1">' +
+            '<div class="modal-dialog modal-lg">' +
+            '<div class="modal-content">' +
+            '<div class="modal-header bg-primary text-white">' +
+            '<h5 class="modal-title"><i class="mdi mdi-puzzle-outline me-2"></i><?= __('安装浏览器扩展') ?></h5>' +
+            '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+            '<div class="alert alert-info">' +
+            '<i class="mdi mdi-information me-2"></i>' +
+            '<?= __('浏览器扩展可以绑过 CORS 限制，真实爬取 LinkedIn、Twitter 等社交媒体平台。') ?>' +
+            '</div>' +
+            
+            '<!-- 快速安装区域 -->' +
+            '<div class="card bg-light mb-4">' +
+            '<div class="card-body text-center">' +
+            '<h5 class="mb-3"><i class="mdi mdi-rocket-launch text-primary me-2"></i><?= __('快速安装') ?></h5>' +
+            '<div class="row g-3">' +
+            '<div class="col-md-6">' +
+            '<button class="btn btn-lg btn-success w-100" onclick="downloadExtension()">' +
+            '<i class="mdi mdi-download me-2"></i><?= __('下载扩展包') ?>' +
+            '</button>' +
+            '<small class="text-muted d-block mt-1">ZIP <?= __('格式，解压后加载') ?></small>' +
+            '</div>' +
+            '<div class="col-md-6">' +
+            '<button class="btn btn-lg btn-primary w-100" onclick="openExtensionPage()">' +
+            '<i class="mdi mdi-puzzle me-2"></i><?= __('打开扩展页面') ?>' +
+            '</button>' +
+            '<small class="text-muted d-block mt-1"><?= __('自动打开扩展管理') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            
+            '<!-- 选项卡切换 -->' +
+            '<ul class="nav nav-tabs mb-3" role="tablist">' +
+            '<li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#install-chrome"><?= __('Chrome / Edge') ?></a></li>' +
+            '<li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#install-firefox"><?= __('Firefox') ?></a></li>' +
+            '</ul>' +
+            
+            '<div class="tab-content">' +
+            '<!-- Chrome/Edge 安装 -->' +
+            '<div class="tab-pane fade show active" id="install-chrome">' +
+            '<div class="row g-2">' +
+            '<div class="col-12">' +
+            '<div class="card border-primary">' +
+            '<div class="card-header bg-primary text-white py-2">' +
+            '<i class="mdi mdi-numeric-1-circle me-1"></i><?= __('下载并解压') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('点击上方"下载扩展包"按钮，将下载的 ZIP 文件解压到任意目录（如桌面）') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-primary">' +
+            '<div class="card-header bg-primary text-white py-2">' +
+            '<i class="mdi mdi-numeric-2-circle me-1"></i><?= __('打开扩展管理页面') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small>' +
+            '<?= __('方法一：点击上方"打开扩展页面"按钮') ?><br>' +
+            '<?= __('方法二：地址栏输入') ?> <code>chrome://extensions</code> <?= __('或') ?> <code>edge://extensions</code><br>' +
+            '<?= __('方法三：菜单 → 扩展程序 → 管理扩展程序') ?>' +
+            '</small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-primary">' +
+            '<div class="card-header bg-primary text-white py-2">' +
+            '<i class="mdi mdi-numeric-3-circle me-1"></i><?= __('开启开发者模式并加载') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small>' +
+            '<strong><?= __('Chrome 新版：') ?></strong><?= __('右上角开启"开发者模式" → 点击"加载已解压的扩展" → 选择解压后的文件夹') ?><br>' +
+            '<strong><?= __('Edge：') ?></strong><?= __('左下角开启"开发人员模式" → 点击"加载解压缩的扩展" → 选择解压后的文件夹') ?>' +
+            '</small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-success">' +
+            '<div class="card-header bg-success text-white py-2">' +
+            '<i class="mdi mdi-check-circle me-1"></i><?= __('完成') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('看到扩展图标出现在工具栏，刷新本页面，扩展状态变为"已连接"') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="alert alert-warning mt-2 mb-0 small">' +
+            '<i class="mdi mdi-alert me-1"></i>' +
+            '<?= __('如果看不到"加载已解压的扩展"按钮，请确保已开启开发者模式。某些企业管理的浏览器可能禁用此功能。') ?>' +
+            '</div>' +
+            '</div>' +
+            
+            '<!-- Firefox 安装 -->' +
+            '<div class="tab-pane fade" id="install-firefox">' +
+            '<div class="row g-2">' +
+            '<div class="col-12">' +
+            '<div class="card border-warning">' +
+            '<div class="card-header bg-warning py-2">' +
+            '<i class="mdi mdi-numeric-1-circle me-1"></i><?= __('下载并解压') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('点击上方"下载扩展包"按钮，解压 ZIP 文件') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-warning">' +
+            '<div class="card-header bg-warning py-2">' +
+            '<i class="mdi mdi-numeric-2-circle me-1"></i><?= __('打开调试页面') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('地址栏输入：') ?> <code>about:debugging#/runtime/this-firefox</code></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-warning">' +
+            '<div class="card-header bg-warning py-2">' +
+            '<i class="mdi mdi-numeric-3-circle me-1"></i><?= __('临时载入') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('点击"临时载入附加组件" → 选择解压目录中的 manifest.json 文件') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="col-12">' +
+            '<div class="card border-success">' +
+            '<div class="card-header bg-success text-white py-2">' +
+            '<i class="mdi mdi-check-circle me-1"></i><?= __('完成') ?>' +
+            '</div>' +
+            '<div class="card-body py-2">' +
+            '<small><?= __('刷新本页面，扩展状态变为"已连接"') ?></small>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="alert alert-info mt-2 mb-0 small">' +
+            '<i class="mdi mdi-information me-1"></i>' +
+            '<?= __('Firefox 临时扩展在浏览器重启后需要重新加载。') ?>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            
+            '<div class="alert alert-secondary mt-3 mb-0 small">' +
+            '<i class="mdi mdi-server me-2"></i>' +
+            '<strong><?= __('服务器部署：') ?></strong><?= __('可直接加载服务器目录：') ?>' +
+            '<code class="ms-1">app/code/Weline/AutoLeadAgent/browser-extension</code>' +
+            '</div>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+            '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>' +
+            '<button type="button" class="btn btn-primary" onclick="location.reload()">' +
+            '<i class="mdi mdi-refresh me-1"></i><?= __('刷新检测') ?>' +
+            '</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        
+        // 移除旧弹窗
+        var oldModal = document.getElementById('extensionInstallModal');
+        if (oldModal) {
+            oldModal.remove();
+        }
+        
+        // 添加新弹窗
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 显示弹窗
+        var modal = new bootstrap.Modal(document.getElementById('extensionInstallModal'));
+        modal.show();
+    }
+    
+    // 下载扩展包
+    window.downloadExtension = function() {
+        var downloadUrl = '<?= $this->getBackendUrl('auto-lead-agent/backend/index/download-extension') ?>';
+        window.location.href = downloadUrl;
+    };
+    
+    // 打开扩展管理页面
+    window.openExtensionPage = function() {
+        var isEdge = navigator.userAgent.indexOf('Edg') !== -1;
+        var isChrome = navigator.userAgent.indexOf('Chrome') !== -1 && !isEdge;
+        var isFirefox = navigator.userAgent.indexOf('Firefox') !== -1;
+        
+        var extensionUrl = '';
+        if (isEdge) {
+            extensionUrl = 'edge://extensions/';
+        } else if (isChrome) {
+            extensionUrl = 'chrome://extensions/';
+        } else if (isFirefox) {
+            extensionUrl = 'about:debugging#/runtime/this-firefox';
+        } else {
+            alert('<?= __('请手动打开浏览器扩展管理页面') ?>');
+            return;
+        }
+        
+        // 尝试打开（可能被浏览器拦截）
+        var newWindow = window.open(extensionUrl, '_blank');
+        
+        // 如果被拦截，显示提示
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            // 复制到剪贴板
+            navigator.clipboard.writeText(extensionUrl).then(function() {
+                alert('<?= __('浏览器安全策略限制，无法自动打开。\n\n扩展页面地址已复制到剪贴板：') ?>\n' + extensionUrl + '\n\n<?= __('请手动粘贴到地址栏访问。') ?>');
+            }).catch(function() {
+                alert('<?= __('浏览器安全策略限制，请手动访问：') ?>\n' + extensionUrl);
+            });
+        }
+    };
+})();
+</script>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+

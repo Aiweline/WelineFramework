@@ -1,0 +1,96 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Shipping\Model\Tracking;
+
+$records = $this->getData('records') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('物流跟踪') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('物流跟踪') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('物流跟踪') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('物流跟踪记录列表') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($records)): ?>
+                                    <div class="alert alert-info mb-0">
+                                        <?= __('当前暂无物流跟踪记录。') ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover align-middle">
+                                            <thead class="table-light">
+                                            <tr>
+                                                <th><?= __('物流单号') ?></th>
+                                                <th><?= __('快递公司ID') ?></th>
+                                                <th><?= __('状态') ?></th>
+                                                <th><?= __('当前位置') ?></th>
+                                                <th><?= __('最后查询时间') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php /** @var Tracking $record */ ?>
+                                            <?php foreach ($records as $record): ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($record->getData(Tracking::fields_TRACKING_NUMBER)) ?></td>
+                                                    <td><?= htmlspecialchars($record->getData(Tracking::fields_CARRIER_ID)) ?></td>
+                                                    <td><?= htmlspecialchars($record->getStatusLabel()) ?></td>
+                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::fields_CURRENT_LOCATION)) ?></td>
+                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::fields_LAST_TRACKED_AT)) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+
+

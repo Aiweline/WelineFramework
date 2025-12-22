@@ -1,0 +1,560 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('搜索目标网站管理') ?></title>
+    <style>
+        .target-website-table {
+            margin-top: 1.5rem;
+        }
+        .btn-add {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+        }
+        .btn-add:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #653a91 100%);
+            color: white;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .syntax-template {
+            font-family: 'Courier New', monospace;
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+        [data-theme-mode="dark"] .syntax-template,
+        [data-bs-theme="dark"] .syntax-template {
+            background-color: #2d3448;
+            color: #e9ecef;
+        }
+        /* 美化搜索筛选区域 - 支持主题切换 */
+        .filter-section {
+            background: var(--bs-body-bg);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            border: 1px solid var(--bs-border-color);
+            transition: all 0.3s ease;
+        }
+        
+        [data-theme-mode="dark"] .filter-section,
+        [data-bs-theme="dark"] .filter-section {
+            background: #252b3b;
+            border-color: #2d3448;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .filter-section .form-control,
+        .filter-section .form-select {
+            border: 2px solid var(--bs-border-color);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+        
+        [data-theme-mode="dark"] .filter-section .form-control,
+        [data-theme-mode="dark"] .filter-section .form-select,
+        [data-bs-theme="dark"] .filter-section .form-control,
+        [data-bs-theme="dark"] .filter-section .form-select {
+            border-color: #2d3448;
+            background: #252b3b;
+            color: #e9ecef;
+        }
+        
+        .filter-section .form-control:focus,
+        .filter-section .form-select:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+        }
+        
+        [data-theme-mode="dark"] .filter-section .form-control:focus,
+        [data-theme-mode="dark"] .filter-section .form-select:focus,
+        [data-bs-theme="dark"] .filter-section .form-control:focus,
+        [data-bs-theme="dark"] .filter-section .form-select:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            background: #252b3b;
+            color: #e9ecef;
+        }
+        
+        .filter-section .form-label {
+            font-weight: 600;
+            color: var(--bs-body-color);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        [data-theme-mode="dark"] .filter-section .form-label,
+        [data-bs-theme="dark"] .filter-section .form-label {
+            color: #e9ecef;
+        }
+        
+        .filter-section .form-label i {
+            margin-right: 8px;
+            color: var(--bs-primary);
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('搜索目标网站管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('auto-lead-agent/backend/index/index')"><?= __('自动寻客') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('搜索目标网站') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作栏 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="card-title mb-0"><?= __('目标网站列表') ?></h5>
+                                    <button type="button" class="btn btn-primary btn-add" onclick="showTargetWebsiteForm()">
+                                        <i class="mdi mdi-plus-circle"></i> <?= __('添加目标网站') ?>
+                                    </button>
+                                </div>
+
+                                <!-- 筛选区域 -->
+                                <div class="filter-section">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-magnify me-1"></i><?= __('搜索') ?>
+                                            </label>
+                                            <input type="text" class="form-control" id="filter-search" placeholder="<?= __('输入网站名称或域名') ?>">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-toggle-switch me-1"></i><?= __('状态') ?>
+                                            </label>
+                                            <select class="form-select" id="filter-status">
+                                                <option value=""><?= __('全部') ?></option>
+                                                <option value="1"><?= __('启用') ?></option>
+                                                <option value="0"><?= __('禁用') ?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">
+                                                <i class="mdi mdi-magnify me-1"></i><?= __('操作') ?>
+                                            </label>
+                                            <div>
+                                                <button type="button" class="btn btn-primary w-100" onclick="loadTargetWebsiteList()">
+                                                    <i class="mdi mdi-magnify me-1"></i><?= __('搜索') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 目标网站列表表格 -->
+                                <div class="table-responsive target-website-table">
+                                    <table class="table table-bordered table-hover" id="target-website-table">
+                                        <thead>
+                                            <tr>
+                                                <th width="60"><?= __('ID') ?></th>
+                                                <th width="150"><?= __('网站名称') ?></th>
+                                                <th width="200"><?= __('域名') ?></th>
+                                                <th><?= __('搜索语法模板') ?></th>
+                                                <th width="80"><?= __('排序') ?></th>
+                                                <th width="80"><?= __('状态') ?></th>
+                                                <th width="180"><?= __('操作') ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="target-website-tbody">
+                                            <tr>
+                                                <td colspan="7" class="text-center">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 分页 -->
+                                <div id="target-website-pagination" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 目标网站表单模态框 -->
+<div class="modal fade" id="target-website-form-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="target-website-form-title"><?= __('添加目标网站') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="target-website-form">
+                <div class="modal-body">
+                    <input type="hidden" id="target-website-id" name="target_website_id" value="0">
+                    
+                    <div class="mb-3">
+                        <label for="target-website-name" class="form-label"><?= __('网站名称') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="target-website-name" name="name" required>
+                        <small class="form-text text-muted"><?= __('例如：LinkedIn、Facebook、Twitter等') ?></small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="target-website-domain" class="form-label"><?= __('域名') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="target-website-domain" name="domain" required>
+                        <small class="form-text text-muted"><?= __('例如：linkedin.com、facebook.com等') ?></small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="target-website-syntax-template" class="form-label"><?= __('搜索语法模板') ?> <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="target-website-syntax-template" name="search_syntax_template" rows="3" required></textarea>
+                        <small class="form-text text-muted">
+                            <?= __('支持占位符：{domain}（域名）、{keyword1}、{keyword2}、{keyword3}（关键词）、{industry}（行业）、{region}（地区）') ?><br>
+                            <?= __('示例：site:{domain} "{keyword1}" "{keyword2}"') ?>
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="target-website-description" class="form-label"><?= __('描述') ?></label>
+                        <textarea class="form-control" id="target-website-description" name="description" rows="2"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="target-website-icon-url" class="form-label"><?= __('图标URL') ?></label>
+                        <input type="text" class="form-control" id="target-website-icon-url" name="icon_url">
+                        <small class="form-text text-muted"><?= __('可选，网站图标的URL地址') ?></small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="target-website-sort-order" class="form-label"><?= __('排序') ?></label>
+                                <input type="number" class="form-control" id="target-website-sort-order" name="sort_order" value="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('状态') ?></label>
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="target-website-is-active" name="is_active" value="1" checked>
+                                        <label class="form-check-label" for="target-website-is-active"><?= __('启用') ?></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                    <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let pageSize = 20;
+
+// 加载目标网站列表
+function loadTargetWebsiteList(page = 1) {
+    currentPage = page;
+    const search = document.getElementById('filter-search').value;
+    const status = document.getElementById('filter-status').value;
+    
+    const params = new URLSearchParams({
+        page: currentPage,
+        page_size: pageSize
+    });
+    
+    if (search) {
+        params.append('search', search);
+    }
+    if (status !== '') {
+        params.append('is_active', status);
+    }
+    
+    fetch('@backend-url("auto-lead-agent/backend/target-website/list")?' + params.toString(), {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            renderTargetWebsiteList(result.data);
+            document.getElementById('target-website-pagination').innerHTML = result.pagination || '';
+        } else {
+            alert(result.message || '<?= __('加载失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Load target website list error:', error);
+        alert('<?= __('加载失败') ?>');
+    });
+}
+
+// 渲染目标网站列表
+function renderTargetWebsiteList(data) {
+    const tbody = document.getElementById('target-website-tbody');
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center"><?= __('暂无数据') ?></td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(item => {
+        const statusClass = item.is_active ? 'status-active' : 'status-inactive';
+        const statusText = item.is_active ? '<?= __('启用') ?>' : '<?= __('禁用') ?>';
+        const syntaxPreview = item.search_syntax_template ? 
+            (item.search_syntax_template.length > 50 ? 
+                item.search_syntax_template.substring(0, 50) + '...' : 
+                item.search_syntax_template) : 
+            '-';
+        
+        html += `
+            <tr>
+                <td>${item.target_website_id}</td>
+                <td><strong>${item.name}</strong></td>
+                <td><code>${item.domain}</code></td>
+                <td>
+                    <div class="syntax-template" title="${item.search_syntax_template || ''}">
+                        ${syntaxPreview}
+                    </div>
+                </td>
+                <td>${item.sort_order}</td>
+                <td>
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-primary me-1" onclick="editTargetWebsite(${item.target_website_id})">
+                        <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                    </button>
+                    <button class="btn btn-sm btn-${item.is_active ? 'warning' : 'success'}" onclick="toggleTargetWebsiteActive(${item.target_website_id}, ${item.is_active ? 0 : 1})">
+                        <i class="mdi mdi-toggle-switch${item.is_active ? '-off' : ''}"></i> ${item.is_active ? '<?= __('禁用') ?>' : '<?= __('启用') ?>'}
+                    </button>
+                    <button class="btn btn-sm btn-danger ms-1" onclick="deleteTargetWebsite(${item.target_website_id})">
+                        <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 显示添加表单
+function showTargetWebsiteForm() {
+    document.getElementById('target-website-form').reset();
+    document.getElementById('target-website-id').value = '0';
+    document.getElementById('target-website-form-title').textContent = '<?= __('添加目标网站') ?>';
+    document.getElementById('target-website-is-active').checked = true;
+    const modal = new bootstrap.Modal(document.getElementById('target-website-form-modal'));
+    modal.show();
+}
+
+// 编辑目标网站
+function editTargetWebsite(id) {
+    fetch('@backend-url("auto-lead-agent/backend/target-website/list")?page=1&page_size=1', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            const item = result.data.find(i => i.target_website_id === id);
+            if (item) {
+                document.getElementById('target-website-id').value = item.target_website_id;
+                document.getElementById('target-website-name').value = item.name;
+                document.getElementById('target-website-domain').value = item.domain;
+                document.getElementById('target-website-syntax-template').value = item.search_syntax_template || '';
+                document.getElementById('target-website-description').value = item.description || '';
+                document.getElementById('target-website-icon-url').value = item.icon_url || '';
+                document.getElementById('target-website-sort-order').value = item.sort_order || 0;
+                document.getElementById('target-website-is-active').checked = item.is_active;
+                document.getElementById('target-website-form-title').textContent = '<?= __('编辑目标网站') ?>';
+                const modal = new bootstrap.Modal(document.getElementById('target-website-form-modal'));
+                modal.show();
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Load target website error:', error);
+        alert('<?= __('加载失败') ?>');
+    });
+}
+
+// 保存目标网站
+document.getElementById('target-website-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {};
+    for (const [key, value] of formData.entries()) {
+        if (key === 'is_active') {
+            data[key] = document.getElementById('target-website-is-active').checked ? 1 : 0;
+        } else {
+            data[key] = value;
+        }
+    }
+    
+    fetch('@backend-url("auto-lead-agent/backend/target-website/save")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams(data).toString()
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(result.message || '<?= __('保存成功') ?>');
+            bootstrap.Modal.getInstance(document.getElementById('target-website-form-modal')).hide();
+            loadTargetWebsiteList(currentPage);
+        } else {
+            alert(result.message || '<?= __('保存失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Save target website error:', error);
+        alert('<?= __('保存失败') ?>');
+    });
+});
+
+// 启用/禁用目标网站
+function toggleTargetWebsiteActive(id, newStatus) {
+    if (!confirm(newStatus ? '<?= __('确定要启用该目标网站吗？') ?>' : '<?= __('确定要禁用该目标网站吗？') ?>')) {
+        return;
+    }
+    
+    const formData = new URLSearchParams({
+        target_website_id: id
+    });
+    
+    fetch('@backend-url("auto-lead-agent/backend/target-website/toggle-active")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData.toString()
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(result.message || '<?= __('操作成功') ?>');
+            loadTargetWebsiteList(currentPage);
+        } else {
+            alert(result.message || '<?= __('操作失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Toggle target website active error:', error);
+        alert('<?= __('操作失败') ?>');
+    });
+}
+
+// 删除目标网站
+function deleteTargetWebsite(id) {
+    if (!confirm('<?= __('确定要删除该目标网站吗？此操作不可恢复！') ?>')) {
+        return;
+    }
+    
+    const formData = new URLSearchParams({
+        target_website_id: id
+    });
+    
+    fetch('@backend-url("auto-lead-agent/backend/target-website/delete")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData.toString()
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(result.message || '<?= __('删除成功') ?>');
+            loadTargetWebsiteList(currentPage);
+        } else {
+            alert(result.message || '<?= __('删除失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Delete target website error:', error);
+        alert('<?= __('删除失败') ?>');
+    });
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadTargetWebsiteList();
+});
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

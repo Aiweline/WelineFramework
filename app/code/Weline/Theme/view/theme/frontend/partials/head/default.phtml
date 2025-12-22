@@ -1,7 +1,7 @@
 <?php
 /**
  * 片段：Head
- * 
+ *
  * 页面头部区域（meta标签、CSS、JS初始化等）
  * 字段
  * @meta.name {default="Head头部片段",name="Head头部片段",description="Head头部片段，用于描述片段的名称"}
@@ -10,160 +10,93 @@
  * @param.description {default="Weline Framework - 现代化的PHP框架",name="页面描述",description="页面描述，用于设置SEO描述"}
  * @param.keywords {default="Weline, Framework, PHP",name="页面关键词",description="页面关键词，用于设置SEO关键词"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置说明：
+ * - Partials 自己的 meta 数据：通过 $meta 或 $this->getData('meta') 访问
+ * - Layout 的 meta 数据：通过 $layout 或 $this->getData('layout') 访问
+ * - 参数配置由 Block\Partials 在渲染时自动加载
+ * - 模板中使用 {{meta.参数}} 输出 partials 的参数，使用 {{layout.参数}} 输出 layout 的参数
  */
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Frontend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Block\ThemeConfig::class);
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+// 主题相关数据由 ControllerFetchFileBefore Observer 设置
+$themeData = $this->getData('theme') ?? [];
+?>
+<!-- 
+    Theme Head Partial - 只负责加载 Theme 资源
+    注意：
+    - Meta 标签、Favicon 等由 Frontend 模块的 head.phtml 负责
+    - Frontend CSS/JS（loading.css, font-awesome, bootstrap, jquery）由 Frontend 模块负责
+    - Theme 只负责加载 Theme 相关的 CSS 变量、色系、主题 CSS/JS
+-->
+<?php
+// 主题相关数据由 ControllerFetchFileBefore Observer 设置
+// 模板中直接使用 theme 对象中的数据，不进行任何提取或获取操作
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 
+// 注意：变量和色盘配置现在通过生成的布局CSS文件加载，不再单独引用
+// 布局CSS文件在编译时自动生成，包含所有CSS变量和色盘配置
+?>
+<!-- 主题CSS（基础样式，不包含变量） -->
+<theme:css>Weline_Theme::theme/{{theme.area}}/assets/css/theme.css</theme:css>
+<?php
+// 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
+// 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
+$area = $themeData['area'] ?? 'frontend';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
+
+// 检查布局信息和主题对象是否存在
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    // 使用LayoutAssetsManager获取CSS URL（使用 Observer 设置的主题对象）
+    $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+    try {
+        $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+        ?>
+<!-- 布局CSS（包含变量、色盘和布局特定样式）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
+<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+<?php
+    } catch (\Exception $e) {
+        // 如果获取URL失败，记录错误
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Head Partial: 无法获取布局CSS URL', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } catch (\Exception $logError) {
+                // 忽略日志错误
+            }
+        }
+    }
+}
+?>
+<!-- 注意：jQuery 等 Frontend JS 由 Frontend 模块的 head.phtml 负责加载 -->
+<?php
 // 获取基础URL和当前语言
 $baseUrl = $this->request->getBaseUrl();
 $currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
 $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
-$pageTitle = $this->getData('title') ?? __('欢迎使用WelineFramework框架！');
-$pageDescription = $this->getData('description') ?? __('Weline Framework - 现代化的PHP框架');
-$pageKeywords = $this->getData('keywords') ?? __('Weline, Framework, PHP');
+$pageTitle = $meta['title'] ?? $this->getData('title') ?? __('欢迎使用WelineFramework框架！');
+$pageDescription = $meta['description'] ?? __('Weline Framework - 现代化的PHP框架');
+$pageKeywords = $meta['keywords'] ?? __('Weline, Framework, PHP');
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
 
-// API 和 Account 模块的配置（如 tokenRefreshPeriod 等）会由模块内部自动从全局配置读取
-// i18n 模块的翻译词会由模块内部自动读取，无需在此处配置
-// 注意：翻译词字典由 PHP 在模板编译时收集，会传递给 i18n 模块
-
-// 获取开发模式状态
-$isDev = defined('DEV') && DEV;
-
-// 扫描可用的主题（从 colors 目录动态获取）
-$availableThemes = ['light']; // 默认主题
-try {
-    /**@var \Weline\Framework\App\Env $env */
-    $env = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\App\Env::class);
-    $modules = $env->getModuleList();
-    if (isset($modules['Weline_Theme'])) {
-        $themeModule = $modules['Weline_Theme'];
-        $themeBasePath = $themeModule['base_path'];
-        
-        // 检测当前区域（frontend 或 backend）
-        $area = 'frontend'; // 默认前端
-        $requestPath = $this->request->getPathInfo() ?? '';
-        if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
-            $area = 'backend';
-        }
-        
-        // 扫描 colors 目录
-        $colorsDir = $themeBasePath . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors';
-        if (is_dir($colorsDir)) {
-            $colorFiles = glob($colorsDir . DS . '_*.css');
-            $themes = [];
-            foreach ($colorFiles as $file) {
-                $basename = basename($file, '.css');
-                // 去掉下划线前缀，获取主题名称
-                if (strpos($basename, '_') === 0) {
-                    $themeName = substr($basename, 1);
-                    if (!empty($themeName)) {
-                        $themes[] = $themeName;
-                    }
-                }
-            }
-            if (!empty($themes)) {
-                $availableThemes = $themes;
-            }
-        }
-    }
-} catch (\Throwable $e) {
-    // 扫描失败时使用默认主题列表
-    if ($isDev) {
-        error_log('扫描主题失败: ' . $e->getMessage());
-    }
-}
-?>
-<meta charset="UTF-8">
-<base href="<?= $baseUrl ?>/">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
-<title><?= htmlspecialchars($pageTitle) ?></title>
-
-<!-- SEO Meta Tags -->
-<meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
-<meta name="keywords" content="<?= htmlspecialchars($pageKeywords) ?>">
-<meta name="author" content="<?= htmlspecialchars($siteName) ?>">
-<meta name="language" content="<?= $currentLang ?>">
-<meta name="currency" content="<?= $currentCurrency ?>">
-
-<!-- Open Graph / Facebook -->
-<meta property="og:type" content="website">
-<meta property="og:url" content="<?= $this->request->getUrlBuilder()->getCurrentUrl() ?>">
-<meta property="og:title" content="<?= htmlspecialchars($pageTitle) ?>">
-<meta property="og:description" content="<?= htmlspecialchars($pageDescription) ?>">
-<meta property="og:site_name" content="<?= htmlspecialchars($siteName) ?>">
-
-<!-- Twitter -->
-<meta property="twitter:card" content="summary_large_image">
-<meta property="twitter:url" content="<?= $this->request->getUrlBuilder()->getCurrentUrl() ?>">
-<meta property="twitter:title" content="<?= htmlspecialchars($pageTitle) ?>">
-<meta property="twitter:description" content="<?= htmlspecialchars($pageDescription) ?>">
-
-<!-- Favicon -->
-<link rel="Shortcut Icon" href="@static(Weline_Frontend::img/favicon.png)">
-<link rel="Bookmark" href="@static(Weline_Frontend::img/favicon.png)">
-<link rel="icon" type="image/png" href="@static(Weline_Frontend::img/favicon.png)">
-<w:block class='Weline\Frontend\Block\Header\Base' template='Weline_Frontend::header/base.phtml'/>
-
-<!--css-->
-<!--loading-->
-<css>Weline_Frontend::/libs/loading/loading.css</css>
-<css>Weline_Frontend::/libs/font-awesome-4.7.0/css/font-awesome.min.css</css>
-<!-- Bootstrap Css -->
-<css>Weline_Frontend::libs/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
-<!-- 主题CSS -->
-<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
-<?php
-// 根据主题模式加载颜色主题（优先使用预览配置）
-$session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-$previewThemeId = $session->getData('preview_theme_id');
-$area = 'frontend';
-$requestPath = $this->request->getPathInfo() ?? '';
-if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
-    $area = 'backend';
-}
-
-if ($previewThemeId) {
-    // 预览模式：使用预览配置
-    $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-    $theme->load($previewThemeId);
-    if ($theme->getId()) {
-        $themeMode = \Weline\Theme\Helper\LayoutScanner::getColorConfig($theme, $area);
-    } else {
-        $themeMode = $themeConfig->getThemeModel() ?: 'light';
-    }
-} else {
-    // 正常模式：使用用户配置
-    $themeMode = $themeConfig->getThemeModel() ?: 'light';
-}
-
-// 加载色系CSS文件
-if ($themeMode && $themeMode !== 'light'): ?>
-<theme:css>Weline_Theme::theme/<?= $area ?>/colors/_<?= $themeMode ?>.css</theme:css>
-<?php endif; 
-
-// 加载变量CSS文件（预览配置）
-if ($previewThemeId && isset($theme) && $theme->getId()) {
-    $variables = \Weline\Theme\Helper\LayoutScanner::getVariablesConfig($theme, $area);
-    foreach ($variables as $variable) {
-        if ($variable): ?>
-<theme:css>Weline_Theme::theme/<?= $area ?>/variables/_<?= $variable ?>.css</theme:css>
-<?php 
-        endif;
-    }
-}
-?>
-<!--JS-->
-<js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
-<?php if (DEV): ?>
-    <!--        <script src="@static(Weline_Frontend::/libs/jquery/3.6.0/jquery.map)"></script>-->
-<?php endif; ?>
-<?php
 $envConfig = [
-    'WELINE_ENV' => $isDev ? 'DEV' : 'PROD',
-    'DEV' => $isDev,
-    'PROD' => !$isDev,
+    'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+    'DEV' => DEV,
+    'PROD' => !DEV,
 ];
 // API 模块的 workerUrl 由 API 模块内部自动处理，无需在此处配置
 $themeConfigPayload = [
@@ -171,7 +104,7 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
-    'debug' => $isDev,
+    'debug' => DEV,
     'site' => [
         'name' => $siteName,
         'title' => $pageTitle,
@@ -188,92 +121,108 @@ $themeConfigPayload = [
     // Account 模块配置由 Account 模块内部自动处理，无需在此处配置
     // Account 模块会自动从全局配置读取所需配置，并处理 URL 解析
     'theme' => [
-        'current' => $themeMode,
-        'available' => $availableThemes, // 动态扫描的主题列表
+        'area' => $area,
+        'colorMode' => $welineThemeColorMode,
+        'layoutType' => $layoutType,
+        'layoutOption' => $layoutOption,
     ],
 ];
+    
+// 将配置数据序列化为JSON，供外部JS文件使用
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('envConfig', $envConfig);
 ?>
-<script>
+<!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<script data-no-extract="true">
     (function() {
-        window.WELINE_ENV = window.WELINE_ENV || '<?= $envConfig['WELINE_ENV'] ?>';
-        window.DEV = window.WELINE_ENV === 'DEV';
-        window.PROD = window.WELINE_ENV === 'PROD';
-        
-        // URL解析辅助函数（参考API文档界面的实现）
-        const getThemeUrlHelper = () => {
-            return (window.Weline && window.Weline.Url) || null;
-        };
-        
-        const resolveAbsoluteUrl = (path, options = {}) => {
-            if (!path) return '';
-            if (/^https?:\/\//i.test(path)) {
-                return path;
-            }
-            
-            const helper = getThemeUrlHelper();
-            if (helper && typeof helper.resolve === 'function') {
-                const opts = typeof options === 'string' ? { type: options } : (options || {});
-                return helper.resolve(path, opts);
-            }
-            
-            // Fallback: 直接返回绝对路径
-            const normalizedOrigin = window.location.origin.replace(/\/+$/, '');
-            const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-            return normalizedOrigin + '/' + cleanPath;
-        };
-        
-        // 设置配置
-        const themeConfigPayload = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
-        
-        // Account 模块配置由 Account 模块内部自动处理，无需在此处解析 URL
-        // Account 模块会自动处理 URL 解析和配置管理
-        
-        window.__WelineThemeConfig = themeConfigPayload;
+        // 合并到全局配置（与Frontend模块的配置合并）
+        // 注意：Frontend模块的head.phtml已经设置了modulesConfigUrl等配置
+        // 这里只合并Theme模块的配置，保留Frontend模块的配置
+        if (!window.__WelineThemeConfig) {
+            window.__WelineThemeConfig = {};
+        }
+        // 使用Object.assign合并，保留Frontend模块已设置的配置（如modulesConfigUrl）
+        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        // Object.assign会保留目标对象中源对象没有的属性，所以modulesConfigUrl会被保留
+        Object.assign(window.__WelineThemeConfig, themeConfig);
     })();
 </script>
-<!-- Token存储管理器（在theme.js之前加载） -->
-<js>Weline_Frontend::js/weline-api-token-storage.js</js>
-<!-- Switcher组件（在theme.js之前加载） -->
-<css>Weline_Frontend::css/weline-switcher.css</css>
-<js>Weline_Frontend::js/weline-switcher.js</js>
+<!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
+<!-- 注意：Token存储管理器、Switcher组件等 Frontend 资源由 Frontend 模块负责加载 -->
 <!-- 主题JS -->
 <theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
-<script>
-    /**
-     * 主题初始化（在theme.js加载后执行）
-     */
-    (function() {
-        'use strict';
-        
-        // 等待Weline对象初始化
-        function initTheme() {
-            if (window.Weline && window.Weline.Theme) {
-                // 初始化主题
-                window.Weline.Theme.init();
-                
-                // 触发主题初始化完成事件
-                window.dispatchEvent(new CustomEvent('weline:theme:initialized', {
-                    detail: {
-                        theme: window.Weline.Theme.getCurrent(),
-                        config: (window.Weline && window.Weline.config) || null
-                    }
-                }));
-            } else {
-                // 如果Weline未加载，延迟重试
-                setTimeout(initTheme, 100);
-            }
-        }
-        
-        // DOM加载完成后初始化
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initTheme);
-        } else {
-            setTimeout(initTheme, 0);
-        }
-    })();
-</script>
-<!--加载配置页头-->
-<?php
-echo $this->getHeader()->getHtml();
-?>
+<!-- 注意：getHeader()->getHtml() 由 Frontend 模块的 head.phtml 负责 -->
 
+<style>
+/* ========================================
+   Amazon风格 - Head初始化样式
+   ======================================== */
+
+/* 亚马逊风格主题色meta标签支持 */
+/* 这些样式会在编译时提取到布局CSS文件中 */
+
+/* 确保HTML元素使用亚马逊风格的基础设置 */
+html[data-theme="amazon"] {
+    /* 使用亚马逊配色变量 */
+    --amazon-primary: #ff9900;
+    --amazon-nav-dark: #131921;
+    --amazon-nav-secondary: #232f3e;
+    --amazon-text-primary: #111;
+    --amazon-text-secondary: #565959;
+    --amazon-link: #007185;
+    --amazon-link-hover: #c45500;
+    --amazon-bg: #fff;
+    --amazon-bg-secondary: #f3f3f3;
+}
+
+/* 基础字体优化（亚马逊风格） */
+html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 确保viewport正确设置 */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari特定优化 */
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+}
+</style>
+
+<script>
+// Amazon风格 - Head初始化脚本
+(function() {
+    'use strict';
+    
+    // 设置亚马逊主题标识
+    if (!document.documentElement.getAttribute('data-theme')) {
+        // 如果未设置主题，默认使用amazon主题
+        document.documentElement.setAttribute('data-theme', 'amazon');
+    }
+    
+    // 亚马逊风格配置增强
+    if (window.__WelineThemeConfig) {
+        // 添加亚马逊风格特定配置
+        window.__WelineThemeConfig.amazon = {
+            primaryColor: '#ff9900',
+            navDark: '#131921',
+            navSecondary: '#232f3e',
+            linkColor: '#007185',
+            linkHover: '#c45500'
+        };
+    }
+    
+    // 性能优化：预加载关键资源
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(function() {
+            // 在空闲时预加载可能需要的资源
+            const link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.href = window.__WelineThemeConfig?.baseUrl || '/';
+            document.head.appendChild(link);
+        });
+    }
+})();
+</script>

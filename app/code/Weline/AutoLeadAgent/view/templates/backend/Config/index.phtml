@@ -1,0 +1,476 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$configs = $this->getData('configs') ?? [];
+$keywordStrategyOptions = $this->getData('keyword_strategy_options') ?? [];
+$defaultConfigs = $this->getData('default_configs') ?? [];
+
+// 处理目标网站数组为文本
+$targetSites = $configs['default_target_sites'] ?? [];
+$targetSitesText = is_array($targetSites) ? implode("\n", $targetSites) : $targetSites;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('配置管理') ?></title>
+    <style>
+        .config-card {
+            margin-bottom: 1.5rem;
+        }
+        .config-card .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        .config-card .card-header i {
+            margin-right: 0.5rem;
+        }
+        .form-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        .form-text {
+            font-size: 0.85rem;
+        }
+        .input-group-text {
+            background-color: #f8f9fa;
+            font-size: 0.875rem;
+        }
+        .btn-save {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+        }
+        .btn-save:hover {
+            background: linear-gradient(135deg, #218838 0%, #1abc9c 100%);
+        }
+        .btn-reset {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            border: none;
+        }
+        .btn-reset:hover {
+            background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+        }
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+        }
+        .section-icon {
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('配置管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('auto-lead-agent/backend/index/index')"><?= __('自动寻客') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('配置管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="config-form">
+                    <div class="row">
+                        <!-- 左侧列 -->
+                        <div class="col-lg-6">
+                            <!-- 基础配置 -->
+                            <div class="card config-card">
+                                <div class="card-header">
+                                    <i class="mdi mdi-cog section-icon"></i>
+                                    <?= __('基础配置') ?>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="agent_interval" class="form-label">
+                                            <?= __('Agent执行间隔') ?>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="agent_interval" 
+                                                   name="agent_interval"
+                                                   value="<?= (int)($configs['agent_interval'] ?? 60) ?>"
+                                                   min="1" 
+                                                   max="3600">
+                                            <span class="input-group-text"><?= __('秒') ?></span>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('Agent每次执行的间隔时间') ?>（1-3600）
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="keyword_strategy" class="form-label">
+                                            <?= __('关键词策略') ?>
+                                        </label>
+                                        <select class="form-select" id="keyword_strategy" name="keyword_strategy">
+                                            <?php foreach ($keywordStrategyOptions as $value => $label): ?>
+                                                <option value="<?= $value ?>" 
+                                                    <?= ($configs['keyword_strategy'] ?? 'auto') === $value ? 'selected' : '' ?>>
+                                                    <?= $label ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <div class="form-text text-muted">
+                                            <?= __('选择搜索关键词的生成方式') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 评分配置 -->
+                            <div class="card config-card">
+                                <div class="card-header">
+                                    <i class="mdi mdi-star section-icon"></i>
+                                    <?= __('评分配置') ?>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="score_threshold" class="form-label">
+                                            <?= __('最低评分阈值') ?>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="score_threshold" 
+                                                   name="score_threshold"
+                                                   value="<?= (int)($configs['score_threshold'] ?? 60) ?>"
+                                                   min="0" 
+                                                   max="100">
+                                            <span class="input-group-text"><?= __('分') ?></span>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('只有评分高于此阈值的客户才会被记录') ?>（0-100）
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- API配置 -->
+                            <div class="card config-card">
+                                <div class="card-header">
+                                    <i class="mdi mdi-api section-icon"></i>
+                                    <?= __('API配置') ?>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="api_rate_limit" class="form-label">
+                                            <?= __('API调用频率') ?>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="api_rate_limit" 
+                                                   name="api_rate_limit"
+                                                   value="<?= (int)($configs['api_rate_limit'] ?? 100) ?>"
+                                                   min="1" 
+                                                   max="1000">
+                                            <span class="input-group-text"><?= __('次/分钟') ?></span>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('每分钟最大API调用次数') ?>（1-1000）
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0">
+                                        <label for="max_concurrent_tasks" class="form-label">
+                                            <?= __('最大并发任务数') ?>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="max_concurrent_tasks" 
+                                                   name="max_concurrent_tasks"
+                                                   value="<?= (int)($configs['max_concurrent_tasks'] ?? 3) ?>"
+                                                   min="1" 
+                                                   max="10">
+                                            <span class="input-group-text"><?= __('个') ?></span>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('同时运行的最大任务数量') ?>（1-10）
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧列 -->
+                        <div class="col-lg-6">
+                            <!-- WASM模型配置 -->
+                            <div class="card config-card">
+                                <div class="card-header">
+                                    <i class="mdi mdi-cube-outline section-icon"></i>
+                                    <?= __('WASM模型配置') ?>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="wasm_model_enabled" 
+                                                   name="wasm_model_enabled"
+                                                   value="1"
+                                                   <?= ($configs['wasm_model_enabled'] ?? true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="wasm_model_enabled">
+                                                <?= __('启用WASM模型') ?>
+                                            </label>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('启用浏览器端侧WASM模型进行智能分析') ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0">
+                                        <label for="wasm_inference_timeout" class="form-label">
+                                            <?= __('推理超时时间') ?>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="wasm_inference_timeout" 
+                                                   name="wasm_inference_timeout"
+                                                   value="<?= (int)($configs['wasm_inference_timeout'] ?? 30000) ?>"
+                                                   min="1000" 
+                                                   max="120000">
+                                            <span class="input-group-text"><?= __('毫秒') ?></span>
+                                        </div>
+                                        <div class="form-text text-muted">
+                                            <?= __('WASM模型单次推理的最大等待时间') ?>（1000-120000）
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 目标网站配置 -->
+                            <div class="card config-card">
+                                <div class="card-header">
+                                    <i class="mdi mdi-web section-icon"></i>
+                                    <?= __('目标网站配置') ?>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-0">
+                                        <label for="default_target_sites" class="form-label">
+                                            <?= __('默认目标网站') ?>
+                                        </label>
+                                        <textarea class="form-control" 
+                                                  id="default_target_sites" 
+                                                  name="default_target_sites"
+                                                  rows="6"
+                                                  placeholder="linkedin.com&#10;twitter.com&#10;facebook.com"><?= htmlspecialchars($targetSitesText) ?></textarea>
+                                        <div class="form-text text-muted">
+                                            <?= __('用于搜索潜在客户的默认社交媒体网站，每行一个') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 操作按钮 -->
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <button type="button" 
+                                                class="btn btn-secondary btn-reset" 
+                                                id="btn-reset-config"
+                                                onclick="resetConfig()">
+                                            <i class="mdi mdi-refresh"></i> <?= __('重置为默认') ?>
+                                        </button>
+                                        <button type="submit" 
+                                                class="btn btn-primary btn-save" 
+                                                id="btn-save-config">
+                                            <i class="mdi mdi-content-save"></i> <?= __('保存配置') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<!-- 确认重置对话框 -->
+<div class="modal fade" id="resetConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-alert-circle text-warning me-2"></i>
+                    <?= __('确认重置') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><?= __('是否确认重置所有配置为默认值？') ?></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-danger" id="btn-confirm-reset">
+                    <?= __('确认重置') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 表单提交
+    var form = document.getElementById('config-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveConfig();
+        });
+    }
+    
+    // 确认重置按钮
+    var confirmResetBtn = document.getElementById('btn-confirm-reset');
+    if (confirmResetBtn) {
+        confirmResetBtn.addEventListener('click', function() {
+            doResetConfig();
+        });
+    }
+});
+
+function saveConfig() {
+    var form = document.getElementById('config-form');
+    var btn = document.getElementById('btn-save-config');
+    var originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('正在保存...') ?>';
+    
+    var formData = new FormData(form);
+    
+    // 处理checkbox
+    if (!formData.has('wasm_model_enabled')) {
+        formData.set('wasm_model_enabled', '0');
+    }
+    
+    var currentPath = window.location.pathname;
+    var saveUrl = currentPath.replace(/\/[^\/]+$/, '/save');
+    
+    fetch(saveUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(result) {
+        if (result.success) {
+            showToast('success', result.message || '<?= __('配置保存成功') ?>');
+        } else {
+            showToast('error', result.message || '<?= __('配置保存失败') ?>');
+        }
+    })
+    .catch(function(error) {
+        console.error('Save config error:', error);
+        showToast('error', '<?= __('配置保存失败') ?>');
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
+
+function resetConfig() {
+    var modal = new bootstrap.Modal(document.getElementById('resetConfirmModal'));
+    modal.show();
+}
+
+function doResetConfig() {
+    var btn = document.getElementById('btn-confirm-reset');
+    var originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('正在重置...') ?>';
+    
+    var currentPath = window.location.pathname;
+    var resetUrl = currentPath.replace(/\/[^\/]+$/, '/reset');
+    
+    fetch(resetUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(result) {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('resetConfirmModal'));
+        if (modal) {
+            modal.hide();
+        }
+        
+        if (result.success) {
+            showToast('success', result.message || '<?= __('配置已重置为默认值') ?>');
+            // 刷新页面以加载默认配置
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('error', result.message || '<?= __('重置配置失败') ?>');
+        }
+    })
+    .catch(function(error) {
+        console.error('Reset config error:', error);
+        showToast('error', '<?= __('重置配置失败') ?>');
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    });
+}
+
+function showToast(type, message) {
+    // 如果有全局的 toast 函数则使用，否则使用 alert
+    if (typeof Toastify !== 'undefined') {
+        Toastify({
+            text: message,
+            duration: 3000,
+            gravity: 'top',
+            position: 'right',
+            backgroundColor: type === 'success' ? '#28a745' : '#dc3545'
+        }).showToast();
+    } else if (typeof toastr !== 'undefined') {
+        toastr[type](message);
+    } else {
+        alert(message);
+    }
+}
+</script>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>

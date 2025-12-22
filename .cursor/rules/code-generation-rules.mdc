@@ -49,6 +49,138 @@ description: |
   - **必须**确保子类属性的类型声明与父类完全一致
   - 即使子类型继承自父类型，属性声明也必须使用父类型
 
+  ### 5. 模板标签和PHP变量（重要）
+
+  - **禁止**在自定义标签（如 `<theme:css>`, `<theme:js>`, `<theme:template>` 等）的内容中使用PHP变量
+  - **原因**：标签解析器在PHP代码执行之前处理标签，导致PHP变量无法被正确解析
+  - **错误示例**：
+    ```php
+    // ❌ 错误：标签内容中的PHP变量无法被解析
+    <theme:css><?= htmlspecialchars($layoutCssPath) ?></theme:css>
+    ```
+  - **正确做法**：
+    ```php
+    // ✅ 正确：在PHP代码块中获取URL，然后直接输出HTML
+    <?php
+    $cssUrl = $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, $layoutCssPath);
+    ?>
+    <link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+    ```
+  - **规则**：
+    1. 如果需要在标签中使用动态值，必须在PHP代码块中先获取值，然后直接输出HTML标签
+    2. 不要在标签内容中使用 `<?= $variable ?>` 这样的PHP代码
+    3. 如果标签支持属性，可以使用属性传递值（如果标签解析器支持）
+    4. 对于静态路径，可以直接在标签内容中使用字符串，但不要使用PHP变量
+
+  ### 5.1 模板变量输出规范（强制）
+
+  - **核心规则**：在 `app/code/Weline/Theme/view/theme` 目录下的模板文件中，**必须**使用模板标签输出变量，**禁止**使用 `<?= $variable ?>` PHP语法
+  - **两种输出方式**：
+    1. **`{{variable}}` 标签**：`{{variable}}` - 推荐，简洁明了
+    2. **`<var>` 标签**：`<var>variable</var>` - 适用于需要标签形式的场景
+  - **使用场景**：
+    - ✅ **HTML内容输出**：使用 `{{variable}}` 或 `<var>variable</var>` 输出HTML内容
+    - ✅ **属性值输出**：在HTML属性中使用 `{{variable}}`（如果框架支持）
+    - ✅ **条件输出**：结合 `<if>` 标签使用
+  - **禁止使用的方式**：
+    - ❌ `<?= $variable ?>` - 禁止使用PHP短标签输出变量
+    - ❌ `<?php echo $variable; ?>` - 禁止使用PHP echo输出变量
+    - ❌ `<?= htmlspecialchars($variable) ?>` - 对于需要转义的变量，应使用框架提供的转义机制或保留PHP代码块（特殊情况）
+  - **特殊情况处理**：
+    - **需要转义的变量**：如果变量需要HTML转义（如 `htmlspecialchars($class)`），可以保留PHP代码块，但应优先考虑使用框架提供的转义机制
+    - **复杂表达式**：如果输出涉及复杂PHP表达式（如三元运算符、函数调用等），可以保留PHP代码块
+    - **URL拼接**：如果涉及URL拼接（如 `$frontendUrl . 'search'`），可以保留PHP代码块
+  - **正确使用方式**：
+    ```php
+    <!-- ✅ 正确：使用 {{}} 标签输出变量 -->
+    <section class="homepage-section">
+        {{features}}
+    </section>
+    
+    <!-- ✅ 正确：使用 <var> 标签输出变量 -->
+    <main class="main-content">
+        <var>content</var>
+    </main>
+    
+    <!-- ✅ 正确：结合条件标签使用 -->
+    <if condition="$showFeatures && $features">
+        <section class="homepage-section">
+            {{features}}
+        </section>
+    </if>
+    
+    <!-- ⚠️ 特殊情况：需要转义的变量可以保留PHP代码 -->
+    <main class="main-content <?= htmlspecialchars($class ?? '') ?>">
+        {{content}}
+    </main>
+    
+    <!-- ⚠️ 特殊情况：URL拼接可以保留PHP代码 -->
+    <a href="<?= $frontendUrl ?>search">搜索</a>
+    
+    <!-- ❌ 错误：使用PHP短标签输出简单变量 -->
+    <section class="homepage-section">
+        <?= $features ?>
+    </section>
+    
+    <!-- ❌ 错误：使用PHP echo输出变量 -->
+    <main class="main-content">
+        <?php echo $content; ?>
+    </main>
+    ```
+  - **规则**：
+    1. **优先使用模板标签**：所有简单变量输出必须使用 `{{variable}}` 或 `<var>variable</var>`
+    2. **特殊情况保留PHP**：只有需要转义、复杂表达式、URL拼接等特殊情况才保留PHP代码块
+    3. **统一风格**：同一项目中应统一使用 `{{}}` 或 `<var>` 标签，推荐使用 `{{}}`
+    4. **框架兼容**：确保使用的标签语法与框架模板引擎兼容
+
+  ### 6. CSS样式编写规范（重要）
+
+  - **禁止**使用 `!important` 声明
+  - **原因**：`!important` 会破坏CSS的层叠规则，导致样式难以维护和覆盖
+  - **错误示例**：
+    ```css
+    /* ❌ 错误：使用 !important */
+    .header-belt {
+        display: flex !important;
+        align-items: center !important;
+    }
+    ```
+  - **正确做法**：通过提高选择器优先级来解决问题
+    ```css
+    /* ✅ 正确：使用更具体的选择器 */
+    .weline-page-wrapper .weline-header .header-belt {
+        display: flex;
+        align-items: center;
+    }
+    
+    /* ✅ 正确：使用属性选择器提高优先级 */
+    .weline-header.header-sticky .header-belt {
+        display: flex;
+        align-items: center;
+    }
+    
+    /* ✅ 正确：使用ID选择器（如果必要） */
+    #main-header .header-belt {
+        display: flex;
+        align-items: center;
+    }
+    ```
+  - **规则**：
+    1. 使用更具体的选择器（增加类名、标签名、伪类等）来提高优先级
+    2. 使用属性选择器提高优先级
+    3. 确保CSS加载顺序正确（布局CSS应该在主题CSS之后加载）
+    4. 如果必须覆盖第三方库样式，使用更具体的选择器而不是 `!important`
+    5. **例外情况**（允许使用 `!important`）：
+       - 工具类（如 `.hidden`, `.sr-only` 等）可以使用 `!important`，因为这些类本身就是用来强制覆盖其他样式的
+       - 必须在注释中说明使用 `!important` 的原因
+       - 示例：
+         ```css
+         /* 工具类：强制隐藏元素，允许使用 !important */
+         .hidden {
+             display: none !important;
+         }
+         ```
+
   ### 5. XML 配置文件
 
   - **事件配置文件名称**：**必须**使用 `etc/event.xml`（单数），**禁止**使用 `events.xml`（复数）
@@ -91,6 +223,148 @@ description: |
     - 可空字段使用 `''`（空字符串），非空字段使用 `'not null'`
   - **复杂表达式**：必须正确嵌套括号，确保 null 合并运算符优先级正确
 
+  ### 6.1 DEV 常量使用规范（强制）
+
+  - **核心规则**：`DEV` 常量在框架中**一定存在**，不需要使用 `defined('DEV')` 检查
+  - **禁止的方式**：
+    - ❌ `$isDev = defined('DEV') && DEV;` - 不需要检查 `defined('DEV')`
+    - ❌ `if (defined('DEV') && DEV) { ... }` - 不需要检查 `defined('DEV')`
+  - **正确使用方式**：
+    - ✅ `$isDev = DEV;` - 直接使用 `DEV` 常量
+    - ✅ `if (DEV) { ... }` - 直接使用 `DEV` 常量进行判断
+  - **示例代码**：
+    ```php
+    // ✅ 正确：直接使用 DEV 常量
+    $isDev = DEV;
+    if (DEV) {
+        // 开发模式代码
+    }
+    
+    // ❌ 错误：不必要的 defined() 检查
+    $isDev = defined('DEV') && DEV;
+    if (defined('DEV') && DEV) {
+        // 开发模式代码
+    }
+    ```
+
+  ### 6.2 Area 区域判断规范（强制）
+
+  - **核心规则**：在特定目录下的模板文件中，`$area` 值已经由文件路径确定，**不需要**通过请求路径判断前后端
+  - **禁止的方式**：
+    - ❌ 在 `view/theme/frontend/` 目录下的文件中判断前后端：`$area = 'frontend'; if (strpos($requestPath, '/admin') === 0) { $area = 'backend'; }`
+    - ❌ 在 `view/theme/backend/` 目录下的文件中判断前后端：`$area = 'frontend'; if (strpos($requestPath, '/admin') === 0) { $area = 'backend'; }`
+  - **正确使用方式**：
+    - ✅ 在 `view/theme/frontend/` 目录下的文件中：直接使用 `$area = 'frontend';`
+    - ✅ 在 `view/theme/backend/` 目录下的文件中：直接使用 `$area = 'backend';`
+  - **示例代码**：
+    ```php
+    // ✅ 正确：在 frontend 目录下的文件中直接使用
+    // 文件路径：app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml
+    $area = 'frontend';
+    
+    // ✅ 正确：在 backend 目录下的文件中直接使用
+    // 文件路径：app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml
+    $area = 'backend';
+    
+    // ❌ 错误：在 frontend 目录下的文件中判断前后端
+    // 文件路径：app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml
+    $area = 'frontend';
+    $requestPath = $this->request->getPathInfo() ?? '';
+    if (strpos($requestPath, '/admin') === 0 || strpos($requestPath, '/backend') === 0) {
+        $area = 'backend';
+    }
+    ```
+
+  ### 6.3 模块路径获取规范（强制）
+
+  - **核心规则**：在模块内部的模板文件中，如果需要获取当前模块的 base_path，**应该直接使用 `__DIR__` 向上查找**，**不需要**通过 `$env->getModuleList()` 获取所有模块列表再判断
+  - **禁止的方式**：
+    - ❌ `$env->getModuleList(); if (isset($modules['Weline_Theme'])) { $themeBasePath = $modules['Weline_Theme']['base_path']; }` - 不需要获取模块列表再判断
+    - ❌ 通过 Env 获取模块列表，然后查找特定模块
+  - **正确使用方式**：
+    - ✅ 使用 `dirname(__DIR__, N)` 从当前文件向上 N 级获取模块根目录（根据文件在模块中的深度计算）
+    - ✅ 例如：文件在 `app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml`，向上5级就是模块根目录：`dirname(__DIR__, 5)`
+  - **示例代码**：
+    ```php
+    // ✅ 正确：直接使用 __DIR__ 获取模块 base_path
+    // 文件路径：app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml
+    // 向上5级：head -> partials -> frontend -> theme -> view -> 模块根目录
+    $themeBasePath = dirname(__DIR__, 5);
+    
+    // ✅ 正确：文件在 app/code/Weline/Theme/view/templates/default.phtml
+    // 向上3级：default.phtml -> templates -> view -> 模块根目录
+    $moduleBasePath = dirname(__DIR__, 3);
+    
+    // ❌ 错误：通过模块列表获取
+    $env = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\App\Env::class);
+    $modules = $env->getModuleList();
+    if (isset($modules['Weline_Theme'])) {
+        $themeBasePath = $modules['Weline_Theme']['base_path'];
+    }
+    ```
+
+  ### 6.4 模板变量设置规范（强制）
+
+  - **核心规则**：**禁止**在模板文件中使用 `$this->setData()` 设置变量，模板中的变量本来就在模板数据中，再设置一遍没用且浪费性能
+  - **禁止的方式**：
+    - ❌ `$this->setData('area', $area);` - 禁止在模板中设置变量
+    - ❌ `$this->setData('variable', $variable);` - 禁止在模板中设置变量
+    - ❌ 在模板中定义变量后，再通过 `setData` 设置到模板数据中
+  - **正确使用方式**：
+    - ✅ 如果变量已经在模板数据中（通过 `getData()` 可以获取到），直接在模板标签中使用 `{{variable}}`
+    - ✅ 如果变量是已知的固定值（如 `frontend` 目录下的文件，`area` 就是 `frontend`），直接在模板标签中使用固定值或 `{{variable}}`
+    - ✅ 变量应该由控制器、观察者或其他上层逻辑设置，而不是在模板中设置
+  - **示例代码**：
+    ```php
+    // ✅ 正确：直接使用变量，不设置到模板数据中
+    $area = 'frontend'; // 仅用于本地逻辑
+    // 在模板标签中直接使用固定值或变量（如果已在模板数据中）
+    <theme:css>Weline_Theme::theme/frontend/variables/_colors.css</theme:css>
+    // 或者如果 area 已在模板数据中：
+    <theme:css>Weline_Theme::theme/{{area}}/variables/_colors.css</theme:css>
+    
+    // ❌ 错误：在模板中设置变量
+    $area = 'frontend';
+    $this->setData('area', $area); // 禁止！模板中的变量本来就在，再设置一遍没用
+    <theme:css>Weline_Theme::theme/{{area}}/variables/_colors.css</theme:css>
+    
+    // ❌ 错误：重复定义变量
+    $area = 'frontend'; // 第一次定义
+    // ... 其他代码 ...
+    $area = 'frontend'; // 重复定义，应该移除
+    ```
+
+  ### 6.5 性能优化规范（强制）
+
+  - **核心规则**：**禁止**在模板文件中进行不必要的文件系统扫描操作（如 `glob()`, `scandir()`, `is_dir()` + 循环等），这些操作会浪费性能且通常没有实际用途
+  - **禁止的方式**：
+    - ❌ 扫描目录获取文件列表（如扫描 `colors` 目录获取主题列表）
+    - ❌ 使用 `glob()` 或 `scandir()` 遍历文件系统
+    - ❌ 在每次页面加载时进行文件系统操作
+  - **正确使用方式**：
+    - ✅ 如果需要动态数据，应该通过配置或数据库获取，而不是扫描文件系统
+    - ✅ 如果数据是静态的，直接使用硬编码的默认值
+    - ✅ 如果确实需要文件系统操作，应该在后台任务或缓存中处理，而不是在模板渲染时
+  - **示例代码**：
+    ```php
+    // ❌ 错误：扫描文件系统获取主题列表（浪费性能）
+    $availableThemes = ['default'];
+    try {
+        $themeBasePath = dirname(__DIR__, 5);
+        $colorsDir = $themeBasePath . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors';
+        if (is_dir($colorsDir)) {
+            $colorFiles = glob($colorsDir . DS . '_*.css');
+            // ... 扫描处理 ...
+        }
+    } catch (\Throwable $e) {
+        // ...
+    }
+    
+    // ✅ 正确：直接使用默认值或从配置获取
+    $availableThemes = ['default']; // 直接使用默认值
+    // 或者从配置获取：$availableThemes = $config->getAvailableThemes();
+    ```
+
   ### 7. 模板加载规范（强制）
 
   - **必须使用模板标签**：所有模板引用必须使用模板标签，禁止使用 `$this->fetch()` 或 `echo $this->fetch()` 方式加载模板
@@ -123,6 +397,117 @@ description: |
     <!-- ❌ 错误：使用 fetch() 方法 -->
     <?php echo $this->fetch('Weline_Theme::theme/frontend/components/loading.phtml'); ?>
     <?= $this->fetch('Weline_Frontend::templates/public/header.phtml') ?>
+    ```
+
+  ### 7.1 模板条件判断规范（强制）
+
+  - **核心规则**：模板文件中的条件判断**必须使用 `<if>` 标签**，**禁止使用 PHP 的 `<?php if ?>` 语句**
+  - **原因**：使用标签语法更简洁、更易读，符合框架模板规范
+  - **禁止的方式**：
+    - ❌ `<?php if ($condition): ?>` - 禁止使用 PHP if 语句
+    - ❌ `<?php if ($a && $b): ?>` - 禁止使用 PHP if 语句
+    - ❌ `<?php endif; ?>` - 禁止使用 PHP endif
+  - **正确使用方式**：
+    - ✅ **使用 `<if>` 标签**：`<if condition="$condition">` - 推荐使用标签格式
+    - ✅ **支持复杂条件**：`<if condition="$showFeatures && $features">` - 支持所有 PHP 表达式
+    - ✅ **支持逻辑运算符**：`<if condition="$a > 0 && $b > 0">` - 支持 `&&`、`||`、`!` 等
+    - ✅ **闭合标签**：使用 `</if>` 闭合，而不是 `<?php endif; ?>`
+  - **语法格式**：
+    ```html
+    <!-- ✅ 正确：使用 <if> 标签 -->
+    <if condition="$showHeader">
+        <div>Header内容</div>
+    </if>
+    
+    <!-- ✅ 正确：复杂条件 -->
+    <if condition="$showFeatures && $features">
+        <section class="features">
+            <?= $features ?>
+        </section>
+    </if>
+    
+    <!-- ✅ 正确：支持 else -->
+    <if condition="$isLoggedIn">
+        <p>欢迎回来！</p>
+        <else/>
+        <p>请先登录</p>
+    </if>
+    
+    <!-- ❌ 错误：使用 PHP if 语句 -->
+    <?php if ($showHeader): ?>
+        <div>Header内容</div>
+    <?php endif; ?>
+    
+    <!-- ❌ 错误：使用 PHP if 语句 -->
+    <?php if ($showFeatures && $features): ?>
+        <section class="features">
+            <?= $features ?>
+        </section>
+    <?php endif; ?>
+    ```
+  - **注意事项**：
+    1. `condition` 属性必填，必须提供条件表达式
+    2. 条件表达式支持所有 PHP 表达式语法
+    3. 变量路径会自动解析（如 `$user.name`）
+    4. 支持嵌套使用 `<if>` 标签
+    5. 可以使用 `<elseif condition="..."/>` 和 `<else/>` 处理多分支条件
+  - **相关文档**：参考 `app/code/Weline/Framework/doc/4-内置标签/03-if-elseif-else标签使用指南.md`
+
+  ### 7.2 模板标签内禁止使用PHP代码（强制）
+
+  - **核心规则**：模板标签（如 `<theme:js>`, `<theme:css>`, `<w:template>`, `<theme:template>` 等）内**绝对禁止**使用PHP代码
+  - **禁止的方式**：
+    - ❌ `<theme:js><?= $this->getData('path') ?></theme:js>` - 标签内不能使用 `<?= ?>` 或任何PHP代码
+    - ❌ `<theme:css><?php echo $path; ?></theme:css>` - 标签内不能使用 `<?php ?>` 代码块
+    - ❌ `<w:template><?= $templatePath ?></w:template>` - 标签内不能使用PHP表达式
+    - ❌ `<theme:js><?= htmlspecialchars($layoutJsFullPath) ?></theme:js>` - 标签内不能使用任何PHP代码，包括 `<?= ?>` 短标签
+    - ❌ **禁止使用 echo 输出标签**：不能在PHP块中使用 `echo "<theme:js>...</theme:js>"` 输出标签字符串
+  - **正确使用方式**：
+    - ✅ **使用模板变量替换语法**：`<theme:js>{{layoutJsPath}}</theme:js>` - 使用 `{{variable}}` 语法（编译时处理）
+    - ✅ **直接使用模板变量**：如果变量已经通过 `$this->getData()` 获取到，说明它已经在模板数据中，可以直接在标签中使用 `{{variable}}`，**不需要再次 setData**
+    - ✅ **固定值直接使用**：在特定布局文件中，如果某些值已经确定（如 `homepage/default.phtml` 中 `layoutType` 就是 `homepage`），直接使用固定值，不需要读取变量
+    - ✅ **条件输出**：在PHP块中判断，然后输出完整的标签（标签内容为完整字符串路径，不使用PHP代码）
+  - **简化原则**：
+    - ✅ **避免不必要的 setData**：如果变量已经通过 `getData` 获取到，说明它已经在模板数据中，不需要再次 `setData`，可以直接在标签中使用 `{{variable}}`
+    - ✅ **避免读取已确定的值**：在特定布局文件中（如 `homepage/default.phtml`），如果 `layoutType` 已经确定是 `homepage`，直接使用固定值，不需要读取 `layoutType` 变量
+  - **示例代码**：
+    ```php
+    <!-- ✅ 正确：直接使用模板变量（变量已在模板数据中，不需要 setData） -->
+    <theme:js>Weline_Theme::theme/frontend/assets/js/layouts/homepage/{{layoutOption}}.js</theme:js>
+    
+    <!-- ✅ 正确：在特定布局文件中，layoutType 已确定，直接使用固定值 -->
+    <!-- 在 homepage/default.phtml 中 -->
+    <theme:js>Weline_Theme::theme/frontend/assets/js/layouts/homepage/{{layoutOption}}.js</theme:js>
+    
+    <!-- ✅ 正确：在 partial 中，需要读取 layoutType（因为会被不同布局调用） -->
+    <!-- 在 head/default.phtml 中 -->
+    <theme:css>Weline_Theme::theme/{{area}}/assets/css/layouts/{{layoutType}}/{{layoutOption}}.css</theme:css>
+    
+    <!-- ✅ 正确：使用 <if> 标签条件输出完整标签（标签内容为完整字符串路径） -->
+    <if condition="$needLoad">
+    <theme:js>Weline_Theme::theme/frontend/assets/js/layout.js</theme:js>
+    </if>
+    
+    <!-- ❌ 错误：在标签内使用PHP代码 -->
+    <theme:js><?= $this->getData('layoutJsPath') ?></theme:js>
+    <theme:css><?php echo $cssPath; ?></theme:css>
+    <theme:js><?= htmlspecialchars($layoutJsFullPath) ?></theme:js>
+    
+    <!-- ❌ 错误：使用 echo 输出标签 -->
+    <?php echo '<theme:js>' . $layoutJsFullPath . '</theme:js>'; ?>
+    
+    <!-- ❌ 错误：不必要的 setData（变量已在模板数据中） -->
+    <?php
+    $layoutOption = $this->getData('layoutOption') ?? 'default';
+    $this->setData('layoutOption', $layoutOption); // 不需要，变量已在模板数据中
+    ?>
+    <theme:js>{{layoutOption}}</theme:js>
+    
+    <!-- ❌ 错误：在特定布局文件中读取已确定的值 -->
+    <!-- 在 homepage/default.phtml 中 -->
+    <?php
+    $layoutType = $this->getData('layoutType') ?? 'homepage'; // 不需要，layoutType 已确定是 homepage
+    ?>
     ```
 
   ### 8. 主题色系和样式规范（重要）
@@ -172,10 +557,22 @@ description: |
   7.1. ✅ **路由和控制器**：添加新控制器后是否运行 `php bin/w setup:upgrade --route` 更新路由
   7.2. ✅ **路由配置**：是否禁止使用 `routes.xml` 文件，使用路由自动注册机制
   7.3. ✅ **模板加载规范（强制）**：是否使用 `<w:template>` 标签加载模板，禁止使用 `$this->fetch()` 或 `echo $this->fetch()` 方式
+  7.3.1. ✅ **模板条件判断规范（强制）**：模板文件中的条件判断是否使用 `<if>` 标签，禁止使用 PHP 的 `<?php if ?>` 语句
+  7.4. ✅ **模板标签内禁止PHP代码（强制）**：模板标签（`<theme:js>`, `<theme:css>`, `<w:template>` 等）内是否禁止使用PHP代码（`<?= ?>`, `<?php ?>`）
+  7.5. ✅ **模板标签内禁止PHP代码（强制）**：是否禁止使用 `echo` 输出标签字符串
+  7.6. ✅ **模板标签内禁止PHP代码（强制）**：动态路径是否使用 `{{variable}}` 语法，而不是在标签内使用PHP代码
+  7.7. ✅ **代码简化（强制）**：是否避免不必要的 `setData`（如果变量已通过 `getData` 获取到，说明它已在模板数据中，不需要再次 `setData`）
+  7.8. ✅ **代码简化（强制）**：在特定布局文件中，是否避免读取已确定的值（如 `homepage/default.phtml` 中 `layoutType` 已确定是 `homepage`，直接使用固定值）
   8. ✅ **PHP 8.2+ 兼容性**：所有 `htmlspecialchars()` 调用是否使用 `?? ''` 处理 null
   9. ✅ **PHP 8.2+ 兼容性**：所有 `json_decode()` 调用是否使用 `?? ''` 处理 null
   10. ✅ **PHP 8.2+ 兼容性**：`addColumn()` 的 `$options` 参数是否使用 `''` 而不是 `null`
   11. ✅ **PHP 8.2+ 兼容性**：所有可能接收 null 的字符串/数组函数是否已处理
+  11.1. ✅ **DEV 常量使用规范（强制）**：是否直接使用 `DEV` 常量，禁止使用 `defined('DEV') && DEV` 这种不必要的检查
+  11.2. ✅ **Area 区域判断规范（强制）**：在 `frontend` 或 `backend` 目录下的模板文件中，是否直接使用对应的 `$area` 值，禁止通过请求路径判断前后端
+  11.3. ✅ **模块路径获取规范（强制）**：在模块内部的模板文件中，是否直接使用 `dirname(__DIR__, N)` 获取模块 base_path，禁止通过 `$env->getModuleList()` 获取模块列表再判断
+  11.4. ✅ **模板变量设置规范（强制）**：是否禁止在模板文件中使用 `$this->setData()` 设置变量，模板中的变量本来就在模板数据中，再设置一遍没用且浪费性能
+  11.5. ✅ **性能优化规范（强制）**：是否禁止在模板文件中进行不必要的文件系统扫描操作（如 `glob()`, `scandir()` 等），避免浪费性能
+  11.6. ✅ **调试代码规范（强制）**：是否禁止在模板phtml代码中写入日志调试代码（如 `$logger->debug()`），如需调试应使用 `dd()` 函数，调试完成后必须删除 `dd()` 调用
   12. ✅ **主题色系规范**：所有颜色是否使用CSS变量，禁止硬编码
   13. ✅ **主题色系规范**：是否同时支持明暗主题切换
   14. ✅ **主题色系规范**：滚动条是否遵循主题规范（6px宽度，使用CSS变量）
@@ -383,16 +780,23 @@ description: |
       - ❌ 硬编码中文：`<button>保存</button>`
       - ❌ 硬编码英文：`<button>Save</button>`
       - ❌ 在 HTML 属性中硬编码：`title="删除"`、`placeholder="请输入名称"`
+      - ❌ **在 HTML 属性中使用 PHP 语法**：`title="<?= __('删除') ?>"`、`aria-label="<?= __('搜索') ?>"` - **严格禁止**
       - ❌ 在 HTML 内容中使用 `<?= __('保存') ?>`：应使用 `<lang>保存</lang>`
       - ❌ 在页面内联 JavaScript 中定义 i18nTexts 变量：应直接使用 `@lang()` 标签
       - ❌ 在外部引入的 JS 文件中直接使用 `@lang()`：应使用全局翻译变量
     - **正确使用方式**：
       - ✅ `<lang>` 标签（推荐）：`<button><lang>保存</lang></button>`
-      - ✅ `<lang>` 标签在属性中：`<input placeholder="<lang>请输入用户名</lang>" />`
-      - ✅ `@lang()` 函数：`title="@lang('删除')"`
+      - ✅ `<lang>` 标签在属性中（推荐）：`<input placeholder="<lang>请输入用户名</lang>" />`、`<a title="<lang>删除</lang>">`、`<button aria-label="<lang>搜索</lang>">`
+      - ✅ `@lang()` 函数在属性中：`title="@lang(删除)"`、`aria-label="@lang(搜索)"`
       - ✅ 页面内联 JavaScript 中使用 `@lang()`：`throw new Error('@lang(请求失败)');`
       - ✅ 外部 JS 文件中使用全局翻译变量：`alert(window.i18nTexts.save);`
       - ✅ PHP 代码块中使用 `__()` 函数：`<?php echo __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]); ?>`
+    - **模板属性翻译规则（强制）**：
+      - **严格禁止在 HTML 属性中使用 PHP 语法**：所有 HTML 属性中的翻译必须使用 `<lang>` 标签或 `@lang()` 函数
+      - ❌ **禁止**：`title="<?= __('删除') ?>"`、`aria-label="<?= __('搜索') ?>"`、`placeholder="<?= __('请输入') ?>"`
+      - ✅ **必须**：`title="<lang>删除</lang>"` 或 `title="@lang(删除)"`
+      - ✅ **必须**：`aria-label="<lang>搜索</lang>"` 或 `aria-label="@lang(搜索)"`
+      - ✅ **必须**：`placeholder="<lang>请输入用户名</lang>"` 或 `placeholder="@lang(请输入用户名)"`
     - **示例代码**：
       ```php
       <!-- ✅ 正确：优先使用 <lang> 标签 -->

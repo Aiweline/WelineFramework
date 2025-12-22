@@ -45,7 +45,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public string $group_by = '';
     public string $having = '';
 
-    protected ?PDOStatement $PDOStatement = null;
+    public ?PDOStatement $PDOStatement = null;
     public string $sql = '';
     public string $additional_sql = '';
 
@@ -62,11 +62,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function table(string $table_name): QueryInterface
-    {
-        $this->table = $this->getTable($table_name);
-        return $this;
-    }
 
     public function insertOld(array $data, array|string $update_fields = [], string $update_where_fields = '', bool $ignore_primary_key = false): QueryInterface
     {

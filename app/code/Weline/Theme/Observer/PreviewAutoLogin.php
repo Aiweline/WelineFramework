@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -80,7 +81,7 @@ class PreviewAutoLogin implements ObserverInterface
             }
         } catch (\Throwable $e) {
             // 静默处理异常，不影响正常流程
-            error_log("主题预览自动登录失败: " . $e->getMessage());
+            Env::log_error('theme', "主题预览自动登录失败: " . $e->getMessage());
         }
     }
 

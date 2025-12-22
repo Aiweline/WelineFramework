@@ -1,0 +1,330 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var string $fileName */
+/** @var array $variable 变量文件数据，包含variables数组 */
+?>
+<?php
+$themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
+$saveUrl = $this->getUrl('theme/backend/config/layout/saveVariables');
+$variables = $variable['variables'] ?? [];
+// 按分类分组
+$groupedVariables = [];
+foreach ($variables as $varName => $var) {
+    $category = $var['category'] ?? '其他';
+    if (!isset($groupedVariables[$category])) {
+        $groupedVariables[$category] = [];
+    }
+    $groupedVariables[$category][$varName] = $var;
+}
+?>
+<div class="modal fade" id="variableFileConfigModal" tabindex="-1" aria-labelledby="variableFileConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="variableFileConfigModalLabel">
+                    <i class="mdi mdi-code-tags me-2"></i>
+                    <?= __('配置变量文件') ?>: <span id="variable-file-modal-name"><?= htmlspecialchars($variable['name'] ?? $fileName) ?></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <?php if (empty($variables)): ?>
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information-outline"></i>
+                        <?= __('该变量文件没有可配置的变量') ?>
+                    </div>
+                <?php else: ?>
+                    <!-- 搜索和筛选 -->
+                    <div class="mb-3">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <input type="text" class="form-control form-control-sm" id="variable-search" 
+                                       placeholder="<?= __('搜索变量名...') ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <select class="form-select form-select-sm" id="variable-category-filter">
+                                    <option value=""><?= __('所有分类') ?></option>
+                                    <?php foreach (array_keys($groupedVariables) as $cat): ?>
+                                        <option value="<?= htmlspecialchars($cat) ?>"><?= htmlspecialchars($cat) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 变量配置表单 -->
+                    <form id="variable-file-form">
+                        <input type="hidden" name="theme_id" value="<?= $themeId ?>">
+                        <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
+                        <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                        <input type="hidden" name="file_name" value="<?= htmlspecialchars($fileName) ?>">
+                        
+                        <?php foreach ($groupedVariables as $category => $vars): ?>
+                            <div class="category-group mb-4" data-category="<?= htmlspecialchars($category) ?>">
+                                <h6 class="category-group-title mb-3">
+                                    <i class="mdi mdi-folder-outline me-1"></i>
+                                    <?= htmlspecialchars($category) ?>
+                                </h6>
+                                <div class="row g-3">
+                                    <?php foreach ($vars as $varName => $var): 
+                                        $varValue = $var['value'] ?? $var['default'] ?? '';
+                                        $varDefault = $var['default'] ?? '';
+                                        $varDescription = $var['description'] ?? '';
+                                        $varType = $var['type'] ?? 'other';
+                                        $isColor = $var['is_color'] ?? false;
+                                    ?>
+                                        <div class="col-md-6 col-lg-4 variable-item" 
+                                             data-var-name="<?= htmlspecialchars(strtolower($varName)) ?>"
+                                             data-category="<?= htmlspecialchars($category) ?>">
+                                            <label class="form-label small fw-bold">
+                                                <code><?= htmlspecialchars($varName) ?></code>
+                                                <?php if ($varType !== 'other'): ?>
+                                                    <span class="badge bg-secondary ms-1"><?= htmlspecialchars($varType) ?></span>
+                                                <?php endif; ?>
+                                            </label>
+                                            <div class="input-group">
+                                                <?php if ($isColor): ?>
+                                                    <input type="color" 
+                                                           class="form-control form-control-color variable-color-input" 
+                                                           value="<?= htmlspecialchars($varValue) ?>" 
+                                                           data-var-name="<?= htmlspecialchars($varName) ?>"
+                                                           style="width: 60px; height: 38px;">
+                                                    <input type="text" 
+                                                           class="form-control variable-text-input" 
+                                                           name="variables[<?= htmlspecialchars($varName) ?>]"
+                                                           value="<?= htmlspecialchars($varValue) ?>" 
+                                                           data-var-name="<?= htmlspecialchars($varName) ?>"
+                                                           placeholder="#000000"
+                                                           pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$">
+                                                <?php elseif ($varType === 'spacing'): ?>
+                                                    <input type="text" 
+                                                           class="form-control variable-text-input" 
+                                                           name="variables[<?= htmlspecialchars($varName) ?>]"
+                                                           value="<?= htmlspecialchars($varValue) ?>" 
+                                                           data-var-name="<?= htmlspecialchars($varName) ?>"
+                                                           placeholder="<?= htmlspecialchars($varDefault) ?>"
+                                                           pattern="^\d+(\.\d+)?(rem|px|em|%)$">
+                                                <?php else: ?>
+                                                    <input type="text" 
+                                                           class="form-control variable-text-input" 
+                                                           name="variables[<?= htmlspecialchars($varName) ?>]"
+                                                           value="<?= htmlspecialchars($varValue) ?>" 
+                                                           data-var-name="<?= htmlspecialchars($varName) ?>"
+                                                           placeholder="<?= htmlspecialchars($varDefault) ?>">
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php if (!empty($varDescription)): ?>
+                                                <small class="text-muted d-block mt-1"><?= htmlspecialchars($varDescription) ?></small>
+                                            <?php endif; ?>
+                                            <?php if ($varValue !== $varDefault): ?>
+                                                <small class="text-info d-block mt-1">
+                                                    <i class="mdi mdi-information-outline"></i>
+                                                    <?= __('默认值') ?>: <code><?= htmlspecialchars($varDefault) ?></code>
+                                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1 reset-to-default" 
+                                                            data-var-name="<?= htmlspecialchars($varName) ?>"
+                                                            data-default-value="<?= htmlspecialchars($varDefault) ?>">
+                                                        <?= __('重置') ?>
+                                                    </button>
+                                                </small>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </form>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="mdi mdi-close me-1"></i>
+                    <?= __('取消') ?>
+                </button>
+                <button type="button" class="btn btn-warning" id="reset-all-variables-btn">
+                    <i class="mdi mdi-restore me-1"></i>
+                    <?= __('重置为默认值') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="save-variables-btn">
+                    <i class="mdi mdi-content-save me-1"></i>
+                    <?= __('保存配置') ?>
+                </button>
+                <button type="button" class="btn btn-success" id="save-and-preview-btn">
+                    <i class="mdi mdi-eye me-1"></i>
+                    <?= __('保存并预览') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const saveUrl = <?= json_encode($saveUrl) ?>;
+    const modal = document.getElementById('variableFileConfigModal');
+    if (!modal) return;
+    
+    // 颜色选择器和文本输入框同步
+    modal.querySelectorAll('.variable-color-input').forEach(function(colorInput) {
+        const textInput = colorInput.nextElementSibling;
+        if (textInput) {
+            colorInput.addEventListener('input', function() {
+                textInput.value = this.value;
+            });
+            textInput.addEventListener('input', function() {
+                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/i.test(this.value)) {
+                    colorInput.value = this.value;
+                }
+            });
+        }
+    });
+    
+    // 搜索和筛选功能（与色盘弹窗相同）
+    const searchInput = document.getElementById('variable-search');
+    const categoryFilter = document.getElementById('variable-category-filter');
+    
+    function filterVariables() {
+        const searchTerm = (searchInput?.value || '').toLowerCase();
+        const selectedCategory = categoryFilter?.value || '';
+        
+        modal.querySelectorAll('.variable-item').forEach(function(item) {
+            const varName = (item.getAttribute('data-var-name') || '').toLowerCase();
+            const category = item.getAttribute('data-category') || '';
+            
+            const matchesSearch = !searchTerm || varName.includes(searchTerm);
+            const matchesCategory = !selectedCategory || category === selectedCategory;
+            
+            if (matchesSearch && matchesCategory) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        modal.querySelectorAll('.category-group').forEach(function(group) {
+            const visibleItems = group.querySelectorAll('.variable-item[style=""], .variable-item:not([style*="display: none"])');
+            if (visibleItems.length === 0) {
+                group.style.display = 'none';
+            } else {
+                group.style.display = '';
+            }
+        });
+    }
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', filterVariables);
+    }
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', filterVariables);
+    }
+    
+    // 重置功能
+    modal.querySelectorAll('.reset-to-default').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const varName = this.getAttribute('data-var-name');
+            const defaultValue = this.getAttribute('data-default-value');
+            const textInput = modal.querySelector(`input[name="variables[${varName}]"]`);
+            const colorInput = modal.querySelector(`.variable-color-input[data-var-name="${varName}"]`);
+            
+            if (textInput) {
+                textInput.value = defaultValue;
+            }
+            if (colorInput) {
+                colorInput.value = defaultValue;
+            }
+        });
+    });
+    
+    const resetAllBtn = document.getElementById('reset-all-variables-btn');
+    if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', function() {
+            if (confirm('<?= __('确定要重置所有变量为默认值吗？') ?>')) {
+                modal.querySelectorAll('.variable-item').forEach(function(item) {
+                    const defaultInput = item.querySelector('[data-default-value]');
+                    if (defaultInput) {
+                        const defaultValue = defaultInput.getAttribute('data-default-value');
+                        const textInput = item.querySelector('input[name*="variables"]');
+                        const colorInput = item.querySelector('.variable-color-input');
+                        
+                        if (textInput) {
+                            textInput.value = defaultValue;
+                        }
+                        if (colorInput) {
+                            colorInput.value = defaultValue;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    
+    // 保存配置
+    function saveVariables(showPreview) {
+        const form = document.getElementById('variable-file-form');
+        if (!form) return;
+        
+        const formData = new FormData(form);
+        if (showPreview) {
+            formData.append('preview', '1');
+        }
+        
+        const saveBtn = document.getElementById('save-variables-btn');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
+        
+        fetch(saveUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 200) {
+                if (typeof showSaveToast === 'function') {
+                    showSaveToast(data.msg || '<?= __('配置保存成功') ?>', 'success');
+                } else {
+                    alert(data.msg || '<?= __('配置保存成功') ?>');
+                }
+                
+                if (showPreview && data.data && data.data.preview_url) {
+                    if (typeof refreshPreview === 'function') {
+                        refreshPreview();
+                    }
+                }
+                
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                if (bsModal) {
+                    bsModal.hide();
+                }
+            } else {
+                alert(data.msg || '<?= __('保存失败') ?>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __('保存失败') ?>: ' + error.message);
+        })
+        .finally(() => {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+        });
+    }
+    
+    const saveBtn = document.getElementById('save-variables-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            saveVariables(false);
+        });
+    }
+    
+    const saveAndPreviewBtn = document.getElementById('save-and-preview-btn');
+    if (saveAndPreviewBtn) {
+        saveAndPreviewBtn.addEventListener('click', function() {
+            saveVariables(true);
+        });
+    }
+})();
+</script>
+

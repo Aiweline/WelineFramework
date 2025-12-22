@@ -49,11 +49,15 @@ class ProductCategory extends Model
                 self::fields_category_id, 'int', 11,
                 'not null', '分类ID')
             ->addIndex(
+                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY,
                 'product_category_product_id_index',
-                self::fields_product_id, 'index', '产品ID索引')
+                self::fields_product_id,
+                '产品ID索引')
             ->addIndex(
+                \Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY,
                 'product_category_category_id_index',
-                self::fields_category_id, 'index', '分类ID索引')
+                self::fields_category_id,
+                '分类ID索引')
             ->create();
 
     }

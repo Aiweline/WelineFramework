@@ -20,6 +20,9 @@ use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormatter;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
@@ -30,8 +33,17 @@ final class Connector extends Query implements ConnectorInterface
 {
     public function __construct(
         private readonly ?ConfigProviderInterface $configProvider
-    )
-    {
+    ) {
+        $identifierFormatter = new DefaultIdentifierFormatter();
+        $tableStrategy = new DefaultTableNameStrategy(
+            $identifierFormatter,
+            $this->configProvider->getPrefix() ?: ''
+        );
+        parent::__construct(
+            $identifierFormatter,
+            $tableStrategy,
+            new GenericDialectAdapter()
+        );
         $this->db_name = $this->configProvider->getDatabase();
     }
 

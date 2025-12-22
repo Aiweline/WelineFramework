@@ -1,0 +1,316 @@
+<?php
+/**
+ * 站点详情页面
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var int $website_id
+ * @var array $summary
+ * @var array $business_value
+ * @var array $daily_comparison
+ * @var array $dashboard_data
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$websiteId = $website_id ?? 0;
+$summary = $summary ?? [];
+$businessValue = $business_value ?? [];
+$dailyComparison = $daily_comparison ?? [];
+$dashboardData = $dashboard_data ?? [];
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>站点详情 - 像素统计</lang></title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .dashboard-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .dashboard-card:hover {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0 font-size-18">
+                                <lang>站点详情</lang> - <lang>站点ID：</lang><?= $websiteId ?>
+                            </h4>
+                            <div>
+                                <a href="<?= $this->getUrl('*/pixel_dashboard/index') ?>" class="btn btn-secondary btn-sm">
+                                    <lang>返回列表</lang>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 消息提示区域 -->
+                <div class='row'>
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card dashboard-card">
+                            <div class="card-body stat-card primary">
+                                <div class="stat-label"><lang>总记录数</lang></div>
+                                <div class="stat-number"><?= number_format($summary['total_count'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card dashboard-card">
+                            <div class="card-body stat-card success">
+                                <div class="stat-label"><lang>已处理</lang></div>
+                                <div class="stat-number"><?= number_format($summary['dealed_count'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card dashboard-card">
+                            <div class="card-body stat-card warning">
+                                <div class="stat-label"><lang>未处理</lang></div>
+                                <div class="stat-number"><?= number_format($summary['un_deal_count'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card dashboard-card">
+                            <div class="card-body stat-card info">
+                                <div class="stat-label"><lang>事件类型数</lang></div>
+                                <div class="stat-number"><?= $summary['event_count'] ?? 0 ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 商业价值趋势图 -->
+                <?php if (!empty($businessValue['data_points'])): ?>
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>商业价值趋势</lang></h4>
+                                <canvas id="businessValueChart" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- 每日对比图表 -->
+                <?php if (!empty($dailyComparison['comparisons'])): ?>
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>每日对比分析</lang></h4>
+                                <canvas id="dailyComparisonChart" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- 事件统计表格 -->
+                <?php if (!empty($summary['events'])): ?>
+                <div class="row">
+                    <div class="col-xl-12">
+                        <div class="card dashboard-card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-4"><lang>事件统计</lang></h4>
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th><lang>事件名称</lang></th>
+                                                <th><lang>数量</lang></th>
+                                                <th><lang>占比</lang></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            $totalEvents = array_sum($summary['events'] ?? []);
+                                            foreach ($summary['events'] ?? [] as $event => $count): 
+                                                $percentage = $totalEvents > 0 ? round(($count / $totalEvents) * 100, 2) : 0;
+                                            ?>
+                                            <tr>
+                                                <td><?= htmlspecialchars($event) ?></td>
+                                                <td><?= number_format($count) ?></td>
+                                                <td><?= $percentage ?>%</td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    @template(Weline_Admin::common/footer.phtml)
+</div>
+
+<script>
+// 商业价值趋势图
+<?php if (!empty($businessValue['data_points'])): ?>
+const businessValueCtx = document.getElementById('businessValueChart');
+if (businessValueCtx) {
+    const businessData = <?= json_encode($businessValue['data_points']) ?>;
+    new Chart(businessValueCtx, {
+        type: 'line',
+        data: {
+            labels: businessData.map(item => item.date),
+            datasets: [{
+                label: '<?= __('价值') ?>',
+                data: businessData.map(item => item.value),
+                borderColor: 'rgb(102, 126, 234)',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y'
+            }, {
+                label: '<?= __('事件数') ?>',
+                data: businessData.map(item => item.events),
+                borderColor: 'rgb(17, 153, 142)',
+                backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+}
+<?php endif; ?>
+
+// 每日对比图表
+<?php if (!empty($dailyComparison['comparisons'])): ?>
+const dailyComparisonCtx = document.getElementById('dailyComparisonChart');
+if (dailyComparisonCtx) {
+    const comparisonData = <?= json_encode($dailyComparison['comparisons']) ?>;
+    new Chart(dailyComparisonCtx, {
+        type: 'bar',
+        data: {
+            labels: comparisonData.map(item => item.date),
+            datasets: [{
+                label: '<?= __('今天') ?>',
+                data: comparisonData.map(item => item.today.value),
+                backgroundColor: 'rgba(102, 126, 234, 0.8)'
+            }, {
+                label: '<?= __('昨天') ?>',
+                data: comparisonData.map(item => item.yesterday.value),
+                backgroundColor: 'rgba(17, 153, 142, 0.8)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+<?php endif; ?>
+</script>
+
+</body>
+</html>
+

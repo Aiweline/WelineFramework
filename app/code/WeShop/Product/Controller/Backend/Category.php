@@ -13,18 +13,24 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Controller\Backend;
 
+use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Manager\ObjectManager;
+use WeShop\Product\Model\Product;
 
 class Category extends \Weline\Framework\App\Controller\BackendController
 {
     private \WeShop\Product\Model\Category $category;
+    private Product $product;
 
     public function __construct(
-        \WeShop\Product\Model\Category $category
+        \WeShop\Product\Model\Category $category,
+        Product $product
     )
     {
         $this->category = $category;
+        $this->product = $product;
     }
 
     public function index()
@@ -97,6 +103,9 @@ class Category extends \Weline\Framework\App\Controller\BackendController
                 die(__('分类找不到！'));
             }
             $this->assign('category', $category);
+            // 加载产品实体的所有属性集
+            $sets = $this->product->eav_AttributeSetModel()->select()->fetchArray();
+            $this->assign('attribute_sets', $sets);
             return $this->fetch('form');
         }
 
@@ -122,6 +131,9 @@ class Category extends \Weline\Framework\App\Controller\BackendController
     {
         if ($this->request->isGet()) {
             $this->assign('action', $this->request->getUrlBuilder()->getCurrentUrl());
+            // 加载产品实体的所有属性集
+            $sets = $this->product->eav_AttributeSetModel()->select()->fetchArray();
+            $this->assign('attribute_sets', $sets);
             return $this->fetch('form');
         }
 
@@ -156,5 +168,31 @@ class Category extends \Weline\Framework\App\Controller\BackendController
             $this->getMessageManager()->addException($e);
         }
         $this->redirect('*/backend/category');
+    }
+
+    /**
+     * 获取分类的默认属性集
+     * @return string
+     */
+    public function getGetDefaultSet(): string
+    {
+        $categoryId = (int)$this->request->getGet('category_id', 0);
+        $result = ['default_set_id' => 0, 'set_name' => ''];
+        
+        if ($categoryId > 0) {
+            $category = $this->category->reset()->load($categoryId);
+            if ($category->getId()) {
+                $defaultSetId = $category->getDefaultSetId();
+                if ($defaultSetId > 0) {
+                    $set = $category->getDefaultSet();
+                    $result = [
+                        'default_set_id' => $defaultSetId,
+                        'set_name' => $set ? $set->getName() : ''
+                    ];
+                }
+            }
+        }
+        
+        return $this->fetchJson($result);
     }
 }

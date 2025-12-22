@@ -84,7 +84,7 @@ class AiApiKey extends Model
                 ->addColumn('expires_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, '', '过期时间')
                 ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '创建时间')
                 ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TIMESTAMP, null, 'not null DEFAULT CURRENT_TIMESTAMP', '更新时间')
-                ->addIndex('token', '', 'UNIQUE', 'idx_token')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_UNIQUE, 'idx_token', self::fields_TOKEN, 'Token唯一索引')
                 ->create();
         }
     }

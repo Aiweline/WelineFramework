@@ -368,6 +368,52 @@ return [
 - **Weline_Framework**：核心框架，提供控制器基类、路由系统、数据库模型等
 - **Weline_Backend**：后台管理模块，提供菜单系统和后台布局
 
+## Hook 使用
+
+Weline Theme 模块提供了完整的 Hook 机制，允许 Customer（客户/开发者）通过 hook 将自己的逻辑注入到主题布局中，实现功能扩展而不修改主题核心代码。
+
+### Hook 类型
+
+1. **Base Hook（基础 Hook）**：为所有布局提供统一配置的 hook 点
+   - 一次配置，所有布局生效
+   - 适合全局 CSS/JS 注入、全局功能模块
+   - 示例：`Weline_Theme::frontend::layouts::base::head-after`
+
+2. **详细布局 Hook**：为特定布局类型提供的 hook 点
+   - 只为特定布局生效
+   - 适合布局特定的功能定制
+   - 示例：`Weline_Theme::frontend::layouts::homepage::content-before`
+
+### 快速开始
+
+1. **查找可用的 Hook**：查看 `app/code/Weline/Theme/hook.php` 文件
+2. **创建 Hook 文件**：在模块的 `view/hooks/` 目录下创建 hook 文件
+3. **文件命名规则**：Hook 名称中的 `::` 需要转换为 `--`
+   - Hook 名称：`Weline_Theme::frontend::layouts::base::head-after`
+   - 文件名：`Weline_Theme--frontend--layouts--base--head-after.phtml`
+
+### 详细文档
+
+- [Hook 使用指南](Hook使用指南.md) - 完整的使用指南和最佳实践
+- [Base Hook 文档](hook/frontend/layouts/base/) - Base Hook 详细文档
+- [首页布局 Hook 文档](hook/frontend/layouts/homepage/) - 首页布局 Hook 详细文档
+
+### 使用示例
+
+**全局 CSS 注入（使用 Base Hook）**：
+```html
+<!-- YourModule/view/hooks/Weline_Theme--frontend--layouts--base--head-after.phtml -->
+<link rel="stylesheet" href="<?= $this->getUrl('static/css/custom.css') ?>">
+```
+
+**首页特定功能（使用详细布局 Hook）**：
+```html
+<!-- YourModule/view/hooks/Weline_Theme--frontend--layouts--homepage--content-before.phtml -->
+<div class="homepage-banner">
+    <img src="<?= $this->getUrl('static/images/banner.jpg') ?>" alt="Banner">
+</div>
+```
+
 ## 版本信息
 
 - 当前版本：1.0.0

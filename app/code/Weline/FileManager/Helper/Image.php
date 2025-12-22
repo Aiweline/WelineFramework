@@ -13,6 +13,13 @@ class Image
      */
     public static function processImagesValuePreviewData(string $value, int $width, int $height): array
     {
+        // 确保 value 是字符串类型
+        if (is_array($value)) {
+            $value = '';
+        } else {
+            $value = (string)$value;
+        }
+        
         $process = '?w=' . $width . '&h=' . $height;
         $value_items = [];
         if ($value) {

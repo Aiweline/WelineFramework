@@ -1,44 +1,64 @@
 /**
- * Weline Frontend - 主题主样式文件
+ * 主题通用样式
  * 
- * 导入顺序：
- * 1. 变量文件
- * 2. 颜色主题
- * 3. 基础样式
- * 4. 组件样式
- * 5. 工具类
+ * 只包含通用的、基础的样式
+ * 布局特定的样式应该在 layouts/{layoutType}/{layoutOption}.css 中
  */
 
-/* ========== 1. 核心变量 ========== */
-@import '../variables/_colors.css';
-@import '../variables/_spacing.css';
-@import '../variables/_typography.css';
-@import '../variables/_shadows.css';
-@import '../variables/_borders.css';
+/* ========== 基础页面结构 ========== */
+.weline-page-wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
 
-/* ========== 2. 颜色主题 ========== */
-@import '../colors/_light.css';
-@import '../colors/_dark.css';
-@import '../colors/_amazon.css';
+.weline-main-content {
+    flex: 1;
+    width: 100%;
+}
 
-/* ========== 3. 基础样式 ========== */
+/* ========== 通用工具类 ========== */
+.skip-to-content {
+    position: absolute;
+    left: -9999px;
+    z-index: 9999;
+}
+
+.skip-to-content:focus {
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    background: var(--color-primary, #0d6efd);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+/* ========== 通用过渡效果 ========== */
 * {
-    margin: 0;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ========== 通用清除浮动 ========== */
+.clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* ========== 通用隐藏类 ========== */
+.hidden {
+    display: none !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     padding: 0;
-    box-sizing: border-box;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
-
-body {
-    font-family: var(--font-family-base);
-    font-size: var(--font-size-base);
-    line-height: var(--line-height-normal);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-primary);
-}
-
-/* ========== 4. 组件样式 ========== */
-@import './components.css';
-
-/* ========== 5. 工具类 ========== */
-@import './utilities.css';
-

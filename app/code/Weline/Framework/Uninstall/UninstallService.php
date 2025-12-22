@@ -14,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Io\File;
+use Weline\ModuleManager\Service\ModuleBackupService;
 
 /**
  * 统一卸载服务
@@ -377,6 +378,7 @@ class UninstallService
         $steps = [];
         try {
             $backupPath = '';
+            $dbBackupInfo = null;
             
             // 自动备份
             if ($autoBackup) {
@@ -408,6 +410,41 @@ class UninstallService
                     'message' => __('模块备份成功：%{1}', [$backupPath]),
                     'time' => date('Y-m-d H:i:s'),
                     'success' => true,
+                ];
+
+                // 数据库表备份（通过 ModuleManager 管理）
+                if (class_exists(ModuleBackupService::class)) {
+                    /** @var ModuleBackupService $moduleBackupService */
+                    $moduleBackupService = ObjectManager::getInstance(ModuleBackupService::class);
+                    $steps[] = [
+                        'step' => 'db_backup',
+                        'message' => __('开始备份模块数据库表'),
+                        'time' => date('Y-m-d H:i:s'),
+                        'success' => true,
+                    ];
+
+                    $dbBackupInfo = $moduleBackupService->backupModuleTables($moduleName);
+                    if (empty($dbBackupInfo['success'])) {
+                        $steps[] = [
+                            'step' => 'db_backup',
+                            'message' => __('数据库备份失败：%{1}', [$dbBackupInfo['message'] ?? '']),
+                            'time' => date('Y-m-d H:i:s'),
+                            'success' => false,
+                        ];
+                        return [
+                            'success' => false,
+                            'backup_path' => $backupPath,
+                            'message' => __('数据库备份失败，已取消卸载：%{1}', [$dbBackupInfo['message'] ?? '']),
+                            'steps' => $steps,
+                        ];
+                    }
+
+                    $steps[] = [
+                        'step' => 'db_backup',
+                        'message' => __('模块数据库表备份成功（时间戳：%{1}）', [$dbBackupInfo['backup_timestamp'] ?? '']),
+                        'time' => date('Y-m-d H:i:s'),
+                        'success' => true,
+                    ];
                 ];
             }
 
