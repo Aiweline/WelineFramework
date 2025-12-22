@@ -16,8 +16,11 @@ namespace Weline\Framework\Database\Connection\Adapter\Sqlite;
 
 use PDO;
 use PDOException;
+use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\Sql;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
@@ -27,8 +30,17 @@ final class Connector extends Query implements ConnectorInterface
 {
     public function __construct(
         private readonly ConfigProviderInterface $configProvider
-    )
-    {
+    ) {
+        $identifierFormatter = new SqliteIdentifierFormatter();
+        $tableStrategy = new DefaultTableNameStrategy(
+            $identifierFormatter,
+            $this->configProvider->getPrefix() ?: ''
+        );
+        parent::__construct(
+            $identifierFormatter,
+            $tableStrategy,
+            new GenericDialectAdapter()
+        );
         $this->db_name = $this->configProvider->getDatabase();
     }
 

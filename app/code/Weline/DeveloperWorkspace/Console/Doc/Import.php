@@ -59,6 +59,9 @@ class Import extends CommandAbstract
         $this->printer->printing(__('   总共扫描: %{count} 个文档', ['count' => $result['scanned']]));
         $this->printer->printing(__('   新增: %{count} 个', ['count' => $result['new']]));
         $this->printer->printing(__('   更新: %{count} 个', ['count' => $result['updated']]));
+        if (isset($result['cleaned_duplicates']) && $result['cleaned_duplicates'] > 0) {
+            $this->printer->warning(__('   清理重复: %{count} 个（重复导入的文档）', ['count' => $result['cleaned_duplicates']]));
+        }
         if (isset($result['deleted']) && $result['deleted'] > 0) {
             $this->printer->warning(__('   删除文档: %{count} 个（不在文件中的文档）', ['count' => $result['deleted']]));
         }

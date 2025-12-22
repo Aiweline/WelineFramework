@@ -3,6 +3,8 @@
 namespace Weline\DataTable\Api\Rest\V1;
 
 use Weline\Framework\App\Controller\BackendRestController;
+use Weline\DataTable\Exception\DataTableException;
+use Weline\DataTable\Helper\ErrorHandler;
 
 class DataTable extends BackendRestController
 {
@@ -32,18 +34,17 @@ class DataTable extends BackendRestController
 
         try {
             // 验证参数
-            if (empty($model) || empty($scope)) {
-                return $this->error(__('缺少必需参数: model 和 scope'));
-            }
+            ErrorHandler::validateRequiredParams(
+                ['model' => $model, 'scope' => $scope],
+                ['model', 'scope']
+            );
+
+            // 验证模型类
+            ErrorHandler::validateModel($model);
 
             // 处理多模型配置
             if (!empty($modelConfig) && is_array($modelConfig) && !empty($modelConfig['models'])) {
                 return $this->handleMultiModelData($modelConfig, $join, $page, $limit, $filters, $sort);
-            }
-
-            // 单模型处理
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
             }
 
             $modelInstance = w_obj($model);
@@ -89,9 +90,13 @@ class DataTable extends BackendRestController
                 'has_prev' => $page > 1
             ]);
 
+        } catch (DataTableException $e) {
+            $e->log('DataTable::postData');
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postData');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         } catch (\Exception $e) {
-            error_log("DataTable API Error: " . $e->getMessage());
-            return $this->error('数据获取失败: ' . $e->getMessage());
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postData');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
     }
 
@@ -105,9 +110,14 @@ class DataTable extends BackendRestController
         $tableId = $this->request->getParam('table_id');
         
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            // 验证必需参数
+            ErrorHandler::validateRequiredParams(
+                ['model' => $model, 'scope' => $scope],
+                ['model', 'scope']
+            );
+
+            // 验证模型类
+            ErrorHandler::validateModel($model);
             
             $modelInstance = w_obj($model);
             
@@ -177,31 +187,43 @@ class DataTable extends BackendRestController
             $cacheKey = "datatable_fields_{$scope}_{$tableId}";
             $cachedConfig = $this->getCache()->get($cacheKey);
             
+            // 缓存字段配置（单独返回，不合并到默认字段中）
+            $cachedDisplayFields = null;
+            $cachedFilterFields = null;
+            
             if ($cachedConfig) {
                 $cachedFields = $cachedConfig['display_fields'] ?? [];
-                $cachedFilterFields = $cachedConfig['filter_fields'] ?? [];
+                $cachedFilterFieldsConfig = $cachedConfig['filter_fields'] ?? [];
                 
-                // 合并缓存的字段配置
+                // 如果有缓存的显示字段配置，合并完整字段信息后单独返回
                 if (!empty($cachedFields)) {
-                    $displayFields = $this->mergeFieldConfigs($allFields, $cachedFields);
+                    $cachedDisplayFields = $this->mergeFieldConfigs($allFields, $cachedFields);
                 }
                 
-                if (!empty($cachedFilterFields)) {
-                    $filterFields = $this->mergeFieldConfigs($allFields, $cachedFilterFields);
+                // 如果有缓存的筛选字段配置，合并完整字段信息后单独返回
+                if (!empty($cachedFilterFieldsConfig)) {
+                    $cachedFilterFields = $this->mergeFieldConfigs($allFields, $cachedFilterFieldsConfig);
                 }
             }
             
             return $this->success('字段信息获取成功', [
                 'all_fields' => $allFields,
-                'display_fields' => $displayFields,
-                'filter_fields' => $filterFields,
+                'display_fields' => $displayFields,  // 默认显示字段（无模板时使用）
+                'filter_fields' => $filterFields,    // 默认筛选字段
+                'cached_display_fields' => $cachedDisplayFields,  // 缓存的显示字段配置
+                'cached_filter_fields' => $cachedFilterFields,    // 缓存的筛选字段配置
                 'primary_key' => $primaryKey,
                 'scope' => $scope,
                 'table_id' => $tableId
             ]);
             
+        } catch (DataTableException $e) {
+            $e->log('DataTable::postFields');
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postFields');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         } catch (\Exception $e) {
-            return $this->error('字段信息获取失败: ' . $e->getMessage());
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postFields');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
     }
 
@@ -1174,6 +1196,181 @@ class DataTable extends BackendRestController
     }
 
     /**
+     * 批量更新记录
+     * 路由: datatable/rest/v1/data-table/batch-update
+     * 方法: POST
+     */
+    public function postBatchUpdate()
+    {
+        $model = $this->request->getParam('model');
+        $ids = $this->request->getParam('ids', []);
+        $data = $this->request->getParam('data', []);
+
+        try {
+            // 验证必需参数
+            ErrorHandler::validateRequiredParams(
+                ['model' => $model, 'ids' => $ids, 'data' => $data],
+                ['model', 'ids', 'data']
+            );
+
+            // 验证模型类
+            ErrorHandler::validateModel($model);
+
+            if (empty($ids) || !is_array($ids)) {
+                throw DataTableException::validationFailed('ids参数必须是非空数组');
+            }
+
+            if (empty($data) || !is_array($data)) {
+                throw DataTableException::validationFailed('data参数必须是非空数组');
+            }
+
+            $modelInstance = w_obj($model);
+            $successCount = 0;
+            $failedCount = 0;
+            $errors = [];
+
+            // 使用事务处理批量更新
+            $operation = function() use ($modelInstance, $ids, $data, &$successCount, &$failedCount, &$errors) {
+                foreach ($ids as $id) {
+                    try {
+                        $record = $modelInstance->find($id);
+                        if (!$record) {
+                            $failedCount++;
+                            $errors[] = "ID {$id}: 记录不存在";
+                            continue;
+                        }
+
+                        // 验证数据
+                        $validatedData = $this->validateData($data, $modelInstance);
+                        if ($validatedData === false) {
+                            $failedCount++;
+                            $errors[] = "ID {$id}: 数据验证失败";
+                            continue;
+                        }
+
+                        // 更新数据
+                        foreach ($validatedData as $field => $value) {
+                            $record->setData($field, $value);
+                        }
+
+                        // 保存数据
+                        if ($record->save()) {
+                            $successCount++;
+                        } else {
+                            $failedCount++;
+                            $errors[] = "ID {$id}: 保存失败";
+                        }
+                    } catch (\Exception $e) {
+                        $failedCount++;
+                        $errors[] = "ID {$id}: " . $e->getMessage();
+                    }
+                }
+            };
+
+            \Weline\DataTable\Helper\TransactionManager::executeInTransaction($operation, 'batch_update');
+
+            $message = __('批量更新完成，成功: %{1}，失败: %{2}', [$successCount, $failedCount]);
+
+            return $this->success($message, [
+                'success_count' => $successCount,
+                'failed_count' => $failedCount,
+                'total_count' => count($ids),
+                'errors' => $errors
+            ]);
+
+        } catch (DataTableException $e) {
+            $e->log('DataTable::postBatchUpdate');
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchUpdate');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
+        } catch (\Exception $e) {
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchUpdate');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
+        }
+    }
+
+    /**
+     * 批量状态变更
+     * 路由: datatable/rest/v1/data-table/batch-status
+     * 方法: POST
+     */
+    public function postBatchStatus()
+    {
+        $model = $this->request->getParam('model');
+        $ids = $this->request->getParam('ids', []);
+        $statusField = $this->request->getParam('status_field', 'status');
+        $statusValue = $this->request->getParam('status_value');
+
+        try {
+            // 验证必需参数
+            ErrorHandler::validateRequiredParams(
+                ['model' => $model, 'ids' => $ids, 'status_value' => $statusValue],
+                ['model', 'ids', 'status_value']
+            );
+
+            // 验证模型类
+            ErrorHandler::validateModel($model);
+
+            if (empty($ids) || !is_array($ids)) {
+                throw DataTableException::validationFailed('ids参数必须是非空数组');
+            }
+
+            $modelInstance = w_obj($model);
+            $successCount = 0;
+            $failedCount = 0;
+            $errors = [];
+
+            // 使用事务处理批量状态变更
+            $operation = function() use ($modelInstance, $ids, $statusField, $statusValue, &$successCount, &$failedCount, &$errors) {
+                foreach ($ids as $id) {
+                    try {
+                        $record = $modelInstance->find($id);
+                        if (!$record) {
+                            $failedCount++;
+                            $errors[] = "ID {$id}: 记录不存在";
+                            continue;
+                        }
+
+                        // 设置状态值
+                        $record->setData($statusField, $statusValue);
+
+                        // 保存数据
+                        if ($record->save()) {
+                            $successCount++;
+                        } else {
+                            $failedCount++;
+                            $errors[] = "ID {$id}: 保存失败";
+                        }
+                    } catch (\Exception $e) {
+                        $failedCount++;
+                        $errors[] = "ID {$id}: " . $e->getMessage();
+                    }
+                }
+            };
+
+            \Weline\DataTable\Helper\TransactionManager::executeInTransaction($operation, 'batch_status');
+
+            $message = __('批量状态变更完成，成功: %{1}，失败: %{2}', [$successCount, $failedCount]);
+
+            return $this->success($message, [
+                'success_count' => $successCount,
+                'failed_count' => $failedCount,
+                'total_count' => count($ids),
+                'status_field' => $statusField,
+                'status_value' => $statusValue,
+                'errors' => $errors
+            ]);
+
+        } catch (DataTableException $e) {
+            $e->log('DataTable::postBatchStatus');
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchStatus');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
+        } catch (\Exception $e) {
+            $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchStatus');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
+        }
+    }
+
+    /**
      * 删除记录
      */
     public function postDelete()
@@ -1242,8 +1439,12 @@ class DataTable extends BackendRestController
             // 获取模型字段信息
             $columns = $modelInstance->columns();
             $fields = [];
-            foreach ($columns as $fieldName) {
-                $fields[$fieldName] = ['Field' => $fieldName];
+            foreach ($columns as $column) {
+                // columns() 返回的是包含字段详细信息的数组
+                $fieldName = $column['Field'] ?? '';
+                if ($fieldName) {
+                    $fields[$fieldName] = $column;
+                }
             }
 
             // 验证每个字段

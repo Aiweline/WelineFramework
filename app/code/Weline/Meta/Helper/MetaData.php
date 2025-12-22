@@ -1132,9 +1132,9 @@ class MetaData
         
         // 检查是否是 .value 格式（设置配置值）
         if (preg_match('/^(.+)\.value$/', $identify, $matches)) {
-            $baseIdentify = $matches[1]; // 如 theme.frontend.partials.header
+            $baseIdentify = $matches[1]; // 如 theme.frontend.layouts.homepage
             
-            // 解析 identify：theme.frontend.partials.header
+            // 解析 identify：theme.frontend.layouts.homepage
             $parts = explode('.', $baseIdentify);
             if (count($parts) < 3) {
                 return false;
@@ -1142,10 +1142,10 @@ class MetaData
             
             // 第一部分是命名空间前缀（theme）
             // 第二部分是区域（frontend/backend）
-            // 剩余部分是配置键
+            // 剩余部分是配置键（如 layouts.homepage）
             $namespacePrefix = $parts[0]; // theme
             $area = $parts[1] ?? 'frontend'; // frontend 或 backend
-            $configKey = implode('.', array_slice($parts, 2)); // partials.header
+            $configKey = implode('.', array_slice($parts, 2)); // layouts.homepage
             
             $namespace = "{$namespacePrefix}.{$area}";
             
@@ -1168,9 +1168,47 @@ class MetaData
             
             // 设置配置值
             try {
+                // 查找对应的 Meta 记录，获取 meta_id 和 meta_identify
+                $metaId = null;
+                $metaIdentify = null;
+                
+                // 尝试根据 baseIdentify 查找 Meta 记录
+                // 例如：theme.frontend.layouts.homepage -> 查找 theme.frontend.layouts.homepage 的 Meta 记录
+                try {
+                    /** @var \Weline\Meta\Model\Meta $metaModel */
+                    $metaModel = ObjectManager::getInstance(\Weline\Meta\Model\Meta::class);
+                    
+                    // 先尝试精确匹配
+                    $metaRecord = $metaModel->reset()
+                        ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $baseIdentify)
+                        ->find()
+                        ->fetch();
+                    
+                    // 如果精确匹配失败，尝试查找父级 Meta 记录
+                    // 例如：如果找不到 theme.frontend.layouts.homepage，尝试查找 theme.frontend.layouts
+                    if (!$metaRecord || !$metaRecord->getId()) {
+                        $parts = explode('.', $baseIdentify);
+                        // 尝试查找父级（去掉最后一部分）
+                        if (count($parts) > 3) {
+                            $parentIdentify = implode('.', array_slice($parts, 0, -1));
+                            $metaRecord = $metaModel->reset()
+                                ->where(\Weline\Meta\Model\Meta::fields_META_IDENTIFY, $parentIdentify)
+                                ->find()
+                                ->fetch();
+                        }
+                    }
+                    
+                    if ($metaRecord && $metaRecord->getId()) {
+                        $metaId = (int)$metaRecord->getId();
+                        $metaIdentify = $metaRecord->getData(\Weline\Meta\Model\Meta::fields_META_IDENTIFY) ?: $baseIdentify;
+                    }
+                } catch (\Exception $e) {
+                    // 如果查找失败，继续使用 identifyId 方式
+                }
+                
                 /** @var \Weline\Meta\Model\MetaConfig $metaConfig */
                 $metaConfig = ObjectManager::getInstance(\Weline\Meta\Model\MetaConfig::class);
-                $metaConfig->setConfig($themeId, $namespace, $configKey, $value, $scope, $locale);
+                $metaConfig->setConfig($themeId, $namespace, $configKey, $value, $scope, $locale, $metaId, $metaIdentify);
                 
                 // 清除相关缓存
                 self::clearCache();

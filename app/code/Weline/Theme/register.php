@@ -14,5 +14,6 @@ Register::register(
     'Weline_Theme',
     __DIR__,
     '1.0.1',
-    '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。'
+    '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。',
+    ['Weline_Meta']
 );

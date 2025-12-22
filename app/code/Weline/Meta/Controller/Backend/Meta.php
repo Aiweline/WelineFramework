@@ -23,7 +23,7 @@ class Meta extends BackendController
     public function index()
     {
         /** @var MetaModel $meta */
-        $meta = ObjectManager::getInstance()->get(MetaModel::class);
+        $meta = ObjectManager::getInstance(MetaModel::class);
         
         // 搜索过滤
         $namespace = $this->request->getGet('namespace');
@@ -54,7 +54,7 @@ class Meta extends BackendController
     {
         $metaId = $this->request->getParam('id');
         /** @var MetaModel $meta */
-        $meta = ObjectManager::getInstance()->get(MetaModel::class);
+        $meta = ObjectManager::getInstance(MetaModel::class);
         
         if ($metaId) {
             $meta->load($metaId);
@@ -71,7 +71,7 @@ class Meta extends BackendController
     {
         $data = $this->request->getPost();
         /** @var MetaModel $meta */
-        $meta = ObjectManager::getInstance()->get(MetaModel::class);
+        $meta = ObjectManager::getInstance(MetaModel::class);
         
         if (!empty($data['meta_id'])) {
             $meta->load($data['meta_id']);

@@ -45,9 +45,18 @@ class PreviewAccountManager
         $config = $theme->getConfig();
         $previewConfig = self::normalizePreviewConfig($config['preview_user'] ?? []);
 
-        /** @var FrontendUser $user */
-        $user = ObjectManager::getInstance(FrontendUser::class);
-        $user->where('username', $previewConfig['username'])->find()->fetch();
+        try {
+            /** @var FrontendUser $user */
+            $user = ObjectManager::getInstance(FrontendUser::class);
+            $user->where('username', $previewConfig['username'])->find()->fetch();
+        } catch (\PDOException $e) {
+            // 如果前端用户表不存在，返回 null（跳过预览用户创建）
+            if (str_contains($e->getMessage(), 'does not exist') || 
+                str_contains($e->getMessage(), 'Undefined table')) {
+                return null;
+            }
+            throw $e;
+        }
 
         $isNewUser = false;
 

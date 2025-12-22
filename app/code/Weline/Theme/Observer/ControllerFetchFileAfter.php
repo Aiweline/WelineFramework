@@ -53,6 +53,12 @@ class ControllerFetchFileAfter implements ObserverInterface
             // Template 是单例，控制器传递的变量（如 $user）会自动保持，不需要手动保存
             $contentHtml = $template->fetch($contentTemplate);
             
+            // 将渲染后的内容放到 meta.content 中，供模板使用 {{meta.content}} 语法
+            $metaData = $template->getData('meta') ?? [];
+            $metaData['content'] = $contentHtml;
+            $metaData['contentTemplate'] = $contentTemplate; // 保留原始模板路径，供需要时使用
+            $template->setData('meta', $metaData);
+            
             // 准备布局数据，只传递 content
             // 其他参数（如 title、sidebar 等）已在 ControllerFetchFileBefore 中通过 ThemeData 加载到模板实例
             // fetch 方法的第二个参数会通过 addData 添加到模板数据中，不会覆盖现有数据

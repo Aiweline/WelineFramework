@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--订单管理主菜单-->
+    <add source="Weline_Checkout::order_manage" 
+         name="checkout_order_main" 
+         title="订单管理" 
+         action="*/backend/order/index"
+         parent="Weline_Backend::business_module" 
+         icon="mdi mdi-cart" 
+         order="30000"/>
+    
+    <!--订单列表-->
+    <add source="Weline_Checkout::order_list" 
+         name="checkout_order_list" 
+         title="订单列表" 
+         action="*/backend/order/index"
+         parent="Weline_Checkout::order_manage" 
+         icon="mdi mdi-format-list-bulleted" 
+         order="1"/>
+    
+    <!--订单详情-->
+    <add source="Weline_Checkout::order_view" 
+         name="checkout_order_view" 
+         title="订单详情" 
+         action="*/backend/order/view"
+         parent="Weline_Checkout::order_manage" 
+         icon="mdi mdi-eye" 
+         order="2"/>
+</menus>
+

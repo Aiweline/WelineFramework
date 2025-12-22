@@ -1,17 +1,17 @@
+<!--
+组件：Dropdown
+
+下拉菜单组件，用于显示选项列表
+字段
+@meta.name {default="Dropdown下拉菜单组件",name="Dropdown下拉菜单组件",description="Dropdown下拉菜单组件，用于描述组件的名称"}
+@meta.description {default="下拉菜单组件，用于显示选项列表",name="下拉菜单组件，用于显示选项列表",description="下拉菜单组件，用于显示选项列表，用于描述组件的用途"}
+@param.id {default="",name="下拉菜单ID",description="下拉菜单ID，必填参数"}
+@param.trigger {default="",name="触发器内容",description="触发器内容（HTML字符串），必填参数"}
+@param.items {default=[],name="菜单项数组",description="菜单项数组，必填参数"}
+@param.position {default="left",name="位置",description="位置，可选值：left/right"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+-->
 <?php
-/**
- * 组件：Dropdown
- * 
- * 下拉菜单组件，用于显示选项列表
- * 字段
- * @info description 描述：下拉菜单组件，用于显示选项列表
- * @info name 名称：Dropdown下拉菜单组件
- * @param id 下拉菜单ID（必填）
- * @param trigger 触发器内容（HTML字符串，必填）
- * @param items 菜单项数组（必填）
- * @param position 位置 (left/right)
- * @param class 额外CSS类
- */
 $id = $this->getData('id') ?? '';
 $trigger = $this->getData('trigger') ?? '';
 $items = $this->getData('items') ?? [];
@@ -34,7 +34,7 @@ if ($class) {
             data-toggle="dropdown" 
             aria-haspopup="true" 
             aria-expanded="false">
-        <?= $trigger ?>
+        {{trigger}}
     </button>
     <div class="dropdown-menu" aria-labelledby="<?= htmlspecialchars($id) ?>">
         <?php foreach ($items as $item): ?>

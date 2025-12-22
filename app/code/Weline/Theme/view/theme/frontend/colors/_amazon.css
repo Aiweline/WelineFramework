@@ -1,26 +1,63 @@
 /**
- * Weline Frontend - Amazon风格主题颜色覆盖
+ * 色系：Amazon风格主题颜色
  * 
- * 参考Amazon的设计风格
+ * Amazon风格的主题颜色覆盖文件
+ * 字段
+ * @meta.name {default="Amazon风格主题颜色",name="Amazon风格主题颜色",description="Amazon风格主题颜色，用于描述色系的名称"}
+ * @meta.description {default="参考Amazon的设计风格，提供橙色主题色系",name="参考Amazon的设计风格，提供橙色主题色系",description="参考Amazon的设计风格，提供橙色主题色系，用于描述色系的用途"}
+ * @meta.theme {default="amazon",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  */
 
 [data-theme="amazon"] {
     /* Amazon风格的颜色调整 */
-    --color-primary: #ff9900;  /* Amazon橙色 */
+    --color-primary: #ff9900;
+    /* Amazon橙色 */
     --color-primary-light: #ffb84d;
     --color-primary-dark: #e68900;
     --color-primary-border: #cc7700;
-    
+
     /* 文本色 - Amazon风格 */
     --color-text-primary: #111;
     --color-text-secondary: #565959;
-    
+    --color-text-tertiary: #a6a6a6;
+    --color-text-disabled: #c7c7c7;
+    --color-text-dark: #131921;
+    --color-text-muted: #565959;
+    --color-text-placeholder: #999;
+    --color-text-light: #f1f5f9;
+    --color-text-light-secondary: #cbd5e1;
+
     /* 背景色 - Amazon风格 */
     --color-bg-primary: #fff;
     --color-bg-secondary: #f3f3f3;
-    
+    --color-bg-tertiary: #e7e7e7;
+    --color-bg-dark: #232f3e;
+    --color-bg-dark-secondary: #131921;
+    --color-bg-dark-tertiary: #232f3e;
+
+    /* 边框色 - Amazon风格 */
+    --color-border-default: #ddd;
+    --color-border-emphasis: #a6a6a6;
+    --color-border-focus: #ff9900;
+    --color-border-light: #e5e7eb;
+
+    /* 强调色（使用Amazon橙色系） */
+    --color-accent: #ff9900;
+    --color-accent-hover: #e68900;
+    --color-accent-light: rgba(255, 153, 0, 0.05);
+    --color-accent-medium: rgba(255, 153, 0, 0.1);
+    --color-accent-dark: rgba(255, 153, 0, 0.15);
+
+    /* 功能色 */
+    --color-success: #28a745;
+    --color-warning: #ffc107;
+    --color-error: #dc3545;
+    --color-error-hover: #ef4444;
+    --color-error-light: rgba(239, 68, 68, 0.05);
+    --color-info: #17a2b8;
+
     /* 链接色 - Amazon风格 */
     --color-link: #007185;
     --color-link-hover: #c45500;
+    --color-link-visited: #551a8b;
 }
-

@@ -198,6 +198,86 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                         </div>
                                     </div>
                                 </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationDefaultSetId'>
+                                            <lang>默认属性集</lang>
+                                        </label>
+                                        <select class='form-control' name='default_set_id' id='validationDefaultSetId'>
+                                            <option value='0'><lang>-- 请选择属性集 --</lang></option>
+                                            <foreach name="attribute_sets" item="set">
+                                                <option value='{{set.set_id}}'
+                                                    <if condition="category.default_set_id == set.set_id">selected</if>
+                                                >{{set.name}}</option>
+                                            </foreach>
+                                        </select>
+                                        <small class="text-muted"><lang>在此分类下创建的产品将默认使用该属性集</lang></small>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationIsActive'>
+                                            <lang>启用状态</lang>
+                                        </label>
+                                        <select class='form-control' name='is_active' id='validationIsActive'>
+                                            <option value='1' <if condition="category.is_active != 0">selected</if>><lang>启用</lang></option>
+                                            <option value='0' <if condition="category.is_active == 0">selected</if>><lang>禁用</lang></option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 分类描述与图片 -->
+                            <div class='row'>
+                                <div class='col-md-6'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationDescription'>
+                                            <lang>分类描述</lang>
+                                        </label>
+                                        <textarea class='form-control' name='description' id='validationDescription' rows='3'>{{category.description}}</textarea>
+                                    </div>
+                                </div>
+                                <div class='col-md-6'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationImage'>
+                                            <lang>分类图片</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='image' id='validationImage'
+                                               value='{{category.image}}' placeholder='@lang{图片URL}'>
+                                        <small class="text-muted"><lang>可输入图片URL或使用媒体库</lang></small>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- SEO 信息 -->
+                            <div class='row'>
+                                <div class='col-12'>
+                                    <h5 class='mb-3'><lang>SEO 设置</lang></h5>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationMetaTitle'>
+                                            <lang>Meta 标题</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='meta_title' id='validationMetaTitle'
+                                               value='{{category.meta_title}}' maxlength='255'>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationMetaKeywords'>
+                                            <lang>Meta 关键词</lang>
+                                        </label>
+                                        <input type='text' class='form-control' name='meta_keywords' id='validationMetaKeywords'
+                                               value='{{category.meta_keywords}}' maxlength='500'>
+                                    </div>
+                                </div>
+                                <div class='col-md-4'>
+                                    <div class='mb-4'>
+                                        <label class='form-label' for='validationMetaDescription'>
+                                            <lang>Meta 描述</lang>
+                                        </label>
+                                        <textarea class='form-control' name='meta_description' id='validationMetaDescription' rows='2'>{{category.meta_description}}</textarea>
+                                    </div>
+                                </div>
                             </div>
                             <button class='btn btn-primary' type='submit'>
                                 <empty

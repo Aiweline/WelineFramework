@@ -15,14 +15,21 @@
  * @param.maxVisible {default=5,name="最大可见页码数",description="最大可见页码数，用于设置同时显示的页码数量"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$currentPage = (int)($this->getData('currentPage') ?? 1);
-$totalPages = (int)($this->getData('totalPages') ?? 1);
-$baseUrl = $this->getData('baseUrl') ?? '';
-$pageParam = $this->getData('pageParam') ?? 'page';
-$showFirstLast = $this->getData('showFirstLast') ?? true;
-$showPrevNext = $this->getData('showPrevNext') ?? true;
-$maxVisible = (int)($this->getData('maxVisible') ?? 5);
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.pagination.default');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$currentPage = (int)($this->getData("meta.currentPage") ?? 1);
+$totalPages = (int)($this->getData("meta.totalPages") ?? 1);
+$baseUrl = $this->getData("meta.baseUrl") ?? '';
+$pageParam = $this->getData("meta.pageParam") ?? 'page';
+$showFirstLast = $this->getData("meta.showFirstLast") ?? true;
+$showPrevNext = $this->getData("meta.showPrevNext") ?? true;
+$maxVisible = (int)($this->getData("meta.maxVisible") ?? 5);
+$class = $this->getData("meta.class") ?? '';
 
 // 构建CSS类
 $paginationClass = 'pagination';

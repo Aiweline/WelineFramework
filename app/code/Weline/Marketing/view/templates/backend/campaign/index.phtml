@@ -1,0 +1,45 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $campaigns
+ * @var \Weline\Framework\Pagination\Pagination $pagination
+ */
+?>
+<div class="marketing-campaign-list">
+    <h1><?= __('促销活动列表') ?></h1>
+    <div class="toolbar">
+        <a href="<?= $this->getUrl('marketing/backend/campaign/getAdd') ?>" class="btn btn-primary"><?= __('添加活动') ?></a>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('活动名称') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('开始时间') ?></th>
+                <th><?= __('结束时间') ?></th>
+                <th><?= __('预算') ?></th>
+                <th><?= __('已花费') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($campaigns as $campaign): ?>
+            <tr>
+                <td><?= $campaign['id'] ?></td>
+                <td><?= $this->escapeHtml($campaign['name']) ?></td>
+                <td><?= $this->escapeHtml($campaign['status']) ?></td>
+                <td><?= $campaign['start_date'] ?></td>
+                <td><?= $campaign['end_date'] ?></td>
+                <td><?= $campaign['budget'] ?? '-' ?></td>
+                <td><?= $campaign['spent'] ?></td>
+                <td>
+                    <a href="<?= $this->getUrl('marketing/backend/campaign/getEdit', ['id' => $campaign['id']]) ?>"><?= __('编辑') ?></a>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?= $this->getChildHtml('pagination') ?>
+</div>
+

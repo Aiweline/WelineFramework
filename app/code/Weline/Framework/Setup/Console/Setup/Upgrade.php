@@ -279,7 +279,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function aliases(): array
     {
-        return [];
+        return ['s:up'];
     }
 
     /**

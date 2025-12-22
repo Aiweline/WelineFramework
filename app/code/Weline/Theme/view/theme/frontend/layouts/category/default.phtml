@@ -1,0 +1,51 @@
+<?php
+/**
+ * 布局：分类页 - 网格布局
+ *
+ * 分类网格布局，适合展示分类卡片
+ * 字段
+ * @meta.name {default="分类网格布局",name="分类网格布局",description="分类网格布局，用于描述布局的名称"}
+ * @meta.description {default="分类网格布局，适合展示分类卡片",name="分类网格布局，适合展示分类卡片",description="分类网格布局，适合展示分类卡片，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="分类",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ */
+?>
+<?php
+$title = $this->getData('title') ?? __('分类');
+$content = $this->getData('content') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <main class="category-grid-main <?= htmlspecialchars($class ?? '') ?>" id="category-grid-main" data-layout="category_grid">
+        <div class="category-grid-container">
+            {{content}}
+        </div>
+    </main>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>
+

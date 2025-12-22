@@ -1,0 +1,202 @@
+<?php
+/**
+ * 客服聊天工作台
+ */
+$agent = $this->getData('agent') ?? [];
+$sessions = $this->getData('sessions') ?? [];
+$waitingSessions = $this->getData('waitingSessions') ?? [];
+$statistics = $this->getData('statistics') ?? [];
+$consoleUrl = $this->getBackendUrl('customerservice/backend/console');
+$cssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-console.css');
+$statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
+$jsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-console.js');
+$statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-statistics.js');
+?>
+<link rel="stylesheet" href="<?= $cssUrl ?>">
+<link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
+<div class="customer-service-console">
+    <div class="console-header">
+        <h1><?= __('客服工作台') ?></h1>
+        <div class="agent-info">
+            <span class="agent-name"><?= htmlspecialchars($agent['name'] ?? __('客服')) ?></span>
+            <span class="agent-locale"><?= htmlspecialchars($agent['locale'] ?? 'zh_Hans_CN') ?></span>
+        </div>
+    </div>
+
+    <!-- 统计卡片区域 -->
+    <div class="statistics-section">
+        <div class="statistics-header">
+            <h2><?= __('工作量统计') ?></h2>
+            <div class="period-selector">
+                <button class="period-btn active" data-period="today"><?= __('今日') ?></button>
+                <button class="period-btn" data-period="week"><?= __('本周') ?></button>
+                <button class="period-btn" data-period="month"><?= __('本月') ?></button>
+                <button class="period-btn" data-period="all"><?= __('全部') ?></button>
+            </div>
+        </div>
+        <div class="statistics-cards" id="statistics-cards">
+            <div class="stat-card">
+                <div class="stat-icon sessions">
+                    <i class="mdi mdi-message-text"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="stat-sessions"><?= $statistics['sessions']['total'] ?? 0 ?></div>
+                    <div class="stat-label"><?= __('会话数') ?></div>
+                    <div class="stat-detail">
+                        <span><?= __('已关闭') ?>: <?= $statistics['sessions']['closed'] ?? 0 ?></span>
+                        <span><?= __('进行中') ?>: <?= $statistics['sessions']['active'] ?? 0 ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon messages">
+                    <i class="mdi mdi-message-reply"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="stat-messages"><?= $statistics['messages']['total'] ?? 0 ?></div>
+                    <div class="stat-label"><?= __('消息数') ?></div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon response-time">
+                    <i class="mdi mdi-clock-outline"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="stat-response-time"><?php 
+                        $avgTime = $statistics['response_time']['average'] ?? 0;
+                        echo $avgTime < 60 ? round($avgTime, 1) . __('秒') : round($avgTime / 60, 1) . __('分钟');
+                    ?></div>
+                    <div class="stat-label"><?= __('平均响应时间') ?></div>
+                    <div class="stat-detail">
+                        <span><?= __('最快') ?>: <?php 
+                            $minTime = $statistics['response_time']['min'] ?? 0;
+                            echo $minTime < 60 ? round($minTime, 1) . __('秒') : round($minTime / 60, 1) . __('分钟');
+                        ?></span>
+                        <span><?= __('最慢') ?>: <?php 
+                            $maxTime = $statistics['response_time']['max'] ?? 0;
+                            echo $maxTime < 60 ? round($maxTime, 1) . __('秒') : round($maxTime / 60, 1) . __('分钟');
+                        ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon duration">
+                    <i class="mdi mdi-timer"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="stat-duration"><?= $statistics['session_duration']['average'] ?? 0 ?></div>
+                    <div class="stat-label"><?= __('平均会话时长（分钟）') ?></div>
+                    <div class="stat-detail">
+                        <span><?= __('最短') ?>: <?= $statistics['session_duration']['min'] ?? 0 ?> <?= __('分钟') ?></span>
+                        <span><?= __('最长') ?>: <?= $statistics['session_duration']['max'] ?? 0 ?> <?= __('分钟') ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="console-layout">
+        <!-- 左侧会话列表 -->
+        <div class="console-sidebar">
+            <div class="sidebar-header">
+                <h2><?= __('会话列表') ?></h2>
+                <button class="btn-refresh" id="refresh-sessions" title="<?= __('刷新') ?>">
+                    <i class="mdi mdi-refresh"></i>
+                </button>
+            </div>
+
+            <!-- 等待分配的会话 -->
+            <?php if (!empty($waitingSessions)): ?>
+            <div class="waiting-sessions">
+                <h3 class="section-title"><?= __('等待分配') ?></h3>
+                <div class="session-list" id="waiting-sessions-list">
+                    <?php foreach ($waitingSessions as $session): ?>
+                    <div class="session-item waiting" data-session-id="<?= $session['session_id'] ?>">
+                        <div class="session-header">
+                            <span class="session-id">#<?= $session['session_id'] ?></span>
+                            <span class="session-status badge-waiting"><?= __('等待中') ?></span>
+                        </div>
+                        <div class="session-preview">
+                            <?php if (isset($session['last_message'])): ?>
+                                <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+                            <?php else: ?>
+                                <p class="last-message"><?= __('暂无消息') ?></p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="session-actions">
+                            <button class="btn-assign" onclick="assignSession(<?= $session['session_id'] ?>)">
+                                <?= __('接单') ?>
+                            </button>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- 我的会话 -->
+            <div class="my-sessions">
+                <h3 class="section-title"><?= __('我的会话') ?></h3>
+                <div class="session-list" id="my-sessions-list">
+                    <?php if (empty($sessions)): ?>
+                        <div class="empty-state">
+                            <p><?= __('暂无会话') ?></p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($sessions as $session): ?>
+                        <div class="session-item <?= $session['unread_count'] > 0 ? 'unread' : '' ?>" 
+                             data-session-id="<?= $session['session_id'] ?>"
+                             onclick="loadSession(<?= $session['session_id'] ?>)">
+                            <div class="session-header">
+                                <span class="session-id">#<?= $session['session_id'] ?></span>
+                                <?php if ($session['unread_count'] > 0): ?>
+                                    <span class="unread-badge"><?= $session['unread_count'] ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="session-preview">
+                                <?php if (isset($session['last_message'])): ?>
+                                    <p class="last-message"><?= htmlspecialchars(mb_substr($session['last_message'], 0, 50)) ?></p>
+                                <?php else: ?>
+                                    <p class="last-message"><?= __('暂无消息') ?></p>
+                                <?php endif; ?>
+                                <?php if (isset($session['last_message_time'])): ?>
+                                    <span class="last-time"><?= date('H:i', strtotime($session['last_message_time'])) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧聊天区域 -->
+        <div class="console-main">
+            <div class="chat-container" id="chat-container">
+                <div class="chat-empty-state">
+                    <div class="empty-icon">
+                        <i class="mdi mdi-message-text"></i>
+                    </div>
+                    <p><?= __('请选择一个会话开始聊天') ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="<?= $jsUrl ?>"></script>
+<script src="<?= $statisticsJsUrl ?>"></script>
+<script>
+    // 初始化工作台
+    const consoleConfig = {
+        consoleUrl: '<?= $consoleUrl ?>',
+        agentId: <?= $agent['agent_id'] ?? 0 ?>
+    };
+    
+    CustomerServiceConsole.init(consoleConfig);
+    CustomerServiceStatistics.init({
+        consoleUrl: '<?= $consoleUrl ?>',
+        currentPeriod: 'today'
+    });
+</script>
+

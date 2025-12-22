@@ -1,0 +1,162 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $components 组件数组，格式：['componentName' => ['name' => '...', 'params' => [...], 'param_count' => 5, 'configured_count' => 2], ...] */
+?>
+<div class="row g-3" id="components-container">
+    <?php foreach ($components as $componentName => $component): 
+        $name = $component['name'] ?? ucfirst($componentName);
+        $description = $component['description'] ?? '';
+        $paramCount = $component['param_count'] ?? 0;
+        $configuredCount = $component['configured_count'] ?? 0;
+        $configProgress = $paramCount > 0 ? round(($configuredCount / $paramCount) * 100) : 0;
+    ?>
+        <div class="col-md-6 col-lg-4">
+            <div class="card component-card h-100" 
+                 data-component-name="<?= htmlspecialchars($componentName) ?>"
+                 style="transition: all 0.2s;">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-2">
+                        <h6 class="card-title mb-0"><?= htmlspecialchars($name) ?></h6>
+                        <span class="badge bg-secondary"><?= $paramCount ?> <?= __('参数') ?></span>
+                    </div>
+                    <?php if (!empty($description)): ?>
+                        <p class="card-text text-muted small mb-2"><?= htmlspecialchars($description) ?></p>
+                    <?php endif; ?>
+                    
+                    <!-- 配置进度 -->
+                    <?php if ($paramCount > 0): ?>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted"><?= __('配置进度') ?></small>
+                                <small class="text-muted"><?= $configuredCount ?>/<?= $paramCount ?></small>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: <?= $configProgress ?>%" 
+                                     aria-valuenow="<?= $configProgress ?>" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <button type="button" 
+                            class="btn btn-sm btn-primary w-100"
+                            onclick="openComponentParamsConfigModal('<?= htmlspecialchars($componentName) ?>');">
+                        <i class="mdi mdi-cog"></i> <?= __('配置参数') ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+</div>
+<small class="text-muted d-block mt-3">
+    <i class="mdi mdi-information-outline"></i>
+    <?= __('点击"配置参数"按钮编辑组件的参数值') ?>
+</small>
+
+<?php
+$themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
+$getUrl = $this->getUrl('theme/backend/config/layout/getComponentParams');
+$modalUrl = $this->getUrl('theme/backend/config/layout/getComponentParamsModal');
+?>
+<script>
+(function() {
+    const themeId = <?= json_encode($themeId) ?>;
+    const area = <?= json_encode($area) ?>;
+    const scope = <?= json_encode($scope) ?>;
+    const getUrl = <?= json_encode($getUrl) ?>;
+    const modalUrl = <?= json_encode($modalUrl) ?>;
+    
+    window.openComponentParamsConfigModal = function(componentName) {
+        if (!themeId) {
+            alert('<?= __('请先选择主题') ?>');
+            return;
+        }
+        
+        // 显示加载状态
+        const loadingHtml = `
+            <div class="modal fade" id="componentParamsModal" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><?= __('配置组件参数') ?></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden"><?= __('加载中...') ?></span>
+                            </div>
+                            <p class="mt-3"><?= __('正在加载组件参数...') ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 移除现有弹窗
+        const existingModal = document.getElementById('componentParamsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 添加加载弹窗
+        document.body.insertAdjacentHTML('beforeend', loadingHtml);
+        const modal = document.getElementById('componentParamsModal');
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // 获取数据并加载弹窗
+        const formData = new FormData();
+        formData.append('theme_id', themeId);
+        formData.append('area', area);
+        formData.append('scope', scope);
+        formData.append('component_name', componentName);
+        
+        fetch(getUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 200 && data.data && data.data.component) {
+                // 使用AJAX加载弹窗内容
+                const componentJson = encodeURIComponent(JSON.stringify(data.data.component));
+                fetch(modalUrl + '?component=' + componentJson + '&component_name=' + encodeURIComponent(componentName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId, {
+                    method: 'GET'
+                })
+                .then(response => response.text())
+                .then(html => {
+                    const modalContent = modal.querySelector('.modal-content');
+                    if (modalContent) {
+                        modalContent.outerHTML = html;
+                        const newModal = document.getElementById('componentParamsModal');
+                        if (newModal) {
+                            const newBsModal = new bootstrap.Modal(newModal);
+                            newBsModal.show();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading modal:', error);
+                    modal.querySelector('.modal-body').innerHTML = 
+                        '<div class="alert alert-danger"><?= __('加载弹窗失败') ?>: ' + error.message + '</div>';
+                });
+            } else {
+                modal.querySelector('.modal-body').innerHTML = 
+                    '<div class="alert alert-danger">' + (data.msg || '<?= __('加载失败') ?>') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            modal.querySelector('.modal-body').innerHTML = 
+                '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + error.message + '</div>';
+        });
+    };
+})();
+</script>
+

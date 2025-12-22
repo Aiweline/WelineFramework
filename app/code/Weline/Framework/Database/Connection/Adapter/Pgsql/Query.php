@@ -45,7 +45,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public string $group_by = '';
     public string $having = '';
 
-    protected ?\PDOStatement $PDOStatement = null;
+    public ?\PDOStatement $PDOStatement = null;
     public string $sql = '';
     public string $additional_sql = '';
 
@@ -65,31 +65,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->identity_field = $field;
         return $this;
     }
-
-    public function table(string $table_name): QueryInterface
-    {
-        $this->table = $this->getTable($table_name);
-        return $this;
-    }
-
+    
     /**
-     * PostgreSQL 使用双引号作为标识符
+     * 重写 query 方法，在执行前转换 MySQL 特有语法
      */
-    public function getTable($table_name): string
+    public function query(string $sql): QueryInterface
     {
-        // 如果已经包含引号，直接返回
-        if (str_contains($table_name, '"')) {
-            return $table_name;
-        }
-        // 去除反引号，替换为双引号
-        $table_name = str_replace('`', '', $table_name);
-        // 如果包含点号（schema.table），分别处理
-        if (str_contains($table_name, '.')) {
-            $parts = explode('.', $table_name);
-            return '"' . implode('"."', $parts) . '"';
-        }
-        return '"' . $table_name . '"';
+        // 转换 SHOW FULL COLUMNS FROM 语法
+        $sql = self::convertShowColumnsToInformationSchema($sql);
+        // 转换反引号为双引号
+        $sql = self::convertBackticksToDoubleQuotes($sql);
+        
+        return parent::query($sql);
     }
+
 
     public function insertOld(array $data, array|string $update_fields = [], string $update_where_fields = '', bool $ignore_primary_key = false): QueryInterface
     {
@@ -344,5 +333,145 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
         return $field;
     }
+    
+    /**
+     * 重写 getPrepareSql 方法，将 SQL 中的反引号替换为双引号
+     * PostgreSQL 使用双引号作为标识符
+     */
+    public function getPrepareSql(bool $format = false): string
+    {
+        $sql = $this->sql;
+        
+        // 处理 SHOW FULL COLUMNS FROM 语法（MySQL 特有，需要转换为 PostgreSQL 兼容的查询）
+        $sql = self::convertShowColumnsToInformationSchema($sql);
+        
+        // 将反引号替换为双引号（PostgreSQL 语法）
+        // 但需要小心处理，避免替换字符串中的反引号
+        // 使用正则表达式匹配标识符：`identifier` 或 `schema`.`table`
+        $sql = preg_replace_callback(
+            '/`([^`]+)`/',
+            function($matches) {
+                $identifier = $matches[1];
+                // 如果包含点号，分别处理每个部分
+                if (str_contains($identifier, '.')) {
+                    $parts = explode('.', $identifier);
+                    return '"' . implode('"."', $parts) . '"';
+                }
+                return '"' . $identifier . '"';
+            },
+            $sql
+        );
+        
+        if ($format) {
+            return \SqlFormatter::format($sql);
+        }
+        return $sql;
+    }
+    
+    /**
+     * 将 MySQL 的 SHOW FULL COLUMNS FROM 语法转换为 PostgreSQL 的 information_schema 查询
+     * 
+     * @param string $sql SQL 语句
+     * @return string 转换后的 SQL
+     */
+    public static function convertShowColumnsToInformationSchema(string $sql): string
+    {
+        // 匹配 SHOW FULL COLUMNS FROM table_name 或 SHOW COLUMNS FROM table_name
+        if (preg_match('/SHOW\s+(FULL\s+)?COLUMNS\s+FROM\s+([^\s;]+)/i', $sql, $matches)) {
+            $tableName = trim($matches[2], '`"\'');
+            
+            // 解析 schema 和 table
+            $schema = 'public';
+            $table = $tableName;
+            
+            if (str_contains($tableName, '.')) {
+                $parts = explode('.', $tableName);
+                if (count($parts) === 2) {
+                    $schema = trim($parts[0], '`"\'');
+                    $table = trim($parts[1], '`"\'');
+                } elseif (count($parts) >= 3) {
+                    // 可能是 database.schema.table 格式，取后两部分
+                    $schema = trim($parts[count($parts) - 2], '`"\'');
+                    $table = trim($parts[count($parts) - 1], '`"\'');
+                }
+            }
+            
+            // 转换为 PostgreSQL information_schema 查询
+            // 返回与 MySQL SHOW FULL COLUMNS 兼容的字段格式
+            $sql = "SELECT 
+                c.column_name AS \"Field\",
+                c.data_type AS \"Type\",
+                CASE WHEN c.is_nullable = 'YES' THEN 'YES' ELSE 'NO' END AS \"Null\",
+                CASE WHEN c.column_default LIKE 'nextval%' THEN 'PRI' 
+                     WHEN constraints.constraint_type = 'PRIMARY KEY' THEN 'PRI'
+                     WHEN constraints.constraint_type = 'UNIQUE' THEN 'UNI'
+                     ELSE '' END AS \"Key\",
+                c.column_default AS \"Default\",
+                CASE WHEN c.column_default LIKE 'nextval%' THEN 'auto_increment' ELSE '' END AS \"Extra\",
+                '' AS \"Collation\",
+                '' AS \"Privileges\",
+                COALESCE(col_description(('{$schema}.{$table}')::regclass::oid, c.ordinal_position), '') AS \"Comment\"
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT kcu.column_name AS col_name, tc.constraint_type
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                WHERE tc.table_schema = '{$schema}' AND tc.table_name = '{$table}'
+            ) constraints ON c.column_name = constraints.col_name
+            WHERE c.table_schema = '{$schema}' AND c.table_name = '{$table}'
+            ORDER BY c.ordinal_position";
+        }
+        
+        return $sql;
+    }
+    
+    /**
+     * 重写 getSql 方法，确保返回的 SQL 使用双引号
+     */
+    public function getSql(bool $format = false): string
+    {
+        $sql = parent::getSql($format);
+        
+        // 将反引号替换为双引号（PostgreSQL 语法）
+        $sql = preg_replace_callback(
+            '/`([^`]+)`/',
+            function($matches) {
+                $identifier = $matches[1];
+                if (str_contains($identifier, '.')) {
+                    $parts = explode('.', $identifier);
+                    return '"' . implode('"."', $parts) . '"';
+                }
+                return '"' . $identifier . '"';
+            },
+            $sql
+        );
+        
+        return $sql;
+    }
+    
+    /**
+     * 将 SQL 中的反引号替换为双引号
+     * PostgreSQL 使用双引号作为标识符
+     * 这是统一的处理函数，在所有 SQL 执行前调用
+     */
+    public static function convertBackticksToDoubleQuotes(string $sql): string
+    {
+        return preg_replace_callback(
+            '/`([^`]+)`/',
+            function($matches) {
+                $identifier = $matches[1];
+                // 如果包含点号，分别处理每个部分
+                if (str_contains($identifier, '.')) {
+                    $parts = explode('.', $identifier);
+                    return '"' . implode('"."', $parts) . '"';
+                }
+                return '"' . $identifier . '"';
+            },
+            $sql
+        );
+    }
+    
 }
 

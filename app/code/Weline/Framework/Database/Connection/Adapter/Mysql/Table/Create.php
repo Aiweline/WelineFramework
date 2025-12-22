@@ -95,6 +95,7 @@ class Create extends AbstractTable implements CreateInterface
         $column = implode('`,`', $column);
         switch ($type) {
             case self::index_type_DEFAULT:
+            case 'INDEX': // 兼容旧的调用方式
                 $this->indexes[] = "INDEX `{$name}`(`{$column}`) {$index_method} {$comment}";
 
                 break;

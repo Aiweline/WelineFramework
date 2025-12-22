@@ -1,0 +1,37 @@
+<?php
+/**
+ * Header Account Links Hook 实现
+ * 
+ * 在账户下拉菜单中显示账户相关链接
+ */
+
+use Weline\Customer\Session\CustomerSession;
+use Weline\Framework\Manager\ObjectManager;
+
+// 获取 CustomerSession
+/** @var CustomerSession $session */
+$session = ObjectManager::getInstance(CustomerSession::class);
+
+// 获取前端URL（使用模板的 getUrl 方法更安全）
+$frontendUrl = $this->getUrl('');
+
+// 检查是否登录
+$isLoggedIn = $session->isLogin();
+?>
+
+<?php if ($isLoggedIn): ?>
+    <!-- 已登录状态：显示账户菜单 -->
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/index" role="menuitem"><?= __('账户') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/orders" role="menuitem"><?= __('我的订单') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/settings" role="menuitem"><?= __('账户设置') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/profile" role="menuitem"><?= __('个人资料') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/address" role="menuitem"><?= __('收货地址') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/password" role="menuitem"><?= __('修改密码') ?></a></li>
+    <li role="none" class="divider"></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/logout" role="menuitem"><?= __('退出登录') ?></a></li>
+<?php else: ?>
+    <!-- 未登录状态：显示登录/注册链接 -->
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/login" role="menuitem"><?= __('登录') ?></a></li>
+    <li role="none"><a href="<?= $frontendUrl ?>customer/account/register" role="menuitem"><?= __('注册') ?></a></li>
+<?php endif; ?>
+

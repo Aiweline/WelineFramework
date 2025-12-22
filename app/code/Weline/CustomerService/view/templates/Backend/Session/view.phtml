@@ -1,0 +1,156 @@
+<?php
+/**
+ * 会话详情页面
+ */
+$session = $this->getData('session') ?? [];
+$messages = $this->getData('messages') ?? [];
+?>
+<div class="customer-service-session-view">
+    <div class="page-header">
+        <h1><?= __('会话详情') ?></h1>
+        <a href="<?= $this->getBackendUrl('customerservice/backend/session') ?>" class="btn btn-secondary">
+            <?= __('返回列表') ?>
+        </a>
+    </div>
+    
+    <div class="session-info">
+        <div class="info-card">
+            <h3><?= __('会话信息') ?></h3>
+            <table class="table">
+                <tr>
+                    <th><?= __('会话ID') ?></th>
+                    <td><?= $session['session_id'] ?? '-' ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('客户ID') ?></th>
+                    <td><?= $session['customer_id'] ?? '-' ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('客服ID') ?></th>
+                    <td><?= $session['agent_id'] ?? '-' ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('客户语言') ?></th>
+                    <td><?= htmlspecialchars($session['customer_locale'] ?? '-') ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('客服语言') ?></th>
+                    <td><?= htmlspecialchars($session['agent_locale'] ?? '-') ?></td>
+                </tr>
+                <tr>
+                    <th><?= __('状态') ?></th>
+                    <td>
+                        <?php
+                        $statusText = [
+                            'waiting' => __('等待中'),
+                            'active' => __('进行中'),
+                            'closed' => __('已关闭')
+                        ];
+                        $statusClass = [
+                            'waiting' => 'badge-warning',
+                            'active' => 'badge-success',
+                            'closed' => 'badge-secondary'
+                        ];
+                        $status = $session['status'] ?? 'waiting';
+                        ?>
+                        <span class="badge <?= $statusClass[$status] ?? 'badge-secondary' ?>">
+                            <?= $statusText[$status] ?? $status ?>
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?= __('创建时间') ?></th>
+                    <td><?= $session['created_at'] ?? '-' ?></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div class="session-messages">
+        <h3><?= __('聊天记录') ?></h3>
+        <div class="messages-container">
+            <?php if (empty($messages)): ?>
+                <p class="text-center"><?= __('暂无消息') ?></p>
+            <?php else: ?>
+                <?php foreach ($messages as $message): ?>
+                    <div class="message-item message-<?= $message['sender_type'] ?>">
+                        <div class="message-header">
+                            <strong><?= $message['sender_type'] === 'customer' ? __('客户') : __('客服') ?></strong>
+                            <span class="message-time"><?= $message['created_at'] ?></span>
+                        </div>
+                        <div class="message-content">
+                            <p><?= htmlspecialchars($message['content']) ?></p>
+                            <?php if (!empty($message['translated_content']) && $message['translated_content'] !== $message['content']): ?>
+                                <p class="message-translated">
+                                    <em><?= __('翻译：') ?><?= htmlspecialchars($message['translated_content']) ?></em>
+                                </p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<style>
+.session-info {
+    margin-bottom: 30px;
+}
+
+.info-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.session-messages {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.messages-container {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.message-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.message-customer {
+    background: #e3f2fd;
+    margin-left: 20%;
+}
+
+.message-agent {
+    background: #f5f5f5;
+    margin-right: 20%;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+.message-content {
+    font-size: 14px;
+}
+
+.message-translated {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #ccc;
+    color: #999;
+    font-size: 12px;
+}
+</style>
+
