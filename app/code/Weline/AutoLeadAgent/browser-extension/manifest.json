@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "AutoLeadAgent 智能寻客助手",
+  "version": "1.0.0",
+  "description": "WelineFramework 自动寻客系统的浏览器扩展，用于爬取社交媒体平台获取潜在客户信息",
+  "author": "Weline",
+  "icons": {},
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*",
+    "https://twitter.com/*",
+    "https://x.com/*",
+    "https://www.facebook.com/*",
+    "https://facebook.com/*",
+    "https://www.instagram.com/*",
+    "https://instagram.com/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://www.tiktok.com/*",
+    "https://tiktok.com/*",
+    "https://www.baidu.com/*",
+    "https://baidu.com/*",
+    "https://www.google.com/*",
+    "https://google.com/*",
+    "https://www.bing.com/*",
+    "https://bing.com/*",
+    "https://html.duckduckgo.com/*",
+    "https://duckduckgo.com/*",
+    "https://yandex.com/*",
+    "https://www.yandex.com/*",
+    "https://search.yahoo.com/*",
+    "https://www.yahoo.com/*",
+    "https://www.so.com/*",
+    "https://so.com/*",
+    "https://www.sogou.com/*",
+    "https://sogou.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://127.0.0.1/*",
+      "http://localhost/*",
+      "https://*/*"
+    ]
+  },
+  "action": {
+    "default_title": "AutoLeadAgent 寻客助手",
+    "default_popup": "popup.html"
+  }
+}
+

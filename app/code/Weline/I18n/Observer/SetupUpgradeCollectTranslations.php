@@ -1,0 +1,80 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
+ * 作者：Admin
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ * 日期：2024/01/01 00:00:00
+ */
+
+namespace Weline\I18n\Observer;
+
+use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
+use Weline\Framework\Cache\CacheInterface;
+use Weline\I18n\Cache\I18nCache;
+use Weline\Framework\Phrase\Cache\PhraseCache;
+
+/**
+ * 系统升级后自动收集语言包观察者
+ * 监听 Weline_Framework_Setup::upgrade_after 事件
+ */
+class SetupUpgradeCollectTranslations implements ObserverInterface
+{
+    private I18n $i18n;
+
+    public function __construct(I18n $i18n)
+    {
+        $this->i18n = $i18n;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function execute(Event &$event): void
+    {
+        try {
+            if (php_sapi_name() === 'cli') {
+                echo "\n[I18n] 正在收集语言包...\n";
+            }
+            
+            // 收集语言包（不使用缓存，确保最新）
+            // 这会自动注册并激活对应的 locale 和国家
+            $this->i18n->convertToLanguageFile(false);
+            
+            // 清理翻译缓存，确保新翻译生效
+            try {
+                /** @var CacheInterface $i18nCache */
+                $i18nCache = ObjectManager::getInstance(I18nCache::class . 'Factory');
+                $i18nCache->clear();
+                
+                /** @var CacheInterface $phraseCache */
+                $phraseCache = ObjectManager::getInstance(PhraseCache::class . 'Factory');
+                $phraseCache->clear();
+            } catch (\Exception $e) {
+                // 缓存清理失败不影响主流程
+                if (php_sapi_name() === 'cli') {
+                    echo "[I18n] 翻译缓存清理失败：" . $e->getMessage() . "\n";
+                }
+            }
+            
+            if (php_sapi_name() === 'cli') {
+                echo "[I18n] 语言包收集完成！\n";
+            }
+            
+        } catch (\Exception $e) {
+            $errorMsg = 'I18n: 系统升级后语言包收集失败 - ' . $e->getMessage();
+            error_log($errorMsg);
+            if (php_sapi_name() === 'cli') {
+                echo "[I18n] 语言包收集失败：" . $e->getMessage() . "\n";
+            }
+        }
+    }
+}
+

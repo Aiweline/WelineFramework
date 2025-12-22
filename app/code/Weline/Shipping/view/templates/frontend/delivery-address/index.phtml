@@ -1,0 +1,149 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+$addresses = $this->getData('addresses') ?? [];
+$frontendUrl = $this->getUrl('');
+?>
+<div class="delivery-address-list">
+    <div class="page-header mb-4">
+        <h2><?= __('收货地址管理') ?></h2>
+        <a href="<?= $frontendUrl ?>shipping/delivery/form" class="btn btn-primary">
+            <i class="ri-add-line"></i> <?= __('新增地址') ?>
+        </a>
+    </div>
+
+    <?php if (empty($addresses)): ?>
+        <div class="alert alert-info">
+            <i class="ri-information-line"></i> <?= __('暂无地址，请添加收货地址') ?>
+        </div>
+    <?php else: ?>
+        <div class="address-grid">
+            <?php foreach ($addresses as $address): ?>
+                <div class="address-card <?= $address->isDefault() ? 'default-address' : '' ?>">
+                    <div class="address-header">
+                        <h4><?= htmlspecialchars($address->getData('name')) ?></h4>
+                        <?php if ($address->isDefault()): ?>
+                            <span class="badge bg-primary"><?= __('默认') ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="address-content">
+                        <p><strong><?= __('收货人') ?>:</strong> <?= htmlspecialchars($address->getData('contact_name')) ?></p>
+                        <p><strong><?= __('电话') ?>:</strong> <?= htmlspecialchars($address->getData('contact_phone')) ?></p>
+                        <p><strong><?= __('地址') ?>:</strong> <?= htmlspecialchars($address->getFullAddress()) ?></p>
+                        <?php if ($address->getData('postal_code')): ?>
+                            <p><strong><?= __('邮编') ?>:</strong> <?= htmlspecialchars($address->getData('postal_code')) ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="address-actions">
+                        <a href="<?= $frontendUrl ?>shipping/delivery/form?id=<?= $address->getId() ?>" class="btn btn-sm btn-outline-primary">
+                            <i class="ri-edit-line"></i> <?= __('编辑') ?>
+                        </a>
+                        <?php if (!$address->isDefault()): ?>
+                            <button type="button" class="btn btn-sm btn-outline-success set-default-btn" data-id="<?= $address->getId() ?>">
+                                <i class="ri-star-line"></i> <?= __('设为默认') ?>
+                            </button>
+                        <?php endif; ?>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-btn" data-id="<?= $address->getId() ?>">
+                            <i class="ri-delete-bin-line"></i> <?= __('删除') ?>
+                        </button>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 设置默认地址
+    document.querySelectorAll('.set-default-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('<?= __('确定要设置为默认地址吗？') ?>')) {
+                return;
+            }
+            const id = this.getAttribute('data-id');
+            fetch('<?= $frontendUrl ?>shipping/delivery/setDefault', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'id=' + id
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            });
+        });
+    });
+
+    // 删除地址
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('<?= __('确定要删除此地址吗？') ?>')) {
+                return;
+            }
+            const id = this.getAttribute('data-id');
+            fetch('<?= $frontendUrl ?>shipping/delivery/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'id=' + id
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            });
+        });
+    });
+});
+</script>
+
+<style>
+.delivery-address-list {
+    padding: 20px;
+}
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.address-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+.address-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    background: #fff;
+}
+.address-card.default-address {
+    border-color: #0d6efd;
+    background: #f0f8ff;
+}
+.address-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.address-content p {
+    margin: 8px 0;
+}
+.address-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+</style>
+

@@ -1,0 +1,550 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var string $file */
+/** @var array $data */
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$area = $area ?: 'frontend';
+$scope = $scope ?: 'default';
+
+// API URLs
+$saveUrl = $this->getUrl('theme/backend/config/variables/save');
+$saveVariableUrl = $this->getUrl('theme/backend/config/variables/saveVariable');
+$refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPreview');
+
+$categories = $data['categories'] ?? [];
+$fileName = $data['name'] ?? ucfirst($file);
+?>
+<!DOCTYPE html>
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>配置变量</lang> - <?= htmlspecialchars($fileName) ?> - <?= htmlspecialchars($theme->getName() ?? '主题') ?></title>
+    <style>
+        .variable-form-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .variable-form-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+        }
+        .variable-form-header h1 {
+            margin: 0 0 10px 0;
+        }
+        .search-filter-bar {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .search-filter-bar input[type="text"],
+        .search-filter-bar select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .search-filter-bar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+        .category-group {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fff;
+        }
+        .category-group-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .variable-item {
+            display: grid;
+            grid-template-columns: 250px 1fr auto 150px;
+            gap: 15px;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .variable-item:hover {
+            background: #e9ecef;
+        }
+        .variable-item label {
+            font-weight: 500;
+            color: #333;
+        }
+        .variable-item .variable-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .variable-item input[type="color"] {
+            width: 60px;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .variable-item input[type="text"],
+        .variable-item input[type="number"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .variable-item select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 80px;
+        }
+        .variable-item .variable-description {
+            font-size: 12px;
+            color: #666;
+        }
+        .variable-item .default-value {
+            font-size: 12px;
+            color: #999;
+        }
+        .action-buttons {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .preview-iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <div class="variable-form-container">
+        <div class="variable-form-header">
+            <h1><lang>配置变量</lang> - <?= htmlspecialchars($fileName) ?></h1>
+            <div>
+                <span><lang>主题：</lang><?= htmlspecialchars($theme->getName() ?? '') ?></span>
+                <span style="margin-left: 20px;"><lang>区域：</lang><?= htmlspecialchars($area) ?></span>
+                <span style="margin-left: 20px;"><lang>作用域：</lang><?= htmlspecialchars($scope) ?></span>
+            </div>
+        </div>
+        
+        <div class="search-filter-bar">
+            <input type="text" id="search-input" placeholder="<lang>搜索变量名...</lang>" onkeyup="filterVariables()">
+            <select id="category-filter" onchange="filterVariables()">
+                <option value=""><lang>所有分类</lang></option>
+                <?php foreach (array_keys($categories) as $category): ?>
+                <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="button" class="btn btn-secondary" onclick="resetToDefaults()"><lang>重置为默认值</lang></button>
+        </div>
+        
+        <form id="variable-form">
+            <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
+            <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
+            <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+            
+            <?php foreach ($categories as $category => $vars): ?>
+            <div class="category-group" data-category="<?= htmlspecialchars($category) ?>">
+                <div class="category-group-title"><?= htmlspecialchars($category) ?></div>
+                
+                <?php foreach ($vars as $var): ?>
+                <div class="variable-item" data-var-name="<?= htmlspecialchars(strtolower($var['cssName'])) ?>" data-category="<?= htmlspecialchars($category) ?>">
+                    <label for="var-<?= htmlspecialchars($var['cssName']) ?>">
+                        <code><?= htmlspecialchars($var['cssName']) ?></code>
+                    </label>
+                    
+                    <div class="variable-input-group">
+                        <?php if ($var['is_color']): ?>
+                        <!-- 颜色变量：使用颜色选择器 -->
+                        <input type="color" 
+                               id="var-<?= htmlspecialchars($var['cssName']) ?>"
+                               data-meta-identify="<?= htmlspecialchars($var['meta_identify']) ?>"
+                               value="<?= htmlspecialchars($var['value'] ?: $var['default']) ?>"
+                               onchange="updateColorValue(this)"
+                               title="<?= htmlspecialchars($var['description'] ?? '') ?>">
+                        <input type="text" 
+                               class="color-text-input"
+                               data-color-input="var-<?= htmlspecialchars($var['cssName']) ?>"
+                               value="<?= htmlspecialchars($var['value'] ?: $var['default']) ?>"
+                               onchange="updateColorFromText(this)"
+                               placeholder="#000000">
+                        <?php elseif ($var['type'] === 'spacing'): ?>
+                        <!-- 间距变量：数字+单位 -->
+                        <?php
+                        $spacingValue = $var['value'] ?: $var['default'];
+                        // 处理var()引用
+                        if (strpos($spacingValue, 'var(') === 0) {
+                            $spacingNum = '';
+                            $spacingUnit = 'rem';
+                        } else {
+                            $spacingMatch = preg_match('/^(\d+(?:\.\d+)?)(rem|px|em|%)?$/', trim($spacingValue), $matches);
+                            $spacingNum = $spacingMatch ? $matches[1] : '';
+                            $spacingUnit = $spacingMatch && isset($matches[2]) ? $matches[2] : 'rem';
+                        }
+                        ?>
+                        <input type="number" 
+                               step="0.01"
+                               id="var-<?= htmlspecialchars($var['cssName']) ?>-num"
+                               value="<?= htmlspecialchars($spacingNum) ?>"
+                               onchange="updateSpacingValue('<?= htmlspecialchars($var['cssName']) ?>')"
+                               placeholder="1">
+                        <select id="var-<?= htmlspecialchars($var['cssName']) ?>-unit"
+                                onchange="updateSpacingValue('<?= htmlspecialchars($var['cssName']) ?>')">
+                            <option value="rem" <?= $spacingUnit === 'rem' ? 'selected' : '' ?>>rem</option>
+                            <option value="px" <?= $spacingUnit === 'px' ? 'selected' : '' ?>>px</option>
+                            <option value="em" <?= $spacingUnit === 'em' ? 'selected' : '' ?>>em</option>
+                            <option value="%" <?= $spacingUnit === '%' ? 'selected' : '' ?>>%</option>
+                        </select>
+                        <input type="hidden" 
+                               id="var-<?= htmlspecialchars($var['cssName']) ?>"
+                               data-meta-identify="<?= htmlspecialchars($var['meta_identify']) ?>"
+                               value="<?= htmlspecialchars($spacingValue) ?>">
+                        <?php else: ?>
+                        <!-- 其他变量：文本输入 -->
+                        <input type="text" 
+                               id="var-<?= htmlspecialchars($var['cssName']) ?>"
+                               data-meta-identify="<?= htmlspecialchars($var['meta_identify']) ?>"
+                               value="<?= htmlspecialchars($var['value'] ?: $var['default']) ?>"
+                               onchange="updateVariableValue(this)"
+                               placeholder="<?= htmlspecialchars($var['default']) ?>">
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="variable-description">
+                        <?= htmlspecialchars($var['description'] ?? '') ?>
+                    </div>
+                    
+                    <div class="default-value">
+                        <lang>默认：</lang><?= htmlspecialchars($var['default']) ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endforeach; ?>
+            
+            <div class="action-buttons">
+                <button type="button" class="btn btn-primary" onclick="saveAllVariables()">
+                    <lang>保存所有配置</lang>
+                </button>
+                <button type="button" class="btn btn-success" onclick="saveAndPreview()">
+                    <lang>保存并预览</lang>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="resetToDefaults()">
+                    <lang>重置为默认值</lang>
+                </button>
+            </div>
+        </form>
+        
+        <!-- 预览iframe -->
+        <iframe id="preview-iframe" class="preview-iframe hidden" src=""></iframe>
+    </div>
+    
+    <script>
+        // 保存所有变量
+        function saveAllVariables() {
+            const form = document.getElementById('variable-form');
+            const formData = new FormData(form);
+            
+            // 收集所有变量值
+            const variables = {};
+            document.querySelectorAll('[data-meta-identify]').forEach(input => {
+                const metaIdentify = input.getAttribute('data-meta-identify');
+                let value = input.value;
+                
+                // 如果是间距变量的隐藏输入，需要从数字和单位输入组合
+                if (input.type === 'hidden' && input.id.includes('var-') && !input.id.includes('-num') && !input.id.includes('-unit')) {
+                    const cssName = input.id.replace('var-', '');
+                    const numInput = document.getElementById('var-' + cssName + '-num');
+                    const unitSelect = document.getElementById('var-' + cssName + '-unit');
+                    if (numInput && unitSelect && numInput.value !== '') {
+                        value = numInput.value + unitSelect.value;
+                    }
+                }
+                
+                if (metaIdentify && value !== null && value !== '') {
+                    variables[metaIdentify] = value;
+                }
+            });
+            
+            formData.append('variables', JSON.stringify(variables));
+            
+            fetch('<?= $saveUrl ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    alert('保存成功！');
+                    if (data.preview_url) {
+                        refreshPreview(data.preview_url);
+                    }
+                } else {
+                    alert('保存失败：' + (data.msg || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存失败：网络错误');
+            });
+        }
+        
+        // 保存单个变量（实时保存）
+        function saveVariable(metaIdentify, value) {
+            const formData = new FormData();
+            formData.append('theme_id', '<?= $theme->getId() ?>');
+            formData.append('area', '<?= htmlspecialchars($area) ?>');
+            formData.append('scope', '<?= htmlspecialchars($scope) ?>');
+            formData.append('meta_identify', metaIdentify);
+            formData.append('value', value);
+            
+            fetch('<?= $saveVariableUrl ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200 && data.preview_url) {
+                    // 实时更新预览
+                    refreshPreview(data.preview_url);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving variable:', error);
+            });
+        }
+        
+        // 更新颜色值
+        function updateColorValue(colorInput) {
+            const textInput = document.querySelector('[data-color-input="' + colorInput.id + '"]');
+            if (textInput) {
+                textInput.value = colorInput.value;
+            }
+            const metaIdentify = colorInput.getAttribute('data-meta-identify');
+            if (metaIdentify) {
+                saveVariable(metaIdentify, colorInput.value);
+            }
+        }
+        
+        // 从文本更新颜色
+        function updateColorFromText(textInput) {
+            const colorInputId = textInput.getAttribute('data-color-input');
+            const colorInput = document.getElementById(colorInputId);
+            if (colorInput && /^#[0-9a-fA-F]{6}$/.test(textInput.value)) {
+                colorInput.value = textInput.value;
+                const metaIdentify = colorInput.getAttribute('data-meta-identify');
+                if (metaIdentify) {
+                    saveVariable(metaIdentify, textInput.value);
+                }
+            }
+        }
+        
+        // 更新间距值
+        function updateSpacingValue(cssName) {
+            const numInput = document.getElementById('var-' + cssName + '-num');
+            const unitSelect = document.getElementById('var-' + cssName + '-unit');
+            const hiddenInput = document.getElementById('var-' + cssName);
+            
+            if (numInput && unitSelect && hiddenInput) {
+                const numValue = numInput.value;
+                const unitValue = unitSelect.value;
+                if (numValue !== '') {
+                    const value = numValue + unitValue;
+                    hiddenInput.value = value;
+                    const metaIdentify = hiddenInput.getAttribute('data-meta-identify');
+                    if (metaIdentify) {
+                        saveVariable(metaIdentify, value);
+                    }
+                }
+            }
+        }
+        
+        // 更新变量值（文本输入）
+        function updateVariableValue(input) {
+            const metaIdentify = input.getAttribute('data-meta-identify');
+            if (metaIdentify) {
+                saveVariable(metaIdentify, input.value);
+            }
+        }
+        
+        // 保存并预览
+        function saveAndPreview() {
+            const form = document.getElementById('variable-form');
+            const formData = new FormData(form);
+            
+            // 收集所有变量值
+            const variables = {};
+            document.querySelectorAll('[data-meta-identify]').forEach(input => {
+                const metaIdentify = input.getAttribute('data-meta-identify');
+                let value = input.value;
+                
+                // 如果是间距变量的隐藏输入，需要从数字和单位输入组合
+                if (input.type === 'hidden' && input.id.includes('var-') && !input.id.includes('-num') && !input.id.includes('-unit')) {
+                    const cssName = input.id.replace('var-', '');
+                    const numInput = document.getElementById('var-' + cssName + '-num');
+                    const unitSelect = document.getElementById('var-' + cssName + '-unit');
+                    if (numInput && unitSelect && numInput.value !== '') {
+                        value = numInput.value + unitSelect.value;
+                    }
+                }
+                
+                if (metaIdentify && value !== null && value !== '') {
+                    variables[metaIdentify] = value;
+                }
+            });
+            
+            formData.append('variables', JSON.stringify(variables));
+            
+            fetch('<?= $saveUrl ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    if (data.preview_url) {
+                        refreshPreview(data.preview_url);
+                        alert('保存成功！预览已更新。');
+                    } else {
+                        alert('保存成功！');
+                    }
+                } else {
+                    alert('保存失败：' + (data.msg || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存失败：网络错误');
+            });
+        }
+        
+        // 刷新预览
+        function refreshPreview(previewUrl) {
+            const iframe = document.getElementById('preview-iframe');
+            if (iframe && previewUrl) {
+                iframe.classList.remove('hidden');
+                iframe.src = previewUrl;
+            }
+        }
+        
+        // 重置为默认值
+        function resetToDefaults() {
+            if (!confirm('确定要重置所有变量为默认值吗？')) {
+                return;
+            }
+            
+            document.querySelectorAll('[data-meta-identify]').forEach(input => {
+                const defaultValue = input.closest('.variable-item').querySelector('.default-value').textContent.replace('默认：', '').trim();
+                if (input.type === 'color') {
+                    input.value = defaultValue;
+                    const textInput = document.querySelector('[data-color-input="' + input.id + '"]');
+                    if (textInput) {
+                        textInput.value = defaultValue;
+                    }
+                } else if (input.type === 'hidden' && input.id.includes('var-') && !input.id.includes('-num') && !input.id.includes('-unit')) {
+                    // 间距变量（检查是否有对应的num和unit输入）
+                    const cssName = input.id.replace('var-', '');
+                    const numInput = document.getElementById('var-' + cssName + '-num');
+                    const unitSelect = document.getElementById('var-' + cssName + '-unit');
+                    if (numInput && unitSelect) {
+                        const match = defaultValue.match(/^(\d+(?:\.\d+)?)(rem|px|em|%)?$/);
+                        if (match) {
+                            numInput.value = match[1];
+                            unitSelect.value = match[2] || 'rem';
+                            input.value = defaultValue;
+                        }
+                    } else {
+                        input.value = defaultValue;
+                    }
+                } else {
+                    input.value = defaultValue;
+                }
+            });
+            
+            saveAllVariables();
+        }
+        
+        // 筛选变量
+        function filterVariables() {
+            const searchText = document.getElementById('search-input').value.toLowerCase();
+            const categoryFilter = document.getElementById('category-filter').value;
+            
+            document.querySelectorAll('.variable-item').forEach(item => {
+                const varName = item.getAttribute('data-var-name') || '';
+                const category = item.getAttribute('data-category') || '';
+                
+                const matchesSearch = !searchText || varName.includes(searchText);
+                const matchesCategory = !categoryFilter || category === categoryFilter;
+                
+                if (matchesSearch && matchesCategory) {
+                    item.style.display = 'grid';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // 隐藏空的分类组
+            document.querySelectorAll('.category-group').forEach(group => {
+                const visibleItems = group.querySelectorAll('.variable-item[style*="grid"], .variable-item:not([style*="none"])');
+                if (visibleItems.length === 0) {
+                    group.style.display = 'none';
+                } else {
+                    group.style.display = 'block';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,176 @@
+<?php
+/**
+ * 营销工具 - 创建活动页面
+ *
+ * @var $this \Weline\Framework\View\Template
+ */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$campaign = $this->getData('campaign') ?: [];
+$campaign_types = $this->getData('campaign_types') ?: [];
+$status_options = $this->getData('status_options') ?: [];
+$isEdit = !empty($campaign['id']);
+?>
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang><?= $isEdit ? '编辑' : '创建' ?>营销活动</lang></title>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
+    
+    <div class="sz-page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="sz-page-title">
+                    <i class="mdi mdi-<?= $isEdit ? 'pencil' : 'plus-circle' ?>"></i>
+                    <lang><?= $isEdit ? '编辑' : '创建' ?>营销活动</lang>
+                </h1>
+            </div>
+            <div>
+                <a href="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="btn btn-secondary">
+                    <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="sz-card">
+        <div class="sz-card-body">
+            <form id="campaign-form" method="post" action="<?= $this->getBackendUrl('ai/backend/marketingtools/save') ?>">
+                <?php if ($isEdit): ?>
+                    <input type="hidden" name="id" value="<?= $campaign['id'] ?>">
+                <?php endif; ?>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="campaign_name"><lang>活动名称</lang> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="campaign_name" name="campaign_name" 
+                                   value="<?= htmlspecialchars($campaign['campaign_name'] ?? '') ?>" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description"><lang>活动描述</lang></label>
+                            <textarea class="form-control" id="description" name="description" rows="4"><?= htmlspecialchars($campaign['description'] ?? '') ?></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="campaign_type"><lang>活动类型</lang> <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="campaign_type" name="campaign_type" required>
+                                        <option value=""><lang>请选择</lang></option>
+                                        <?php foreach ($campaign_types as $value => $label): ?>
+                                            <option value="<?= $value ?>" <?= ($campaign['campaign_type'] ?? '') === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="status"><lang>状态</lang></label>
+                                    <select class="form-control" id="status" name="status">
+                                        <?php foreach ($status_options as $value => $label): ?>
+                                            <option value="<?= $value ?>" <?= ($campaign['status'] ?? 'draft') === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="start_date"><lang>开始日期</lang> <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="start_date" name="start_date" 
+                                           value="<?= $campaign['start_date'] ?? '' ?>" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="end_date"><lang>结束日期</lang> <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="end_date" name="end_date" 
+                                           value="<?= $campaign['end_date'] ?? '' ?>" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="budget"><lang>预算</lang> (¥)</label>
+                            <input type="number" class="form-control" id="budget" name="budget" 
+                                   value="<?= $campaign['budget'] ?? '' ?>" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-content-save"></i> <lang>保存</lang>
+                    </button>
+                    <a href="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="btn btn-secondary">
+                        <i class="mdi mdi-close"></i> <lang>取消</lang>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
+    
+    <script>
+        document.getElementById('campaign-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value;
+            });
+            
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert(result.message || '保存成功');
+                    window.location.href = '<?= $this->getBackendUrl('ai/backend/marketingtools') ?>';
+                } else {
+                    alert(result.message || '保存失败');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存失败');
+            });
+        });
+        
+        // 日期验证
+        document.getElementById('start_date').addEventListener('change', function() {
+            const endDate = document.getElementById('end_date');
+            if (this.value && endDate.value && this.value > endDate.value) {
+                alert('开始日期不能晚于结束日期');
+                this.value = '';
+            }
+        });
+        
+        document.getElementById('end_date').addEventListener('change', function() {
+            const startDate = document.getElementById('start_date');
+            if (this.value && startDate.value && this.value < startDate.value) {
+                alert('结束日期不能早于开始日期');
+                this.value = '';
+            }
+        });
+    </script>
+</body>
+</html>
+

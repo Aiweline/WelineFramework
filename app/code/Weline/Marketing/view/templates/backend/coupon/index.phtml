@@ -1,0 +1,43 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $coupons
+ * @var \Weline\Framework\Pagination\Pagination $pagination
+ */
+?>
+<div class="marketing-coupon-list">
+    <h1><?= __('优惠券列表') ?></h1>
+    <div class="toolbar">
+        <a href="<?= $this->getUrl('marketing/backend/coupon/getAdd') ?>" class="btn btn-primary"><?= __('添加优惠券') ?></a>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('优惠券代码') ?></th>
+                <th><?= __('类型') ?></th>
+                <th><?= __('折扣值') ?></th>
+                <th><?= __('状态') ?></th>
+                <th><?= __('使用次数') ?></th>
+                <th><?= __('操作') ?></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($coupons as $coupon): ?>
+            <tr>
+                <td><?= $coupon['id'] ?></td>
+                <td><?= $this->escapeHtml($coupon['code']) ?></td>
+                <td><?= $this->escapeHtml($coupon['type']) ?></td>
+                <td><?= $coupon['discount_value'] ?></td>
+                <td><?= $this->escapeHtml($coupon['status']) ?></td>
+                <td><?= $coupon['usage_count'] ?>/<?= $coupon['usage_limit'] ?? '∞' ?></td>
+                <td>
+                    <a href="<?= $this->getUrl('marketing/backend/coupon/getEdit', ['id' => $coupon['id']]) ?>"><?= __('编辑') ?></a>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?= $this->getChildHtml('pagination') ?>
+</div>
+

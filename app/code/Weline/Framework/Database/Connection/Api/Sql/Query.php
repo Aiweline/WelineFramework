@@ -13,11 +13,15 @@ namespace Weline\Framework\Database\Connection\Api\Sql;
 
 use PDO;
 use PDOStatement;
-use Weline\Framework\App\Debug;
-use Weline\Framework\App\Env;
-use Weline\Framework\App\Exception;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormatter;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\DialectAdapterInterface;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\GenericDialectAdapter;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\IdentifierFormatterInterface;
+use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterface;
 use Weline\Framework\Database\Exception\DbException;
-use Weline\Framework\Database\Helper\Tool;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\Debug;
 use Weline\Framework\Manager\ObjectManager;
 
 abstract class Query implements QueryInterface
@@ -51,7 +55,7 @@ abstract class Query implements QueryInterface
 
     public int $total = 0;
 
-    protected ?PDOStatement $PDOStatement = null;
+    public ?PDOStatement $PDOStatement = null;
     public string $sql = '';
     public string $additional_sql = '';
 
@@ -62,6 +66,47 @@ abstract class Query implements QueryInterface
     public string $backup_file = '';
     public bool $batch = false;
 
+    protected IdentifierFormatterInterface $identifierFormatter;
+    protected TableNameStrategyInterface $tableNameStrategy;
+    protected DialectAdapterInterface $dialectAdapter;
+
+    public function __construct(
+        ?IdentifierFormatterInterface $identifierFormatter = null,
+        ?TableNameStrategyInterface   $tableNameStrategy = null,
+        ?DialectAdapterInterface      $dialectAdapter = null
+    ) {
+        $this->identifierFormatter = $identifierFormatter ?? new DefaultIdentifierFormatter();
+        $this->tableNameStrategy = $tableNameStrategy ?? new DefaultTableNameStrategy($this->identifierFormatter);
+        $this->dialectAdapter = $dialectAdapter ?? new GenericDialectAdapter();
+    }
+
+    public function setIdentifierFormatter(IdentifierFormatterInterface $identifierFormatter): static
+    {
+        $this->identifierFormatter = $identifierFormatter;
+        return $this;
+    }
+
+    public function setTableNameStrategy(TableNameStrategyInterface $tableNameStrategy): static
+    {
+        $this->tableNameStrategy = $tableNameStrategy;
+        return $this;
+    }
+
+    public function setDialectAdapter(DialectAdapterInterface $dialectAdapter): static
+    {
+        $this->dialectAdapter = $dialectAdapter;
+        return $this;
+    }
+
+    public function getIdentifierFormatter(): IdentifierFormatterInterface
+    {
+        return $this->identifierFormatter;
+    }
+
+    public function formatTableName(string $logicalName): string
+    {
+        return $this->tableNameStrategy->resolve($logicalName, $this->db_name);
+    }
 
     public function identity(string $field): QueryInterface
     {
@@ -71,7 +116,18 @@ abstract class Query implements QueryInterface
 
     public function table(string $table_name): QueryInterface
     {
-        $this->table = $this->getTable($table_name);
+        $table_name = trim($table_name);
+        if ($table_name === '') {
+            return $this;
+        }
+        if (str_contains($table_name, ' ')) {
+            $table_names = preg_split('/\s+/', $table_name);
+            $table_name = $table_names[0];
+            $alias_name = $table_names[1] ?? $this->table_alias;
+            $this->fields = str_replace('main_table.', $alias_name . '.', $this->fields);
+            $this->alias($alias_name);
+        }
+        $this->table = $this->tableNameStrategy->resolve($table_name, $this->db_name);
         return $this;
     }
 
@@ -524,9 +580,17 @@ abstract class Query implements QueryInterface
                 $this->sql = $sql;
                 $this->query($this->sql);
             } else {
+                // 临时保存 ORDER BY，因为 COUNT 查询不需要 ORDER BY
+                // PostgreSQL 要求：使用聚合函数时，ORDER BY 中的列必须出现在 GROUP BY 中
+                $savedOrder = $this->order;
+                $this->order = [];
+                
                 $this->fields = "count({$field}) as `{$alias}`";
                 $this->limit(1, 0);
                 $this->prepareSql('find');
+                
+                // 恢复 ORDER BY（不影响原始查询对象）
+                $this->order = $savedOrder;
             }
         }
 
@@ -603,17 +667,48 @@ abstract class Query implements QueryInterface
             Debug::target('pre_fetch', $msg);
         }
         if ($this->batch and $this->fetch_type == 'insert') {
-            $origin_data = $this->getLink()->exec($this->getSql());
-            if ($origin_data === false) {
-                $result = false;
+            // 检查 SQL 是否包含 RETURNING 子句（PostgreSQL）
+            $hasReturning = stripos($this->sql, 'RETURNING') !== false;
+            
+            if ($hasReturning) {
+                // 如果使用 RETURNING，需要使用 prepare/execute 来获取结果
+                $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                $this->PDOStatement->execute($this->bound_values);
+                $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+                // 批量插入时，返回最后一个插入的 ID
+                if (!empty($origin_data) && is_array($origin_data)) {
+                    $lastRow = end($origin_data);
+                    $result = $lastRow[$this->identity_field] ?? reset($lastRow);
+                } else {
+                    $result = $this->getLink()->lastInsertId();
+                }
             } else {
-                $result = $this->getLink()->lastInsertId();
+                // 没有 RETURNING，使用 exec
+                $origin_data = $this->getLink()->exec($this->getSql());
+                if ($origin_data === false) {
+                    $result = false;
+                } else {
+                    $result = $this->getLink()->lastInsertId();
+                }
             }
             $origin_data = $result;
             $this->reset();
         } else {
-            $this->PDOStatement = $this->getLink()->prepare($this->sql);
-            $this->PDOStatement->execute($this->bound_values);
+            // 单条语句，使用 prepare/execute
+            // PostgreSQL 的 prepared statement 不支持多个 SQL 命令
+            // 如果 SQL 包含多个命令，prepare() 会抛出异常，我们捕获并处理
+            try {
+                $this->PDOStatement = $this->getLink()->prepare($this->sql);
+                $this->PDOStatement->execute($this->bound_values);
+            } catch (\PDOException $e) {
+                // 检查是否是"不能插入多个命令"的错误
+                if (str_contains($e->getMessage(), 'cannot insert multiple commands') || 
+                    str_contains($e->getMessage(), 'multiple commands')) {
+                    throw new \Exception(__('PostgreSQL 的 prepared statement 不支持包含多个 SQL 命令。请将查询拆分为单独的语句，或使用 exec() 方法执行多个语句。SQL: %{1}', [substr($this->sql, 0, 200)]), 0, $e);
+                }
+                // 其他错误继续抛出
+                throw $e;
+            }
             // 检查是否有多个结果集
             $origin_data = [];
             do {
@@ -661,7 +756,41 @@ abstract class Query implements QueryInterface
                 }
                 break;
             case 'insert':
-                $result = $this->getLink()->lastInsertId();
+                // 如果使用了 RETURNING 子句（PostgreSQL），从结果中获取 ID
+                if (!empty($data) && is_array($data)) {
+                    // 检查是否是 RETURNING 的结果
+                    // RETURNING 的结果通常是数组，包含插入的 ID
+                    $firstRow = null;
+                    if (isset($data[0]) && is_array($data[0])) {
+                        // 多行结果（批量插入）
+                        $firstRow = $data[0];
+                    } elseif (is_array($data) && !isset($data[0]) && !empty($data)) {
+                        // 单行结果（关联数组）
+                        $firstRow = $data;
+                    } elseif (count($data) === 1 && is_array($data[0])) {
+                        // 单行结果（索引数组）
+                        $firstRow = $data[0];
+                    }
+                    
+                    // 从 RETURNING 结果中获取 ID
+                    if ($firstRow && $this->identity_field) {
+                        // 尝试从结果中获取 identity_field
+                        if (isset($firstRow[$this->identity_field])) {
+                            $result = $firstRow[$this->identity_field];
+                        } else {
+                            // 如果没有找到 identity_field，尝试获取第一个值
+                            $result = reset($firstRow);
+                        }
+                    } else {
+                        // 尝试使用 lastInsertId
+                        $lastId = $this->getLink()->lastInsertId();
+                        $result = $lastId !== false ? $lastId : (reset($data) ?? null);
+                    }
+                } else {
+                    // 没有 RETURNING 结果，使用 lastInsertId
+                    $lastId = $this->getLink()->lastInsertId();
+                    $result = $lastId !== false ? $lastId : null;
+                }
                 break;
             case 'pagination':
             case 'query':
@@ -869,6 +998,35 @@ abstract class Query implements QueryInterface
             return \SqlFormatter::format($real_sql);
         }
         return $real_sql;
+    }
+
+    /**
+     * 检测 SQL 是否包含多个语句（排除字符串中的分号和末尾的分号）
+     */
+    protected function hasMultipleSqlStatements(string $sql): bool
+    {
+        // 移除注释
+        $sql = preg_replace('/--.*$/m', '', $sql);
+        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+        
+        // 移除首尾空白
+        $sql = trim($sql);
+        
+        // 移除末尾的分号（单条语句末尾的分号是允许的）
+        $sql = rtrim($sql, ';');
+        
+        // 如果移除末尾分号后为空，说明只有一条语句
+        if (empty(trim($sql))) {
+            return false;
+        }
+        
+        // 匹配不在引号内的分号（这些是真正的语句分隔符）
+        // 使用更精确的正则表达式：匹配分号，但排除在单引号或双引号内的分号
+        $pattern = '/;(?=(?:[^\'"]*+(?:(?:\'[^\']*+\')|(?:"[^"]*+"))*+)*+$)/';
+        $matches = preg_match_all($pattern, $sql);
+        
+        // 如果找到分号，说明有多个语句
+        return $matches > 0;
     }
 
     public function truncate(string $backup_file = '', string $table = ''): static

@@ -132,10 +132,10 @@ class AiUsageLog extends Model
                 'not null default current_timestamp',
                 '创建时间'
             )
-            ->addIndex('INDEX', 'idx_api_key_id', self::fields_API_KEY_ID)
-            ->addIndex('INDEX', 'idx_tenant_id', self::fields_TENANT_ID)
-            ->addIndex('INDEX', 'idx_model_code', self::fields_MODEL_CODE)
-            ->addIndex('INDEX', 'idx_created_at', self::fields_CREATED_AT)
+            ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_api_key_id', self::fields_API_KEY_ID)
+            ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_tenant_id', self::fields_TENANT_ID)
+            ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_model_code', self::fields_MODEL_CODE)
+            ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_created_at', self::fields_CREATED_AT)
             ->create();
         }
     }

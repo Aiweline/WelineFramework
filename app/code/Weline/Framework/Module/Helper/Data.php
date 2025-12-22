@@ -222,14 +222,18 @@ class Data extends AbstractHelper
                             
                             // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
                             if ($request_method && $rule_method !== strtolower($method)) {
-                                $full_method_router = strtolower($baseRouter . '/' . $method);
-                                $full_method_route = $full_method_router . ($request_method ? '::' . $request_method : '');
-                                $full_method_params = [
+                                // 1. 注册完整方法名的kebab-case路由（/get-add格式）
+                                $full_method_kebab = strtolower(preg_replace('/([A-Z])/', '-$1', $method));
+                                $full_method_kebab_router = strtolower($baseRouter . '/' . $full_method_kebab);
+                                $full_method_kebab_router = trim($full_method_kebab_router, '/');
+                                $full_method_kebab_router = preg_replace('#/+#', '/', $full_method_kebab_router);
+                                $full_method_kebab_route = $full_method_kebab_router . ($request_method ? '::' . $request_method : '');
+                                $full_method_kebab_params = [
                                     'type' => DataInterface::type_API,
                                     'area' => $ctl_area,
                                     'module' => $name,
                                     'base_router' => $router_,
-                                    'router' => $full_method_route,
+                                    'router' => $full_method_kebab_route,
                                     'class' => $api_class,
                                     'module_path' => $path,
                                     'method' => $method,
@@ -237,17 +241,50 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true
                                 ];
-                                $data = new DataObject($full_method_params);
+                                $data = new DataObject($full_method_kebab_params);
                                 /**@var \ReflectionAttribute $attribute */
                                 foreach ($attributes as $attribute) {
                                     $data->setData('attribute', $attribute);
                                     $data->setData('type', 'api');
                                     $data->setData('controller_data', $ctl_data);
-                                    $data->setData('params', $full_method_params);
+                                    $data->setData('params', $full_method_kebab_params);
                                     $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);
+                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_kebab_params);
+                                
+                                // 2. 注册完整方法名的小写路由（/getadd格式）
+                                $full_method_lower_router = strtolower($baseRouter . '/' . strtolower($method));
+                                $full_method_lower_router = trim($full_method_lower_router, '/');
+                                $full_method_lower_router = preg_replace('#/+#', '/', $full_method_lower_router);
+                                // 只有当小写路由与kebab-case路由不同时才注册
+                                if ($full_method_lower_router !== $full_method_kebab_router) {
+                                    $full_method_lower_route = $full_method_lower_router . ($request_method ? '::' . $request_method : '');
+                                    $full_method_lower_params = [
+                                        'type' => DataInterface::type_API,
+                                        'area' => $ctl_area,
+                                        'module' => $name,
+                                        'base_router' => $router_,
+                                        'router' => $full_method_lower_route,
+                                        'class' => $api_class,
+                                        'module_path' => $path,
+                                        'method' => $method,
+                                        'request_method' => $request_method,
+                                        'is_backend' => $backend,
+                                        'is_enable' => true
+                                    ];
+                                    $data = new DataObject($full_method_lower_params);
+                                    /**@var \ReflectionAttribute $attribute */
+                                    foreach ($attributes as $attribute) {
+                                        $data->setData('attribute', $attribute);
+                                        $data->setData('type', 'api');
+                                        $data->setData('controller_data', $ctl_data);
+                                        $data->setData('params', $full_method_lower_params);
+                                        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                    }
+                                    // 路由注册+
+                                    Register::register(RegisterDataInterface::ROUTER, $name, $full_method_lower_params);
+                                }
                             }
                         }
                     }
@@ -397,14 +434,18 @@ class Data extends AbstractHelper
                             
                             // 新增：如果方法名包含HTTP方法前缀，同时注册完整方法名路由
                             if ($request_method && $rule_method !== strtolower($method)) {
-                                $full_method_router = strtolower($baseRouter . '/' . $method);
-                                $full_method_route = $full_method_router . ($request_method ? '::' . $request_method : '');
-                                $full_method_params = [
+                                // 1. 注册完整方法名的kebab-case路由（/get-add格式）
+                                $full_method_kebab = strtolower(preg_replace('/([A-Z])/', '-$1', $method));
+                                $full_method_kebab_router = strtolower($baseRouter . '/' . $full_method_kebab);
+                                $full_method_kebab_router = trim($full_method_kebab_router, '/');
+                                $full_method_kebab_router = preg_replace('#/+#', '/', $full_method_kebab_router);
+                                $full_method_kebab_route = $full_method_kebab_router . ($request_method ? '::' . $request_method : '');
+                                $full_method_kebab_params = [
                                     'type' => DataInterface::type_PC,
                                     'area' => $ctl_area,
                                     'module' => $name,
                                     'base_router' => $router_,
-                                    'router' => $full_method_route,
+                                    'router' => $full_method_kebab_route,
                                     'class' => $pc_class,
                                     'module_path' => $path,
                                     'method' => $method,
@@ -412,17 +453,50 @@ class Data extends AbstractHelper
                                     'is_backend' => $backend,
                                     'is_enable' => true,
                                 ];
-                                $data = new DataObject($full_method_params);
+                                $data = new DataObject($full_method_kebab_params);
                                 /**@var \ReflectionAttribute $attribute */
                                 foreach ($attributes as $attribute) {
                                     $data->setData('attribute', $attribute);
                                     $data->setData('type', 'pc');
                                     $data->setData('controller_data', $ctl_data);
-                                    $data->setData('params', $full_method_params);
+                                    $data->setData('params', $full_method_kebab_params);
                                     $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
                                 }
                                 // 路由注册+
-                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_params);
+                                Register::register(RegisterDataInterface::ROUTER, $name, $full_method_kebab_params);
+                                
+                                // 2. 注册完整方法名的小写路由（/getadd格式）
+                                $full_method_lower_router = strtolower($baseRouter . '/' . strtolower($method));
+                                $full_method_lower_router = trim($full_method_lower_router, '/');
+                                $full_method_lower_router = preg_replace('#/+#', '/', $full_method_lower_router);
+                                // 只有当小写路由与kebab-case路由不同时才注册
+                                if ($full_method_lower_router !== $full_method_kebab_router) {
+                                    $full_method_lower_route = $full_method_lower_router . ($request_method ? '::' . $request_method : '');
+                                    $full_method_lower_params = [
+                                        'type' => DataInterface::type_PC,
+                                        'area' => $ctl_area,
+                                        'module' => $name,
+                                        'base_router' => $router_,
+                                        'router' => $full_method_lower_route,
+                                        'class' => $pc_class,
+                                        'module_path' => $path,
+                                        'method' => $method,
+                                        'request_method' => $request_method,
+                                        'is_backend' => $backend,
+                                        'is_enable' => true,
+                                    ];
+                                    $data = new DataObject($full_method_lower_params);
+                                    /**@var \ReflectionAttribute $attribute */
+                                    foreach ($attributes as $attribute) {
+                                        $data->setData('attribute', $attribute);
+                                        $data->setData('type', 'pc');
+                                        $data->setData('controller_data', $ctl_data);
+                                        $data->setData('params', $full_method_lower_params);
+                                        $this->getEvenManager()->dispatch('Weline_Framework_Module::controller_attributes', $data);
+                                    }
+                                    // 路由注册+
+                                    Register::register(RegisterDataInterface::ROUTER, $name, $full_method_lower_params);
+                                }
                             }
                         }
                     }

@@ -1,0 +1,240 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$widgets = $this->getData('widgets') ?? [];
+$allWidgets = $this->getData('allWidgets') ?? [];
+$modules = $this->getData('modules') ?? [];
+$allowedTypes = $this->getData('allowedTypes') ?? [];
+$moduleFilter = $this->getData('moduleFilter') ?? '';
+$typeFilter = $this->getData('typeFilter') ?? '';
+$search = $this->getData('search') ?? '';
+?>
+<!DOCTYPE html>
+<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= $page_title ?? __('部件管理') ?></title>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class='page-content'>
+            <div class="container-fluid">
+                
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= $page_title ?? __('部件管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="javascript: void(0);"><?= $breadcrumb_parent ?? __('内容管理') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= $breadcrumb_current ?? __('部件管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 筛选工具栏 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <form method="get" class="row g-3">
+                                    <div class="col-md-3">
+                                        <input type="text" class="form-control" name="search" 
+                                               placeholder="<?= __('搜索部件...') ?>" 
+                                               value="<?= htmlspecialchars($search) ?>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select class="form-select" name="module">
+                                            <option value=""><?= __('所有模块') ?></option>
+                                            <?php foreach ($modules as $module): ?>
+                                                <option value="<?= htmlspecialchars($module) ?>" 
+                                                        <?= $moduleFilter === $module ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($module) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select class="form-select" name="type">
+                                            <option value=""><?= __('所有类型') ?></option>
+                                            <?php foreach ($allowedTypes as $type): ?>
+                                                <option value="<?= htmlspecialchars($type) ?>" 
+                                                        <?= $typeFilter === $type ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars(ucfirst($type)) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="ri-search-line me-1"></i><?= __('筛选') ?>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 部件列表 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <?= __('部件列表') ?>
+                                    <span class="badge bg-primary ms-2"><?= count($allWidgets, COUNT_RECURSIVE) - count($allWidgets) ?></span>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($widgets)): ?>
+                                    <div class="text-center py-5">
+                                        <i class="ri-inbox-line" style="font-size: 48px; color: #ccc;"></i>
+                                        <p class="text-muted mt-3"><?= __('没有找到部件') ?></p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th><?= __('部件名称') ?></th>
+                                                    <th><?= __('类型') ?></th>
+                                                    <th><?= __('来源模块') ?></th>
+                                                    <th><?= __('描述') ?></th>
+                                                    <th><?= __('版本') ?></th>
+                                                    <th><?= __('操作') ?></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($widgets as $type => $typeWidgets): ?>
+                                                    <?php foreach ($typeWidgets as $name => $widget): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <strong><?= htmlspecialchars($widget['name'] ?? $name) ?></strong>
+                                                                <br>
+                                                                <small class="text-muted"><?= htmlspecialchars($name) ?></small>
+                                                            </td>
+                                                            <td>
+                                                                <span class="badge bg-info"><?= htmlspecialchars(ucfirst($type)) ?></span>
+                                                            </td>
+                                                            <td><?= htmlspecialchars($widget['module'] ?? '') ?></td>
+                                                            <td><?= htmlspecialchars($widget['description'] ?? '') ?></td>
+                                                            <td><?= htmlspecialchars($widget['version'] ?? '1.0.0') ?></td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-sm btn-primary" 
+                                                                        onclick="viewWidgetDetail('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($name) ?>')">
+                                                                    <i class="ri-eye-line"></i> <?= __('详情') ?>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<!-- 部件详情模态框 -->
+<div class="modal fade" id="widget-detail-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('部件详情') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="widget-detail-content">
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/foot.phtml)
+<script>
+function viewWidgetDetail(type, name) {
+    const modal = new bootstrap.Modal(document.getElementById('widget-detail-modal'));
+    const content = document.getElementById('widget-detail-content');
+    
+    content.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"></div></div>';
+    modal.show();
+    
+    fetch('<?= $this->getUrlBuilder()->getBackendUrl('widget/backend/widget/detail') ?>&type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name))
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.widget) {
+                const widget = data.widget;
+                let html = '<div class="widget-detail">';
+                html += '<h6>' + (widget.name || name) + '</h6>';
+                html += '<p class="text-muted">' + (widget.description || '') + '</p>';
+                html += '<table class="table table-sm">';
+                html += '<tr><th><?= __('类型') ?>:</th><td>' + type + '</td></tr>';
+                html += '<tr><th><?= __('名称') ?>:</th><td>' + name + '</td></tr>';
+                html += '<tr><th><?= __('来源模块') ?>:</th><td>' + (widget.module || '') + '</td></tr>';
+                html += '<tr><th><?= __('版本') ?>:</th><td>' + (widget.version || '1.0.0') + '</td></tr>';
+                html += '</table>';
+                
+                if (widget.params && Object.keys(widget.params).length > 0) {
+                    html += '<h6 class="mt-3"><?= __('参数配置') ?></h6>';
+                    html += '<table class="table table-sm">';
+                    html += '<thead><tr><th><?= __('参数名') ?></th><th><?= __('类型') ?></th><th><?= __('默认值') ?></th><th><?= __('说明') ?></th></tr></thead>';
+                    html += '<tbody>';
+                    for (const [key, param] of Object.entries(widget.params)) {
+                        html += '<tr>';
+                        html += '<td>' + key + '</td>';
+                        html += '<td><span class="badge bg-secondary">' + (param.type || 'string') + '</span></td>';
+                        html += '<td>' + (param.default !== undefined ? JSON.stringify(param.default) : '') + '</td>';
+                        html += '<td>' + (param.description || '') + '</td>';
+                        html += '</tr>';
+                    }
+                    html += '</tbody></table>';
+                }
+                
+                html += '</div>';
+                content.innerHTML = html;
+            } else {
+                content.innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('获取详情失败') ?>') + '</div>';
+            }
+        })
+        .catch(error => {
+            content.innerHTML = '<div class="alert alert-danger"><?= __('加载失败') ?>: ' + error.message + '</div>';
+        });
+}
+</script>
+
+</body>
+</html>
+

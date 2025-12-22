@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Meta\Model\Meta;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Meta\Model\MetaLocal;
 
 class Install implements InstallInterface
 {
@@ -39,6 +40,13 @@ class Install implements InstallInterface
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($metaConfig);
         $metaConfig->setup($modelSetup, $context);
+        
+        // 安装MetaLocal表（Meta多语言翻译表）
+        /** @var MetaLocal $metaLocal */
+        $metaLocal = ObjectManager::getInstance(MetaLocal::class);
+        $modelSetup = ObjectManager::make(ModelSetup::class);
+        $modelSetup->putModel($metaLocal);
+        $metaLocal->setup($modelSetup, $context);
     }
 }
 

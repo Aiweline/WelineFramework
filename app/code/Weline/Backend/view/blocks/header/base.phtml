@@ -28,6 +28,20 @@ $env_model = \Weline\Framework\App\Env::get('deploy');
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '{module}/view/statics/{path}' : 'static/' . $theme_path . '/{module}/view/statics/{path}');
 $token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
+
+// 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
+$i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
+if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
+    try {
+        $jsWords = \Weline\I18n\Helper\JsWordsRegistry::getWordsWithTranslations();
+        if (is_array($jsWords) && !empty($jsWords)) {
+            // JS 声明的词覆盖同 key 的默认翻译
+            $i18nWords = array_merge($i18nWords, $jsWords);
+        }
+    } catch (\Throwable $e) {
+        // 忽略异常，避免影响页面渲染
+    }
+}
 ?>
 <!--加载requirejs-->
 <?php if (DEV) : ?>
@@ -58,7 +72,8 @@ endif;
     });
 </script>
 <w:js>Weline_Backend::/js/cookie.js</w:js>
-<script>
+<!-- Backend配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<script data-no-extract="true">
     window.site = {
         user_id: '{{user_id}}',
         module: '{{current_module}}',
@@ -72,7 +87,7 @@ endif;
         frontend_api_host: '{{frontend_api_host}}',
         url_host: '{{ url_host }}',
         base_router: '{{base_router}}',
-        i18n: <?= json_encode(Weline\Framework\Phrase\Parser::getWords())?>,
+        i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
         themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
     }
     window.path = (path) => {
@@ -365,4 +380,4 @@ endif;
         return phrase(word, arguments)
     }
 </script>
-<hook>head</hook>
+<hook>Weline_Backend::backend::partials::head::before</hook>

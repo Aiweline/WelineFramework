@@ -330,7 +330,7 @@ PHP;
                 $defaultValue = '<?=$defaultValue?>';
             } else {
                 /** @var LocaleDictionary $localeDict */
-                $localeDict = ObjectManager::getInstance()->get(LocaleDictionary::class);
+                $localeDict = ObjectManager::getInstance(LocaleDictionary::class);
                 
                 // 先尝试带 scope 的 key
                 $md5 = LocaleDictionary::generateMd5($metaKeyWithScope, $locale);

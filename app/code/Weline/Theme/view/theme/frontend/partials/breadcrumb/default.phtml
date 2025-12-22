@@ -10,9 +10,16 @@
  * @param.separator {default="/",name="分隔符",description="分隔符，用于设置面包屑项之间的分隔符"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$items = $this->getData('items') ?? [];
-$separator = $this->getData('separator') ?? '/';
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.breadcrumb.default');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$items = $this->getData("meta.items") ?? [];
+$separator = $this->getData("meta.separator") ?? '/';
+$class = $this->getData("meta.class") ?? '';
 
 // 构建CSS类
 $breadcrumbClass = 'breadcrumb';

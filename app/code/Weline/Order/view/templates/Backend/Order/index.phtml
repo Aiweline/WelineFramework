@@ -1,0 +1,240 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Order\Model\Order;
+
+$orders = $this->getData('orders') ?? [];
+$total = $this->getData('total') ?? 0;
+$page = $this->getData('page') ?? 1;
+$pageSize = $this->getData('page_size') ?? 20;
+$totalPages = $this->getData('total_pages') ?? 1;
+$filters = $this->getData('filters') ?? [];
+
+$backendBase = $this->getBackendUrl('order/backend/order/index');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('订单管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('订单管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('订单管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="card-title mb-0"><?= __('订单列表') ?></h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <a href="<?= $this->getBackendUrl('order/backend/order/edit') ?>" class="btn btn-primary">
+                                            <i class="mdi mdi-plus"></i> <?= __('新建订单') ?>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <form method="get" action="<?= $backendBase ?>" class="mb-3">
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <input type="text" name="keyword" class="form-control" 
+                                                   placeholder="<?= __('搜索订单号、客户姓名、邮箱') ?>" 
+                                                   value="<?= htmlspecialchars($filters['keyword'] ?? '') ?>">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <select name="status" class="form-select">
+                                                <option value=""><?= __('全部状态') ?></option>
+                                                <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
+                                                <option value="processing" <?= ($filters['status'] ?? '') === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
+                                                <option value="paid" <?= ($filters['status'] ?? '') === 'paid' ? 'selected' : '' ?>><?= __('已支付') ?></option>
+                                                <option value="fulfilled" <?= ($filters['status'] ?? '') === 'fulfilled' ? 'selected' : '' ?>><?= __('已发货') ?></option>
+                                                <option value="completed" <?= ($filters['status'] ?? '') === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
+                                                <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>><?= __('已取消') ?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <select name="payment_status" class="form-select">
+                                                <option value=""><?= __('全部支付状态') ?></option>
+                                                <option value="pending" <?= ($filters['payment_status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待支付') ?></option>
+                                                <option value="paid" <?= ($filters['payment_status'] ?? '') === 'paid' ? 'selected' : '' ?>><?= __('已支付') ?></option>
+                                                <option value="partial" <?= ($filters['payment_status'] ?? '') === 'partial' ? 'selected' : '' ?>><?= __('部分支付') ?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <select name="fulfillment_status" class="form-select">
+                                                <option value=""><?= __('全部发货状态') ?></option>
+                                                <option value="pending" <?= ($filters['fulfillment_status'] ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待发货') ?></option>
+                                                <option value="shipped" <?= ($filters['fulfillment_status'] ?? '') === 'shipped' ? 'selected' : '' ?>><?= __('已发货') ?></option>
+                                                <option value="delivered" <?= ($filters['fulfillment_status'] ?? '') === 'delivered' ? 'selected' : '' ?>><?= __('已送达') ?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="submit" class="btn btn-primary w-100">
+                                                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                            </button>
+                                        </div>
+                                        <div class="col-md-1">
+                                            <a href="<?= $backendBase ?>" class="btn btn-secondary w-100">
+                                                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th><?= __('订单号') ?></th>
+                                                <th><?= __('客户') ?></th>
+                                                <th><?= __('订单总额') ?></th>
+                                                <th><?= __('订单状态') ?></th>
+                                                <th><?= __('支付状态') ?></th>
+                                                <th><?= __('发货状态') ?></th>
+                                                <th><?= __('创建时间') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($orders)): ?>
+                                                <tr>
+                                                    <td colspan="8" class="text-center"><?= __('暂无数据') ?></td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($orders as $order): ?>
+                                                    <?php
+                                                    $orderData = is_object($order) ? $order->getData() : $order;
+                                                    $status = $orderData[Order::fields_STATUS] ?? '';
+                                                    $paymentStatus = $orderData[Order::fields_PAYMENT_STATUS] ?? '';
+                                                    $fulfillmentStatus = $orderData[Order::fields_FULFILLMENT_STATUS] ?? '';
+                                                    ?>
+                                                    <tr>
+                                                        <td>
+                                                            <a href="<?= $this->getBackendUrl('order/backend/order/view', ['id' => $orderData[Order::fields_ID] ?? '']) ?>">
+                                                                <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?>
+                                                            </a>
+                                                        </td>
+                                                        <td>
+                                                            <div><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_NAME] ?? '') ?></div>
+                                                            <small class="text-muted"><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_EMAIL] ?? '') ?></small>
+                                                        </td>
+                                                        <td>
+                                                            <strong><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_GRAND_TOTAL] ?? 0), 2) ?></strong>
+                                                        </td>
+                                                        <td>
+                                                            <?php
+                                                            // 使用Order模型的状态方法（内部已使用事件机制）
+                                                            $statusText = \Weline\Order\Model\Order::getStatusLabel($status);
+                                                            $statusClass = \Weline\Order\Model\Order::getStatusClassByCode($status);
+                                                            ?>
+                                                            <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <?php
+                                                            $paymentClass = match($paymentStatus) {
+                                                                'pending' => 'warning',
+                                                                'paid' => 'success',
+                                                                'partial' => 'info',
+                                                                'refunded' => 'secondary',
+                                                                default => 'secondary',
+                                                            };
+                                                            $paymentText = Order::getPaymentStatusLabel($paymentStatus);
+                                                            ?>
+                                                            <span class="badge bg-<?= $paymentClass ?>"><?= $paymentText ?></span>
+                                                        </td>
+                                                        <td>
+                                                            <?php
+                                                            $fulfillmentClass = match($fulfillmentStatus) {
+                                                                'pending' => 'warning',
+                                                                'shipped' => 'info',
+                                                                'delivered' => 'success',
+                                                                default => 'secondary',
+                                                            };
+                                                            $fulfillmentText = Order::getFulfillmentStatusLabel($fulfillmentStatus);
+                                                            ?>
+                                                            <span class="badge bg-<?= $fulfillmentClass ?>"><?= $fulfillmentText ?></span>
+                                                        </td>
+                                                        <td><?= $orderData[Order::fields_CREATED_AT] ?? '' ?></td>
+                                                        <td>
+                                                            <div class="btn-group btn-group-sm">
+                                                                <a href="<?= $this->getBackendUrl('order/backend/order/view', ['id' => $orderData[Order::fields_ID] ?? '']) ?>" 
+                                                                   class="btn btn-primary btn-sm" title="<?= __('查看详情') ?>">
+                                                                    <i class="mdi mdi-eye"></i>
+                                                                </a>
+                                                                <a href="<?= $this->getBackendUrl('order/backend/order/edit', ['id' => $orderData[Order::fields_ID] ?? '']) ?>" 
+                                                                   class="btn btn-info btn-sm" title="<?= __('编辑') ?>">
+                                                                    <i class="mdi mdi-pencil"></i>
+                                                                </a>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <?php if ($totalPages > 1): ?>
+                                    <nav aria-label="Page navigation">
+                                        <ul class="pagination justify-content-center">
+                                            <?php if ($page > 1): ?>
+                                                <li class="page-item">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page - 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                                        <?= __('上一页') ?>
+                                                    </a>
+                                                </li>
+                                            <?php endif; ?>
+                                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $i ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                                        <?= $i ?>
+                                                    </a>
+                                                </li>
+                                            <?php endfor; ?>
+                                            <?php if ($page < $totalPages): ?>
+                                                <li class="page-item">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page + 1 ?>&page_size=<?= $pageSize ?><?= !empty($filters) ? '&' . http_build_query($filters) : '' ?>">
+                                                        <?= __('下一页') ?>
+                                                    </a>
+                                                </li>
+                                            <?php endif; ?>
+                                        </ul>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@template(Weline_Admin::common/footer.phtml)
+</body>
+</html>
+

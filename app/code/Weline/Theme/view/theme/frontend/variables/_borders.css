@@ -1,7 +1,11 @@
 /**
- * Weline Frontend - 边框变量定义
+ * 变量：边框变量定义
  * 
- * 定义统一的边框系统
+ * 定义统一的边框系统变量
+ * 字段
+ * @meta.name {default="边框变量",name="边框变量",description="边框变量，用于描述变量的名称"}
+ * @meta.description {default="定义统一的边框系统，包括边框宽度、圆角、样式等",name="定义统一的边框系统，包括边框宽度、圆角、样式等",description="定义统一的边框系统，包括边框宽度、圆角、样式等，用于描述变量的用途"}
+ * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
  */
 
 :root {
@@ -10,7 +14,7 @@
     --border-width-thin: 1px;
     --border-width-medium: 2px;
     --border-width-thick: 3px;
-    
+
     /* ========== 边框圆角 ========== */
     --border-radius-none: 0;
     --border-radius-sm: 3px;
@@ -19,15 +23,14 @@
     --border-radius-xl: 12px;
     --border-radius-2xl: 16px;
     --border-radius-full: 9999px;
-    
+
     /* ========== 边框样式 ========== */
     --border-style-solid: solid;
     --border-style-dashed: dashed;
     --border-style-dotted: dotted;
-    
+
     /* ========== 组件边框 ========== */
     --border-input: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
     --border-button: var(--border-width-thin) var(--border-style-solid) var(--color-primary-border);
     --border-card: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
 }
-

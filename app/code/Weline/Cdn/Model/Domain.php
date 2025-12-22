@@ -105,10 +105,10 @@ class Domain extends Model
                 ->addColumn(self::fields_ENABLED, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_SITE_ID, '', 'KEY', 'idx_site_id')
-                ->addIndex(self::fields_ADAPTER, '', 'KEY', 'idx_adapter')
-                ->addIndex(self::fields_ENABLED, '', 'KEY', 'idx_enabled')
-                ->addIndex(self::fields_DOMAIN_NAME, '', 'KEY', 'idx_domain_name')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_site_id', self::fields_SITE_ID, '站点ID索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_adapter', self::fields_ADAPTER, '适配器索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_enabled', self::fields_ENABLED, '启用状态索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_domain_name', self::fields_DOMAIN_NAME, '域名索引')
                 ->create();
         }
     }

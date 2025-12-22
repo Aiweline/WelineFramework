@@ -1,7 +1,11 @@
 /**
- * Weline Frontend - 阴影变量定义
+ * 变量：阴影变量定义
  * 
- * 定义统一的阴影系统
+ * 定义统一的阴影系统变量
+ * 字段
+ * @meta.name {default="阴影变量",name="阴影变量",description="阴影变量，用于描述变量的名称"}
+ * @meta.description {default="定义统一的阴影系统，包括基础阴影、特殊阴影、组件阴影等",name="定义统一的阴影系统，包括基础阴影、特殊阴影、组件阴影等",description="定义统一的阴影系统，包括基础阴影、特殊阴影、组件阴影等，用于描述变量的用途"}
+ * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
  */
 
 :root {

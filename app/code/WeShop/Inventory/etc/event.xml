@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!--
+ * 本文件由 秋枫雁飞 编写，所有解释权归WeShop所有。
+ * 作者：Admin
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
+ * 描述：WeShop库存模块事件配置
+-->
+<config>
+    <!-- 库存事件定义 -->
+    <events>
+        <!-- 库存变更事件 -->
+        <event name="WeShop_Inventory::stock_change">
+            <description>库存数量变更时触发（增加/减少）</description>
+        </event>
+        
+        <!-- 低库存警告事件 -->
+        <event name="WeShop_Inventory::stock_low">
+            <description>库存低于阈值时触发</description>
+        </event>
+        
+        <!-- 缺货事件 -->
+        <event name="WeShop_Inventory::out_of_stock">
+            <description>产品库存归零时触发</description>
+        </event>
+    </events>
+    
+    <!-- 监听产品事件 -->
+    <observers>
+        <!-- 监听产品保存后事件，初始化库存记录 -->
+        <observer event="WeShop_Product::product_save_after" 
+                  class="WeShop\Inventory\Observer\ProductSaveAfter" 
+                  method="execute"/>
+        
+        <!-- 监听产品删除后事件，清理库存记录 -->
+        <observer event="WeShop_Product::product_delete_after" 
+                  class="WeShop\Inventory\Observer\ProductDeleteAfter" 
+                  method="execute"/>
+    </observers>
+</config>
+

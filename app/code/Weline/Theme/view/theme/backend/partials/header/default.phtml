@@ -12,11 +12,18 @@
  * @param showUserMenu 是否显示用户菜单
  * @param class 额外CSS类
  */
-$logo = $this->getData('logo') ?? '';
-$logoText = $this->getData('logoText') ?? __('Weline Admin');
-$navItems = $this->getData('navItems') ?? [];
-$showUserMenu = $this->getData('showUserMenu') ?? true;
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.header.default');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$logo = $this->getData("meta.logo") ?? '';
+$logoText = $this->getData("meta.logoText") ?? __('Weline Admin');
+$navItems = $this->getData("meta.navItems") ?? [];
+$showUserMenu = $this->getData("meta.showUserMenu") ?? true;
+$class = $this->getData("meta.class") ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
 $backendUrl = $this->request->getUrlBuilder()->getBackendUrl('/');

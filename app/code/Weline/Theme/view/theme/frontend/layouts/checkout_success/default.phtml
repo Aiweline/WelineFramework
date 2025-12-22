@@ -1,0 +1,84 @@
+<?php
+/**
+ * 布局：结账页 - 成功页面布局
+ *
+ * 订单提交成功后的确认页面布局
+ * 字段
+ * @meta.name {default="结账成功页面布局",name="结账成功页面布局",description="结账成功页面布局，用于描述布局的名称"}
+ * @meta.description {default="订单提交成功后的确认页面布局",name="订单提交成功后的确认页面布局",description="订单提交成功后的确认页面布局，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="订单确认",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param orderNumber {default="",name="订单号",description="订单号，用于显示订单号"}
+ * @param orderDetails {default="",name="订单详情（HTML字符串，可选）",description="订单详情（HTML字符串，可选），用于设置订单详情"}
+ * @param continueShopping {default="/",name="继续购物链接",description="继续购物链接，用于设置继续购物链接"}
+ * @param viewOrder {default="",name="查看订单链接（可选）",description="查看订单链接（可选），用于设置查看订单链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ */
+?>
+<?php
+$title = $this->getData('title') ?? __('订单确认');
+$content = $this->getData('content') ?? '';
+$orderNumber = $this->getData('orderNumber') ?? '';
+$orderDetails = $this->getData('orderDetails') ?? '';
+$continueShopping = $this->getData('continueShopping') ?? '/';
+$viewOrder = $this->getData('viewOrder') ?? '';
+$class = $this->getData('class') ?? '';
+
+// 设置页面标题
+$this->assign('title', $title);
+?>
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="checkout-success-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-success-main" data-layout="checkout_success">
+        <div class="checkout-success-container">
+            <div class="checkout-success-content">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h1 class="success-title"><?= __('订单提交成功！') ?></h1>
+                
+                <?php if ($orderNumber): ?>
+                    <p class="order-number">
+                        <?= __('订单号：') ?><strong><?= htmlspecialchars($orderNumber) ?></strong>
+                    </p>
+                <?php endif; ?>
+                
+                <?php if ($content): ?>
+                    <div class="success-message">
+                        {{content}}
+                    </div>
+                <?php endif; ?>
+                
+                <?php if ($orderDetails): ?>
+                    <div class="order-details">
+                        {{orderDetails}}
+                    </div>
+                <?php endif; ?>
+                
+                <div class="success-actions">
+                    <?php if ($viewOrder): ?>
+                        <a href="<?= htmlspecialchars($viewOrder) ?>" class="btn btn-primary">
+                            <?= __('查看订单') ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="btn btn-secondary">
+                        <?= __('继续购物') ?>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

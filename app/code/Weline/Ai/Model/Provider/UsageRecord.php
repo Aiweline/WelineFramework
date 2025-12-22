@@ -118,12 +118,12 @@ class UsageRecord extends Model
                 ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'success\'', '状态')
                 ->addColumn(self::fields_ERROR_MESSAGE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'null', '错误信息')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
-                ->addIndex(self::fields_ACCOUNT_ID, '', 'KEY', 'idx_account_id')
-                ->addIndex(self::fields_PROVIDER_CODE, '', 'KEY', 'idx_provider_code')
-                ->addIndex(self::fields_MODEL_CODE, '', 'KEY', 'idx_model_code')
-                ->addIndex(self::fields_USER_ID, '', 'KEY', 'idx_user_id')
-                ->addIndex(self::fields_CREATED_AT, '', 'KEY', 'idx_created_at')
-                ->addIndex(self::fields_ACCOUNT_ID . ',' . self::fields_CREATED_AT, '', 'KEY', 'idx_account_created')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_account_id', self::fields_ACCOUNT_ID)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_provider_code', self::fields_PROVIDER_CODE)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_model_code', self::fields_MODEL_CODE)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_user_id', self::fields_USER_ID)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_created_at', self::fields_CREATED_AT)
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_account_created', self::fields_ACCOUNT_ID . ',' . self::fields_CREATED_AT)
                 ->create();
         }
     }

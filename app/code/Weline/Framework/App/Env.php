@@ -726,7 +726,32 @@ class Env extends DataObject
         if (!is_file(Env::path_MODULES_FILE)) {
             return [];
         }
-        $this->module_list = (array)require Env::path_MODULES_FILE;
+        
+        // 检查文件是否可读
+        if (!is_readable(Env::path_MODULES_FILE)) {
+            $error = error_get_last();
+            throw new \Weline\Framework\Exception\Core(
+                __('无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。', [
+                    Env::path_MODULES_FILE,
+                    $error['message'] ?? 'Permission denied (errno=13)'
+                ])
+            );
+        }
+        
+        try {
+            $this->module_list = (array)require Env::path_MODULES_FILE;
+        } catch (\Throwable $e) {
+            // 如果是权限错误，提供更友好的提示
+            if (strpos($e->getMessage(), 'Permission denied') !== false || 
+                strpos($e->getMessage(), 'errno=13') !== false) {
+                throw new \Weline\Framework\Exception\Core(
+                    __('模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器', [
+                        Env::path_MODULES_FILE
+                    ])
+                );
+            }
+            throw $e;
+        }
 
         return $this->module_list;
     }

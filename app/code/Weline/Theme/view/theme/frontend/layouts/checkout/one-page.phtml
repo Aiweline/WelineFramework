@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：结账页 - 单页布局
- * 
+ *
  * 单页结账布局，所有步骤在一个页面完成
  * 字段
  * @meta.name {default="结账页单页布局",name="结账页单页布局",description="结账页单页布局，用于描述布局的名称"}
@@ -13,6 +13,8 @@
  * @param breadcrumb {default="",name="面包屑导航（可选）",description="面包屑导航（可选），用于设置面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
+?>
+<?php
 $title = $this->getData('title') ?? __('结账');
 $content = $this->getData('content') ?? '';
 $orderSummary = $this->getData('orderSummary') ?? '';
@@ -23,29 +25,31 @@ $class = $this->getData('class') ?? '';
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <?php if ($breadcrumb): ?>
         <nav class="breadcrumb-nav">
-            <?= $breadcrumb ?>
+            {{breadcrumb}}
         </nav>
     <?php endif; ?>
     
-    <main class="checkout-main one-page <?= htmlspecialchars($class) ?>">
+    <main class="checkout-main one-page <?= htmlspecialchars($class ?? '') ?>" id="checkout-main" data-layout="checkout_one_page">
         <div class="checkout-container">
             <div class="checkout-content-wrapper">
                 <div class="checkout-form">
-                    <?= $content ?>
+                    {{content}}
                 </div>
                 
                 <?php if ($orderSummary): ?>
                     <aside class="checkout-summary sticky">
-                        <?= $orderSummary ?>
+                        {{orderSummary}}
                     </aside>
                 <?php endif; ?>
             </div>

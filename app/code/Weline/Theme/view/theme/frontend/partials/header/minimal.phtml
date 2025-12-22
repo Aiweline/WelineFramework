@@ -11,10 +11,16 @@
  * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$logo = $this->getData('logo') ?? '';
-$logoText = $this->getData('logoText') ?? __('Weline');
-$navItems = $this->getData('navItems') ?? [];
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.header.minimal');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+$logo = $this->getData("meta.logo") ?? '';
+$logoText = $this->getData("meta.logoText") ?? __('Weline');
+$navItems = $this->getData("meta.navItems") ?? [];
+$class = $this->getData("meta.class") ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
 $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');

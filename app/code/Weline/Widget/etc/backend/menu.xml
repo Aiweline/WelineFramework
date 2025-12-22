@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--可视化编辑器-->
+    <add source="Weline_Widget::editor" name="editor" title="可视化编辑器" action="*/backend/editor"
+         parent="Weline_EditorManager::content_management" icon="mdi mdi-pencil-box" order="100"/>
+    <!--部件管理-->
+    <add source="Weline_Widget::widget_management" name="widget_management" title="部件管理" action="*/backend/widget"
+         parent="Weline_Widget::editor" icon="mdi mdi-puzzle" order="10"/>
+</menus>
+

@@ -1,0 +1,119 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\AutoLeadAgent\Model\WasmHash;
+
+$wasm = $this->getData('wasm');
+$fileExists = $this->getData('file_exists');
+$fileSize = $this->getData('file_size');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('WASM详情') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('WASM详情') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="<?= $this->getBackendUrl('auto-lead-agent/backend/wasm/index') ?>"><?= __('WASM管理') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('详情') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('基本信息') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <th style="width: 150px;"><?= __('哈希ID') ?></th>
+                                        <td><?= $wasm->getId() ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('版本') ?></th>
+                                        <td><span class="badge bg-primary"><?= htmlspecialchars($wasm->getData(WasmHash::fields_VERSION) ?? '1') ?></span></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('SHA-256 哈希') ?></th>
+                                        <td><code class="text-break"><?= htmlspecialchars($wasm->getData(WasmHash::fields_HASH_VALUE)) ?></code></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('文件路径') ?></th>
+                                        <td><code class="text-break"><?= htmlspecialchars($wasm->getData(WasmHash::fields_WASM_PATH)) ?></code></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('文件状态') ?></th>
+                                        <td>
+                                            <?php if ($fileExists): ?>
+                                                <span class="badge bg-success"><?= __('文件存在') ?></span>
+                                                <span class="text-muted ms-2">(<?= $fileSize ?>)</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger"><?= __('文件不存在') ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('创建时间') ?></th>
+                                        <td><?= $wasm->getData(WasmHash::fields_CREATED_AT) ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th><?= __('更新时间') ?></th>
+                                        <td><?= $wasm->getData(WasmHash::fields_UPDATED_AT) ?></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('操作') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <a href="<?= $this->getBackendUrl('auto-lead-agent/backend/wasm/index') ?>" 
+                                   class="btn btn-secondary w-100 mb-2">
+                                    <i class="mdi mdi-arrow-left me-1"></i><?= __('返回列表') ?>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+

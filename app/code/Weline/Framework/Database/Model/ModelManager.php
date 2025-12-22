@@ -52,6 +52,11 @@ class ModelManager
         foreach ($model_files_data as $key => $model_class) {
             $this->printing->note($model_class, __('Model升级'));
             if (class_exists($model_class)) {
+                // 跳过抽象类
+                $reflection = new \ReflectionClass($model_class);
+                if ($reflection->isAbstract()) {
+                    continue;
+                }
                 $model = ObjectManager::getInstance($model_class);
                 if ($model instanceof AbstractModel) {
                     $data = new DataObject(['model' => $model, 'type' => $type, 'object' => $this, 'module' => $module]);

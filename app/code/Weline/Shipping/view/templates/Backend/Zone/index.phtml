@@ -1,0 +1,99 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Shipping\Model\Zone;
+
+$zones = $this->getData('zones') ?? [];
+$backendBase = $this->getBackendUrl('shipping/backend/zone');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('配送区域') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('配送区域') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('配送区域') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><?= __('配送区域列表') ?></h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($zones)): ?>
+                                    <div class="alert alert-info mb-0">
+                                        <?= __('当前暂无配送区域，请后续在此页面完善配置。') ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover align-middle">
+                                            <thead class="table-light">
+                                            <tr>
+                                                <th><?= __('区域名称') ?></th>
+                                                <th><?= __('区域代码') ?></th>
+                                                <th><?= __('状态') ?></th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php /** @var Zone $zone */ ?>
+                                            <?php foreach ($zones as $zone): ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($zone->getData(Zone::fields_ZONE_NAME)) ?></td>
+                                                    <td><?= htmlspecialchars($zone->getData(Zone::fields_ZONE_CODE)) ?></td>
+                                                    <td>
+                                                        <?php if ($zone->getData(Zone::fields_IS_ACTIVE)): ?>
+                                                            <span class="badge bg-success"><?= __('启用') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="badge bg-secondary"><?= __('禁用') ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/vendor-scripts.phtml)
+</body>
+</html>
+
+

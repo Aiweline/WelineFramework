@@ -74,6 +74,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "Cookie操作工具函数"
+    },
+    geo: {
+        paths: [
+            "Weline_Geo::statics/frontend/js/geo.js"
+        ],
+        globalVar: "WelineGeo",
+        description: "Geo定位模块（浏览器定位和IP定位）"
     }
 });
 
@@ -85,6 +92,7 @@ Object.assign(window.WelineModulesConfig.moduleAliases, {
     account: "weline-api-account",
     tokenStorage: "weline-api-token-storage",
     worker: "weline-api-worker",
-    switcher: "weline-switcher"
+    switcher: "weline-switcher",
+    geolocation: "geo"
 });
 

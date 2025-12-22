@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Helper\Data;
 use Weline\Framework\Uninstall\UninstallService;
+use Weline\ModuleManager\Service\ModuleBackupService;
 
 class Remove extends CommandAbstract
 {
@@ -105,8 +106,27 @@ class Remove extends CommandAbstract
                 }
                 foreach ($args as $module) {
                     $this->printer->note(__('执行 ') . $module . __(' 卸载程序...'));
+
+                    // 如果可用，先通过 ModuleManager 进行数据库表备份（借助统一备份服务）
+                    if (class_exists(ModuleBackupService::class)) {
+                        /** @var ModuleBackupService $backupService */
+                        $backupService = ObjectManager::getInstance(ModuleBackupService::class);
+                        $this->printer->note(__('开始为模块 %{1} 备份数据库表...', [$module]));
+                        $dbBackupInfo = $backupService->backupModuleTables($module);
+                        if (empty($dbBackupInfo['success'])) {
+                            $this->printer->error(__('模块 %{1} 数据库备份失败：%{2}，已取消卸载。', [
+                                $module,
+                                $dbBackupInfo['message'] ?? '',
+                            ]));
+                            continue;
+                        }
+                        $this->printer->success(__('模块 %{1} 数据库表备份完成（时间戳：%{2}）', [
+                            $module,
+                            $dbBackupInfo['backup_timestamp'] ?? '',
+                        ]));
+                    }
                     
-                    // 通过事件通知卸载服务执行卸载（备份）
+                    // 通过事件通知卸载服务执行卸载（文件级备份 + 事件）
                     $eventManager = ObjectManager::getInstance(EventsManager::class);
                     $eventData = [
                         'type' => UninstallService::TYPE_MODULE,

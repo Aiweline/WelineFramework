@@ -133,70 +133,73 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     // 注意：editingState 已移到每个实例中，确保实例隔离
 
     /**
-     * 初始化下拉菜单功?
+     * 初始化下拉菜单功能
      */
     initDropdowns: function () {
-        // 绑定下拉菜单切换事件
-        document.removeEventListener('click', window._wDropdownToggleHandler, true);
-        window._wDropdownToggleHandler = function (e) {
+        // 防止重复初始化
+        if (window._wDropdownInitialized) {
+            return;
+        }
+        window._wDropdownInitialized = true;
+
+        // 使用事件委托处理下拉菜单切换
+        document.addEventListener('click', function (e) {
             const toggle = e.target.closest('[data-w-toggle="dropdown"]');
+            
             if (toggle) {
                 e.preventDefault();
                 e.stopPropagation();
-                const dropdown = toggle.parentElement.querySelector('.w-dropdown-menu');
-                // 关闭其他下拉菜单
-                document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
-                    if (menu !== dropdown) menu.classList.remove('show');
-                });
-                // 切换当前下拉菜单
-                dropdown && dropdown.classList.toggle('show');
-                // 添加旋转动画到图标
-                const icon = toggle.querySelector('i.fas.fa-undo');
-                if (dropdown && dropdown.classList.contains('show')) {
-                    icon && (icon.style.transform = 'rotate(180deg)');
-                } else {
-                    icon && (icon.style.transform = 'rotate(0deg)');
+                
+                const dropdownContainer = toggle.closest('.w-dropdown');
+                const dropdown = dropdownContainer ? dropdownContainer.querySelector('.w-dropdown-menu') : toggle.parentElement.querySelector('.w-dropdown-menu');
+                
+                if (!dropdown) {
+                    console.warn('DataTable: dropdown menu not found for toggle button');
+                    return;
                 }
+                
+                // 关闭其他所有下拉菜单
+                document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
+                    if (menu !== dropdown) {
+                        menu.classList.remove('show');
+                    }
+                });
+                
+                // 切换当前下拉菜单
+                const isOpen = dropdown.classList.contains('show');
+                dropdown.classList.toggle('show');
+                
+                // 添加旋转动画到图标（如果有的话）
+                const icon = toggle.querySelector('i.fas.fa-undo, i.fas.fa-chevron-down');
+                if (icon) {
+                    icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+                
+                return;
             }
-        };
-        document.addEventListener('click', window._wDropdownToggleHandler, true);
-
-        // 点击外部关闭下拉菜单
-        document.removeEventListener('click', window._wDropdownCloseHandler, false);
-        window._wDropdownCloseHandler = function (e) {
-            if (!e.target.closest('.w-dropdown')) {
+            
+            // 如果点击的不是下拉菜单内部，关闭所有下拉菜单
+            if (!e.target.closest('.w-dropdown-menu') && !e.target.closest('.w-dropdown-item')) {
                 document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
                     menu.classList.remove('show');
                 });
-                document.querySelectorAll('[data-w-toggle="dropdown"] i.fas.fa-undo').forEach(function (icon) {
+                document.querySelectorAll('[data-w-toggle="dropdown"] i.fas.fa-undo, [data-w-toggle="dropdown"] i.fas.fa-chevron-down').forEach(function (icon) {
                     icon.style.transform = 'rotate(0deg)';
                 });
             }
-        };
-        document.addEventListener('click', window._wDropdownCloseHandler, false);
-
-        // 阻止下拉菜单内部点击事件冒泡
-        document.removeEventListener('click', window._wDropdownItemHandler, false);
-        window._wDropdownItemHandler = function (e) {
-            if (e.target.closest('.w-dropdown-item')) {
-                e.stopPropagation();
-            }
-        };
-        document.addEventListener('click', window._wDropdownItemHandler, false);
+        }, false);
 
         // ESC键关闭下拉菜单
-        document.removeEventListener('keydown', window._wDropdownEscHandler, false);
-        window._wDropdownEscHandler = function (e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.w-dropdown-menu.show').forEach(function (menu) {
                     menu.classList.remove('show');
                 });
-                document.querySelectorAll('[data-w-toggle="dropdown"] i.fas.fa-undo').forEach(function (icon) {
+                document.querySelectorAll('[data-w-toggle="dropdown"] i.fas.fa-undo, [data-w-toggle="dropdown"] i.fas.fa-chevron-down').forEach(function (icon) {
                     icon.style.transform = 'rotate(0deg)';
                 });
             }
-        };
-        document.addEventListener('keydown', window._wDropdownEscHandler, false);
+        }, false);
     },
 
     /**
@@ -527,7 +530,23 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     /**
      * 切换重要列显示
      */
-    toggleImportantView: function (table) {
+    toggleImportantView: function (tableIdOrElement) {
+        // 支持传入 tableId 字符串或 DOM 元素
+        let table = tableIdOrElement;
+        if (typeof tableIdOrElement === 'string') {
+            const instance = this.getInstance(tableIdOrElement);
+            if (instance) {
+                table = instance.container[0] || instance.container;
+            } else {
+                table = document.getElementById(tableIdOrElement);
+            }
+        }
+        
+        if (!table) {
+            console.error('toggleImportantView: table not found');
+            return;
+        }
+
         const isImportantView = table.classList.contains('w-important-view');
 
         if (isImportantView) {
@@ -536,7 +555,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             table.querySelectorAll('th, td').forEach(function (cell) {
                 cell.style.display = '';
             });
-            table.querySelector('[data-w-action="important-view"]').textContent = __('只显示重要数据');
+            const btn = table.querySelector('[data-w-action="important-view"]');
+            if (btn) btn.textContent = __('只显示重要数据');
         } else {
             // 只显示重要列
             table.classList.add('w-important-view');
@@ -546,7 +566,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             table.querySelectorAll('.w-important-column').forEach(function (cell) {
                 cell.style.display = '';
             });
-            table.querySelector('[data-w-action="important-view"]').textContent = __('显示所有数据');
+            const btn = table.querySelector('[data-w-action="important-view"]');
+            if (btn) btn.textContent = __('显示所有数据');
         }
     },
 
@@ -586,7 +607,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 导出数据功能
      */
     exportData: function (tableId, format = 'excel') {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
@@ -680,7 +701,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     </div>
                 </div>
                 
-                <!-- 添加导出模态框样式 -->
+                <!-- 添加导出模态框样式（支持主题适配） -->
                 <style>
                     .w-export-modal {
                         position: fixed;
@@ -696,13 +717,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     }
                     
                     .w-export-content {
-                        background: white;
+                        background: var(--datatable-bg, var(--bs-body-bg, #fff));
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                         border-radius: 8px;
                         padding: 24px;
                         min-width: 480px;
                         max-width: 600px;
-                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
                         position: relative;
+                        border: 1px solid var(--datatable-border, var(--bs-border-color, #dee2e6));
                     }
                     
                     .w-export-header {
@@ -711,14 +734,14 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     }
                     
                     .w-export-title {
-                        color: #333;
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                         margin: 0 0 8px 0;
                         font-size: 18px;
                         font-weight: 600;
                     }
                     
                     .w-export-subtitle {
-                        color: #666;
+                        color: var(--datatable-muted, var(--bs-secondary-color, #666));
                         margin: 0;
                         font-size: 14px;
                         line-height: 1.5;
@@ -746,8 +769,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         justify-content: space-between;
                         margin-bottom: 16px;
                         padding: 12px;
-                        background: #f8f9fa;
+                        background: var(--datatable-hover-bg, var(--bs-tertiary-bg, #f8f9fa));
                         border-radius: 6px;
+                        border: 1px solid var(--datatable-border, var(--bs-border-color, #dee2e6));
                     }
                     
                     .stat-item {
@@ -757,7 +781,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     
                     .stat-label {
                         font-size: 12px;
-                        color: #666;
+                        color: var(--datatable-muted, var(--bs-secondary-color, #666));
                         display: block;
                         margin-bottom: 4px;
                     }
@@ -765,21 +789,22 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     .stat-value {
                         font-size: 16px;
                         font-weight: bold;
-                        color: #333;
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                     }
                     
                     .stat-separator {
-                        color: #999;
+                        color: var(--datatable-muted, var(--bs-secondary-color, #999));
                         margin: 0 2px;
                     }
                     
                     .w-progress-bar {
                         position: relative;
                         height: 20px;
-                        background: #e9ecef;
+                        background: var(--datatable-hover-bg, var(--bs-tertiary-bg, #e9ecef));
                         border-radius: 10px;
                         overflow: hidden;
                         margin-bottom: 12px;
+                        border: 1px solid var(--datatable-border, var(--bs-border-color, #dee2e6));
                     }
                     
                     .w-progress-fill {
@@ -796,7 +821,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         transform: translate(-50%, -50%);
                         font-size: 12px;
                         font-weight: bold;
-                        color: #333;
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                         z-index: 1;
                     }
                     
@@ -810,12 +835,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     .w-export-status i {
                         margin-right: 8px;
                         font-size: 16px;
-                        color: #007bff;
+                        color: var(--datatable-primary, var(--bs-primary, #007bff));
                     }
                     
                     .w-export-status-text {
                         font-size: 14px;
-                        color: #333;
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                     }
                     
                     .w-export-time-info {
@@ -826,19 +851,19 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     }
                     
                     .time-label {
-                        color: #666;
+                        color: var(--datatable-muted, var(--bs-secondary-color, #666));
                     }
                     
                     .time-value {
                         font-weight: bold;
-                        color: #333;
+                        color: var(--datatable-text, var(--bs-body-color, #333));
                         margin-left: 4px;
                     }
                     
                     .w-export-warning {
-                        background: #fff3cd;
-                        border: 1px solid #ffeaa7;
-                        color: #856404;
+                        background: var(--bs-warning-bg-subtle, #fff3cd);
+                        border: 1px solid var(--bs-warning-border-subtle, #ffeaa7);
+                        color: var(--bs-warning-text-emphasis, #856404);
                         padding: 8px 12px;
                         border-radius: 4px;
                         margin-bottom: 20px;
@@ -849,7 +874,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     
                     .w-export-warning i {
                         margin-right: 8px;
-                        color: #f39c12;
+                        color: var(--bs-warning, #f39c12);
                     }
                     
                     .w-export-actions {
@@ -866,21 +891,21 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     }
                     
                     .w-export-btn.secondary {
-                        background: #6c757d;
+                        background: var(--bs-secondary, #6c757d);
                         color: white;
                     }
                     
                     .w-export-btn.secondary:hover {
-                        background: #5a6268;
+                        background: var(--bs-secondary-bg-subtle, #5a6268);
                     }
                     
                     .w-export-btn.primary {
-                        background: #007bff;
+                        background: var(--datatable-primary, var(--bs-primary, #007bff));
                         color: white;
                     }
                     
                     .w-export-btn.primary:hover {
-                        background: #0056b3;
+                        opacity: 0.9;
                     }
                 </style>
             </div>
@@ -951,13 +976,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             $('.progress-percentage').text(`${progress}%`);
             $('.w-export-status-text').text(`正在获取第 ${currentPage} 页数据...`);
 
-            // 使用流式导出API
-            const streamExportUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
-                ? window.api('datatable/rest/v1/data-table/stream-export') 
+            // 使用数据获取API进行分页导出
+            const dataApiUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
+                ? window.api('datatable/rest/v1/data-table/data') 
                 : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table/stream-export'
-                    : '/api/rest/v1/datatable/data-table/stream-export';
-            fetch(streamExportUrl, {
+                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table/data'
+                    : '/api/rest/v1/datatable/data-table/data';
+            fetch(dataApiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -966,11 +991,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     model: instance.options.model,
                     scope: instance.options.scope,
                     page: currentPage,
-                    page_size: pageSize,
-                    format: format,
-                    filters: instance.filters,
-                    sort: instance.sorts,
-                    conditions: instance.conditions || {}
+                    limit: pageSize,
+                    filters: instance.filters || {},
+                    sort: instance.sorts || {},
+                    search: instance.search || ''
                 })
             })
                 .then(response => response.json())
@@ -980,7 +1004,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         return;
                     }
 
-                    if (response.code === 200 && response.data) {
+                    if ((response.code == 200 || response.code === '200' || response.success) && response.data) {
                         // 添加当前页数据
                         if (response.data.data) {
                             allData = allData.concat(response.data.data);
@@ -1244,6 +1268,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         // 使用 instanceKey 存储实例（可能是 tableId 或 scope）
         this.instances[instanceKey] = instance;
 
+        // 初始化下拉菜单（确保每次初始化表格时都检查）
+        this.initDropdowns();
+
         // 初始化主题
         this.initTheme();
 
@@ -1431,7 +1458,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         // 导出功能
         const exportHandler = () => {
             const selectedIds = this.getSelectedRowIds(instance);
-            this.exportData(instance, selectedIds, 'excel');
+            this.exportDataBatch(instance, selectedIds, 'excel');
         };
         toolbar.querySelector('.batch-export-btn')?.addEventListener('click', exportHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.batch-export-btn'), event: 'click', handler: exportHandler });
@@ -1439,7 +1466,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const exportExcelHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
-            this.exportData(instance, selectedIds, 'excel');
+            this.exportDataBatch(instance, selectedIds, 'excel');
         };
         toolbar.querySelector('.export-excel-btn')?.addEventListener('click', exportExcelHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-excel-btn'), event: 'click', handler: exportExcelHandler });
@@ -1447,7 +1474,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const exportCsvHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
-            this.exportData(instance, selectedIds, 'csv');
+            this.exportDataBatch(instance, selectedIds, 'csv');
         };
         toolbar.querySelector('.export-csv-btn')?.addEventListener('click', exportCsvHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-csv-btn'), event: 'click', handler: exportCsvHandler });
@@ -1455,7 +1482,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         const exportJsonHandler = (e) => {
             e.preventDefault();
             const selectedIds = this.getSelectedRowIds(instance);
-            this.exportData(instance, selectedIds, 'json');
+            this.exportDataBatch(instance, selectedIds, 'json');
         };
         toolbar.querySelector('.export-json-btn')?.addEventListener('click', exportJsonHandler);
         instance.eventHandlers.batchActions.push({ element: toolbar.querySelector('.export-json-btn'), event: 'click', handler: exportJsonHandler });
@@ -1525,9 +1552,9 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 导出数据
+     * 批量导出数据（用于批量操作工具栏）
      */
-    exportData: function (instance, selectedIds = null, format = 'excel') {
+    exportDataBatch: function (instance, selectedIds = null, format = 'excel') {
         const tableId = instance.container.getAttribute('id');
 
         // 如果没有选中任何行，导出所有数据
@@ -1738,30 +1765,36 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         })
             .then(response => response.json())
             .then(response => {
-                // 3. 合并模板字段和接口字段
+                // 3. 合并模板字段和接口字段（用于"可用字段"列表）
                 let apiFields = (response.data && response.data.all_fields) ? response.data.all_fields : [];
                 let mergedFields = this.mergeTemplateAndApiFields(templateFields, apiFields);
                 // 合并filter字段
                 let apiFilterFields = (response.data && response.data.filter_fields) ? response.data.filter_fields : [];
                 let mergedFilterFields = this.mergeTemplateAndApiFields(templateFilterFields, apiFilterFields);
 
-                // 4. 保护模板字段，确保它们始终在显示字段中
-                let displayFields = response.data.display_fields || [];
+                // 4. 确定显示字段：优先级为 缓存配置 > 模板字段 > API默认字段
+                let displayFields;
+                const cachedDisplayFields = response.data.cached_display_fields;
                 const templateFieldNames = new Set(templateFields.map(f => f.name));
 
-                // 确保模板字段始终在显示字段中
-                templateFields.forEach(templateField => {
-                    const existingIndex = displayFields.findIndex(f => f.name === templateField.name);
-                    if (existingIndex === -1) {
-                        // 模板字段不在显示字段中，添加到开头
-                        displayFields.unshift(templateField);
-                    } else {
-                        // 模板字段已存在，用模板字段替换（保护模板配置）
-                        displayFields[existingIndex] = templateField;
-                    }
-                });
+                if (cachedDisplayFields && cachedDisplayFields.length > 0) {
+                    // 有缓存配置，使用缓存配置，但确保模板字段属性优先
+                    displayFields = cachedDisplayFields.map(cachedField => {
+                        const templateField = templateFields.find(t => t.name === cachedField.name);
+                        return templateField ? { ...cachedField, ...templateField } : cachedField;
+                    });
+                    console.log('loadModelFieldsForInit: 使用缓存配置', displayFields);
+                } else if (templateFields.length > 0) {
+                    // 没有缓存配置，但有模板字段，只显示模板字段
+                    displayFields = [...templateFields];
+                    console.log('loadModelFieldsForInit: 使用模板字段（默认只显示模板中指定的字段）', displayFields);
+                } else {
+                    // 没有缓存配置也没有模板字段，使用API默认字段
+                    displayFields = response.data.display_fields || [];
+                    console.log('loadModelFieldsForInit: 使用API默认字段', displayFields);
+                }
 
-                // 5. 添加用户选择的字段（非模板字段）
+                // 5. 记录用户选择的字段（非模板字段）
                 const userSelectedFields = displayFields.filter(field => !templateFieldNames.has(field.name));
                 console.log('loadModelFieldsForInit: 用户选择的字段', userSelectedFields);
 
@@ -2091,6 +2124,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             const canEdit = isProtected ?
                 (field.editable === true || field.editable === 'true') :
                 (field.editable !== false);
+            // 检查列是否可以拖动排序（默认允许，除非明确禁止）
+            const canDragOrder = field.display_orderable !== false && 
+                                 field.display_orderable !== 'false' && 
+                                 field.display_orderable !== 0 && 
+                                 field.display_orderable !== '0';
 
             if (canSort) {
                 hasSortableFields = true;
@@ -2100,12 +2138,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 '<i class="fas fa-sort sort-icon" data-field="' + field.name + '"></i>' : '';
             const editIcon = canEdit ?
                 '<i class="fas fa-edit edit-icon" data-field="' + field.name + '"></i>' : '';
+            // 拖动手柄图标（只有可拖动的列才显示）
+            const dragHandle = canDragOrder ?
+                '<i class="fas fa-grip-vertical column-drag-handle" title="' + __('拖动调整列顺序') + '"></i>' : '';
 
             headerHtml += `
                 <th data-field="${field.name}"
-                    class="${canSort ? 'sortable' : ''} ${canEdit ? 'editable' : ''} resizable"
-                    style="min-width: ${field.minWidth || '100px'}; max-width: ${field.maxWidth || 'none'}; position: relative;">
+                    class="${canSort ? 'sortable' : ''} ${canEdit ? 'editable' : ''} resizable ${canDragOrder ? 'column-draggable' : ''}"
+                    style="min-width: ${field.minWidth || '100px'}; max-width: ${field.maxWidth || 'none'}; position: relative;"
+                    ${canDragOrder ? 'draggable="true"' : ''}>
                     <div class="header-content">
+                        ${dragHandle}
                         <span class="field-label">${field.label || field.name}</span>
                         ${sortIcon}
                         ${editIcon}
@@ -2137,8 +2180,207 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             });
         }
 
-        // 重新初始化拖拽排序功能
+        // 重新初始化拖拽排序功能（字段配置弹窗）
         this.initDragSort(tableId);
+        
+        // 初始化列头拖动排序功能
+        this.initColumnDragSort(tableId);
+    },
+    
+    /**
+     * 初始化表格列头拖动排序功能
+     * @param {string} tableId 表格ID
+     */
+    initColumnDragSort: function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) return;
+
+        const container = instance.container[0] || instance.container;
+        const thead = container.querySelector('thead');
+        if (!thead) return;
+
+        const headerCells = thead.querySelectorAll('th.column-draggable');
+        const self = this;
+
+        headerCells.forEach(th => {
+            const fieldName = th.getAttribute('data-field');
+            if (!fieldName) return;
+
+            // 拖动开始
+            th.addEventListener('dragstart', function (e) {
+                // 检查是否点击的是拖动手柄或非resize-handle区域
+                const target = e.target;
+                if (target.classList.contains('resize-handle')) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', fieldName);
+                e.dataTransfer.setData('source', 'column-header');
+                th.classList.add('column-dragging');
+                
+                // 添加拖动时的视觉效果
+                setTimeout(() => {
+                    th.style.opacity = '0.5';
+                }, 0);
+            });
+
+            // 拖动结束
+            th.addEventListener('dragend', function () {
+                th.classList.remove('column-dragging');
+                th.style.opacity = '';
+                
+                // 清除所有拖放指示器
+                thead.querySelectorAll('.column-drop-indicator').forEach(el => el.remove());
+                thead.querySelectorAll('.column-drag-over').forEach(el => el.classList.remove('column-drag-over'));
+            });
+
+            // 拖动经过
+            th.addEventListener('dragover', function (e) {
+                const source = e.dataTransfer.types.includes('source') ? 'column-header' : '';
+                // 只处理来自列头的拖动
+                if (e.dataTransfer.getData('source') === 'column-header' || e.dataTransfer.types.includes('text/plain')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    th.classList.add('column-drag-over');
+                    
+                    // 显示放置指示器
+                    self.showColumnDropIndicator(th, e);
+                }
+            });
+
+            // 拖动离开
+            th.addEventListener('dragleave', function (e) {
+                // 确保是真正离开而不是进入子元素
+                if (!th.contains(e.relatedTarget)) {
+                    th.classList.remove('column-drag-over');
+                    self.removeColumnDropIndicator(th);
+                }
+            });
+
+            // 放置
+            th.addEventListener('drop', function (e) {
+                e.preventDefault();
+                th.classList.remove('column-drag-over');
+                self.removeColumnDropIndicator(th);
+                
+                const draggedFieldName = e.dataTransfer.getData('text/plain');
+                
+                if (draggedFieldName && draggedFieldName !== fieldName) {
+                    // 执行列移动
+                    self.moveColumnByDrag(tableId, draggedFieldName, fieldName);
+                }
+            });
+        });
+    },
+    
+    /**
+     * 显示列放置指示器
+     */
+    showColumnDropIndicator: function (th, e) {
+        // 移除之前的指示器
+        this.removeColumnDropIndicator(th);
+        
+        const rect = th.getBoundingClientRect();
+        const midPoint = rect.left + rect.width / 2;
+        const isLeftSide = e.clientX < midPoint;
+        
+        // 创建指示器
+        const indicator = document.createElement('div');
+        indicator.className = 'column-drop-indicator';
+        indicator.style.cssText = `
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--datatable-primary, #2563eb);
+            z-index: 1000;
+            pointer-events: none;
+            ${isLeftSide ? 'left: 0;' : 'right: 0;'}
+        `;
+        
+        th.style.position = 'relative';
+        th.appendChild(indicator);
+        th.setAttribute('data-drop-position', isLeftSide ? 'before' : 'after');
+    },
+    
+    /**
+     * 移除列放置指示器
+     */
+    removeColumnDropIndicator: function (th) {
+        const indicator = th.querySelector('.column-drop-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+        th.removeAttribute('data-drop-position');
+    },
+    
+    /**
+     * 通过拖动移动列
+     * @param {string} tableId 表格ID
+     * @param {string} draggedFieldName 被拖动的字段名
+     * @param {string} targetFieldName 目标字段名
+     */
+    moveColumnByDrag: function (tableId, draggedFieldName, targetFieldName) {
+        const instance = this.instances[tableId];
+        if (!instance) return;
+
+        const fieldList = instance.displayFields;
+        const draggedIndex = fieldList.findIndex(f => f.name === draggedFieldName);
+        const targetIndex = fieldList.findIndex(f => f.name === targetFieldName);
+
+        if (draggedIndex === -1 || targetIndex === -1) {
+            console.warn('moveColumnByDrag: 字段未找到', { draggedFieldName, targetFieldName });
+            return;
+        }
+
+        const draggedField = fieldList[draggedIndex];
+        const targetField = fieldList[targetIndex];
+
+        // 检查字段是否允许移动
+        const draggedCanMove = draggedField.display_orderable !== false && 
+                               draggedField.display_orderable !== 'false' && 
+                               draggedField.display_orderable !== 0 && 
+                               draggedField.display_orderable !== '0';
+        const targetCanMove = targetField.display_orderable !== false && 
+                              targetField.display_orderable !== 'false' && 
+                              targetField.display_orderable !== 0 && 
+                              targetField.display_orderable !== '0';
+
+        if (!draggedCanMove) {
+            console.warn('moveColumnByDrag: 被拖动的字段不允许移动', draggedFieldName);
+            this.showWarning(tableId, __('该列不允许移动'));
+            return;
+        }
+
+        if (!targetCanMove) {
+            console.warn('moveColumnByDrag: 目标位置字段不允许移动', targetFieldName);
+            this.showWarning(tableId, __('无法放置到该位置'));
+            return;
+        }
+
+        // 执行移动
+        const movedField = fieldList.splice(draggedIndex, 1)[0];
+        // 计算新的目标索引（因为删除了一个元素）
+        const newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        fieldList.splice(newTargetIndex, 0, movedField);
+
+        // 保存用户配置到缓存
+        this.saveFieldConfigToCache(tableId);
+
+        // 重新渲染表头和数据
+        this.renderHeader(tableId, fieldList);
+        this.renderTable(instance);
+
+        // 显示成功提示
+        this.showSuccess(tableId, __('列顺序已更新'));
+
+        console.log('moveColumnByDrag: 列拖动移动完成', {
+            dragged: draggedFieldName,
+            target: targetFieldName,
+            newOrder: fieldList.map(f => f.name)
+        });
     },
 
     /**
@@ -2337,13 +2579,16 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 $loading.hide();
                 $content.show();
 
-                if (response.code === 200) {
+                // 兼容 code 为字符串或数字
+                if (response.code == 200 || response.code === '200' || response.success) {
                     instance.data = response.data.data || [];
                     instance.pagination = response.data.pagination;
+                    // 设置 totalCount 用于导出功能
+                    instance.totalCount = response.data.total || response.data.pagination?.total || instance.data.length || 0;
                     this.renderTable(instance);
                 } else {
                     console.error('API错误:', response.msg);
-                    this.showError(response.msg || __('加载数据失败'));
+                    this.showError(response.msg || response.message || __('加载数据失败'));
                 }
             })
             .catch(error => {
@@ -2469,7 +2714,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         })
             .then(response => response.json())
             .then(response => {
-                if (response.code === 200) {
+                // 兼容 code 为字符串或数字
+                if (response.code == 200 || response.code === '200' || response.success) {
                     this.showSuccess(scope, __('配置保存成功'));
                     const modal = document.getElementById('table-config-modal-' + scope);
                     if (modal && typeof bootstrap !== 'undefined') {
@@ -2479,7 +2725,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         }
                     }
                 } else {
-                    this.showError(scope, response.msg);
+                    this.showError(scope, response.msg || response.message || __('保存失败'));
                 }
             })
             .catch(() => {
@@ -2642,7 +2888,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         })
             .then(response => response.json())
             .then(response => {
-                if (response.code === 200) {
+                // 兼容 code 为字符串或数字
+                if (response.code == 200 || response.code === '200' || response.success) {
                     this.showSuccess(tableId, __('保存成功'));
                     $('#' + modalId).modal('hide');
                     instance.isEditing = false;
@@ -2650,7 +2897,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     instance.editingData = {};
                     this.loadData(instance);
                 } else {
-                    this.showError(tableId, response.msg);
+                    this.showError(tableId, response.msg || response.message || __('保存失败'));
                 }
             })
             .catch(() => {
@@ -2864,7 +3111,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             .then(response => {
                 this.hideLoading(tableId);
 
-                if (response.code === 200) {
+                // 兼容 code 为字符串或数字
+                if (response.code == 200 || response.code === '200' || response.success) {
                     const message = options.softDelete
                         ? __('记录已移至回收站')
                         : __('删除成功');
@@ -2876,7 +3124,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     // 清除选中状态
                     this.clearSelection(instance);
                 } else {
-                    this.showError(tableId, response.msg || __('删除失败'));
+                    this.showError(tableId, response.msg || response.message || __('删除失败'));
                 }
             })
             .catch(error => {
@@ -2906,20 +3154,29 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 绑定事件
      */
     bindEvents: function (instance) {
+        // 获取容器（支持 DOM 元素和 jQuery 对象）
+        const container = instance.container.jquery ? instance.container[0] : instance.container;
+        
         // 搜索事件
-        instance.container.find('#search-input-' + instance.options.scope).on('keypress', (e) => {
-            if (e.which === 13) {
-                this.search(instance.options.scope);
-            }
-        });
+        const searchInput = container.querySelector('#search-input-' + instance.options.scope);
+        if (searchInput) {
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.which === 13 || e.keyCode === 13) {
+                    this.search(instance.options.scope);
+                }
+            });
+        }
 
-        // 过滤器事?
-        instance.container.find('#filter-form-' + instance.options.scope).on('submit', (e) => {
-            e.preventDefault();
-            this.applyFilter(instance.options.scope);
-        });
+        // 过滤器事件
+        const filterForm = container.querySelector('#filter-form-' + instance.options.scope);
+        if (filterForm) {
+            filterForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.applyFilter(instance.options.scope);
+            });
+        }
 
-        // 窗口关闭前提?
+        // 窗口关闭前提示
         window.addEventListener('beforeunload', (e) => {
             if (instance.isEditing) {
                 e.preventDefault();
@@ -3116,23 +3373,48 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 根据scope获取实例
+     * 根据任意标识符获取实例（通用查找方法）
+     * 支持: tableId, scope, datatable-scope-xxx 格式
      */
-    getInstanceByScope: function (scope) {
-        // 首先尝试通过 scope 键直接查找（如果设置了隔离标志）
-        const scopeKey = 'scope-' + scope;
-        if (this.instances[scopeKey] && this.instances[scopeKey].isolate) {
+    getInstance: function (identifier) {
+        // 1. 直接查找
+        if (this.instances[identifier]) {
+            return this.instances[identifier];
+        }
+        
+        // 2. 尝试 scope- 前缀
+        const scopeKey = 'scope-' + identifier;
+        if (this.instances[scopeKey]) {
             return this.instances[scopeKey];
         }
         
-        // 否则遍历所有实例查找匹配的 scope
+        // 3. 尝试从 datatable-scope-xxx 格式中提取 scope
+        if (identifier.startsWith('datatable-scope-')) {
+            const extractedScope = identifier.replace('datatable-scope-', '');
+            const extractedScopeKey = 'scope-' + extractedScope;
+            if (this.instances[extractedScopeKey]) {
+                return this.instances[extractedScopeKey];
+            }
+        }
+        
+        // 4. 遍历所有实例查找匹配的 scope 或 tableId
         for (const instanceKey in this.instances) {
             const instance = this.instances[instanceKey];
-            if (instance.scope === scope || (instance.options && instance.options.scope === scope)) {
+            if (instance.scope === identifier || 
+                instance.tableId === identifier ||
+                (instance.options && instance.options.scope === identifier)) {
                 return instance;
             }
         }
+        
         return null;
+    },
+
+    /**
+     * 根据scope获取实例
+     */
+    getInstanceByScope: function (scope) {
+        return this.getInstance(scope);
     },
 
     /**
@@ -3163,34 +3445,54 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     /**
      * 显示成功信息
      */
-    showSuccess: function (tableId, message) {
-        // 创建临时成功提示
+    /**
+     * 显示成功信息（增强版）
+     */
+    showSuccess: function (tableId, message, options = {}) {
+        const {
+            autoHide = true,
+            hideDelay = 3000
+        } = options;
+
+        const container = document.getElementById('w-datatable-' + tableId) || document.getElementById(tableId);
+        if (!container) {
+            console.error('DataTable container not found:', tableId);
+            return;
+        }
+
+        // 移除已存在的成功消息
+        const existingSuccess = container.querySelector('.datatable-success-message');
+        if (existingSuccess) {
+            existingSuccess.remove();
+        }
+
+        // 创建成功消息元素
         const successHtml = `
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <div class="datatable-success-message">
                 <i class="fas fa-check-circle"></i>
-                <strong>成功！</strong>${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <span>${message}</span>
             </div>
         `;
 
-        // 在模态框顶部显示成功消息
-        const modalBody = document.querySelector(`#field-config-modal-${tableId} .modal-body`);
-        if (modalBody) {
-            modalBody.insertAdjacentHTML('afterbegin', successHtml);
+        // 在表格容器顶部显示成功消息
+        const toolbar = container.querySelector('.w-datatable-toolbar');
+        if (toolbar) {
+            toolbar.insertAdjacentHTML('afterend', successHtml);
+        } else {
+            container.insertAdjacentHTML('afterbegin', successHtml);
         }
 
-        // 3秒后自动隐藏
-        setTimeout(() => {
-            const alertElement = document.querySelector(`#field-config-modal-${tableId} .alert-success`);
-            if (alertElement) {
-                alertElement.style.opacity = '0';
-                setTimeout(() => {
-                    if (alertElement.parentNode) {
-                        alertElement.parentNode.removeChild(alertElement);
-                    }
-                }, 300);
-            }
-        }, 3000);
+        // 自动隐藏
+        if (autoHide) {
+            setTimeout(() => {
+                const successMsg = container.querySelector('.datatable-success-message');
+                if (successMsg) {
+                    successMsg.style.opacity = '0';
+                    successMsg.style.transition = 'opacity 0.3s';
+                    setTimeout(() => successMsg.remove(), 300);
+                }
+            }, hideDelay);
+        }
     },
 
     /**
@@ -3282,39 +3584,64 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 显示错误信息
+     * 显示错误信息（增强版）
      */
-    showError: function (tableId, message) {
-        const errorElement = document.getElementById('error-' + tableId);
-        const contentElement = document.getElementById('content-' + tableId);
+    showError: function (tableId, message, options = {}) {
+        const {
+            autoHide = true,
+            hideDelay = 5000,
+            showRetry = false,
+            retryCallback = null
+        } = options;
 
-        if (errorElement) {
-            errorElement.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>错误！</strong>${message}
-                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="DataTableManager.loadModelFields('${tableId}')">
-                        <i class="fas fa-redo"></i> 重试
+        const container = document.getElementById('w-datatable-' + tableId) || document.getElementById(tableId);
+        if (!container) {
+            console.error('DataTable container not found:', tableId);
+            return;
+        }
+
+        // 移除已存在的错误消息
+        const existingError = container.querySelector('.datatable-error-message');
+        if (existingError) {
+            existingError.remove();
+        }
+
+        // 创建错误消息元素
+        const errorHtml = `
+            <div class="datatable-error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>${message}</span>
+                ${showRetry && retryCallback ? `
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="${retryCallback}">
+                        <i class="fas fa-redo"></i> ${__('重试')}
                     </button>
-                </div>
-            `;
-            errorElement.style.display = 'block';
+                ` : ''}
+            </div>
+        `;
+
+        // 在表格容器顶部显示错误消息
+        const toolbar = container.querySelector('.w-datatable-toolbar');
+        if (toolbar) {
+            toolbar.insertAdjacentHTML('afterend', errorHtml);
+        } else {
+            container.insertAdjacentHTML('afterbegin', errorHtml);
         }
 
-        if (contentElement) {
-            contentElement.style.display = 'none';
+        // 自动隐藏
+        if (autoHide) {
+            setTimeout(() => {
+                const errorMsg = container.querySelector('.datatable-error-message');
+                if (errorMsg) {
+                    errorMsg.style.opacity = '0';
+                    errorMsg.style.transition = 'opacity 0.3s';
+                    setTimeout(() => errorMsg.remove(), 300);
+                }
+            }, hideDelay);
         }
     },
 
     /**
-     * 显示警告消息
-     */
-    showWarning: function (tableId, message) {
-        alert(__('警告: %{1}', message));
-    },
-
-    /**
-     * 初始化表格主?
+     * 初始化表格主体
      */
     initBody: function (scope, options) {
         console.log('初始化表格主?', scope, options);
@@ -3397,7 +3724,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             modal.style.display = 'flex';
 
             // 检查是否已经有缓存的字段数据
-            const instance = DataTableManager.instances[tableId];
+            const instance = DataTableManager.getInstance(tableId);
             if (instance && instance.allFields && instance.allFields.length > 0) {
                 console.log('openFieldConfig: 使用缓存的字段数据', {
                     allFields: instance.allFields.length,
@@ -3418,7 +3745,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             }
 
             DataTableManager.bindFieldConfigTabs(tableId);
+            
+            // 确保拖拽功能在DOM渲染完成后初始化
             setTimeout(function () {
+                DataTableManager.initDragSort(tableId);
                 var firstInput = modal.querySelector('input,select,textarea,button');
                 if (firstInput) firstInput.focus();
             }, 200);
@@ -3485,30 +3815,36 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         })
             .then(response => response.json())
             .then(response => {
-                // 3. 合并模板字段和接口字段
+                // 3. 合并模板字段和接口字段（用于"可用字段"列表）
                 let apiFields = (response.data && response.data.all_fields) ? response.data.all_fields : [];
                 let mergedFields = this.mergeTemplateAndApiFields(templateFields, apiFields);
                 // 合并filter字段
                 let apiFilterFields = (response.data && response.data.filter_fields) ? response.data.filter_fields : [];
                 let mergedFilterFields = this.mergeTemplateAndApiFields(templateFilterFields, apiFilterFields);
 
-                // 4. 保护模板字段，确保它们始终在显示字段中
-                let displayFields = response.data.display_fields || [];
+                // 4. 确定显示字段：优先级为 缓存配置 > 模板字段 > API默认字段
+                let displayFields;
+                const cachedDisplayFields = response.data.cached_display_fields;
                 const templateFieldNames = new Set(templateFields.map(f => f.name));
 
-                // 确保模板字段始终在显示字段中
-                templateFields.forEach(templateField => {
-                    const existingIndex = displayFields.findIndex(f => f.name === templateField.name);
-                    if (existingIndex === -1) {
-                        // 模板字段不在显示字段中，添加到开头
-                        displayFields.unshift(templateField);
-                    } else {
-                        // 模板字段已存在，用模板字段替换（保护模板配置）
-                        displayFields[existingIndex] = templateField;
-                    }
-                });
+                if (cachedDisplayFields && cachedDisplayFields.length > 0) {
+                    // 有缓存配置，使用缓存配置，但确保模板字段属性优先
+                    displayFields = cachedDisplayFields.map(cachedField => {
+                        const templateField = templateFields.find(t => t.name === cachedField.name);
+                        return templateField ? { ...cachedField, ...templateField } : cachedField;
+                    });
+                    console.log('loadModelFieldsForConfig: 使用缓存配置', displayFields);
+                } else if (templateFields.length > 0) {
+                    // 没有缓存配置，但有模板字段，只显示模板字段
+                    displayFields = [...templateFields];
+                    console.log('loadModelFieldsForConfig: 使用模板字段（默认只显示模板中指定的字段）', displayFields);
+                } else {
+                    // 没有缓存配置也没有模板字段，使用API默认字段
+                    displayFields = response.data.display_fields || [];
+                    console.log('loadModelFieldsForConfig: 使用API默认字段', displayFields);
+                }
 
-                // 5. 添加用户选择的字段（非模板字段）
+                // 5. 记录用户选择的字段（非模板字段）
                 const userSelectedFields = displayFields.filter(field => !templateFieldNames.has(field.name));
                 console.log('loadModelFieldsForConfig: 用户选择的字段', userSelectedFields);
 
@@ -4271,9 +4607,12 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 刷新数据
      */
     refreshData: function (tableId) {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
+        
         if (instance) {
             this.loadData(instance);
+        } else {
+            console.error('DataTable instance not found for:', tableId, 'Available instances:', Object.keys(this.instances));
         }
     },
 
@@ -4322,35 +4661,10 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     },
 
     /**
-     * 导出数据
-     */
-    exportData: function (scope, format) {
-        const instance = this.getInstanceByScope(scope.replace('-footer', ''));
-        if (instance) {
-            const params = {
-                model: instance.options.model,
-                scope: instance.options.scope,
-                format: format,
-                filters: instance.filters,
-                search: instance.search,
-                sorts: instance.sorts
-            };
-
-            // 创建下载链接
-            const queryString = Object.keys(params)
-                .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(JSON.stringify(params[key])))
-                .join('&');
-
-            const downloadUrl = '/datatable/api/export?' + queryString;
-            window.open(downloadUrl, '_blank');
-        }
-    },
-
-    /**
      * 保存字段配置
      */
     saveFieldConfig: function (tableId) {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
         if (!instance) return;
 
         const displayFields = instance.displayFields || [];
@@ -4383,7 +4697,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ scope: instance.options.scope, config: configData })
         }).then(r => r.json()).then(response => {
-            if (response.code === 200) {
+            // 兼容 code 为字符串或数字
+            if (response.code == 200 || response.code === '200' || response.success) {
                 console.log('saveFieldConfig: 保存成功，开始重新渲染表');
 
                 // 关闭配置弹窗
@@ -4393,11 +4708,11 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 DataTableManager.rebuildTableFromConfig(tableId, displayFields, filterFields);
 
             } else {
-                alert(response.message || __('保存失败'));
+                DataTableManager.showError(tableId, response.msg || response.message || __('保存失败'));
             }
         }).catch(error => {
             console.error('saveFieldConfig: 保存失败', error);
-            alert(__('保存失败: %{1}', error.message));
+            DataTableManager.showError(tableId, __('保存失败: %{1}', [error.message || '未知错误']));
         }).finally(() => {
             if ($saveBtn) {
                 $saveBtn.innerHTML = originalText;
@@ -5304,7 +5619,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * @param {string} tableId 表格ID
      */
     clearHeaderConfig: function (tableId) {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
@@ -5320,7 +5635,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * @param {string} tableId 表格ID
      */
     clearFilterConfig: function (tableId) {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
@@ -5336,7 +5651,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * @param {string} tableId 表格ID
      */
     clearAllConfig: function (tableId) {
-        const instance = this.instances[tableId];
+        const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
@@ -6248,7 +6563,9 @@ document.addEventListener('click', function (e) {
 // 初始化下拉菜单功能（只在单例模式下执行一次）
 if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTableManager._initialized) {
     window.DataTableManager._initialized = true;
-    document.addEventListener('DOMContentLoaded', function () {
+    
+    // 初始化函数
+    var initDataTableManager = function () {
         if (window.DataTableManager) {
             window.DataTableManager.initDropdowns();
             window.DataTableManager.initTheme();
@@ -6261,7 +6578,15 @@ if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTabl
                 window.DataTableManager.initInlineEdit(table.id);
             });
         }
-    });
+    };
+    
+    // 根据页面加载状态决定如何初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDataTableManager);
+    } else {
+        // 页面已加载，直接初始化
+        initDataTableManager();
+    }
 }
 
 // 自动翻译所有带data-w-i18n的元素

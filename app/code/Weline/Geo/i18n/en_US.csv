@@ -1,0 +1,67 @@
+定位成功,"Location successful"
+没有可用的定位服务提供者,"No available location service providers"
+"所有定位服务提供者都失败，最后错误: %{1}","All location service providers failed, last error: %{1}"
+未知错误,"Unknown error"
+"geojs.io请求失败: %{1}","geojs.io request failed: %{1}"
+"geojs.io返回错误状态码: %{1}","geojs.io returned error status code: %{1}"
+"geojs.io返回数据解析失败: %{1}","geojs.io response data parsing failed: %{1}"
+geojs.io返回空数据,"geojs.io returned empty data"
+"ip-api.com请求失败: %{1}","ip-api.com request failed: %{1}"
+"ip-api.com返回错误状态码: %{1}","ip-api.com returned error status code: %{1}"
+"ip-api.com返回数据解析失败: %{1}","ip-api.com response data parsing failed: %{1}"
+定位失败,"Location failed"
+"ip-api.com定位失败: %{1}","ip-api.com location failed: %{1}"
+"ipapi.co请求失败: %{1}","ipapi.co request failed: %{1}"
+"ipapi.co返回错误状态码: %{1}","ipapi.co returned error status code: %{1}"
+"ipapi.co返回数据解析失败: %{1}","ipapi.co response data parsing failed: %{1}"
+"ipapi.co定位失败: %{1}","ipapi.co location failed: %{1}"
+"ipinfo.io请求失败: %{1}","ipinfo.io request failed: %{1}"
+"ipinfo.io返回错误状态码: %{1}","ipinfo.io returned error status code: %{1}"
+"ipinfo.io返回数据解析失败: %{1}","ipinfo.io response data parsing failed: %{1}"
+"ipinfo.io定位失败: %{1}","ipinfo.io location failed: %{1}"
+"ipwhois.app请求失败: %{1}","ipwhois.app request failed: %{1}"
+"ipwhois.app返回错误状态码: %{1}","ipwhois.app returned error status code: %{1}"
+"ipwhois.app返回数据解析失败: %{1}","ipwhois.app response data parsing failed: %{1}"
+"ipwhois.app定位失败: %{1}","ipwhois.app location failed: %{1}"
+本地定位服务暂未实现，将使用备用通道,"Local location service not implemented, will use fallback channels"
+"浏览器不支持Geolocation API","Browser does not support Geolocation API"
+用户拒绝了定位权限,"User denied geolocation permission"
+位置信息不可用,"Position information unavailable"
+定位请求超时,"Location request timeout"
+IP定位服务响应错误,"IP location service response error"
+IP定位失败,"IP location failed"
+"IP定位服务不可用: %{1}","IP location service unavailable: %{1}"
+Geo定位模块,"Geo Location Module"
+浏览器定位,"Browser Location"
+IP定位,"IP Location"
+智能定位,"Smart Location"
+位置缓存,"Position Cache"
+位置监听,"Position Watch"
+获取当前位置,"Get Current Position"
+监听位置变化,"Watch Position Changes"
+清除位置监听,"Clear Position Watch"
+清除缓存,"Clear Cache"
+设置缓存时长,"Set Cache Duration"
+纬度,Latitude
+经度,Longitude
+精度,Accuracy
+海拔,Altitude
+海拔精度,"Altitude Accuracy"
+方向,Heading
+速度,Speed
+国家,Country
+国家代码,"Country Code"
+地区,Region
+省份,Province
+城市,City
+时区,Timezone
+时间戳,Timestamp
+定位来源,"Location Source"
+浏览器不支持定位功能，将使用IP定位,"Browser does not support location, will use IP location"
+"使用浏览器定位，精度: %{1} 米","Using browser location, accuracy: %{1} meters"
+"使用IP定位，城市: %{1}","Using IP location, city: %{1}"
+所有定位方式都失败,"All location methods failed"
+无法自动填充地址,"Unable to auto-fill address"
+请允许浏览器定位权限以使用此功能,"Please allow browser location permission to use this feature"
+定位服务暂时不可用，请稍后重试,"Location service temporarily unavailable, please try again later"
+网络错误，请稍后重试,"Network error, please try again later"

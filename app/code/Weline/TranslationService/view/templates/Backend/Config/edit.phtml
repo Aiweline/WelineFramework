@@ -1,0 +1,258 @@
+<?php
+/**
+ * 翻译服务渠道配置编辑页面
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \Weline\TranslationService\Model\TranslationProvider $provider
+ */
+$provider = $this->getData('provider');
+$isEdit = $provider && $provider->getId();
+$supportedLanguages = $provider ? $provider->getSupportedLanguages() : [];
+$config = $provider ? $provider->getConfig() : [];
+?>
+<div class="translation-service-config-edit-page">
+    <div class="page-header mb-4">
+        <h1><?= $isEdit ? __('编辑渠道配置') : __('添加渠道配置') ?></h1>
+    </div>
+
+    <form method="post" action="<?= $this->getBackendUrl('*/backend/config/save') ?>">
+        <?php if ($isEdit): ?>
+            <input type="hidden" name="provider_id" value="<?= $provider->getId() ?>">
+        <?php endif; ?>
+
+        <div class="card">
+            <div class="card-header">
+                <h3><?= __('基本信息') ?></h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('渠道名称') ?> <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   name="provider_name" 
+                                   value="<?= htmlspecialchars($provider->getData('provider_name') ?? '') ?>" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('渠道代码') ?></label>
+                            <?php if ($isEdit): ?>
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="<?= htmlspecialchars($provider->getData('provider_code') ?? '') ?>" 
+                                       readonly>
+                                <small class="text-muted"><?= __('渠道代码不可修改') ?></small>
+                            <?php else: ?>
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="provider_code" 
+                                       value="<?= htmlspecialchars($provider->getData('provider_code') ?? '') ?>" 
+                                       placeholder="如：google、baidu等">
+                                <small class="text-muted"><?= __('渠道代码（小写字母、数字、下划线），留空自动生成') ?></small>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('描述') ?></label>
+                    <textarea class="form-control" 
+                              name="description" 
+                              rows="3"><?= htmlspecialchars($provider->getData('description') ?? '') ?></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3><?= __('API配置') ?></h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label"><?= __('API密钥') ?> <span class="text-danger">*</span></label>
+                    <input type="text" 
+                           class="form-control" 
+                           name="api_key" 
+                           value="<?= htmlspecialchars($provider->getData('api_key') ?? '') ?>" 
+                           required>
+                    <small class="text-muted"><?= __('从翻译服务提供商获取API密钥') ?></small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('API密钥（Secret）') ?></label>
+                    <input type="password" 
+                           class="form-control" 
+                           name="api_secret" 
+                           value="<?= htmlspecialchars($provider->getData('api_secret') ?? '') ?>">
+                    <small class="text-muted"><?= __('部分服务商需要额外的Secret密钥') ?></small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('API端点URL') ?></label>
+                    <input type="text" 
+                           class="form-control" 
+                           name="api_endpoint" 
+                           value="<?= htmlspecialchars($provider->getData('api_endpoint') ?? '') ?>">
+                    <small class="text-muted"><?= __('API接口地址，留空使用默认地址') ?></small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3><?= __('高级配置') ?></h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       name="is_enabled" 
+                                       id="is_enabled"
+                                       <?= $provider && $provider->isEnabled() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_enabled">
+                                    <?= __('启用渠道') ?>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       name="is_default" 
+                                       id="is_default"
+                                       <?= $provider && $provider->isDefault() ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="is_default">
+                                    <?= __('设为默认渠道') ?>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('优先级') ?></label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   name="priority" 
+                                   value="<?= htmlspecialchars($provider->getData('priority') ?? 0) ?>">
+                            <small class="text-muted"><?= __('数字越大优先级越高') ?></small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('速率限制（每分钟）') ?></label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   name="rate_limit" 
+                                   value="<?= htmlspecialchars($provider->getData('rate_limit') ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('每日限制') ?></label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   name="daily_limit" 
+                                   value="<?= htmlspecialchars($provider->getData('daily_limit') ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label"><?= __('每字符成本') ?></label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   name="cost_per_character" 
+                                   step="0.000001"
+                                   value="<?= htmlspecialchars($provider->getData('cost_per_character') ?? 0) ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3><?= __('支持的语言') ?></h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label"><?= __('选择支持的语言') ?></label>
+                    <div class="row" id="supported-languages-container">
+                        <?php
+                        $allLanguages = [
+                            'zh' => '中文', 'en' => 'English', 'ja' => '日本語', 'ko' => '한국어',
+                            'fr' => 'Français', 'de' => 'Deutsch', 'es' => 'Español', 'ru' => 'Русский',
+                            'ar' => 'العربية', 'pt' => 'Português', 'it' => 'Italiano', 'nl' => 'Nederlands',
+                            'pl' => 'Polski', 'tr' => 'Türkçe', 'vi' => 'Tiếng Việt', 'th' => 'ไทย',
+                            'id' => 'Bahasa Indonesia', 'hi' => 'हिन्दी', 'cs' => 'Čeština', 'sv' => 'Svenska',
+                            'da' => 'Dansk', 'fi' => 'Suomi', 'no' => 'Norsk', 'ro' => 'Română',
+                            'hu' => 'Magyar', 'el' => 'Ελληνικά', 'he' => 'עברית', 'uk' => 'Українська',
+                            'bg' => 'Български', 'hr' => 'Hrvatski', 'sk' => 'Slovenčina', 'sl' => 'Slovenščina',
+                            'et' => 'Eesti', 'lv' => 'Latviešu', 'lt' => 'Lietuvių', 'mt' => 'Malti',
+                            'ga' => 'Gaeilge', 'cy' => 'Cymraeg', 'ca' => 'Català', 'eu' => 'Euskara',
+                        ];
+                        foreach ($allLanguages as $code => $name):
+                            $checked = in_array($code, $supportedLanguages) ? 'checked' : '';
+                        ?>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="supported_languages[]" 
+                                           value="<?= $code ?>" 
+                                           id="lang_<?= $code ?>"
+                                           <?= $checked ?>>
+                                    <label class="form-check-label" for="lang_<?= $code ?>">
+                                        <?= $name ?> (<?= $code ?>)
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllLanguages()">
+                            <?= __('全选') ?>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllLanguages()">
+                            <?= __('全不选') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+            </button>
+            <a href="<?= $this->getBackendUrl('*/backend/config') ?>" class="btn btn-secondary">
+                <i class="mdi mdi-close"></i> <?= __('取消') ?>
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+function selectAllLanguages() {
+    document.querySelectorAll('#supported-languages-container input[type="checkbox"]').forEach(function(checkbox) {
+        checkbox.checked = true;
+    });
+}
+
+function deselectAllLanguages() {
+    document.querySelectorAll('#supported-languages-container input[type="checkbox"]').forEach(function(checkbox) {
+        checkbox.checked = false;
+    });
+}
+</script>
+

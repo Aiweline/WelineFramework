@@ -7,6 +7,8 @@
 namespace Weline\DataTable\Api\Rest\V1;
 
 use Weline\Framework\App\Controller\BackendRestController;
+use Weline\DataTable\Exception\DataTableException;
+use Weline\DataTable\Helper\ErrorHandler;
 
 class Form extends BackendRestController
 {
@@ -38,14 +40,13 @@ class Form extends BackendRestController
             $manualFields = $bodyParams['manual_fields'] ?? $this->request->getParam('manual_fields', []);
 
             // 验证必需参数
-            if (empty($model)) {
-                return $this->error(__('缺少必需参数: model。请传递 model 参数指定表单对应的模型类名，例如：WeShop\\Store\\Model\\Store'), '', 400);
-            }
+            ErrorHandler::validateRequiredParams(
+                ['model' => $model],
+                ['model']
+            );
 
-            // 验证模型类是否存在
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', [$model]));
-            }
+            // 验证模型类
+            ErrorHandler::validateModel($model);
 
             // 实例化模型
             $modelInstance = w_obj($model);
@@ -118,18 +119,26 @@ class Form extends BackendRestController
                 // 获取字段类型
                 $fieldType = $this->getFieldType($fieldName, $columns);
                 
+                // 获取列信息（用于 maxlength、step 等属性）
+                $columnInfo = $this->getColumnInfo($fieldName, $columns);
+                
                 // 构建字段信息
                 $fieldInfo = [
                     'name' => $fieldName,
                     'label' => $this->getFieldLabel($fieldName),
                     'type' => $fieldType,
-                    'required' => $fieldName === $primaryKey,
+                    'required' => $fieldName === $primaryKey || ($columnInfo['nullable'] === false && $columnInfo['default'] === null),
                     'readonly' => $fieldName === $primaryKey,
+                    'disabled' => false,
                     'placeholder' => __('请输入%{1}', [$this->getFieldLabel($fieldName)]),
-                    'value' => '',
+                    'value' => $columnInfo['default'] ?? '',
                     'options' => $this->getFieldOptions($fieldName, $fieldType),
                     'validation' => $this->getFieldValidation($fieldName, $fieldType),
-                    'help' => ''
+                    'help' => $columnInfo['comment'] ?? '',
+                    'maxlength' => $columnInfo['maxlength'] ?? 0,
+                    'min' => $columnInfo['min'] ?? null,
+                    'max' => $columnInfo['max'] ?? null,
+                    'step' => $this->getFieldStep($fieldType, $columnInfo),
                 ];
 
                 $fields[] = $fieldInfo;
@@ -154,93 +163,167 @@ class Form extends BackendRestController
                 'total' => count($fields)
             ]);
 
+        } catch (DataTableException $e) {
+            $e->log('Form::postFields');
+            $errorResponse = ErrorHandler::handleException($e, 'Form::postFields');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         } catch (\Exception $e) {
-            error_log("DataTable Form API Error: " . $e->getMessage());
-            return $this->error(__('获取字段失败: %{1}', [$e->getMessage()]));
+            $errorResponse = ErrorHandler::handleException($e, 'Form::postFields');
+            return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
     }
 
     /**
      * 获取字段类型
+     * 优先根据数据库列类型判断，然后根据字段名推断
      */
     private function getFieldType(string $fieldName, array $columns = []): string
     {
+        // 首先尝试从数据库列信息推断类型（更准确）
+        $dbType = $this->getFieldTypeFromColumn($fieldName, $columns);
+        if ($dbType !== null) {
+            return $dbType;
+        }
+
         // 根据字段名推断类型
         $fieldNameLower = strtolower($fieldName);
         
-        if (strpos($fieldNameLower, 'email') !== false) {
+        // 邮箱字段
+        if (strpos($fieldNameLower, 'email') !== false || strpos($fieldNameLower, 'mail') !== false) {
             return 'email';
         }
-        if (strpos($fieldNameLower, 'password') !== false) {
+        // 密码字段
+        if (strpos($fieldNameLower, 'password') !== false || strpos($fieldNameLower, 'pwd') !== false) {
             return 'password';
         }
-        if (strpos($fieldNameLower, 'phone') !== false || strpos($fieldNameLower, 'tel') !== false) {
+        // 电话字段
+        if (strpos($fieldNameLower, 'phone') !== false || strpos($fieldNameLower, 'tel') !== false || strpos($fieldNameLower, 'mobile') !== false) {
             return 'tel';
         }
-        if (strpos($fieldNameLower, 'url') !== false || strpos($fieldNameLower, 'link') !== false) {
+        // URL字段
+        if (strpos($fieldNameLower, 'url') !== false || strpos($fieldNameLower, 'link') !== false || strpos($fieldNameLower, 'website') !== false) {
             return 'url';
         }
-        if (strpos($fieldNameLower, 'date') !== false) {
-            if (strpos($fieldNameLower, 'time') !== false && strpos($fieldNameLower, 'date') !== false) {
-                return 'datetime';
-            }
+        // 日期时间字段
+        if (strpos($fieldNameLower, 'datetime') !== false || 
+            (strpos($fieldNameLower, 'date') !== false && strpos($fieldNameLower, 'time') !== false)) {
+            return 'datetime';
+        }
+        if (strpos($fieldNameLower, 'date') !== false || strpos($fieldNameLower, 'created_at') !== false || 
+            strpos($fieldNameLower, 'updated_at') !== false || strpos($fieldNameLower, 'deleted_at') !== false) {
             return 'date';
         }
-        if (strpos($fieldNameLower, 'time') !== false) {
+        // 时间字段
+        if (strpos($fieldNameLower, 'time') !== false || strpos($fieldNameLower, 'hours') !== false) {
             return 'time';
         }
-        if (strpos($fieldNameLower, 'image') !== false || strpos($fieldNameLower, 'photo') !== false || strpos($fieldNameLower, 'avatar') !== false) {
+        // 图片字段
+        if (strpos($fieldNameLower, 'image') !== false || strpos($fieldNameLower, 'photo') !== false || 
+            strpos($fieldNameLower, 'avatar') !== false || strpos($fieldNameLower, 'logo') !== false ||
+            strpos($fieldNameLower, 'thumbnail') !== false || strpos($fieldNameLower, 'icon') !== false) {
             return 'image';
         }
-        if (strpos($fieldNameLower, 'file') !== false || strpos($fieldNameLower, 'attachment') !== false) {
+        // 文件字段
+        if (strpos($fieldNameLower, 'file') !== false || strpos($fieldNameLower, 'attachment') !== false || 
+            strpos($fieldNameLower, 'document') !== false) {
             return 'file';
         }
-        if (strpos($fieldNameLower, 'status') !== false || strpos($fieldNameLower, 'type') !== false || strpos($fieldNameLower, 'state') !== false) {
+        // 状态/类型字段（下拉选择）
+        if (strpos($fieldNameLower, 'status') !== false || $fieldNameLower === 'type' || 
+            strpos($fieldNameLower, 'state') !== false || strpos($fieldNameLower, 'category') !== false ||
+            strpos($fieldNameLower, 'is_') !== false || strpos($fieldNameLower, 'has_') !== false) {
             return 'select';
         }
-        if (strpos($fieldNameLower, 'content') !== false || strpos($fieldNameLower, 'description') !== false || strpos($fieldNameLower, 'detail') !== false) {
+        // 长文本字段
+        if (strpos($fieldNameLower, 'content') !== false || strpos($fieldNameLower, 'description') !== false || 
+            strpos($fieldNameLower, 'detail') !== false || strpos($fieldNameLower, 'remark') !== false ||
+            strpos($fieldNameLower, 'note') !== false || strpos($fieldNameLower, 'comment') !== false ||
+            strpos($fieldNameLower, 'meta_') !== false) {
             return 'textarea';
         }
-        if (strpos($fieldNameLower, 'price') !== false || strpos($fieldNameLower, 'amount') !== false || strpos($fieldNameLower, 'money') !== false) {
+        // 数字字段
+        if (strpos($fieldNameLower, 'price') !== false || strpos($fieldNameLower, 'amount') !== false || 
+            strpos($fieldNameLower, 'money') !== false || strpos($fieldNameLower, 'cost') !== false ||
+            strpos($fieldNameLower, 'total') !== false || strpos($fieldNameLower, 'quantity') !== false ||
+            strpos($fieldNameLower, 'qty') !== false || strpos($fieldNameLower, 'count') !== false ||
+            strpos($fieldNameLower, 'number') !== false || strpos($fieldNameLower, 'num') !== false ||
+            strpos($fieldNameLower, 'age') !== false || strpos($fieldNameLower, 'weight') !== false ||
+            strpos($fieldNameLower, 'width') !== false || strpos($fieldNameLower, 'height') !== false ||
+            strpos($fieldNameLower, 'length') !== false || strpos($fieldNameLower, 'size') !== false ||
+            strpos($fieldNameLower, 'sort') !== false || strpos($fieldNameLower, 'order') !== false ||
+            strpos($fieldNameLower, 'latitude') !== false || strpos($fieldNameLower, 'longitude') !== false ||
+            strpos($fieldNameLower, 'lat') !== false || strpos($fieldNameLower, 'lng') !== false ||
+            strpos($fieldNameLower, 'percent') !== false || strpos($fieldNameLower, 'rate') !== false ||
+            strpos($fieldNameLower, 'score') !== false || strpos($fieldNameLower, 'level') !== false) {
             return 'number';
         }
-        if (strpos($fieldNameLower, 'id') !== false && $fieldNameLower !== 'id') {
+        // 外键ID字段（数字）
+        if (preg_match('/_id$/', $fieldNameLower) && $fieldNameLower !== 'id') {
             return 'number';
-        }
-
-        // 从数据库列信息推断类型
-        if (!empty($columns)) {
-            foreach ($columns as $column) {
-                $colName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? '') : '';
-                if ($colName === $fieldName) {
-                    $type = is_array($column) ? ($column['Type'] ?? $column['type'] ?? '') : '';
-                    $typeLower = strtolower($type);
-                    
-                    if (strpos($typeLower, 'int') !== false) {
-                        return 'number';
-                    }
-                    if (strpos($typeLower, 'decimal') !== false || strpos($typeLower, 'float') !== false || strpos($typeLower, 'double') !== false) {
-                        return 'number';
-                    }
-                    if (strpos($typeLower, 'date') !== false) {
-                        if (strpos($typeLower, 'time') !== false) {
-                            return 'datetime';
-                        }
-                        return 'date';
-                    }
-                    if (strpos($typeLower, 'time') !== false) {
-                        return 'time';
-                    }
-                    if (strpos($typeLower, 'text') !== false) {
-                        return 'textarea';
-                    }
-                    break;
-                }
-            }
         }
 
         // 默认返回文本类型
         return 'text';
+    }
+
+    /**
+     * 从数据库列信息获取字段类型
+     */
+    private function getFieldTypeFromColumn(string $fieldName, array $columns): ?string
+    {
+        if (empty($columns)) {
+            return null;
+        }
+
+        foreach ($columns as $column) {
+            $colName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? $column['COLUMN_NAME'] ?? '') : '';
+            if ($colName !== $fieldName) {
+                continue;
+            }
+
+            $type = is_array($column) ? ($column['Type'] ?? $column['type'] ?? $column['DATA_TYPE'] ?? '') : '';
+            $typeLower = strtolower($type);
+            
+            // 整数类型
+            if (preg_match('/^(tiny|small|medium|big)?int/i', $typeLower)) {
+                return 'number';
+            }
+            // 浮点数类型
+            if (preg_match('/^(decimal|float|double|numeric|real)/i', $typeLower)) {
+                return 'number';
+            }
+            // 日期时间类型
+            if (strpos($typeLower, 'datetime') !== false || strpos($typeLower, 'timestamp') !== false) {
+                return 'datetime';
+            }
+            if (strpos($typeLower, 'date') !== false) {
+                return 'date';
+            }
+            if (strpos($typeLower, 'time') !== false) {
+                return 'time';
+            }
+            // 长文本类型
+            if (preg_match('/^(text|mediumtext|longtext|clob)/i', $typeLower)) {
+                return 'textarea';
+            }
+            // BLOB类型（文件）
+            if (preg_match('/^(blob|mediumblob|longblob|binary|varbinary)/i', $typeLower)) {
+                return 'file';
+            }
+            // BOOLEAN类型
+            if (preg_match('/^(bool|boolean|bit)/i', $typeLower)) {
+                return 'select';
+            }
+            // ENUM类型
+            if (strpos($typeLower, 'enum') !== false) {
+                return 'select';
+            }
+
+            // VARCHAR/CHAR 默认返回 null，让字段名推断来处理
+            break;
+        }
+
+        return null;
     }
 
     /**
@@ -329,9 +412,84 @@ class Form extends BackendRestController
             $validation['pattern'] = '^https?://.+';
         } elseif ($fieldType === 'number') {
             $validation['type'] = 'number';
+        } elseif ($fieldType === 'tel') {
+            $validation['pattern'] = '^[\\d\\-\\+\\(\\)\\s]+$';
         }
 
         return $validation;
+    }
+
+    /**
+     * 获取列详细信息
+     */
+    private function getColumnInfo(string $fieldName, array $columns): array
+    {
+        $info = [
+            'maxlength' => 0,
+            'nullable' => true,
+            'default' => null,
+            'comment' => '',
+            'precision' => null,
+            'scale' => null,
+            'min' => null,
+            'max' => null,
+        ];
+
+        if (empty($columns)) {
+            return $info;
+        }
+
+        foreach ($columns as $column) {
+            $colName = is_array($column) ? ($column['Field'] ?? $column['field'] ?? $column['COLUMN_NAME'] ?? '') : '';
+            if ($colName !== $fieldName) {
+                continue;
+            }
+
+            $type = is_array($column) ? ($column['Type'] ?? $column['type'] ?? $column['DATA_TYPE'] ?? '') : '';
+            $typeLower = strtolower($type);
+            
+            // 解析 VARCHAR(255) 或 DECIMAL(10,2) 格式
+            if (preg_match('/varchar\((\d+)\)/i', $type, $matches)) {
+                $info['maxlength'] = (int)$matches[1];
+            } elseif (preg_match('/char\((\d+)\)/i', $type, $matches)) {
+                $info['maxlength'] = (int)$matches[1];
+            } elseif (preg_match('/decimal\((\d+),(\d+)\)/i', $type, $matches)) {
+                $info['precision'] = (int)$matches[1];
+                $info['scale'] = (int)$matches[2];
+            }
+            
+            // 获取是否允许 NULL
+            $nullable = $column['Null'] ?? $column['null'] ?? $column['IS_NULLABLE'] ?? 'YES';
+            $info['nullable'] = strtoupper($nullable) === 'YES' || $nullable === true;
+            
+            // 获取默认值
+            $info['default'] = $column['Default'] ?? $column['default'] ?? $column['COLUMN_DEFAULT'] ?? null;
+            
+            // 获取注释
+            $info['comment'] = $column['Comment'] ?? $column['comment'] ?? $column['COLUMN_COMMENT'] ?? '';
+            
+            break;
+        }
+
+        return $info;
+    }
+
+    /**
+     * 获取字段步进值（用于 number 类型）
+     */
+    private function getFieldStep(string $fieldType, array $columnInfo): ?string
+    {
+        if ($fieldType !== 'number') {
+            return null;
+        }
+
+        // 如果有小数位数，设置相应的步进值
+        if (isset($columnInfo['scale']) && $columnInfo['scale'] > 0) {
+            return '0.' . str_repeat('0', $columnInfo['scale'] - 1) . '1';
+        }
+
+        // 整数类型默认步进值为 1
+        return '1';
     }
 
     /**

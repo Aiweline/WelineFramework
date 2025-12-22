@@ -1,0 +1,92 @@
+<?php
+/**
+ * 订单列表页面
+ */
+$orders = $this->getData('orders') ?: [];
+$page = $this->getData('page') ?: 1;
+$pageSize = $this->getData('page_size') ?: 20;
+?>
+<div class="order-list-page">
+    <h1><?= __('我的订单') ?></h1>
+    
+    <?php if (empty($orders)): ?>
+    <div class="empty-state">
+        <p><?= __('暂无订单') ?></p>
+    </div>
+    <?php else: ?>
+    <div class="order-list">
+        <?php foreach ($orders as $order): ?>
+        <div class="order-item">
+            <div class="order-header">
+                <div class="order-number">
+                    <span><?= __('订单号') ?>: <?= $this->escapeHtml($order['order_number']) ?></span>
+                </div>
+                <div class="order-status">
+                    <span class="status-badge status-<?= $this->escapeHtml($order['status']) ?>">
+                        <?= $this->escapeHtml($order['status_text'] ?? $order['status']) ?>
+                    </span>
+                </div>
+            </div>
+            
+            <div class="order-body">
+                <div class="order-info">
+                    <div class="info-item">
+                        <span><?= __('订单总额') ?>:</span>
+                        <strong><?= $this->escapeHtml($order['currency']) ?> <?= number_format($order['total_amount'], 2) ?></strong>
+                    </div>
+                    <div class="info-item">
+                        <span><?= __('支付状态') ?>:</span>
+                        <span><?= $this->escapeHtml($order['payment_status_text'] ?? $order['payment_status']) ?></span>
+                    </div>
+                    <div class="info-item">
+                        <span><?= __('创建时间') ?>:</span>
+                        <span><?= $this->escapeHtml($order['created_time']) ?></span>
+                    </div>
+                </div>
+                
+                <div class="order-actions">
+                    <a href="<?= $this->getUrl('checkout/frontend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
+                        <?= __('查看详情') ?>
+                    </a>
+                    <?php if ($order['status'] === 'pending' || $order['status'] === 'processing'): ?>
+                    <button type="button" class="btn btn-sm btn-danger cancel-order" data-order-id="<?= $order['order_id'] ?>">
+                        <?= __('取消订单') ?>
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 取消订单
+    document.querySelectorAll('.cancel-order').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const orderId = this.getAttribute('data-order-id');
+            if (confirm('<?= __('确定要取消此订单吗？') ?>')) {
+                // 发送取消请求
+                fetch('<?= $this->getUrl('checkout/frontend/order/cancel') ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'order_id=' + orderId
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+

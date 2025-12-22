@@ -52,13 +52,15 @@ class Pixel extends Model
     }
     
     /**
-     * 根据站点ID获取像素记录
+     * 根据站点ID获取像素记录（支持分页和限制）
      * 
      * @param int $websiteId 站点ID
      * @param array $conditions 额外的查询条件
+     * @param int|null $limit 限制返回数量，null表示不限制（但最大10000）
+     * @param int|null $offset 偏移量，用于分页
      * @return array
      */
-    public static function getPixelsByWebsiteId(int $websiteId, array $conditions = []): array
+    public static function getPixelsByWebsiteId(int $websiteId, array $conditions = [], ?int $limit = null, ?int $offset = null): array
     {
         $model = w_obj(self::class)->reset()->where(self::fields_WEBSITE_ID, $websiteId);
         
@@ -73,6 +75,21 @@ class Pixel extends Model
                 $model->where($field, $value);
             }
         }
+        
+        // 添加限制，避免查询过大导致性能问题
+        if ($limit !== null) {
+            $limit = min($limit, 10000); // 最大限制10000条
+            $model->limit($limit);
+            if ($offset !== null) {
+                $model->offset($offset);
+            }
+        } else {
+            // 如果没有指定限制，默认限制10000条
+            $model->limit(10000);
+        }
+        
+        // 使用索引字段排序，提高查询性能
+        $model->order(self::fields_CREATED_AT . ' DESC');
         
         return $model->select()->fetchArray();
     }
@@ -134,7 +151,7 @@ class Pixel extends Model
     }
     
     /**
-     * 获取所有站点ID列表（去重）
+     * 获取所有站点ID列表（去重，带缓存优化）
      * 
      * @return array
      */
@@ -151,8 +168,14 @@ class Pixel extends Model
                 return [];
             }
             
-            // 使用原生SQL查询，避免链式调用可能返回false的问题
-            $sql = "SELECT DISTINCT `" . self::fields_WEBSITE_ID . "` FROM `{$tableName}` WHERE `" . self::fields_WEBSITE_ID . "` IS NOT NULL";
+            // 使用索引字段查询，提高性能
+            // website_id字段已有索引 idx_website_id
+            $sql = "SELECT DISTINCT `" . self::fields_WEBSITE_ID . "` 
+                    FROM `{$tableName}` 
+                    WHERE `" . self::fields_WEBSITE_ID . "` IS NOT NULL 
+                    ORDER BY `" . self::fields_WEBSITE_ID . "` ASC
+                    LIMIT 1000"; // 限制最大返回数量，避免性能问题
+            
             $result = $connector->query($sql)->fetch();
             
             if (empty($result)) {
