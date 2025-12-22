@@ -1,0 +1,841 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var string $path */
+/** @var string $type */
+/** @var array $config */
+/** @var array $options */
+/** @var int|null $meta_id */
+/** @var string|null $meta_identify */
+?>
+<form id="dir-config-form">
+    <?php if ($meta_id): ?>
+        <input type="hidden" name="meta_id" value="<?= (int)$meta_id ?>">
+    <?php endif; ?>
+    <?php if ($meta_identify): ?>
+        <input type="hidden" name="meta_identify" value="<?= htmlspecialchars($meta_identify) ?>">
+    <?php endif; ?>
+    <div class="mb-3">
+        <label class="form-label"><?= __('目录路径') ?></label>
+        <input type="text" class="form-control" value="<?= htmlspecialchars($path) ?>" readonly>
+        <small class="text-muted"><?= __('当前配置的目录路径') ?></small>
+    </div>
+    
+    <?php
+    // 根据类型显示不同的配置界面
+    $typeLabels = [
+        'layout' => __('选择布局'),
+        'partial' => __('选择部件'),
+        'colors' => __('选择色系'),
+        'component' => __('选择组件'),
+        'variable' => __('配置变量')
+    ];
+    $typeLabel = $typeLabels[$type] ?? __('选择配置');
+    ?>
+    
+    <div class="mb-3">
+        <label class="form-label"><?= $typeLabel ?></label>
+        <input type="hidden" name="config[<?= $type ?>]" id="<?= $type ?>-value" value="<?= htmlspecialchars($config[$type] ?? '') ?>">
+        
+        <?php if ($type === 'colors' && !empty($options)): ?>
+            <!-- 色系盘选择器 -->
+            <div class="row g-3" id="color-palette-container">
+                <?php 
+                // 计算文本颜色（根据背景色亮度）
+                function getContrastColor($hexColor) {
+                    $hexColor = ltrim($hexColor, '#');
+                    if (strlen($hexColor) === 3) {
+                        $hexColor = $hexColor[0] . $hexColor[0] . $hexColor[1] . $hexColor[1] . $hexColor[2] . $hexColor[2];
+                    }
+                    $r = hexdec(substr($hexColor, 0, 2));
+                    $g = hexdec(substr($hexColor, 2, 2));
+                    $b = hexdec(substr($hexColor, 4, 2));
+                    $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
+                    return $brightness > 128 ? '#000' : '#fff';
+                }
+                
+                // 生成色盘颜色数组（从主色和次色生成渐变色）
+                function generateColorPalette($primaryColor, $secondaryColor) {
+                    $colors = [$primaryColor];
+                    if ($secondaryColor) {
+                        $colors[] = $secondaryColor;
+                    }
+                    // 生成一些中间色
+                    if (count($colors) < 6) {
+                        $colors = array_merge($colors, [
+                            $primaryColor,
+                            $secondaryColor ?: $primaryColor,
+                            $primaryColor,
+                            $secondaryColor ?: $primaryColor
+                        ]);
+                    }
+                    return array_slice($colors, 0, 6);
+                }
+                
+                foreach ($options as $option): 
+                    $isSelected = (isset($config[$type]) && $config[$type] === $option['value']);
+                    $itemName = $option['label'] ?? ucfirst($option['value']);
+                    $itemDescription = $option['meta']['description'] ?? '';
+                    $themeIdentifier = $option['meta']['theme'] ?? $option['value'];
+                    $primaryColor = $option['meta']['primary_color'] ?? '';
+                    $secondaryColor = $option['meta']['secondary_color'] ?? '';
+                    
+                    // 根据主题标识设置默认颜色
+                    if (empty($primaryColor)) {
+                        switch ($themeIdentifier) {
+                            case 'light':
+                                $primaryColor = '#ffffff';
+                                $secondaryColor = '#f8f9fa';
+                                break;
+                            case 'dark':
+                                $primaryColor = '#1a1a1a';
+                                $secondaryColor = '#2d2d2d';
+                                break;
+                            case 'amazon':
+                                $primaryColor = '#ff9900';
+                                $secondaryColor = '#131921';
+                                break;
+                            default:
+                                $primaryColor = '#0d6efd';
+                                $secondaryColor = '#6c757d';
+                        }
+                    }
+                    
+                    $colorPalette = generateColorPalette($primaryColor, $secondaryColor);
+                    
+                    // 生成色盘渐变色（使用主色和次色生成更丰富的渐变）
+                    $gradientColors = [];
+                    if ($secondaryColor && $secondaryColor !== $primaryColor) {
+                        // 如果有次色，生成从主色到次色的渐变
+                        $gradientColors = [
+                            $primaryColor . ' 0deg',
+                            $primaryColor . ' 45deg',
+                            $secondaryColor . ' 90deg',
+                            $secondaryColor . ' 135deg',
+                            $primaryColor . ' 180deg',
+                            $primaryColor . ' 225deg',
+                            $secondaryColor . ' 270deg',
+                            $secondaryColor . ' 315deg',
+                            $primaryColor . ' 360deg'
+                        ];
+                    } else {
+                        // 如果只有主色，生成单色渐变
+                        $gradientColors = [
+                            $primaryColor . ' 0deg',
+                            $primaryColor . ' 120deg',
+                            $primaryColor . ' 240deg',
+                            $primaryColor . ' 360deg'
+                        ];
+                    }
+                    $gradientString = implode(', ', $gradientColors);
+                ?>
+                    <div class="col-md-6 col-lg-4 col-xl-3">
+                        <div class="color-palette-wheel-card <?= $isSelected ? 'selected' : '' ?>" 
+                             data-colors-value="<?= htmlspecialchars($option['value']) ?>"
+                             style="cursor: pointer;">
+                            <!-- 圆形色盘 -->
+                            <div class="color-wheel-wrapper">
+                                <div class="color-wheel" style="background: conic-gradient(<?= $gradientString ?>);">
+                                    <div class="color-wheel-inner">
+                                        <div class="color-wheel-center" style="background: <?= htmlspecialchars($primaryColor) ?>;">
+                                            <i class="mdi mdi-palette"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php if ($isSelected): ?>
+                                    <div class="color-wheel-check">
+                                        <i class="mdi mdi-check-circle"></i>
+                                    </div>
+                                <?php endif; ?>
+                                <!-- 配置图标 -->
+                                <div class="color-wheel-config-btn" 
+                                     data-color-file="<?= htmlspecialchars($option['file'] ?? '') ?>"
+                                     data-color-value="<?= htmlspecialchars($option['value']) ?>"
+                                     title="<?= __('配置色系') ?>">
+                                    <i class="mdi mdi-cog"></i>
+                                </div>
+                            </div>
+                            
+                            <!-- 色系信息 -->
+                            <div class="color-palette-info">
+                                <h6 class="color-palette-name"><?= htmlspecialchars($itemName) ?></h6>
+                                <?php if (!empty($itemDescription)): ?>
+                                    <p class="color-palette-desc"><?= htmlspecialchars($itemDescription) ?></p>
+                                <?php endif; ?>
+                                
+                                <!-- 颜色标签 -->
+                                <div class="color-tags">
+                                    <span class="color-tag" style="background-color: <?= htmlspecialchars($primaryColor) ?>; color: <?= getContrastColor($primaryColor) ?>;">
+                                        <?= htmlspecialchars($primaryColor) ?>
+                                    </span>
+                                    <?php if ($secondaryColor): ?>
+                                        <span class="color-tag" style="background-color: <?= htmlspecialchars($secondaryColor) ?>; color: <?= getContrastColor($secondaryColor) ?>;">
+                                            <?= htmlspecialchars($secondaryColor) ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <small class="text-muted d-block mt-3">
+                <i class="mdi mdi-information-outline"></i>
+                <?= __('点击色盘选择色系，选中的色系将应用到当前主题') ?>
+            </small>
+            
+        <?php elseif (in_array($type, ['layout', 'partial', 'component']) && !empty($options)): ?>
+            <!-- 卡片选择器（用于 layout, partial, component） -->
+            <div class="row g-3" id="<?= $type ?>-cards-container">
+                <?php foreach ($options as $option): ?>
+                    <?php 
+                    $isSelected = (isset($config[$type]) && $config[$type] === $option['value']);
+                    $itemName = $option['label'] ?? ucfirst($option['value']);
+                    $itemDescription = $option['meta']['description'] ?? '';
+                    ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card <?= $type ?>-card h-100 <?= $isSelected ? 'border-primary shadow-sm' : '' ?>" 
+                             data-<?= $type ?>-value="<?= htmlspecialchars($option['value']) ?>"
+                             style="cursor: pointer; transition: all 0.2s; <?= $isSelected ? 'border-width: 2px;' : '' ?>">
+                            <div class="card-body">
+                                <div class="d-flex align-items-start justify-content-between mb-2">
+                                    <h6 class="card-title mb-0"><?= htmlspecialchars($itemName) ?></h6>
+                                    <?php if ($isSelected): ?>
+                                        <span class="badge bg-primary"><?= __('已选中') ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($itemDescription)): ?>
+                                    <p class="card-text text-muted small mb-2"><?= htmlspecialchars($itemDescription) ?></p>
+                                <?php endif; ?>
+                                <small class="text-muted d-block">
+                                    <code><?= htmlspecialchars($option['file']) ?></code>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <small class="text-muted d-block mt-2">
+                <?php
+                $hints = [
+                    'layout' => __('点击卡片选择布局文件，选中的布局将应用到当前主题'),
+                    'partial' => __('点击卡片选择部件文件，选中的部件将应用到当前主题'),
+                    'component' => __('点击卡片选择组件文件，选中的组件将应用到当前主题')
+                ];
+                echo $hints[$type] ?? __('点击卡片选择文件，选中的文件将应用到当前主题');
+                ?>
+            </small>
+            
+        <?php elseif ($type === 'variable' && !empty($options)): ?>
+            <!-- 变量配置表单 -->
+            <div class="variable-config-container">
+                <?php foreach ($options as $option): ?>
+                    <?php 
+                    $itemName = $option['label'] ?? ucfirst($option['value']);
+                    $itemDescription = $option['meta']['description'] ?? '';
+                    $varName = $option['value'];
+                    $currentValue = $config['variables'][$varName] ?? '';
+                    ?>
+    <div class="mb-3">
+                        <label class="form-label">
+                            <?= htmlspecialchars($itemName) ?>
+                            <?php if (!empty($itemDescription)): ?>
+                                <small class="text-muted">(<?= htmlspecialchars($itemDescription) ?>)</small>
+                            <?php endif; ?>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               name="config[variables][<?= htmlspecialchars($varName) ?>]"
+                               value="<?= htmlspecialchars($currentValue) ?>"
+                               placeholder="<?= __('请输入变量值') ?>">
+                        <small class="text-muted d-block mt-1">
+                            <code><?= htmlspecialchars($option['file']) ?></code>
+                        </small>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <small class="text-muted d-block mt-2"><?= __('输入变量值，这些值将应用到当前主题') ?></small>
+            
+        <?php else: ?>
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i> 
+                <?php
+                $messages = [
+                    'layout' => __('该目录下没有可用的布局文件'),
+                    'partial' => __('该目录下没有可用的部件文件'),
+                    'colors' => __('该目录下没有可用的色系文件'),
+                    'component' => __('该目录下没有可用的组件文件'),
+                    'variable' => __('该目录下没有可用的变量文件')
+                ];
+                echo $messages[$type] ?? __('该目录下没有可用的配置项');
+                ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <script>
+    // 卡片选择初始化 - 使用直接绑定方式
+    (function() {
+        var type = '<?= $type ?>';
+        var cardClass, valueAttr, valueInputId;
+        
+        if (type === 'colors') {
+            cardClass = '.color-palette-wheel-card';
+            valueAttr = 'data-colors-value';
+            valueInputId = 'colors-value';
+        } else {
+            cardClass = '.' + type + '-card';
+            valueAttr = 'data-' + type + '-value';
+            valueInputId = type + '-value';
+        }
+        
+        // 检查是否是需要卡片选择的类型
+        if (['layout', 'partial', 'component', 'colors'].indexOf(type) === -1) {
+            return;
+        }
+        
+        // 直接查找并绑定事件到所有卡片
+        var cards = document.querySelectorAll('#dir-config-form ' + cardClass);
+        console.log('[dir-config-form] 查找卡片:', cardClass, '找到:', cards.length);
+        
+        cards.forEach(function(card) {
+            card.style.cursor = 'pointer';
+            card.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var cardValue = card.getAttribute(valueAttr);
+                console.log('[dir-config-form] 点击卡片:', cardValue);
+                
+                if (!cardValue) {
+                    console.warn('[dir-config-form] 卡片缺少属性:', valueAttr);
+                    return;
+                }
+                
+                // 移除所有卡片的选中状态
+                cards.forEach(function(c) {
+                    if (type === 'colors') {
+                        c.classList.remove('selected');
+                        var checkMark = c.querySelector('.color-wheel-check');
+                        if (checkMark) {
+                            checkMark.remove();
+                        }
+                    } else {
+                        c.classList.remove('border-primary', 'shadow-sm');
+                        c.style.borderWidth = '';
+                        var badge = c.querySelector('.badge.bg-primary');
+                        if (badge && badge.textContent === '<?= __('已选中') ?>') {
+                            badge.remove();
+                        }
+                    }
+                });
+                
+                // 设置当前卡片为选中状态
+                if (type === 'colors') {
+                    card.classList.add('selected');
+                    // 添加选中标记
+                    var wheelWrapper = card.querySelector('.color-wheel-wrapper');
+                    if (wheelWrapper && !wheelWrapper.querySelector('.color-wheel-check')) {
+                        var checkMark = document.createElement('div');
+                        checkMark.className = 'color-wheel-check';
+                        checkMark.innerHTML = '<i class="mdi mdi-check-circle"></i>';
+                        wheelWrapper.appendChild(checkMark);
+                    }
+                } else {
+                    card.classList.add('border-primary', 'shadow-sm');
+                    card.style.borderWidth = '2px';
+                    
+                    // 添加选中徽章
+                    var cardTitle = card.querySelector('.card-title');
+                    if (cardTitle && !card.querySelector('.badge.bg-primary')) {
+                        var badge = document.createElement('span');
+                        badge.className = 'badge bg-primary';
+                        badge.textContent = '<?= __('已选中') ?>';
+                        cardTitle.parentElement.insertBefore(badge, cardTitle.nextSibling);
+                    }
+                }
+                
+                // 更新隐藏字段的值
+                var valueInput = document.getElementById(valueInputId);
+                if (valueInput) {
+                    valueInput.value = cardValue;
+                    console.log('[dir-config-form] 更新隐藏字段:', valueInputId, '=', cardValue);
+                } else {
+                    console.error('[dir-config-form] 未找到隐藏字段:', valueInputId);
+                }
+            };
+        });
+        
+        console.log('[dir-config-form] 卡片事件绑定完成, type=' + type + ', cards=' + cards.length);
+        
+        // 初始化已选中的卡片状态
+        if (type === 'colors') {
+            cards.forEach(function(card) {
+                if (card.classList.contains('selected')) {
+                    var wheelWrapper = card.querySelector('.color-wheel-wrapper');
+                    if (wheelWrapper && !wheelWrapper.querySelector('.color-wheel-check')) {
+                        var checkMark = document.createElement('div');
+                        checkMark.className = 'color-wheel-check';
+                        checkMark.innerHTML = '<i class="mdi mdi-check-circle"></i>';
+                        wheelWrapper.appendChild(checkMark);
+                    }
+                }
+            });
+            
+            // 绑定配置按钮点击事件
+            var configBtns = document.querySelectorAll('#dir-config-form .color-wheel-config-btn');
+            configBtns.forEach(function(btn) {
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    var colorFile = btn.getAttribute('data-color-file');
+                    var colorValue = btn.getAttribute('data-color-value');
+                    var themeId = document.querySelector('input[name="theme_id"]')?.value || 
+                                  document.querySelector('input[name="identity_id"]')?.value;
+                    var area = document.querySelector('input[name="area"]')?.value || 'frontend';
+                    var scope = document.querySelector('input[name="scope"]')?.value || 'default';
+                    
+                    if (!colorFile || !colorValue || !themeId) {
+                        alert('<?= __('缺少必要参数') ?>');
+                        return;
+                    }
+                    
+                    // 打开配置弹窗
+                    openColorConfigModal({
+                        themeId: themeId,
+                        area: area,
+                        scope: scope,
+                        colorFile: colorFile,
+                        colorValue: colorValue
+                    });
+                };
+            });
+        }
+        
+        // 打开色系配置弹窗
+        function openColorConfigModal(params) {
+            var modalId = 'color-config-modal';
+            var existingModal = document.getElementById(modalId);
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 创建模态框
+            var modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal fade';
+            modal.setAttribute('tabindex', '-1');
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="mdi mdi-palette me-2"></i>
+                                <?= __('配置色系') ?>: <span id="color-config-name"></span>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                </div>
+                                <p class="mt-2"><?= __('正在读取颜色变量...') ?></p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                            <button type="button" class="btn btn-primary" id="save-color-config-btn" disabled>
+                                <i class="mdi mdi-content-save me-1"></i>
+                                <?= __('保存配置') ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            var bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // 加载颜色变量
+            loadColorVariables(params, modal);
+            
+            // 清理：模态框关闭时移除
+            modal.addEventListener('hidden.bs.modal', function() {
+                modal.remove();
+            });
+        }
+        
+        // 加载颜色变量
+        function loadColorVariables(params, modal) {
+            var url = '<?= $this->getUrl("theme/backend/config/layout/getColorVariables") ?? "/theme/backend/config/layout/getColorVariables" ?>';
+            var formData = new FormData();
+            formData.append('theme_id', params.themeId);
+            formData.append('area', params.area);
+            formData.append('scope', params.scope);
+            formData.append('color_file', params.colorFile);
+            formData.append('color_value', params.colorValue);
+            
+            fetch(url, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    renderColorConfigForm(data.data, modal, params);
+                } else {
+                    showError(data.msg || '<?= __('加载失败') ?>', modal);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('<?= __('网络错误') ?>', modal);
+            });
+        }
+        
+        // 渲染颜色配置表单
+        function renderColorConfigForm(data, modal, params) {
+            var modalBody = modal.querySelector('.modal-body');
+            var colorName = data.colorName || params.colorValue;
+            document.getElementById('color-config-name').textContent = colorName;
+            
+            var variables = data.variables || [];
+            if (variables.length === 0) {
+                modalBody.innerHTML = '<div class="alert alert-info"><?= __('未找到颜色变量') ?></div>';
+                return;
+            }
+            
+            // 按分类组织变量
+            var grouped = {};
+            variables.forEach(function(variable) {
+                var category = variable.category || '其他';
+                if (!grouped[category]) {
+                    grouped[category] = [];
+                }
+                grouped[category].push(variable);
+            });
+            
+            var html = '<div class="color-variables-config">';
+            for (var category in grouped) {
+                html += '<div class="color-category mb-4">';
+                html += '<h6 class="mb-3"><i class="mdi mdi-folder-outline me-1"></i>' + category + '</h6>';
+                html += '<div class="row g-3">';
+                
+                grouped[category].forEach(function(variable) {
+                    html += '<div class="col-md-6 col-lg-4">';
+                    html += '<div class="color-variable-item">';
+                    html += '<label class="form-label small">' + variable.name + '</label>';
+                    html += '<div class="input-group">';
+                    html += '<input type="color" class="form-control form-control-color" value="' + variable.value + '" data-var-name="' + variable.name + '" style="width: 60px;">';
+                    html += '<input type="text" class="form-control" value="' + variable.value + '" data-var-name="' + variable.name + '" placeholder="#000000">';
+                    html += '</div>';
+                    if (variable.description) {
+                        html += '<small class="text-muted">' + variable.description + '</small>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+                html += '</div>';
+            }
+            html += '</div>';
+            
+            modalBody.innerHTML = html;
+            
+            // 绑定颜色选择器和文本输入框的同步
+            modalBody.querySelectorAll('input[type="color"]').forEach(function(colorInput) {
+                var inputGroup = colorInput.closest('.input-group');
+                var textInput = inputGroup ? inputGroup.querySelector('input[type="text"][data-var-name]') : null;
+                if (textInput) {
+                    colorInput.addEventListener('input', function() {
+                        textInput.value = this.value.toUpperCase();
+                    });
+                }
+            });
+            
+            modalBody.querySelectorAll('input[type="text"][data-var-name]').forEach(function(textInput) {
+                var inputGroup = textInput.closest('.input-group');
+                var colorInput = inputGroup ? inputGroup.querySelector('input[type="color"]') : null;
+                if (colorInput) {
+                    textInput.addEventListener('input', function() {
+                        var value = this.value.trim();
+                        if (/^#[0-9A-Fa-f]{6}$/i.test(value)) {
+                            colorInput.value = value.toUpperCase();
+                        }
+                    });
+                    textInput.addEventListener('blur', function() {
+                        var value = this.value.trim();
+                        if (!/^#[0-9A-Fa-f]{6}$/i.test(value) && value !== '') {
+                            // 如果不是有效的颜色值，尝试转换或恢复
+                            if (/^#[0-9A-Fa-f]{3}$/i.test(value)) {
+                                // 3位转6位
+                                var hex = value.substring(1);
+                                value = '#' + hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+                                this.value = value.toUpperCase();
+                                colorInput.value = value.toUpperCase();
+                            } else {
+                                // 恢复为颜色选择器的值
+                                this.value = colorInput.value;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            // 启用保存按钮
+            var saveBtn = document.getElementById('save-color-config-btn');
+            saveBtn.disabled = false;
+            saveBtn.onclick = function() {
+                saveColorConfig(modal, params);
+            };
+        }
+        
+        // 保存颜色配置
+        function saveColorConfig(modal, params) {
+            var variables = {};
+            modal.querySelectorAll('input[type="text"][data-var-name]').forEach(function(input) {
+                var varName = input.getAttribute('data-var-name');
+                var varValue = input.value.trim();
+                if (varName && varValue) {
+                    variables[varName] = varValue;
+                }
+            });
+            
+            var saveBtn = document.getElementById('save-color-config-btn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
+            
+            var url = '<?= $this->getUrl("theme/backend/config/layout/saveColorVariables") ?? "/theme/backend/config/layout/saveColorVariables" ?>';
+            var formData = new FormData();
+            formData.append('theme_id', params.themeId);
+            formData.append('area', params.area);
+            formData.append('scope', params.scope);
+            formData.append('color_file', params.colorFile);
+            formData.append('color_value', params.colorValue);
+            formData.append('variables', JSON.stringify(variables));
+            
+            fetch(url, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    alert('<?= __('配置保存成功') ?>');
+                    bootstrap.Modal.getInstance(modal).hide();
+                    // 可以刷新页面或更新色盘显示
+                    if (typeof window.location !== 'undefined') {
+                        window.location.reload();
+                    }
+                } else {
+                    alert(data.msg || '<?= __('保存失败') ?>');
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="mdi mdi-content-save me-1"></i><?= __('保存配置') ?>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('<?= __('网络错误') ?>');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="mdi mdi-content-save me-1"></i><?= __('保存配置') ?>';
+            });
+        }
+        
+        // 显示错误
+        function showError(message, modal) {
+            var modalBody = modal.querySelector('.modal-body');
+            modalBody.innerHTML = '<div class="alert alert-danger">' + message + '</div>';
+        }
+    })();
+    </script>
+    
+    <style>
+    /* 卡片样式（layout, partial, component） */
+    .layout-card, .partial-card, .component-card {
+        border: 1px solid #dee2e6;
+    }
+    .layout-card:hover, .partial-card:hover, .component-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .layout-card.border-primary, .partial-card.border-primary, .component-card.border-primary {
+        border-color: #0d6efd !important;
+    }
+    
+    /* 色系盘样式 */
+    .color-palette-wheel-card {
+        background: #fff;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 1.25rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .color-palette-wheel-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+        transform: translateY(-4px);
+    }
+    .color-palette-wheel-card.selected {
+        border-color: #0d6efd;
+        border-width: 3px;
+        box-shadow: 0 4px 16px rgba(13, 110, 253, 0.25);
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.05) 0%, rgba(13, 110, 253, 0.02) 100%);
+    }
+    
+    /* 色盘容器 */
+    .color-wheel-wrapper {
+        position: relative;
+        width: 100%;
+        padding-bottom: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    /* 圆形色盘 */
+    .color-wheel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        padding: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+    .color-palette-wheel-card:hover .color-wheel {
+        transform: rotate(15deg) scale(1.05);
+    }
+    
+    /* 色盘内圈 */
+    .color-wheel-inner {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* 色盘中心 */
+    .color-wheel-center {
+        width: 40%;
+        height: 40%;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.5rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 选中标记 */
+    .color-wheel-check {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 32px;
+        height: 32px;
+        background: #0d6efd;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.2rem;
+        box-shadow: 0 2px 8px rgba(13, 110, 253, 0.4);
+        animation: checkPulse 0.3s ease;
+        z-index: 2;
+    }
+    @keyframes checkPulse {
+        0% { transform: scale(0); opacity: 0; }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    
+    /* 配置按钮 */
+    .color-wheel-config-btn {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #495057;
+        font-size: 1rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        z-index: 2;
+        opacity: 0;
+    }
+    .color-palette-wheel-card:hover .color-wheel-config-btn {
+        opacity: 1;
+    }
+    .color-wheel-config-btn:hover {
+        background: #0d6efd;
+        color: #fff;
+        transform: scale(1.1) rotate(90deg);
+        box-shadow: 0 3px 10px rgba(13, 110, 253, 0.4);
+    }
+    
+    /* 色系信息 */
+    .color-palette-info {
+        text-align: center;
+    }
+    .color-palette-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #212529;
+    }
+    .color-palette-desc {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0.75rem;
+        line-height: 1.4;
+    }
+    
+    /* 颜色标签 */
+    .color-tags {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .color-tag {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        font-family: 'Courier New', monospace;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    </style>
+    
+    <div class="mb-3">
+        <label class="form-label"><?= __('描述') ?></label>
+        <textarea name="config[description]" class="form-control" rows="3" placeholder="<?= __('输入目录描述信息（可选）') ?>"><?= htmlspecialchars($config['description'] ?? '') ?></textarea>
+    </div>
+    
+    <input type="hidden" name="theme_id" value="<?= is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : (is_array($theme) && isset($theme['id']) ? $theme['id'] : (is_array($theme) && isset($theme['identity_id']) ? $theme['identity_id'] : '')) ?>">
+    <input type="hidden" name="identity_id" value="<?= is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : (is_array($theme) && isset($theme['id']) ? $theme['id'] : (is_array($theme) && isset($theme['identity_id']) ? $theme['identity_id'] : '')) ?>">
+    <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
+    <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+    <input type="hidden" name="path" value="<?= htmlspecialchars($path) ?>">
+    <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
+</form>

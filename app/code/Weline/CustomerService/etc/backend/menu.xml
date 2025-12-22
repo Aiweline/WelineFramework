@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:weline:backend:etc/menu.xsd">
+    <menu>
+        <item id="Weline_CustomerService::customer_service" 
+              title="客服服务" 
+              resource="Weline_CustomerService::customer_service"
+              parent="Weline_Backend::system_service"
+              sort="100">
+            <item id="Weline_CustomerService::config" 
+                  title="客服配置" 
+                  resource="Weline_CustomerService::config"
+                  action="*/backend/config"
+                  sort="10"/>
+            <item id="Weline_CustomerService::agent" 
+                  title="客服人员" 
+                  resource="Weline_CustomerService::agent"
+                  action="*/backend/agent"
+                  sort="20"/>
+            <item id="Weline_CustomerService::console" 
+                  title="客服工作台" 
+                  resource="Weline_CustomerService::console"
+                  action="*/backend/console"
+                  sort="25"/>
+            <item id="Weline_CustomerService::session" 
+                  title="会话管理" 
+                  resource="Weline_CustomerService::session"
+                  action="*/backend/session"
+                  sort="30"/>
+        </item>
+    </menu>
+</config>
+

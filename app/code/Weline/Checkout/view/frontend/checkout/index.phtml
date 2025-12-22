@@ -1,0 +1,80 @@
+<?php
+/**
+ * 结账页面
+ */
+?>
+<div class="checkout-page">
+    <h1><?= __('结账') ?></h1>
+    
+    <form id="checkout-form" method="post" action="<?= $this->getUrl('checkout/frontend/checkout/createOrder') ?>">
+        <div class="checkout-section">
+            <h2><?= __('收货地址') ?></h2>
+            <div id="shipping-address-form">
+                <!-- 地址表单将由JavaScript动态生成或通过hook注入 -->
+            </div>
+        </div>
+        
+        <div class="checkout-section">
+            <h2><?= __('订单项') ?></h2>
+            <div id="order-items">
+                <!-- 订单项列表将由JavaScript动态生成 -->
+            </div>
+        </div>
+        
+        <div class="checkout-section">
+            <h2><?= __('配送方式') ?></h2>
+            <div id="shipping-methods">
+                <!-- 配送方式选择 -->
+            </div>
+        </div>
+        
+        <div class="checkout-section">
+            <h2><?= __('支付方式') ?></h2>
+            <div id="payment-methods">
+                <!-- 支付方式选择，可通过hook注入 -->
+                <?= $this->getHook('Weline_Checkout::payment::process::before') ?>
+            </div>
+        </div>
+        
+        <div class="checkout-totals">
+            <div class="total-row">
+                <span><?= __('商品小计') ?>:</span>
+                <span id="subtotal">¥0.00</span>
+            </div>
+            <div class="total-row">
+                <span><?= __('运费') ?>:</span>
+                <span id="shipping-amount">¥0.00</span>
+            </div>
+            <div class="total-row">
+                <span><?= __('税费') ?>:</span>
+                <span id="tax-amount">¥0.00</span>
+            </div>
+            <div class="total-row">
+                <span><?= __('折扣') ?>:</span>
+                <span id="discount-amount">-¥0.00</span>
+            </div>
+            <div class="total-row total">
+                <span><?= __('订单总额') ?>:</span>
+                <span id="total-amount">¥0.00</span>
+            </div>
+        </div>
+        
+        <div class="checkout-actions">
+            <button type="submit" class="btn btn-primary"><?= __('提交订单') ?></button>
+        </div>
+    </form>
+</div>
+
+<script>
+// 结账页面JavaScript逻辑
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('checkout-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            // 处理表单提交
+        });
+    }
+});
+</script>
+

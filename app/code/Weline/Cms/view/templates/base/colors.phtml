@@ -1,0 +1,100 @@
+<?php
+/**
+ * 颜色方案选择处理器 - Color Scheme Selector
+ * 根据模板配置的色系名称加载对应的颜色配置文件
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * 使用说明：
+ * 1. 在模板的 style_settings 中设置 'color_scheme' 字段，值为色系名称（如 'dark'）
+ * 2. 在模板头部调用此文件：<?php include __DIR__ . '/../../../base/colors.phtml'; ?>
+ * 3. 或者通过 <w:template> 标签调用，但需要在调用前设置 template_code 数据
+ * 4. 颜色配置文件将在当前作用域中定义 $colors 数组变量
+ * 
+ * 颜色配置协议：
+ * - 颜色配置文件必须定义 $colors 数组变量，键名为颜色用途（如 'primary_bg', 'text_color' 等）
+ * - 颜色值可以是 hex 格式（#RRGGBB）、rgb/rgba 格式或 CSS 颜色名称
+ * - 如果指定的色系文件不存在，将使用 'default' 作为默认色系
+ * - 如果 'default' 也不存在，$colors 将为空数组，模板应使用硬编码的默认颜色
+ * 
+ * 在模板中使用：
+ * 方式1（推荐）：在模板头部直接 require 颜色配置文件
+ * 方式2：通过模板变量传递 template_code，然后调用此文件
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 从页面数据获取模板代码
+$templateCode = $this->getData('template_code');
+if (empty($templateCode) && $page) {
+    $templateCode = $page->getData('style') ?: '';
+}
+
+// 如果还没有，尝试从请求参数获取（预览模式）
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+
+// 如果无法获取模板代码，尝试从当前文件路径推断
+if (empty($templateCode)) {
+    $templateCode = 'jion-landing'; // 默认模板代码
+}
+
+// 获取色系配置名称，默认为 'default'
+$colorScheme = $styleSettings['color_scheme'] ?? 'default';
+$colorScheme = trim($colorScheme);
+if (empty($colorScheme)) {
+    $colorScheme = 'default';
+}
+
+// 初始化颜色数组
+$colors = [];
+
+// 使用模板系统的路径解析方法获取色系文件路径（支持生产环境）
+// 先尝试加载指定的色系，如果不存在则加载 default
+$colorSchemeTemplate = "Weline_Cms::style/{$templateCode}/colors/{$colorScheme}.phtml";
+$defaultSchemeTemplate = "Weline_Cms::style/{$templateCode}/colors/default.phtml";
+try {
+    list($fileName, $fileDir, $viewDir, $templateDir, $compileDir) = $this->processFileSource($colorSchemeTemplate, '');
+    // 确保路径正确拼接
+    $colorSchemeFile = rtrim($templateDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($fileName, DIRECTORY_SEPARATOR);
+    
+    // 如果文件存在，在当前作用域 include（这样 $colors 变量可用）
+    if (file_exists($colorSchemeFile)) {
+        include $colorSchemeFile;
+    } else {
+        // 尝试加载 default
+        if ($colorScheme !== 'default') {
+            list($fileName, $fileDir, $viewDir, $templateDir, $compileDir) = $this->processFileSource($defaultSchemeTemplate, '');
+            $defaultSchemeFile = rtrim($templateDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($fileName, DIRECTORY_SEPARATOR);
+            if (file_exists($defaultSchemeFile)) {
+                include $defaultSchemeFile;
+            }
+        }
+    }
+} catch (\Exception $e) {
+    // 如果解析失败，尝试加载 default
+    if ($colorScheme !== 'default') {
+        try {
+            list($fileName, $fileDir, $viewDir, $templateDir, $compileDir) = $this->processFileSource($defaultSchemeTemplate, '');
+            $defaultSchemeFile = rtrim($templateDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($fileName, DIRECTORY_SEPARATOR);
+            if (file_exists($defaultSchemeFile)) {
+                include $defaultSchemeFile;
+            }
+        } catch (\Exception $e2) {
+            // default 也不存在，保持 $colors 为空数组
+        }
+    }
+}
+
+// 如果仍未定义 $colors，初始化为空数组
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+// $colors 变量现在可以在当前模板作用域中使用
+?>

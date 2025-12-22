@@ -59,11 +59,174 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.9);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.datatable-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: datatable-spin 1s linear infinite;
+}
+
+.datatable-loading-text {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+@keyframes datatable-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 操作确认对话框样式 */
+.datatable-confirm-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: datatable-fade-in 0.2s;
+}
+
+.datatable-confirm-content {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: datatable-slide-up 0.3s;
+}
+
+.datatable-confirm-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.datatable-confirm-message {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.datatable-confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.datatable-confirm-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.datatable-confirm-btn-cancel {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.datatable-confirm-btn-cancel:hover {
+    background: #e0e0e0;
+}
+
+.datatable-confirm-btn-confirm {
+    background: #dc3545;
+    color: white;
+}
+
+.datatable-confirm-btn-confirm:hover {
+    background: #c82333;
+}
+
+@keyframes datatable-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes datatable-slide-up {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 错误提示样式 */
+.datatable-error-message {
+    background: #fee;
+    border: 1px solid #fcc;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 12px 0;
+    color: #c33;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: datatable-slide-down 0.3s;
+}
+
+.datatable-error-message i {
+    font-size: 16px;
+}
+
+/* 成功提示样式 */
+.datatable-success-message {
+    background: #efe;
+    border: 1px solid #cfc;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 12px 0;
+    color: #3c3;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: datatable-slide-down 0.3s;
+}
+
+.datatable-success-message i {
+    font-size: 16px;
+}
+
+@keyframes datatable-slide-down {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .datatable-content {
@@ -3152,4 +3315,147 @@ body[data-sidebar="dark"] .w-nav-link:hover:not(.active),
 body[data-topbar="dark"] .w-nav-link:hover:not(.active) {
     background: #374151;
     color: #60a5fa;
+}
+
+/* ===== 表格列头拖动排序样式 ===== */
+
+/* 列头拖动手柄 */
+.column-drag-handle {
+    cursor: grab;
+    color: var(--datatable-text-muted, #b0b8c9);
+    font-size: 0.85em;
+    margin-right: 6px;
+    opacity: 0;
+    transition: opacity 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+
+th.column-draggable:hover .column-drag-handle {
+    opacity: 1;
+}
+
+th.column-draggable:hover .column-drag-handle:hover {
+    color: var(--datatable-primary, #2563eb);
+}
+
+/* 可拖动列头样式 */
+th.column-draggable {
+    cursor: default;
+    user-select: none;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+th.column-draggable:hover {
+    background-color: var(--datatable-bg-secondary, #f8f9fa);
+}
+
+/* 拖动中的列头 */
+th.column-dragging {
+    opacity: 0.5 !important;
+    background-color: var(--datatable-bg-secondary, #f8f9fa) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+}
+
+/* 拖动经过时的高亮 */
+th.column-drag-over {
+    background-color: rgba(37, 99, 235, 0.1) !important;
+    border: 1px dashed var(--datatable-primary, #2563eb);
+}
+
+/* 列放置指示器 */
+.column-drop-indicator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--datatable-primary, #2563eb);
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 0 8px var(--datatable-primary, #2563eb);
+    animation: dropIndicatorPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes dropIndicatorPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* 列头内容布局调整 - 支持拖动手柄 */
+th.column-draggable .header-content {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+th.column-draggable .header-content .field-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 拖动时禁用其他交互 */
+th.column-dragging .sort-icon,
+th.column-dragging .edit-icon,
+th.column-dragging .resize-handle {
+    pointer-events: none;
+    opacity: 0.3;
+}
+
+/* 暗色主题支持 */
+body[data-sidebar="dark"] .column-drag-handle,
+body[data-topbar="dark"] .column-drag-handle {
+    color: #6b7280;
+}
+
+body[data-sidebar="dark"] th.column-draggable:hover .column-drag-handle,
+body[data-topbar="dark"] th.column-draggable:hover .column-drag-handle {
+    color: #9ca3af;
+}
+
+body[data-sidebar="dark"] th.column-draggable:hover .column-drag-handle:hover,
+body[data-topbar="dark"] th.column-draggable:hover .column-drag-handle:hover {
+    color: #60a5fa;
+}
+
+body[data-sidebar="dark"] th.column-draggable:hover,
+body[data-topbar="dark"] th.column-draggable:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+body[data-sidebar="dark"] th.column-dragging,
+body[data-topbar="dark"] th.column-dragging {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-sidebar="dark"] th.column-drag-over,
+body[data-topbar="dark"] th.column-drag-over {
+    background-color: rgba(96, 165, 250, 0.15) !important;
+    border-color: #60a5fa;
+}
+
+body[data-sidebar="dark"] .column-drop-indicator,
+body[data-topbar="dark"] .column-drop-indicator {
+    background: #60a5fa;
+    box-shadow: 0 0 8px #60a5fa;
+}
+
+/* 触摸设备优化 - 始终显示拖动手柄 */
+@media (hover: none) and (pointer: coarse) {
+    .column-drag-handle {
+        opacity: 0.7;
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .column-drag-handle {
+        font-size: 0.9em;
+        margin-right: 4px;
+    }
 }

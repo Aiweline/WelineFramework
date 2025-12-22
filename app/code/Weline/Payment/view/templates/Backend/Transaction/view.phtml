@@ -1,0 +1,111 @@
+<?php
+/**
+ * 交易记录详情页面
+ */
+?>
+@template(Weline_Admin::common/header.phtml)
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="mdi mdi-eye me-2"></i><?= __('交易记录详情') ?>
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-bordered">
+                                <tr>
+                                    <th width="30%"><?= __('交易号') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('transaction_no')) ?></td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('订单ID') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('order_id')) ?></td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('支付方式') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('method_code')) ?></td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('支付金额') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('amount')) ?> <?= htmlspecialchars($transaction->getData('currency')) ?></td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('支付状态') ?></th>
+                                    <td>
+                                        <?php
+                                        $status = $transaction->getData('status');
+                                        $statusMap = [
+                                            'pending' => ['label' => __('待支付'), 'class' => 'warning'],
+                                            'processing' => ['label' => __('处理中'), 'class' => 'info'],
+                                            'success' => ['label' => __('支付成功'), 'class' => 'success'],
+                                            'failed' => ['label' => __('支付失败'), 'class' => 'danger'],
+                                            'refunded' => ['label' => __('已退款'), 'class' => 'secondary'],
+                                        ];
+                                        $statusInfo = $statusMap[$status] ?? ['label' => $status, 'class' => 'secondary'];
+                                        ?>
+                                        <span class="badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('创建时间') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('created_at')) ?></td>
+                                </tr>
+                                <tr>
+                                    <th><?= __('更新时间') ?></th>
+                                    <td><?= htmlspecialchars($transaction->getData('updated_at')) ?></td>
+                                </tr>
+                                <?php if ($transaction->getData('paid_at')): ?>
+                                    <tr>
+                                        <th><?= __('支付完成时间') ?></th>
+                                        <td><?= htmlspecialchars($transaction->getData('paid_at')) ?></td>
+                                    </tr>
+                                <?php endif; ?>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 请求数据 -->
+                    <?php $requestData = $transaction->getRequestData(); ?>
+                    <?php if (!empty($requestData)): ?>
+                        <div class="mt-3">
+                            <h5><?= __('请求数据') ?></h5>
+                            <pre class="bg-light p-3 rounded"><?= htmlspecialchars(json_encode($requestData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- 响应数据 -->
+                    <?php $responseData = $transaction->getResponseData(); ?>
+                    <?php if (!empty($responseData)): ?>
+                        <div class="mt-3">
+                            <h5><?= __('响应数据') ?></h5>
+                            <pre class="bg-light p-3 rounded"><?= htmlspecialchars(json_encode($responseData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- 回调数据 -->
+                    <?php $callbackData = $transaction->getCallbackData(); ?>
+                    <?php if (!empty($callbackData)): ?>
+                        <div class="mt-3">
+                            <h5><?= __('回调数据') ?></h5>
+                            <pre class="bg-light p-3 rounded"><?= htmlspecialchars(json_encode($callbackData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="mt-3">
+                        <a href="<?= $this->getUrl('*/backend/transaction/index') ?>" class="btn btn-secondary">
+                            <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@template(Weline_Admin::common/footer.phtml)
+

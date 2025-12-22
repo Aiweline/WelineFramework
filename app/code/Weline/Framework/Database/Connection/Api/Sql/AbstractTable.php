@@ -114,9 +114,32 @@ abstract class AbstractTable implements TableInterface
         if ($primary_key) {
             $this->primary_key = $primary_key;
         }
-        $this->table = $table;
-        $this->new_table_name = $new_table_name ? '`' . $this->connector->getConfigProvider()->getDatabase() . '`.`' . $new_table_name . '`' : '';
+        $this->table = $this->formatTableName($table);
+        $this->new_table_name = $new_table_name ? $this->formatTableName($new_table_name) : '';
         $this->comment = $comment;
+    }
+
+    protected function formatTableName(string $table): string
+    {
+        // 如果表名已经包含引号（已格式化），需要先去除引号再重新格式化
+        // 这样可以确保使用正确的策略（PostgreSQL 使用双引号，MySQL 使用反引号）
+        $table = trim($table);
+        if (str_contains($table, '"') || str_contains($table, '`')) {
+            // 去除所有引号，提取逻辑表名
+            $table = preg_replace('/[`"]/', '', $table);
+            // 如果包含点号，提取表名部分（忽略 schema 或数据库名）
+            if (str_contains($table, '.')) {
+                $parts = explode('.', $table);
+                $table = end($parts); // 取最后一部分作为表名
+            }
+        }
+        
+        if (method_exists($this->connector, 'formatTableName')) {
+            return $this->connector->formatTableName($table);
+        }
+        $dbName = $this->connector->getConfigProvider()->getDatabase();
+        $table = str_replace('`', '', $table);
+        return ($dbName ? "`{$dbName}`." : '') . "`{$table}`";
     }
 
     /**

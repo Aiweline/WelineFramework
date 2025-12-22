@@ -266,8 +266,8 @@ class EventsManager
                 $errorDetails['sourceModule'],
                 $errorDetails['eventInfo']
             );
-            // 致命报错
-            trigger_error($fullErrorMessage, E_USER_ERROR);
+            // PHP 8.4+ 不再支持 trigger_error() 的 E_USER_ERROR，改为抛出异常
+            throw new Exception($fullErrorMessage);
         } finally {
             // 清除检查标志
             self::$isCheckingEvent = false;

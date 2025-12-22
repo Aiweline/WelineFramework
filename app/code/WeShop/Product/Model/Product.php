@@ -492,4 +492,118 @@ class Product extends EavModel
             ->select()->fetchArray();
     }
 
+    /**
+     * 产品保存前钩子 - 触发事件
+     */
+    public function save_before(): void
+    {
+        parent::save_before();
+        // 触发产品保存前事件
+        $this->getEventManager()->dispatch('WeShop_Product::product_save_before', [
+            'product' => $this,
+            'is_new' => empty($this->getId())
+        ]);
+    }
+
+    /**
+     * 产品保存后钩子 - 触发事件
+     */
+    public function save_after(): void
+    {
+        parent::save_after();
+        // 触发产品保存后事件
+        $this->getEventManager()->dispatch('WeShop_Product::product_save_after', [
+            'product' => $this,
+            'product_id' => $this->getId()
+        ]);
+    }
+
+    /**
+     * 产品删除前钩子 - 触发事件
+     */
+    public function delete_before(): void
+    {
+        parent::delete_before();
+        // 触发产品删除前事件
+        $this->getEventManager()->dispatch('WeShop_Product::product_delete_before', [
+            'product' => $this,
+            'product_id' => $this->getId()
+        ]);
+    }
+
+    /**
+     * 产品删除后钩子 - 触发事件
+     */
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        // 触发产品删除后事件
+        $this->getEventManager()->dispatch('WeShop_Product::product_delete_after', [
+            'product_id' => $this->getOriginData(self::fields_ID)
+        ]);
+    }
+
+    /**
+     * 获取事件管理器
+     * @return \Weline\Framework\Event\EventsManager
+     */
+    protected function getEventManager(): \Weline\Framework\Event\EventsManager
+    {
+        return ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+    }
+
+    /**
+     * 获取属性集ID
+     * @return int
+     */
+    public function getSetId(): int
+    {
+        return (int)$this->getData(self::fields_set_id);
+    }
+
+    /**
+     * 设置属性集ID
+     * @param int $setId
+     * @return static
+     */
+    public function setSetId(int $setId): static
+    {
+        return $this->setData(self::fields_set_id, $setId);
+    }
+
+    /**
+     * 获取产品当前使用的属性集（通过 set_id）
+     * @return Set|null
+     */
+    public function getCurrentAttributeSet(): ?Set
+    {
+        $setId = $this->getSetId();
+        if ($setId <= 0) {
+            return null;
+        }
+        /** @var Set $set */
+        $set = ObjectManager::getInstance(Set::class);
+        $set->load($setId);
+        return $set->getId() ? $set : null;
+    }
+
+    /**
+     * 获取SPU
+     * @return string
+     */
+    public function getSpu(): string
+    {
+        return (string)$this->getData(self::fields_spu);
+    }
+
+    /**
+     * 设置SPU
+     * @param string $spu
+     * @return static
+     */
+    public function setSpu(string $spu): static
+    {
+        return $this->setData(self::fields_spu, $spu);
+    }
+
 }

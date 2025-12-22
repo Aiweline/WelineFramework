@@ -43,9 +43,14 @@ class BackendControllerInit implements ObserverInterface
             ->find()
             ->fetch();
         if (!$acl->getId()) {
-            $name = '';
+            // 如果 name 为空，使用默认值，避免违反 NOT NULL 约束
+            $name = __('未命名访问');
         } else {
             $name = $acl->getSourceName();
+            // 如果 name 仍然为空，使用默认值
+            if (empty($name)) {
+                $name = __('未命名访问');
+            }
         }
         /** @var BackendActivityLog $activityLogger */
         $activityLogger = ObjectManager::getInstance(BackendActivityLog::class);

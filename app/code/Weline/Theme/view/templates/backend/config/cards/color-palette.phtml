@@ -1,0 +1,288 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $colorPalettes 色盘数组，格式：['paletteName' => ['name' => '...', 'primary_color' => '...', 'variables' => [...], 'is_selected' => true], ...] */
+?>
+<?php
+// 计算文本颜色（根据背景色亮度）
+function getContrastColor($hexColor) {
+    $hexColor = ltrim($hexColor, '#');
+    if (strlen($hexColor) === 3) {
+        $hexColor = $hexColor[0] . $hexColor[0] . $hexColor[1] . $hexColor[1] . $hexColor[2] . $hexColor[2];
+    }
+    $r = hexdec(substr($hexColor, 0, 2));
+    $g = hexdec(substr($hexColor, 2, 2));
+    $b = hexdec(substr($hexColor, 4, 2));
+    $brightness = ($r * 299 + $g * 587 + $b * 114) / 1000;
+    return $brightness > 128 ? '#000' : '#fff';
+}
+
+// 生成色盘渐变色
+function generateColorGradient($primaryColor, $secondaryColor) {
+    $gradientColors = [];
+    if ($secondaryColor && $secondaryColor !== $primaryColor) {
+        $gradientColors = [
+            $primaryColor . ' 0deg',
+            $primaryColor . ' 45deg',
+            $secondaryColor . ' 90deg',
+            $secondaryColor . ' 135deg',
+            $primaryColor . ' 180deg',
+            $primaryColor . ' 225deg',
+            $secondaryColor . ' 270deg',
+            $secondaryColor . ' 315deg',
+            $primaryColor . ' 360deg'
+        ];
+    } else {
+        $gradientColors = [
+            $primaryColor . ' 0deg',
+            $primaryColor . ' 120deg',
+            $primaryColor . ' 240deg',
+            $primaryColor . ' 360deg'
+        ];
+    }
+    return implode(', ', $gradientColors);
+}
+?>
+<div class="row g-3" id="color-palette-container">
+    <?php foreach ($colorPalettes as $paletteName => $palette): 
+        $isSelected = $palette['is_selected'] ?? false;
+        $name = $palette['name'] ?? ucfirst($paletteName);
+        $description = $palette['description'] ?? '';
+        $primaryColor = $palette['primary_color'] ?? '#4a90e2';
+        $secondaryColor = $palette['secondary_color'] ?? '#f1f5f9';
+        $gradientString = generateColorGradient($primaryColor, $secondaryColor);
+    ?>
+        <div class="col-md-6 col-lg-4 col-xl-3">
+            <div class="color-palette-wheel-card <?= $isSelected ? 'selected' : '' ?>" 
+                 data-palette-name="<?= htmlspecialchars($paletteName) ?>"
+                 style="cursor: pointer;">
+                <!-- 圆形色盘 -->
+                <div class="color-wheel-wrapper">
+                    <div class="color-wheel" style="background: conic-gradient(<?= $gradientString ?>);">
+                        <div class="color-wheel-inner">
+                            <div class="color-wheel-center" style="background: <?= htmlspecialchars($primaryColor) ?>;">
+                                <i class="mdi mdi-palette"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <?php if ($isSelected): ?>
+                        <div class="color-wheel-check">
+                            <i class="mdi mdi-check-circle"></i>
+                        </div>
+                    <?php endif; ?>
+                    <!-- 配置图标（齿轮按钮） -->
+                    <div class="color-wheel-config-btn" 
+                         data-palette-name="<?= htmlspecialchars($paletteName) ?>"
+                         title="<?= __('配置色系') ?>"
+                         onclick="event.stopPropagation(); openColorPaletteConfigModal('<?= htmlspecialchars($paletteName) ?>');">
+                        <i class="mdi mdi-cog"></i>
+                    </div>
+                </div>
+                
+                <!-- 色系信息 -->
+                <div class="color-palette-info">
+                    <h6 class="color-palette-name"><?= htmlspecialchars($name) ?></h6>
+                    <?php if (!empty($description)): ?>
+                        <p class="color-palette-desc"><?= htmlspecialchars($description) ?></p>
+                    <?php endif; ?>
+                    
+                    <!-- 颜色标签 -->
+                    <div class="color-tags">
+                        <span class="color-tag" style="background-color: <?= htmlspecialchars($primaryColor) ?>; color: <?= getContrastColor($primaryColor) ?>;">
+                            <?= htmlspecialchars($primaryColor) ?>
+                        </span>
+                        <?php if ($secondaryColor): ?>
+                            <span class="color-tag" style="background-color: <?= htmlspecialchars($secondaryColor) ?>; color: <?= getContrastColor($secondaryColor) ?>;">
+                                <?= htmlspecialchars($secondaryColor) ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+</div>
+<small class="text-muted d-block mt-3">
+    <i class="mdi mdi-information-outline"></i>
+    <?= __('点击色盘选择色系，点击齿轮图标配置色系变量') ?>
+</small>
+
+<?php
+$themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
+$saveUrl = $this->getUrl('theme/backend/config/layout/saveColorPalette');
+$saveVariablesUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteVariables');
+?>
+<script>
+(function() {
+    const themeId = <?= json_encode($themeId) ?>;
+    const area = <?= json_encode($area) ?>;
+    const scope = <?= json_encode($scope) ?>;
+    const saveUrl = <?= json_encode($saveUrl) ?>;
+    const saveVariablesUrl = <?= json_encode($saveVariablesUrl) ?>;
+    
+    // 色盘选择处理
+    document.addEventListener('DOMContentLoaded', function() {
+        const container = document.getElementById('color-palette-container');
+        if (!container) return;
+        
+        container.addEventListener('click', function(e) {
+            const card = e.target.closest('.color-palette-wheel-card');
+            if (!card || e.target.closest('.color-wheel-config-btn')) {
+                return;
+            }
+            
+            const paletteName = card.getAttribute('data-palette-name');
+            if (!paletteName) return;
+            
+            // 保存色盘选择
+            saveColorPalette(paletteName);
+        });
+    });
+
+    function saveColorPalette(paletteName) {
+        if (!themeId) {
+            alert('<?= __('请先选择主题') ?>');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('theme_id', themeId);
+        formData.append('area', area);
+        formData.append('scope', scope);
+        formData.append('palette_name', paletteName);
+        
+        fetch(saveUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 200) {
+                // 更新选中状态
+                document.querySelectorAll('.color-palette-wheel-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                const selectedCard = document.querySelector(`[data-palette-name="${paletteName}"]`);
+                if (selectedCard) {
+                    selectedCard.classList.add('selected');
+                    // 添加选中标记
+                    if (!selectedCard.querySelector('.color-wheel-check')) {
+                        const check = document.createElement('div');
+                        check.className = 'color-wheel-check';
+                        check.innerHTML = '<i class="mdi mdi-check-circle"></i>';
+                        selectedCard.querySelector('.color-wheel-wrapper').appendChild(check);
+                    }
+                }
+                
+                // 触发预览刷新
+                if (typeof refreshPreview === 'function') {
+                    refreshPreview();
+                }
+                
+                // 显示成功提示
+                if (typeof showSaveToast === 'function') {
+                    showSaveToast('<?= __('色盘选择已保存') ?>', 'success');
+                }
+            } else {
+                alert(data.msg || '<?= __('保存失败') ?>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __('保存失败') ?>: ' + error.message);
+        });
+    }
+
+    window.openColorPaletteConfigModal = function(paletteName) {
+        if (!themeId) {
+            alert('<?= __('请先选择主题') ?>');
+            return;
+        }
+        
+        const getUrl = <?= json_encode($this->getUrl('theme/backend/config/layout/getColorPaletteVariables')) ?>;
+        const modalUrl = <?= json_encode($this->getUrl('theme/backend/config/layout/getColorPaletteModal')) ?>;
+        
+        // 显示加载状态
+        const loadingHtml = `
+            <div class="modal fade" id="colorPaletteVariablesModal" tabindex="-1">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><?= __('配置色系变量') ?></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden"><?= __('加载中...') ?></span>
+                            </div>
+                            <p class="mt-3"><?= __('正在加载色盘变量...') ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 移除现有弹窗
+        const existingModal = document.getElementById('colorPaletteVariablesModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 添加加载弹窗
+        document.body.insertAdjacentHTML('beforeend', loadingHtml);
+        const modal = document.getElementById('colorPaletteVariablesModal');
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // 获取数据
+        const formData = new FormData();
+        formData.append('theme_id', themeId);
+        formData.append('area', area);
+        formData.append('scope', scope);
+        formData.append('palette_name', paletteName);
+        
+        fetch(getUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 200 && data.data && data.data.palette) {
+                // 使用AJAX加载弹窗内容
+                const paletteJson = encodeURIComponent(JSON.stringify(data.data.palette));
+                fetch(modalUrl + '?palette=' + paletteJson + '&palette_name=' + encodeURIComponent(paletteName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId, {
+                    method: 'GET'
+                })
+                .then(response => response.text())
+                .then(html => {
+                    const modalContent = modal.querySelector('.modal-content');
+                    if (modalContent) {
+                        modalContent.outerHTML = html;
+                        const newModal = document.getElementById('colorPaletteVariablesModal');
+                        if (newModal) {
+                            const newBsModal = new bootstrap.Modal(newModal);
+                            newBsModal.show();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading modal:', error);
+                    modal.querySelector('.modal-body').innerHTML = 
+                        '<div class="alert alert-danger"><?= __('加载弹窗失败') ?>: ' + error.message + '</div>';
+                });
+            } else {
+                modal.querySelector('.modal-body').innerHTML = 
+                    '<div class="alert alert-danger">' + (data.msg || '<?= __('加载失败') ?>') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            modal.querySelector('.modal-body').innerHTML = 
+                '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + error.message + '</div>';
+        });
+    };
+})();
+</script>
+

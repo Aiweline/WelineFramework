@@ -74,15 +74,35 @@ class Store extends BackendController
     }
 
     #[Acl('WeShop_Store::add_post', '店铺添加', 'mdi mdi-pen-plus', '店铺添加')]
-    public function postAdd(): void
+    public function postAdd()
     {
         $data = $this->request->getPost();
         try {
             $this->store->setModelFieldsData($data)
                 ->save();
+            
+            // 如果是 AJAX 请求，返回 JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'status' => true,
+                    'success' => true,
+                    'message' => __('添加成功！'),
+                    'id' => $this->store->getId()
+                ]);
+            }
+            
             $this->getMessageManager()->addSuccess(__('添加成功！'));
             $this->redirect('*/backend/store/edit', ['id' => $this->store->getId()]);
         } catch (\Exception $e) {
+            // 如果是 AJAX 请求，返回 JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'status' => false,
+                    'success' => false,
+                    'message' => __('添加商铺出现问题！') . ': ' . $e->getMessage()
+                ]);
+            }
+            
             $this->getMessageManager()->addError(__('添加商铺出现问题！'));
             $this->getMessageManager()->addException($e);
             $this->redirect();
@@ -110,6 +130,14 @@ class Store extends BackendController
             return $this->fetch('form');
         }
         if (!$this->request->isPost()) {
+            // 如果是 AJAX 请求，返回 JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'status' => false,
+                    'success' => false,
+                    'message' => __('请求错误！')
+                ]);
+            }
             $this->getMessageManager()->addError(__('请求错误！'));
             $this->redirect();
         }
@@ -118,9 +146,29 @@ class Store extends BackendController
         try {
             $this->store->setModelFieldsData($data)
                 ->save();
+            
+            // 如果是 AJAX 请求，返回 JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'status' => true,
+                    'success' => true,
+                    'message' => __('编辑商铺成功！'),
+                    'id' => $this->store->getId()
+                ]);
+            }
+            
             $this->getMessageManager()->addSuccess(__('编辑商铺成功！'));
             $this->redirect('*/backend/store/edit', ['id' => $this->store->getId()]);
         } catch (\Exception $e) {
+            // 如果是 AJAX 请求，返回 JSON
+            if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                return $this->fetchJson([
+                    'status' => false,
+                    'success' => false,
+                    'message' => __('编辑商铺出现问题！') . ': ' . $e->getMessage()
+                ]);
+            }
+            
             $this->getMessageManager()->addError(__('编辑商铺出现问题！'));
             $this->getMessageManager()->addException($e);
             $this->redirect();

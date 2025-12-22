@@ -42,11 +42,13 @@ class Scanner extends BackendController
         
         try {
             // 触发扫描事件，让其他模块的观察者处理
-            $this->getEventManager()->dispatch('meta_scan_path', [
+            // 注意：dispatch 方法的第二个参数需要按引用传递，所以先创建变量
+            $eventData = [
                 'scan_path' => $scanPath,
                 'namespace' => $namespace,
                 'strict_mode' => $strictMode
-            ]);
+            ];
+            $this->getEventManager()->dispatch('Weline_Meta::scan_path', $eventData);
             
             $this->getMessageManager()->addSuccess(__('扫描任务已提交，请查看扫描结果'));
         } catch (\Exception $e) {
@@ -73,7 +75,7 @@ class Scanner extends BackendController
         
         try {
             /** @var ScannerService $scanner */
-            $scanner = ObjectManager::getInstance()->get(ScannerService::class);
+            $scanner = ObjectManager::getInstance(ScannerService::class);
             $results = $scanner->scanPath($scanPath, $namespace, $strictMode);
             
             $successCount = count($results['success']);

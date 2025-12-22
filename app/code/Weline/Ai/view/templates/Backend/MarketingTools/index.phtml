@@ -4,44 +4,405 @@
  *
  * @var $this \Weline\Framework\View\Template
  */
+/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$campaigns = $this->getData('campaigns') ?: [];
+$stats = $this->getData('stats') ?: [];
+$pagination = $this->getData('pagination');
+$filters = $this->getData('filters') ?: [];
+$campaign_types = $this->getData('campaign_types') ?: [];
+$status_options = $this->getData('status_options') ?: [];
 ?>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
-
-<div class="sz-page-header">
-    <h1 class="sz-page-title">
-        <i class="mdi mdi-bullhorn"></i>
-        营销工具
-    </h1>
-    <p class="sz-page-subtitle">AI驱动的营销活动管理工具</p>
-</div>
-
-<div class="sz-card">
-    <div class="sz-card-body">
-        <div class="sz-empty-state">
-            <i class="mdi mdi-chart-line sz-empty-icon"></i>
-            <h3>功能开发中</h3>
-            <p class="text-muted">营销工具功能正在开发中，敬请期待...</p>
-            <div class="mt-4">
-                <a href="<?= $this->getBackendUrl('*/backend/index') ?>" class="btn btn-primary">
-                    <i class="mdi mdi-arrow-left"></i> 返回首页
+<!DOCTYPE html>
+<html lang='zh-CN' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><lang>营销工具</lang></title>
+    <style>
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .stat-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3rem;
+            opacity: 0.2;
+        }
+        
+        .campaign-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .campaign-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .campaign-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .campaign-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .campaign-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .badge-draft {
+            background: #e0e0e0;
+            color: #666;
+        }
+        
+        .badge-active {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .badge-completed {
+            background: #2196f3;
+            color: white;
+        }
+        
+        .badge-cancelled {
+            background: #f44336;
+            color: white;
+        }
+        
+        .badge-promotion {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .badge-referral {
+            background: #9c27b0;
+            color: white;
+        }
+        
+        .badge-discount {
+            background: #00bcd4;
+            color: white;
+        }
+        
+        .campaign-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .campaign-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .campaign-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .filter-bar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .empty-icon {
+            font-size: 80px;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    @template(Weline_Admin::common/body.phtml)
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-before.phtml') ?>
+    
+    <div class="sz-page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="sz-page-title">
+                    <i class="mdi mdi-megaphone"></i>
+                    <lang>营销工具</lang>
+                </h1>
+                <p class="sz-page-subtitle"><lang>AI驱动的营销活动管理工具</lang></p>
+            </div>
+            <div>
+                <a href="<?= $this->getBackendUrl('ai/backend/marketingtools/create') ?>" class="btn btn-primary">
+                    <i class="mdi mdi-plus"></i> <lang>创建活动</lang>
                 </a>
             </div>
         </div>
     </div>
-</div>
-
-<?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
-
-<style>
-.sz-empty-state {
-    text-align: center;
-    padding: 60px 20px;
-}
-.sz-empty-icon {
-    font-size: 80px;
-    color: #ddd;
-    margin-bottom: 20px;
-}
-</style>
-
+    
+    <!-- 统计卡片 -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label"><lang>总活动数</lang></div>
+                <div class="stat-number"><?= $stats['total_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-bullhorn stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card success">
+                <div class="stat-label"><lang>进行中</lang></div>
+                <div class="stat-number"><?= $stats['active_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-play-circle stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card warning">
+                <div class="stat-label"><lang>草稿</lang></div>
+                <div class="stat-number"><?= $stats['draft_campaigns'] ?? 0 ?></div>
+                <i class="mdi mdi-file-document-outline stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card info">
+                <div class="stat-label"><lang>总预算</lang></div>
+                <div class="stat-number">¥<?= number_format($stats['total_budget'] ?? 0, 2) ?></div>
+                <i class="mdi mdi-currency-cny stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 筛选栏 -->
+    <div class="filter-bar">
+        <form method="get" action="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="filter-group">
+            <div class="form-group mb-0">
+                <input type="text" name="search" class="form-control" placeholder="搜索活动名称..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>">
+            </div>
+            <div class="form-group mb-0">
+                <select name="status" class="form-control">
+                    <option value="">全部状态</option>
+                    <?php foreach ($status_options as $value => $label): ?>
+                        <option value="<?= $value ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group mb-0">
+                <select name="campaign_type" class="form-control">
+                    <option value="">全部类型</option>
+                    <?php foreach ($campaign_types as $value => $label): ?>
+                        <option value="<?= $value ?>" <?= ($filters['campaign_type'] ?? '') === $value ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+            </button>
+            <a href="<?= $this->getBackendUrl('ai/backend/marketingtools') ?>" class="btn btn-secondary">
+                <i class="mdi mdi-refresh"></i> <lang>重置</lang>
+            </a>
+        </form>
+    </div>
+    
+    <!-- 活动列表 -->
+    <div class="sz-card">
+        <div class="sz-card-body">
+            <?php if (empty($campaigns)): ?>
+                <div class="empty-state">
+                    <i class="mdi mdi-inbox-empty empty-icon"></i>
+                    <h3><lang>暂无活动</lang></h3>
+                    <p class="text-muted"><lang>创建您的第一个营销活动</lang></p>
+                    <div class="mt-4">
+                        <a href="<?= $this->getBackendUrl('ai/backend/marketingtools/create') ?>" class="btn btn-primary">
+                            <i class="mdi mdi-plus"></i> <lang>创建活动</lang>
+                        </a>
+                    </div>
+                </div>
+            <?php else: ?>
+                <?php foreach ($campaigns as $campaign): ?>
+                    <div class="campaign-card">
+                        <div class="campaign-header">
+                            <div>
+                                <h3 class="campaign-title"><?= htmlspecialchars($campaign['campaign_name'] ?? '') ?></h3>
+                            </div>
+                            <div>
+                                <span class="campaign-badge badge-<?= $campaign['status'] ?? 'draft' ?>">
+                                    <?= $status_options[$campaign['status'] ?? 'draft'] ?? $campaign['status'] ?? 'draft' ?>
+                                </span>
+                                <span class="campaign-badge badge-<?= $campaign['campaign_type'] ?? 'promotion' ?>">
+                                    <?= $campaign_types[$campaign['campaign_type'] ?? 'promotion'] ?? $campaign['campaign_type'] ?? 'promotion' ?>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <?php if (!empty($campaign['description'])): ?>
+                            <p class="text-muted mb-3"><?= htmlspecialchars($campaign['description']) ?></p>
+                        <?php endif; ?>
+                        
+                        <div class="campaign-meta">
+                            <div class="campaign-meta-item">
+                                <i class="mdi mdi-calendar-start"></i>
+                                <span><lang>开始</lang>: <?= $campaign['start_date'] ?? '-' ?></span>
+                            </div>
+                            <div class="campaign-meta-item">
+                                <i class="mdi mdi-calendar-end"></i>
+                                <span><lang>结束</lang>: <?= $campaign['end_date'] ?? '-' ?></span>
+                            </div>
+                            <?php if (!empty($campaign['budget'])): ?>
+                                <div class="campaign-meta-item">
+                                    <i class="mdi mdi-currency-cny"></i>
+                                    <span><lang>预算</lang>: ¥<?= number_format((float)$campaign['budget'], 2) ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <div class="campaign-meta-item">
+                                <i class="mdi mdi-clock-outline"></i>
+                                <span><lang>创建时间</lang>: <?= $campaign['created_at'] ?? '-' ?></span>
+                            </div>
+                        </div>
+                        
+                        <div class="campaign-actions">
+                            <a href="<?= $this->getBackendUrl('ai/backend/marketingtools/edit', ['id' => $campaign['id']]) ?>" class="btn btn-sm btn-primary">
+                                <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteCampaign(<?= $campaign['id'] ?>)">
+                                <i class="mdi mdi-delete"></i> <lang>删除</lang>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                
+                <!-- 分页 -->
+                <?php if ($pagination && $pagination->getTotalPages() > 1): ?>
+                    <nav aria-label="Page navigation" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            <?php if ($pagination->getCurrentPage() > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $this->getBackendUrl('ai/backend/marketingtools', ['page' => $pagination->getCurrentPage() - 1] + $filters) ?>">
+                                        <lang>上一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                            
+                            <?php for ($i = 1; $i <= $pagination->getTotalPages(); $i++): ?>
+                                <li class="page-item <?= $i === $pagination->getCurrentPage() ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= $this->getBackendUrl('ai/backend/marketingtools', ['page' => $i] + $filters) ?>"><?= $i ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            
+                            <?php if ($pagination->getCurrentPage() < $pagination->getTotalPages()): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= $this->getBackendUrl('ai/backend/marketingtools', ['page' => $pagination->getCurrentPage() + 1] + $filters) ?>">
+                                        <lang>下一页</lang>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <?= $this->getChildHtml('Weline_Admin::Backend/page-layout/main-content-after.phtml') ?>
+    
+    <script>
+        function deleteCampaign(id) {
+            if (!confirm('确定要删除这个活动吗？')) {
+                return;
+            }
+            
+            fetch('<?= $this->getBackendUrl('ai/backend/marketingtools/delete') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'id=' + id
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || '删除失败');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('删除失败');
+            });
+        }
+    </script>
+</body>
+</html>

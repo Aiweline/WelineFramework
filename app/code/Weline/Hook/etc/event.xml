@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- 系统升级后事件：自动刷新 Hook 注册表 -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Hook::setup_upgrade_after_refresh_registry" 
+                  instance="Weline\Hook\Observer\SetupUpgradeAfter" 
+                  disabled="false" 
+                  shared="true" 
+                  sort="200"/>
+    </event>
+</config>

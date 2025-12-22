@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：后端 - 全屏布局
- * 
+ *
  * 后端全屏布局，内容占满整个屏幕，无侧边栏，适合大屏展示、数据可视化等场景
  * 字段
  * @info description 描述：后端全屏布局，内容占满整个屏幕，无侧边栏，适合大屏展示、数据可视化等场景
@@ -11,20 +11,14 @@
  * @param showHeader 是否显示header（默认：true）
  * @param showFooter 是否显示footer（默认：false）
  * @param class 额外CSS类
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
-$title = $this->getData('title') ?? '';
-$content = $this->getData('content') ?? '';
-$showHeader = $this->getData('showHeader') ?? true;
-$showFooter = $this->getData('showFooter') ?? false;
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-if ($title) {
-    $this->assign('title', $title);
-}
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="{{htmlLang}}">
 <head>
     @template(Weline_Backend::templates/public/head.phtml)
     <style>
@@ -45,19 +39,19 @@ if ($title) {
     </style>
 </head>
 <body>
-    <?php if ($showHeader): ?>
+    <if condition="meta.showHeader">
         @template(Weline_Backend::blocks/header/base.phtml)
-    <?php endif; ?>
+    </if>
     
-    <div class="backend-layout-fullscreen <?= htmlspecialchars($class) ?>">
+    <div class="backend-layout-fullscreen <?= htmlspecialchars($meta['class'] ?? '') ?>">
         <main class="backend-main-content">
-            <?= $content ?>
+            {{meta.content}}
         </main>
     </div>
     
-    <?php if ($showFooter): ?>
+    <if condition="meta.showFooter">
         @template(Weline_Backend::blocks/footer/base.phtml)
-    <?php endif; ?>
+    </if>
 </body>
 </html>
 

@@ -113,11 +113,11 @@ class WarmupUrl extends Model
                 ->addColumn(self::fields_LAST_WARMED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'null', '最后预热时间')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_MODULE, '', 'KEY', 'idx_module')
-                ->addIndex(self::fields_STATUS, '', 'KEY', 'idx_status')
-                ->addIndex(self::fields_ENABLED, '', 'KEY', 'idx_enabled')
-                ->addIndex(self::fields_DOMAIN_ID, '', 'KEY', 'idx_domain_id')
-                ->addIndex(self::fields_URL, '', 'KEY', 'idx_url')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_module', self::fields_MODULE, '模块索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS, '状态索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_enabled', self::fields_ENABLED, '启用状态索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_domain_id', self::fields_DOMAIN_ID, '域名ID索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_url', self::fields_URL, 'URL索引')
                 ->create();
         }
     }

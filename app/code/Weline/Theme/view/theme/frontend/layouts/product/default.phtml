@@ -1,0 +1,63 @@
+<?php
+/**
+ * 布局：产品页 - 详情页布局
+ *
+ * 产品详情页布局，包含产品图片、信息、详情等区域
+ * 字段
+ * @meta.name {default="产品详情页布局",name="产品详情页布局",description="产品详情页布局，用于描述布局的名称"}
+ * @meta.description {default="产品详情页布局，包含产品图片、信息、详情等区域",name="产品详情页布局，包含产品图片、信息、详情等区域",description="产品详情页布局，包含产品图片、信息、详情等区域，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="产品详情",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+ * @param sidebar {default="",name="侧边栏内容（相关产品推荐等）",description="侧边栏内容（相关产品推荐等），用于设置侧边栏内容"}
+ * @param breadcrumb {default="",name="面包屑导航",description="面包屑导航，用于设置面包屑导航"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+?>
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+</head>
+<body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    
+    <if condition="meta.breadcrumb">
+        <nav class="breadcrumb-nav">
+            {{meta.breadcrumb}}
+        </nav>
+    </if>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <main class="product-detail-main <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="product-detail-main" data-layout="product_detail">
+        <div class="product-detail-container">
+            <div class="product-detail-content">
+                {{meta.content}}
+            </div>
+            
+            <if condition="meta.sidebar">
+                <aside class="product-detail-sidebar">
+                    {{meta.sidebar}}
+                </aside>
+            </if>
+        </div>
+    </main>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>
+

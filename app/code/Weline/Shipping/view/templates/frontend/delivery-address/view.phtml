@@ -1,0 +1,126 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+$address = $this->getData('address');
+$frontendUrl = $this->getUrl('');
+?>
+<div class="delivery-address-view">
+    <div class="page-header mb-4">
+        <h2><?= __('收货地址详情') ?></h2>
+        <div>
+            <a href="<?= $frontendUrl ?>shipping/delivery/form?id=<?= $address->getId() ?>" class="btn btn-primary">
+                <i class="ri-edit-line"></i> <?= __('编辑') ?>
+            </a>
+            <a href="<?= $frontendUrl ?>shipping/delivery/index" class="btn btn-secondary">
+                <i class="ri-arrow-left-line"></i> <?= __('返回列表') ?>
+            </a>
+        </div>
+    </div>
+
+    <?php if ($address): ?>
+        <div class="address-detail-card">
+            <div class="detail-header">
+                <h3><?= htmlspecialchars($address->getData('name')) ?></h3>
+                <?php if ($address->isDefault()): ?>
+                    <span class="badge bg-primary"><?= __('默认地址') ?></span>
+                <?php endif; ?>
+            </div>
+            <div class="detail-content">
+                <div class="detail-row">
+                    <span class="label"><?= __('收货人') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('contact_name')) ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('联系电话') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('contact_phone')) ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('国家') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('country') ?: '中国') ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('省份') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('province')) ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('城市') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('city')) ?></span>
+                </div>
+                <?php if ($address->getData('district')): ?>
+                <div class="detail-row">
+                    <span class="label"><?= __('区县') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('district')) ?></span>
+                </div>
+                <?php endif; ?>
+                <div class="detail-row">
+                    <span class="label"><?= __('街道地址') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('street')) ?></span>
+                </div>
+                <?php if ($address->getData('postal_code')): ?>
+                <div class="detail-row">
+                    <span class="label"><?= __('邮政编码') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('postal_code')) ?></span>
+                </div>
+                <?php endif; ?>
+                <div class="detail-row">
+                    <span class="label"><?= __('完整地址') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getFullAddress()) ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('创建时间') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('created_at')) ?></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label"><?= __('更新时间') ?>:</span>
+                    <span class="value"><?= htmlspecialchars($address->getData('updated_at')) ?></span>
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-warning">
+            <?= __('地址不存在') ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.delivery-address-view {
+    padding: 20px;
+}
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.address-detail-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    background: #fff;
+}
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.detail-row {
+    display: flex;
+}
+.detail-row .label {
+    min-width: 120px;
+    font-weight: 600;
+    color: #666;
+}
+.detail-row .value {
+    flex: 1;
+    color: #333;
+}
+</style>
+

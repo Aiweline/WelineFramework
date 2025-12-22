@@ -10,6 +10,11 @@ use PHPUnit\Framework\TestCase;
 use Weline\DataTable\Api\Rest\V1\DataTable;
 use Weline\DataTable\Api\Rest\V1\Form;
 use Weline\DataTable\Api\Rest\V1\Trash;
+use Weline\DataTable\Api\Rest\V1\Import;
+use Weline\DataTable\Exception\DataTableException;
+use Weline\DataTable\Helper\ErrorHandler;
+use Weline\DataTable\Helper\ValidationManager;
+use Weline\DataTable\Helper\PermissionManager;
 use Weline\Framework\App\Session\BackendApiSession;
 use Weline\Framework\Http\Request;
 
@@ -18,6 +23,7 @@ class ApiTest extends TestCase
     private $dataTableApi;
     private $formApi;
     private $trashApi;
+    private $importApi;
     private $mockBackendApiSession;
     private $mockRequest;
 
@@ -37,11 +43,13 @@ class ApiTest extends TestCase
         $this->dataTableApi = new DataTable($this->mockBackendApiSession);
         $this->formApi = new Form($this->mockBackendApiSession);
         $this->trashApi = new Trash($this->mockBackendApiSession);
+        $this->importApi = new Import($this->mockBackendApiSession);
         
         // 使用反射设置 request 属性
         $this->setRequestProperty($this->dataTableApi);
         $this->setRequestProperty($this->formApi);
         $this->setRequestProperty($this->trashApi);
+        $this->setRequestProperty($this->importApi);
     }
 
     /**
@@ -55,6 +63,75 @@ class ApiTest extends TestCase
             $requestProperty->setAccessible(true);
             $requestProperty->setValue($apiInstance, $this->mockRequest);
         }
+    }
+
+    // ==================== 异常处理测试 ====================
+
+    /**
+     * 测试 DataTableException
+     */
+    public function testDataTableException()
+    {
+        $exception = DataTableException::modelNotFound('TestModel');
+        $this->assertEquals(DataTableException::CODE_MODEL_NOT_FOUND, $exception->getCode());
+        $this->assertStringContainsString('模型类不存在', $exception->getMessage());
+    }
+
+    /**
+     * 测试 ErrorHandler
+     */
+    public function testErrorHandler()
+    {
+        $exception = new \Exception('测试异常');
+        $result = ErrorHandler::handleException($exception, 'test');
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('code', $result);
+        $this->assertArrayHasKey('msg', $result);
+    }
+
+    /**
+     * 测试 ValidationManager
+     */
+    public function testValidationManager()
+    {
+        $data = [
+            'email' => 'test@example.com',
+            'age' => 25
+        ];
+        
+        $rules = [
+            'email' => [
+                ValidationManager::RULE_REQUIRED => true,
+                ValidationManager::RULE_EMAIL => true
+            ],
+            'age' => [
+                ValidationManager::RULE_REQUIRED => true,
+                ValidationManager::RULE_INTEGER => true,
+                ValidationManager::RULE_MIN => 18,
+                ValidationManager::RULE_MAX => 100
+            ]
+        ];
+        
+        $result = ValidationManager::validate($data, $rules);
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('valid', $result);
+        $this->assertArrayHasKey('errors', $result);
+    }
+
+    /**
+     * 测试 PermissionManager
+     */
+    public function testPermissionManager()
+    {
+        $canView = PermissionManager::canViewField('TestModel', 'name');
+        $this->assertIsBool($canView);
+        
+        $canEdit = PermissionManager::canEditField('TestModel', 'name');
+        $this->assertIsBool($canEdit);
+        
+        $canAction = PermissionManager::canPerformAction('TestModel', PermissionManager::PERMISSION_CREATE);
+        $this->assertIsBool($canAction);
     }
 
     // ==================== DataTable API 测试 ====================
@@ -353,6 +430,61 @@ class ApiTest extends TestCase
         ob_start();
         try {
             $result = @$this->dataTableApi->postData();
+        } finally {
+            ob_end_clean();
+        }
+        
+        if (is_string($result)) {
+            $result = json_decode($result, true);
+        }
+        
+        $this->assertIsArray($result);
+    }
+
+    // ==================== Import API 测试 ====================
+
+    /**
+     * 测试批量更新接口
+     */
+    public function testDataTablePostBatchUpdate()
+    {
+        $this->mockRequest->method('getParam')
+            ->willReturnMap([
+                ['model', null, 'Weline\DataTable\Model\TestUser'],
+                ['ids', [], [1, 2, 3]],
+                ['data', [], ['status' => 1]]
+            ]);
+
+        ob_start();
+        try {
+            $result = @$this->dataTableApi->postBatchUpdate();
+        } finally {
+            ob_end_clean();
+        }
+        
+        if (is_string($result)) {
+            $result = json_decode($result, true);
+        }
+        
+        $this->assertIsArray($result);
+    }
+
+    /**
+     * 测试批量状态变更接口
+     */
+    public function testDataTablePostBatchStatus()
+    {
+        $this->mockRequest->method('getParam')
+            ->willReturnMap([
+                ['model', null, 'Weline\DataTable\Model\TestUser'],
+                ['ids', [], [1, 2, 3]],
+                ['status_field', 'status', 'status'],
+                ['status_value', null, 1]
+            ]);
+
+        ob_start();
+        try {
+            $result = @$this->dataTableApi->postBatchStatus();
         } finally {
             ob_end_clean();
         }

@@ -1,0 +1,7 @@
+# WASM编译相关
+wasm/deps/
+wasm/src/build/
+wasm/output/
+
+# 编译生成的文件（可选，如需版本控制可删除这行）
+# view/statics/wasm/

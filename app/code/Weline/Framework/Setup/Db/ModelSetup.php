@@ -14,11 +14,9 @@ namespace Weline\Framework\Setup\Db;
 use Weline\Framework\App\Debug;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table;
-use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
 use Weline\Framework\Database\ConnectionFactory;
-use Weline\Framework\Database\Db\DdlFactory;
 use Weline\Framework\Output\Cli\Printing;
 
 /**
@@ -176,7 +174,32 @@ class ModelSetup
             $table_name = $this->model->getTable();
         }
         try {
-            $this->query('DROP TABLE IF EXISTS ' . $table_name);
+            // 获取连接器类型，判断是否为 PostgreSQL
+            $connector = $this->model->getConnection()->getConnector();
+            $isPostgresql = $connector instanceof \Weline\Framework\Database\Connection\Adapter\Pgsql\Connector;
+            
+            // PostgreSQL 需要双引号包裹表名，并添加 CASCADE 选项
+            if ($isPostgresql) {
+                // 如果表名已经包含引号，先去除
+                $table_name = trim($table_name, '`"\'');
+                // 如果表名包含点号（schema.table），分别处理
+                if (str_contains($table_name, '.')) {
+                    $parts = explode('.', $table_name);
+                    $quotedParts = array_map(function($part) {
+                        $part = trim($part, '`"\'');
+                        return '"' . $part . '"';
+                    }, $parts);
+                    $table_name = implode('.', $quotedParts);
+                } else {
+                    $table_name = '"' . $table_name . '"';
+                }
+                $sql = 'DROP TABLE IF EXISTS ' . $table_name . ' CASCADE';
+            } else {
+                // MySQL/SQLite 等其他数据库
+                $sql = 'DROP TABLE IF EXISTS ' . $table_name;
+            }
+            
+            $this->query($sql);
             return true;
         } catch (\Exception $exception) {
             throw $exception;

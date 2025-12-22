@@ -4,14 +4,14 @@
  * 
  * 全局加载指示器组件
  * 字段
- * @info description 描述：全局加载指示器组件
- * @info name 名称：Loading加载组件
- * @param id 元素ID（默认：loading）
- * @param class 额外CSS类
- * @param type 加载器类型（默认：1，可扩展其他类型）
- * @param text 加载文字提示
- * @param overlay 是否显示遮罩层（默认：true）
- * @param autoHide 页面加载后是否自动隐藏（默认：true）
+ * @meta.name {default="Loading加载组件",name="Loading加载组件",description="Loading加载组件，用于描述组件的名称"}
+ * @meta.description {default="全局加载指示器组件",name="全局加载指示器组件",description="全局加载指示器组件，用于描述组件的用途"}
+ * @param.id {default="loading",name="元素ID",description="元素ID，默认：loading"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.type {default=1,name="加载器类型",description="加载器类型，默认：1，可扩展其他类型"}
+ * @param.text {default="",name="加载文字提示",description="加载文字提示，用于设置加载文字"}
+ * @param.overlay {default=true,name="是否显示遮罩层",description="是否显示遮罩层，默认：true"}
+ * @param.autoHide {default=true,name="是否自动隐藏",description="页面加载后是否自动隐藏，默认：true"}
  */
 $id = $this->getData('id') ?? 'loading';
 $class = $this->getData('class') ?? '';

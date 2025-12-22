@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：首页 - 默认布局
- * 
+ *
  * 首页默认布局，包含header、banner、main、footer
  * 字段
  * @meta.name {default="首页默认布局",name="首页默认布局",description="首页默认布局，用于描述布局的名称"}
@@ -13,72 +13,137 @@
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param features {default="",name="功能特性区块（HTML字符串）",description="功能特性区块内容（HTML字符串），用于展示产品/服务特性"}
+ * @param statistics {default="",name="统计数据区块（HTML字符串）",description="统计数据区块内容（HTML字符串），用于展示关键数据指标"}
+ * @param products {default="",name="产品推荐区块（HTML字符串）",description="产品推荐区块内容（HTML字符串），用于展示推荐产品/服务"}
+ * @param testimonials {default="",name="客户评价区块（HTML字符串）",description="客户评价区块内容（HTML字符串），用于展示客户评价/推荐"}
+ * @param partners {default="",name="合作伙伴区块（HTML字符串）",description="合作伙伴区块内容（HTML字符串），用于展示合作伙伴/品牌"}
+ * @param news {default="",name="新闻动态区块（HTML字符串）",description="新闻动态区块内容（HTML字符串），用于展示最新动态"}
+ * @param showFeatures {default=true,name="是否显示功能特性区块",description="是否显示功能特性区块，用于控制功能特性区块的显示"}
+ * @param showStatistics {default=true,name="是否显示统计数据区块",description="是否显示统计数据区块，用于控制统计数据区块的显示"}
+ * @param showProducts {default=true,name="是否显示产品推荐区块",description="是否显示产品推荐区块，用于控制产品推荐区块的显示"}
+ * @param showTestimonials {default=true,name="是否显示客户评价区块",description="是否显示客户评价区块，用于控制客户评价区块的显示"}
+ * @param showPartners {default=true,name="是否显示合作伙伴区块",description="是否显示合作伙伴区块，用于控制合作伙伴区块的显示"}
+ * @param showNews {default=true,name="是否显示新闻动态区块",description="是否显示新闻动态区块，用于控制新闻动态区块的显示"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
-$title = $this->getData('title') ?? __('首页');
-$content = $this->getData('content') ?? '';
-$banner = $this->getData('banner') ?? '';
-$showHeader = $this->getData('showHeader') ?? true;
-$showFooter = $this->getData('showFooter') ?? true;
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-$this->assign('title', $title);
+$meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang) @hook(Weline_Theme::frontend::layouts::homepage::html-lang-end)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
 </head>
 <body>
-    <?php if ($showHeader): ?>
-        <?php
-        // 使用配置的 header partials
-        $partialsBlock = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
-        $headerPath = $partialsBlock->getPartialsPath('frontend', 'header', 'default');
-        if ($headerPath) {
-            echo $this->fetch($headerPath, [
-                'logo' => $this->getData('logo') ?? '',
-                'logoText' => $this->getData('logoText') ?? __('Weline'),
-                'navItems' => $this->getData('navItems') ?? [],
-                'showSearch' => $this->getData('showSearch') ?? true,
-                'showUserMenu' => $this->getData('showUserMenu') ?? true
-            ]);
-        }
-        ?>
-    <?php endif; ?>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
     
-    <?php if ($banner): ?>
-        <section class="homepage-banner">
-            <?= $banner ?>
-        </section>
-    <?php endif; ?>
+    <div class="weline-page-wrapper">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+        
+        <div class="weline-main-content">
+            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
+            
+            <if condition="meta.banner">
+                <section class="homepage-banner">
+                    {{meta.banner}}
+                </section>
+            </if>
+            
+            <if condition="meta.showStatistics && meta.statistics">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::statistics-before</w:hook>
+                <section class="homepage-section homepage-statistics">
+                    <div class="container">
+                        {{meta.statistics}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::statistics-after</w:hook>
+            </if>
+            
+            <if condition="meta.showFeatures && meta.features">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::features-before</w:hook>
+                <section class="homepage-section homepage-features">
+                    <div class="container">
+                        {{meta.features}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::features-after</w:hook>
+            </if>
+            
+            <main class="homepage-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="homepage-main" data-layout="homepage">
+                {{meta.content}}
+            </main>
+            
+            <if condition="meta.showProducts && meta.products">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::products-before</w:hook>
+                <section class="homepage-section homepage-products">
+                    <div class="container">
+                        {{meta.products}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::products-after</w:hook>
+            </if>
+            
+            <if condition="meta.showTestimonials && meta.testimonials">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials-before</w:hook>
+                <section class="homepage-section homepage-testimonials">
+                    <div class="container">
+                        {{meta.testimonials}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::testimonials-after</w:hook>
+            </if>
+            
+            <if condition="meta.showNews && meta.news">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::news-before</w:hook>
+                <section class="homepage-section homepage-news">
+                    <div class="container">
+                        {{meta.news}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::news-after</w:hook>
+            </if>
+            
+            <if condition="meta.showPartners && meta.partners">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::partners-before</w:hook>
+                <section class="homepage-section homepage-partners">
+                    <div class="container">
+                        {{meta.partners}}
+                    </div>
+                </section>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::partners-after</w:hook>
+            </if>
+            
+            <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+        </div>
+        
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
+            <footer class="weline-footer">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
+            </footer>
+            <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
     
-    <main class="homepage-main <?= htmlspecialchars($class) ?>">
-        <?php
-        // 如果指定了 contentTemplate，优先渲染原模板
-        $contentTemplate = $this->getData('contentTemplate');
-        if ($contentTemplate) {
-            echo $this->fetch($contentTemplate);
-        } else {
-            // 否则使用 content 变量（HTML字符串）
-            echo $content;
-        }
-        ?>
-    </main>
-    
-    <?php if ($showFooter): ?>
-        <?php
-        // 使用配置的 footer partials
-        $footerPath = $partialsBlock->getPartialsPath('frontend', 'footer', 'default');
-        if ($footerPath) {
-            echo $this->fetch($footerPath, [
-                'copyright' => $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利'),
-                'links' => $this->getData('links') ?? [],
-                'showBackToTop' => $this->getData('showBackToTop') ?? true
-            ]);
-        }
-        ?>
-    <?php endif; ?>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
 
