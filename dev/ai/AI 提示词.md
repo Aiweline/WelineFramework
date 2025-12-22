@@ -225,6 +225,54 @@
   - `Controller/Frontend/Test/Index.php` → `{模块router}/frontend/test/index`
   - `Controller/Backend/User/List.php` → `{模块router}/backend/user/list`
   - `Api/Rest/V1/User.php` → `{模块router}/rest/v1/user`
+- **方法名转URL规则（重要）**：
+  - **camelCase 转 kebab-case**：方法名自动从 camelCase 转换为 kebab-case
+    - `taskProgress` → `task-progress`
+    - `sourceTypes` → `source-types`
+    - `modelPerformance` → `model-performance`
+  - **HTTP前缀自动移除并限定请求方法**：方法名前缀 `get`、`post`、`delete` 会被自动移除，且限定 HTTP 请求方法
+    - `getSourceTypes` → URL `/source-types`，HTTP 方法 `GET`
+    - `postSaveData` → URL `/save-data`，HTTP 方法 `POST`
+    - `postTaskProgress` → URL `/task-progress`，HTTP 方法 `POST`
+    - `deleteItem` → URL `/item`，HTTP 方法 `DELETE`
+  - **多重路由格式支持（兼容性增强）**：对于包含HTTP方法前缀的方法，框架会自动注册三种路由格式
+    - `getAdd()` → 同时支持：
+      - `/add` (简化格式，移除HTTP方法前缀)
+      - `/get-add` (完整方法名的kebab-case格式)
+      - `/getadd` (完整方法名的小写格式)
+    - `getData()` → 同时支持：`/data`、`/get-data`、`/getdata`
+    - `postSave()` → 同时支持：`/save`、`/post-save`、`postsave`
+    - **注意**：三种格式都指向同一个控制器方法，可以根据需要选择使用
+  - **注意**：框架虽定义了 `UPDATE` 请求方法，但 Web 服务器通常不支持（返回501），因此**建议更新操作使用 `post*` 前缀**
+  - **前端请求方法必须匹配**：
+    - `get*` 方法 → 前端使用 `fetch(url, { method: 'GET' })`
+    - `post*` 方法 → 前端使用 `fetch(url, { method: 'POST' })`
+    - `delete*` 方法 → 前端使用 `fetch(url, { method: 'DELETE' })`
+  - **前端调用规范**：前端 JavaScript 可以使用三种格式中的任意一种
+    - ✅ 正确：`/backend/index/add` (简化格式)
+    - ✅ 正确：`/backend/index/get-add` (kebab-case格式)
+    - ✅ 正确：`/backend/index/getadd` (小写格式)
+    - ❌ 错误：`/backend/index/getAdd` (URL中不能使用大写)
+  - **URL构建示例**：
+    ```javascript
+    // ✅ 正确：三种格式都可以使用
+    var url = baseUrl + '/task-progress';      // 简化格式（推荐）
+    var url = baseUrl + '/get-task-progress';  // kebab-case格式
+    var url = baseUrl + '/gettaskprogress';    // 小写格式
+    var url = baseUrl + '/source-types';       // 简化格式（推荐）
+    var url = baseUrl + '/get-source-types';   // kebab-case格式
+    var url = baseUrl + '/getsourcetypes';     // 小写格式
+    
+    // ❌ 错误：使用原始方法名（camelCase在URL中无效）
+    var url = baseUrl + '/getTaskProgress';    // 404错误
+    var url = baseUrl + '/getSourceTypes';     // 404错误
+    ```
+  - **避免URL重复模块名**：不要在URL中重复模块路由前缀
+    - ✅ 正确：`/auto-lead-agent/backend/index/task-progress`
+    - ❌ 错误：`/auto-lead-agent/auto-lead-agent/backend/index/task-progress`
+  - **参数传递规范**：使用查询参数而非路径参数
+    - ✅ 正确：`/backend/index/view?taskId=1`
+    - ❌ 错误：`/backend/index/view/taskId/1`
 - **API URL 结构规范（重要）**：
   - **URL 结构格式**：`[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]`
   - `[]` 表示**必然存在**的部分
@@ -251,7 +299,7 @@
 - RESTful API开发
 - 控制器方法命名规则：HTTP方法前缀解析
 - 路由映射机制：getData->/data(GET), postData->/data(POST)
-- 双重路由支持：getData同时支持/data和/getdata两种路由
+- 多重路由格式支持：getData同时支持/data（简化格式）、/get-data（kebab-case格式）、/getdata（小写格式）三种路由
 - index方法特殊处理：可省略index后缀
 - 方法名解析：按大写字母拆分，提取HTTP方法限制
 - **重要**：`routes.xml` 不是框架的规约文件，禁止使用。路由通过控制器位置自动注册
@@ -498,6 +546,74 @@
 - 模块管理命令：setup:upgrade, module:list, module:enable/disable
 - 模块依赖管理：dependencies参数
 - 模块命名规范：Vendor_ModuleName格式
+
+### 后台菜单配置规则（重要）
+- **强制要求**：开发后台功能时，**必须配置后台菜单**，否则用户无法在后台访问该功能
+- **配置文件位置**：`app/code/Weline/{ModuleName}/etc/backend/menu.xml`
+- **XML结构要求**：
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+         xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+         xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+      <add source="ModuleName::menu_id" 
+           name="menu_name" 
+           title="菜单标题" 
+           action="admin/module/controller/action" 
+           parent="Weline_Backend::parent_menu"
+           icon="mdi mdi-icon-name"
+           order="100"/>
+  </menus>
+  ```
+- **必需属性**：
+  - `source`: ACL权限资源（格式：`ModuleName::permission`），必须与ACL权限配置对应
+  - `name`: 菜单唯一标识符（建议使用下划线命名）
+  - `title`: 显示标题（用户可见的菜单名称）
+  - `action`: 路由地址（格式：`admin/module/controller/action` 或 `*/backend/action`）
+  - `parent`: 父菜单（使用父菜单的 `source` 值，空字符串表示顶级菜单）
+  - `icon`: 图标类名（推荐使用 `mdi mdi-*` 或 `fas fa-*`）
+  - `order`: 排序数字（数字越小越靠前）
+- **常用父菜单**：
+  - `Weline_Backend::dashboard` - 主仪表板
+  - `Weline_Backend::business_module` - 业务模块
+  - `Weline_Backend::system_menu` - 系统管理
+  - `Weline_Backend::system_service` - 系统服务
+  - `Weline_Backend::system_settings` - 系统设置
+- **重要原则**：
+  - **模块单一职责**：每个模块只管理自己的菜单配置，不要在其他模块的menu.xml中配置菜单
+  - **ACL权限对应**：菜单的`source`必须与ACL权限资源对应，确保权限控制正确
+  - **路由格式正确**：`action`属性必须使用正确的路由格式，不能使用错误的路径
+  - **双冒号分隔**：使用双冒号 `::` 分隔模块名和权限标识
+- **菜单配置示例**：
+  ```xml
+  <!-- 顶级菜单 -->
+  <add source="Weline_YourModule::main" 
+       name="your_module_main" 
+       title="您的模块" 
+       action="" 
+       parent=""
+       icon="mdi mdi-cog"
+       order="10000"/>
+  
+  <!-- 子菜单 -->
+  <add source="Weline_YourModule::settings" 
+       name="your_module_settings" 
+       title="模块设置" 
+       action="yourmodule/backend/settings" 
+       parent="Weline_YourModule::main"
+       icon="mdi mdi-settings"
+       order="10"/>
+  
+  <!-- 挂载到系统菜单 -->
+  <add source="Weline_YourModule::config" 
+       name="your_module_config" 
+       title="模块配置" 
+       action="yourmodule/backend/config" 
+       parent="Weline_Backend::system_menu"
+       icon="mdi mdi-cog-box"
+       order="20100"/>
+  ```
+- **配置后必须执行**：配置菜单后，必须运行 `php bin/w setup:upgrade` 更新系统配置
 
 ### 高级功能
 - 语言包注册机制：Register::I18N类型，CSV翻译文件，自动词条收集
@@ -1249,29 +1365,75 @@ php bin/w event:cache -f                // 3. 收集事件
 php bin/w cron:task:collect             // 4. 收集定时任务
 php bin/w cron:install                  // 5. 安装定时任务
 
-// 22. 后端菜单配置示例
-// etc/backend/menu.xml
+// 22. 后端菜单配置示例（重要：开发后台功能必须配置）
+// 文件位置：app/code/Weline/YourModule/etc/backend/menu.xml
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <!-- 主菜单 -->
+    
+    <!-- 示例1：创建独立的顶级菜单 -->
     <add source="Weline_YourModule::main" 
          name="your_module_main" 
          title="您的模块" 
-         action="admin/yourmodule/index" 
-         parent="Weline_Backend::dashboard"
-         icon="fas fa-cog"
-         order="100"/>
-    <!-- 子菜单 -->
+         action="" 
+         parent=""
+         icon="mdi mdi-cog"
+         order="10000"/>
+    
+    <!-- 示例2：挂载到系统菜单 -->
+    <add source="Weline_YourModule::system_config" 
+         name="your_module_system_config" 
+         title="模块系统配置" 
+         action="yourmodule/backend/config" 
+         parent="Weline_Backend::system_menu"
+         icon="mdi mdi-cog-box"
+         order="20100"/>
+    
+    <!-- 示例3：挂载到业务模块 -->
+    <add source="Weline_YourModule::business_item" 
+         name="your_module_business_item" 
+         title="业务功能" 
+         action="yourmodule/backend/business" 
+         parent="Weline_Backend::business_module"
+         icon="mdi mdi-briefcase"
+         order="10010"/>
+    
+    <!-- 示例4：子菜单（挂载到自定义父菜单） -->
     <add source="Weline_YourModule::settings" 
          name="your_module_settings" 
          title="模块设置" 
-         action="admin/yourmodule/settings" 
+         action="yourmodule/backend/settings" 
          parent="Weline_YourModule::main"
-         icon="fas fa-settings"
-         order="1"/>
+         icon="mdi mdi-settings"
+         order="10"/>
+    
+    <!-- 示例5：使用通配符路由（*/backend/action） -->
+    <add source="Weline_YourModule::list" 
+         name="your_module_list" 
+         title="数据列表" 
+         action="*/backend/list" 
+         parent="Weline_YourModule::main"
+         icon="mdi mdi-list"
+         order="20"/>
+    
+    <!-- 示例6：挂载到仪表板 -->
+    <add source="Weline_YourModule::dashboard" 
+         name="your_module_dashboard" 
+         title="模块仪表板" 
+         action="yourmodule/backend/dashboard" 
+         parent="Weline_Backend::dashboard"
+         icon="mdi mdi-monitor-dashboard"
+         order="100"/>
 </menus>
+
+// 菜单配置要点：
+// 1. source 必须与 ACL 权限资源对应（格式：ModuleName::permission）
+// 2. action 路由格式：yourmodule/backend/controller/action 或 */backend/action
+// 3. parent 使用父菜单的 source 值，空字符串表示顶级菜单
+// 4. icon 推荐使用 mdi mdi-* 或 fas fa-* 图标类
+// 5. order 数字越小越靠前
+// 6. 配置后必须运行 php bin/w setup:upgrade 更新系统
 
 // 23. 模块安装脚本示例
 // Setup/Install.php

@@ -1,0 +1,95 @@
+可视化编辑器,"Visual Editor"
+内容管理,"Content Management"
+标题和标识不能为空,"Title and handle cannot be empty"
+页面标识已存在,"Page handle already exists"
+保存成功,"Saved successfully"
+"保存失败: %{1}","Save failed: %{1}"
+页面ID不能为空,"Page ID cannot be empty"
+页面不存在,"Page does not exist"
+"加载失败: %{1}","Load failed: %{1}"
+"获取部件列表失败: %{1}","Failed to get widget list: %{1}"
+部件类型和名称不能为空,"Widget type and name cannot be empty"
+部件不存在,"Widget does not exist"
+"预览失败: %{1}","Preview failed: %{1}"
+页面内容不能为空,"Page content cannot be empty"
+部件管理,"Widget Management"
+"获取部件详情失败: %{1}","Failed to get widget details: %{1}"
+部件多语言翻译表,部件多语言翻译表
+部件唯一标识符（格式：module_type_name）,部件唯一标识符（格式：module_type_name）
+语言代码,语言代码
+部件名称（翻译）,部件名称（翻译）
+部件描述（翻译）,部件描述（翻译）
+创建时间,"Created At"
+更新时间,"Updated At"
+解析部件参数失败,"Failed to parse widget parameters"
+预览失败,预览失败
+确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
+选择一个部件进行配置,"Select a widget to configure"
+请填写页面标题和标识,"Please fill in page title and handle"
+未知错误,"Unknown error"
+保存失败,保存失败
+保存,Save
+预览,Preview
+页面标题,"Page Title"
+页面标识,"Page Handle"
+部件库,"Widget Library"
+搜索部件...,"Search widgets..."
+画布,Canvas
+从左侧拖放部件到这里,"Drag widgets from left panel here"
+属性配置,Properties
+编辑代码,"Edit Code"
+取消,Cancel
+所有模块,"All Modules"
+所有类型,"All Types"
+筛选,Filter
+部件列表,"Widget List"
+没有找到部件,"No widgets found"
+部件名称,"Widget Name"
+类型,Type
+来源模块,"Source Module"
+描述,Description
+版本,Version
+操作,Actions
+详情,Details
+部件详情,"Widget Details"
+加载中...,Loading...
+关闭,Close
+名称,Name
+参数配置,Parameters
+参数名,"Parameter Name"
+默认值,"Default Value"
+说明,说明
+获取详情失败,"Failed to get details"
+加载失败,"Load failed"
+编辑器首页,"Editor Home"
+访问编辑器,"Access Editor"
+保存页面,"Save Page"
+加载页面,"Load Page"
+获取部件列表,"Get Widget List"
+查看部件列表,"View Widget List"
+查看部件详情,"View Widget Details"
+预览部件,"Preview Widget"
+预览页面,"Preview Page"
+"可视化编辑器模块，支持通过拖放方式组织页面，使用 w:widget 标签存储和渲染部件。","Visual editor module that supports organizing pages through drag and drop, using w:widget tags to store and render widgets."
+此部件没有可配置的参数,"This widget has no configurable parameters"
+更新,Update
+编辑,Edit
+删除,Delete
+部件显示名称,"Widget Display Name"
+部件描述,"Widget Description"
+部件规约文件（必需），定义部件的基本信息、参数配置和模板路径,"Widget specification file (required), defines widget basic information, parameter configuration and template path"
+"部件模板文件（必需，如果未提供 block_class）","Widget template file (required if block_class is not provided)"
+部件文档（可选），说明部件的使用方法,"Widget documentation (optional), describes how to use the widget"
+可视化编辑器页面表,"Visual Editor Page Table"
+页面ID,"Page ID"
+"页面内容（w:widget 标签）","Page Content (w:widget tags)"
+"元数据（JSON 格式）","Metadata (JSON format)"
+"页面状态（draft, published）","Page Status (draft, published)"
+"Widget 错误: type 和 name 属性是必需的","Widget Error: type and name attributes are required"
+"Widget 错误: 未找到部件 %{1}/%{2}","Widget Error: Widget not found %{1}/%{2}"
+"Widget 错误: 无效的部件类型 %{1}","Widget Error: Invalid widget type %{1}"
+"Widget 错误: 未找到模板或 Block 类","Widget Error: Template or Block class not found"
+"Widget Block 渲染错误: %{1}","Widget Block rendering error: %{1}"
+"Widget 错误: Block 类缺少 render() 方法","Widget Error: Block class missing render() method"
+"Widget 模板渲染错误: %{1}","Widget template rendering error: %{1}"
+"Widget 错误: %{1}","Widget Error: %{1}"

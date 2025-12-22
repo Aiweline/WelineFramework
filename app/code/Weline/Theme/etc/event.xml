@@ -7,6 +7,7 @@
     </event>
     <event name="Weline_Framework_View::fetch_file">
         <observer name="Framework_Theme::fetch_file" instance="Weline\Theme\Observer\TemplateFetchFile" disabled="false" shared="true" sort="0"/>
+        <observer name="Weline_Theme::partials_fetch_file_before" instance="Weline\Theme\Observer\PartialsFetchFileBefore" disabled="false" shared="true" sort="5"/>
     </event>
     <event name="Weline_Framework_Console::compile">
         <observer name="Framework_Theme::compile" instance="Weline\Theme\Observer\CompileResource" disabled="false" shared="true" sort="0"/>
@@ -19,5 +20,18 @@
     </event>
     <event name="Weline_Framework_Controller::fetch_file_after">
         <observer name="Weline_Theme::controller_fetch_file_after" instance="Weline\Theme\Observer\ControllerFetchFileAfter" disabled="false" shared="true" sort="10"/>
+    </event>
+    <!-- 系统升级后：自动清理主题缓存并扫描 app/design 下的所有主题 -->
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Theme::setup_upgrade_after" instance="Weline\Theme\Observer\SetupUpgradeAfter" disabled="false" shared="true" sort="0"/>
+        <observer name="Weline_Theme::variable_meta_register" instance="Weline\Theme\Observer\VariableMetaRegister" disabled="false" shared="true" sort="100"/>
+    </event>
+    <!-- 模板编译后：提取内联CSS/JS并生成布局资源文件 -->
+    <event name="Weline_Framework_Template::after_compile">
+        <observer name="Weline_Theme::layout_assets_extractor" instance="Weline\Theme\Observer\LayoutAssetsExtractor" disabled="false" shared="true" sort="200"/>
+    </event>
+    <!-- Meta扫描事件：解析变量文件并注册到Meta系统 -->
+    <event name="Weline_Meta::scan_path">
+        <observer name="Weline_Theme::meta_scan_variable_files" instance="Weline\Theme\Observer\MetaScanVariableFiles" disabled="false" shared="true" sort="20"/>
     </event>
 </config>

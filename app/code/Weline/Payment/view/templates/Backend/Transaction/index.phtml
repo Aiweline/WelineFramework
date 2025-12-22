@@ -1,0 +1,164 @@
+<?php
+/**
+ * 交易记录列表页面
+ */
+?>
+@template(Weline_Admin::common/header.phtml)
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="mdi mdi-cash-multiple me-2"></i><?= __('交易记录管理') ?>
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- 搜索表单 -->
+                    <form method="get" class="mb-3">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <input type="text" name="keyword" class="form-control" 
+                                       placeholder="<?= __('交易号/订单ID') ?>" 
+                                       value="<?= htmlspecialchars($keyword ?? '') ?>">
+                            </div>
+                            <div class="col-md-2">
+                                <select name="status" class="form-select">
+                                    <option value=""><?= __('全部状态') ?></option>
+                                    <option value="pending" <?= ($status ?? '') === 'pending' ? 'selected' : '' ?>><?= __('待支付') ?></option>
+                                    <option value="processing" <?= ($status ?? '') === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
+                                    <option value="success" <?= ($status ?? '') === 'success' ? 'selected' : '' ?>><?= __('支付成功') ?></option>
+                                    <option value="failed" <?= ($status ?? '') === 'failed' ? 'selected' : '' ?>><?= __('支付失败') ?></option>
+                                    <option value="refunded" <?= ($status ?? '') === 'refunded' ? 'selected' : '' ?>><?= __('已退款') ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" name="method_code" class="form-control" 
+                                       placeholder="<?= __('支付方式代码') ?>" 
+                                       value="<?= htmlspecialchars($method_code ?? '') ?>">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="mdi mdi-magnify me-2"></i><?= __('搜索') ?>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th><?= __('交易号') ?></th>
+                                    <th><?= __('订单ID') ?></th>
+                                    <th><?= __('支付方式') ?></th>
+                                    <th><?= __('金额') ?></th>
+                                    <th><?= __('状态') ?></th>
+                                    <th><?= __('创建时间') ?></th>
+                                    <th><?= __('操作') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($transactions)): ?>
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">
+                                            <?= __('暂无交易记录') ?>
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($transactions as $transaction): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($transaction->getData('transaction_no')) ?></td>
+                                            <td><?= htmlspecialchars($transaction->getData('order_id')) ?></td>
+                                            <td><?= htmlspecialchars($transaction->getData('method_code')) ?></td>
+                                            <td><?= htmlspecialchars($transaction->getData('amount')) ?> <?= htmlspecialchars($transaction->getData('currency')) ?></td>
+                                            <td>
+                                                <?php
+                                                $status = $transaction->getData('status');
+                                                $statusMap = [
+                                                    'pending' => ['label' => __('待支付'), 'class' => 'warning'],
+                                                    'processing' => ['label' => __('处理中'), 'class' => 'info'],
+                                                    'success' => ['label' => __('支付成功'), 'class' => 'success'],
+                                                    'failed' => ['label' => __('支付失败'), 'class' => 'danger'],
+                                                    'refunded' => ['label' => __('已退款'), 'class' => 'secondary'],
+                                                ];
+                                                $statusInfo = $statusMap[$status] ?? ['label' => $status, 'class' => 'secondary'];
+                                                ?>
+                                                <span class="badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
+                                            </td>
+                                            <td><?= htmlspecialchars($transaction->getData('created_at')) ?></td>
+                                            <td>
+                                                <a href="<?= $this->getUrl('*/backend/transaction/view', ['id' => $transaction->getId()]) ?>" 
+                                                   class="btn btn-sm btn-info">
+                                                    <i class="mdi mdi-eye"></i> <?= __('查看') ?>
+                                                </a>
+                                                <?php if (!$transaction->isSuccess() && !$transaction->isFailed()): ?>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-primary query-status"
+                                                            data-id="<?= $transaction->getId() ?>">
+                                                        <i class="mdi mdi-refresh"></i> <?= __('查询状态') ?>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 分页 -->
+                    <?php if ($total_pages > 1): ?>
+                        <nav>
+                            <ul class="pagination justify-content-center">
+                                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                    <li class="page-item <?= $page == $i ? 'active' : '' ?>">
+                                        <a class="page-link" href="?page=<?= $i ?>&keyword=<?= urlencode($keyword ?? '') ?>&status=<?= urlencode($status ?? '') ?>&method_code=<?= urlencode($method_code ?? '') ?>">
+                                            <?= $i ?>
+                                        </a>
+                                    </li>
+                                <?php endfor; ?>
+                            </ul>
+                        </nav>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 查询支付状态
+    document.querySelectorAll('.query-status').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            
+            fetch('<?= $this->getUrl("*/backend/transaction/query") ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'id=' + encodeURIComponent(id)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message || '<?= __('查询成功') ?>');
+                    location.reload();
+                } else {
+                    alert(data.message || '<?= __('查询失败') ?>');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('<?= __('查询失败') ?>');
+            });
+        });
+    });
+});
+</script>
+
+@template(Weline_Admin::common/footer.phtml)
+

@@ -13,18 +13,21 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Observer;
 
+use Weline\Framework\Event\Event;
+use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Service\CountryUpdateService;
 
-class SystemUpdateObserver
+/**
+ * 系统更新后自动检测和更新国家信息观察者
+ * 监听 Weline_Framework_System::system_update_after 和 Weline_Framework_Module::module_install_after 事件
+ */
+class SystemUpdateObserver implements ObserverInterface
 {
     /**
-     * 系统更新后自动检测和更新国家信息
-     * 
-     * @param \Weline\Framework\Event\Event $event
-     * @return void
+     * @inheritDoc
      */
-    public function afterSystemUpdate(\Weline\Framework\Event\Event $event): void
+    public function execute(Event &$event): void
     {
         try {
             /** @var CountryUpdateService $countryUpdateService */
@@ -33,38 +36,17 @@ class SystemUpdateObserver
             // 检查并自动更新国家信息
             $result = $countryUpdateService->checkAndUpdateCountries();
             
+            $eventName = $event->getName();
+            $source = strpos($eventName, 'module_install') !== false ? '模块安装后' : '系统更新后';
+            
             if ($result['updated']) {
-                error_log('I18n: 系统更新后自动更新了 ' . $result['updated_count'] . ' 个国家信息');
+                error_log("I18n: {$source}自动更新了 " . $result['updated_count'] . ' 个国家信息');
             } else {
-                error_log('I18n: 系统更新后国家信息检查完成 - ' . $result['message']);
+                error_log("I18n: {$source}国家信息检查完成 - " . $result['message']);
             }
             
         } catch (\Exception $e) {
-            error_log('I18n: 系统更新后国家信息自动更新失败 - ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * 模块安装后自动检测和更新国家信息
-     * 
-     * @param \Weline\Framework\Event\Event $event
-     * @return void
-     */
-    public function afterModuleInstall(\Weline\Framework\Event\Event $event): void
-    {
-        try {
-            /** @var CountryUpdateService $countryUpdateService */
-            $countryUpdateService = ObjectManager::getInstance(CountryUpdateService::class);
-            
-            // 检查并自动更新国家信息
-            $result = $countryUpdateService->checkAndUpdateCountries();
-            
-            if ($result['updated']) {
-                error_log('I18n: 模块安装后自动更新了 ' . $result['updated_count'] . ' 个国家信息');
-            }
-            
-        } catch (\Exception $e) {
-            error_log('I18n: 模块安装后国家信息自动更新失败 - ' . $e->getMessage());
+            error_log('I18n: 国家信息自动更新失败 - ' . $e->getMessage());
         }
     }
 }

@@ -85,6 +85,16 @@ class Document extends \Weline\Framework\Database\Model
                 $alter->addColumn(self::fields_SORT_ORDER, '', TableInterface::column_type_INTEGER, 11, 'default 0', '排序');
             }
             
+            // 添加唯一索引：module_name + file_path，防止重复导入
+            // 注意：如果索引已存在，addIndex 会忽略或报错（取决于数据库）
+            // 这里使用 try-catch 来忽略已存在的索引
+            try {
+                $alter->addIndex('UNIQUE', 'idx_module_file_unique', [self::fields_MODULE_NAME, self::fields_FILE_PATH], '模块文件唯一索引');
+            } catch (\Exception $e) {
+                // 索引可能已存在，忽略错误
+                $setup->getPrinting()->warning('索引可能已存在: ' . $e->getMessage());
+            }
+            
             // 执行修改
             $alter->alter();
         }
@@ -109,6 +119,8 @@ class Document extends \Weline\Framework\Database\Model
                 ->addColumn(self::fields_FILE_NAME, TableInterface::column_type_VARCHAR, 200, '', '文件名')
                 ->addColumn(self::fields_IS_AUTO_IMPORTED, TableInterface::column_type_INTEGER, 1, 'default 0', '是否自动导入')
                 ->addColumn(self::fields_SORT_ORDER, TableInterface::column_type_INTEGER, 0, 'default 0', '排序')
+                // 添加唯一索引：module_name + file_path，防止重复导入
+                ->addIndex('UNIQUE', 'idx_module_file_unique', [self::fields_MODULE_NAME, self::fields_FILE_PATH], '模块文件唯一索引')
                 ->create();
         }
     }

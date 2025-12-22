@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：购物车 - 默认布局
- * 
+ *
  * 购物车页面默认布局，包含商品列表、价格汇总等
  * 字段
  * @meta.name {default="购物车默认布局",name="购物车默认布局",description="购物车默认布局，用于描述布局的名称"}
@@ -13,57 +13,63 @@
  * @param breadcrumb {default="",name="面包屑导航（可选）",description="面包屑导航（可选），用于设置面包屑导航"}
  * @param continueShopping {default="",name="继续购物链接（可选）",description="继续购物链接（可选），用于设置继续购物链接"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
-$title = $this->getData('title') ?? __('购物车');
-$content = $this->getData('content') ?? '';
-$summary = $this->getData('summary') ?? '';
-$breadcrumb = $this->getData('breadcrumb') ?? '';
-$continueShopping = $this->getData('continueShopping') ?? '';
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-$this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
 <body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
-    <?php if ($breadcrumb): ?>
+    <if condition="meta.breadcrumb">
         <nav class="breadcrumb-nav">
-            <?= $breadcrumb ?>
+            {{meta.breadcrumb}}
         </nav>
-    <?php endif; ?>
+    </if>
     
-    <main class="cart-main <?= htmlspecialchars($class) ?>">
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <main class="cart-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-main" data-layout="cart">
         <div class="cart-container">
             <div class="cart-header">
                 <h1 class="cart-title"><?= __('购物车') ?></h1>
-                <?php if ($continueShopping): ?>
-                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="continue-shopping-link">
+                <if condition="meta.continueShopping">
+                    <a href="<?= htmlspecialchars($meta['continueShopping'] ?? '') ?>" class="continue-shopping-link">
                         <?= __('继续购物') ?>
                     </a>
-                <?php endif; ?>
+                </if>
             </div>
             
             <div class="cart-content-wrapper">
                 <div class="cart-items">
-                    <?= $content ?>
+                    {{meta.content}}
                 </div>
                 
-                <?php if ($summary): ?>
+                <if condition="meta.summary">
                     <aside class="cart-summary">
-                        <?= $summary ?>
+                        {{meta.summary}}
                     </aside>
-                <?php endif; ?>
+                </if>
             </div>
         </div>
     </main>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
     
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
     @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
 

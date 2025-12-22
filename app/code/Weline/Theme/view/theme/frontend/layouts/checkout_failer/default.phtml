@@ -1,0 +1,82 @@
+<?php
+/**
+ * 布局：结账页 - 失败页面布局
+ *
+ * 订单提交失败后的错误提示页面布局
+ * 字段
+ * @meta.name {default="结账失败页面布局",name="结账失败页面布局",description="结账失败页面布局，用于描述布局的名称"}
+ * @meta.description {default="订单提交失败后的错误提示页面布局",name="订单提交失败后的错误提示页面布局",description="订单提交失败后的错误提示页面布局，用于描述布局的用途"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * @param title {default="订单提交失败",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param errorMessage {default="很抱歉，您的订单提交失败，请稍后重试。",name="错误提示信息",description="错误提示信息，用于显示失败原因"}
+ * @param errorCode {default="",name="错误代码（可选）",description="错误代码（可选），用于显示错误代码"}
+ * @param retryUrl {default="",name="重试链接（可选）",description="重试链接（可选），用于设置重试提交订单的链接"}
+ * @param backToCart {default="/cart",name="返回购物车链接",description="返回购物车链接，用于设置返回购物车的链接"}
+ * @param contactSupport {default="",name="联系客服链接（可选）",description="联系客服链接（可选），用于设置联系客服的链接"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ */
+?>
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="checkout-failer-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="checkout-failer-main" data-layout="checkout_failer">
+        <div class="checkout-failer-container">
+            <div class="checkout-failer-content">
+                <div class="failer-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <h1 class="failer-title"><?= htmlspecialchars($meta['title'] ?? __('订单提交失败')) ?></h1>
+                
+                <div class="error-message">
+                    <p><?= htmlspecialchars($meta['errorMessage'] ?? __('很抱歉，您的订单提交失败，请稍后重试。')) ?></p>
+                </div>
+                
+                <if condition="meta.errorCode">
+                    <p class="error-code">
+                        <?= __('错误代码：') ?><code><?= htmlspecialchars($meta['errorCode'] ?? '') ?></code>
+                    </p>
+                </if>
+                
+                <div class="failer-actions">
+                    <if condition="meta.retryUrl">
+                        <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="btn btn-primary">
+                            <i class="fas fa-redo"></i> <?= __('重试提交') ?>
+                        </a>
+                    </if>
+                    <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="btn btn-secondary">
+                        <i class="fas fa-shopping-cart"></i> <?= __('返回购物车') ?>
+                    </a>
+                    <if condition="meta.contactSupport">
+                        <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="btn btn-outline">
+                            <i class="fas fa-headset"></i> <?= __('联系客服') ?>
+                        </a>
+                    </if>
+                </div>
+                
+                <div class="help-tips">
+                    <p class="tips-title"><?= __('温馨提示：') ?></p>
+                    <ul>
+                        <li><?= __('请检查您的网络连接是否正常') ?></li>
+                        <li><?= __('请确认您的支付信息是否正确') ?></li>
+                        <li><?= __('如问题持续存在，请联系客服寻求帮助') ?></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

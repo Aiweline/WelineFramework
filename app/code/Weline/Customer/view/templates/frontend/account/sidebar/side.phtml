@@ -1,0 +1,37 @@
+<?php
+/**@var \Weline\Framework\View\Template $this */
+/**@var \Weline\Customer\Model\Customer $user */
+$avatar = $user->getAvatar();
+$username = $user->getUsername();
+$email = $user->getEmail();
+$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+?>
+<!-- 侧边栏导航 -->
+<div class="sidebar-header">
+        <div class="sidebar-avatar">
+            <?php if ($avatar): ?>
+                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="avatar-fallback"><?= $avatarInitial ?></div>
+            <?php else: ?>
+                <div class="avatar-fallback"><?= $avatarInitial ?></div>
+            <?php endif; ?>
+        </div>
+        <div class="sidebar-user-info">
+            <h4><?= htmlspecialchars($username) ?></h4>
+            <?php if ($email): ?>
+                <p class="text-muted"><?= htmlspecialchars($email) ?></p>
+            <?php endif; ?>
+        </div>
+    </div>
+    <nav class="nav flex-column">
+        <a class="nav-link active" href="#profile" data-section="profile">
+            <i class="ri-user-line"></i> <span><lang>个人资料</lang></span>
+        </a>
+        <a class="nav-link" href="#security" data-section="security">
+            <i class="ri-lock-line"></i> <span><lang>安全设置</lang></span>
+        </a>
+        <hook>account.sidebar</hook>
+        <a class="nav-link logout-link" href="/customer/account/logout">
+            <i class="ri-logout-box-line"></i> <span><lang>退出登录</lang></span>
+        </a>
+    </nav>

@@ -75,6 +75,70 @@
           "required": true,
           "placeholder": "请选择部件",
           "show": true
+        },
+        "colors": {
+          "label": "色系",
+          "desc": "色系命名空间，用于描述色系的名称",
+          "options": {
+            "light": "浅色系",
+            "dark": "深色系",
+            "amazon": "Amazon风格色系",
+            "default": "默认色系"
+          },
+          "values": [
+            "light",
+            "dark",
+            "amazon",
+            "default"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": false,
+          "placeholder": "请选择色系",
+          "show": true,
+          "name": {
+            "name": "色系名称",
+            "description": "色系名称字段"
+          },
+          "description": {
+            "name": "色系描述",
+            "description": "色系描述字段"
+          },
+          "theme": {
+            "name": "主题标识",
+            "description": "主题标识字段"
+          }
+        },
+        "variables": {
+          "label": "变量",
+          "desc": "变量命名空间，用于描述变量的名称",
+          "options": {
+            "colors": "颜色变量",
+            "borders": "边框变量",
+            "typography": "字体变量",
+            "spacing": "间距变量",
+            "shadows": "阴影变量"
+          },
+          "values": [
+            "colors",
+            "borders",
+            "typography",
+            "spacing",
+            "shadows"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": false,
+          "placeholder": "请选择变量",
+          "show": true,
+          "name": {
+            "name": "变量名称",
+            "description": "变量名称字段"
+          },
+          "description": {
+            "name": "变量描述",
+            "description": "变量描述字段"
+          }
         }
       },
       "backend": {
@@ -124,6 +188,70 @@
           "required": true,
           "placeholder": "请选择部件",
           "show": true
+        },
+        "colors": {
+          "label": "色系",
+          "desc": "色系命名空间，用于描述色系的名称",
+          "options": {
+            "light": "浅色系",
+            "dark": "深色系",
+            "amazon": "Amazon风格色系",
+            "default": "默认色系"
+          },
+          "values": [
+            "light",
+            "dark",
+            "amazon",
+            "default"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": false,
+          "placeholder": "请选择色系",
+          "show": true,
+          "name": {
+            "name": "色系名称",
+            "description": "色系名称字段"
+          },
+          "description": {
+            "name": "色系描述",
+            "description": "色系描述字段"
+          },
+          "theme": {
+            "name": "主题标识",
+            "description": "主题标识字段"
+          }
+        },
+        "variables": {
+          "label": "变量",
+          "desc": "变量命名空间，用于描述变量的名称",
+          "options": {
+            "colors": "颜色变量",
+            "borders": "边框变量",
+            "typography": "字体变量",
+            "spacing": "间距变量",
+            "shadows": "阴影变量"
+          },
+          "values": [
+            "colors",
+            "borders",
+            "typography",
+            "spacing",
+            "shadows"
+          ],
+          "default": "default",
+          "type": "select",
+          "required": false,
+          "placeholder": "请选择变量",
+          "show": true,
+          "name": {
+            "name": "变量名称",
+            "description": "变量名称字段"
+          },
+          "description": {
+            "name": "变量描述",
+            "description": "变量描述字段"
+          }
         }
       }
     }

@@ -1,18 +1,18 @@
+<!--
+组件：FormGroup
+
+表单组组件，用于包装表单字段
+字段
+@meta.name {default="FormGroup表单组组件",name="FormGroup表单组组件",description="FormGroup表单组组件，用于描述组件的名称"}
+@meta.description {default="表单组组件，用于包装表单字段",name="表单组组件，用于包装表单字段",description="表单组组件，用于包装表单字段，用于描述组件的用途"}
+@param.label {default="",name="字段标签",description="字段标签，用于设置字段标签"}
+@param.input {default="",name="输入框HTML",description="输入框HTML，必填参数"}
+@param.help {default="",name="帮助文字",description="帮助文字，用于设置帮助文字"}
+@param.error {default="",name="错误信息",description="错误信息，用于设置错误信息"}
+@param.required {default=false,name="是否必填",description="是否必填，用于控制字段的必填状态"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+-->
 <?php
-/**
- * 组件：FormGroup
- * 
- * 表单组组件，用于包装表单字段
- * 字段
- * @info description 描述：表单组组件，用于包装表单字段
- * @info name 名称：FormGroup表单组组件
- * @param label 字段标签
- * @param input 输入框HTML（必填）
- * @param help 帮助文字
- * @param error 错误信息
- * @param required 是否必填
- * @param class 额外CSS类
- */
 $label = $this->getData('label') ?? '';
 $input = $this->getData('input') ?? '';
 $help = $this->getData('help') ?? '';
@@ -36,7 +36,7 @@ if ($class) {
         </label>
     <?php endif; ?>
     
-    <?= $input ?>
+    {{input}}
     
     <?php if ($help && !$error): ?>
         <small class="form-text"><?= htmlspecialchars($help) ?></small>

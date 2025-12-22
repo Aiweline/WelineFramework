@@ -1,0 +1,152 @@
+<?php
+$hooks = $this->getData('hooks') ?? [];
+$totalCount = count($hooks);
+$currentSort = $this->getData('sort_by') ?? 'name';
+$currentOrder = $this->getData('sort_order') ?? 'asc';
+$quickSearch = $this->getData('quick_search') ?? '';
+$filterModule = $this->getData('filter_module') ?? '';
+$filterRegistered = $this->getData('filter_registered') ?? '';
+$filterFiles = $this->getData('filter_files') ?? '';
+$filterArea = $this->getData('filter_area') ?? '';
+$filterType = $this->getData('filter_type') ?? '';
+?>
+<div class="list-header">
+    <div class="list-info">
+        <span>共找到 <strong><?= $totalCount ?></strong> 个 Hook</span>
+    </div>
+</div>
+<?php if (empty($hooks)): ?>
+    <div class="empty-state">
+        <i class="mdi mdi-hook"></i>
+        <h3>暂无 Hook 信息</h3>
+        <p>系统中还没有定义任何 Hook。</p>
+    </div>
+<?php else: ?>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'name' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'q' => $quickSearch,
+                            'module' => $filterModule,
+                            'registered' => $filterRegistered,
+                            'files' => $filterFiles,
+                            'area' => $filterArea,
+                            'type' => $filterType,
+                            'sort' => 'name',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
+                            Hook 名
+                            <?php if ($currentSort === 'name'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>定义模块</th>
+                    <th>区域/类型</th>
+                    <th>组件/位置</th>
+                    <th>
+                        <?php
+                        $newOrder = ($currentSort === 'files' && $currentOrder === 'asc') ? 'desc' : 'asc';
+                        $queryParams = http_build_query(array_filter([
+                            'q' => $quickSearch,
+                            'module' => $filterModule,
+                            'registered' => $filterRegistered,
+                            'files' => $filterFiles,
+                            'area' => $filterArea,
+                            'type' => $filterType,
+                            'sort' => 'files',
+                            'order' => $newOrder
+                        ]));
+                        ?>
+                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="files" data-order="<?= $newOrder ?>">
+                            文件数
+                            <?php if ($currentSort === 'files'): ?>
+                                <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
+                            <?php endif; ?>
+                        </a>
+                    </th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($hooks as $hookName => $hookInfo): ?>
+                    <tr>
+                        <td>
+                            <div class="hook-name">
+                                <code><?= htmlspecialchars($hookName ?? '') ?></code>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="hook-module">
+                                <span class="badge badge-info"><?= htmlspecialchars($hookInfo['module'] ?? '') ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="hook-area-type">
+                                <span class="badge badge-secondary"><?= htmlspecialchars($hookInfo['area'] ?? '') ?></span>
+                                <span class="badge badge-secondary"><?= htmlspecialchars($hookInfo['type'] ?? '') ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="hook-component-position">
+                                <small><strong><?= htmlspecialchars($hookInfo['component'] ?? '') ?></strong></small>
+                                <small class="text-muted"><?= htmlspecialchars($hookInfo['position'] ?? '') ?></small>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="hook-files">
+                                <?php
+                                $fileCount = $hookInfo['file_count'] ?? 0;
+                                $usingModules = $hookInfo['using_modules'] ?? [];
+                                ?>
+                                <?php if ($fileCount > 0): ?>
+                                    <span class="badge badge-primary">
+                                        <i class="mdi mdi-file"></i> <?= $fileCount ?> 个文件
+                                    </span>
+                                    <div class="using-modules">
+                                        <small class="text-muted">
+                                            来自 <?= count($usingModules) ?> 个模块
+                                        </small>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted">无文件</span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="hook-status">
+                                <?php if ($hookInfo['is_registered'] ?? false): ?>
+                                    <span class="badge badge-success" title="已在 HookInterface 中注册">已注册</span>
+                                <?php else: ?>
+                                    <span class="badge badge-danger" title="未在 HookInterface 中注册">未注册</span>
+                                <?php endif; ?>
+                                <?php if ($hookInfo['has_files'] ?? false): ?>
+                                    <span class="badge badge-info" title="存在 Hook 文件">有文件</span>
+                                <?php else: ?>
+                                    <span class="badge badge-warning" title="不存在 Hook 文件">无文件</span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-primary btn-view-detail" 
+                                        data-hook-name="<?= htmlspecialchars($hookName) ?>"
+                                        title="查看详情">
+                                    <i class="mdi mdi-eye"></i> 详情
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>

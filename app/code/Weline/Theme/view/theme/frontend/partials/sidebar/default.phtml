@@ -11,10 +11,17 @@
  * @param.collapsed {default=false,name="是否折叠",description="是否折叠，用于控制侧边栏的折叠状态"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$items = $this->getData('items') ?? [];
-$activeItem = $this->getData('activeItem') ?? '';
-$collapsed = $this->getData('collapsed') ?? false;
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.sidebar.default');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$items = $this->getData("meta.items") ?? [];
+$activeItem = $this->getData("meta.activeItem") ?? '';
+$collapsed = $this->getData("meta.collapsed") ?? false;
+$class = $this->getData("meta.class") ?? '';
 
 // 构建CSS类
 $sidebarClass = 'sidebar';

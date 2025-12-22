@@ -1,0 +1,107 @@
+<?php
+/**
+ * 后台订单管理列表页面
+ */
+$orders = $this->getData('orders') ?: [];
+$total = $this->getData('total') ?: 0;
+$page = $this->getData('page') ?: 1;
+$limit = $this->getData('limit') ?: 20;
+$totalPages = $this->getData('total_pages') ?: 1;
+$status = $this->getData('status') ?: '';
+$paymentStatus = $this->getData('payment_status') ?: '';
+$keyword = $this->getData('keyword') ?: '';
+?>
+<div class="order-management-page">
+    <h1><?= __('订单管理') ?></h1>
+    
+    <div class="filters">
+        <form method="get" action="<?= $this->getBackendUrl('checkout/backend/order/index') ?>">
+            <div class="filter-group">
+                <label><?= __('订单状态') ?>:</label>
+                <select name="status">
+                    <option value=""><?= __('全部') ?></option>
+                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
+                    <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
+                    <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
+                    <option value="cancelled" <?= $status === 'cancelled' ? 'selected' : '' ?>><?= __('已取消') ?></option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label><?= __('支付状态') ?>:</label>
+                <select name="payment_status">
+                    <option value=""><?= __('全部') ?></option>
+                    <option value="pending" <?= $paymentStatus === 'pending' ? 'selected' : '' ?>><?= __('待支付') ?></option>
+                    <option value="paid" <?= $paymentStatus === 'paid' ? 'selected' : '' ?>><?= __('已支付') ?></option>
+                    <option value="failed" <?= $paymentStatus === 'failed' ? 'selected' : '' ?>><?= __('支付失败') ?></option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label><?= __('订单号') ?>:</label>
+                <input type="text" name="keyword" value="<?= $this->escapeHtml($keyword) ?>" placeholder="<?= __('请输入订单号') ?>">
+            </div>
+            
+            <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+        </form>
+    </div>
+    
+    <div class="order-list">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th><?= __('订单号') ?></th>
+                    <th><?= __('客户ID') ?></th>
+                    <th><?= __('订单状态') ?></th>
+                    <th><?= __('支付状态') ?></th>
+                    <th><?= __('订单总额') ?></th>
+                    <th><?= __('创建时间') ?></th>
+                    <th><?= __('操作') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($orders)): ?>
+                <tr>
+                    <td colspan="7" class="text-center"><?= __('暂无订单') ?></td>
+                </tr>
+                <?php else: ?>
+                <?php foreach ($orders as $order): ?>
+                <tr>
+                    <td><?= $this->escapeHtml($order['order_number']) ?></td>
+                    <td><?= $this->escapeHtml($order['customer_id']) ?></td>
+                    <td>
+                        <span class="status-badge status-<?= $this->escapeHtml($order['status']) ?>">
+                            <?= $this->escapeHtml($order['status']) ?>
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge payment-<?= $this->escapeHtml($order['payment_status']) ?>">
+                            <?= $this->escapeHtml($order['payment_status']) ?>
+                        </span>
+                    </td>
+                    <td><?= $this->escapeHtml($order['currency']) ?> <?= number_format($order['total_amount'], 2) ?></td>
+                    <td><?= $this->escapeHtml($order['created_time']) ?></td>
+                    <td>
+                        <a href="<?= $this->getBackendUrl('checkout/backend/order/view', ['order_id' => $order['order_id']]) ?>" class="btn btn-sm btn-primary">
+                            <?= __('查看') ?>
+                        </a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    
+    <?php if ($totalPages > 1): ?>
+    <div class="pagination">
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+        <a href="<?= $this->getBackendUrl('checkout/backend/order/index', ['page' => $i]) ?>" 
+           class="page-link <?= $i === $page ? 'active' : '' ?>">
+            <?= $i ?>
+        </a>
+        <?php endfor; ?>
+    </div>
+    <?php endif; ?>
+</div>
+

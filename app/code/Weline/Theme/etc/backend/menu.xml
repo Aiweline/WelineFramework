@@ -11,5 +11,10 @@
     <add source="Weline_Theme::theme_list" name="theme_list" title="主题列表" 
          action="theme/backend/index" parent="Weline_Theme::theme_management"
          icon="mdi mdi-view-list" order="10"/>
+    
+    <!--主题配置编辑（Meta管理器）-->
+    <add source="Weline_Theme::theme_edit" name="theme_edit" title="主题配置" 
+         action="theme/backend/config/layout/edit" parent="Weline_Theme::theme_management"
+         icon="mdi mdi-cog-outline" order="20"/>
 </menus>
 

@@ -1,16 +1,16 @@
+<!--
+组件：Badge
+
+徽章组件，用于显示标签和状态
+字段
+@meta.name {default="Badge徽章组件",name="Badge徽章组件",description="Badge徽章组件，用于描述组件的名称"}
+@meta.description {default="徽章组件，用于显示标签和状态",name="徽章组件，用于显示标签和状态",description="徽章组件，用于显示标签和状态，用于描述组件的用途"}
+@param.text {default="",name="徽章文字",description="徽章文字，必填参数"}
+@param.type {default="primary",name="类型",description="类型，可选值：primary/secondary/success/danger/warning/info"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+@param.id {default="",name="元素ID",description="元素ID，用于设置徽章ID"}
+-->
 <?php
-/**
- * 组件：Badge
- * 
- * 徽章组件，用于显示标签和状态
- * 字段
- * @info description 描述：徽章组件，用于显示标签和状态
- * @info name 名称：Badge徽章组件
- * @param text 徽章文字（必填）
- * @param type 类型 (primary/secondary/success/danger/warning/info)
- * @param class 额外CSS类
- * @param id 元素ID
- */
 $text = $this->getData('text') ?? '';
 $type = $this->getData('type') ?? 'primary';
 $class = $this->getData('class') ?? '';

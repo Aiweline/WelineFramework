@@ -103,9 +103,9 @@ class Account extends Model
                 ->addColumn(self::fields_STATUS, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'active\'', '状态')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_ADAPTER, '', 'KEY', 'idx_adapter')
-                ->addIndex(self::fields_STATUS, '', 'KEY', 'idx_status')
-                ->addIndex(self::fields_ADAPTER . ',' . self::fields_IS_DEFAULT, '', 'KEY', 'idx_adapter_default')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_adapter', self::fields_ADAPTER, '适配器索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_status', self::fields_STATUS, '状态索引')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_KEY, 'idx_adapter_default', [self::fields_ADAPTER, self::fields_IS_DEFAULT], '适配器默认值复合索引')
                 ->create();
         }
     }

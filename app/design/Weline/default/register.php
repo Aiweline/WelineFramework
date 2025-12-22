@@ -1,10 +1,8 @@
 <?php
-
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
+/**
+ * Weline Default Theme
+ * 
+ * 默认主题 - 继承 Weline_Theme，添加自定义样式
  */
 
 use Weline\Framework\Register\Register;
@@ -15,7 +13,8 @@ Register::register(
     [
         'name' => 'default',
         'path' => __DIR__,
+        'parent' => ''
     ],
-    '1.0.1',
-    '默认主题'
+    '1.0.0',
+    '默认主题 - 现代简约风格'
 );

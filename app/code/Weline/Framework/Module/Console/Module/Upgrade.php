@@ -290,13 +290,15 @@ class Upgrade extends CommandAbstract
             $this->system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printer->setup(__('%{modules} 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $no_modules)]));
-            exit(0);
+            // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+            throw new Exception(__('模块检查失败：%{modules} 模块未找到(异常卸载)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $no_modules)]));
         }
         if ($diff_base_path_modules) {
             $this->system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printer->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printer->setup(__('%{modules} 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $diff_base_path_modules)]));
-            exit(0);
+            // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+            throw new Exception(__('模块检查失败：%{modules} 模块路径不一致(异常搬迁)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $diff_base_path_modules)]));
         }
 
         $dependencyModuleNames = array_keys($dependencyModules);
@@ -309,7 +311,8 @@ class Upgrade extends CommandAbstract
                 $anser = $this->system->input();
                 if ($anser == '1' || ($anser != '2')) {
                     $this->printer->setup(__('程序停止运行，请检查问题后继续执行！'));
-                    exit(0);
+                    // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
+                    throw new Exception(__('用户选择停止执行：模块 %{1} 已被删除，请手动确认并删除 %{2} 中关于此模块的信息', [$module['name'], Env::path_MODULES_FILE]));
                 }
                 $this->printer->setup(__('你选择了继续执行，可能会出现不可预知的错误。'));
                 $total = 3;
@@ -333,16 +336,20 @@ class Upgrade extends CommandAbstract
                 try {
                     $module_handle->setupUpgrade(new Module($module));
                 } catch (Exception $exception) {
-                    $this->printer->error($exception->getMessage());
-                    die;
+                    $this->printer->error(__('模块 %{1} 升级失败：%{2}', [$module_name, $exception->getMessage()]));
+                    $this->printer->error(__('错误详情：%{1}', [$exception->getTraceAsString()]));
+                    // 抛出异常而不是die，让外层的try-catch-finally可以正确处理
+                    throw new Exception(__('模块 %{1} 升级失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
                 }
             }
             if (isset($module['installing']) and $module['installing']) {
                 try {
                     $module_handle->setupInstall(new Module($module));
                 } catch (Exception $exception) {
-                    $this->printer->error($exception->getMessage());
-                    die;
+                    $this->printer->error(__('模块 %{1} 安装失败：%{2}', [$module_name, $exception->getMessage()]));
+                    $this->printer->error(__('错误详情：%{1}', [$exception->getTraceAsString()]));
+                    // 抛出异常而不是die，让外层的try-catch-finally可以正确处理
+                    throw new Exception(__('模块 %{1} 安装失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
                 }
             }
         }
@@ -352,7 +359,16 @@ class Upgrade extends CommandAbstract
             if ($argsModule and !in_array($module_name, $argsModule)) {
                 continue;
             }
-            $module_handle->setupModel(new Module($module));
+            try {
+                $module_handle->setupModel(new Module($module));
+            } catch (Exception $exception) {
+                $this->printer->error(__('模块 %{1} 模型注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                if (DEV) {
+                    $this->printer->error(__('错误详情：%{1}', [$exception->getTraceAsString()]));
+                }
+                // 抛出异常而不是die，让外层的try-catch-finally可以正确处理
+                throw new Exception(__('模块 %{1} 模型注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
+            }
         }
 
         // 注册路由信息
@@ -380,13 +396,31 @@ class Upgrade extends CommandAbstract
             if ($argsModule and !in_array($module_name, $argsModule)) {
                 continue;
             }
-            $module_handle->registerRoute(new Module($module));
+            try {
+                $module_handle->registerRoute(new Module($module));
+            } catch (Exception $exception) {
+                $this->printer->error(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
+                if (DEV) {
+                    $this->printer->error(__('错误详情：%{1}', [$exception->getTraceAsString()]));
+                }
+                // 抛出异常而不是die，让外层的try-catch-finally可以正确处理
+                throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]), 0, $exception);
+            }
         }
         
         // 所有模块路由注册完成后，一次性写入所有路由文件
-        $this->printer->note(__('正在写入路由文件...'));
-        $routerHelper->flushBatchRouters();
-        $this->printer->success(__('路由文件写入完成！'));
+        try {
+            $this->printer->note(__('正在写入路由文件...'));
+            $routerHelper->flushBatchRouters();
+            $this->printer->success(__('路由文件写入完成！'));
+        } catch (Exception $exception) {
+            $this->printer->error(__('路由文件写入失败：%{1}', [$exception->getMessage()]));
+            if (DEV) {
+                $this->printer->error(__('错误详情：%{1}', [$exception->getTraceAsString()]));
+            }
+            // 抛出异常而不是die，让外层的try-catch-finally可以正确处理
+            throw new Exception(__('路由文件写入失败：%{1}', [$exception->getMessage()]), 0, $exception);
+        }
         if ($argsModule) {
             $this->printer->note(__('指定模块 %{1} 更新完毕！', [implode(', ', $argsModule)]));
         } else {

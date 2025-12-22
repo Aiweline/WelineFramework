@@ -16,6 +16,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block\Csrf;
 use Weline\Framework\View\Exception\TemplateException;
+use Weline\Hook\HookData;
 
 class Taglib
 {
@@ -301,6 +302,298 @@ class Taglib
                                 }
                                 $var_name = $this->varParser($var_name);
                                 return "<?=$var_name?count({$var_name}):0?>";
+                        }
+                    }
+            ],
+            
+            'hook' => [
+                'tag' => 1,
+                'callback' =>
+                    function ($tag_key, $config, $tag_data, $attributes) {
+                        // 处理成对标签的情况（支持 else）
+                        if ($tag_key === 'tag') {
+                            $content = $tag_data[2] ?? '';
+                            
+                            // 检查是否有 else 标签（支持多种格式）
+                            $else_pattern = '/<(?:w:)?else\s*\/?>/i';
+                            $has_else = preg_match($else_pattern, $content, $else_matches, PREG_OFFSET_CAPTURE);
+                            
+                            if ($has_else && isset($else_matches[0]) && is_array($else_matches[0]) && isset($else_matches[0][1])) {
+                                // 分割内容：else 之前是 hook 名称，之后是 else 内容
+                                $else_pos = is_int($else_matches[0][1]) ? $else_matches[0][1] : (int)$else_matches[0][1];
+                                $else_match_str = $else_matches[0][0] ?? '';
+                                $hook_name = trim(substr($content, 0, $else_pos));
+                                $else_content = substr($content, $else_pos + strlen($else_match_str));
+                            } else {
+                                // 没有 else 标签，但可能内容中混入了 HTML 或其他内容
+                                // 尝试找到第一个 HTML 标签或 PHP 代码的位置，在那之前提取 hook 名称
+                                $html_pos = strpos($content, '<');
+                                $php_pos = strpos($content, '<?');
+                                $min_pos = false;
+                                if ($html_pos !== false) {
+                                    $min_pos = $html_pos;
+                                }
+                                if ($php_pos !== false) {
+                                    $min_pos = ($min_pos === false) ? $php_pos : min($min_pos, $php_pos);
+                                }
+                                if ($min_pos !== false) {
+                                    $hook_name = trim(substr($content, 0, $min_pos));
+                                    $else_content = substr($content, $min_pos);
+                                } else {
+                                    $hook_name = trim($content);
+                                    $else_content = '';
+                                }
+                            }
+                            
+                            // 统一清理 hook 名称，移除可能混入的 PHP 代码标签和 HTML 标签
+                            $hook_name = preg_replace('/<\?php\s*else\s*:?\s*\?>/i', '', $hook_name);
+                            $hook_name = preg_replace('/<\?=\s*else\s*\?>/i', '', $hook_name);
+                            // 移除可能混入的 HTML 标签（防止 else 内容被错误包含）
+                            $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
+                            // 移除可能混入的 PHP 代码
+                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
+                            // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
+                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                            $hook_name = trim($hook_name);
+                            
+                            // 检查 hook 是否存在
+                            $hook_exists = false;
+                            $hook_has_files = false;
+                            
+                            try {
+                                // 使用 HookData 检查 hook 是否存在
+                                $hook_exists = HookData::hookExists($hook_name);
+                                
+                                // 检查 hook 是否有实现文件
+                                if ($hook_exists) {
+                                    try {
+                                        $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        $hookReader->setPath($hook_name);
+                                        $hook_files = $hookReader->getFileList();
+                                        $hook_has_files = !empty($hook_files);
+                                    } catch (\Throwable $e) {
+                                        // 如果检查失败，假设有文件（运行时处理）
+                                        $hook_has_files = true;
+                                    }
+                                }
+                            } catch (\Throwable $e) {
+                                // HookData 不可用时，继续执行
+                            }
+                            
+                            // 如果 hook 存在且有实现文件，返回 hook 调用代码
+                            if ($hook_exists && $hook_has_files) {
+                                // 在开发环境下，检查 hook 是否有规约
+                                if (defined('DEV') && DEV) {
+                                    try {
+                                        $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
+                                        
+                                        // 在开发环境下，如果 generated/hooks.php 不存在，自动刷新
+                                        $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+                                        if (!file_exists($registryFile)) {
+                                            $hookRegistry->refresh();
+                                        }
+                                        
+                                        // 如果钩子没有规约，尝试刷新注册表后再检查一次
+                                        if (!$hookRegistry->hasSpec($hook_name)) {
+                                            // 强制刷新注册表，确保最新
+                                            $hookRegistry->refresh();
+                                            // 重新检查
+                                            if (!$hookRegistry->hasSpec($hook_name)) {
+                                                // 解析模块名
+                                                $moduleName = '';
+                                                if (str_contains($hook_name, '::')) {
+                                                    // 新格式：ModuleName::area::type::component::position
+                                                    $parts = explode('::', $hook_name);
+                                                    $moduleName = $parts[0] ?? '';
+                                                } else {
+                                                    // 简单格式：尝试从注册表中查找所属模块
+                                                    $hookModule = $hookRegistry->getHookModule($hook_name);
+                                                    if ($hookModule) {
+                                                        $moduleName = $hookModule;
+                                                    } else {
+                                                        // 如果找不到，提示用户需要定义规约
+                                                        $moduleName = '相关模块';
+                                                    }
+                                                }
+                                                
+                                                // 在开发环境下抛出异常
+                                                throw new \Exception(
+                                                    sprintf(
+                                                        'Hook 未定义规约：%s。请在模块 %s 的 hook.php 文件中定义此 hook 的规约。',
+                                                        $hook_name,
+                                                        $moduleName
+                                                    )
+                                                );
+                                            }
+                                        }
+                                    } catch (\Throwable $e) {
+                                        // 如果是我们主动抛出的异常（hook 未定义规约），继续抛出
+                                        if (str_contains($e->getMessage(), 'Hook 未定义规约')) {
+                                            throw $e;
+                                        }
+                                        // 如果 HookRegistry 不可用，记录错误但继续执行
+                                    }
+                                    
+                                    // 在开发模式下，获取 hook 实现文件列表并添加注释
+                                    try {
+                                        $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                                        $hookReader->setPath($hook_name);
+                                        // 获取原始文件列表（不使用 callback，获取绝对路径）
+                                        $hook_files_raw = $hookReader->getFileList(function($modules_files) {
+                                            return $modules_files; // 返回原始格式
+                                        });
+                                        
+                                        if (!empty($hook_files_raw)) {
+                                            $hook_comment = "<!-- Hook: {$hook_name} -->\n";
+                                            $hook_comment .= "<!-- Hook 实现来源（开发模式显示）:\n";
+                                            foreach ($hook_files_raw as $module => $file) {
+                                                // 提取相对路径（相对于项目根目录）
+                                                if (strpos($file, BP) === 0) {
+                                                    $relativePath = str_replace(BP, '', $file);
+                                                    $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+                                                } else {
+                                                    // 如果已经是相对路径格式（Module::path），直接使用
+                                                    $relativePath = str_replace($module . '::', '', $file);
+                                                }
+                                                
+                                                $hook_comment .= "  - 模块: {$module}\n";
+                                                $hook_comment .= "    文件: {$relativePath}\n";
+                                                
+                                                // 检查是否有 hover 相关的 CSS 类
+                                                $cssClass = str_replace(['::', '-'], ['-', '-'], $hook_name);
+                                                $hook_comment .= "    CSS 类: .{$cssClass}, .header-{$cssClass}\n";
+                                            }
+                                            $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
+                                            $hook_comment .= "-->\n";
+                                            
+                                            return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
+                                        }
+                                    } catch (\Throwable $e) {
+                                        // 如果获取文件列表失败，继续执行但不添加注释
+                                    }
+                                }
+                                
+                                return "<?=\$this->getHook('" . $hook_name . "')?>";
+                            } else {
+                                // hook 不存在或没有实现文件，返回 else 内容
+                                // 注意：<else/> 在 hook 标签中只用作切分，不需要转换为 PHP else
+                                // 返回的 else_content 中不包含用于切分的 <else/> 标签
+                                // 如果 else_content 中有其他 <else/>，由 tagReplace 的后续处理来处理
+                                return $else_content;
+                            }
+                        } else {
+                            // 单标签情况（向后兼容）
+                            $hook_name = trim($tag_data[1] ?? '');
+                            // 清理 hook 名称，移除可能混入的 PHP 代码标签和 HTML 标签
+                            $hook_name = preg_replace('/<\?php\s*else\s*:?\s*\?>/i', '', $hook_name);
+                            $hook_name = preg_replace('/<\?=\s*else\s*\?>/i', '', $hook_name);
+                            // 移除可能混入的 HTML 标签
+                            $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
+                            // 移除可能混入的 PHP 代码
+                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
+                            // 只保留 hook 名称（在遇到非合法字符前停止）
+                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                            $hook_name = trim($hook_name);
+                            
+                            // 在开发环境下，检查 hook 是否有规约（在 hook.php 中定义）
+                            // 统一要求所有 hook 都必须定义规约
+                            // 再次清理 hook 名称，确保没有混入其他内容
+                            $hook_name = preg_replace('/<[^>]+>/', '', $hook_name); // 移除 HTML 标签
+                            $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name); // 移除 PHP 代码
+                            // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
+                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                            $hook_name = trim($hook_name);
+                            
+                            if (defined('DEV') && DEV) {
+                                try {
+                                    $hookRegistry = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Hook\HookRegistry::class);
+                                    
+                                    // 在开发环境下，如果 generated/hooks.php 不存在，自动刷新
+                                    $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+                                    if (!file_exists($registryFile)) {
+                                        $hookRegistry->refresh();
+                                    }
+                                    
+                                    if (!$hookRegistry->hasSpec($hook_name)) {
+                                        // 解析模块名
+                                        $moduleName = '';
+                                        if (str_contains($hook_name, '::')) {
+                                            // 新格式：ModuleName::area::type::component::position
+                                            $parts = explode('::', $hook_name);
+                                            $moduleName = $parts[0] ?? '';
+                                        } else {
+                                            // 简单格式：尝试从注册表中查找所属模块
+                                            $hookModule = $hookRegistry->getHookModule($hook_name);
+                                            if ($hookModule) {
+                                                $moduleName = $hookModule;
+                                            } else {
+                                                // 如果找不到，提示用户需要定义规约
+                                                $moduleName = '相关模块';
+                                            }
+                                        }
+                                        
+                                        // 在开发环境下抛出异常
+                                        throw new \Exception(
+                                            sprintf(
+                                                'Hook 未定义规约：%s。请在模块 %s 的 hook.php 文件中定义此 hook 的规约。',
+                                                $hook_name,
+                                                $moduleName
+                                            )
+                                        );
+                                    }
+                                } catch (\Throwable $e) {
+                                    // 如果是我们主动抛出的异常（hook 未定义规约），继续抛出
+                                    if (str_contains($e->getMessage(), 'Hook 未定义规约')) {
+                                        throw $e;
+                                    }
+                                    // 如果 HookRegistry 不可用，记录错误但继续执行
+                                    // 这样可以在运行时处理
+                                }
+                            }
+                        
+                        // 在编译阶段检查 hook 是否有实现文件，如果没有就直接返回空字符串
+                        try {
+                            $hookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+                            $hookReader->setPath($hook_name);
+                            $hook_files = $hookReader->getFileList();
+                            // 如果没有实现文件，直接返回空字符串，不生成 PHP 代码
+                            if (empty($hook_files)) {
+                                return '';
+                            }
+                            
+                            // 在开发模式下，添加 hook 实现来源注释
+                            if (defined('DEV') && DEV && !empty($hook_files)) {
+                                $hook_comment = "<!-- Hook: {$hook_name} -->\n";
+                                $hook_comment .= "<!-- Hook 实现来源（开发模式显示）:\n";
+                                foreach ($hook_files as $module => $file) {
+                                    // 提取相对路径
+                                    if (strpos($file, BP) === 0) {
+                                        $relativePath = str_replace(BP, '', $file);
+                                        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+                                    } else {
+                                        // 如果已经是相对路径格式（Module::path），直接使用
+                                        $relativePath = str_replace($module . '::', '', $file);
+                                    }
+                                    
+                                    $hook_comment .= "  - 模块: {$module}\n";
+                                    $hook_comment .= "    文件: {$relativePath}\n";
+                                    
+                                    // 检查是否有 hover 相关的 CSS 类
+                                    $cssClass = str_replace(['::', '-'], ['-', '-'], $hook_name);
+                                    $hook_comment .= "    CSS 类: .{$cssClass}, .header-{$cssClass}\n";
+                                }
+                                $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
+                                $hook_comment .= "-->\n";
+                                
+                                return $hook_comment . "<?=\$this->getHook('" . $hook_name . "')?>";
+                            }
+                        } catch (\Throwable $e) {
+                            // 如果检查失败（例如 Hook 模块未安装或 HookReader 不可用），仍然生成 PHP 代码
+                            // 这样可以在运行时处理
+                        }
+                        
+                        // 有实现时，生成 PHP 代码
+                        return "<?=\$this->getHook('" . $hook_name . "')?>";
                         }
                     }
             ],
@@ -883,16 +1176,6 @@ class Taglib
                         }
                     }
             ],
-            'hook' => [
-                'tag' => 1,
-                'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) {
-                        return match ($tag_key) {
-                            'tag' => "<?=\$this->getHook('" . trim($tag_data[2]) . "')?>",
-                            default => "<?=\$this->getHook('" . trim($tag_data[1]) . "')?>"
-                        };
-                    }
-            ],
             'string' => [
                 'tag' => 1,
                 'callback' =>
@@ -1050,7 +1333,9 @@ class Taglib
                                 }
                             }
                         }
-                        $customTag[1] = str_replace(PHP_EOL, '', $customTag[1]);
+                        // 移除换行符和制表符，确保多行属性能正确解析
+                        $customTag[1] = str_replace(PHP_EOL, ' ', $customTag[1]);
+                        $customTag[1] = str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $customTag[1]);
                     }
 
                     $rawAttributes = $customTag[1] ?? '';

@@ -1,0 +1,63 @@
+<?php
+/**
+ * 测试布局：用于验证CSS/JS提取功能
+ * 
+ * 此布局文件包含内联CSS和JS，用于测试LayoutAssetsExtractor功能
+ */
+$layoutType = $this->getData('layoutType') ?? 'test';
+$layoutOption = $this->getData('layoutOption') ?? 'assets-test';
+
+// 确保布局信息被设置
+$this->setData('layoutType', $layoutType);
+$this->setData('layoutOption', $layoutOption);
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS/JS提取功能测试</title>
+    
+    <!-- 内联CSS - 应该被提取到外部文件 -->
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--color-bg, #ffffff);
+        }
+        .test-header {
+            color: var(--color-primary, #007bff);
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .test-content {
+            padding: 15px;
+            border: 1px solid var(--color-border, #dee2e6);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="test-header">CSS/JS提取功能测试</h1>
+        <div class="test-content">
+            <p>这是一个测试页面，用于验证CSS/JS提取功能是否正常工作。</p>
+            <button id="test-button">点击测试</button>
+        </div>
+    </div>
+    
+    <!-- 内联JS - 应该被提取到外部文件 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const button = document.getElementById('test-button');
+            if (button) {
+                button.addEventListener('click', function() {
+                    alert('JS提取功能正常工作！');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+

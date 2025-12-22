@@ -1,78 +1,243 @@
-<?php
-/**
- * 布局：默认布局
- * 
- * 默认布局模板，适用于所有页面类型
- * 字段
- * @meta.name {default="默认布局",name="默认布局",description="默认布局，用于描述布局的名称"}
- * @meta.description {default="默认布局，包含header、main、footer",name="默认布局，包含header、main、footer",description="默认布局，包含header、main、footer，用于描述布局的用途"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- * @param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
- * @param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
- * @param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- */
-$title = $this->getData('title') ?? '';
-$content = $this->getData('content') ?? '';
-$showHeader = $this->getData('showHeader') ?? true;
-$showFooter = $this->getData('showFooter') ?? true;
-$class = $this->getData('class') ?? '';
+<!--
+布局：默认布局
 
-// 设置页面标题
-if ($title) {
-    $this->assign('title', $title);
-}
-?>
+默认布局模板，适用于所有页面类型
+字段
+@meta.name {default="默认布局",name="默认布局",description="默认布局，用于描述布局的名称"}
+@meta.description {default="默认布局，包含header、main、footer",name="默认布局，包含header、main、footer",description="默认布局，包含header、main、footer，用于描述布局的用途"}
+@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
+@param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
 <body>
-    <?php if ($showHeader): ?>
-        <?php
-        // 使用配置的 header partials
-        $partialsBlock = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
-        $headerPath = $partialsBlock->getPartialsPath('frontend', 'header', 'default');
-        if ($headerPath) {
-            echo $this->fetch($headerPath, [
-                'logo' => $this->getData('logo') ?? '',
-                'logoText' => $this->getData('logoText') ?? __('Weline'),
-                'navItems' => $this->getData('navItems') ?? [],
-                'showSearch' => $this->getData('showSearch') ?? true,
-                'showUserMenu' => $this->getData('showUserMenu') ?? true
-            ]);
-        }
-        ?>
-    <?php endif; ?>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
     
-    <main class="main-content <?= htmlspecialchars($class) ?>">
-        <?php
-        // 如果指定了 contentTemplate，优先渲染原模板
-        $contentTemplate = $this->getData('contentTemplate');
-        if ($contentTemplate) {
-            echo $this->fetch($contentTemplate);
-        } else {
-            // 否则使用 content 变量（HTML字符串）
-            echo $content;
-        }
-        ?>
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+    
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
+    <main class="main-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="main-content" data-layout="main_content">
+        <if condition="meta.contentTemplate">
+            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+            <else/>
+            {{meta.content}}
+        </if>
     </main>
+    <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
     
-    <?php if ($showFooter): ?>
-        <?php
-        // 使用配置的 footer partials
-        $footerPath = $partialsBlock->getPartialsPath('frontend', 'footer', 'default');
-        if ($footerPath) {
-            echo $this->fetch($footerPath, [
-                'copyright' => $this->getData('copyright') ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利'),
-                'links' => $this->getData('links') ?? [],
-                'showBackToTop' => $this->getData('showBackToTop') ?? true
-            ]);
-        }
-        ?>
-    <?php endif; ?>
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+    
+    <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
+
+<style>
+/* ========================================
+   Amazon风格 - 默认布局样式
+   ======================================== */
+
+/* 基础重置和全局样式 */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #111;
+    background-color: #fff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 亚马逊风格容器 */
+.main-content {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0;
+    background-color: #fff;
+    min-height: calc(100vh - 200px);
+}
+
+/* 页面包装器 */
+body > main {
+    width: 100%;
+}
+
+/* 响应式容器 */
+@media (max-width: 1400px) {
+    .main-content {
+        padding: 0 1rem;
+    }
+}
+
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 0 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 0 0.5rem;
+    }
+}
+
+/* 内容区域样式 */
+.main-content > * {
+    width: 100%;
+}
+
+/* 平滑滚动 */
+html {
+    scroll-behavior: smooth;
+}
+
+/* 链接样式（亚马逊风格） */
+a {
+    color: #007185;
+    text-decoration: none;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+a:hover {
+    color: #c45500;
+    text-decoration: underline;
+}
+
+/* 按钮基础样式 */
+button {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* 输入框基础样式 */
+input, textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* 清除默认样式 */
+ul, ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* 图片响应式 */
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* 工具类 */
+.clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+</style>
+
+<script>
+// Amazon风格 - 默认布局基础交互脚本
+(function() {
+    'use strict';
+    
+    // 等待DOM加载完成
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    
+    function init() {
+        // 初始化基础交互功能
+        initSmoothScroll();
+        initExternalLinks();
+    }
+    
+    // 平滑滚动增强
+    function initSmoothScroll() {
+        // 为所有锚点链接添加平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href === '#' || href === '#!') {
+                    e.preventDefault();
+                    return;
+                }
+                
+                const target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    }
+    
+    // 外部链接处理
+    function initExternalLinks() {
+        document.querySelectorAll('a[href^="http"]').forEach(function(link) {
+            // 如果是外部链接，添加target="_blank"和rel="noopener"
+            const hostname = window.location.hostname;
+            const linkHostname = new URL(link.href).hostname;
+            
+            if (linkHostname !== hostname) {
+                link.setAttribute('target', '_blank');
+                link.setAttribute('rel', 'noopener noreferrer');
+            }
+        });
+    }
+})();
+</script>
 
