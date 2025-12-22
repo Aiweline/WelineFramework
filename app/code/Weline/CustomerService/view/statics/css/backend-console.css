@@ -1,0 +1,412 @@
+/**
+ * 客服工作台样式
+ */
+.customer-service-console {
+    height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    background: #f5f5f5;
+}
+
+.console-header {
+    background: #fff;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.console-header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.agent-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.agent-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.agent-locale {
+    padding: 4px 8px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.console-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧会话列表 */
+.console-sidebar {
+    width: 350px;
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    padding: 15px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn-refresh {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: #666;
+    transition: color 0.2s;
+}
+
+.btn-refresh:hover {
+    color: #1976d2;
+}
+
+.waiting-sessions,
+.my-sessions {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.section-title {
+    padding: 10px 15px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    background: #f9f9f9;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.session-list {
+    padding: 0;
+}
+
+.session-item {
+    padding: 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.2s;
+    position: relative;
+}
+
+.session-item:hover {
+    background: #f9f9f9;
+}
+
+.session-item.active {
+    background: #e3f2fd;
+    border-left: 3px solid #1976d2;
+}
+
+.session-item.unread {
+    background: #fff3e0;
+}
+
+.session-item.waiting {
+    background: #fff9c4;
+}
+
+.session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.session-id {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.unread-badge {
+    background: #f44336;
+    color: #fff;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 18px;
+    text-align: center;
+}
+
+.session-status {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.badge-waiting {
+    background: #ff9800;
+    color: #fff;
+}
+
+.session-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.last-message {
+    margin: 0;
+    color: #666;
+    font-size: 13px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.last-time {
+    font-size: 11px;
+    color: #999;
+    margin-left: 10px;
+}
+
+.session-actions {
+    margin-top: 10px;
+}
+
+.btn-assign {
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.btn-assign:hover {
+    background: #1565c0;
+}
+
+.empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: #999;
+}
+
+/* 右侧聊天区域 */
+.console-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    overflow: hidden;
+}
+
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #999;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.chat-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+}
+
+.chat-header-info h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.chat-header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-close-session {
+    background: #f44336;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.btn-close-session:hover {
+    background: #d32f2f;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f9f9f9;
+}
+
+.message-item {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-item.customer {
+    align-items: flex-start;
+}
+
+.message-item.agent {
+    align-items: flex-end;
+}
+
+.message-bubble {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 18px;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.message-item.customer .message-bubble {
+    background: #e0e0e0;
+    color: #333;
+    border-bottom-left-radius: 4px;
+}
+
+.message-item.agent .message-bubble {
+    background: #1976d2;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+
+.message-content {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.message-time {
+    font-size: 11px;
+    color: #999;
+    margin-top: 5px;
+    padding: 0 5px;
+}
+
+.message-item.agent .message-time {
+    text-align: right;
+}
+
+.chat-input-area {
+    padding: 15px 20px;
+    border-top: 1px solid #e0e0e0;
+    background: #fff;
+}
+
+.chat-input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.chat-input {
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    padding: 10px 15px;
+    font-size: 14px;
+    resize: none;
+    min-height: 40px;
+    max-height: 120px;
+    font-family: inherit;
+}
+
+.chat-input:focus {
+    outline: none;
+    border-color: #1976d2;
+}
+
+.btn-send {
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+    min-width: 80px;
+}
+
+.btn-send:hover:not(:disabled) {
+    background: #1565c0;
+}
+
+.btn-send:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* 滚动条样式 */
+.console-sidebar::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.console-sidebar::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.console-sidebar::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.console-sidebar::-webkit-scrollbar-thumb:hover,
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+

@@ -187,9 +187,10 @@ class Form implements TaglibInterface
             ];
             TableContext::pushChildTag('d-form', $scope, $formContext);
 
-            // 生成API URL
+            // 生成API URL（使用REST API路径）
             if (empty($action)) {
-                $action = '/datatable/api/form';
+                // 使用 window.api() 函数生成的URL格式
+                $action = 'datatable/rest/v1/data-table';
             }
 
             // 解析排除和包含字段
@@ -282,6 +283,8 @@ class Form implements TaglibInterface
         $modeStr = is_array($mode) ? implode(',', $mode) : (string)$mode;
         $scopeStr = is_array($scope) ? implode(',', $scope) : (string)$scope;
         $modelStr = is_array($model) ? implode(',', $model) : (string)$model;
+        // JavaScript 字符串中需要转义反斜杠，否则 \S, \M 等会被解释为转义字符
+        $modelStrJs = addslashes($modelStr);
         $formMode = (string)$formMode;
         
         $formHtml = '';
@@ -412,7 +415,7 @@ class Form implements TaglibInterface
                     console.log("DataTableFormManager 已加载，初始化表单: ' . $id . '");
                     var initForm = function() {
                         DataTableFormManager.initForm("' . $id . '", {
-                            model: "' . $modelStr . '",
+                            model: "' . $modelStrJs . '",
                             scope: "' . $scopeStr . '",
                             mode: "' . $modeStr . '",
                             recordId: "' . $recordIdStr . '",
@@ -437,7 +440,7 @@ class Form implements TaglibInterface
             if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
                 console.log("DataTableFormManager 已加载，初始化表单: ' . $id . '");
                 DataTableFormManager.initForm("' . $id . '", {
-                    model: "' . $modelStr . '",
+                    model: "' . $modelStrJs . '",
                     scope: "' . $scopeStr . '",
                     mode: "' . $modeStr . '",
                     recordId: "' . $recordIdStr . '",
@@ -451,7 +454,7 @@ class Form implements TaglibInterface
                     if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
                         clearInterval(checkInterval);
                         DataTableFormManager.initForm("' . $id . '", {
-                            model: "' . $modelStr . '",
+                            model: "' . $modelStrJs . '",
                             scope: "' . $scopeStr . '",
                             mode: "' . $modeStr . '",
                             recordId: "' . $recordIdStr . '",
@@ -903,12 +906,16 @@ DOC;
 .w-form-modal-container {
     position: relative;
     width: 100%;
-    max-width: 800px;
-    max-height: 90vh;
-    overflow: hidden;
+    max-width: 560px;
+    max-height: calc(90vh - 40px);
+    display: flex;
+    flex-direction: column;
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: modalSlideIn 0.3s ease;
+}
+.w-form-modal-container.w-form-modal-wide {
+    max-width: 900px;
 }
 @keyframes modalSlideIn {
     from {
@@ -925,9 +932,11 @@ DOC;
     background: #ffffff;
     border-radius: 12px;
     overflow: hidden;
-    max-height: 90vh;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    flex: 1;
 }
 /* 表单头部 */
 .w-form-header {
@@ -984,22 +993,52 @@ DOC;
 }
 /* 表单主体 */
 .w-form-body {
-    padding: 32px 28px;
+    padding: 24px 28px;
     flex: 1;
     overflow-y: auto;
-    min-height: 200px;
+    min-height: 100px;
+    max-height: calc(70vh - 150px);
 }
+/* 表单字段网格布局 - 默认单列 */
 .w-form-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px 24px;
+    align-items: start;
+}
+/* 字段较多时使用双列布局 */
+.w-form-fields.w-form-fields-multi {
+    grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 768px) {
+    .w-form-fields:has(.w-form-field:nth-child(5)) {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 /* 表单字段 */
 .w-form-field {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 4px;
+    gap: 8px;
+    min-width: 0;
+}
+/* 占满整行的字段类型 */
+.w-form-field.w-field-full-width,
+.w-form-field[data-type="textarea"],
+.w-form-field[data-type="file"],
+.w-form-field[data-type="image"],
+.w-form-field:has(textarea),
+.w-form-field:has(.w-file-field),
+.w-form-field:has(.w-image-field) {
+    grid-column: 1 / -1;
+}
+/* 字段类型样式 */
+.w-form-field.w-field-type-number .w-form-control {
+    font-variant-numeric: tabular-nums;
+}
+.w-form-field.w-field-type-file,
+.w-form-field.w-field-type-image {
+    grid-column: 1 / -1;
 }
 .w-field-label {
     font-size: 0.9375rem;
@@ -1301,21 +1340,41 @@ select.w-form-control {
     flex: 1;
 }
 /* 响应式设计 */
+@media (max-width: 992px) {
+    .w-form-modal-container {
+        max-width: 95%;
+    }
+    .w-form-fields {
+        grid-template-columns: 1fr;
+    }
+    .w-form-field.w-field-full-width,
+    .w-form-field[data-type="textarea"],
+    .w-form-field[data-type="file"],
+    .w-form-field[data-type="image"] {
+        grid-column: 1;
+    }
+}
 @media (max-width: 768px) {
     .w-form-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+        padding: 16px 20px;
     }
     .w-form-actions {
         width: 100%;
         justify-content: flex-end;
     }
     .w-form-body {
-        padding: 16px;
+        padding: 16px 20px;
+        max-height: calc(60vh - 120px);
+    }
+    .w-form-fields {
+        grid-template-columns: 1fr;
+        gap: 16px;
     }
     .w-form-footer {
-        padding: 16px;
+        padding: 16px 20px;
     }
     .w-form-horizontal .w-form-field {
         flex-direction: column;
@@ -1548,26 +1607,184 @@ body[data-topbar="dark"] .w-form-message-error {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     overflow: hidden;
     margin: 20px 0;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
 }
 .w-form-inline-container .w-form-header {
     background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    padding: 24px 28px;
+    padding: 20px 24px;
     border-bottom: 1px solid #e5e7eb;
-    min-height: 64px;
+    min-height: 56px;
+    flex-shrink: 0;
 }
 .w-form-inline-container .w-form-body {
-    padding: 32px 28px;
-    min-height: 200px;
+    padding: 24px;
+    min-height: 150px;
+    flex: 1;
+    overflow-y: auto;
 }
 .w-form-inline-container .w-form-footer {
     background: #f9fafb;
-    padding: 24px 28px;
+    padding: 16px 24px;
     border-top: 1px solid #e5e7eb;
     display: flex;
     justify-content: flex-end;
     gap: 16px;
-    min-height: 72px;
+    min-height: 60px;
     align-items: center;
+    flex-shrink: 0;
+}
+/* 文件字段样式 */
+.w-file-field {
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f9fafb;
+    transition: all 0.2s ease;
+}
+.w-file-field:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+}
+.w-file-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.w-file-btn {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+.w-file-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+.w-file-info {
+    color: #6b7280;
+    font-size: 0.8125rem;
+}
+.w-file-list {
+    margin-top: 12px;
+}
+.w-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+.w-file-name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.w-file-size {
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+.w-file-remove {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+}
+.w-file-remove:hover {
+    background: #fef2f2;
+}
+.w-file-placeholder {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    font-style: italic;
+}
+/* 图片字段样式 */
+.w-image-field {
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f9fafb;
+    transition: all 0.2s ease;
+}
+.w-image-field:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+}
+.w-image-preview {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.w-image-placeholder {
+    text-align: center;
+    padding: 24px;
+    cursor: pointer;
+    color: #6b7280;
+}
+.w-image-placeholder i {
+    font-size: 2.5rem;
+    color: #d1d5db;
+    margin-bottom: 8px;
+    display: block;
+}
+.w-placeholder-text {
+    font-size: 0.9375rem;
+    margin-bottom: 4px;
+}
+.w-placeholder-info {
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+.w-image-preview-img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 6px;
+    object-fit: contain;
+}
+.w-image-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+}
+/* 上传进度条 */
+.w-upload-progress {
+    margin-top: 12px;
+}
+.w-progress-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.w-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+.w-progress-text {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 4px;
 }
 /* 按钮组增强 */
 .w-form-actions {

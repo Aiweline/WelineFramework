@@ -1378,7 +1378,7 @@
      * 监听postMessage消息，支持从父窗口切换主题色系（用于主题预览）
      */
     (function initThemeColorMessageListener() {
-        window.addEventListener('message', function(event) {
+        window.addEventListener('message', function (event) {
             // 安全检查：只接受来自同源的消息（在预览场景中，父窗口和iframe是同源的）
             if (event.data && event.data.type === 'switchThemeColor') {
                 const themeColor = event.data.themeColor;
@@ -1446,5 +1446,485 @@
             }, 0);
         }
     })();
+
+    /**
+     * Header 功能模块
+     * 处理下拉菜单、搜索建议、键盘导航等
+     */
+    (function initHeaderFeatures() {
+        function HeaderManager() {
+            this.activeDropdown = null;
+            this.searchSuggestions = null;
+            this.searchInput = null;
+            this.init();
+        }
+
+        HeaderManager.prototype = {
+            init: function () {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => this.setup());
+                } else {
+                    this.setup();
+                }
+            },
+
+            setup: function () {
+                this.setupAccountDropdown();
+                this.setupKeyboardNavigation();
+                this.setupClickOutside();
+            },
+
+            // 账户下拉菜单
+            setupAccountDropdown: function () {
+                const accountElement = document.querySelector('.header-account');
+                if (!accountElement) return;
+
+                const dropdown = accountElement.querySelector('.account-dropdown');
+                const trigger = accountElement.querySelector('.action-link') || accountElement;
+
+                // 点击/hover 切换
+                const toggleDropdown = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.closeAllDropdowns();
+                    if (accountElement.classList.contains('active')) {
+                        this.closeDropdown(accountElement);
+                    } else {
+                        this.openDropdown(accountElement);
+                    }
+                };
+
+                trigger.addEventListener('click', toggleDropdown);
+
+                // 键盘支持
+                trigger.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleDropdown(e);
+                    } else if (e.key === 'Escape') {
+                        this.closeDropdown(accountElement);
+                    }
+                });
+
+                // 菜单项键盘导航
+                const menuItems = dropdown.querySelectorAll('a[role="menuitem"]');
+                menuItems.forEach((item, index) => {
+                    item.addEventListener('keydown', (e) => {
+                        if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            const next = menuItems[index + 1] || menuItems[0];
+                            next?.focus();
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            const prev = menuItems[index - 1] || menuItems[menuItems.length - 1];
+                            prev?.focus();
+                        } else if (e.key === 'Escape') {
+                            this.closeDropdown(accountElement);
+                            trigger.focus();
+                        }
+                    });
+                });
+            },
+
+            // 键盘导航
+            setupKeyboardNavigation: function () {
+                // ESC 关闭所有下拉菜单
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeAllDropdowns();
+                    }
+                });
+            },
+
+            // 点击外部关闭
+            setupClickOutside: function () {
+                document.addEventListener('click', (e) => {
+                    // 关闭账户下拉菜单
+                    if (!e.target.closest('.header-account') &&
+                        !e.target.closest('.account-dropdown')) {
+                        this.closeAllDropdowns();
+                    }
+                });
+            },
+
+            // 打开下拉菜单
+            openDropdown: function (element) {
+                this.closeAllDropdowns();
+                element.classList.add('active');
+                const trigger = element.querySelector('[aria-expanded]');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'true');
+                }
+                this.activeDropdown = element;
+            },
+
+            // 关闭下拉菜单
+            closeDropdown: function (element) {
+                element.classList.remove('active');
+                const trigger = element.querySelector('[aria-expanded]');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+                if (this.activeDropdown === element) {
+                    this.activeDropdown = null;
+                }
+            },
+
+            // 关闭所有下拉菜单
+            closeAllDropdowns: function () {
+                document.querySelectorAll('.header-account.active').forEach(el => {
+                    this.closeDropdown(el);
+                });
+            }
+        };
+
+        // 初始化
+        new HeaderManager();
+    })();
+
+    /**
+     * 侧边栏菜单管理（全部分类）
+     */
+    (function initCategoriesSidebar() {
+        function CategoriesSidebarManager() {
+            this.sidebar = null;
+            this.overlay = null;
+            this.hamburgerBtn = null;
+            this.closeBtn = null;
+            this.isOpen = false;
+            this.init();
+        }
+
+        CategoriesSidebarManager.prototype = {
+            init: function () {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => this.setup());
+                } else {
+                    this.setup();
+                }
+            },
+
+            setup: function () {
+                this.sidebar = document.getElementById('categories-sidebar');
+                this.overlay = document.getElementById('categories-sidebar-overlay');
+                this.hamburgerBtn = document.getElementById('hamburger-menu');
+                this.closeBtn = document.getElementById('categories-sidebar-close');
+
+                if (!this.sidebar || !this.overlay) return;
+
+                // 汉堡菜单按钮点击
+                if (this.hamburgerBtn) {
+                    this.hamburgerBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.toggle();
+                    });
+                }
+
+                // 关闭按钮
+                if (this.closeBtn) {
+                    this.closeBtn.addEventListener('click', () => this.close());
+                }
+
+                // 点击遮罩层关闭
+                this.overlay.addEventListener('click', () => this.close());
+
+                // ESC 键关闭
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isOpen) {
+                        this.close();
+                    }
+                });
+
+                // 侧边栏菜单项点击展开/收起
+                this.setupSidebarMenuItems();
+            },
+
+            setupSidebarMenuItems: function () {
+                const menuItems = this.sidebar?.querySelectorAll('.sidebar-category-item.has-children > .sidebar-category-link');
+                if (!menuItems) return;
+
+                menuItems.forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const parentItem = item.closest('.sidebar-category-item');
+                        if (!parentItem) return;
+
+                        // 如果有子菜单，切换展开/收起
+                        if (parentItem.classList.contains('has-children')) {
+                            e.preventDefault();
+                            const isActive = parentItem.classList.contains('active');
+
+                            // 关闭同级其他项
+                            const siblings = Array.from(parentItem.parentElement.children);
+                            siblings.forEach(sibling => {
+                                if (sibling !== parentItem) {
+                                    sibling.classList.remove('active');
+                                }
+                            });
+
+                            // 切换当前项
+                            if (isActive) {
+                                parentItem.classList.remove('active');
+                            } else {
+                                parentItem.classList.add('active');
+                            }
+                        }
+                    });
+                });
+            },
+
+            open: function () {
+                if (this.isOpen) return;
+
+                this.isOpen = true;
+                this.sidebar?.classList.add('active');
+                this.overlay?.classList.add('active');
+                this.sidebar?.setAttribute('aria-hidden', 'false');
+                this.overlay?.setAttribute('aria-hidden', 'false');
+
+                if (this.hamburgerBtn) {
+                    this.hamburgerBtn.setAttribute('aria-expanded', 'true');
+                    this.hamburgerBtn.classList.add('active');
+                }
+
+                // 防止背景滚动
+                document.body.style.overflow = 'hidden';
+
+                // 聚焦到侧边栏
+                setTimeout(() => {
+                    this.sidebar?.focus();
+                }, 100);
+            },
+
+            close: function () {
+                if (!this.isOpen) return;
+
+                this.isOpen = false;
+                this.sidebar?.classList.remove('active');
+                this.overlay?.classList.remove('active');
+                this.sidebar?.setAttribute('aria-hidden', 'true');
+                this.overlay?.setAttribute('aria-hidden', 'true');
+
+                if (this.hamburgerBtn) {
+                    this.hamburgerBtn.setAttribute('aria-expanded', 'false');
+                    this.hamburgerBtn.classList.remove('active');
+                }
+
+                // 恢复背景滚动
+                document.body.style.overflow = '';
+
+                // 聚焦回汉堡菜单按钮
+                this.hamburgerBtn?.focus();
+            },
+
+            toggle: function () {
+                if (this.isOpen) {
+                    this.close();
+                } else {
+                    this.open();
+                }
+            }
+        };
+
+        // 初始化
+        new CategoriesSidebarManager();
+    })();
+
+    // ========== 配置初始化（从head partial移除的内联JS逻辑） ==========
+    (function () {
+        // 初始化环境变量
+        if (window.__WelineThemeConfig && window.__WelineThemeConfig.env) {
+            const env = window.__WelineThemeConfig.env;
+            if (typeof env.WELINE_ENV !== 'undefined') {
+                window.WELINE_ENV = window.WELINE_ENV || env.WELINE_ENV;
+            }
+            if (typeof env.DEV !== 'undefined') {
+                window.DEV = window.DEV !== undefined ? window.DEV : env.DEV;
+            }
+            if (typeof env.PROD !== 'undefined') {
+                window.PROD = window.PROD !== undefined ? window.PROD : env.PROD;
+            }
+        }
+
+        // 主题初始化（在Weline对象初始化后执行）
+        function initTheme() {
+            if (window.Weline && window.Weline.Theme) {
+                // 初始化主题
+                window.Weline.Theme.init();
+
+                // 触发主题初始化完成事件
+                window.dispatchEvent(new CustomEvent('weline:theme:initialized', {
+                    detail: {
+                        theme: window.Weline.Theme.getCurrent(),
+                        config: (window.Weline && window.Weline.config) || null
+                    }
+                }));
+            } else {
+                // 如果Weline未加载，延迟重试
+                setTimeout(initTheme, 100);
+            }
+        }
+
+        // DOM加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTheme);
+        } else {
+            setTimeout(initTheme, 0);
+        }
+    })();
+
+    // ========== Mini购物车处理（在购物车模块declare后） ==========
+    (function () {
+        'use strict';
+
+        let miniCartInitialized = false;
+
+        function initMiniCart() {
+            if (miniCartInitialized) {
+                return;
+            }
+
+            const headerCart = document.querySelector('.header-cart');
+            if (!headerCart) {
+                return;
+            }
+
+            const miniCart = document.getElementById('mini-cart');
+            const miniCartOverlay = document.getElementById('mini-cart-overlay');
+            const miniCartClose = document.getElementById('mini-cart-close');
+            const cartLink = headerCart.querySelector('.cart-link');
+
+            if (!miniCart || !miniCartOverlay) {
+                return;
+            }
+
+            // 打开购物车
+            function openMiniCart() {
+                headerCart.classList.add('mini-cart-open');
+                miniCart.setAttribute('aria-hidden', 'false');
+                miniCartOverlay.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+
+                // 加载购物车内容
+                if (window.Weline && window.Weline.Api) {
+                    loadMiniCartContent();
+                }
+            }
+
+            // 关闭购物车
+            function closeMiniCart() {
+                headerCart.classList.remove('mini-cart-open');
+                miniCart.setAttribute('aria-hidden', 'true');
+                miniCartOverlay.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+
+            // 加载购物车内容
+            async function loadMiniCartContent() {
+                try {
+                    if (!window.Weline || !window.Weline.Api) {
+                        return;
+                    }
+
+                    // 这里可以调用API获取购物车内容
+                    // const cartData = await window.Weline.Api.request('/cart/mini', { method: 'GET' });
+                    // renderMiniCart(cartData);
+                } catch (error) {
+                    console.error('加载购物车内容失败:', error);
+                }
+            }
+
+            // 渲染购物车内容
+            function renderMiniCart(cartData) {
+                const miniCartItems = document.getElementById('mini-cart-items');
+                const miniCartEmpty = document.getElementById('mini-cart-empty');
+                const miniCartFooter = document.getElementById('mini-cart-footer');
+
+                if (!miniCartItems || !miniCartEmpty) {
+                    return;
+                }
+
+                if (cartData && cartData.items && cartData.items.length > 0) {
+                    miniCartEmpty.style.display = 'none';
+                    miniCartItems.style.display = 'block';
+                    if (miniCartFooter) {
+                        miniCartFooter.style.display = 'block';
+                    }
+                    // 渲染购物车商品列表
+                    // TODO: 实现商品列表渲染逻辑
+                } else {
+                    miniCartEmpty.style.display = 'flex';
+                    miniCartItems.style.display = 'none';
+                    if (miniCartFooter) {
+                        miniCartFooter.style.display = 'none';
+                    }
+                }
+            }
+
+            // 绑定事件
+            if (cartLink) {
+                cartLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openMiniCart();
+                });
+            }
+
+            if (miniCartClose) {
+                miniCartClose.addEventListener('click', closeMiniCart);
+            }
+
+            if (miniCartOverlay) {
+                miniCartOverlay.addEventListener('click', closeMiniCart);
+            }
+
+            // ESC键关闭
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && headerCart.classList.contains('mini-cart-open')) {
+                    closeMiniCart();
+                }
+            });
+
+            miniCartInitialized = true;
+        }
+
+        // 监听购物车模块declare事件
+        function waitForCartModule() {
+            if (window.Weline && window.Weline.declarer) {
+                // 检查购物车模块是否已声明
+                if (window.Weline.declarer.isDeclared('cart') || window.Weline.declarer.isDeclared('api')) {
+                    initMiniCart();
+                } else {
+                    // 监听declare事件
+                    const originalDeclare = window.Weline.declarer.declare;
+                    if (originalDeclare) {
+                        window.Weline.declarer.declare = function (...args) {
+                            const result = originalDeclare.apply(this, args);
+                            const moduleNames = Array.isArray(args[0]) ? args[0] : [args[0]];
+                            if (moduleNames.includes('cart') || moduleNames.includes('api')) {
+                                setTimeout(initMiniCart, 0);
+                            }
+                            return result;
+                        };
+                    }
+                }
+            } else {
+                // 如果Weline未加载，延迟重试
+                setTimeout(waitForCartModule, 100);
+            }
+        }
+
+        // 等待DOM和Weline加载
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitForCartModule);
+        } else {
+            setTimeout(waitForCartModule, 0);
+        }
+    })();
+
+    // ========== 声明搜索模块 ==========
+    // 在 head 中声明搜索模块，立即加载
+    if (window.Weline && window.Weline.declare) {
+        Weline.declare('search', true, 'Weline_Theme::js/search.js');
+    }
 
 })(window, document);

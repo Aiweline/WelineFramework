@@ -1579,7 +1579,7 @@ php bin/w server:stop
 - **MUST**: 迁移文件必须实现 `upgrade()` 和 `rollback()` 方法
 - **MUST**: 在迁移文件中必须使用 `$this->getTable('表名')` 获取表操作对象
 - **MUST**: 必须验证表名与模型定义一致（检查模型的 `$this->_table` 属性）
-- **MUST**: 添加字段前必须检查字段是否已存在（使用 `columnExists()` 方法）
+- **MUST**: 添加字段前必须检查字段是否已存在（使用 `hasFields()` 方法）
 - **MUST**: 删除字段前必须检查字段是否存在
 - **MUST**: 迁移完成后必须调用 `$table->alter()` 执行表结构变更
 - **MUST**: 迁移文件必须提供回滚功能（`rollback()` 方法），以便出现问题时能够恢复
@@ -1728,7 +1728,7 @@ class add_model_fields_20250111 extends Base
         $table = $this->getTable('ai');  // 或 'ai_model'，取决于实际表名
         
         // 添加 proxy_info 字段
-        if (!$table->columnExists('proxy_info')) {
+        if (!$table->hasFields('proxy_info')) {
             $table->addColumn(
                 'proxy_info',
                 'TEXT',
@@ -1740,7 +1740,7 @@ class add_model_fields_20250111 extends Base
         }
         
         // 添加 is_active 字段
-        if (!$table->columnExists('is_active')) {
+        if (!$table->hasFields('is_active')) {
             $table->addColumn(
                 'is_active',
                 'INTEGER',
@@ -1753,7 +1753,7 @@ class add_model_fields_20250111 extends Base
         }
         
         // 添加 is_default 字段
-        if (!$table->columnExists('is_default')) {
+        if (!$table->hasFields('is_default')) {
             $table->addColumn(
                 'is_default',
                 'INTEGER',
@@ -1777,15 +1777,15 @@ class add_model_fields_20250111 extends Base
         $table = $this->getTable('ai');
         
         // 删除添加的字段
-        if ($table->columnExists('proxy_info')) {
+        if ($table->hasFields('proxy_info')) {
             $table->dropColumn('proxy_info');
         }
         
-        if ($table->columnExists('is_active')) {
+        if ($table->hasFields('is_active')) {
             $table->dropColumn('is_active');
         }
         
-        if ($table->columnExists('is_default')) {
+        if ($table->hasFields('is_default')) {
             $table->dropColumn('is_default');
         }
         
@@ -1831,7 +1831,7 @@ public function save(): string
 ✓ 实现 upgrade() 和 rollback() 方法
 ✓ 使用 $this->getTable('表名') 获取表操作对象
 ✓ 表名与模型的 $_table 属性一致
-✓ 使用 columnExists() 检查字段是否存在
+✓ 使用 hasFields() 检查字段是否存在
 ✓ 使用 $table->addColumn() 添加字段
 ✓ 使用 $table->dropColumn() 删除字段（在rollback中）
 ✓ 调用 $table->alter() 执行变更

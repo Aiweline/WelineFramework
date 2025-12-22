@@ -246,7 +246,7 @@ class AiModel extends Model
                 ->addColumn(self::fields_MODEL_SOURCE, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, "default 'remote'", '模型来源: local(本地)或remote(远程第三方)')
                 ->addColumn(self::fields_CREATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '创建时间')
                 ->addColumn(self::fields_UPDATED_AT, \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '更新时间')
-                ->addIndex(self::fields_MODEL_CODE, '', 'UNIQUE', 'idx_model_code')
+                ->addIndex(\Weline\Framework\Database\Api\Db\Ddl\TableInterface::index_type_UNIQUE, 'idx_model_code', self::fields_MODEL_CODE)
                 ->create();
         }
     }

@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：首页 - 极简布局
- * 
+ *
  * 首页极简布局，无banner，适合简洁风格
  * 字段
  * @meta.name {default="首页极简布局",name="首页极简布局",description="首页极简布局，用于描述布局的名称"}
@@ -10,27 +10,38 @@
  * @param title {default="首页",name="页面标题",description="页面标题，用于设置页面标题"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ *
+ * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+ * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+ * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
  */
-$title = $this->getData('title') ?? __('首页');
-$content = $this->getData('content') ?? '';
-$class = $this->getData('class') ?? '';
-
-// 设置页面标题
-$this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
 </head>
 <body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     @template(Weline_Frontend::templates/public/header.phtml)
-    
-    <main class="homepage-main minimal <?= htmlspecialchars($class) ?>">
-        <?= $content ?>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
+    <main class="homepage-main minimal <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage_minimal">
+        <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
+        {{meta.content}}
+        <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
     </main>
-    
+    <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
     @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
 

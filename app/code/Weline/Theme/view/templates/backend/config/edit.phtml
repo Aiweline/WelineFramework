@@ -1,0 +1,973 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme[] $themes */
+/** @var \Weline\Theme\Model\WelineTheme|null $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $scopeOptions */
+/** @var string|null $previewUrlFrontend */
+/** @var string|null $previewUrlBackend */
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$area = $area ?: 'frontend';
+$scope = $scope ?: 'default';
+$identityId = null;
+if ($theme) {
+    if (is_object($theme) && method_exists($theme, 'getId')) {
+        $identityId = $theme->getId();
+    } elseif (is_array($theme)) {
+        $identityId = $theme['id'] ?? $theme['identity_id'] ?? null;
+    }
+}
+
+// 生成目录配置回调JSON（使用JSON_UNESCAPED_SLASHES和JSON_UNESCAPED_UNICODE确保格式正确）
+$dirConfigUrl = $this->getUrl('theme/backend/config/layout/dirConfigForm');
+$dirConfigCallback = json_encode([
+    'url' => $dirConfigUrl
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+// 生成布局激活回调URL（用于标记当前选中的布局节点）
+// 注意：方法名 getActiveLayouts 对应路由 activeLayouts（去掉 get 前缀，首字母小写）
+$layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayouts');
+?>
+<!DOCTYPE html>
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('主题配置编辑') ?> - <?= __('Weline Admin 管理面板') ?></title>
+    <style>
+        /* 预览容器样式 */
+        .preview-container {
+            transition: background-color 0.3s ease;
+            overflow: auto;
+        }
+        .preview-container-light { background: #f5f5f5; }
+        .preview-container-dark { background: #1a1a1a; }
+        
+        /* 预览容器滚动条样式 - 亮色主题 */
+        .preview-container-light::-webkit-scrollbar { width: 8px; height: 8px; }
+        .preview-container-light::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.2); border-radius: 4px; }
+        .preview-container-light::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.3); }
+        .preview-container-light::-webkit-scrollbar-track { background-color: rgba(0, 0, 0, 0.05); }
+        .preview-container-light { scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05); }
+        
+        /* 预览容器滚动条样式 - 暗色主题 */
+        .preview-container-dark::-webkit-scrollbar { width: 8px; height: 8px; }
+        .preview-container-dark::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+        .preview-container-dark::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.4); }
+        .preview-container-dark::-webkit-scrollbar-track { background-color: rgba(255, 255, 255, 0.1); }
+        .preview-container-dark { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1); }
+        
+        /* 设备框架样式 */
+        .device-frame-wrapper {
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .device-frame {
+            transition: all 0.3s ease;
+            position: relative;
+            transform-origin: top center;
+        }
+        .device-desktop { width: 100%; max-width: 100%; aspect-ratio: 16/9; }
+        .device-tablet { width: 768px; max-width: 100%; aspect-ratio: 4/3; }
+        .device-mobile { width: 375px; max-width: 100%; aspect-ratio: 9/16; }
+        
+        .device-screen {
+            width: 100%; height: 100%;
+            border: 8px solid #2c3e50;
+            border-radius: 8px;
+            background: #1a1a1a;
+            box-shadow: 0 0 0 2px #34495e, 0 10px 40px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .device-screen-inner {
+            width: 100%; 
+            height: 100%;
+            overflow: hidden;
+            border-radius: 2px;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .device-screen-inner iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+        
+        /* 配置区域滚动条 */
+        .config-panel {
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,0,0,0.2) rgba(0,0,0,0.05);
+        }
+        .config-panel::-webkit-scrollbar { width: 6px; height: 6px; }
+        .config-panel::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 3px; }
+        .config-panel::-webkit-scrollbar-track { background-color: rgba(0,0,0,0.05); }
+        
+        /* Tab 样式优化 */
+        .nav-tabs .nav-link { padding: 0.5rem 1rem; font-size: 0.875rem; }
+        .nav-pills .nav-link { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        
+        /* 加载动画 */
+        .iframe-loading {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255,255,255,0.95);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* 前后端Tab样式 */
+        .area-tabs .nav-link {
+            font-weight: 600;
+            border-radius: 0.375rem 0.375rem 0 0;
+        }
+        .area-tabs .nav-link.active {
+            background: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+        }
+        
+        /* 面板宽度过渡动画 */
+        .transition-width {
+            transition: flex 0.3s ease, max-width 0.3s ease, width 0.3s ease;
+        }
+        
+        /* 默认布局：配置区域 80%，预览区域 20% */
+        #configPanel {
+            flex: 0 0 80%;
+            max-width: 80%;
+        }
+        #previewPanel {
+            flex: 0 0 20%;
+            max-width: 20%;
+        }
+        
+        /* 预览展开状态：配置区域 35%，预览区域 65% */
+        .preview-expanded #configPanel {
+            flex: 0 0 35%;
+            max-width: 35%;
+        }
+        .preview-expanded #previewPanel {
+            flex: 0 0 65%;
+            max-width: 65%;
+        }
+        
+        
+        /* 展开/收缩按钮样式 */
+        #previewToggleBtn {
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 100;
+            width: 24px;
+            height: 48px;
+            padding: 0;
+            border-radius: 4px 0 0 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        }
+        #previewToggleBtn i {
+            transition: transform 0.3s ease;
+        }
+        .preview-expanded #previewToggleBtn i {
+            transform: rotate(180deg);
+        }
+        
+        /* 色盘卡片样式 */
+        .color-palette-wheel-card {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .color-palette-wheel-card:hover {
+            border-color: #0d6efd;
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+            transform: translateY(-4px);
+        }
+        .color-palette-wheel-card.selected {
+            border-color: #0d6efd;
+            border-width: 3px;
+            box-shadow: 0 4px 16px rgba(13, 110, 253, 0.25);
+            background: linear-gradient(135deg, rgba(13, 110, 253, 0.05) 0%, rgba(13, 110, 253, 0.02) 100%);
+        }
+        
+        /* 色盘容器 */
+        .color-wheel-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        /* 圆形色盘 */
+        .color-wheel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            padding: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .color-palette-wheel-card:hover .color-wheel {
+            transform: rotate(15deg) scale(1.05);
+        }
+        
+        /* 色盘内圈 */
+        .color-wheel-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 色盘中心 */
+        .color-wheel-center {
+            width: 40%;
+            height: 40%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* 选中标记 */
+        .color-wheel-check {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            background: #0d6efd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 8px rgba(13, 110, 253, 0.4);
+            animation: checkPulse 0.3s ease;
+            z-index: 2;
+        }
+        @keyframes checkPulse {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* 配置按钮 */
+        .color-wheel-config-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #495057;
+            font-size: 1rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 2;
+            opacity: 0;
+        }
+        .color-palette-wheel-card:hover .color-wheel-config-btn {
+            opacity: 1;
+        }
+        .color-wheel-config-btn:hover {
+            background: #0d6efd;
+            color: #fff;
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 3px 10px rgba(13, 110, 253, 0.4);
+        }
+        
+        /* 色系信息 */
+        .color-palette-info {
+            text-align: center;
+        }
+        .color-palette-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #212529;
+        }
+        .color-palette-desc {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+        
+        /* 颜色标签 */
+        .color-tags {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .color-tag {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('主题配置编辑') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="<?= $this->getUrl('theme/backend/index') ?>"><?= __('主题管理') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('主题配置') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主题选择栏 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card mb-0">
+                            <div class="card-body py-2">
+                                <form method="get" action="<?= $this->getUrl('theme/backend/config/layout/edit') ?>" id="theme-edit-form" class="row g-2 align-items-center">
+                                    <div class="col-auto">
+                                        <label class="form-label mb-0 small"><?= __('主题') ?>:</label>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select name="theme_id" class="form-select form-select-sm" id="theme-select" required>
+                                            <option value=""><?= __('请选择') ?></option>
+                                            <?php foreach ($themes as $t): ?>
+                                                <?php 
+                                                // 处理 $t 可能是对象或数组的情况
+                                                $tId = is_object($t) && method_exists($t, 'getId') ? $t->getId() : (is_array($t) ? ($t['id'] ?? $t['identity_id'] ?? '') : '');
+                                                $tName = is_object($t) && method_exists($t, 'getName') ? $t->getName() : (is_array($t) ? ($t['name'] ?? '') : '');
+                                                
+                                                // 处理 $theme 可能是对象或数组的情况
+                                                $themeId = null;
+                                                if ($theme) {
+                                                    if (is_object($theme) && method_exists($theme, 'getId')) {
+                                                        $themeId = $theme->getId();
+                                                    } elseif (is_array($theme)) {
+                                                        $themeId = $theme['id'] ?? $theme['identity_id'] ?? null;
+                                                    }
+                                                }
+                                                $isSelected = $themeId && $tId && $themeId == $tId;
+                                                ?>
+                                                <option value="<?= htmlspecialchars((string)$tId) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($tName) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-auto">
+                                        <label class="form-label mb-0 small"><?= __('Scope') ?>:</label>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="text" name="scope" class="form-control form-control-sm" 
+                                               value="<?= htmlspecialchars($scope) ?>" placeholder="default"
+                                               list="scope-datalist">
+                                        <datalist id="scope-datalist">
+                                            <?php 
+                                            // scopeOptions 格式: ['frontend' => [...], 'backend' => [...]]
+                                            $allScopes = [];
+                                            foreach ($scopeOptions as $areaScopes) {
+                                                if (is_array($areaScopes)) {
+                                                    $allScopes = array_merge($allScopes, $areaScopes);
+                                                }
+                                            }
+                                            foreach (array_unique($allScopes) as $opt): ?>
+                                                <option value="<?= htmlspecialchars((string)$opt) ?>">
+                                            <?php endforeach; ?>
+                                        </datalist>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="mdi mdi-refresh"></i> <?= __('加载') ?>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if ($theme): ?>
+                <!-- 主内容区域（默认预览展开） -->
+                <div class="row preview-expanded" id="mainContentRow">
+                    <!-- 左侧：配置区域 -->
+                    <div class="col-lg-5 transition-width" id="configPanel">
+                        <div class="card">
+                            <div class="card-header p-0">
+                                <!-- 前端/后端 Tab -->
+                                <ul class="nav nav-tabs area-tabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link <?= $area === 'frontend' ? 'active' : '' ?>" 
+                                                id="area-frontend-tab" data-bs-toggle="tab" data-bs-target="#area-frontend" 
+                                                type="button" role="tab" data-area="frontend">
+                                            <i class="mdi mdi-web"></i> <?= __('前端') ?>
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link <?= $area === 'backend' ? 'active' : '' ?>" 
+                                                id="area-backend-tab" data-bs-toggle="tab" data-bs-target="#area-backend" 
+                                                type="button" role="tab" data-area="backend">
+                                            <i class="mdi mdi-cog"></i> <?= __('后端') ?>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="tab-content">
+                                    <!-- 前端配置 -->
+                                    <div class="tab-pane fade <?= $area === 'frontend' ? 'show active' : '' ?>" 
+                                         id="area-frontend" role="tabpanel">
+                                        <!-- 前端配置子Tab -->
+                                        <ul class="nav nav-pills nav-sm mb-2" role="tablist">
+                                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#fe-layouts"><?= __('布局') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-colors"><?= __('色系') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-partials"><?= __('部件') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-variables"><?= __('变量') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-components"><?= __('组件') ?></button></li>
+                                        </ul>
+                                        <div class="tab-content config-panel">
+                                            <div class="tab-pane fade show active" id="fe-layouts">
+                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>" layout-active-callback="<?= htmlspecialchars($layoutActiveCallbackUrl) ?>"/>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-colors">
+                                                <?php 
+                                                // 调试：检查数据
+                                                if (defined('DEV') && DEV && isset($_GET['debug'])) {
+                                                    echo '<pre>frontendColorPalettes: ' . print_r($frontendColorPalettes ?? [], true) . '</pre>';
+                                                }
+                                                ?>
+                                                <?php if (!empty($frontendColorPalettes)): ?>
+                                                    <?php $this->assign('colorPalettes', $frontendColorPalettes); ?>
+                                                    <?php $this->assign('area', 'frontend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/color-palette.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用色盘') ?>
+                                                        <?php if (defined('DEV') && DEV): ?>
+                                                            <br><small>调试信息：主题ID=<?= $theme ? ($theme->getId() ?? 'N/A') : 'N/A' ?>, 路径=<?= $theme ? ($theme->getPath() ?? 'N/A') : 'N/A' ?></small>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-partials">
+                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>"/>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-variables">
+                                                <?php if (!empty($frontendVariables)): ?>
+                                                    <?php $this->assign('variables', $frontendVariables); ?>
+                                                    <?php $this->assign('area', 'frontend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/variable-file.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用变量文件') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-components">
+                                                <?php if (!empty($frontendComponents)): ?>
+                                                    <?php $this->assign('components', $frontendComponents); ?>
+                                                    <?php $this->assign('area', 'frontend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/component.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用组件') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 后端配置 -->
+                                    <div class="tab-pane fade <?= $area === 'backend' ? 'show active' : '' ?>" 
+                                         id="area-backend" role="tabpanel">
+                                        <!-- 后端配置子Tab -->
+                                        <ul class="nav nav-pills nav-sm mb-2" role="tablist">
+                                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#be-layouts"><?= __('布局') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-colors"><?= __('色系') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-partials"><?= __('部件') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-variables"><?= __('变量') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-components"><?= __('组件') ?></button></li>
+                                        </ul>
+                                        <div class="tab-content config-panel">
+                                            <div class="tab-pane fade show active" id="be-layouts">
+                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>" layout-active-callback="<?= htmlspecialchars($layoutActiveCallbackUrl) ?>"/>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-colors">
+                                                <?php if (!empty($backendColorPalettes)): ?>
+                                                    <?php $this->assign('colorPalettes', $backendColorPalettes); ?>
+                                                    <?php $this->assign('area', 'backend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/color-palette.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用色盘') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-partials">
+                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>"/>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-variables">
+                                                <?php if (!empty($backendVariables)): ?>
+                                                    <?php $this->assign('variables', $backendVariables); ?>
+                                                    <?php $this->assign('area', 'backend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/variable-file.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用变量文件') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-components">
+                                                <?php if (!empty($backendComponents)): ?>
+                                                    <?php $this->assign('components', $backendComponents); ?>
+                                                    <?php $this->assign('area', 'backend'); ?>
+                                                    <?php $this->assign('scope', $scope); ?>
+                                                    <?php $this->assign('theme', $theme); ?>
+                                                    <?= $this->fetch('Weline_Theme::templates/backend/config/cards/component.phtml') ?>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">
+                                                        <i class="mdi mdi-information-outline"></i>
+                                                        <?= __('暂无可用组件') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：预览区域（默认展开） -->
+                    <div class="col-lg-7 transition-width expanded" id="previewPanel" style="position: relative;">
+                        <!-- 展开/收缩按钮 -->
+                        <button type="button" class="btn btn-primary" id="previewToggleBtn" title="<?= __('展开/收缩预览') ?>">
+                            <i class="mdi mdi-chevron-left"></i>
+                        </button>
+                        <div class="card">
+                            <div class="card-header py-2">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <!-- 左侧：预览标题和自动登录 -->
+                                    <div class="d-flex align-items-center gap-2">
+                                        <h6 class="mb-0"><?= __('主题预览') ?></h6>
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" id="autoLoginSwitch" checked>
+                                            <label class="form-check-label small" for="autoLoginSwitch"><?= __('自动登录') ?></label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 右侧：控制按钮 -->
+                                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                                        <!-- 色系切换 -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-primary theme-color-btn active" data-theme-color="light" title="<?= __('亮色') ?>">
+                                                <i class="mdi mdi-weather-sunny"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary theme-color-btn" data-theme-color="dark" title="<?= __('暗色') ?>">
+                                                <i class="mdi mdi-weather-night"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- 设备切换 -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary device-btn active" data-device="desktop" title="<?= __('电脑') ?>">
+                                                <i class="mdi mdi-monitor"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary device-btn" data-device="tablet" title="<?= __('平板') ?>">
+                                                <i class="mdi mdi-tablet"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary device-btn" data-device="mobile" title="<?= __('手机') ?>">
+                                                <i class="mdi mdi-cellphone"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- 刷新和全屏 -->
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="refreshPreviewBtn" title="<?= __('刷新') ?>">
+                                            <i class="mdi mdi-refresh"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-info" id="fullscreenBtn" title="<?= __('全屏') ?>">
+                                            <i class="mdi mdi-fullscreen"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <!-- 预览容器 -->
+                                <div class="preview-container preview-container-light" id="previewContainer" 
+                                     data-theme-color="light" 
+                                     style="display: flex; justify-content: center; align-items: center; padding: 20px; min-height: 500px;">
+                                    
+                                    <div class="device-frame-wrapper" data-device="desktop" style="width: 100%;">
+                                        <div class="device-frame device-desktop">
+                                            <div class="device-screen">
+                                                <div class="device-screen-inner">
+                                                    <!-- 加载动画 -->
+                                                    <div class="iframe-loading" id="iframeLoading">
+                                                        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                                            <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                                        </div>
+                                                        <p class="text-muted mb-0"><?= __('正在加载预览...') ?></p>
+                                                    </div>
+                                                    <!-- 预览 iframe -->
+                                                    <iframe id="previewIframe" 
+                                                            src="<?= $area === 'frontend' ? ($previewUrlFrontend ?? '') : ($previewUrlBackend ?? '') ?>"
+                                                            style="width: 100%; height: 100%; border: none; background: white; display: block;"
+                                                            data-frontend-url="<?= htmlspecialchars($previewUrlFrontend ?? '') ?>"
+                                                            data-backend-url="<?= htmlspecialchars($previewUrlBackend ?? '') ?>"></iframe>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info">
+                    <i class="mdi mdi-information-outline me-2"></i>
+                    <?= __('请先选择一个主题以开始配置。') ?>
+                </div>
+                <?php endif; ?>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<script>
+(function() {
+    // 检测当前后端主题色
+    function getCurrentBackendTheme() {
+        const body = document.body;
+        // 检查多种可能的主题标识方式
+        if (body.getAttribute('data-theme-mode') === 'dark' || 
+            body.getAttribute('data-layout-mode') === 'dark' ||
+            body.getAttribute('data-sidebar') === 'dark' ||
+            body.getAttribute('data-topbar') === 'dark' ||
+            body.classList.contains('dark-mode') ||
+            body.classList.contains('theme-dark')) {
+            return 'dark';
+        }
+        // 检查html标签
+        const html = document.documentElement;
+        if (html.getAttribute('data-theme') === 'dark' ||
+            html.getAttribute('data-bs-theme') === 'dark') {
+            return 'dark';
+        }
+        // 默认返回亮色
+        return 'light';
+    }
+    
+    // 预览相关元素
+    const previewContainer = document.getElementById('previewContainer');
+    const previewIframe = document.getElementById('previewIframe');
+    const iframeLoading = document.getElementById('iframeLoading');
+    const frameWrapper = document.querySelector('.device-frame-wrapper');
+    const deviceFrame = document.querySelector('.device-frame');
+    const deviceScreenInner = document.querySelector('.device-screen-inner');
+    
+    // 初始化预览容器主题色（跟随后端主题）
+    const backendTheme = getCurrentBackendTheme();
+    if (previewContainer) {
+        previewContainer.classList.remove('preview-container-light', 'preview-container-dark');
+        previewContainer.classList.add('preview-container-' + backendTheme);
+        previewContainer.dataset.themeColor = backendTheme;
+        
+        // 更新色系切换按钮状态
+        document.querySelectorAll('.theme-color-btn').forEach(btn => {
+            if (btn.dataset.themeColor === backendTheme) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+    
+    // iframe 加载完成后隐藏loading
+    if (previewIframe) {
+        previewIframe.addEventListener('load', function() {
+            if (iframeLoading) iframeLoading.style.display = 'none';
+        });
+    }
+    
+    // 色系切换
+    document.querySelectorAll('.theme-color-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const color = this.dataset.themeColor;
+            document.querySelectorAll('.theme-color-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            if (previewContainer) {
+                previewContainer.classList.remove('preview-container-light', 'preview-container-dark');
+                previewContainer.classList.add('preview-container-' + color);
+                previewContainer.dataset.themeColor = color;
+            }
+        });
+    });
+    
+    // 设备切换
+    const deviceConfig = {
+        desktop: { width: 1280, height: 720 },
+        tablet:  { width: 820,  height: 1024 },
+        mobile:  { width: 414,  height: 896 }
+    };
+    
+    function applyDeviceScale(device) {
+        // 不再需要缩放，设备框通过 CSS 的 aspect-ratio 和固定高度自适应
+        // 设备框高度设置
+        const cfg = deviceConfig[device] || deviceConfig.desktop;
+        if (deviceFrame && device !== 'desktop') {
+            deviceFrame.style.height = cfg.height + 'px';
+        }
+    }
+    
+    applyDeviceScale('desktop');
+    window.addEventListener('resize', () => {
+        const active = document.querySelector('.device-btn.active')?.dataset.device || 'desktop';
+        applyDeviceScale(active);
+    });
+    
+    document.querySelectorAll('.device-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const device = this.dataset.device;
+            document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            if (frameWrapper) frameWrapper.dataset.device = device;
+            if (deviceFrame) {
+                deviceFrame.classList.remove('device-desktop', 'device-tablet', 'device-mobile');
+                deviceFrame.classList.add('device-' + device);
+            }
+            applyDeviceScale(device);
+        });
+    });
+    
+    // 预览面板展开/收缩切换
+    const mainContentRow = document.getElementById('mainContentRow');
+    const previewToggleBtn = document.getElementById('previewToggleBtn');
+    const previewPanelEl = document.getElementById('previewPanel');
+    
+    if (previewToggleBtn) {
+        previewToggleBtn.addEventListener('click', function() {
+            if (mainContentRow) {
+                mainContentRow.classList.toggle('preview-expanded');
+            }
+            if (previewPanelEl) {
+                previewPanelEl.classList.toggle('expanded');
+            }
+        });
+    }
+    
+    // 刷新预览
+    function refreshPreview() {
+        if (!previewIframe) return;
+        if (iframeLoading) iframeLoading.style.display = 'flex';
+        
+        const currentSrc = previewIframe.src;
+        if (currentSrc) {
+            const url = new URL(currentSrc, window.location.origin);
+            url.searchParams.set('_t', Date.now());
+            previewIframe.src = url.toString();
+        }
+    }
+    
+    document.getElementById('refreshPreviewBtn')?.addEventListener('click', refreshPreview);
+    
+    // 全屏预览
+    document.getElementById('fullscreenBtn')?.addEventListener('click', function() {
+        if (previewIframe) {
+            if (previewIframe.requestFullscreen) {
+                previewIframe.requestFullscreen();
+            } else if (previewIframe.webkitRequestFullscreen) {
+                previewIframe.webkitRequestFullscreen();
+            }
+        }
+    });
+    
+    // 前端/后端 Tab 切换时更新预览 URL
+    document.querySelectorAll('.area-tabs .nav-link').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function() {
+            const area = this.dataset.area;
+            if (previewIframe) {
+                if (iframeLoading) iframeLoading.style.display = 'flex';
+                const url = area === 'frontend' 
+                    ? previewIframe.dataset.frontendUrl 
+                    : previewIframe.dataset.backendUrl;
+                if (url) {
+                    const urlObj = new URL(url, window.location.origin);
+                    urlObj.searchParams.set('_t', Date.now());
+                    previewIframe.src = urlObj.toString();
+                }
+            }
+        });
+    });
+    
+    // 监听 Meta 保存事件
+    document.addEventListener('theme-meta-frontend-saved', function(e) {
+        console.log('[ThemeEdit] 前端配置已保存:', e.detail);
+        // 显示保存成功提示
+        showSaveToast('前端配置已保存', 'success');
+        // 如果当前显示的是前端预览，刷新
+        const activeAreaTab = document.querySelector('.area-tabs .nav-link.active');
+        if (activeAreaTab && activeAreaTab.dataset.area === 'frontend') {
+            refreshPreview();
+        }
+    });
+    
+    document.addEventListener('theme-meta-backend-saved', function(e) {
+        console.log('[ThemeEdit] 后端配置已保存:', e.detail);
+        // 显示保存成功提示
+        showSaveToast('后端配置已保存', 'success');
+        // 如果当前显示的是后端预览，刷新
+        const activeAreaTab = document.querySelector('.area-tabs .nav-link.active');
+        if (activeAreaTab && activeAreaTab.dataset.area === 'backend') {
+            refreshPreview();
+        }
+    });
+    
+    // 本地 toast 提示函数
+    function showSaveToast(message, type) {
+        let toastContainer = document.getElementById('theme-edit-toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'theme-edit-toast-container';
+            toastContainer.style.cssText = 'position: fixed; top: 70px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toast = document.createElement('div');
+        const bgColor = type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8';
+        const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+        
+        toast.style.cssText = 'background: ' + bgColor + '; color: #fff; padding: 12px 20px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 10px; font-size: 14px; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; pointer-events: auto;';
+        toast.innerHTML = '<span style="font-size: 16px;">' + icon + '</span><span>' + message + '</span>';
+        
+        toastContainer.appendChild(toast);
+        
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+        });
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+    
+    // 监听后端主题变化（通过 MutationObserver 监听 data-theme 等属性变化）
+    const themeObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && 
+                (mutation.attributeName === 'data-theme' || 
+                 mutation.attributeName === 'data-bs-theme' ||
+                 mutation.attributeName === 'data-theme-mode' ||
+                 mutation.attributeName === 'data-layout-mode' ||
+                 mutation.attributeName === 'class')) {
+                const newTheme = getCurrentBackendTheme();
+                if (previewContainer && previewContainer.dataset.themeColor !== newTheme) {
+                    previewContainer.classList.remove('preview-container-light', 'preview-container-dark');
+                    previewContainer.classList.add('preview-container-' + newTheme);
+                    previewContainer.dataset.themeColor = newTheme;
+                    
+                    // 更新色系切换按钮状态
+                    document.querySelectorAll('.theme-color-btn').forEach(btn => {
+                        if (btn.dataset.themeColor === newTheme) {
+                            btn.classList.add('active');
+                        } else {
+                            btn.classList.remove('active');
+                        }
+                    });
+                }
+            }
+        });
+    });
+    
+    // 观察 html 和 body 的属性变化
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme', 'data-bs-theme', 'class']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-theme-mode', 'data-layout-mode', 'data-sidebar', 'data-topbar', 'class']
+    });
+})();
+</script>
+
+</body>
+</html>

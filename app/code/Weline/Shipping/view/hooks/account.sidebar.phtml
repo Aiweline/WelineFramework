@@ -1,0 +1,25 @@
+<?php
+/**
+ * 个人中心侧边栏 Hook 实现
+ * 
+ * 在账户侧边栏中添加发货地址和收货地址管理链接
+ */
+/**@var \Weline\Framework\View\Template $this */
+
+// 获取当前用户（从模板数据中获取）
+$user = $this->getData('user');
+if (!$user) {
+    return;
+}
+
+$frontendUrl = $this->getUrl('');
+?>
+<a class="nav-link" href="<?= htmlspecialchars($frontendUrl) ?>shipping/address/index" data-section="shipping-address">
+    <i class="ri-truck-line"></i> 
+    <span><?= __('发货地址') ?></span>
+</a>
+<a class="nav-link" href="<?= htmlspecialchars($frontendUrl) ?>shipping/delivery/index" data-section="delivery-address">
+    <i class="ri-map-pin-line"></i> 
+    <span><?= __('收货地址') ?></span>
+</a>
+

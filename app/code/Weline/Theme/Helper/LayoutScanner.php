@@ -206,14 +206,15 @@ class LayoutScanner
      * @param string $area 区域
      * @return array meta信息数组
      */
-    private static function extractLayoutMeta(string $filePath, string $area): array
+    public static function extractLayoutMeta(string $filePath, string $area): array
     {
         $meta = [
             'name' => '',
             'description' => '',
             'icon' => '',
             'version' => '',
-            'author' => ''
+            'author' => '',
+            'params' => []
         ];
         
         if (!is_file($filePath)) {
@@ -222,7 +223,21 @@ class LayoutScanner
         
         $content = file_get_contents($filePath);
         
-        // 提取 @meta::info 格式的meta信息
+        // 提取 @meta.name 格式的meta信息（新格式，支持CSS和PHTML）
+        if (preg_match('/@meta\.name\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.name\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        }
+        
+        // 提取 @meta.description 格式的meta信息
+        if (preg_match('/@meta\.description\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['description'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.description\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['description'] = trim($matches[1]);
+        }
+        
+        // 提取 @meta::info 格式的meta信息（兼容旧格式）
         if (preg_match_all('/@meta::info\s+(\w+)\s+(.+)/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = trim($match[1]);
@@ -528,7 +543,8 @@ class LayoutScanner
     {
         $meta = [
             'name' => ucfirst($colorName),
-            'description' => ''
+            'description' => '',
+            'theme' => $colorName
         ];
         
         if (!is_file($filePath)) {
@@ -537,23 +553,74 @@ class LayoutScanner
         
         $content = file_get_contents($filePath);
         
-        // 提取注释中的描述
-        if (preg_match('/\/\*\*\s*\n\s*\*\s*(.+?)\s*\n/', $content, $matches)) {
+        // 提取 @meta.name 格式的meta信息
+        if (preg_match('/@meta\.name\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.name\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        }
+        
+        // 提取 @meta.description 格式的meta信息
+        if (preg_match('/@meta\.description\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['description'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.description\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
             $meta['description'] = trim($matches[1]);
         }
         
-        // 根据名称设置中文名称
-        $nameMap = [
-            'light' => '亮色主题',
-            'dark' => '暗色主题',
-            'amazon' => 'Amazon风格'
-        ];
+        // 提取 @meta.theme 格式的meta信息
+        if (preg_match('/@meta\.theme\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['theme'] = trim($matches[1]);
+        }
         
-        if (isset($nameMap[$colorName])) {
-            $meta['name'] = $nameMap[$colorName];
+        // 如果没有提取到名称，使用文件名（首字母大写）
+        if (empty($meta['name']) || $meta['name'] === ucfirst($colorName)) {
+            $meta['name'] = ucfirst($colorName);
+        }
+        
+        // 如果没有提取到描述，尝试从注释中提取
+        if (empty($meta['description'])) {
+            // 尝试提取注释块的第一行描述
+            if (preg_match('/\/\*\*\s*\n\s*\*\s*(.+?)\s*\n/', $content, $matches)) {
+                $meta['description'] = trim($matches[1]);
+            }
+        }
+
+        // 提取参数定义（使用 ComponentMetaParser，保证与 Meta 配置一致）
+        try {
+            $parsedMeta = ComponentMetaParser::parse($filePath);
+            if (!empty($parsedMeta['params'])) {
+                $meta['params'] = self::formatParsedParams($parsedMeta['params']);
+            } else {
+                $meta['params'] = [];
+            }
+        } catch (\Throwable $throwable) {
+            $meta['params'] = [];
         }
         
         return $meta;
+    }
+
+    /**
+     * 将 ComponentMetaParser 的参数定义转换为布局配置所需结构
+     */
+    private static function formatParsedParams(array $parsedParams): array
+    {
+        $params = [];
+        foreach ($parsedParams as $param) {
+            $key = $param['name'] ?? null;
+            if (!$key) {
+                continue;
+            }
+            $params[$key] = [
+                'name' => $param['name_label'] ?? $key,
+                'description' => $param['description'] ?? '',
+                'default' => $param['default'] ?? '',
+                'type' => $param['type'] ?? 'text',
+                'required' => (bool)($param['required'] ?? false),
+                'options' => $param['options'] ?? null,
+            ];
+        }
+        return $params;
     }
     
     /**
@@ -880,22 +947,40 @@ class LayoutScanner
         
         $content = file_get_contents($filePath);
         
-        // 提取注释中的描述
-        if (preg_match('/\/\*\*\s*\n\s*\*\s*(.+?)\s*\n/', $content, $matches)) {
+        // 提取 @meta.name 格式的meta信息
+        if (preg_match('/@meta\.name\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.name\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['name'] = trim($matches[1]);
+        }
+        
+        // 提取 @meta.description 格式的meta信息
+        if (preg_match('/@meta\.description\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['description'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.description\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
             $meta['description'] = trim($matches[1]);
         }
         
-        // 根据名称设置中文名称
-        $nameMap = [
-            'colors' => '颜色变量',
-            'spacing' => '间距变量',
-            'typography' => '字体变量',
-            'shadows' => '阴影变量',
-            'borders' => '边框变量'
-        ];
+        // 如果没有提取到名称，使用默认映射
+        if (empty($meta['name']) || $meta['name'] === ucfirst($varName)) {
+            $nameMap = [
+                'colors' => '颜色变量',
+                'spacing' => '间距变量',
+                'typography' => '字体变量',
+                'shadows' => '阴影变量',
+                'borders' => '边框变量'
+            ];
+            
+            if (isset($nameMap[$varName])) {
+                $meta['name'] = $nameMap[$varName];
+            }
+        }
         
-        if (isset($nameMap[$varName])) {
-            $meta['name'] = $nameMap[$varName];
+        // 如果没有提取到描述，尝试从注释中提取
+        if (empty($meta['description'])) {
+            if (preg_match('/\/\*\*\s*\n\s*\*\s*(.+?)\s*\n/', $content, $matches)) {
+                $meta['description'] = trim($matches[1]);
+            }
         }
         
         return $meta;

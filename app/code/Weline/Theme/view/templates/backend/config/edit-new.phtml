@@ -1,0 +1,358 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme[] $themes */
+/** @var \Weline\Theme\Model\WelineTheme|null $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $scopeOptions */
+/** @var string|null $previewUrlFrontend */
+/** @var string|null $previewUrlBackend */
+/** @var array $frontendLayoutOptions */
+/** @var array $backendLayoutOptions */
+/** @var array $frontendPartialsOptions */
+/** @var array $backendPartialsOptions */
+/** @var array $frontendColorOptions */
+/** @var array $backendColorOptions */
+/** @var array $frontendVariableOptions */
+/** @var array $backendVariableOptions */
+/** @var array $frontendComponentOptions */
+/** @var array $backendComponentOptions */
+/** @var array $frontendLayoutConfig */
+/** @var array $backendLayoutConfig */
+/** @var array $frontendPartialsConfig */
+/** @var array $backendPartialsConfig */
+/** @var string|null $frontendColorConfig */
+/** @var string|null $backendColorConfig */
+/** @var array $frontendVariablesConfig */
+/** @var array $backendVariablesConfig */
+/** @var string $saveSelectionUrl */
+/** @var string $getFileParamsUrl */
+/** @var string $saveFileParamsUrl */
+
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+$area = $area ?: 'frontend';
+$scope = $scope ?: 'default';
+$themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? null)) : null;
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('主题配置编辑') ?> - <?= __('Weline Admin 管理面板') ?></title>
+    <link rel="stylesheet" href="<?= $this->fetchTagSource('statics', 'Weline_Theme::templates/backend/config/edit-new.css') ?>">
+</head>
+
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+
+<div id="layout-wrapper">
+    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
+    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+
+                <!-- 页面标题 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('主题配置编辑') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="<?= $this->getUrl('theme/backend/index') ?>"><?= __('主题管理') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('主题配置') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主题选择栏 -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card mb-0">
+                            <div class="card-body py-2">
+                                <form method="get" action="<?= $this->getUrl('theme/backend/config/layout/edit') ?>" id="theme-edit-form" class="row g-2 align-items-center">
+                                    <div class="col-auto">
+                                        <label class="form-label mb-0 small"><?= __('主题') ?>:</label>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select name="theme_id" class="form-select form-select-sm" id="theme-select" required>
+                                            <option value=""><?= __('请选择') ?></option>
+                                            <?php foreach ($themes as $t): ?>
+                                                <?php 
+                                                $tId = is_object($t) && method_exists($t, 'getId') ? $t->getId() : (is_array($t) ? ($t['id'] ?? $t['identity_id'] ?? '') : '');
+                                                $tName = is_object($t) && method_exists($t, 'getName') ? $t->getName() : (is_array($t) ? ($t['name'] ?? '') : '');
+                                                $isSelected = $themeId && $tId && $themeId == $tId;
+                                                ?>
+                                                <option value="<?= htmlspecialchars((string)$tId) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($tName) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-auto">
+                                        <label class="form-label mb-0 small"><?= __('Scope') ?>:</label>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="text" name="scope" class="form-control form-control-sm" 
+                                               value="<?= htmlspecialchars($scope) ?>" placeholder="default"
+                                               list="scope-datalist">
+                                        <datalist id="scope-datalist">
+                                            <?php 
+                                            $allScopes = [];
+                                            foreach ($scopeOptions as $areaScopes) {
+                                                if (is_array($areaScopes)) {
+                                                    $allScopes = array_merge($allScopes, $areaScopes);
+                                                }
+                                            }
+                                            foreach (array_unique($allScopes) as $opt): ?>
+                                                <option value="<?= htmlspecialchars((string)$opt) ?>">
+                                            <?php endforeach; ?>
+                                        </datalist>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="mdi mdi-refresh"></i> <?= __('加载') ?>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if ($theme): ?>
+                <!-- 主内容区域（默认预览展开） -->
+                <div class="row preview-expanded" id="mainContentRow">
+                    <!-- 左侧：配置区域 -->
+                    <div class="col-lg-5 transition-width" id="configPanel">
+                        <div class="card">
+                            <div class="card-header p-0">
+                                <!-- 前端/后端 Tab -->
+                                <ul class="nav nav-tabs area-tabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link <?= $area === 'frontend' ? 'active' : '' ?>" 
+                                                id="area-frontend-tab" data-bs-toggle="tab" data-bs-target="#area-frontend" 
+                                                type="button" role="tab" data-area="frontend">
+                                            <i class="mdi mdi-web"></i> <?= __('前端') ?>
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link <?= $area === 'backend' ? 'active' : '' ?>" 
+                                                id="area-backend-tab" data-bs-toggle="tab" data-bs-target="#area-backend" 
+                                                type="button" role="tab" data-area="backend">
+                                            <i class="mdi mdi-cog"></i> <?= __('后端') ?>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="tab-content">
+                                    <!-- 前端配置 -->
+                                    <div class="tab-pane fade <?= $area === 'frontend' ? 'show active' : '' ?>" 
+                                         id="area-frontend" role="tabpanel">
+                                        <!-- 前端配置子Tab -->
+                                        <ul class="nav nav-pills nav-sm mb-2" role="tablist">
+                                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#fe-layouts"><?= __('布局') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-colors"><?= __('色系') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-partials"><?= __('部件') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-variables"><?= __('变量') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#fe-components"><?= __('组件') ?></button></li>
+                                        </ul>
+                                        <div class="tab-content config-panel" id="frontend-config-content">
+                                            <div class="tab-pane fade show active" id="fe-layouts">
+                                                <div id="frontend-layouts-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-colors">
+                                                <div id="frontend-colors-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-partials">
+                                                <div id="frontend-partials-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-variables">
+                                                <div id="frontend-variables-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="fe-components">
+                                                <div id="frontend-components-container"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 后端配置 -->
+                                    <div class="tab-pane fade <?= $area === 'backend' ? 'show active' : '' ?>" 
+                                         id="area-backend" role="tabpanel">
+                                        <!-- 后端配置子Tab -->
+                                        <ul class="nav nav-pills nav-sm mb-2" role="tablist">
+                                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#be-layouts"><?= __('布局') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-colors"><?= __('色系') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-partials"><?= __('部件') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-variables"><?= __('变量') ?></button></li>
+                                            <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#be-components"><?= __('组件') ?></button></li>
+                                        </ul>
+                                        <div class="tab-content config-panel" id="backend-config-content">
+                                            <div class="tab-pane fade show active" id="be-layouts">
+                                                <div id="backend-layouts-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-colors">
+                                                <div id="backend-colors-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-partials">
+                                                <div id="backend-partials-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-variables">
+                                                <div id="backend-variables-container"></div>
+                                            </div>
+                                            <div class="tab-pane fade" id="be-components">
+                                                <div id="backend-components-container"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：预览区域（默认展开） -->
+                    <div class="col-lg-7 transition-width expanded" id="previewPanel" style="position: relative;">
+                        <!-- 展开/收缩按钮 -->
+                        <button type="button" class="btn btn-primary" id="previewToggleBtn" title="<?= __('展开/收缩预览') ?>">
+                            <i class="mdi mdi-chevron-left"></i>
+                        </button>
+                        <div class="card">
+                            <div class="card-header py-2">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <!-- 左侧：预览标题和自动登录 -->
+                                    <div class="d-flex align-items-center gap-2">
+                                        <h6 class="mb-0"><?= __('主题预览') ?></h6>
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" id="autoLoginSwitch" checked>
+                                            <label class="form-check-label small" for="autoLoginSwitch"><?= __('自动登录') ?></label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 右侧：控制按钮 -->
+                                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                                        <!-- 色系切换 -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-primary theme-color-btn active" data-theme-color="light" title="<?= __('亮色') ?>">
+                                                <i class="mdi mdi-weather-sunny"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary theme-color-btn" data-theme-color="dark" title="<?= __('暗色') ?>">
+                                                <i class="mdi mdi-weather-night"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- 设备切换 -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary device-btn active" data-device="desktop" title="<?= __('电脑') ?>">
+                                                <i class="mdi mdi-monitor"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary device-btn" data-device="tablet" title="<?= __('平板') ?>">
+                                                <i class="mdi mdi-tablet"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary device-btn" data-device="mobile" title="<?= __('手机') ?>">
+                                                <i class="mdi mdi-cellphone"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- 刷新和全屏 -->
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="refreshPreviewBtn" title="<?= __('刷新') ?>">
+                                            <i class="mdi mdi-refresh"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-info" id="fullscreenBtn" title="<?= __('全屏') ?>">
+                                            <i class="mdi mdi-fullscreen"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <!-- 预览容器 -->
+                                <div class="preview-container preview-container-light" id="previewContainer" 
+                                     data-theme-color="light" 
+                                     style="display: flex; justify-content: center; align-items: center; padding: 20px; min-height: 500px;">
+                                    
+                                    <div class="device-frame-wrapper" data-device="desktop" style="width: 100%;">
+                                        <div class="device-frame device-desktop">
+                                            <div class="device-screen">
+                                                <div class="device-screen-inner">
+                                                    <!-- 加载动画 -->
+                                                    <div class="iframe-loading" id="iframeLoading">
+                                                        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                                            <span class="visually-hidden"><?= __('加载中...') ?></span>
+                                                        </div>
+                                                        <p class="text-muted mb-0"><?= __('正在加载预览...') ?></p>
+                                                    </div>
+                                                    <!-- 预览 iframe -->
+                                                    <iframe id="previewIframe" 
+                                                            src="<?= $area === 'frontend' ? ($previewUrlFrontend ?? '') : ($previewUrlBackend ?? '') ?>"
+                                                            style="width: 100%; height: 100%; border: none; background: white; display: block;"
+                                                            data-frontend-url="<?= htmlspecialchars($previewUrlFrontend ?? '') ?>"
+                                                            data-backend-url="<?= htmlspecialchars($previewUrlBackend ?? '') ?>"></iframe>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info">
+                    <i class="mdi mdi-information-outline me-2"></i>
+                    <?= __('请先选择一个主题以开始配置。') ?>
+                </div>
+                <?php endif; ?>
+
+            </div>
+        </div>
+
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+@template(Weline_Admin::common/right-sidebar.phtml)
+
+<!-- 参数配置模态框 -->
+@template(Weline_Theme::templates/backend/config/params-modal.phtml)
+
+<script>
+// 配置数据
+window.themeEditConfig = {
+    themeId: <?= json_encode($themeId) ?>,
+    area: <?= json_encode($area) ?>,
+    scope: <?= json_encode($scope) ?>,
+    saveSelectionUrl: <?= json_encode($saveSelectionUrl) ?>,
+    getFileParamsUrl: <?= json_encode($getFileParamsUrl) ?>,
+    saveFileParamsUrl: <?= json_encode($saveFileParamsUrl) ?>,
+    frontendLayoutOptions: <?= json_encode($frontendLayoutOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendLayoutOptions: <?= json_encode($backendLayoutOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendPartialsOptions: <?= json_encode($frontendPartialsOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendPartialsOptions: <?= json_encode($backendPartialsOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendColorOptions: <?= json_encode($frontendColorOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendColorOptions: <?= json_encode($backendColorOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendVariableOptions: <?= json_encode($frontendVariableOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendVariableOptions: <?= json_encode($backendVariableOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendComponentOptions: <?= json_encode($frontendComponentOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendComponentOptions: <?= json_encode($backendComponentOptions ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendLayoutConfig: <?= json_encode($frontendLayoutConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendLayoutConfig: <?= json_encode($backendLayoutConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendPartialsConfig: <?= json_encode($frontendPartialsConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendPartialsConfig: <?= json_encode($backendPartialsConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    frontendColorConfig: <?= json_encode($frontendColorConfig ?? null) ?>,
+    backendColorConfig: <?= json_encode($backendColorConfig ?? null) ?>,
+    frontendVariablesConfig: <?= json_encode($frontendVariablesConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    backendVariablesConfig: <?= json_encode($backendVariablesConfig ?? [], JSON_UNESCAPED_UNICODE) ?>,
+    previewUrlFrontend: <?= json_encode($previewUrlFrontend ?? '') ?>,
+    previewUrlBackend: <?= json_encode($previewUrlBackend ?? '') ?>
+};
+</script>
+<script src="<?= $this->fetchTagSource('statics', 'Weline_Theme::templates/backend/config/edit-new.js') ?>"></script>
+
+</body>
+</html>
+

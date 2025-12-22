@@ -383,6 +383,9 @@ class I18n
             /**@var $i18n_file File */
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
+                    // 自动注册 locale（确保 is_install = 1）
+                    $this->ensureLocaleInstalled($local);
+                    
                     $handle = @fopen($i18n_file, 'r');
                     if ($handle === false) {
                         // 输出表格头（仅第一次）
@@ -929,6 +932,144 @@ class I18n
         $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code', $target_local);
         $this->i18nCache->set($cache_key,$LocalsModel);
         return $LocalsModel;
+    }
+
+    /**
+     * 确保 locale 已安装并激活
+     * 在收集语言包时自动注册并激活对应的 locale 和国家
+     *
+     * @param string $localeCode locale 代码，如 zh_Hans_CN
+     * @return void
+     */
+    public function ensureLocaleInstalled(string $localeCode): void
+    {
+        static $installedLocales = [];
+        
+        // 已处理过的 locale 跳过
+        if (isset($installedLocales[$localeCode])) {
+            return;
+        }
+        $installedLocales[$localeCode] = true;
+
+        try {
+            // 从 locale 代码提取国家代码
+            // 格式可能是 zh_CN, zh_Hans_CN, en_US 等
+            $parts = explode('_', $localeCode);
+            $countryCode = '';
+            if (count($parts) >= 2) {
+                // 最后一个部分通常是国家代码（如果是2个大写字母）
+                $lastPart = end($parts);
+                if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
+                    $countryCode = $lastPart;
+                }
+            }
+
+            // 确保国家已安装并激活
+            if ($countryCode && Countries::exists($countryCode)) {
+                /** @var \Weline\I18n\Model\Countries $countriesModel */
+                $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
+                $country = $countriesModel->reset()
+                    ->where(\Weline\I18n\Model\Countries::fields_CODE, $countryCode)
+                    ->find()
+                    ->fetch();
+                
+                if (!$country->getId()) {
+                    // 国家不存在，创建并激活
+                    // 尝试获取国旗
+                    $flag = '';
+                    try {
+                        $flag = (string)$this->getCountryFlag($countryCode);
+                    } catch (\Exception $e) {
+                        // 忽略国旗获取失败
+                    }
+                    
+                    $countriesModel->reset()
+                        ->setData([
+                            \Weline\I18n\Model\Countries::fields_CODE => $countryCode,
+                            \Weline\I18n\Model\Countries::fields_FLAG => $flag,
+                            \Weline\I18n\Model\Countries::fields_IS_INSTALL => 1,
+                            \Weline\I18n\Model\Countries::fields_IS_ACTIVE => 1,
+                        ])
+                        ->save();
+                    if (php_sapi_name() === 'cli') {
+                        echo "  [+] 自动注册并激活国家: {$countryCode}\n";
+                    }
+                } else {
+                    // 国家存在，检查是否需要更新安装/激活状态
+                    $needUpdate = false;
+                    if (!$country->getData(\Weline\I18n\Model\Countries::fields_IS_INSTALL)) {
+                        $country->setData(\Weline\I18n\Model\Countries::fields_IS_INSTALL, 1);
+                        $needUpdate = true;
+                    }
+                    if (!$country->getData(\Weline\I18n\Model\Countries::fields_IS_ACTIVE)) {
+                        $country->setData(\Weline\I18n\Model\Countries::fields_IS_ACTIVE, 1);
+                        $needUpdate = true;
+                    }
+                    if ($needUpdate) {
+                        $country->save();
+                        if (php_sapi_name() === 'cli') {
+                            echo "  [*] 启用并激活国家: {$countryCode}\n";
+                        }
+                    }
+                }
+            }
+
+            // 确保 locale 已安装并激活
+            /** @var Locale $localeModel */
+            $localeModel = ObjectManager::getInstance(Locale::class);
+            $locale = $localeModel->reset()
+                ->where(Locale::fields_CODE, $localeCode)
+                ->find()
+                ->fetch();
+            
+            if (!$locale->getId()) {
+                // locale 不存在，创建并激活
+                // 尝试获取国旗
+                $flag = '';
+                if ($countryCode) {
+                    try {
+                        $flag = (string)$this->getCountryFlag($countryCode);
+                    } catch (\Exception $e) {
+                        // 忽略国旗获取失败
+                    }
+                }
+                
+                $localeModel->reset()
+                    ->setData([
+                        Locale::fields_CODE => $localeCode,
+                        Locale::fields_COUNTRY_CODE => $countryCode,
+                        Locale::fields_FLAG => $flag,
+                        Locale::fields_IS_ACTIVE => 1,
+                        Locale::fields_IS_INSTALL => 1,
+                    ])
+                    ->save();
+                if (php_sapi_name() === 'cli') {
+                    echo "  [+] 自动注册并激活语言: {$localeCode}\n";
+                }
+            } else {
+                // locale 存在，检查是否需要更新安装/激活状态
+                $needUpdate = false;
+                if (!$locale->getData(Locale::fields_IS_INSTALL)) {
+                    $locale->setData(Locale::fields_IS_INSTALL, 1);
+                    $needUpdate = true;
+                }
+                if (!$locale->getData(Locale::fields_IS_ACTIVE)) {
+                    $locale->setData(Locale::fields_IS_ACTIVE, 1);
+                    $needUpdate = true;
+                }
+                if ($needUpdate) {
+                    $locale->save();
+                    if (php_sapi_name() === 'cli') {
+                        echo "  [*] 启用并激活语言: {$localeCode}\n";
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // 忽略错误，不影响语言包收集
+            if (php_sapi_name() === 'cli') {
+                echo "  [!] 注册语言 {$localeCode} 失败: " . $e->getMessage() . "\n";
+            }
+        }
     }
 }
 

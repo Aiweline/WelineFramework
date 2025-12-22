@@ -22,6 +22,63 @@ class ThemeConfigManager
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
 
+        // 对于 layouts 类型，使用 ThemeData::getLayoutConfig() 读取所有布局配置
+        if ($type === 'layouts') {
+            $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
+            // 调试：记录读取到的布局配置
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->debug('ThemeConfigManager::getConfig layouts', [
+                        'area' => $area,
+                        'scope' => $scope,
+                        'layoutConfig' => $layoutConfig
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // 忽略日志错误
+            }
+            return $layoutConfig;
+        }
+        
+        // 对于 partials 类型，使用 ThemeData::getPartialsConfig() 读取所有部件配置
+        if ($type === 'partials') {
+            $partialsConfig = ThemeData::getPartialsConfig($area, $scope);
+            // 调试：记录读取到的部件配置
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->debug('ThemeConfigManager::getConfig partials', [
+                        'area' => $area,
+                        'scope' => $scope,
+                        'partialsConfig' => $partialsConfig
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // 忽略日志错误
+            }
+            return $partialsConfig;
+        }
+        
+        // 对于 colors 类型，使用 ThemeData::getColorConfig() 读取色系配置
+        if ($type === 'colors') {
+            $colorConfig = ThemeData::getColorConfig($area, $scope);
+            // 调试：记录读取到的色系配置
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->debug('ThemeConfigManager::getConfig colors', [
+                        'area' => $area,
+                        'scope' => $scope,
+                        'colorConfig' => $colorConfig
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                // 忽略日志错误
+            }
+            return $colorConfig;
+        }
+
         // 使用 ThemeData 读取配置
         // 格式：theme.{area}.{type}.value
         $identify = "{$type}.value";

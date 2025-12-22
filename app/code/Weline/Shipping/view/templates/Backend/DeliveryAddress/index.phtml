@@ -1,0 +1,225 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+use Weline\Shipping\Model\DeliveryAddress;
+
+$addresses = $this->getData('addresses') ?? [];
+$total = $this->getData('total') ?? 0;
+$page = $this->getData('page') ?? 1;
+$limit = $this->getData('limit') ?? 20;
+$totalPages = $this->getData('total_pages') ?? 1;
+$keyword = $this->getData('keyword') ?? '';
+$customerIdFilter = $this->getData('customer_id_filter') ?? 0;
+$customers = $this->getData('customers') ?? [];
+
+$backendBase = $this->getBackendUrl('shipping/backend/deliveryaddress');
+$createUrl = $this->getBackendUrl('shipping/backend/deliveryaddress/edit');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('运送地址管理') ?></title>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('运送地址管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item active"><?= __('运送地址管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="card-title mb-0"><?= __('运送地址列表') ?></h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <a href="<?= $createUrl ?>" class="btn btn-primary">
+                                            <i class="mdi mdi-plus"></i> <?= __('新增地址') ?>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <form method="get" action="<?= $backendBase ?>" class="mb-3">
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <select name="customer_id" class="form-select">
+                                                <option value=""><?= __('全部客户') ?></option>
+                                                <?php foreach ($customers as $customer): ?>
+                                                    <option value="<?= $customer['customer_id'] ?? $customer['id'] ?? '' ?>" 
+                                                            <?= $customerIdFilter == ($customer['customer_id'] ?? $customer['id'] ?? 0) ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars(($customer['name'] ?? $customer['username'] ?? '') . ($customer['email'] ? ' (' . $customer['email'] . ')' : '')) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <input type="text" name="keyword" class="form-control" 
+                                                   placeholder="<?= __('搜索地址名称、联系人、电话或街道') ?>" 
+                                                   value="<?= htmlspecialchars($keyword) ?>">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="submit" class="btn btn-primary w-100">
+                                                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
+                                            </button>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <a href="<?= $backendBase ?>" class="btn btn-secondary w-100">
+                                                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th><?= __('ID') ?></th>
+                                                <th><?= __('客户ID') ?></th>
+                                                <th><?= __('地址名称') ?></th>
+                                                <th><?= __('联系人') ?></th>
+                                                <th><?= __('联系电话') ?></th>
+                                                <th><?= __('地址') ?></th>
+                                                <th><?= __('默认') ?></th>
+                                                <th><?= __('状态') ?></th>
+                                                <th><?= __('创建时间') ?></th>
+                                                <th><?= __('操作') ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($addresses)): ?>
+                                                <tr>
+                                                    <td colspan="10" class="text-center"><?= __('暂无数据') ?></td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($addresses as $address): ?>
+                                                    <tr>
+                                                        <td><?= $address[DeliveryAddress::fields_ID] ?? '' ?></td>
+                                                        <td><?= $address[DeliveryAddress::fields_CUSTOMER_ID] ?? '' ?></td>
+                                                        <td><?= htmlspecialchars($address[DeliveryAddress::fields_NAME] ?? '') ?></td>
+                                                        <td><?= htmlspecialchars($address[DeliveryAddress::fields_CONTACT_NAME] ?? '') ?></td>
+                                                        <td><?= htmlspecialchars($address[DeliveryAddress::fields_CONTACT_PHONE] ?? '') ?></td>
+                                                        <td>
+                                                            <?= htmlspecialchars(
+                                                                ($address[DeliveryAddress::fields_COUNTRY] ?? '') .
+                                                                ($address[DeliveryAddress::fields_PROVINCE] ?? '') .
+                                                                ($address[DeliveryAddress::fields_CITY] ?? '') .
+                                                                ($address[DeliveryAddress::fields_DISTRICT] ?? '') .
+                                                                ($address[DeliveryAddress::fields_STREET] ?? '')
+                                                            ) ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php if (!empty($address[DeliveryAddress::fields_IS_DEFAULT])): ?>
+                                                                <span class="badge bg-success"><?= __('是') ?></span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-secondary"><?= __('否') ?></span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php if (!empty($address[DeliveryAddress::fields_IS_ENABLED])): ?>
+                                                                <span class="badge bg-success"><?= __('启用') ?></span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-danger"><?= __('禁用') ?></span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td><?= $address[DeliveryAddress::fields_CREATED_AT] ?? '' ?></td>
+                                                        <td>
+                                                            <div class="btn-group btn-group-sm">
+                                                                <a href="<?= $this->getBackendUrl('shipping/backend/deliveryaddress/edit', ['id' => $address[DeliveryAddress::fields_ID]]) ?>" 
+                                                                   class="btn btn-primary btn-sm">
+                                                                    <i class="mdi mdi-pencil"></i>
+                                                                </a>
+                                                                <?php if (empty($address[DeliveryAddress::fields_IS_DEFAULT])): ?>
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/deliveryaddress/setDefault', ['id' => $address[DeliveryAddress::fields_ID]]) ?>" 
+                                                                       class="btn btn-info btn-sm" 
+                                                                       onclick="return confirm('<?= __('确定要设置为默认地址吗？') ?>')">
+                                                                        <i class="mdi mdi-star"></i>
+                                                                    </a>
+                                                                <?php endif; ?>
+                                                                <?php if (!empty($address[DeliveryAddress::fields_IS_ENABLED])): ?>
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/deliveryaddress/disable', ['id' => $address[DeliveryAddress::fields_ID]]) ?>" 
+                                                                       class="btn btn-warning btn-sm">
+                                                                        <i class="mdi mdi-cancel"></i>
+                                                                    </a>
+                                                                <?php else: ?>
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/deliveryaddress/enable', ['id' => $address[DeliveryAddress::fields_ID]]) ?>" 
+                                                                       class="btn btn-success btn-sm">
+                                                                        <i class="mdi mdi-check-circle"></i>
+                                                                    </a>
+                                                                <?php endif; ?>
+                                                                <a href="<?= $this->getBackendUrl('shipping/backend/deliveryaddress/delete', ['id' => $address[DeliveryAddress::fields_ID]]) ?>" 
+                                                                   class="btn btn-danger btn-sm" 
+                                                                   onclick="return confirm('<?= __('确定要删除这个地址吗？') ?>')">
+                                                                    <i class="mdi mdi-delete"></i>
+                                                                </a>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <?php if ($totalPages > 1): ?>
+                                    <nav aria-label="Page navigation">
+                                        <ul class="pagination justify-content-center">
+                                            <?php if ($page > 1): ?>
+                                                <li class="page-item">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page - 1 ?>&limit=<?= $limit ?>&keyword=<?= urlencode($keyword) ?>&customer_id=<?= $customerIdFilter ?>">
+                                                        <?= __('上一页') ?>
+                                                    </a>
+                                                </li>
+                                            <?php endif; ?>
+                                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $i ?>&limit=<?= $limit ?>&keyword=<?= urlencode($keyword) ?>&customer_id=<?= $customerIdFilter ?>">
+                                                        <?= $i ?>
+                                                    </a>
+                                                </li>
+                                            <?php endfor; ?>
+                                            <?php if ($page < $totalPages): ?>
+                                                <li class="page-item">
+                                                    <a class="page-link" href="<?= $backendBase ?>?page=<?= $page + 1 ?>&limit=<?= $limit ?>&keyword=<?= urlencode($keyword) ?>&customer_id=<?= $customerIdFilter ?>">
+                                                        <?= __('下一页') ?>
+                                                    </a>
+                                                </li>
+                                            <?php endif; ?>
+                                        </ul>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+</body>
+</html>
+

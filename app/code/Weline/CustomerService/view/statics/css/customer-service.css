@@ -1,0 +1,390 @@
+/**
+ * 客服服务模块样式文件
+ */
+
+/* 客服组件容器 */
+.customer-service-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 悬浮聊天按钮 */
+.cs-chat-button {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    position: relative;
+    color: white;
+    font-size: 24px;
+}
+
+.cs-chat-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.cs-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ff4444;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* 聊天窗口 */
+.cs-chat-window {
+    position: absolute;
+    bottom: 80px;
+    right: 0;
+    width: 380px;
+    height: 600px;
+    max-height: 80vh;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 聊天窗口头部 */
+.cs-chat-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cs-chat-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.cs-chat-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.cs-btn-icon {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.cs-btn-icon:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* 聊天消息区域 */
+.cs-chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f5f5f5;
+}
+
+.cs-welcome-message {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
+.cs-message {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.cs-message.customer {
+    align-items: flex-end;
+}
+
+.cs-message.agent {
+    align-items: flex-start;
+}
+
+.cs-message-bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.cs-message.customer .cs-message-bubble {
+    background: #667eea;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.cs-message.agent .cs-message-bubble {
+    background: white;
+    color: #333;
+    border: 1px solid #e0e0e0;
+    border-bottom-left-radius: 4px;
+}
+
+.cs-message-time {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+    padding: 0 4px;
+}
+
+/* 聊天输入区域 */
+.cs-chat-footer {
+    border-top: 1px solid #e0e0e0;
+    padding: 15px;
+    background: white;
+}
+
+.cs-language-selector {
+    margin-bottom: 10px;
+}
+
+.cs-language-selector select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.cs-input-area {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.cs-message-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    resize: none;
+    font-family: inherit;
+}
+
+.cs-message-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.cs-send-button {
+    width: 40px;
+    height: 40px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.cs-send-button:hover {
+    background: #5568d3;
+}
+
+.cs-send-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* 模态框 */
+.cs-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.cs-modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cs-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cs-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.cs-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.cs-modal-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.cs-modal-body {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.cs-form-group {
+    margin-bottom: 15px;
+}
+
+.cs-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #333;
+}
+
+.cs-form-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.cs-form-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.cs-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.cs-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cs-btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.cs-btn-primary:hover {
+    background: #5568d3;
+}
+
+.cs-btn-secondary {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.cs-btn-secondary:hover {
+    background: #e0e0e0;
+}
+
+/* 加载状态 */
+.cs-loading {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+}
+
+.cs-loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    .customer-service-widget {
+        bottom: 10px;
+        right: 10px;
+    }
+    
+    .cs-chat-window {
+        width: calc(100vw - 20px);
+        height: calc(100vh - 80px);
+        max-height: calc(100vh - 80px);
+        bottom: 70px;
+        right: 10px;
+        border-radius: 12px 12px 0 0;
+    }
+    
+    .cs-chat-button {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+}
+

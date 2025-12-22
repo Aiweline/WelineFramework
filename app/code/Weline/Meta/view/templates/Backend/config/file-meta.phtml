@@ -1,0 +1,1206 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var array $metaContext */
+
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$metaContext = $this->getData('metaContext') ?? [];
+$namespaceList = $this->getData('namespaceList') ?? [];
+
+$currentNamespace = $metaContext['namespace'] ?? '';
+$currentArea = $metaContext['area'] ?? '';
+$currentScope = $metaContext['scope'] ?? 'default';
+$currentLocale = $metaContext['locale'] ?? (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
+$currentType = $metaContext['type'] ?? '';
+$currentCategory = $metaContext['category'] ?? '';
+$currentIdentityId = $metaContext['identity_id'] ?? '';
+
+// 从控制器传入的唯一化选项（如果没有则使用空数组）
+$scopeOptions = $this->getData('scopeOptions') ?? [];
+$localeOptions = $this->getData('localeOptions') ?? [];
+$typeOptions = $this->getData('typeOptions') ?? [];
+$categoryOptions = $this->getData('categoryOptions') ?? [];
+
+// 如果没有当前命名空间，默认选择第一个
+if (empty($currentNamespace) && !empty($namespaceList)) {
+    $currentNamespace = $namespaceList[0];
+}
+?>
+
+<!DOCTYPE html>
+<html lang="zh-CN" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<head>
+    @template(Weline_Admin::common/head.phtml)
+    <title><?= __('元数据配置管理') ?></title>
+    <style>
+        .meta-tree ul {
+            list-style: none;
+            padding-left: 1rem;
+            margin-bottom: 0;
+        }
+        .meta-tree li {
+            margin: 0.2rem 0;
+        }
+        .meta-tree .tree-label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.3rem;
+            border-radius: 4px;
+        }
+        .meta-tree .tree-label:hover {
+            background: rgba(13,110,253,0.08);
+        }
+        .meta-tree .tree-label.active {
+            background: rgba(13,110,253,0.15);
+            color: #0d6efd;
+            font-weight: 600;
+        }
+        .meta-tree .tree-node-children {
+            margin-left: 1rem;
+        }
+        .meta-tree .collapsed {
+            display: none;
+        }
+        .meta-param-list .list-group-item {
+            border-left: none;
+            border-right: none;
+        }
+        .meta-param-list .list-group-item:first-child {
+            border-top: none;
+        }
+        .meta-param-list .list-group-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body <?= $themeConfig->getLayouts() ?? ''; ?>>
+@template(Weline_Admin::common/page/loading.phtml)
+<div id="layout-wrapper">
+    <w:block class="Weline\Admin\Block\Backend\Page\Topbar"/>
+    <w:block class="Weline\Admin\Block\Backend\Page\Topnav"/>
+    @template(Weline_Admin::common/left-sidebar.phtml)
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                            <h4 class="mb-sm-0"><?= __('元数据配置管理') ?></h4>
+                            <div class="page-title-right">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item">
+                                        <a href="@backend-url('meta/backend/meta')"><?= __('元数据管理') ?></a>
+                                    </li>
+                                    <li class="breadcrumb-item active"><?= __('配置管理') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <template>Weline_Component::message.phtml</template>
+                    </div>
+                </div>
+
+                <div class="meta-config-page" id="meta-config-app"
+     data-tree-url="<?= $this->getUrl('meta/backend/config/file/tree') ?>"
+     data-meta-url="<?= $this->getUrl('meta/backend/config/file/fileMeta') ?>"
+     data-save-url="<?= $this->getUrl('meta/backend/config/file/save') ?>"
+     data-translation-url="<?= $this->getUrl('meta/backend/config/file/paramTranslation') ?>"
+     data-translation-save-url="<?= $this->getUrl('meta/backend/config/file/paramTranslationSave') ?>"
+     data-locales-url="<?= $this->getUrl('meta/backend/config/file/getLocales') ?>"
+     data-meta-name-desc-translation-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslation') ?>"
+     data-meta-name-desc-translation-save-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslationSave') ?>">
+                    <!-- 筛选条件置顶一行 -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><?= __('筛选条件') ?></h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="meta-filter-form" class="meta-filter-form">
+                                        <div class="row g-3">
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('命名空间') ?></label>
+                                                <select class="form-select form-select-sm" name="namespace" id="namespace-select">
+                                                    <option value=""><?= __('请选择') ?></option>
+                                                    <?php foreach ($namespaceList as $ns): ?>
+                                                        <option value="<?= htmlspecialchars($ns) ?>" <?= $currentNamespace === $ns ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($ns) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('区域') ?></label>
+                                                <select class="form-select form-select-sm" name="area">
+                                                    <option value=""><?= __('全部') ?></option>
+                                                    <option value="frontend" <?= $currentArea === 'frontend' ? 'selected' : '' ?>>frontend</option>
+                                                    <option value="backend" <?= $currentArea === 'backend' ? 'selected' : '' ?>>backend</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('Scope') ?></label>
+                                                <select class="form-select form-select-sm" name="scope">
+                                                    <option value=""><?= __('全部') ?></option>
+                                                    <?php foreach ($scopeOptions as $scopeOption): ?>
+                                                        <option value="<?= htmlspecialchars($scopeOption) ?>" <?= $currentScope === $scopeOption ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($scopeOption) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('语言') ?></label>
+                                                <select class="form-select form-select-sm" name="locale">
+                                                    <option value=""><?= __('全部') ?></option>
+                                                    <?php foreach ($localeOptions as $code): ?>
+                                                        <option value="<?= htmlspecialchars($code) ?>" <?= $currentLocale === $code ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($code) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('类型 (可选)') ?></label>
+                                                <select class="form-select form-select-sm" name="type">
+                                                    <option value=""><?= __('全部') ?></option>
+                                                    <?php foreach ($typeOptions as $type): ?>
+                                                        <option value="<?= htmlspecialchars($type) ?>" <?= $currentType === $type ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($type) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small"><?= __('分类 (可选)') ?></label>
+                                                <select class="form-select form-select-sm" name="category">
+                                                    <option value=""><?= __('全部') ?></option>
+                                                    <?php foreach ($categoryOptions as $cat): ?>
+                                                        <option value="<?= htmlspecialchars($cat) ?>" <?= $currentCategory === $cat ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($cat) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 mt-2">
+                                            <div class="col-md-3">
+                                                <label class="form-label small"><?= __('实体ID (可选)') ?></label>
+                                                <input type="text" class="form-control form-control-sm" name="identity_id" value="<?= htmlspecialchars($currentIdentityId) ?>" placeholder="<?= __('例如：主题ID、模块ID等') ?>">
+                                                <div class="form-text small"><?= __('对应实体的记录ID，用于过滤配置') ?></div>
+                                            </div>
+                                        </div>
+                                        <div class="row mt-3">
+                                            <div class="col-12">
+                                                <button type="submit" class="btn btn-primary btn-sm" id="reload-tree-btn">
+                                                    <i class="mdi mdi-reload me-1"></i><?= __('加载文件树') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 树和详情左右布局 -->
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0"><?= __('元数据文件树') ?></h5>
+                                    <small class="text-muted" id="meta-tree-count"></small>
+                                </div>
+                                <div class="card-body" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                    <div id="meta-file-tree" class="meta-tree">
+                                        <div class="text-center text-muted py-4"><?= __('请先加载文件树') ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><?= __('元数据详情') ?></h5>
+                                </div>
+                                <div class="card-body" id="meta-file-editor" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                    <div class="text-center text-muted py-5">
+                                        <i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i>
+                                        <p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Meta name/description 翻译 Modal -->
+<div class="modal fade" id="metaNameDescriptionTranslationModal" tabindex="-1" aria-labelledby="metaNameDescriptionTranslationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="metaNameDescriptionTranslationModalLabel"><?= __('Meta 翻译') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="metaNameDescriptionTranslationModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                    <p class="mt-3 text-muted mb-0"><?= __('正在加载翻译...') ?></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="metaSaveNameDescriptionTranslationBtn"><?= __('保存翻译') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 参数翻译 Modal（独立于 layout-wrapper，跟随后台样式） -->
+<div class="modal fade" id="metaParamTranslationModal" tabindex="-1" aria-labelledby="metaParamTranslationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="metaParamTranslationModalLabel"><?= __('参数翻译') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="metaParamTranslationModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden"><?= __('加载中...') ?></span>
+                    </div>
+                    <p class="mt-3 text-muted mb-0"><?= __('正在加载翻译...') ?></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="metaSaveParamTranslationBtn"><?= __('保存翻译') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .meta-tree ul {
+        list-style: none;
+        padding-left: 1rem;
+        margin-bottom: 0;
+    }
+    .meta-tree li {
+        margin: 0.2rem 0;
+    }
+    .meta-tree .tree-label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.2rem 0.3rem;
+        border-radius: 4px;
+    }
+    .meta-tree .tree-label:hover {
+        background: rgba(13,110,253,0.08);
+    }
+    .meta-tree .tree-label.active {
+        background: rgba(13,110,253,0.15);
+        color: #0d6efd;
+        font-weight: 600;
+    }
+    .meta-tree .tree-node-children {
+        margin-left: 1rem;
+    }
+    .meta-tree .collapsed {
+        display: none;
+    }
+    .meta-param-list .list-group-item {
+        border-left: none;
+        border-right: none;
+    }
+    .meta-param-list .list-group-item:first-child {
+        border-top: none;
+    }
+    .meta-param-list .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    /* 文件树滚动条样式 - 兼容亮色/暗色主题 */
+    /* 文件树容器滚动条 - 针对包含 #meta-file-tree 的 .card-body */
+    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"] {
+        /* Firefox滚动条 */
+        scrollbar-width: thin !important;
+        scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent) !important;
+    }
+
+    /* Webkit浏览器滚动条（Chrome, Safari, Edge） */
+    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar {
+        width: 6px !important;
+        height: 6px !important;
+    }
+
+    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-track {
+        background: var(--scrollbar-track, transparent) !important;
+        border-radius: 3px;
+    }
+
+    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb, #a2adb7) !important;
+        border-radius: 3px;
+        transition: background 0.2s ease;
+    }
+
+    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover, #8590a5) !important;
+    }
+
+    /* 元数据详情编辑器滚动条 */
+    #meta-file-editor[style*="overflow-y"] {
+        scrollbar-width: thin !important;
+        scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent) !important;
+    }
+
+    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar {
+        width: 6px !important;
+        height: 6px !important;
+    }
+
+    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-track {
+        background: var(--scrollbar-track, transparent) !important;
+        border-radius: 3px;
+    }
+
+    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb, #a2adb7) !important;
+        border-radius: 3px;
+        transition: background 0.2s ease;
+    }
+
+    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover, #8590a5) !important;
+    }
+
+    /* 暗色主题滚动条样式 */
+    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"] {
+        scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent) !important;
+    }
+
+    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb, #8590a5) !important;
+    }
+
+    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover, #a2adb7) !important;
+    }
+
+    [data-theme="dark"] #meta-file-editor[style*="overflow-y"] {
+        scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent) !important;
+    }
+
+    [data-theme="dark"] #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb, #8590a5) !important;
+    }
+
+    [data-theme="dark"] #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover, #a2adb7) !important;
+    }
+</style>
+
+<script>
+(function() {
+    const app = document.getElementById('meta-config-app');
+    if (!app) {
+        return;
+    }
+
+    const endpoints = {
+        tree: app.dataset.treeUrl,
+        file: app.dataset.metaUrl,
+        save: app.dataset.saveUrl,
+        translation: app.dataset.translationUrl,
+        translationSave: app.dataset.translationSaveUrl,
+        locales: app.dataset.localesUrl,
+        metaNameDescTranslation: app.dataset.metaNameDescTranslationUrl,
+        metaNameDescTranslationSave: app.dataset.metaNameDescTranslationSaveUrl,
+    };
+
+    const filtersForm = document.getElementById('meta-filter-form');
+    const treeContainer = document.getElementById('meta-file-tree');
+    const treeCount = document.getElementById('meta-tree-count');
+    const editorContainer = document.getElementById('meta-file-editor');
+    const translationModalEl = document.getElementById('metaParamTranslationModal');
+    const translationModalBody = document.getElementById('metaParamTranslationModalBody');
+    const translationSaveBtn = document.getElementById('metaSaveParamTranslationBtn');
+    let translationModal = null;
+
+    // 原生弹窗类 - 兼容亮色/暗色主题
+    class NativeModal {
+        constructor(element) {
+            this.element = element;
+            this.isVisible = false;
+            this.backdrop = null;
+            this.init();
+        }
+
+        // 检测当前主题
+        getCurrentTheme() {
+            // 方法1: 检测 data-theme 属性
+            const dataTheme = document.documentElement.getAttribute('data-theme');
+            if (dataTheme) {
+                return dataTheme === 'dark' ? 'dark' : 'light';
+            }
+            
+            // 方法2: 检测 body 或 html 的 class
+            if (document.documentElement.classList.contains('dark') || 
+                document.body.classList.contains('dark')) {
+                return 'dark';
+            }
+            
+            // 方法3: 检测 prefers-color-scheme
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                return 'dark';
+            }
+            
+            return 'light';
+        }
+
+        // 更新主题样式
+        updateThemeStyles() {
+            const theme = this.getCurrentTheme();
+            const isDark = theme === 'dark';
+            
+            // 更新背景遮罩颜色
+            if (this.backdrop) {
+                if (isDark) {
+                    this.backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                } else {
+                    this.backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                }
+            }
+        }
+
+        init() {
+            // 创建背景遮罩
+            this.backdrop = document.createElement('div');
+            this.backdrop.className = 'modal-backdrop fade';
+            this.updateThemeStyles();
+            this.backdrop.style.cssText += 'position: fixed; top: 0; left: 0; z-index: 1040; width: 100vw; height: 100vh;';
+            document.body.appendChild(this.backdrop);
+
+            // 绑定关闭按钮事件
+            const closeButtons = this.element.querySelectorAll('[data-bs-dismiss="modal"]');
+            closeButtons.forEach(btn => {
+                btn.addEventListener('click', () => this.hide());
+            });
+
+            // 点击背景关闭
+            this.backdrop.addEventListener('click', () => this.hide());
+
+            // ESC键关闭
+            this.escapeHandler = (e) => {
+                if (e.key === 'Escape' && this.isVisible) {
+                    this.hide();
+                }
+            };
+
+            // 监听主题变化
+            if (window.matchMedia) {
+                this.themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                this.themeChangeHandler = () => {
+                    this.updateThemeStyles();
+                };
+                this.themeMediaQuery.addEventListener('change', this.themeChangeHandler);
+            }
+
+            // 监听 data-theme 属性变化
+            this.themeObserver = new MutationObserver(() => {
+                this.updateThemeStyles();
+            });
+            this.themeObserver.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['data-theme', 'class']
+            });
+        }
+
+        show() {
+            if (this.isVisible) return;
+            
+            this.isVisible = true;
+            this.element.style.display = 'block';
+            this.element.classList.remove('fade');
+            this.element.classList.add('show');
+            this.element.setAttribute('aria-hidden', 'false');
+            this.element.setAttribute('aria-modal', 'true');
+            
+            // 设置弹窗样式
+            const currentStyle = this.element.getAttribute('style') || '';
+            if (!currentStyle.includes('position')) {
+                this.element.style.position = 'fixed';
+            }
+            if (!currentStyle.includes('top')) {
+                this.element.style.top = '0';
+            }
+            if (!currentStyle.includes('left')) {
+                this.element.style.left = '0';
+            }
+            if (!currentStyle.includes('z-index')) {
+                this.element.style.zIndex = '1050';
+            }
+            if (!currentStyle.includes('width')) {
+                this.element.style.width = '100%';
+            }
+            if (!currentStyle.includes('height')) {
+                this.element.style.height = '100%';
+            }
+            this.element.style.overflowX = 'hidden';
+            this.element.style.overflowY = 'auto';
+            this.element.style.outline = '0';
+            
+            // 显示背景遮罩
+            this.backdrop.classList.add('show');
+            this.backdrop.style.display = 'block';
+            
+            // 防止body滚动
+            document.body.style.overflow = 'hidden';
+            document.body.style.paddingRight = '0px';
+            
+            // 绑定ESC键
+            document.addEventListener('keydown', this.escapeHandler);
+            
+            // 触发显示事件
+            this.element.dispatchEvent(new Event('shown', { bubbles: true }));
+        }
+
+        hide() {
+            if (!this.isVisible) return;
+            
+            this.isVisible = false;
+            this.element.classList.remove('show');
+            this.element.classList.add('fade');
+            this.element.setAttribute('aria-hidden', 'true');
+            this.element.setAttribute('aria-modal', 'false');
+            
+            // 隐藏背景遮罩
+            this.backdrop.classList.remove('show');
+            
+            // 延迟隐藏，等待动画完成
+            setTimeout(() => {
+                this.element.style.display = 'none';
+                this.backdrop.style.display = 'none';
+                
+                // 恢复body滚动
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }, 150);
+            
+            // 移除ESC键绑定
+            document.removeEventListener('keydown', this.escapeHandler);
+            
+            // 触发隐藏事件
+            this.element.dispatchEvent(new Event('hidden', { bubbles: true }));
+        }
+
+        dispose() {
+            if (this.backdrop && this.backdrop.parentNode) {
+                this.backdrop.parentNode.removeChild(this.backdrop);
+            }
+            document.removeEventListener('keydown', this.escapeHandler);
+            
+            // 清理主题监听
+            if (this.themeMediaQuery && this.themeChangeHandler) {
+                this.themeMediaQuery.removeEventListener('change', this.themeChangeHandler);
+            }
+            if (this.themeObserver) {
+                this.themeObserver.disconnect();
+            }
+        }
+    }
+    const translationState = {
+        metaIdentify: null,
+        param: null,
+        scope: 'default',
+        locale: null,
+        area: null,
+    };
+    let lastFilters = {};
+
+    filtersForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        loadTree();
+    });
+
+    document.getElementById('reload-tree-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        loadTree();
+    });
+
+    treeContainer.addEventListener('click', function (e) {
+        const label = e.target.closest('.tree-label');
+        if (!label) {
+            return;
+        }
+
+        const nodeType = label.dataset.nodeType;
+        if (nodeType === 'dir') {
+            const children = label.parentElement.querySelector(':scope > .tree-node-children');
+            if (children) {
+                children.classList.toggle('collapsed');
+            }
+            return;
+        }
+
+        const metaIdentify = label.dataset.metaIdentify;
+        const area = label.dataset.nodeArea || lastFilters.area || 'frontend';
+        treeContainer.querySelectorAll('.tree-label').forEach(el => el.classList.remove('active'));
+        label.classList.add('active');
+        loadMetaFile(metaIdentify, area);
+    });
+
+    editorContainer.addEventListener('click', function(e) {
+        const translateBtn = e.target.closest('.param-translate-btn');
+        if (translateBtn) {
+            openParamTranslation({
+                metaIdentify: translateBtn.dataset.metaIdentify,
+                param: translateBtn.dataset.param,
+                scope: translateBtn.dataset.scope,
+            });
+            return;
+        }
+        
+        const metaNameDescTranslateBtn = e.target.closest('.meta-name-desc-translate-btn');
+        if (metaNameDescTranslateBtn) {
+            openMetaNameDescriptionTranslation({
+                metaIdentify: metaNameDescTranslateBtn.dataset.metaIdentify,
+                field: metaNameDescTranslateBtn.dataset.field,
+                scope: metaNameDescTranslateBtn.dataset.scope,
+            });
+        }
+    });
+
+    translationSaveBtn.addEventListener('click', saveParamTranslation);
+
+    function getFilters() {
+        const formData = new FormData(filtersForm);
+        return {
+            namespace: formData.get('namespace') || '',
+            area: formData.get('area') || '',
+            scope: formData.get('scope') || 'default',
+            locale: formData.get('locale') || '',
+            type: formData.get('type') || '',
+            category: formData.get('category') || '',
+            identity_id: formData.get('identity_id') || '',
+        };
+    }
+
+    function loadTree() {
+        const filters = getFilters();
+        
+        // 验证 namespace 不能为空
+        if (!filters.namespace || filters.namespace.trim() === '') {
+            treeContainer.innerHTML = '<div class="alert alert-warning mb-0"><?= __('请先选择命名空间') ?></div>';
+            return;
+        }
+        
+        lastFilters = filters;
+        treeContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载...') ?></p></div>';
+        treeCount.textContent = '';
+
+        const params = new URLSearchParams(filters);
+        fetch(endpoints.tree + '?' + params.toString(), { credentials: 'same-origin' })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('加载失败') ?>');
+                }
+                const tree = json.data.tree || [];
+                treeCount.textContent = tree.length ? sprintf('<?= __('共 %s 个节点') ?>', tree.length) : '';
+                renderTree(tree);
+                editorContainer.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i><p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p></div>';
+            })
+            .catch(error => {
+                console.error(error);
+                treeContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+            });
+    }
+
+    function renderTree(nodes) {
+        if (!nodes.length) {
+            treeContainer.innerHTML = '<div class="text-muted text-center py-4"><?= __('未找到符合条件的元数据文件') ?></div>';
+            return;
+        }
+        treeContainer.innerHTML = '';
+        const ul = document.createElement('ul');
+        ul.classList.add('meta-tree-root');
+        nodes.forEach(node => {
+            ul.appendChild(createTreeNode(node));
+        });
+        treeContainer.appendChild(ul);
+    }
+
+    function createTreeNode(node) {
+        const li = document.createElement('li');
+        const label = document.createElement('div');
+        label.className = 'tree-label';
+        label.dataset.nodeType = node.type || 'dir';
+        label.textContent = node.title || node.meta_identify || '…';
+
+        if (node.type === 'file') {
+            label.dataset.metaIdentify = node.meta_identify;
+            label.dataset.nodeArea = node.area || '';
+            const icon = document.createElement('i');
+            icon.className = 'mdi mdi-file-document-outline text-primary';
+            label.prepend(icon);
+        } else {
+            const icon = document.createElement('i');
+            icon.className = 'mdi mdi-folder-outline text-warning';
+            label.prepend(icon);
+        }
+
+        li.appendChild(label);
+
+        if (node.children && node.children.length) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'tree-node-children';
+            const childUl = document.createElement('ul');
+            node.children.forEach(child => childUl.appendChild(createTreeNode(child)));
+            childrenContainer.appendChild(childUl);
+            li.appendChild(childrenContainer);
+        }
+
+        return li;
+    }
+
+    function loadMetaFile(metaIdentify, area) {
+        editorContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载元数据...') ?></p></div>';
+
+        const params = new URLSearchParams({
+            meta_identify: metaIdentify,
+            scope: lastFilters.scope || 'default',
+            locale: lastFilters.locale || '',
+            area: area || lastFilters.area || '',
+            identity_id: lastFilters.identity_id || '',
+        });
+
+        fetch(endpoints.file + '?' + params.toString(), { credentials: 'same-origin' })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('加载失败') ?>');
+                }
+                renderMetaEditor(json.data, params);
+            })
+            .catch(error => {
+                console.error(error);
+                editorContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+            });
+    }
+
+    function renderMetaEditor(data, params) {
+        const meta = data.meta || {};
+        const paramsList = data.params || [];
+
+        let html = '';
+        html += '<div class="mb-3">';
+        html += '<div class="d-flex justify-content-between align-items-center">';
+        html += '<div class="flex-grow-1">';
+        // Name 显示区域
+        html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+        html += '<h5 class="mb-0">' + (meta.name || meta.meta_identify || 'meta') + '</h5>';
+        if (meta.name_translatable) {
+            html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + (meta.meta_identify || '') + '" data-field="name" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译名称') ?>"><i class="mdi mdi-translate"></i></button>';
+        }
+        html += '</div>';
+        // Description 显示区域
+        if (meta.description) {
+            html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+            html += '<div class="text-muted small">' + meta.description + '</div>';
+            if (meta.description_translatable) {
+                html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + (meta.meta_identify || '') + '" data-field="description" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译描述') ?>"><i class="mdi mdi-translate"></i></button>';
+            }
+            html += '</div>';
+        }
+        html += '<div class="text-muted small">' + (meta.file_path || meta.file_full_path || '') + '</div>';
+        html += '</div>';
+        html += '<span class="badge bg-light text-dark align-self-center" style="height: fit-content;">' + (meta.meta_type || 'meta') + '</span>';
+        html += '</div>';
+        html += '</div>';
+
+        html += '<form id="meta-file-form" data-meta-identify="' + (meta.meta_identify || '') + '" data-area="' + (meta.area || params.get('area') || '') + '">';
+        html += '<input type="hidden" name="meta_identify" value="' + (meta.meta_identify || '') + '">';
+        html += '<input type="hidden" name="scope" value="' + (params.get('scope') || 'default') + '">';
+        html += '<input type="hidden" name="area" value="' + (meta.area || params.get('area') || '') + '">';
+        html += '<input type="hidden" name="identity_id" value="' + (params.get('identity_id') || '') + '">';
+        html += '<input type="hidden" name="locale" value="' + (params.get('locale') || lastFilters.locale || '') + '">';
+
+        if (!paramsList.length) {
+            html += '<div class="alert alert-info mb-0"><?= __('该文件没有可配置的参数。') ?></div>';
+        } else {
+            html += '<div class="list-group meta-param-list mb-3">';
+            paramsList.forEach(function (item) {
+                const value = item.value ?? '';
+                html += '<div class="list-group-item">';
+                html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+                html += '<div><strong>' + (item.label || item.name) + '</strong> <code class="text-muted ms-1" style="font-size: 11px;">' + item.name + '</code> <button type="button" class="btn btn-sm btn-outline-secondary param-translate-btn ms-1" data-meta-identify="' + (meta.meta_identify || '') + '" data-param="' + item.name + '" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>"><i class="mdi mdi-translate"></i></button></div>';
+                html += '</div>';
+                if (item.description) {
+                    html += '<div class="text-muted small mb-2">' + item.description + '</div>';
+                }
+
+                if ((item.input === 'textarea') || (typeof value === 'string' && value.length > 80)) {
+                    html += '<textarea class="form-control form-control-sm" rows="3" name="params[' + item.name + ']">' + (value || '') + '</textarea>';
+                } else if ((item.input === 'select' || item.options && Object.keys(item.options).length)) {
+                    html += '<select class="form-select form-select-sm" name="params[' + item.name + ']">';
+                    const options = item.options || {};
+                    Object.keys(options).forEach(function (optValue) {
+                        const selected = String(optValue) === String(value) ? 'selected' : '';
+                        html += '<option value="' + optValue + '" ' + selected + '>' + options[optValue] + '</option>';
+                    });
+                    html += '</select>';
+                } else {
+                    html += '<input type="text" class="form-control form-control-sm" name="params[' + item.name + ']" value="' + (value || '') + '">';
+                }
+
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '<div class="text-end">';
+            html += '<button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save me-1"></i><?= __('保存配置') ?></button>';
+            html += '</div>';
+        }
+
+        html += '</form>';
+
+        editorContainer.innerHTML = html;
+        const form = document.getElementById('meta-file-form');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                saveMetaConfig(form);
+            });
+        }
+    }
+
+    function saveMetaConfig(form) {
+        const formData = new FormData(form);
+        const formArea = form.getAttribute('data-area') || (lastFilters.area || '');
+        treeContainer.querySelectorAll('.tree-label').forEach(el => el.classList.remove('saving'));
+        const activeNode = treeContainer.querySelector('.tree-label.active');
+        if (activeNode) {
+            activeNode.classList.add('saving');
+        }
+
+        fetch(endpoints.save, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+        })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
+                }
+                alert(json.msg || json.message || '<?= __('配置保存成功') ?>');
+                notifyParentConfigSaved(formArea);
+            })
+            .catch(error => {
+                console.error(error);
+                alert('<?= __('保存失败') ?>: ' + error.message);
+            })
+            .finally(() => {
+                if (activeNode) {
+                    activeNode.classList.remove('saving');
+                }
+            });
+    }
+
+    function openParamTranslation(payload) {
+        translationState.metaIdentify = payload.metaIdentify;
+        translationState.param = payload.param;
+        translationState.scope = payload.scope || lastFilters.scope || 'default';
+        translationState.locale = lastFilters.locale || '';
+        translationState.area = payload.area || lastFilters.area || '';
+
+        if (!translationModal) {
+            translationModal = new NativeModal(translationModalEl);
+        }
+        translationModal.show();
+        loadParamTranslation();
+    }
+
+    function loadParamTranslation() {
+        const params = new URLSearchParams({
+            meta_identify: translationState.metaIdentify,
+            param: translationState.param,
+            scope: translationState.scope,
+        });
+
+        translationModalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载翻译...') ?></p></div>';
+
+        fetch(endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('加载失败') ?>');
+                }
+
+                const data = json.data || {};
+                const translations = data.translations || [];
+
+                let html = '';
+                html += '<form id="metaParamTranslationForm">';
+                html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || translationState.metaIdentify) + '">';
+                html += '<input type="hidden" name="param" value="' + (data.param || translationState.param) + '">';
+                html += '<input type="hidden" name="scope" value="' + (data.scope || translationState.scope) + '">';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + (data.label || translationState.param) + ')</strong></label>';
+                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + (data.default_value || '') + '</div>';
+                html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
+                if (data.description) {
+                    html += '<div class="text-muted small mt-1">' + data.description + '</div>';
+                }
+                html += '</div>';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><strong><?= __('多语言翻译') ?></strong></label>';
+                if (translations.length === 0) {
+                    html += '<div class="alert alert-info mb-0"><?= __('没有可用的语言') ?></div>';
+                } else {
+                    html += '<div class="list-group">';
+                    translations.forEach(function(trans) {
+                        html += '<div class="list-group-item">';
+                        html += '<div class="row align-items-center">';
+                        html += '<div class="col-md-3">';
+                        html += '<label class="form-label mb-0"><strong>' + (trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="text-muted small">' + trans.code + '</div>';
+                        html += '</div>';
+                        html += '<div class="col-md-9">';
+                        html += '<input type="text" class="form-control" name="translations[' + trans.code + ']" value="' + (trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                html += '</form>';
+                translationModalBody.innerHTML = html;
+            })
+            .catch(error => {
+                console.error(error);
+                translationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+            });
+    }
+
+    function saveParamTranslation() {
+        const form = document.getElementById('metaParamTranslationForm');
+        if (!form) {
+            return;
+        }
+
+        const formData = new FormData(form);
+        fetch(endpoints.translationSave, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+        })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
+                }
+                translationModal.hide();
+                alert(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                // 重新加载当前文件以更新显示
+                const activeNode = treeContainer.querySelector('.tree-label.active');
+                if (activeNode) {
+                    const metaIdentify = activeNode.dataset.metaIdentify;
+                    const area = activeNode.dataset.nodeArea || lastFilters.area || 'frontend';
+                    loadMetaFile(metaIdentify, area);
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                alert('<?= __('保存失败') ?>: ' + error.message);
+            });
+    }
+
+    function sprintf(format) {
+        const args = Array.prototype.slice.call(arguments, 1);
+        return format.replace(/%s/g, () => args.shift());
+    }
+
+    function notifyParentConfigSaved(area) {
+        if (window.parent && window.parent !== window) {
+            try {
+                window.parent.postMessage({
+                    type: 'meta-config:saved',
+                    area: area || ''
+                }, '*');
+            } catch (err) {
+                console.warn('postMessage failed', err);
+            }
+        }
+    }
+
+    // Meta name/description 翻译相关
+    const metaNameDescTranslationModalEl = document.getElementById('metaNameDescriptionTranslationModal');
+    const metaNameDescTranslationModalBody = document.getElementById('metaNameDescriptionTranslationModalBody');
+    const metaNameDescTranslationSaveBtn = document.getElementById('metaSaveNameDescriptionTranslationBtn');
+    let metaNameDescTranslationModal = null;
+    const metaNameDescTranslationState = {
+        metaIdentify: null,
+        field: null,
+        scope: 'default',
+    };
+
+    function openMetaNameDescriptionTranslation(payload) {
+        metaNameDescTranslationState.metaIdentify = payload.metaIdentify;
+        metaNameDescTranslationState.field = payload.field;
+        metaNameDescTranslationState.scope = payload.scope || 'default';
+
+        if (!metaNameDescTranslationModal) {
+            metaNameDescTranslationModal = new NativeModal(metaNameDescTranslationModalEl);
+        }
+        metaNameDescTranslationModal.show();
+        loadMetaNameDescriptionTranslation();
+    }
+
+    function loadMetaNameDescriptionTranslation() {
+        const params = new URLSearchParams({
+            meta_identify: metaNameDescTranslationState.metaIdentify,
+            field: metaNameDescTranslationState.field,
+            scope: metaNameDescTranslationState.scope,
+        });
+
+        metaNameDescTranslationModalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0"><?= __('正在加载翻译...') ?></p></div>';
+
+        fetch(endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('加载失败') ?>');
+                }
+
+                const data = json.data || {};
+                const translations = data.translations || [];
+                const fieldLabel = data.field === 'name' ? '<?= __('名称') ?>' : '<?= __('描述') ?>';
+
+                let html = '';
+                html += '<form id="metaNameDescriptionTranslationForm">';
+                html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || '') + '">';
+                html += '<input type="hidden" name="field" value="' + (data.field || '') + '">';
+                html += '<input type="hidden" name="scope" value="' + (data.scope || 'default') + '">';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + fieldLabel + ')</strong></label>';
+                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + (data.default_value || '') + '</div>';
+                html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
+                html += '</div>';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><strong><?= __('多语言翻译') ?></strong></label>';
+                if (translations.length === 0) {
+                    html += '<div class="alert alert-info mb-0"><?= __('没有可用的语言') ?></div>';
+                } else {
+                    html += '<div class="list-group">';
+                    translations.forEach(function(trans) {
+                        html += '<div class="list-group-item">';
+                        html += '<div class="row align-items-center">';
+                        html += '<div class="col-md-3">';
+                        html += '<label class="form-label mb-0"><strong>' + (trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="text-muted small">' + trans.code + '</div>';
+                        html += '</div>';
+                        html += '<div class="col-md-9">';
+                        html += '<input type="text" class="form-control" name="translations[' + trans.code + ']" value="' + (trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                html += '</form>';
+                metaNameDescTranslationModalBody.innerHTML = html;
+            })
+            .catch(error => {
+                console.error(error);
+                metaNameDescTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+            });
+    }
+
+    function saveMetaNameDescriptionTranslation() {
+        const form = document.getElementById('metaNameDescriptionTranslationForm');
+        if (!form) {
+            return;
+        }
+
+        const formData = new FormData(form);
+        fetch(endpoints.metaNameDescTranslationSave, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+        })
+            .then(response => response.json())
+            .then(json => {
+                if (json.code !== 200) {
+                    throw new Error(json.msg || json.message || '<?= __('保存失败') ?>');
+                }
+                metaNameDescTranslationModal.hide();
+                alert(json.msg || json.message || '<?= __('翻译已保存') ?>');
+                // 重新加载当前文件以更新显示
+                const activeNode = treeContainer.querySelector('.tree-label.active');
+                if (activeNode) {
+                    const metaIdentify = activeNode.dataset.metaIdentify;
+                    const area = activeNode.dataset.nodeArea || lastFilters.area || 'frontend';
+                    loadMetaFile(metaIdentify, area);
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                alert('<?= __('保存失败') ?>: ' + error.message);
+            });
+    }
+
+    if (metaNameDescTranslationSaveBtn) {
+        metaNameDescTranslationSaveBtn.addEventListener('click', saveMetaNameDescriptionTranslation);
+    }
+
+    // 命名空间选择变化时自动加载
+    const namespaceSelect = document.getElementById('namespace-select');
+    if (namespaceSelect) {
+        namespaceSelect.addEventListener('change', function() {
+            // 如果选择了命名空间，自动加载文件树
+            if (this.value && this.value.trim() !== '') {
+                loadTree();
+            } else {
+                treeContainer.innerHTML = '<div class="text-center text-muted py-4"><?= __('请先选择命名空间') ?></div>';
+                editorContainer.innerHTML = '<div class="text-center text-muted py-5"><i class="mdi mdi-file-tree-outline" style="font-size: 3rem;"></i><p class="mt-3 mb-0"><?= __('请选择左侧文件以查看详情') ?></p></div>';
+            }
+        });
+    }
+
+    // 初始化时，如果有默认命名空间，自动加载一次
+    const defaultNamespace = namespaceSelect ? namespaceSelect.value : '';
+    if (defaultNamespace && defaultNamespace.trim() !== '') {
+        loadTree();
+    }
+})();
+</script>
+</body>
+</html>

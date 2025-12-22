@@ -12,11 +12,18 @@
  * @param.showSearch {default=true,name="是否显示搜索框",description="是否显示搜索框，用于控制搜索框的显示"}
  * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
-$logo = $this->getData('logo') ?? '';
-$logoText = $this->getData('logoText') ?? __('Weline');
-$navItems = $this->getData('navItems') ?? [];
-$showSearch = $this->getData('showSearch') ?? true;
-$class = $this->getData('class') ?? '';
+
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.header.centered');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$logo = $this->getData("meta.logo") ?? '';
+$logoText = $this->getData("meta.logoText") ?? __('Weline');
+$navItems = $this->getData("meta.navItems") ?? [];
+$showSearch = $this->getData("meta.showSearch") ?? true;
+$class = $this->getData("meta.class") ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
 $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
@@ -66,17 +73,27 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
         <div class="header-actions">
             <!-- 语言切换 Hook -->
             <div class="header-action-item" data-hook="header-language-switcher">
-                <hook>header-language-switcher</hook>
+                <w:hook>header-language-switcher<else/><button class="language-switcher-btn" title="<?= __('切换语言') ?>">
+                    <i class="fas fa-globe"></i>
+                    <span><?= __('语言') ?></span>
+                </button></w:hook>
             </div>
 
             <!-- 货币切换 Hook -->
             <div class="header-action-item" data-hook="header-currency-switcher">
-                <hook>header-currency-switcher</hook>
+                <w:hook>header-currency-switcher<else/><button class="currency-switcher-btn" title="<?= __('切换货币') ?>">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span>CNY</span>
+                </button></w:hook>
             </div>
 
             <!-- 购物车 Hook -->
             <div class="header-action-item" data-hook="header-cart">
-                <hook>header-cart</hook>
+                <w:hook>header-cart<else/><a href="<?= $frontendUrl ?>cart" class="cart-link" title="<?= __('购物车') ?>">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-text"><?= __('购物车') ?></span>
+                    <span class="cart-count">0</span>
+                </a></w:hook>
             </div>
         </div>
     </div>

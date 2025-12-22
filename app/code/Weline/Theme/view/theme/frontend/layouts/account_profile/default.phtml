@@ -1,0 +1,44 @@
+<!--
+布局：个人中心 - 个人资料布局
+
+个人资料页面布局，适合表单编辑
+字段
+@meta.name {default="个人中心个人资料布局",name="个人中心个人资料布局",description="个人中心个人资料布局，用于描述布局的名称"}
+@meta.description {default="个人资料页面布局，适合表单编辑",name="个人资料页面布局，适合表单编辑",description="个人资料页面布局，适合表单编辑，用于描述布局的用途"}
+@preview.login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+@login {default=1,option={0:不需要登录,1:需要登录},name="是否需要登录",description="个人中心的个人资料布局，需要登录才能访问。"}
+@param.title {default="个人资料",name="页面标题",description="页面标题，用于设置页面标题"}
+@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
+@param.sidebar {default="",name="侧边栏内容（可选）",description="侧边栏内容（可选），用于设置侧边栏内容"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+
+参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
+模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
+页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+-->
+<!DOCTYPE html>
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <div class="account-profile <?= htmlspecialchars(($meta['class'] ?? '')) ?>">
+        <if condition="meta.sidebar">
+            <aside class="account-sidebar">
+                {{meta.sidebar}}
+            </aside>
+        </if>
+        
+        <main class="account-profile-content" id="account-profile-content" data-layout="account_profile_content">
+            {{meta.content}}
+        </main>
+    </div>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
+

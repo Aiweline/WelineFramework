@@ -1,30 +1,36 @@
+<!--
+组件：Card
+
+卡片组件，用于展示结构化内容
+字段
+@meta.name {default="Card卡片组件",name="Card卡片组件",description="Card卡片组件，用于描述组件的名称"}
+@meta.description {default="卡片组件，用于展示结构化内容",name="卡片组件，用于展示结构化内容",description="卡片组件，用于展示结构化内容，用于描述组件的用途"}
+@param.title {default="",name="卡片标题",description="卡片标题，用于设置卡片标题"}
+@param.subtitle {default="",name="副标题",description="副标题，用于设置卡片副标题"}
+@param.content {default="",name="卡片内容（HTML字符串）",description="卡片内容（HTML字符串），必填参数，用于设置卡片内容"}
+@param.footer {default="",name="卡片底部内容",description="卡片底部内容，用于设置卡片底部内容"}
+@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+@param.id {default="",name="元素ID",description="元素ID，用于设置卡片ID"}
+@param.headerActions {default=[],name="标题栏操作按钮",description="标题栏操作按钮，用于设置标题栏操作按钮"}
+@param.image {default="",name="卡片图片URL",description="卡片图片URL，用于设置卡片图片"}
+@param.imageAlt {default="",name="图片alt文本",description="图片alt文本，用于设置图片alt属性"}
+-->
 <?php
-/**
- * 组件：Card
- * 
- * 卡片组件，用于展示结构化内容
- * 字段
- * @meta.name {default="Card卡片组件",name="Card卡片组件",description="Card卡片组件，用于描述组件的名称"}
- * @meta.description {default="卡片组件，用于展示结构化内容",name="卡片组件，用于展示结构化内容",description="卡片组件，用于展示结构化内容，用于描述组件的用途"}
- * @param.title {default="",name="卡片标题",description="卡片标题，用于设置卡片标题"}
- * @param.subtitle {default="",name="副标题",description="副标题，用于设置卡片副标题"}
- * @param.content {default="",name="卡片内容（HTML字符串）",description="卡片内容（HTML字符串），必填参数，用于设置卡片内容"}
- * @param.footer {default="",name="卡片底部内容",description="卡片底部内容，用于设置卡片底部内容"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
- * @param.id {default="",name="元素ID",description="元素ID，用于设置卡片ID"}
- * @param.headerActions {default=[],name="标题栏操作按钮",description="标题栏操作按钮，用于设置标题栏操作按钮"}
- * @param.image {default="",name="卡片图片URL",description="卡片图片URL，用于设置卡片图片"}
- * @param.imageAlt {default="",name="图片alt文本",description="图片alt文本，用于设置图片alt属性"}
- */
-$title = $this->getData('title') ?? '';
-$subtitle = $this->getData('subtitle') ?? '';
-$content = $this->getData('content') ?? '';
-$footer = $this->getData('footer') ?? '';
-$class = $this->getData('class') ?? '';
-$id = $this->getData('id') ?? '';
-$headerActions = $this->getData('headerActions') ?? [];
-$image = $this->getData('image') ?? '';
-$imageAlt = $this->getData('imageAlt') ?? '';
+// 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.card');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$title = $this->getData("meta.title") ?? '';
+$subtitle = $this->getData("meta.subtitle") ?? '';
+$content = $this->getData("meta.content") ?? '';
+$footer = $this->getData("meta.footer") ?? '';
+$class = $this->getData("meta.class") ?? '';
+$id = $this->getData("meta.id") ?? '';
+$headerActions = $this->getData("meta.headerActions") ?? [];
+$image = $this->getData("meta.image") ?? '';
+$imageAlt = $this->getData("meta.imageAlt") ?? '';
 
 // 构建CSS类
 $cardClass = 'card';
@@ -50,7 +56,7 @@ if ($class) {
             <?php if (!empty($headerActions)): ?>
                 <div class="card-actions">
                     <?php foreach ($headerActions as $action): ?>
-                        <?= $action ?>
+                        {{action}}
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -58,12 +64,12 @@ if ($class) {
     <?php endif; ?>
     
     <div class="card-body">
-        <?= $content ?>
+        {{content}}
     </div>
     
     <?php if ($footer): ?>
         <div class="card-footer">
-            <?= $footer ?>
+            {{footer}}
         </div>
     <?php endif; ?>
 </div>

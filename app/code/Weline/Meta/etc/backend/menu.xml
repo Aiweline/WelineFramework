@@ -14,5 +14,10 @@
     <add source="Weline_Meta::meta_scanner" name="meta_scanner" title="扫描元数据" 
          action="meta/backend/scanner" parent="Weline_Meta::meta_manager"
          icon="mdi mdi-file-search" order="2"/>
+
+    <add source="Weline_Meta::meta_config_files" name="meta_config_files" title="元数据配置管理"
+         action="meta/backend/config/file"
+         parent="Weline_Meta::meta_manager"
+         icon="mdi mdi-file-tree" order="3"/>
 </menus>
 

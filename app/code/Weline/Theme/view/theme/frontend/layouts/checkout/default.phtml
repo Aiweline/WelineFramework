@@ -1,7 +1,7 @@
 <?php
 /**
  * 布局：结账页 - 默认布局
- * 
+ *
  * 结账页面默认布局，包含订单信息、收货地址、支付方式等
  * 字段
  * @meta.name {default="结账页默认布局",name="结账页默认布局",description="结账页默认布局，用于描述布局的名称"}
@@ -14,6 +14,8 @@
  * @param breadcrumb {default="",name="面包屑导航（可选）",description="面包屑导航（可选），用于设置面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  */
+?>
+<?php
 $title = $this->getData('title') ?? __('结账');
 $content = $this->getData('content') ?? '';
 $orderSummary = $this->getData('orderSummary') ?? '';
@@ -25,42 +27,53 @@ $class = $this->getData('class') ?? '';
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="@hook(Weline_Theme::frontend::layouts::base::html-lang)">
 <head>
-    @template(Weline_Frontend::templates/public/head.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
 <body>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <?php if ($breadcrumb): ?>
         <nav class="breadcrumb-nav">
-            <?= $breadcrumb ?>
+            {{breadcrumb}}
         </nav>
     <?php endif; ?>
     
-    <main class="checkout-main <?= htmlspecialchars($class) ?>">
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <main class="checkout-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-main" data-layout="checkout">
         <div class="checkout-container">
             <?php if ($steps): ?>
                 <div class="checkout-steps">
-                    <?= $steps ?>
+                    {{steps}}
                 </div>
             <?php endif; ?>
             
             <div class="checkout-content-wrapper">
                 <div class="checkout-form">
-                    <?= $content ?>
+                    {{content}}
                 </div>
                 
                 <?php if ($orderSummary): ?>
                     <aside class="checkout-summary">
-                        <?= $orderSummary ?>
+                        {{orderSummary}}
                     </aside>
                 <?php endif; ?>
             </div>
         </div>
     </main>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
     
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
     @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
 

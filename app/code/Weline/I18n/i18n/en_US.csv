@@ -1,3 +1,47 @@
+"参数错误：--locale 或 -l 参数不能为空","参数错误：--locale 或 -l 参数不能为空"
+开始导入所有模块的CSV翻译文件...,开始导入所有模块的CSV翻译文件...
+"目标语言: %{1}","目标语言: %{1}"
+导入完成!,导入完成!
+"处理文件数: %{1}","处理文件数: %{1}"
+"导入数量: %{1}","导入数量: %{1}"
+"跳过数量: %{1}","跳过数量: %{1}"
+"失败数量: %{1}","失败数量: %{1}"
+"耗时: %{1}秒","耗时: %{1}秒"
+错误信息:,错误信息:
+导入失败!,导入失败!
+"错误信息: %{1}","错误信息: %{1}"
+"导入异常: %{1}","导入异常: %{1}"
+"参数错误：--file 和 --locale 参数不能为空","参数错误：--file 和 --locale 参数不能为空"
+"使用 --help 查看帮助信息","使用 --help 查看帮助信息"
+开始导入CSV翻译文件...,开始导入CSV翻译文件...
+"文件路径: %{1}","文件路径: %{1}"
+"总行数: %{1}","总行数: %{1}"
+从CSV文件导入翻译到词典,从CSV文件导入翻译到词典
+从CSV文件导入翻译到词典（已存在的翻译会自动跳过）,从CSV文件导入翻译到词典（已存在的翻译会自动跳过）
+CSV文件路径（导入单个文件时必填）,CSV文件路径（导入单个文件时必填）
+"目标语言代码（如 en_US, ja_JP）【必填】","目标语言代码（如 en_US, ja_JP）【必填】"
+导入所有模块的CSV文件（自动扫描所有模块的i18n目录）,导入所有模块的CSV文件（自动扫描所有模块的i18n目录）
+显示帮助信息,显示帮助信息
+导入指定CSV文件,导入指定CSV文件
+导入所有模块的英文翻译,导入所有模块的英文翻译
+导入所有模块的日文翻译,导入所有模块的日文翻译
+开始AI翻译...,开始AI翻译...
+"源语言: %{1}","源语言: %{1}"
+"批量大小: %{1}","批量大小: %{1}"
+翻译完成!,"Translation completed!"
+"翻译数量: %{1}","翻译数量: %{1}"
+"总词数: %{1}","总词数: %{1}"
+翻译失败!,翻译失败!
+"翻译异常: %{1}","翻译异常: %{1}"
+"异常位置: %{1}:%{2}","异常位置: %{1}:%{2}"
+使用AI批量翻译词典,使用AI批量翻译词典
+使用AI批量翻译词典（增量翻译，已存在的翻译不会重新翻译）,使用AI批量翻译词典（增量翻译，已存在的翻译不会重新翻译）
+"目标语言代码（如 en_US, ja_JP），默认 en_US","目标语言代码（如 en_US, ja_JP），默认 en_US"
+"源语言代码（如 zh_Hans_CN），默认 zh_Hans_CN","源语言代码（如 zh_Hans_CN），默认 zh_Hans_CN"
+"每批翻译数量，默认 1000","每批翻译数量，默认 1000"
+翻译为英文（默认）,翻译为英文（默认）
+翻译为日文,翻译为日文
+翻译500个词,翻译500个词
 是否实时收集翻译词典。[enable/disable],"Enable/disable real-time translation dictionary collection"
 正在收集模块：%{1},"Collecting module: %{1}"
 "模块 %{1} 语言包收集成功！","Module %{1} language pack collected successfully!"
@@ -9,6 +53,33 @@
 翻译缓存清理成功！,"Translation cache cleared successfully!"
 翻译缓存清理失败：%{1}，但翻译收集已完成,"Translation cache clearing failed: %{1}, but translation collection completed"
 查看本地语言码,"View local language code"
+"无法初始化 TranslationService：%{1}","无法初始化 TranslationService：%{1}"
+"翻译服务不可用，请确保 AI 模块已安装并配置","翻译服务不可用，请确保 AI 模块已安装并配置"
+"提示：TranslationService 需要以下依赖：","提示：TranslationService 需要以下依赖："
+"- Weline\Ai\Service\AiService","- Weline\Ai\Service\AiService"
+"- Weline\Ai\Service\I18nIntegration","- Weline\Ai\Service\I18nIntegration"
+"- Weline\Ai\Adapter\TranslationAdapter（会自动通过场景代码使用）","- Weline\Ai\Adapter\TranslationAdapter（会自动通过场景代码使用）"
+"请检查 AI 模块是否正确安装，并确保已配置默认翻译模型","请检查 AI 模块是否正确安装，并确保已配置默认翻译模型"
+"开始提取并翻译自定义 i18n 词条...","开始提取并翻译自定义 i18n 词条..."
+源语言：%{1},源语言：%{1}
+目标语言：%{1},目标语言：%{1}
+指定模块：%{1},指定模块：%{1}
+处理所有模块...,处理所有模块...
+翻译完成！,翻译完成！
+处理模块：%{1},处理模块：%{1}
+"总计：翻译 %{1} 个词条，跳过 %{2} 个词条","总计：翻译 %{1} 个词条，跳过 %{2} 个词条"
+未找到模块：%{1},未找到模块：%{1}
+"模块 %{1} 没有 i18n 目录","模块 %{1} 没有 i18n 目录"
+"模块 %{1} 没有源语言文件：%{2}","模块 %{1} 没有源语言文件：%{2}"
+"模块 %{1} 没有需要翻译的词条","模块 %{1} 没有需要翻译的词条"
+"模块 %{1} 需要翻译 %{2} 个词条","模块 %{1} 需要翻译 %{2} 个词条"
+"模块 %{1} 翻译完成：成功 %{2} 个，失败 %{3} 个","模块 %{1} 翻译完成：成功 %{2} 个，失败 %{3} 个"
+所有翻译都失败了，请检查：,所有翻译都失败了，请检查：
+"1. AI 模块是否正确安装和配置","1. AI 模块是否正确安装和配置"
+"2. 是否配置了默认翻译模型","2. 是否配置了默认翻译模型"
+"3. AI API 密钥是否正确配置","3. AI API 密钥是否正确配置"
+"4. 网络连接是否正常","4. 网络连接是否正常"
+无法创建文件：%{1},无法创建文件：%{1}
 准备处理数据：插入%{1}个，更新%{2}个，跳过%{3}个,"Preparing data: insert %{1}, update %{2}, skip %{3}"
 成功插入%{1}个国家数据！,"Successfully inserted %{1} country records!"
 成功更新%{1}个国家数据！,"Successfully updated %{1} country records!"
@@ -37,6 +108,7 @@
 该区域不存在！区域代码：%{1},"Locale does not exist! Locale code: %{1}"
 区域已安装！区域代码：%{1},"Locale installed! Locale code: %{1}"
 区域已卸载！区域代码：%{1},"Locale uninstalled! Locale code: %{1}"
+获取成功,获取成功
 操作成功！更新%{1}记录。,"Operation successful! Updated %{1} records."
 成功安装!国家：%{1}(%{2}),"Successfully installed! Country: %{1}(%{2})"
 国家不存在！国家代码：%{1},"Country does not exist! Country code: %{1}"
@@ -150,16 +222,49 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 请传输local标签值！,"Please pass the local tag value!"
 请选择一个字段！,"Please select a field!"
 请设置local标签id属性！,"Please set the id attribute of the local tag!"
-翻译完成!,"Translation completed!"
 没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
 没有需要收集的翻译词,"No translation words need to be collected"
 "收集成功！一共收集更新词条：%{1} 个","Collection successful! Total collected and updated entries: %{1}"
+没有启用的语言需要翻译,没有启用的语言需要翻译
+"%{1}: 成功翻译 %{2} 个词","%{1}: 成功翻译 %{2} 个词"
+"%{1}: 翻译失败 - %{2}","%{1}: 翻译失败 - %{2}"
+"AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}","AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}"
+所有语言的词典都已完成翻译，无需翻译新词,所有语言的词典都已完成翻译，无需翻译新词
+"AI批量翻译异常: %{1}","AI批量翻译异常: %{1}"
+收集翻译词,"Collect Translation Words"
+"当其他模块需要收集翻译词时触发。事件数据格式：[""translations"" => [[""word"" => ""翻译键"", ""translate"" => ""翻译值""], ...]]。I18n模块的观察者会将翻译词存储到字典表中。","当其他模块需要收集翻译词时触发。事件数据格式：[""translations"" => [[""word"" => ""翻译键"", ""translate"" => ""翻译值""], ...]]。I18n模块的观察者会将翻译词存储到字典表中。"
 ...,...
 "警告：无法创建翻译文件 %{file}","Warning: Unable to create translation file %{file}"
-在线翻译模式：从数据库读取翻译失败：%{error},"Online translation mode: Failed to read translation from database: %{error}"
 "警告：无法写入翻译文件 %{file}","Warning: Unable to write translation file %{file}"
 "警告：无法写入语言文件 %{file}","Warning: Unable to write language file %{file}"
+"参数错误：words 必须是非空数组","参数错误：words 必须是非空数组"
+"参数错误：target_locale 不能为空","参数错误：target_locale 不能为空"
+AI翻译调用失败,AI翻译调用失败
+"目标语言：%{locale}\n词数：%{count}\n错误信息：%{error}","目标语言：%{locale}\n词数：%{count}\n错误信息：%{error}"
+AI翻译异常,AI翻译异常
+"目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line}","目标语言：%{locale}\n词数：%{count}\n异常信息：%{error}\n异常位置：%{file}:%{line}"
+"事件处理异常: %{1}","事件处理异常: %{1}"
 "语言包(%{1})：%{2} 已安装。","Language pack (%{1}): %{2} has been installed."
+AI翻译完成,AI翻译完成
+没有待翻译的词，所有词典已翻译完成。,没有待翻译的词，所有词典已翻译完成。
+没有待翻译的词,没有待翻译的词
+"保存翻译失败 [%{1}]: %{2}","保存翻译失败 [%{1}]: %{2}"
+AI批量翻译完成,AI批量翻译完成
+"目标语言：%{locale}\n翻译数量：%{translated}\n失败数量：%{failed}\n总词数：%{total}\n耗时：%{duration}秒","目标语言：%{locale}\n翻译数量：%{translated}\n失败数量：%{failed}\n总词数：%{total}\n耗时：%{duration}秒"
+"成功翻译 %{1} 个词","成功翻译 %{1} 个词"
+AI翻译失败,AI翻译失败
+"目标语言：%{locale}\n待翻译词数：%{total}\n错误信息：\n%{errors}","目标语言：%{locale}\n待翻译词数：%{total}\n错误信息：\n%{errors}"
+"AI翻译失败: %{1}","AI翻译失败: %{1}"
+"翻译过程发生异常\n目标语言：%{locale}\n异常信息：%{error}\n异常位置：%{file}:%{line}","翻译过程发生异常\n目标语言：%{locale}\n异常信息：%{error}\n异常位置：%{file}:%{line}"
+"CSV文件不存在: %{1}","CSV文件不存在: %{1}"
+"无法打开CSV文件: %{1}","无法打开CSV文件: %{1}"
+"第%{1}行导入失败 [%{2}]: %{3}","第%{1}行导入失败 [%{2}]: %{3}"
+CSV词典导入完成,CSV词典导入完成
+"文件：%{file}\n语言：%{locale}\n导入数量：%{imported}\n跳过数量：%{skipped}\n失败数量：%{failed}\n耗时：%{duration}秒","文件：%{file}\n语言：%{locale}\n导入数量：%{imported}\n跳过数量：%{skipped}\n失败数量：%{failed}\n耗时：%{duration}秒"
+"成功导入 %{1} 条翻译","成功导入 %{1} 条翻译"
+CSV词典导入失败,CSV词典导入失败
+"文件：%{file}\n语言：%{locale}\n错误：%{error}","文件：%{file}\n语言：%{locale}\n错误：%{error}"
+"处理了 %{1} 个CSV文件，导入 %{2} 条翻译","处理了 %{1} 个CSV文件，导入 %{2} 条翻译"
 国家信息更新成功！共更新%{1}个国家。,"Country information updated successfully! Total updated %{1} countries."
 国家信息更新失败：%{1},"Country information update failed: %{1}"
 国家信息已完整，无需更新。,"Country information is complete"
@@ -171,6 +276,8 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 Weline_I18n:语言包读取,"Weline_I18n: Language Pack Read"
 Weline_I18n:语言包Locals读取,"Weline_I18n: Language Pack Locals Read"
 Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals Translation Dictionary Read"
+成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
+推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
 确定恢复该词典么？,"Are you sure you want to restore this dictionary?"
 确认后，翻译部分将恢复至翻译前！,"After confirmation"
 取消,Cancel
@@ -181,28 +288,59 @@ Weline_I18n:语言包Locals翻译词典读取,"Weline_I18n: Language Pack Locals
 编辑,Edit
 提示,Tip
 保存失败,"Save failed"
-i18n国际化国家,i18n国际化国家
+i18n国际化>国家,"i18n Internationalization > Countries"
 系统配置,"System Configuration"
+i18n国际化,"i18n Internationalization"
 国家,Country
+国家管理：帮助建立对应国家的i18n翻译。,"Country Management: Help establish i18n translations for corresponding countries."
+展示语言：,"Display Language:"
+已激活,Activated
+已安装未激活,"Installed but not activated"
+已安装,Installed
+未安装,"Not installed"
+全部,All
 暂无已安装的国家,"No installed countries"
+请先导入国家数据，然后安装需要的国家。,"Please import country data first, then install the countries you need."
+去安装,"Go to Install"
+暂无已安装未激活的国家,"No installed but not activated countries"
+所有已安装的国家都已激活，或者没有已安装的国家。,"All installed countries are activated, or there are no installed countries."
+查看已安装,"View Installed"
+暂无已激活的国家,"No activated countries"
+没有已激活的国家，请先安装并激活需要的国家。,"No activated countries, please install and activate the countries you need first."
+暂无未安装的国家,"No uninstalled countries"
+请先导入国家数据。,"Please import country data first."
+更新全球数据,"Update Global Data"
 暂无国家数据,"No country data"
-温馨提示,"Friendly Reminder"
+"请点击""更新全球数据""按钮来更新国家数据。","请点击""更新全球数据""按钮来更新国家数据。"
 "Weline Admin 管理面板","Weline Admin Management Panel"
-i18n国际化国家>地区>词典,i18n国际化国家>地区>词典
+i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
 地区,Region
 词典,Dictionary
-根据地区翻译来自前端采集到的词,根据地区翻译来自前端采集到的词
+根据地区翻译来自前端采集到的词.,"Translate words collected from the frontend according to regions."
+操作：,Actions:
+更新,Update
+导出语言包,"Export Language Pack"
+（尚未开发）,"(Not yet developed)"
+导入语言包,"Import Language Pack"
 发布,Publish
 在线收集词典功能状态：,"Online Dictionary Collection Feature Status:"
 实时,Real-time
 缓存,Cache
+当前词典（语言包）：,"Current Dictionary (Language Pack):"
+所属国家：,Country:
+一共,Total
+个词条,entries
+请,Please
+更新（收集）,"Update (Collect)"
 恢复,Restore
+词,Word
 翻译,Translation
 收集时间,"Collection Time"
 翻译时间,"Translation Time"
 删除,Delete
 区域,Locale
-更新,Update
+i18n国际化国家列表,"i18n Internationalization Country List"
+国际化支持：查看和安装国家.,"Internationalization Support: View and install countries."
 词典管理,"Dictionary Management"
 地区列表,"Region List"
 排序,Sort
@@ -211,16 +349,16 @@ i18n国际化国家>地区>词典,i18n国际化国家>地区>词典
 国家代码,"Country Code"
 国家名称,"Country Name"
 旗帜,Flag
+激活状态,"Activation Status"
 是否安装,"Is Installed"
 操作,Operation
-i18n国际化国家>地区,i18n国际化国家>地区
+i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
+安装国家,"Install Country"
+安装,Install
 i18n国际化词典,"i18n Internationalization Dictionary"
 国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"
 当前目标语言：,"Current Target Language:"
-原文将被翻译成此语言,"The source text will be translated into this language"
 当前翻译模式：,"Current Translation Mode:"
-缓存模式,"Cache Mode"
-"点击""翻译模式""按钮可切换","Click the Translation Mode"" button to switch"""
 翻译进度,"Translation Progress"
 已翻译:,Translated:
 未翻译:,Untranslated:
@@ -233,24 +371,24 @@ i18n国际化词典,"i18n Internationalization Dictionary"
 导入CSV,"Import CSV"
 翻译模式,"Translation Mode"
 在线翻译模式,"Online Translation Mode"
-当前,当前
+缓存模式,"Cache Mode"
 自动词汇注册,"Auto Vocabulary Registration"
 未知,Unknown
 智能搜索与筛选,"Smart Search and Filter"
-核心,Core
+AI驱动,"AI Driven"
 目标语言,"Target Language"
+核心,Core
+选择要翻译的目标语言,"Select target language to translate"
 智能搜索,"Smart Search"
-输入要搜索的词汇或翻译内容...,"Enter the word or translation content to search..."
 搜索,Search
 重置,Reset
 原文,"Source Text"
 译文,"Translated Text"
 更新时间,"Update time"
 暂无翻译数据,"No translation data"
-"请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the "Collect Dictionary" button to collect vocabulary from the framework, or manually add translations"
+"请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
 编辑翻译,"Edit Translation"
 更新翻译,"Update Translation"
-收集翻译词,"Collect Translation Words"
 正在收集真实翻译词汇...,"Collecting real translation vocabulary..."
 正在扫描框架文件...,"Scanning framework files..."
 翻译模式设置,"Translation Mode Settings"
@@ -270,8 +408,6 @@ i18n国际化词典,"i18n Internationalization Dictionary"
 刷新数据,"Refresh Data"
 完成翻译,"Complete Translation"
 翻译方向,"Translation Direction"
-@lang(在线翻译模式),@lang(在线翻译模式)
-@lang(缓存模式),@lang(缓存模式)
 导入CSV文件,"Import CSV File"
 导入要求：,"Import Requirements:"
 文件名必须是有效的locale_code（如：zh_Hans_CN.csv、en_US.csv）,"File name must be a valid locale_code (e.g., zh_Hans_CN.csv, en_US.csv)"
@@ -281,12 +417,54 @@ i18n国际化词典,"i18n Internationalization Dictionary"
 支持.csv格式，文件名必须是locale_code,"Supports .csv format, file name must be locale_code"
 覆盖已存在的翻译,"Overwrite existing translations"
 开始导入,"Start Import"
+请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
+填写正确！,"Filled correctly!"
+请输入关键词,"Please enter keywords"
+I18n翻译,"I18n Translation"
+国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
+语言代码,"Language Code"
+语言名,"Language Name"
+是否禁用,"Is Disabled"
+国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
+国旗,"National Flag"
+搜索菜单,"Search Menu"
+搜索菜单...,"Search Menu..."
+常用菜单,"Frequently Used Menu"
+搜索结果,"Search Results"
+最近访问,"Recently Visited"
+访问最多,"Most Visited"
+设置,Settings
+布局预设配置包,"Layout Preset Configuration Package"
+选择布局预设,"Select Layout Preset"
+默认布局,"Default Layout"
+浅色侧边栏,"Light Sidebar"
+图标侧边栏,"Icon Sidebar"
+紧凑侧边栏,"Compact Sidebar"
+水平布局,"Horizontal Layout"
+水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
+水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
+盒装布局,"Boxed Layout"
+选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
+主题颜色,"Theme Color"
+选择主题模式,"Select Theme Mode"
+明亮模式,"Bright Mode"
+暗黑模式,"Dark Mode"
+RTL模式,"RTL Mode"
+在线翻译模式：从数据库读取翻译失败：%{error},"Online translation mode: Failed to read translation from database: %{error}"
+i18n国际化国家,i18n国际化国家
+温馨提示,"Friendly Reminder"
+i18n国际化国家>地区>词典,i18n国际化国家>地区>词典
+根据地区翻译来自前端采集到的词,根据地区翻译来自前端采集到的词
+i18n国际化国家>地区,i18n国际化国家>地区
+原文将被翻译成此语言,"The source text will be translated into this language"
+"点击""翻译模式""按钮可切换","Click the Translation Mode"" button to switch"""
+当前,当前
+输入要搜索的词汇或翻译内容...,"Enter the word or translation content to search..."
+@lang(在线翻译模式),@lang(在线翻译模式)
+@lang(缓存模式),@lang(缓存模式)
 系统管理,"System Management"
 I18n国际化,"I18n Internationalization"
 总区域数,"Total Locales"
-已激活,Activated
-已安装,Installed
-未安装,"Not installed"
 全球语言包覆盖情况,"Global Language Pack Coverage"
 区域列表,"Locale List"
 未启用提示,"Unactivated Notice"
@@ -296,10 +474,8 @@ I18n国际化,"I18n Internationalization"
 激活,Activate
 停用,Deactivate
 区域代码,"Locale Code"
-国旗,"National Flag"
 区域名称,"Locale Name"
 状态,Status
-安装,Install
 暂无数据,"No Data"
 需要您的关注,"Needs Your Attention"
 太棒了！,Excellent!
@@ -325,84 +501,12 @@ I18n国际化,"I18n Internationalization"
 "已安装%{1} 个区域","%{1} locales installed"
 管理该国家的区域,"Manage Locales for This Country"
 管理区域,"Manage Locales"
-请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
-请输入关键词,"Please enter keywords"
-I18n翻译,"I18n Translation"
-国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
-语言代码,"Language Code"
-语言名,"Language Name"
-是否禁用,"Is Disabled"
-国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
-展示语言：,"Display Language:"
 "Weline Framework","Weline Framework"
 "Weline Framework - 后台管理","Weline Framework - Backend Management"
 "Weline Framework - 现代化的PHP框架后台管理","Weline Framework - Modern PHP Framework Backend Management"
-搜索菜单,"Search Menu"
-搜索菜单...,"Search Menu..."
-常用菜单,"Frequently Used Menu"
-搜索结果,"Search Results"
-最近访问,"Recently Visited"
-访问最多,"Most Visited"
-设置,Settings
-布局预设配置包,"Layout Preset Configuration Package"
-选择布局预设,"Select Layout Preset"
-默认布局,"Default Layout"
-浅色侧边栏,"Light Sidebar"
-图标侧边栏,"Icon Sidebar"
-紧凑侧边栏,"Compact Sidebar"
-水平布局,"Horizontal Layout"
-水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
-水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
-盒装布局,"Boxed Layout"
-选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
-主题颜色,"Theme Color"
-选择主题模式,"Select Theme Mode"
-明亮模式,"Bright Mode"
-暗黑模式,"Dark Mode"
-RTL模式,"RTL Mode"
-i18n国际化国家>地区>词典,i18n国际化国家>地区>词典
-根据地区翻译来自前端采集到的词,根据地区翻译来自前端采集到的词
-i18n国际化国家>地区,i18n国际化国家>地区
-i18n国际化国家,i18n国际化国家
-i18n国际化国家>地区>词典,i18n国际化国家>地区>词典
 根据地区翻译来自前端采集到的,根据地区翻译来自前端采集到的
-i18n国际化国家>地区,i18n国际化国家>地区
-"请点击收集词典""按钮从框架中收集词汇，或手动添加翻译""","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
-i18n国际化>国家,"i18n Internationalization > Countries"
-i18n国际化,"i18n Internationalization"
-国家管理：帮助建立对应国家的i18n翻译。,"Country Management: Help establish i18n translations for corresponding countries."
-已安装未激活,"Installed but not activated"
-全部,All
-请先导入国家数据，然后安装需要的国家。,"Please import country data first, then install the countries you need."
-去安装,"Go to Install"
-暂无已安装未激活的国家,"No installed but not activated countries"
-所有已安装的国家都已激活，或者没有已安装的国家。,"All installed countries are activated, or there are no installed countries."
-查看已安装,"View Installed"
-暂无已激活的国家,"No activated countries"
-没有已激活的国家，请先安装并激活需要的国家。,"No activated countries, please install and activate the countries you need first."
-暂无未安装的国家,"No uninstalled countries"
-请先导入国家数据。,"Please import country data first."
-更新全球数据,"Update Global Data"
 "请点击更新全球数据""按钮来更新国家数据。""","Please click the Update Global Data"" button to update country data."""
 更新过程中请勿关闭此窗口，系统正在为您导入全球数据，预计需要几分钟时间。,"Please do not close this window during the update process. The system is importing global data for you, which may take a few minutes."
-i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
-根据地区翻译来自前端采集到的词.,"Translate words collected from the frontend according to regions."
-操作：,Actions:
-导出语言包,"Export Language Pack"
-（尚未开发）,"(Not yet developed)"
-导入语言包,"Import Language Pack"
-当前词典（语言包）：,"Current Dictionary (Language Pack):"
-所属国家：,Country:
-一共,Total
-个词条,entries
-请,Please
-更新（收集）,"Update (Collect)"
-词,Word
-i18n国际化国家列表,"i18n Internationalization Country List"
-国际化支持：查看和安装国家.,"Internationalization Support: View and install countries."
-激活状态,"Activation Status"
-i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
-安装国家,"Install Country"
 未启用提醒,"Unactivated Warning"
 已安装国家但未启用的区域,"Installed Countries with Unactivated Locales"
 所有已安装的国家区域都已启用,"All installed country locales are enabled"
@@ -411,7 +515,6 @@ i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
 "已激活 %{1} 个区域","%{1} activated locales"
 "已安装 %{1} 个区域","%{1} installed locales"
 已安装未启用任何区域,"Installed but no locales activated"
-填写正确！,"Filled correctly!"
 {$titileText},{$titileText}
 确定要停用,"Are you sure you want to disable"
 吗,?
@@ -422,10 +525,6 @@ i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
 刷新来自前端采集到的词。,"Refresh words collected from the frontend."
 禁用,Disable
 "访问次数: ","Visit Count: "
-成功推送收集词汇！推送消息：%{msg},"Successfully pushed vocabulary collection! Push message: %{msg}"
-推送收集词汇失败！推送消息：%{1},"Failed to push vocabulary collection! Push message: %{1}"
-AI驱动,"AI Driven"
-选择要翻译的目标语言,"Select target language to translate"
 "收集成功！一共收集更新词条：%{count} 个","Collection successful! Total updated entries: %{count}"
 收集失败：%{msg},"Collection failed: %{msg}"
 "只需要在前端或者后端刷新页面，或者使用命令：php bin/w i18n:collect 也可以收集到大部分词。","Just refresh the page on the frontend or backend, or use the command: php bin/w i18n:collect to collect most words."

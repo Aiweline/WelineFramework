@@ -1,0 +1,973 @@
+<?php
+/**
+ * Jion Landing 模板 - Content
+ * 包含所有内容区域：Banner、Why Jion、Community Preview、CTA、Social Proof
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * 
+ * @fields_start
+ * 
+ * group:banner => Banner区域设置
+ * banner.background_image => 背景图片地址:text:
+ * banner.background_image_mobile => 手机端背景图片地址:text:
+ * banner.heading => 主标题:text:Discover Stocks With High-Potential
+ * banner.description => 描述文字:textarea:Stock alerts with incredible-potential since February 1, 2025 now being sent out for-free. Potential-stock alerts are updated in real time!
+ * banner.button_text => 按钮文本:text:Get Free Insights
+ * banner.button_url => 按钮链接地址:text:#
+ * banner.button_event_name => 按钮事件名称:text:
+ * 
+ * group:why_jion => Why Jion区域设置
+ * why_jion.heading => 标题:text:Why Jion
+ * why_jion.card1_icon => 卡片1图标URL:text:
+ * why_jion.card1_title => 卡片1标题:text:Community
+ * why_jion.card1_text => 卡片1描述:text:Connect with learners and professionals interested in the stock market.
+ * why_jion.card2_icon => 卡片2图标URL:text:
+ * why_jion.card2_title => 卡片2标题:text:Daily Stock Market Insights
+ * why_jion.card2_text => 卡片2描述:text:Receive simplified stock market updates and educational insights daily (for learning only).
+ * why_jion.card3_icon => 卡片3图标URL:text:
+ * why_jion.card3_title => 卡片3标题:text:Educational Discussions
+ * why_jion.card3_text => 卡片3描述:text:Learn faster through shared stock market ideas and educational discussions.
+ * 
+ * group:community_preview => Community Preview区域设置
+ * community_preview.heading => 标题:text:Community Preview
+ * community_preview.card1_image => 卡片1图片URL:text:
+ * community_preview.card1_title => 卡片1标题:text:Live Threads
+ * community_preview.card1_text => 卡片1描述:text:"Today's stock market topics" - curated educational highlights, easy to scan.
+ * community_preview.card2_image => 卡片2图片URL:text:
+ * community_preview.card2_title => 卡片2标题:text:Member Highlights
+ * community_preview.card2_text => 卡片2描述:text:Real member learning experiences and useful educational takeaways.
+ * community_preview.card3_image => 卡片3图片URL:text:
+ * community_preview.card3_title => 卡片3标题:text:Weekly Stock Market Roundup
+ * community_preview.card3_text => 卡片3描述:text:Weekly educational stock market summaries for all learners.
+ * 
+ * group:cta_section => CTA区域设置
+ * cta_section.heading => 标题:text:Be part of the stock market learning conversation
+ * cta_section.card1_title => 卡片1标题:text:Join Free for Educational Access
+ * cta_section.card1_button_text => 卡片1按钮文本:text:Learn with us
+ * cta_section.card1_button_url => 卡片1按钮链接:text:#
+ * cta_section.card1_button_event_name => 卡片1按钮事件名称:text:
+ * cta_section.card2_text => 卡片2文本:text:Joined by 2,500+ learners and professionals across the U.S. Researchers · Learners · Market Enthusiasts
+ * 
+ * group:social_proof => Social Proof区域设置
+ * social_proof.heading => 标题:text:Social Proof
+ * social_proof.card1_icon => 卡片1图标URL:text:
+ * social_proof.card1_title => 卡片1标题:text:Over 2,500 Learners.
+ * social_proof.card1_text => 卡片1描述:text:Active across the U.S.
+ * social_proof.card2_icon => 卡片2图标URL:text:
+ * social_proof.card2_title => 卡片2标题:text:Learners · Researchers · Market Enthusiasts.
+ * social_proof.card2_text => 卡片2描述:text:Diverse learning community, nationwide
+ * 
+ * group:content_text => 页面内容设置
+ * content_text.display => 显示页面内容:select:yes|yes,no
+ * 
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+// 页面事件名称配置（用于按钮事件）
+$pageHandleForEvent = $page ? preg_replace('/[^a-zA-Z0-9_-]+/', '-', (string)$page->getData('handle')) : '';
+$pageDefaultCtaEvent = $page ? trim((string)$page->getData('cta_event_name')) : '';
+
+// 加载颜色配置
+$templateCode = $page ? $page->getData('style') : 'jion-landing';
+// 如果还没有，尝试从请求参数获取（预览模式）
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'jion-landing';
+}
+?>
+<?php
+// 统一加载颜色配置（与 header 保持一致）
+$colors = [];
+$this->assign('template_code', $templateCode);
+?>
+<w:template>Weline_Cms::base/colors.phtml</w:template>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+?>
+<?php
+// Helper functions
+if (!function_exists('getConfig')) {
+    function getConfig($settings, $key, $default = '') {
+        return $settings[$key] ?? $default;
+    }
+}
+
+if (!function_exists('parseResp')) {
+    function parseResp($value) {
+        if (empty($value)) return ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => ''];
+        $value = trim($value);
+        $unit = '';
+        if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+            $unit = $matches[1];
+            $value = preg_replace('/[a-z%]+$/i', '', $value);
+        }
+        $parts = explode('/', trim($value));
+        $result = ['mobile' => '', 'tablet' => '', 'desktop' => '', 'unit' => $unit ?: 'px'];
+        switch (count($parts)) {
+            case 1: $result['mobile'] = $result['tablet'] = $result['desktop'] = trim($parts[0]); break;
+            case 2: $result['mobile'] = trim($parts[0]); $result['desktop'] = trim($parts[1]); break;
+            case 3: $result['mobile'] = trim($parts[0]); $result['tablet'] = trim($parts[1]); $result['desktop'] = trim($parts[2]); break;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('genRespCSS')) {
+    function genRespCSS($parsed) {
+        $mobile = floatval($parsed['mobile']);
+        $desktop = floatval($parsed['desktop']);
+        $unit = $parsed['unit'];
+        if ($mobile === $desktop) return $mobile . $unit;
+        $diff = $desktop - $mobile;
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+    }
+}
+
+if (!function_exists('genButtonHeight')) {
+    /**
+     * 生成按钮高度的 clamp 表达式
+     * @param int $mobile 移动端高度
+     * @param int $pc PC端高度
+     * @return string
+     */
+    function genButtonHeight($mobile, $pc) {
+        $diff = $pc - $mobile;
+        return "clamp({$mobile}px, calc({$mobile}px + {$diff} * ((100vw - 375px) / (1280 - 375))), {$pc}px)";
+    }
+}
+
+if (!function_exists('genButtonWidth')) {
+    /**
+     * 生成按钮宽度的 clamp 表达式
+     * @param int $mobile 移动端宽度
+     * @param int $pc PC端宽度
+     * @return string
+     */
+    function genButtonWidth($mobile, $pc) {
+        $diff = $pc - $mobile;
+        return "clamp({$mobile}px, calc({$mobile}px + {$diff} * ((100vw - 375px) / (1280 - 375))), {$pc}px)";
+    }
+}
+
+if (!function_exists('genThreeBreakpoint')) {
+    /**
+     * 生成三端（Mobile/iPad/PC）的 clamp 表达式
+     * 确保在 iPad 断点（768px）精确匹配 tablet 值
+     * @param float $mobile 移动端值（375px）
+     * @param float $tablet iPad 端值（768px）
+     * @param float $pc PC端值（1280px）
+     * @param string $unit 单位，默认 'px'
+     * @return string
+     */
+    function genThreeBreakpoint($mobile, $tablet, $pc, $unit = 'px') {
+        // 如果三端值相同，直接返回
+        if ($mobile === $tablet && $tablet === $pc) {
+            return $mobile . $unit;
+        }
+        
+        // 分段插值：
+        // 第一段：375px -> 768px (mobile -> tablet)
+        // 第二段：768px -> 1280px (tablet -> pc)
+        $diff1 = $tablet - $mobile;
+        $diff2 = $pc - $tablet;
+        
+        // 使用分段计算：当 vw < 768px 时使用第一段，当 vw >= 768px 时使用第二段
+        // 通过 min/max 实现条件判断
+        return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + ({$tablet} - {$mobile}) * ((min(100vw, 768px) - 375px) / (768 - 375)) + ({$pc} - {$tablet}) * ((max(0px, 100vw - 768px)) / (1280 - 768))), {$pc}{$unit})";
+    }
+}
+
+// 页面内容
+$pageContent = $page ? $page->getData('content') : '';
+$showContent = getConfig($styleSettings, 'content_text.display', 'yes');
+
+// Banner配置
+$bannerBgImage = getConfig($styleSettings, 'banner.background_image', '');
+$bannerBgImageMobile = getConfig($styleSettings, 'banner.background_image_mobile', '');
+// 默认 Banner 图（使用 fetchTemplateStatic 获取静态资源）
+$defaultBannerUrl = $this->fetchTemplateStatic('Weline_Cms::style/jion-landing/asset/img/banner.jpg');
+$defaultBannerUrlMobile = $this->fetchTemplateStatic('Weline_Cms::style/jion-landing/asset/img/mobile-banner.jpg');
+// 若未配置则使用默认
+$bannerBgImageFinal = $bannerBgImage ?: $defaultBannerUrl;
+$bannerBgImageMobileFinal = $bannerBgImageMobile ?: ($defaultBannerUrlMobile ?: $defaultBannerUrl);
+$bannerHeading = getConfig($styleSettings, 'banner.heading', 'Discover Stocks With High-Potential');
+$bannerDescription = getConfig($styleSettings, 'banner.description', 'Stock alerts with incredible-potential since February 1, 2025 now being sent out for-free. Potential-stock alerts are updated in real time!');
+$bannerButtonText = getConfig($styleSettings, 'banner.button_text', 'Get Free Insights');
+$bannerButtonUrl = getConfig($styleSettings, 'banner.button_url', '#');
+// Banner 按钮事件名称
+$bannerButtonEventRaw = trim(getConfig($styleSettings, 'banner.button_event_name', ''));
+if ($bannerButtonEventRaw !== '') {
+    $bannerButtonEventName = 'banner_button_' . $pageHandleForEvent . '_' . $bannerButtonEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $bannerButtonEventName = $pageDefaultCtaEvent;
+} else {
+    $bannerButtonEventName = 'banner_button_' . $pageHandleForEvent . '_click';
+}
+
+// Why Jion配置
+$whyJionHeading = getConfig($styleSettings, 'why_jion.heading', 'Why Jion');
+// SVG 图标内联（直接写到代码中，不需要发起请求）
+$whyJionIcon1 = '<svg width="45" height="41" viewBox="0 0 45 41" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="0.5" width="44" height="40" rx="9.5" fill="#96A7C9" fill-opacity="0.5" stroke="#3D3D3D"/><path d="M23 16C26.2216 16 28.8333 13.3884 28.8333 10.1667C28.8333 6.94505 26.2216 4.33337 23 4.33337C19.7783 4.33337 17.1666 6.94505 17.1666 10.1667C17.1666 13.3884 19.7783 16 23 16Z" fill="#2F88FF" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.33337 35.1667C6.33337 27.8029 13.0491 21.8334 21.3334 21.8334" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M29.5417 24.3334C27.7698 24.3334 26.3334 26.0072 26.3334 28.072C26.3334 31.8106 30.125 35.2095 32.1667 36C34.2084 35.2095 38 31.8106 38 28.072C38 26.0072 36.5636 24.3334 34.7917 24.3334C33.7066 24.3334 32.7473 24.9611 32.1667 25.9219C31.5861 24.9611 30.6268 24.3334 29.5417 24.3334Z" fill="#2F88FF" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+$whyJionIcon2 = '<svg width="45" height="41" viewBox="0 0 45 41" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="0.5" width="44" height="40" rx="9.5" fill="#96A7C9" fill-opacity="0.5" stroke="#3D3D3D"/><path d="M22.9999 6.83337C17.5231 6.83337 13.0833 11.2732 13.0833 16.75V30.9167H32.9166V16.75C32.9166 11.2732 28.4768 6.83337 22.9999 6.83337Z" fill="#2F88FF"/><path d="M13.0833 30.9167V16.75C13.0833 11.2732 17.5231 6.83337 22.9999 6.83337C28.4768 6.83337 32.9166 11.2732 32.9166 16.75V30.9167M8.83325 30.9167H37.1666" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.9999 35.1666C24.9559 35.1666 26.5416 33.581 26.5416 31.625V30.9166H19.4583V31.625C19.4583 33.581 21.0439 35.1666 22.9999 35.1666Z" fill="#2F88FF" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+$whyJionIcon3 = '<svg width="45" height="41" viewBox="0 0 45 41" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="0.5" width="44" height="40" rx="9.5" fill="#96A7C9" fill-opacity="0.5" stroke="#3D3D3D"/><path d="M9.39591 28.9792H35.6042C36.4557 28.9792 37.1459 28.289 37.1459 27.4375V8.93754C37.1459 8.0861 36.4557 7.39587 35.6042 7.39587H9.39591C8.54448 7.39587 7.85425 8.0861 7.85425 8.93754V27.4375C7.85425 28.289 8.54448 28.9792 9.39591 28.9792Z" fill="#2F88FF" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M14.7917 12.7916V23.5833" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M30.2083 12.7916V23.5833" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M22.5 15.1041V21.2708" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M19.4167 18.1875H25.5834" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M7.08325 33.6041H37.9166" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+$whyJionCards = [
+    [
+        'icon' => $whyJionIcon1,
+        'title' => getConfig($styleSettings, 'why_jion.card1_title', 'Community'),
+        'text' => getConfig($styleSettings, 'why_jion.card1_text', 'Connect with learners and professionals interested in the stock market.')
+    ],
+    [
+        'icon' => $whyJionIcon2,
+        'title' => getConfig($styleSettings, 'why_jion.card2_title', 'Daily Stock Market Insights'),
+        'text' => getConfig($styleSettings, 'why_jion.card2_text', 'Receive simplified stock market updates and educational insights daily (for learning only).')
+    ],
+    [
+        'icon' => $whyJionIcon3,
+        'title' => getConfig($styleSettings, 'why_jion.card3_title', 'Educational Discussions'),
+        'text' => getConfig($styleSettings, 'why_jion.card3_text', 'Learn faster through shared stock market ideas and educational discussions.')
+    ]
+];
+
+// Community Preview配置
+$communityPreviewHeading = getConfig($styleSettings, 'community_preview.heading', 'Community Preview');
+$communityPreviewCards = [
+    [
+        'image' => getConfig($styleSettings, 'community_preview.card1_image', ''),
+        'title' => getConfig($styleSettings, 'community_preview.card1_title', 'Live Threads'),
+        'text' => getConfig($styleSettings, 'community_preview.card1_text', '"Today\'s stock market topics" - curated educational highlights, easy to scan.')
+    ],
+    [
+        'image' => getConfig($styleSettings, 'community_preview.card2_image', ''),
+        'title' => getConfig($styleSettings, 'community_preview.card2_title', 'Member Highlights'),
+        'text' => getConfig($styleSettings, 'community_preview.card2_text', 'Real member learning experiences and useful educational takeaways.')
+    ],
+    [
+        'image' => getConfig($styleSettings, 'community_preview.card3_image', ''),
+        'title' => getConfig($styleSettings, 'community_preview.card3_title', 'Weekly Stock Market Roundup'),
+        'text' => getConfig($styleSettings, 'community_preview.card3_text', 'Weekly educational stock market summaries for all learners.')
+    ]
+];
+
+// 为每个卡片设置默认图片（如果未配置）
+$defaultImages = [
+    'Live-Threads.jpg',
+    'Member-Highlights.jpg',
+    'Weekly-Stock-Market-Roundup.png'
+];
+foreach ($communityPreviewCards as $index => &$card) {
+    if (empty($card['image']) && isset($defaultImages[$index])) {
+        $card['image'] = $this->fetchTemplateStatic('Weline_Cms::style/jion-landing/asset/img/' . $defaultImages[$index]);
+    }
+}
+unset($card); // 释放引用
+
+// CTA配置
+$ctaHeading = getConfig($styleSettings, 'cta_section.heading', 'Be part of the stock market learning conversation');
+$ctaCard1Title = getConfig($styleSettings, 'cta_section.card1_title', 'Join Free for Educational Access');
+$ctaCard1ButtonText = getConfig($styleSettings, 'cta_section.card1_button_text', 'Learn with us');
+$ctaCard1ButtonUrl = getConfig($styleSettings, 'cta_section.card1_button_url', '#');
+// CTA 按钮事件名称
+$ctaButtonEventRaw = trim(getConfig($styleSettings, 'cta_section.card1_button_event_name', ''));
+if ($ctaButtonEventRaw !== '') {
+    $ctaButtonEventName = 'cta_button_' . $pageHandleForEvent . '_' . $ctaButtonEventRaw;
+} elseif ($pageDefaultCtaEvent !== '') {
+    $ctaButtonEventName = $pageDefaultCtaEvent;
+} else {
+    $ctaButtonEventName = 'cta_button_' . $pageHandleForEvent . '_click';
+}
+$ctaCard2Text = getConfig($styleSettings, 'cta_section.card2_text', 'Joined by 2,500+ learners and professionals across the U.S. Researchers · Learners · Market Enthusiasts');
+
+// Social Proof配置
+$socialProofHeading = getConfig($styleSettings, 'social_proof.heading', 'Social Proof');
+// SVG 图标内联（直接写到代码中，不需要发起请求）
+$socialProofIcon1 = '<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24 20C27.866 20 31 16.866 31 13C31 9.13401 27.866 6 24 6C20.134 6 17 9.13401 17 13C17 16.866 20.134 20 24 20Z" fill="#2F88FF" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.25488C10.1865 8.51983 9 10.6214 9 13.0002C9 15.5465 10.3596 17.7753 12.3924 19.0002" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M36 7.25488C37.8135 8.51983 39 10.6214 39 13.0002C39 15.3789 37.8135 17.4806 36 18.7455" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 40V42H36V40C36 36.2725 36 34.4087 35.391 32.9385C34.5791 30.9783 33.0217 29.4209 31.0615 28.609C29.5913 28 27.7275 28 24 28C20.2725 28 18.4087 28 16.9385 28.609C14.9783 29.4209 13.4209 30.9783 12.609 32.9385C12 34.4087 12 36.2725 12 40Z" fill="#2F88FF" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M43.9999 42.0001V40.8001C43.9999 36.3197 43.9999 34.0795 43.128 32.3682C42.361 30.8629 41.1371 29.6391 39.6318 28.8721" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.00009 42.0001V40.8001C4.00009 36.3197 4.00009 34.0795 4.87204 32.3682C5.63902 30.8629 6.86287 29.6391 8.36816 28.8721" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+$socialProofIcon2 = '<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 24L12 33L4 28.5V42H44V15L37 23L31 18L24 26L18 24Z" fill="#2F88FF" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 28.5V17L11 23L16.5 15L22.5 18L31 9L36.5 13.5L44 6V15.5" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+$socialProofCards = [
+    [
+        'icon' => $socialProofIcon1,
+        'title' => getConfig($styleSettings, 'social_proof.card1_title', 'Over 2,500 Learners.'),
+        'text' => getConfig($styleSettings, 'social_proof.card1_text', 'Active across the U.S.')
+    ],
+    [
+        'icon' => $socialProofIcon2,
+        'title' => getConfig($styleSettings, 'social_proof.card2_title', 'Learners · Researchers · Market Enthusiasts.'),
+        'text' => getConfig($styleSettings, 'social_proof.card2_text', 'Diverse learning community, nationwide')
+    ]
+];
+?>
+<?php
+// Banner 和 CTA 按钮渐变颜色（在样式开始前定义，供 hover 使用）
+// 按钮统一使用 button_primary_bg 和 button_primary_hover
+?>
+<style>
+    .jion-content {
+        width: 100%;
+        background-color: <?= htmlspecialchars($colors['section_bg'] ?? $colors['primary_bg'] ?? '#0A1128') ?>;
+        color: <?= htmlspecialchars($colors['banner_heading_text'] ?? ($colors['text_primary'] ?? '#FFFFFF')) ?>;
+    }
+    
+    .jion-section {
+        width: 100%;
+        padding: <?= genRespCSS(parseResp('20/30' . 'px')) ?> <?= genRespCSS(parseResp('16/40' . 'px')) ?>;
+        background-color: <?= htmlspecialchars($colors['section_bg'] ?? $colors['primary_bg'] ?? '#0A1128') ?>;
+    }
+    
+    .jion-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    
+    /* Banner区域 */
+    .jion-banner {
+        position: relative;
+        min-height: <?= genRespCSS(parseResp('400/600' . 'px')) ?>;
+        display: flex;
+        align-items: flex-start; /* 从顶部对齐 */
+        /* 顶部固定 20，左右/底部保持响应式 */
+        padding-top: 20px;
+        padding-right: <?= genRespCSS(parseResp('16/40' . 'px')) ?>;
+        padding-bottom: <?= genRespCSS(parseResp('40/80' . 'px')) ?>;
+        padding-left: <?= genRespCSS(parseResp('16/40' . 'px')) ?>;
+        background-color: <?= htmlspecialchars($colors['banner_bg'] ?? ($colors['primary_bg'] ?? '#0A1128')) ?>;
+        overflow: hidden;
+    }
+    
+    .jion-banner-picture {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        object-fit: cover;
+        object-position: center;
+    }
+    
+    .jion-banner-picture img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        display: block;
+    }
+    
+    .jion-banner::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: <?= htmlspecialchars($colors['banner_overlay'] ?? 'rgba(10, 17, 40, 0.3)') ?>;
+        z-index: 1;
+    }
+    
+    
+    @media (max-width: 767px) {
+        .jion-banner {
+            min-height: auto; /* 手机端高度跟随图片 */
+            height: auto;
+            display: block; /* 改为 block，不使用 flex */
+            padding-top: 0; /* 移除顶部 padding，让图片从顶部开始 */
+            padding-bottom: 0; /* 移除底部 padding */
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        .jion-banner-picture {
+            position: relative; /* 改为相对定位，让图片撑开容器 */
+            height: auto;
+        }
+        
+        .jion-banner-picture img {
+            position: relative;
+            height: auto; /* 图片自然高度 */
+            width: 100%; /* 保持宽度100% */
+            object-fit: none; /* 不使用 cover，保持原始比例 */
+            display: block;
+        }
+        
+        .jion-banner::after {
+            position: absolute; /* 遮罩层保持绝对定位 */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        .jion-banner .jion-container {
+            position: absolute; /* 容器绝对定位在图片上方 */
+            top: 20px;
+            left: 0;
+            right: 0;
+            padding: 0 <?= genRespCSS(parseResp('16/40' . 'px')) ?>;
+        }
+        
+        .jion-banner-content {
+            padding: 0;
+        }
+    }
+    
+    .jion-banner-content {
+        position: relative;
+        z-index: 2;
+        max-width: 600px;
+    }
+    
+    .jion-banner-heading {
+        /* font-size: Mobile 32px, iPad 48px, PC 48px */
+        font-size: <?= genThreeBreakpoint(32, 48, 48, 'px') ?>;
+        font-weight: 900;
+        /* line-height: Mobile 45px, iPad 58px, PC 58px */
+        line-height: <?= genThreeBreakpoint(45, 58, 58, 'px') ?>;
+        margin-bottom: <?= genRespCSS(parseResp('16/24' . 'px')) ?>;
+        color: <?= htmlspecialchars($colors['banner_heading_text'] ?? ($colors['text_primary'] ?? '#FFFFFF')) ?>;
+    }
+    
+    .jion-banner-description {
+        /* font-size: Mobile 13px, iPad 20px, PC 20px */
+        font-size: <?= genThreeBreakpoint(13, 20, 20, 'px') ?>;
+        font-weight: 500;
+        /* line-height: Mobile 25px, iPad 24px, PC 24px */
+        line-height: <?= genThreeBreakpoint(25, 24, 24, 'px') ?>;
+        margin-bottom: <?= genRespCSS(parseResp('24/32' . 'px')) ?>;
+        color: <?= htmlspecialchars($colors['banner_subtitle_text'] ?? ($colors['text_primary'] ?? '#FFFFFF')) ?>;
+    }
+    
+    .jion-banner-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* 尺寸动态计算：PC 205px×48px, iPad 180px×48px, Mobile 119px×34px */
+        width: <?= genButtonWidth(160, 205) ?>;
+        height: <?= genButtonHeight(34, 48) ?>;
+        padding: 0;
+        background-color: <?= htmlspecialchars($colors['button_primary_bg'] ?? '#1a2cbe') ?>;
+        color: #FFFFFF;
+        text-decoration: none;
+        border: none;
+        border-radius: 10px;
+        /* font-size: Mobile 15px, iPad 15px, PC 20px */
+        font-size: <?= genThreeBreakpoint(15, 15, 20, 'px') ?>;
+        font-weight: 900;
+        line-height: 1;
+        transition: background-color 0.3s ease;
+        box-shadow: none; /* 去掉阴影 */
+    }
+    
+    .jion-banner-button:hover,
+    .jion-banner-button:focus,
+    .jion-banner-button:active {
+        background-color: <?= htmlspecialchars($colors['button_primary_hover'] ?? '#101e38') ?> !important;
+        color: #FFFFFF !important;
+        text-decoration: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Section标题 */
+    .jion-section-heading {
+        font-size: <?= genRespCSS(parseResp('24/36' . 'px')) ?>;
+        font-weight: 700;
+        margin-bottom: <?= genRespCSS(parseResp('10/20' . 'px')) ?>;
+        color: <?= htmlspecialchars($colors['text_primary'] ?? '#FFFFFF') ?>;
+    }
+    
+    /* Why Jion 区域网格 */
+    .jion-cards-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: <?= genRespCSS(parseResp('20/32' . 'px')) ?>;
+        margin-bottom: <?= genRespCSS(parseResp('40/60' . 'px')) ?>;
+    }
+    
+    @media (min-width: 768px) {
+        .jion-cards-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .jion-cards-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: <?= genRespCSS(parseResp('20/24' . 'px')) ?>;
+        }
+    }
+    
+    /* ========== Why Jion 区域卡片样式 ========== */
+    .jion-why-jion-card {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        /* gap: Mobile 16px, iPad 12px, PC 20px */
+        gap: <?= genThreeBreakpoint(10, 12, 20, 'px') ?>;
+        /* padding: Mobile 20px, iPad 12px, PC 20px */
+        padding: <?= genThreeBreakpoint(6, 12, 20, 'px') ?>;
+        /* 渐变背景（自上而下） */
+        <?php
+        $cardGradStart = $colors['why_jion_card_grad_start'] ?? '#121c32';
+        $cardGradEnd = $colors['why_jion_card_grad_end'] ?? '#121c32';
+        ?>
+        background: linear-gradient(180deg, 
+            <?= htmlspecialchars($cardGradStart ?? '') ?> 0%, 
+            <?= htmlspecialchars($cardGradEnd ?? '') ?> 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: none;
+        border-radius: <?= genRespCSS(parseResp('16/25' . 'px')) ?>;
+        box-shadow: inset 0px 0px 1px 1px <?= htmlspecialchars($colors['card_border_glow'] ?? '#146bb9') ?>,
+        inset 0px 0 10px 0px <?= htmlspecialchars($colors['card_border_glow'] ?? '#146bb9') ?>,
+        inset 5px -1px 3px 0px <?= htmlspecialchars($colors['card_border_glow'] ?? '#146bb9') ?>,
+        inset 4px 4px 5px 0px <?= htmlspecialchars($colors['card_border_glow'] ?? '#146bb9') ?>;
+    }
+    
+    .jion-why-jion-card-icon {
+        flex-shrink: 0;
+        width: 45px;
+        height: 41px;
+    }
+    
+    .jion-why-jion-card-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    
+    .jion-why-jion-card-content {
+        flex: 1;
+        min-width: 0;
+        padding-top:  <?= genRespCSS(parseResp('6/15' . 'px')) ?>;
+    }
+    
+    .jion-why-jion-card-title {
+        font-size: <?= genRespCSS(parseResp('18/22' . 'px')) ?>;
+        font-weight: 600;
+        margin-bottom: <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+        color: #FFFFFF;
+    }
+    
+    .jion-why-jion-card-text {
+        font-size: <?= genRespCSS(parseResp('14/16' . 'px')) ?>;
+        line-height: 1.6;
+        color: #FFFFFF;
+    }
+    
+    /* ========== Community Preview 区域卡片样式 ========== */
+    .jion-community-preview-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: <?= genRespCSS(parseResp('20/32' . 'px')) ?>;
+        margin-bottom: <?= genRespCSS(parseResp('40/60' . 'px')) ?>;
+    }
+    
+    @media (min-width: 768px) {
+        .jion-community-preview-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .jion-community-preview-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: <?= genRespCSS(parseResp('20/24' . 'px')) ?>;
+        }
+    }
+    
+    .jion-community-preview-card {
+        display: flex;
+        flex-direction: column; /* 上图下文布局 */
+        background: <?= htmlspecialchars($colors['community_preview_card_bg'] ?? '#121c32') ?>;
+        box-shadow: unset;
+        border: 1px solid #32343a;
+        padding: 0; /* 移除内边距，让图片和内容分别控制 */
+        border-radius: <?= genRespCSS(parseResp('16/25' . 'px')) ?>;
+        overflow: hidden; /* 确保图片圆角生效 */
+    }
+    
+    .jion-community-preview-card-image {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: <?= genRespCSS(parseResp('16/25' . 'px')) ?> <?= genRespCSS(parseResp('16/25' . 'px')) ?> 0 0; /* 只有上边圆角 */
+        margin-bottom: 0;
+        padding: 8px;
+        object-fit: cover;
+        transition: opacity 0.3s ease;
+    }
+    
+    /* 懒加载图片加载完成后的效果 */
+    .jion-community-preview-card-image[data-loaded="1"] {
+        opacity: 1;
+    }
+    
+    .jion-community-preview-card-image:not([data-loaded]) {
+        opacity: 0.7;
+    }
+    
+    .jion-community-preview-card-content {
+        flex: 1;
+        padding: <?= genRespCSS(parseResp('12/24' . 'px')) ?>;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .jion-community-preview-card-title {
+        font-size: <?= genRespCSS(parseResp('18/22' . 'px')) ?>;
+        font-weight: 600;
+        margin-bottom: <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+        color: #FFFFFF;
+        text-align: left;
+    }
+    
+    .jion-community-preview-card-text {
+        font-size: <?= genRespCSS(parseResp('14/16' . 'px')) ?>;
+        line-height: 1.6;
+        color: #FFFFFF;
+        text-align: left;
+    }
+    
+    /* ========== CTA 区域卡片样式 ========== */
+    .jion-cta-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: <?= genRespCSS(parseResp('20/32' . 'px')) ?>;
+    }
+    
+    .jion-cta-card {
+        justify-content: center;
+        display: grid;
+        background: <?= htmlspecialchars($colors['cta_card_bg'] ?? '#121c32') ?>;
+        border: 1px solid <?= htmlspecialchars($colors['cta_card_border'] ?? '#32343a') ?>;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 向下的黑色阴影 */
+        padding: <?= genRespCSS(parseResp('20/84' . 'px')) ?>;
+        border-radius: <?= genRespCSS(parseResp('16/25' . 'px')) ?>;
+        text-align: center; /* 文本左右居中 */
+        /* 内容上下居中 */
+        align-items: center;
+        justify-items: center;
+    }
+    
+    .jion-cta-card-title {
+        font-size: <?= genRespCSS(parseResp('18/22' . 'px')) ?>;
+        font-weight: 600;
+        margin-bottom: <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+        color: #FFFFFF;
+        text-align: center; /* 标题居中 */
+    }
+    
+    .jion-cta-card-text {
+        /* 尺寸动态计算：PC 20px/24px, iPad 15px/18px, Mobile 15px/18px */
+        font-size: <?= genRespCSS(parseResp('15/20' . 'px')) ?>; /* Mobile 15px, PC 20px */
+        line-height: <?= genRespCSS(parseResp('18/24' . 'px')) ?>; /* Mobile 18px, PC 24px */
+        color: #FFFFFF;
+        text-align: center; /* 文本居中 */
+        font-weight: 400;
+    }
+    @media (min-width: 768px) {
+        .jion-cta-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    /* iPad 精确尺寸（clamp 无法精确匹配，使用媒体查询覆盖）*/
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .jion-cta-card-text {
+            font-size: 15px;
+            line-height: 18px;
+        }
+    }
+    
+    .jion-cta-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* 尺寸动态计算：PC 205px×48px, iPad 180px×48px, Mobile 119px×34px */
+        width: <?= genButtonWidth(119, 205) ?>;
+        height: <?= genButtonHeight(34, 48) ?>;
+        padding: 0;
+        line-height: 1;
+        background-color: <?= htmlspecialchars($colors['button_primary_bg'] ?? '#1a2cbe') ?>;
+        color: #FFFFFF;
+        text-decoration: none;
+        border: none;
+        border-radius: 10px;
+        font-size: <?= genRespCSS(parseResp('14/16' . 'px')) ?>;
+        font-weight: 600;
+        transition: background-color 0.3s ease;
+        /* 轻微阴影效果 */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-top: <?= genRespCSS(parseResp('16/20' . 'px')) ?>;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .jion-cta-button:hover,
+    .jion-cta-button:focus,
+    .jion-cta-button:active {
+        background-color: <?= htmlspecialchars($colors['button_primary_hover'] ?? '#101e38') ?> !important;
+        color: #FFFFFF !important;
+        text-decoration: none !important;
+        outline: none !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    /* ========== Social Proof 区域卡片样式 ========== */
+    .jion-social-proof-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: <?= genRespCSS(parseResp('20/32' . 'px')) ?>;
+        margin-bottom: <?= genRespCSS(parseResp('40/60' . 'px')) ?>;
+    }
+    
+    @media (min-width: 768px) {
+        .jion-social-proof-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    .jion-social-proof-card {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start; /* 内容靠左对齐 */
+        text-align: left; /* 文本靠左对齐 */
+        background: <?= htmlspecialchars($colors['social_proof_card_bg'] ?? '#121c32') ?>;
+        border: 1px solid <?= htmlspecialchars($colors['social_proof_card_border'] ?? '#32343a') ?>;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 向下的黑色阴影 */
+        padding: <?= genRespCSS(parseResp('20/24' . 'px')) ?>;
+        border-radius: <?= genRespCSS(parseResp('16/25' . 'px')) ?>;
+    }
+    
+    .jion-social-proof-card-icon {
+        display: inline-block;
+        /* 三端统一：65px × 65px */
+        width: 65px;
+        height: 65px;
+        margin-bottom: <?= genRespCSS(parseResp('16/20' . 'px')) ?>;
+    }
+    
+    .jion-social-proof-card-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    
+    .jion-social-proof-card-title {
+        /* 三端统一：font-size 20px, line-height 24px, font-weight 900 */
+        font-size: 20px;
+        line-height: 24px;
+        font-weight: 900;
+        margin-bottom: <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+        color: #FFFFFF;
+        text-align: left; /* 标题靠左对齐 */
+    }
+    
+    .jion-social-proof-card-text {
+        /* 三端统一：font-size 16px, line-height 19px, font-weight 400 */
+        font-size: 16px;
+        line-height: 19px;
+        font-weight: 400;
+        color: #FFFFFF;
+        text-align: left; /* 文本靠左对齐 */
+    }
+    
+    /* 页面内容 */
+    .jion-page-content {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: <?= genRespCSS(parseResp('40/80' . 'px')) ?> <?= genRespCSS(parseResp('16/40' . 'px')) ?>;
+        color: <?= htmlspecialchars($colors['text_secondary'] ?? '#E0E0E0') ?>;
+        font-size: <?= genRespCSS(parseResp('14/16' . 'px')) ?>;
+        line-height: 1.8;
+    }
+    
+    /* iPad 精确尺寸（clamp 无法精确匹配，使用媒体查询覆盖）*/
+    @media (min-width: 768px) and (max-width: 1024px) {
+    }
+    
+    @media (max-width: 767px) {
+        .jion-section {
+            padding: <?= genRespCSS(parseResp('30/40' . 'px')) ?> <?= genRespCSS(parseResp('12/16' . 'px')) ?>;
+        }
+        
+        .jion-banner {
+            /* 顶部保持 20，其余保持响应式（已在上方设置）*/
+        }
+        
+        .jion-why-jion-card {
+            padding: 15px;
+        }
+        
+        .jion-social-proof-card-icon {
+            margin-left: auto;
+            margin-right: auto;
+        }
+    }
+</style>
+
+<!-- 按钮事件处理：使用 data-track-event 属性，由 tracking.phtml 统一处理 -->
+
+<main class="jion-content">
+    <?php if ($showContent === 'yes' && $pageContent): ?>
+    <div class="jion-page-content">
+        <?= $pageContent ?>
+    </div>
+    <?php endif; ?>
+    
+    <!-- Banner区域 -->
+    <section class="jion-banner">
+        <picture class="jion-banner-picture">
+            <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($bannerBgImageMobileFinal ?? '') ?>">
+            <img src="<?= htmlspecialchars($bannerBgImageFinal ?? '') ?>" 
+                 alt="Banner" 
+                 loading="eager" 
+                 decoding="async" 
+                 fetchpriority="high">
+        </picture>
+        <div class="jion-container">
+            <div class="jion-banner-content">
+                <?php if ($bannerHeading): ?>
+                <h1 class="jion-banner-heading"><?= htmlspecialchars($bannerHeading) ?></h1>
+                <?php endif; ?>
+                
+                <?php if ($bannerDescription): ?>
+                <p class="jion-banner-description"><?= htmlspecialchars($bannerDescription) ?></p>
+                <?php endif; ?>
+                
+                <?php if ($bannerButtonText && $bannerButtonUrl): ?>
+                <a href="<?= htmlspecialchars($bannerButtonUrl) ?>" 
+                   class="jion-banner-button"
+                   data-track-event="<?= htmlspecialchars($bannerButtonEventName ?? '') ?>">
+                    <?= htmlspecialchars($bannerButtonText) ?>
+                </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Why Jion区域 -->
+    <section class="jion-section">
+        <div class="jion-container">
+            <?php if ($whyJionHeading): ?>
+            <h2 class="jion-section-heading"><?= htmlspecialchars($whyJionHeading) ?></h2>
+            <?php endif; ?>
+            
+            <div class="jion-cards-grid">
+                <?php foreach ($whyJionCards as $card): ?>
+                <div class="jion-why-jion-card">
+                    <?php if (!empty($card['icon'])): ?>
+                    <div class="jion-why-jion-card-icon">
+                        <?= $card['icon'] ?>
+                    </div>
+                    <div class="jion-why-jion-card-content">
+                        <?php endif; ?>
+                        <?php if (!empty($card['title'])): ?>
+                        <h3 class="jion-why-jion-card-title"><?= htmlspecialchars($card['title']) ?></h3>
+                        <?php endif; ?>
+                        <?php if (!empty($card['text'])): ?>
+                        <p class="jion-why-jion-card-text"><?= htmlspecialchars($card['text']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Community Preview区域 -->
+    <section class="jion-section">
+        <div class="jion-container">
+            <?php if ($communityPreviewHeading): ?>
+            <h2 class="jion-section-heading"><?= htmlspecialchars($communityPreviewHeading) ?></h2>
+            <?php endif; ?>
+            
+            <div class="jion-community-preview-grid">
+                <?php foreach ($communityPreviewCards as $card): ?>
+                <div class="jion-community-preview-card">
+                    <?php if (!empty($card['image'])): ?>
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="<?= htmlspecialchars($card['image']) ?>" alt="<?= htmlspecialchars($card['title'] ?? '') ?>" class="jion-community-preview-card-image" loading="lazy">
+                    <?php endif; ?>
+                    <div class="jion-community-preview-card-content">
+                        <?php if (!empty($card['title'])): ?>
+                        <h3 class="jion-community-preview-card-title"><?= htmlspecialchars($card['title']) ?></h3>
+                        <?php endif; ?>
+                        <?php if (!empty($card['text'])): ?>
+                        <p class="jion-community-preview-card-text"><?= htmlspecialchars($card['text']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    
+    <!-- CTA区域 -->
+    <section class="jion-section">
+        <div class="jion-container">
+            <?php if ($ctaHeading): ?>
+            <h2 class="jion-section-heading"><?= htmlspecialchars($ctaHeading) ?></h2>
+            <?php endif; ?>
+            
+            <div class="jion-cta-grid">
+                <div class="jion-cta-card">
+                    <?php if ($ctaCard1Title): ?>
+                    <h3 class="jion-cta-card-title"><?= htmlspecialchars($ctaCard1Title) ?></h3>
+                    <?php endif; ?>
+                    <?php if ($ctaCard1ButtonText && $ctaCard1ButtonUrl): ?>
+                    <a href="<?= htmlspecialchars($ctaCard1ButtonUrl) ?>" 
+                       class="jion-cta-button"
+                       data-track-event="<?= htmlspecialchars($ctaButtonEventName ?? '') ?>">
+                        <?= htmlspecialchars($ctaCard1ButtonText) ?>
+                    </a>
+                    <?php endif; ?>
+                </div>
+                
+                <div class="jion-cta-card">
+                    <?php if ($ctaCard2Text): ?>
+                    <p class="jion-cta-card-text"><?= htmlspecialchars($ctaCard2Text) ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Social Proof区域 -->
+    <section class="jion-section">
+        <div class="jion-container">
+            <?php if ($socialProofHeading): ?>
+            <h2 class="jion-section-heading"><?= htmlspecialchars($socialProofHeading) ?></h2>
+            <?php endif; ?>
+            
+            <div class="jion-social-proof-grid">
+                <?php foreach ($socialProofCards as $card): ?>
+                <div class="jion-social-proof-card">
+                    <?php if (!empty($card['icon'])): ?>
+                    <div class="jion-social-proof-card-icon">
+                        <?= $card['icon'] ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($card['title'])): ?>
+                    <h3 class="jion-social-proof-card-title"><?= htmlspecialchars($card['title']) ?></h3>
+                    <?php endif; ?>
+                    <?php if (!empty($card['text'])): ?>
+                    <p class="jion-social-proof-card-text"><?= htmlspecialchars($card['text']) ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- 懒加载脚本 -->
+<w:template>Weline_Cms::base/lazy-loading.phtml</w:template>

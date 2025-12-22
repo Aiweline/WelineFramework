@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <!--地址管理菜单-->
+    <add source="Weline_Shipping::address_manager" name="address_manager" title="地址管理" action="" 
+         parent="Weline_Backend::business_module"
+         icon="mdi mdi-map-marker-multiple" order="20420"/>
+    
+    <add source="Weline_Shipping::shipping_address_list" name="shipping_address_list" title="发货地址管理" 
+         action="shipping/backend/shippingaddress" parent="Weline_Shipping::address_manager"
+         icon="mdi mdi-truck" order="1"/>
+    
+    <add source="Weline_Shipping::delivery_address_list" name="delivery_address_list" title="运送地址管理" 
+         action="shipping/backend/deliveryaddress" parent="Weline_Shipping::address_manager"
+         icon="mdi mdi-truck-delivery" order="2"/>
+    
+    <!--配送系统管理菜单-->
+    <add source="Weline_Shipping::shipping_system" name="shipping_system" title="配送系统" action="" 
+         parent="Weline_Backend::business_module"
+         icon="mdi mdi-truck-delivery" order="20430"/>
+    
+    <add source="Weline_Shipping::region_list" name="region_list" title="地区管理" 
+         action="shipping/backend/region" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-map-marker" order="1"/>
+    
+    <add source="Weline_Shipping::zone_list" name="zone_list" title="配送区域" 
+         action="shipping/backend/zone" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-map" order="2"/>
+    
+    <add source="Weline_Shipping::carrier_list" name="carrier_list" title="快递公司" 
+         action="shipping/backend/carrier" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-truck" order="3"/>
+    
+    <add source="Weline_Shipping::rate_template_list" name="rate_template_list" title="费用模板" 
+         action="shipping/backend/ratetemplate" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-calculator" order="4"/>
+    
+    <add source="Weline_Shipping::free_shipping_rule_list" name="free_shipping_rule_list" title="免邮规则" 
+         action="shipping/backend/freeshippingrule" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-gift" order="5"/>
+    
+    <add source="Weline_Shipping::shipping_service_list" name="shipping_service_list" title="配送服务" 
+         action="shipping/backend/shippingservice" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-truck-fast" order="6"/>
+    
+    <add source="Weline_Shipping::tracking_list" name="tracking_list" title="物流跟踪" 
+         action="shipping/backend/tracking" parent="Weline_Shipping::shipping_system"
+         icon="mdi mdi-map-search" order="7"/>
+</menus>
+

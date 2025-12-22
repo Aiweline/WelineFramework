@@ -10,5 +10,8 @@ declare(strict_types=1);
 return [
     // 路由别名配置
     'router' => 'theme',
+    'dependencies' => [
+        'Weline_Meta'
+    ]
 ];
 

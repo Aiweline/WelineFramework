@@ -4,22 +4,22 @@
  * 
  * 输入框组件，支持多种类型和验证
  * 字段
- * @info description 描述：输入框组件，支持多种类型和验证
- * @info name 名称：Input输入框组件
- * @param name 字段名（必填）
- * @param type 输入类型 (text/password/email/tel/number等)
- * @param label 标签文字
- * @param placeholder 占位符
- * @param value 默认值
- * @param required 是否必填
- * @param disabled 是否禁用
- * @param readonly 是否只读
- * @param class 额外CSS类
- * @param id 元素ID
- * @param help 帮助文字
- * @param error 错误信息
- * @param icon 图标类名
- * @param autocomplete 自动完成
+ * @meta.name {default="Input输入框组件",name="Input输入框组件",description="Input输入框组件，用于描述组件的名称"}
+ * @meta.description {default="输入框组件，支持多种类型和验证",name="输入框组件，支持多种类型和验证",description="输入框组件，支持多种类型和验证，用于描述组件的用途"}
+ * @param.name {default="",name="字段名",description="字段名，必填参数"}
+ * @param.type {default="text",name="输入类型",description="输入类型，可选值：text/password/email/tel/number等"}
+ * @param.label {default="",name="标签文字",description="标签文字，用于设置标签文字"}
+ * @param.placeholder {default="",name="占位符",description="占位符，用于设置占位符"}
+ * @param.value {default="",name="默认值",description="默认值，用于设置默认值"}
+ * @param.required {default=false,name="是否必填",description="是否必填，用于控制字段的必填状态"}
+ * @param.disabled {default=false,name="是否禁用",description="是否禁用，用于控制字段的禁用状态"}
+ * @param.readonly {default=false,name="是否只读",description="是否只读，用于控制字段的只读状态"}
+ * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置组件额外CSS类"}
+ * @param.id {default="",name="元素ID",description="元素ID，用于设置输入框ID"}
+ * @param.help {default="",name="帮助文字",description="帮助文字，用于设置帮助文字"}
+ * @param.error {default="",name="错误信息",description="错误信息，用于设置错误信息"}
+ * @param.icon {default="",name="图标类名",description="图标类名，用于设置输入框图标"}
+ * @param.autocomplete {default="",name="自动完成",description="自动完成，用于设置自动完成属性"}
  */
 $name = $this->getData('name') ?? '';
 $type = $this->getData('type') ?? 'text';

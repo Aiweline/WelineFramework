@@ -16,6 +16,15 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     @template(Weline_Admin::common/head.phtml)
     <title><?= __('主题管理') ?> - <?= __('Weline Admin 管理面板') ?></title>
     <style>
+        /* 设备缩放支持：在容器宽度较小时缩放内屏，避免滚动 */
+        .device-frame {
+            transform-origin: top center;
+        }
+        .device-screen-inner {
+            width: 100%;
+            height: 100%;
+        }
+
         /* 隐藏所有预览容器的滚动条 */
         .preview-container,
         .preview-container-layout {
@@ -25,6 +34,94 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         .preview-container::-webkit-scrollbar,
         .preview-container-layout::-webkit-scrollbar {
             display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .config-preview-panel {
+            position: relative;
+            min-height: 420px;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+        }
+        .config-preview-panel iframe {
+            width: 100%;
+            height: 100%;
+            min-height: 380px;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+        .config-preview-panel .iframe-loading {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            bottom: 16px;
+            background: rgba(255,255,255,0.96);
+            border-radius: 10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 5;
+            transition: opacity 0.3s ease;
+        }
+        .config-preview-panel .iframe-loading.small {
+            padding: 0 20px;
+        }
+        .config-preview-panel .preview-note {
+            border-top: 1px dashed #e2e8f0;
+        }
+        .has-meta-config {
+            position: relative;
+        }
+        .meta-config-btn {
+            border: none;
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+        .meta-config-btn i {
+            font-size: 14px;
+        }
+        .meta-config-btn:hover {
+            color: #0d6efd;
+            background: rgba(13, 110, 253, 0.15);
+        }
+        .meta-config-floating {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 2;
+        }
+        .meta-config-btn {
+            padding: 0;
+        }
+        .meta-config-iframe-wrapper {
+            position: relative;
+            min-height: 640px;
+            background: #f8fafc;
+        }
+        .meta-config-iframe-wrapper .iframe-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.9);
+            z-index: 2;
         }
         
         /* 隐藏所有iframe的滚动条（但保留滚动功能） */
@@ -345,17 +442,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 <h5 class="modal-title" id="metaConfigModalLabel"><?= __('Meta配置') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="metaConfigModalBody">
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
+            <div class="modal-body p-0">
+                <div class="meta-config-iframe-wrapper">
+                    <div class="iframe-loading" id="metaConfigIframeLoading">
+                        <div class="spinner-border text-primary mb-2" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
                     </div>
-                    <p class="mt-3 text-muted"><?= __('正在加载配置...') ?></p>
+                        <p class="text-muted small mb-0"><?= __('正在加载配置...') ?></p>
                 </div>
+                    <iframe id="metaConfigIframe" class="meta-config-iframe d-none" style="width: 100%; min-height: 640px; border: none;"></iframe>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="saveMetaConfigBtn"><?= __('保存配置') ?></button>
             </div>
         </div>
     </div>
@@ -373,11 +469,48 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     const layoutConfigUrl = '<?= $this->getUrl('theme/backend/config/layout/config-data') ?>';
     const layoutSaveUrl = '<?= $this->getUrl('theme/backend/config/layout/save') ?>';
     const layoutPreviewUrl = '<?= $this->getUrl('theme/backend/config/layout/preview') ?>';
+    const metaConfigModalElement = document.getElementById('metaConfigModal');
+    const metaConfigIframe = document.getElementById('metaConfigIframe');
+    const metaConfigIframeLoading = document.getElementById('metaConfigIframeLoading');
+    const metaManagerUrl = '<?= $this->getUrl('meta/backend/config/file') ?>';
     const DEFAULT_SCOPE = 'default';
     const layoutScopes = {
         frontend: 'frontend/' + DEFAULT_SCOPE,
         backend: 'backend/' + DEFAULT_SCOPE
     };
+
+    const currentParamTranslation = {
+        identify: null,
+        param: null,
+        scope: DEFAULT_SCOPE,
+        area: 'frontend',
+        locale: null
+    };
+
+    function buildPreviewCardHtml(area, context, title, description = '') {
+        const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+        const areaKey = capitalize(area);
+        const contextKey = capitalize(context);
+        const loadingId = 'iframeLoading' + areaKey + contextKey;
+        const iframeId = 'configPreviewIframe' + areaKey + contextKey;
+        let html = '';
+        html += '<div class="card h-100">';
+        html += '<div class="card-header"><h6 class="mb-0">' + title + '</h6></div>';
+        html += '<div class="card-body p-0">';
+        html += '<div class="config-preview-panel">';
+        html += '<div class="iframe-loading small" id="' + loadingId + '">';
+        html += '<div class="spinner-border text-primary mb-2" role="status" style="width: 2rem; height: 2rem;"><span class="visually-hidden"><?= __('加载中...') ?></span></div>';
+        html += '<p class="text-muted small mb-0"><?= __('正在刷新预览...') ?></p>';
+        html += '</div>';
+        html += '<iframe id="' + iframeId + '" class="config-preview-iframe" data-area="' + area + '" data-context="' + context + '" data-loading-id="' + loadingId + '" style="width: 100%; min-height: 420px; border: none; background: white; border-radius: 8px;"></iframe>';
+        if (description) {
+            html += '<div class="preview-note text-muted small text-center py-2">' + description + '</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
 
     function normalizeScopeInput(area, value) {
         const normalizedArea = (area || 'frontend').toLowerCase();
@@ -510,6 +643,181 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             openThemeModal(themeId, themeName, true);
         }
     });
+
+    // 加载并渲染单个参数的翻译配置
+    function loadParamTranslation() {
+        if (!currentParamTranslation.identify || !currentParamTranslation.param) {
+            return;
+        }
+
+        const params = new URLSearchParams();
+        params.append('theme_id', currentThemeId);
+        params.append('area', currentParamTranslation.area || 'frontend');
+        params.append('identify', currentParamTranslation.identify);
+        params.append('param', currentParamTranslation.param);
+        params.append('scope', currentParamTranslation.scope || DEFAULT_SCOPE);
+        if (currentParamTranslation.locale) {
+            params.append('locale', currentParamTranslation.locale);
+        }
+
+        paramTranslationModalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3 text-muted mb-0"><?= __('正在加载翻译...') ?></p></div>';
+
+        fetch(paramTranslationUrl + '?' + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                if (data.code !== 200) {
+                    paramTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0">' + (data.msg || data.message || '<?= __('加载翻译失败') ?>') + '</div>';
+                    return;
+                }
+
+                const info = data.data || {};
+                currentParamTranslation.locale = info.locale || currentParamTranslation.locale || (<?= json_encode(\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN') ?>);
+
+                let html = '';
+                html += '<form id="paramTranslationForm">';
+                html += '<input type="hidden" name="theme_id" value="' + currentThemeId + '">';
+                html += '<input type="hidden" name="area" value="' + (info.area || currentParamTranslation.area || 'frontend') + '">';
+                html += '<input type="hidden" name="identify" value="' + (info.identify || currentParamTranslation.identify) + '">';
+                html += '<input type="hidden" name="param" value="' + (info.param || currentParamTranslation.param) + '">';
+                html += '<input type="hidden" name="scope" value="' + (info.scope || currentParamTranslation.scope || DEFAULT_SCOPE) + '">';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><?= __('参数') ?></label>';
+                html += '<div><code>' + (info.identify || currentParamTranslation.identify) + '.param.' + (info.param || currentParamTranslation.param) + '.value</code></div>';
+                html += '</div>';
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label"><?= __('目标语言代码') ?></label>';
+                html += '<input type="text" class="form-control form-control-sm" name="locale" value="' + (info.locale || currentParamTranslation.locale || '') + '" placeholder="zh_Hans_CN">';
+                html += '<div class="form-text"><?= __('填写要翻译到的语言代码，例如 zh_Hans_CN / en_US / es_ES 等。') ?></div>';
+                html += '</div>';
+
+                const label = info.label || currentParamTranslation.param;
+                const desc = info.description || '';
+                const val = (typeof info.value !== 'undefined' && info.value !== null) ? info.value : (info.default || '');
+
+                html += '<div class="mb-3">';
+                html += '<label class="form-label">' + label + '</label>';
+                if (desc) {
+                    html += '<div class="text-muted small mb-1">' + desc + '</div>';
+                }
+                html += '<input type="text" class="form-control" name="value" value="' + String(val).replace(/"/g, '&quot;') + '">';
+                html += '</div>';
+
+                paramTranslationModalBody.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                paramTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载翻译失败') ?>: ' + error.message + '</div>';
+            });
+    }
+
+    /**
+     * 加载并渲染 Meta 参数配置（齿轮按钮）
+     * @param {Object} options
+     * @param {string} options.area frontend/backend
+     * @param {string} options.type layouts/colors/variables/components/partials
+     * @param {string} options.identify meta_identify（如 layouts.default）
+     */
+    function loadMetaConfig(options) {
+        if (!currentThemeId) {
+            return;
+        }
+        if (!options || !options.identify) {
+            return;
+        }
+
+        const area = options.area || 'frontend';
+        const type = options.type || 'layouts';
+        const identify = options.identify;
+
+        if (!metaConfigModalBody) {
+            return;
+        }
+
+        metaConfigModalBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3 text-muted"><?= __('正在加载配置...') ?></p></div>';
+
+        const params = new URLSearchParams();
+        params.append('theme_id', currentThemeId);
+        params.append('area', area);
+        params.append('identify', identify);
+        // scope：复用当前布局配置的 scope 规则
+        const scopeValue = area === 'backend' ? (layoutScopes.backend || 'backend/' + DEFAULT_SCOPE) : (layoutScopes.frontend || 'frontend/' + DEFAULT_SCOPE);
+        params.append('scope', scopeValue.split('/').slice(1).join('/') || DEFAULT_SCOPE);
+
+        fetch(metaConfigUrl + '?' + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                if (data.code !== 200) {
+                    metaConfigModalBody.innerHTML = '<div class="alert alert-danger">' + (data.msg || data.message || '<?= __('加载配置失败') ?>') + '</div>';
+                    return;
+                }
+
+                const cfg = data.data || {};
+                const paramsList = Array.isArray(cfg.params) ? cfg.params : [];
+
+                if (paramsList.length === 0) {
+                    metaConfigModalBody.innerHTML = '<div class="alert alert-info mb-0"><?= __('该组件未定义可配置参数。') ?></div>';
+                    return;
+                }
+
+                let html = '';
+                html += '<form id="metaConfigForm">';
+                html += '<input type="hidden" name="theme_id" value="' + currentThemeId + '">';
+                html += '<input type="hidden" name="area" value="' + (cfg.area || area) + '">';
+                html += '<input type="hidden" name="identify" value="' + (cfg.identify || identify) + '">';
+                html += '<input type="hidden" name="scope" value="' + (cfg.scope || (scopeValue.split('/').slice(1).join('/') || DEFAULT_SCOPE)) + '">';
+
+                // 语言信息（当前语言）
+                const currentLocale = cfg.locale || 'zh_Hans_CN';
+                html += '<div class="mb-3 d-flex justify-content-between align-items-center">';
+                html += '<div>';
+                html += '<span class="badge bg-light text-dark me-2"><?= __('当前语言') ?>:</span>';
+                html += '<code style="font-size: 11px;">' + currentLocale + '</code>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '<div class="list-group list-group-flush">';
+                paramsList.forEach(function (item) {
+                    const name = item.name || '';
+                    const label = item.label || name;
+                    const desc = item.description || '';
+                    const value = (typeof item.value !== 'undefined' && item.value !== null) ? item.value : (item.default || '');
+                    const isTranslatable = !!item.translate;
+
+                    html += '<div class="list-group-item">';
+                    html += '<div class="mb-2 d-flex justify-content-between align-items-center">';
+                    html += '<div><strong>' + label + '</strong>';
+                    html += ' <code class="text-muted ms-1" style="font-size: 11px;">' + name + '</code></div>';
+                    if (isTranslatable) {
+                        html += '<div class="d-flex align-items-center gap-1">';
+                        html += '<span class="badge bg-success-subtle text-success" title="<?= __('该参数支持多语言翻译') ?>"><?= __('多语言') ?></span>';
+                        html += '<button type="button" class="btn btn-sm btn-outline-secondary param-translate-btn" ' +
+                            'data-area="' + (cfg.area || area) + '" ' +
+                            'data-identify="' + (cfg.identify || identify) + '" ' +
+                            'data-param="' + name + '" ' +
+                            'data-scope="' + (cfg.scope || (scopeValue.split("/").slice(1).join("/") || DEFAULT_SCOPE)) + '">' +
+                            '<i class="mdi mdi-translate"></i></button>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    if (desc) {
+                        html += '<div class="text-muted small mb-2">' + desc + '</div>';
+                    }
+                    html += '<input type="text" class="form-control form-control-sm" name="params[' + name + ']" value="' + String(value).replace(/"/g, '&quot;') + '">';
+                    html += '</div>';
+                });
+                html += '</div>';
+
+                html += '</form>';
+
+                metaConfigModalBody.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                metaConfigModalBody.innerHTML = '<div class="alert alert-danger"><?= __('加载配置失败') ?>: ' + error.message + '</div>';
+            });
+    }
     
     // 渲染主题信息
     function renderThemeInfo(container, data, isPreview = false) {
@@ -626,7 +934,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 html += '</div>';
                 var containerBgColor = defaultTheme === 'dark' ? '#1a1a1a' : '#f5f5f5';
                 var containerClass = defaultTheme === 'dark' ? 'preview-container-dark' : 'preview-container-light';
-                html += '<div class="preview-container ' + containerClass + '" data-theme-color="' + defaultTheme + '" style="display: flex; justify-content: center; align-items: center; background: ' + containerBgColor + '; min-height: 600px; transition: background-color 0.3s ease;">';
+                html += '<div class="preview-container ' + containerClass + '" data-theme-color="' + defaultTheme + '" style="display: flex; justify-content: center; align-items: center; background: ' + containerBgColor + '; min-height: 500px; padding: 20px; transition: background-color 0.3s ease;">';
                 html += '<div class="device-frame-wrapper" data-device="desktop" style="width: 100%; max-width: 100%; transition: all 0.3s ease; display: flex; justify-content: center; align-items: center;">';
                 html += '<div class="device-frame device-desktop" style="width: 100%; max-width: 100%; aspect-ratio: 16/9; transition: all 0.3s ease; position: relative;">';
                 html += '<div class="device-screen" style="width: 100%; height: 100%; border: 8px solid #2c3e50; border-radius: 8px; background: #1a1a1a; box-shadow: 0 0 0 2px #34495e, 0 10px 40px rgba(0,0,0,0.3); position: relative; overflow: hidden; box-sizing: border-box;">';
@@ -666,7 +974,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 html += '</div>';
                 var containerBgColorBackend = defaultTheme === 'dark' ? '#1a1a1a' : '#f5f5f5';
                 var containerClassBackend = defaultTheme === 'dark' ? 'preview-container-dark' : 'preview-container-light';
-                html += '<div class="preview-container ' + containerClassBackend + '" data-theme-color="' + defaultTheme + '" style="display: flex; justify-content: center; align-items: center; background: ' + containerBgColorBackend + '; min-height: 600px; transition: background-color 0.3s ease;">';
+                html += '<div class="preview-container ' + containerClassBackend + '" data-theme-color="' + defaultTheme + '" style="display: flex; justify-content: center; align-items: center; background: ' + containerBgColorBackend + '; min-height: 500px; padding: 20px; transition: background-color 0.3s ease;">';
                 html += '<div class="device-frame-wrapper" data-device="desktop" style="width: 100%; max-width: 100%; transition: all 0.3s ease; display: flex; justify-content: center; align-items: center;">';
                 html += '<div class="device-frame device-desktop" style="width: 100%; max-width: 100%; aspect-ratio: 16/9; transition: all 0.3s ease; position: relative;">';
                 html += '<div class="device-screen" style="width: 100%; height: 100%; border: 8px solid #2c3e50; border-radius: 8px; background: #1a1a1a; box-shadow: 0 0 0 2px #34495e, 0 10px 40px rgba(0,0,0,0.3); position: relative; overflow: hidden; box-sizing: border-box;">';
@@ -708,6 +1016,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>';
         
         container.innerHTML = html;
+
+        // 初始化前端 Meta 配置 iframe（主题 + 前端 + 当前 scope）
+        const metaFrame = container.querySelector('#frontendMetaManagerFrame');
+        if (metaFrame) {
+            const params = new URLSearchParams({
+                theme_id: data.theme.id,
+                area: 'frontend',
+                scope: frontendScopeOnly
+            });
+            metaFrame.src = '<?= $this->getUrl('theme/backend/config/layout/meta') ?>' + '?' + params.toString();
+        }
         
         // 初始化iframe加载状态管理
         function initIframeLoading(iframeId) {
@@ -824,6 +1143,14 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             
             if (!deviceFrameWrapper || !deviceFrame || !deviceScreen) return;
             
+            // 计算缩放，避免容器过窄导致外框溢出
+            const baseWidthMap = { desktop: 1280, tablet: 820, mobile: 414 };
+            const baseHeightMap = { desktop: 720, tablet: 1024, mobile: 896 };
+            const baseWidth = baseWidthMap[device] || 1280;
+            const baseHeight = baseHeightMap[device] || 720;
+            const containerWidth = Math.max(320, (tabPane?.querySelector('.preview-container')?.clientWidth || deviceFrameWrapper.clientWidth || baseWidth) - 32);
+            const scale = Math.min(1, Math.max(0.35, containerWidth / baseWidth));
+            
             // 更新设备类型
             deviceFrameWrapper.setAttribute('data-device', device);
             deviceFrame.className = 'device-frame device-' + device;
@@ -899,6 +1226,8 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 notch.style.cssText = 'position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 24px; background: ' + notchBg + '; border-radius: 0 0 16px 16px; z-index: 10;';
                 notch.style.display = 'block';
             }
+            
+            // 不再需要缩放，设备框通过 CSS 的 aspect-ratio 和固定高度自适应
         }
         
         // 绑定设备选择按钮事件
@@ -1428,21 +1757,106 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
     document.addEventListener('click', function(e) {
         if (e.target.closest('.layout-config-btn')) {
             const btn = e.target.closest('.layout-config-btn');
-            currentThemeId = btn.getAttribute('data-theme-id');
-            const themeName = btn.getAttribute('data-theme-name');
+            const themeId = btn.getAttribute('data-theme-id');
             
-            const modal = new bootstrap.Modal(document.getElementById('layoutConfigModal'));
-            document.getElementById('layoutConfigModalLabel').textContent = '<?= __('布局配置') ?> - ' + themeName;
-            
-            // 重置Modal内容
-            const modalBody = document.getElementById('layoutConfigModalBody');
-            modalBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3 text-muted"><?= __('正在加载配置...') ?></p></div>';
-            
-            modal.show();
-            
-            loadLayoutConfigData(modalBody, true);
+            // 跳转到主题编辑页面
+            const editUrl = '<?= $this->getUrl('theme/backend/config/layout/edit') ?>' + 
+                           '?theme_id=' + encodeURIComponent(themeId) + 
+                           '&area=frontend&scope=default';
+            window.location.href = editUrl;
         }
     });
+
+    // 打开 Meta 参数配置 Modal（齿轮按钮）
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.meta-config-btn');
+        if (!btn) {
+            return;
+        }
+
+        if (!currentThemeId) {
+            alert('<?= __('请先选择需要配置的主题') ?>');
+            return;
+        }
+
+        const area = (btn.getAttribute('data-area') || 'frontend').toLowerCase();
+        const type = btn.getAttribute('data-type') || '';
+        const category = btn.getAttribute('data-category') || '';
+        let identify = btn.getAttribute('data-identify') || '';
+
+        if (identify) {
+            if (!identify.startsWith('theme.')) {
+                identify = 'theme.' + area + '.' + identify.replace(/^theme\./, '');
+            }
+        }
+
+        const scopeValue = layoutScopes[area] || (area + '/' + DEFAULT_SCOPE);
+        const scopeParts = scopeValue.split('/');
+        const scope = scopeParts.slice(1).join('/') || DEFAULT_SCOPE;
+
+        const params = new URLSearchParams({
+            namespace: 'theme.' + area,
+            area: area,
+            theme_id: currentThemeId || '',
+            scope: scope,
+            type: type,
+        });
+
+        if (category) {
+            params.append('category', category);
+        }
+        if (identify) {
+            params.append('meta_identify', identify);
+        }
+
+        if (metaConfigIframeLoading) {
+            metaConfigIframeLoading.style.display = 'flex';
+        }
+        if (metaConfigIframe) {
+            metaConfigIframe.classList.add('d-none');
+            metaConfigIframe.src = metaManagerUrl + '?' + params.toString();
+            metaConfigIframe.onload = function() {
+                if (metaConfigIframeLoading) {
+                    metaConfigIframeLoading.style.display = 'none';
+                }
+                metaConfigIframe.classList.remove('d-none');
+            };
+        }
+
+        if (metaConfigModalElement) {
+            const modal = bootstrap.Modal.getOrCreateInstance(metaConfigModalElement);
+            const label = document.getElementById('metaConfigModalLabel');
+            if (label) {
+                label.textContent = '<?= __('Meta配置') ?> - ' + (identify || type || area);
+            }
+            modal.show();
+        }
+    });
+    
+    window.addEventListener('message', function(event) {
+        const data = event.data || {};
+        if (data.type === 'meta-config:saved') {
+            refreshPreviewIframes((data.area || '').toLowerCase());
+        }
+    });
+
+    function refreshPreviewIframes(targetArea = null) {
+        document.querySelectorAll('.config-preview-iframe').forEach(function(iframe) {
+            const iframeArea = (iframe.getAttribute('data-area') || '').toLowerCase();
+            if (targetArea && iframeArea !== targetArea) {
+                return;
+            }
+            const loadingId = iframe.getAttribute('data-loading-id');
+            if (loadingId) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) {
+                    loadingEl.style.display = 'flex';
+                }
+            }
+            const src = iframe.getAttribute('src');
+            iframe.setAttribute('src', src);
+        });
+    }
     
     // 打开部件配置Modal
     document.addEventListener('click', function(e) {
@@ -1501,6 +1915,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         const backendScopeValue = normalizeScopeInput('backend', data.backendScope || layoutScopes.backend);
         layoutScopes.frontend = frontendScopeValue;
         layoutScopes.backend = backendScopeValue;
+
+        // 解析前端 Scope（frontend/default -> default），用于传给 Meta 管理 iframe
+        const frontendScopeParts = frontendScopeValue.split('/');
+        const frontendScopeOnly = frontendScopeParts.slice(1).join('/') || 'default';
         const scopeOptions = data.scopeOptions || {};
         const frontendScopeOptionsRaw = Array.isArray(scopeOptions.frontend) ? scopeOptions.frontend : [];
         const backendScopeOptionsRaw = Array.isArray(scopeOptions.backend) ? scopeOptions.backend : [];
@@ -1556,159 +1974,17 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 前端配置子Tab内容
         html += '<div class="tab-content" id="frontend-config-tab-content">';
         
-        // 布局配置子Tab
+        // 布局配置子Tab（直接使用 Meta 管理 iframe）
         html += '<div class="tab-pane fade show active" id="frontend-layout-config" role="tabpanel">';
-        html += '<div class="row g-3">';
-        // 左侧：配置区域
-        html += '<div class="col-md-5 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('布局配置') ?></h6></div>';
-        html += '<div class="card-body">';
-        
-        // 前端布局配置 - 使用Tab展示
-        html += '<div class="mb-3">';
-        html += '<label class="form-label"><strong><?= __('布局配置') ?></strong></label>';
-        if (!data.frontendLayouts || Object.keys(data.frontendLayouts).length === 0) {
-            html += '<p class="text-muted"><?= __('该主题暂无前端布局选项') ?></p>';
-        } else {
-            // 布局类型Tab导航
-            html += '<ul class="nav nav-tabs mb-3" id="frontend-layout-tabs" role="tablist">';
-            let firstTab = true;
-            Object.keys(data.frontendLayouts).forEach(layoutType => {
-                const tabId = 'frontend-layout-' + layoutType;
-                const active = firstTab ? ' active' : '';
-                const selected = firstTab ? 'true' : 'false';
-                html += '<li class="nav-item" role="presentation">';
-                html += '<button class="nav-link' + active + '" id="' + tabId + '-tab" data-bs-toggle="tab" data-bs-target="#' + tabId + '-pane" type="button" role="tab" aria-controls="' + tabId + '-pane" aria-selected="' + selected + '">';
-                html += layoutType.charAt(0).toUpperCase() + layoutType.slice(1);
-                html += '</button>';
-                html += '</li>';
-                firstTab = false;
-            });
-            html += '</ul>';
-            
-            // 布局类型Tab内容
-            html += '<div class="tab-content" id="frontend-layout-tab-content">';
-            firstTab = true;
-            Object.keys(data.frontendLayouts).forEach(layoutType => {
-                const tabId = 'frontend-layout-' + layoutType;
-                const active = firstTab ? ' show active' : '';
-                html += '<div class="tab-pane fade' + active + '" id="' + tabId + '-pane" role="tabpanel" aria-labelledby="' + tabId + '-tab">';
-                html += '<div class="row g-2">';
-                
-                data.frontendLayouts[layoutType].forEach(option => {
-                    // 支持新格式（包含meta信息）和旧格式（字符串）
-                    const optionValue = typeof option === 'object' ? option.value : option;
-                    const optionMeta = typeof option === 'object' ? (option.meta || {}) : {};
-                    const optionName = optionMeta.name || optionValue.charAt(0).toUpperCase() + optionValue.slice(1);
-                    const optionDesc = optionMeta.description || '';
-                    const optionIcon = optionMeta.icon || 'mdi mdi-view-dashboard';
-                    const isSelected = (data.frontendLayoutConfig[layoutType] || 'default') === optionValue;
-                    
-                    html += '<div class="col-12 col-md-6">';
-                    html += '<div class="card layout-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-layout-type="' + layoutType + '" data-layout-value="' + optionValue + '" data-area="frontend">';
-                    html += '<div class="card-body p-3">';
-                    html += '<div class="d-flex align-items-start">';
-                    html += '<div class="flex-shrink-0 me-3">';
-                    html += '<i class="' + optionIcon + '" style="font-size: 1.5rem; color: ' + (isSelected ? '#0d6efd' : '#6c757d') + ';"></i>';
-                    html += '</div>';
-                    html += '<div class="flex-grow-1">';
-                    html += '<h6 class="mb-1">' + optionName + '</h6>';
-                    if (optionDesc) {
-                        html += '<p class="text-muted small mb-0">' + optionDesc + '</p>';
-                    }
-                    html += '</div>';
-                    if (isSelected) {
-                        html += '<div class="flex-shrink-0">';
-                        html += '<i class="mdi mdi-check-circle text-primary"></i>';
-                        html += '</div>';
-                    }
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                });
-                
-                html += '</div>'; // 结束 row
-                html += '</div>'; // 结束 tab-pane
-                firstTab = false;
-            });
-            html += '</div>'; // 结束 tab-content
-        }
-        html += '</div>'; // 结束 mb-3 (布局配置)
-        html += '</div>'; // 结束 card-body
-        html += '</div>'; // 结束 card
-        html += '</div>'; // 结束左侧配置区域 col-md-5
-        
-        // 右侧：预览区域
-        html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header d-flex justify-content-between align-items-center">';
-        html += '<h6 class="mb-0"><?= __('前端预览') ?></h6>';
-        html += '<div class="d-flex gap-2 align-items-center">';
-        // 自动登录开关（仅前端预览显示）
-        html += '<div class="form-check form-switch me-2">';
-        html += '<input class="form-check-input auto-login-switch-layout" type="checkbox" id="autoLoginSwitchLayout" checked data-area="frontend">';
-        html += '<label class="form-check-label" for="autoLoginSwitchLayout" title="<?= __('预览时自动登录测试账户') ?>"><?= __('自动登录') ?></label>';
-        html += '</div>';
-        // 主题色系切换按钮
-        const defaultThemeLayout = detectExternalTheme();
-        const lightActiveLayout = defaultThemeLayout === 'light' ? ' active' : '';
-        const darkActiveLayout = defaultThemeLayout === 'dark' ? ' active' : '';
-        const containerBgColorLayout = defaultThemeLayout === 'dark' ? '#1a1a1a' : '#f5f5f5';
-        const containerClassLayout = defaultThemeLayout === 'dark' ? 'preview-container-dark-layout' : 'preview-container-light-layout';
-        const borderColorLayout = defaultThemeLayout === 'dark' ? '#4a5568' : '#2c3e50';
-        const shadowColorLayout = defaultThemeLayout === 'dark' ? '#1a1a1a' : '#34495e';
-        html += '<div class="btn-group btn-group-sm" role="group" aria-label="<?= __('主题色系切换') ?>">';
-        html += '<button type="button" class="btn btn-outline-primary theme-color-btn-layout' + lightActiveLayout + '" data-theme-color="light" data-area="frontend" title="<?= __('亮色主题') ?>">';
-        html += '<i class="mdi mdi-weather-sunny"></i> <?= __('亮色') ?>';
-        html += '</button>';
-        html += '<button type="button" class="btn btn-outline-primary theme-color-btn-layout' + darkActiveLayout + '" data-theme-color="dark" data-area="frontend" title="<?= __('暗色主题') ?>">';
-        html += '<i class="mdi mdi-weather-night"></i> <?= __('暗色') ?>';
-        html += '</button>';
-        html += '</div>';
-        // 刷新预览按钮
-        html += '<button type="button" class="btn btn-sm btn-outline-success refresh-preview-btn-layout" data-area="frontend" title="<?= __('刷新预览') ?>">';
-        html += '<i class="mdi mdi-refresh"></i> <?= __('刷新') ?>';
-        html += '</button>';
-        // 全屏预览按钮
-        html += '<button type="button" class="btn btn-sm btn-outline-info fullscreen-preview-btn-layout" data-area="frontend" title="<?= __('全屏预览') ?>">';
-        html += '<i class="mdi mdi-fullscreen"></i> <?= __('全屏') ?>';
-        html += '</button>';
-        // 设备选择按钮
-        html += '<div class="btn-group btn-group-sm device-selector-layout" role="group" aria-label="<?= __('设备选择') ?>" data-area="frontend">';
-        html += '<button type="button" class="btn btn-outline-secondary device-btn-layout active" data-device="desktop" data-width="1920px" data-height="1080px" title="<?= __('电脑 (1920x1080)') ?>">';
-        html += '<i class="mdi mdi-monitor"></i> <?= __('电脑') ?>';
-        html += '</button>';
-        html += '<button type="button" class="btn btn-outline-secondary device-btn-layout" data-device="tablet" data-width="768px" title="<?= __('平板') ?>">';
-        html += '<i class="mdi mdi-tablet"></i> <?= __('平板') ?>';
-        html += '</button>';
-        html += '<button type="button" class="btn btn-outline-secondary device-btn-layout" data-device="mobile" data-width="375px" title="<?= __('手机') ?>">';
-        html += '<i class="mdi mdi-cellphone"></i> <?= __('手机') ?>';
-        html += '</button>';
-        html += '</div>';
-        html += '</div>';
-        html += '</div>';
-        html += '<div class="card-body p-0">';
-        html += '<div class="preview-container-layout ' + containerClassLayout + '" data-theme-color="' + defaultThemeLayout + '" style="width: 100%; min-height: 600px; max-height: 700px; background: ' + containerBgColorLayout + '; position: relative; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 20px; transition: background-color 0.3s ease;">';
-        html += '<div class="device-frame-wrapper-layout" data-device="desktop" style="width: 100%; max-width: 100%; transition: all 0.3s ease; display: flex; justify-content: center; align-items: center;">';
-        html += '<div class="device-frame-layout device-desktop-layout" style="width: 100%; max-width: 100%; aspect-ratio: 16/9; transition: all 0.3s ease; position: relative;">';
-        html += '<div class="device-screen-layout" style="width: 100%; height: 100%; border: 8px solid ' + borderColorLayout + '; border-radius: 8px; background: #1a1a1a; box-shadow: 0 0 0 2px ' + shadowColorLayout + ', 0 10px 40px rgba(0,0,0,' + (defaultThemeLayout === 'dark' ? '0.5' : '0.3') + '); position: relative; overflow: hidden; box-sizing: border-box;">';
-        html += '<div class="device-screen-inner-layout" style="width: 100%; height: 100%; overflow: hidden; border-radius: 2px; box-sizing: border-box; position: relative;">';
-        html += '<div class="iframe-loading" id="iframeLoadingFrontendConfig" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">';
-        html += '<div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden"><?= __('加载中...') ?></span></div>';
-        html += '<p class="text-muted mb-0"><?= __('正在加载预览...') ?></p>';
-        html += '</div>';
-        html += '<iframe id="layoutPreviewIframeFrontend" style="width: 100%; height: 100%; border: none; background: white;"></iframe>';
-        html += '</div>'; // 结束 device-screen-inner-layout
-        html += '</div>'; // 结束 device-screen-layout
-        html += '</div>'; // 结束 device-frame-layout
-        html += '</div>'; // 结束 device-frame-wrapper-layout
-        html += '</div>'; // 结束 preview-container-layout
-        html += '</div>'; // 结束 card-body
-        html += '</div>'; // 结束 card
-        html += '</div>'; // 结束右侧预览区域 col-md-7
-        html += '</div>'; // 结束row
+        html += '  <div class="card">';
+        html += '    <div class="card-header">';
+        html += '      <h6 class="mb-0"><?= __('布局 Meta 配置') ?></h6>';
+        html += '    </div>';
+        html += '    <div class="card-body p-0">';
+        html += '      <iframe id="frontendMetaManagerFrame" class="w-100 border-0"';
+        html += '              style="min-height: 520px; background-color: transparent;"></iframe>';
+        html += '    </div>';
+        html += '  </div>';
         html += '</div>'; // 结束布局配置子Tab
         
         // 色系配置子Tab
@@ -1726,8 +2002,13 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const colorName = colorMeta.name || colorValue.charAt(0).toUpperCase() + colorValue.slice(1);
                 const colorDesc = colorMeta.description || '';
                 const isSelected = (data.frontendColorConfig || 'light') === colorValue;
+                const hasColorParams = colorMeta.params && Object.keys(colorMeta.params).length > 0;
+                const colorIdentify = colorMeta.meta_identify || ('colors.' + colorValue);
                 html += '<div class="col-12 col-md-6">';
-                html += '<div class="card color-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-color-value="' + colorValue + '" data-area="frontend">';
+                html += '<div class="card color-option-card' + (isSelected ? ' border-primary' : '') + (hasColorParams ? ' has-meta-config' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-color-value="' + colorValue + '" data-area="frontend">';
+                if (hasColorParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="frontend" data-type="colors" data-identify="' + colorIdentify + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-body p-3">';
                 html += '<div class="d-flex align-items-start">';
                 html += '<div class="flex-grow-1">';
@@ -1754,12 +2035,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>'; // 结束 card
         html += '</div>'; // 结束 col-md-5
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('色系预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择色系后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('frontend', 'color', '<?= __('色系预览') ?>', '<?= __('切换色系后即刻更新页面样式') ?>');
         html += '</div>';
         html += '</div>'; // 结束 row
         html += '</div>'; // 结束色系配置子Tab
@@ -1807,7 +2083,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     const isSelected = (data.frontendPartialsConfig[partialType] || 'default') === optionValue;
                     
                     html += '<div class="col-12 col-md-6">';
-                    html += '<div class="card partial-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer;" data-partial-type="' + partialType + '" data-partial-value="' + optionValue + '" data-area="frontend">';
+                    const hasPartialParams = optionMeta.params && Object.keys(optionMeta.params).length > 0;
+                    html += '<div class="card partial-option-card' + (isSelected ? ' border-primary' : '') + (hasPartialParams ? ' has-meta-config' : '') + '" style="cursor: pointer;" data-partial-type="' + partialType + '" data-partial-value="' + optionValue + '" data-area="frontend">';
+                    if (hasPartialParams) {
+                        html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="frontend" data-type="partials" data-identify="' + partialType + '.' + optionValue + '"><i class="mdi mdi-cog"></i></button>';
+                    }
                     html += '<div class="card-body p-3">';
                     html += '<div class="d-flex align-items-start">';
                     html += '<div class="flex-shrink-0 me-3">';
@@ -1826,6 +2106,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     }
                     html += '</div>';
                     html += '</div>';
+                    if (optionMeta.params && Object.keys(optionMeta.params).length > 0) {
+                        html += '<div class="d-flex justify-content-end mt-2">';
+                        html += '<button type="button" class="btn btn-link btn-sm text-decoration-none meta-config-btn" data-area="frontend" data-type="partials" data-identify="' + partialType + '.' + optionValue + '"><i class="mdi mdi-tune"></i> <?= __('参数配置') ?></button>';
+                        html += '</div>';
+                    }
                     html += '</div>';
                     html += '</div>';
                 });
@@ -1840,12 +2125,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>'; // 结束 card
         html += '</div>'; // 结束 col-md-5
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('部件预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择部件后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('frontend', 'partial', '<?= __('部件预览') ?>', '<?= __('选中不同部件组合，右侧实时渲染效果') ?>');
         html += '</div>';
         html += '</div>'; // 结束 row
         html += '</div>'; // 结束部件配置子Tab
@@ -1865,8 +2145,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const varName = varMeta.name || varValue.charAt(0).toUpperCase() + varValue.slice(1);
                 const varDesc = varMeta.description || '';
                 const isSelected = (data.frontendVariablesConfig || []).includes(varValue);
+                const hasVarParams = varMeta.params && Object.keys(varMeta.params).length > 0;
                 html += '<div class="col-12">';
-                html += '<div class="card variable-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer;" data-variable-value="' + varValue + '" data-area="frontend">';
+                html += '<div class="card variable-option-card' + (isSelected ? ' border-primary' : '') + (hasVarParams ? ' has-meta-config' : '') + '" style="cursor: pointer;" data-variable-value="' + varValue + '" data-area="frontend">';
+                if (hasVarParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="frontend" data-type="variables" data-identify="' + varValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-body p-3">';
                 html += '<div class="d-flex align-items-start">';
                 html += '<div class="flex-grow-1">';
@@ -1882,6 +2166,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 }
                 html += '</div>';
                 html += '</div>';
+                if (varMeta.params && Object.keys(varMeta.params).length > 0) {
+                    html += '<div class="d-flex justify-content-end mt-2">';
+                    html += '<button type="button" class="btn btn-link btn-sm text-decoration-none meta-config-btn" data-area="frontend" data-type="variables" data-identify="' + varValue + '"><i class="mdi mdi-tune"></i> <?= __('参数配置') ?></button>';
+                    html += '</div>';
+                }
                 html += '</div>';
                 html += '</div>';
             });
@@ -1893,12 +2182,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>'; // 结束 card
         html += '</div>'; // 结束 col-md-5
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('变量预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择变量后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('frontend', 'variable', '<?= __('变量预览') ?>', '<?= __('勾选的变量将在预览中即时体现') ?>');
         html += '</div>';
         html += '</div>'; // 结束 row
         html += '</div>'; // 结束变量配置子Tab
@@ -1906,9 +2190,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 组件预览子Tab
         html += '<div class="tab-pane fade" id="frontend-component-config" role="tabpanel">';
         html += '<div class="row g-3">';
-        html += '<div class="col-12">';
-        html += '<div class="card">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('组件预览') ?></h6></div>';
+        html += '<div class="col-md-7 col-12">';
+        html += '<div class="card h-100">';
+        html += '<div class="card-header"><h6 class="mb-0"><?= __('组件列表') ?></h6></div>';
         html += '<div class="card-body">';
         html += '<div class="row g-3">';
         if (data.frontendComponents && data.frontendComponents.length > 0) {
@@ -1917,8 +2201,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const compMeta = typeof component === 'object' ? (component.meta || {}) : {};
                 const compName = compMeta.name || compValue.charAt(0).toUpperCase() + compValue.slice(1);
                 const compDesc = compMeta.description || '';
-                html += '<div class="col-12 col-md-6 col-lg-4">';
-                html += '<div class="card component-preview-card" data-component="' + compValue + '" data-area="frontend">';
+                const hasCompParams = compMeta.params && Object.keys(compMeta.params).length > 0;
+                html += '<div class="col-12 col-md-6">';
+                html += '<div class="card component-preview-card' + (hasCompParams ? ' has-meta-config' : '') + '" data-component="' + compValue + '" data-area="frontend">';
+                if (hasCompParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="frontend" data-type="components" data-identify="' + compValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-header">';
                 html += '<h6 class="mb-0">' + compName + '</h6>';
                 html += '</div>';
@@ -1926,7 +2214,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 if (compDesc) {
                     html += '<p class="text-muted small mb-2">' + compDesc + '</p>';
                 }
-                html += '<button type="button" class="btn btn-sm btn-primary preview-component-btn" data-component="' + compValue + '" data-area="frontend"><?= __('预览') ?></button>';
                 html += '</div>';
                 html += '</div>';
                 html += '</div>';
@@ -1937,7 +2224,10 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>'; // 结束 row
         html += '</div>'; // 结束 card-body
         html += '</div>'; // 结束 card
-        html += '</div>'; // 结束 col-12
+        html += '</div>'; // 结束 col-md-7
+        html += '<div class="col-md-5 col-12">';
+        html += buildPreviewCardHtml('frontend', 'component', '<?= __('组件预览') ?>', '<?= __('组件内容将嵌入预览页，便于快速确认样式') ?>');
+        html += '</div>';
         html += '</div>'; // 结束 row
         html += '</div>'; // 结束组件预览子Tab
         
@@ -2042,8 +2332,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     const optionIcon = optionMeta.icon || 'mdi mdi-view-dashboard';
                     const isSelected = (data.backendLayoutConfig[layoutType] || 'default') === optionValue;
                     
-                    html += '<div class="col-12 col-md-6">';
-                    html += '<div class="card layout-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-layout-type="' + layoutType + '" data-layout-value="' + optionValue + '" data-area="backend">';
+                html += '<div class="col-12 col-md-6">';
+                const hasParams = optionMeta.params && Object.keys(optionMeta.params).length > 0;
+                html += '<div class="card layout-option-card' + (isSelected ? ' border-primary' : '') + (hasParams ? ' has-meta-config' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-layout-type="' + layoutType + '" data-layout-value="' + optionValue + '" data-area="backend">';
+                if (hasParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="backend" data-type="layouts" data-identify="' + layoutType + '.' + optionValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                     html += '<div class="card-body p-3">';
                     html += '<div class="d-flex align-items-start">';
                     html += '<div class="flex-shrink-0 me-3">';
@@ -2083,6 +2377,16 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '<div class="card-header d-flex justify-content-between align-items-center">';
         html += '<h6 class="mb-0"><?= __('后端预览') ?></h6>';
         html += '<div class="d-flex gap-2 align-items-center">';
+
+        // 后端预览主题色系（复用前端预览的检测逻辑）
+        const defaultThemeLayout = detectExternalTheme();
+        const lightActiveLayout = defaultThemeLayout === 'light' ? ' active' : '';
+        const darkActiveLayout = defaultThemeLayout === 'dark' ? ' active' : '';
+        const containerBgColorLayout = defaultThemeLayout === 'dark' ? '#1a1a1a' : '#f5f5f5';
+        const containerClassLayout = defaultThemeLayout === 'dark' ? 'preview-container-dark-layout' : 'preview-container-light-layout';
+        const borderColorLayout = defaultThemeLayout === 'dark' ? '#4a5568' : '#2c3e50';
+        const shadowColorLayout = defaultThemeLayout === 'dark' ? '#1a1a1a' : '#34495e';
+
         // 主题色系切换按钮（后端使用相同的变量）
         html += '<div class="btn-group btn-group-sm" role="group" aria-label="<?= __('主题色系切换') ?>">';
         html += '<button type="button" class="btn btn-outline-primary theme-color-btn-layout' + lightActiveLayout + '" data-theme-color="light" data-area="backend" title="<?= __('亮色主题') ?>">';
@@ -2124,7 +2428,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '<div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden"><?= __('加载中...') ?></span></div>';
         html += '<p class="text-muted mb-0"><?= __('正在加载预览...') ?></p>';
         html += '</div>';
-        html += '<iframe id="layoutPreviewIframeBackend" style="width: 100%; height: 100%; border: none; background: white;"></iframe>';
+        html += '<iframe id="layoutPreviewIframeBackend" class="config-preview-iframe" data-area="backend" data-context="layout" data-loading-id="iframeLoadingBackendConfig" style="width: 100%; height: 100%; border: none; background: white;"></iframe>';
         html += '</div>'; // 结束 device-screen-inner-layout
         html += '</div>'; // 结束 device-screen-layout
         html += '</div>'; // 结束 device-frame-layout
@@ -2151,8 +2455,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const colorName = colorMeta.name || colorValue.charAt(0).toUpperCase() + colorValue.slice(1);
                 const colorDesc = colorMeta.description || '';
                 const isSelected = (data.backendColorConfig || 'light') === colorValue;
+                const hasColorParams = colorMeta.params && Object.keys(colorMeta.params).length > 0;
                 html += '<div class="col-12 col-md-6">';
-                html += '<div class="card color-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-color-value="' + colorValue + '" data-area="backend">';
+                html += '<div class="card color-option-card' + (isSelected ? ' border-primary' : '') + (hasColorParams ? ' has-meta-config' : '') + '" style="cursor: pointer; transition: all 0.2s;" data-color-value="' + colorValue + '" data-area="backend">';
+                if (hasColorParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="backend" data-type="colors" data-identify="' + colorValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-body p-3">';
                 html += '<div class="d-flex align-items-start">';
                 html += '<div class="flex-grow-1">';
@@ -2179,12 +2487,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>';
         html += '</div>';
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('色系预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择色系后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('backend', 'color', '<?= __('色系预览') ?>', '<?= __('后台色系调整后立即刷新右侧预览') ?>');
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -2227,7 +2530,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     const optionIcon = optionMeta.icon || 'mdi mdi-view-dashboard';
                     const isSelected = (data.backendPartialsConfig[partialType] || 'default') === optionValue;
                     html += '<div class="col-12 col-md-6">';
-                    html += '<div class="card partial-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer;" data-partial-type="' + partialType + '" data-partial-value="' + optionValue + '" data-area="backend">';
+                    const hasPartialParams = optionMeta.params && Object.keys(optionMeta.params).length > 0;
+                    html += '<div class="card partial-option-card' + (isSelected ? ' border-primary' : '') + (hasPartialParams ? ' has-meta-config' : '') + '" style="cursor: pointer;" data-partial-type="' + partialType + '" data-partial-value="' + optionValue + '" data-area="backend">';
+                    if (hasPartialParams) {
+                        html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="backend" data-type="partials" data-identify="' + partialType + '.' + optionValue + '"><i class="mdi mdi-cog"></i></button>';
+                    }
                     html += '<div class="card-body p-3">';
                     html += '<div class="d-flex align-items-start">';
                     html += '<div class="flex-shrink-0 me-3">';
@@ -2246,6 +2553,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                     }
                     html += '</div>';
                     html += '</div>';
+                    if (optionMeta.params && Object.keys(optionMeta.params).length > 0) {
+                        html += '<div class="d-flex justify-content-end mt-2">';
+                        html += '<button type="button" class="btn btn-link btn-sm text-decoration-none meta-config-btn" data-area="backend" data-type="partials" data-identify="' + partialType + '.' + optionValue + '"><i class="mdi mdi-tune"></i> <?= __('参数配置') ?></button>';
+                        html += '</div>';
+                    }
                     html += '</div>';
                     html += '</div>';
                 });
@@ -2259,12 +2571,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>';
         html += '</div>';
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('部件预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择部件后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('backend', 'partial', '<?= __('部件预览') ?>', '<?= __('后台部件切换后即刻同步到右侧预览') ?>');
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -2284,8 +2591,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const varName = varMeta.name || varValue.charAt(0).toUpperCase() + varValue.slice(1);
                 const varDesc = varMeta.description || '';
                 const isSelected = (data.backendVariablesConfig || []).includes(varValue);
+                const hasVarParams = varMeta.params && Object.keys(varMeta.params).length > 0;
                 html += '<div class="col-12">';
-                html += '<div class="card variable-option-card' + (isSelected ? ' border-primary' : '') + '" style="cursor: pointer;" data-variable-value="' + varValue + '" data-area="backend">';
+                html += '<div class="card variable-option-card' + (isSelected ? ' border-primary' : '') + (hasVarParams ? ' has-meta-config' : '') + '" style="cursor: pointer;" data-variable-value="' + varValue + '" data-area="backend">';
+                if (hasVarParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="backend" data-type="variables" data-identify="' + varValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-body p-3">';
                 html += '<div class="d-flex align-items-start">';
                 html += '<div class="flex-grow-1">';
@@ -2301,6 +2612,11 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 }
                 html += '</div>';
                 html += '</div>';
+                if (varMeta.params && Object.keys(varMeta.params).length > 0) {
+                    html += '<div class="d-flex justify-content-end mt-2">';
+                    html += '<button type="button" class="btn btn-link btn-sm text-decoration-none meta-config-btn" data-area="backend" data-type="variables" data-identify="' + varValue + '"><i class="mdi mdi-tune"></i> <?= __('参数配置') ?></button>';
+                    html += '</div>';
+                }
                 html += '</div>';
                 html += '</div>';
             });
@@ -2312,12 +2628,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>';
         html += '</div>';
         html += '<div class="col-md-7 col-12">';
-        html += '<div class="card h-100">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('变量预览') ?></h6></div>';
-        html += '<div class="card-body">';
-        html += '<p class="text-muted"><?= __('选择变量后，预览将自动更新') ?></p>';
-        html += '</div>';
-        html += '</div>';
+        html += buildPreviewCardHtml('backend', 'variable', '<?= __('变量预览') ?>', '<?= __('变量调整后立即渲染到预览区') ?>');
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -2325,9 +2636,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 后端组件预览子Tab
         html += '<div class="tab-pane fade" id="backend-component-config" role="tabpanel">';
         html += '<div class="row g-3">';
-        html += '<div class="col-12">';
-        html += '<div class="card">';
-        html += '<div class="card-header"><h6 class="mb-0"><?= __('组件预览') ?></h6></div>';
+        html += '<div class="col-md-7 col-12">';
+        html += '<div class="card h-100">';
+        html += '<div class="card-header"><h6 class="mb-0"><?= __('组件列表') ?></h6></div>';
         html += '<div class="card-body">';
         html += '<div class="row g-3">';
         if (data.backendComponents && data.backendComponents.length > 0) {
@@ -2336,8 +2647,12 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 const compMeta = typeof component === 'object' ? (component.meta || {}) : {};
                 const compName = compMeta.name || compValue.charAt(0).toUpperCase() + compValue.slice(1);
                 const compDesc = compMeta.description || '';
-                html += '<div class="col-12 col-md-6 col-lg-4">';
-                html += '<div class="card component-preview-card" data-component="' + compValue + '" data-area="backend">';
+                const hasCompParams = compMeta.params && Object.keys(compMeta.params).length > 0;
+                html += '<div class="col-12 col-md-6">';
+                html += '<div class="card component-preview-card' + (hasCompParams ? ' has-meta-config' : '') + '" data-component="' + compValue + '" data-area="backend">';
+                if (hasCompParams) {
+                    html += '<button type="button" class="meta-config-btn meta-config-floating" title="<?= __('配置参数') ?>" data-area="backend" data-type="components" data-identify="' + compValue + '"><i class="mdi mdi-cog"></i></button>';
+                }
                 html += '<div class="card-header">';
                 html += '<h6 class="mb-0">' + compName + '</h6>';
                 html += '</div>';
@@ -2345,7 +2660,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 if (compDesc) {
                     html += '<p class="text-muted small mb-2">' + compDesc + '</p>';
                 }
-                html += '<button type="button" class="btn btn-sm btn-primary preview-component-btn" data-component="' + compValue + '" data-area="backend"><?= __('预览') ?></button>';
                 html += '</div>';
                 html += '</div>';
                 html += '</div>';
@@ -2356,6 +2670,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         html += '</div>';
         html += '</div>';
         html += '</div>';
+        html += '</div>';
+        html += '<div class="col-md-5 col-12">';
+        html += buildPreviewCardHtml('backend', 'component', '<?= __('组件预览') ?>', '<?= __('后台组件效果会立即应用到此预览区') ?>');
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -2464,52 +2781,56 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 更新预览
         function updatePreview(area, overrideLayouts = null) {
             const config = getCurrentConfig(area);
-            // 如果提供了覆盖的布局配置，使用它
             if (overrideLayouts) {
                 config.layouts = overrideLayouts;
             }
-            // 获取自动登录开关状态
             const autoLoginSwitch = container.querySelector('.auto-login-switch-layout[data-area="' + area + '"]');
             const autoLogin = autoLoginSwitch && autoLoginSwitch.checked ? '1' : '0';
             const previewUrl = buildPreviewUrl(area, config.header, config.layouts, config.color, config.partials, config.variables, autoLogin);
-            const iframeId = area === 'frontend' ? 'layoutPreviewIframeFrontend' : 'layoutPreviewIframeBackend';
-            const loadingId = area === 'frontend' ? 'iframeLoadingFrontendConfig' : 'iframeLoadingBackendConfig';
-            const iframe = document.getElementById(iframeId);
-            const loadingDiv = document.getElementById(loadingId);
+            const previewFrames = container.querySelectorAll('.config-preview-iframe[data-area="' + area + '"]');
             
-            if (iframe && loadingDiv) {
-                // 显示加载状态
-                loadingDiv.style.display = 'flex';
-                loadingDiv.style.opacity = '1';
+            if (!previewFrames.length) {
+                return;
+            }
+            
+            previewFrames.forEach(frame => {
+                const loadingId = frame.getAttribute('data-loading-id');
+                const loadingDiv = loadingId ? document.getElementById(loadingId) : null;
                 
-                // 更新iframe URL
-                iframe.src = previewUrl;
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'flex';
+                    loadingDiv.style.opacity = '1';
+                }
                 
-                // 监听加载完成
-                iframe.addEventListener('load', function() {
-                    // 尝试隐藏iframe内部的滚动条（但保留滚动功能）
+                frame.src = previewUrl;
+                
+                const handleLoad = function() {
                     try {
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        const iframeDoc = frame.contentDocument || frame.contentWindow.document;
                         if (iframeDoc) {
-                            // 添加样式到iframe的head（隐藏滚动条但保留滚动功能）
                             const style = iframeDoc.createElement('style');
                             style.textContent = 'body, html { scrollbar-width: none !important; -ms-overflow-style: none !important; overflow-y: auto !important; overflow-x: auto !important; } body::-webkit-scrollbar, html::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; } body::-webkit-scrollbar-track, html::-webkit-scrollbar-track { display: none !important; }';
                             iframeDoc.head.appendChild(style);
                         }
                     } catch (e) {
-                        // 跨域限制，无法访问iframe内容，忽略错误
                         console.debug('无法访问iframe内容（可能是跨域限制）:', e);
                     }
                     
-                    setTimeout(() => {
-                        loadingDiv.style.opacity = '0';
+                    if (loadingDiv) {
                         setTimeout(() => {
-                            loadingDiv.style.display = 'none';
-                            loadingDiv.style.opacity = '1';
+                            loadingDiv.style.opacity = '0';
+                            setTimeout(() => {
+                                loadingDiv.style.display = 'none';
+                                loadingDiv.style.opacity = '1';
+                            }, 300);
                         }, 300);
-                    }, 500);
-                }, { once: true });
-            }
+                    }
+                    
+                    frame.removeEventListener('load', handleLoad);
+                };
+                
+                frame.addEventListener('load', handleLoad);
+            });
         }
         
         // 绑定配置选择改变事件
@@ -2705,18 +3026,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 return;
             }
             
-            // 组件预览按钮
-            const componentBtn = e.target.closest('.preview-component-btn');
-            if (componentBtn) {
-                const area = componentBtn.getAttribute('data-area');
-                const component = componentBtn.getAttribute('data-component');
-                const scopePath = layoutScopes[area] || (area + '/' + DEFAULT_SCOPE);
-                
-                // 打开组件预览Modal或新窗口
-                const previewUrl = layoutPreviewUrl + '?theme_id=' + themeId + '&area=' + area + '&component=' + component + '&scope=' + encodeURIComponent(scopePath);
-                window.open(previewUrl, '_blank', 'width=1200,height=800');
-                return;
-            }
         });
         
         // 绑定tab切换事件，切换时更新预览
@@ -3155,6 +3464,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         // 初始化前端预览
         setTimeout(() => {
             updatePreview('frontend');
+            updatePreview('backend');
         }, 300);
     }
     
@@ -3223,6 +3533,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         if (!form) return;
         
         const formData = new FormData(form);
+        if (!formData.get('locale') && currentMetaConfig.locale) {
+            formData.append('locale', currentMetaConfig.locale);
+        }
         const themeId = formData.get('theme_id');
         
         // 收集前端配置
@@ -3382,7 +3695,29 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
             saveBtn.textContent = originalText;
         });
     });
-    
+
+    // 参数翻译按钮（在 Meta 参数列表里）
+    document.addEventListener('click', function(e) {
+        const translateBtn = e.target.closest('.param-translate-btn');
+        if (translateBtn) {
+            if (!currentThemeId) {
+                return;
+            }
+
+            currentParamTranslation.identify = translateBtn.getAttribute('data-identify') || '';
+            currentParamTranslation.param = translateBtn.getAttribute('data-param') || '';
+            currentParamTranslation.area = translateBtn.getAttribute('data-area') || 'frontend';
+            currentParamTranslation.scope = translateBtn.getAttribute('data-scope') || DEFAULT_SCOPE;
+            currentParamTranslation.locale = null;
+
+            const modal = new bootstrap.Modal(document.getElementById('paramTranslationModal'));
+            document.getElementById('paramTranslationModalLabel').textContent = '<?= __('参数翻译') ?> - ' + currentParamTranslation.param;
+            modal.show();
+
+            loadParamTranslation();
+        }
+    });
+
     // 保存部件配置
     document.getElementById('savePartialsConfigBtn').addEventListener('click', function() {
         const form = document.getElementById('partialsConfigForm');
@@ -3471,184 +3806,6 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         });
     });
     
-    // Meta配置功能
-    let currentMetaConfig = {
-        themeId: null,
-        area: null,
-        type: null,
-        identify: null
-    };
-    
-    // 配置按钮点击事件（使用事件委托）
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.config-preview-btn')) {
-            const btn = e.target.closest('.config-preview-btn');
-            const themeId = btn.getAttribute('data-theme-id');
-            const area = btn.getAttribute('data-area');
-            
-            // 打开配置Modal
-            openMetaConfigModal(themeId, area);
-        }
-    });
-    
-    // 打开Meta配置Modal
-    function openMetaConfigModal(themeId, area) {
-        currentMetaConfig.themeId = themeId;
-        currentMetaConfig.area = area;
-        currentMetaConfig.type = 'layouts'; // 默认布局
-        currentMetaConfig.identify = 'default'; // 默认标识
-        
-        const modal = new bootstrap.Modal(document.getElementById('metaConfigModal'));
-        const modalBody = document.getElementById('metaConfigModalBody');
-        
-        // 重置Modal内容
-        modalBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3 text-muted"><?= __('正在加载配置...') ?></p></div>';
-        
-        modal.show();
-        
-        // 加载meta配置
-        loadMetaConfig(themeId, area, 'layouts', 'default');
-    }
-    
-    // 加载Meta配置
-    function loadMetaConfig(themeId, area, type, identify) {
-        const url = '<?= $this->getUrl('theme/backend/index/meta-config') ?>?theme_id=' + themeId + '&area=' + area + '&type=' + type + '&identify=' + identify;
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    renderMetaConfigForm(data.data);
-                } else {
-                    document.getElementById('metaConfigModalBody').innerHTML = '<div class="alert alert-danger">' + (data.message || '<?= __('加载配置失败') ?>') + '</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('metaConfigModalBody').innerHTML = '<div class="alert alert-danger"><?= __('加载配置失败') ?>: ' + error.message + '</div>';
-            });
-    }
-    
-    // 渲染Meta配置表单
-    function renderMetaConfigForm(data) {
-        const modalBody = document.getElementById('metaConfigModalBody');
-        let html = '<form id="metaConfigForm">';
-        html += '<input type="hidden" name="theme_id" value="' + currentMetaConfig.themeId + '">';
-        html += '<input type="hidden" name="area" value="' + currentMetaConfig.area + '">';
-        html += '<input type="hidden" name="type" value="' + currentMetaConfig.type + '">';
-        html += '<input type="hidden" name="identify" value="' + currentMetaConfig.identify + '">';
-        
-        // Meta信息显示
-        if (data.meta && Object.keys(data.meta).length > 0) {
-            html += '<div class="card mb-3">';
-            html += '<div class="card-header"><h6 class="mb-0"><?= __('Meta信息') ?></h6></div>';
-            html += '<div class="card-body">';
-            html += '<pre style="max-height: 200px; overflow-y: auto;">' + JSON.stringify(data.meta, null, 2) + '</pre>';
-            html += '</div>';
-            html += '</div>';
-        }
-        
-        // 参数配置表单
-        if (data.params && Object.keys(data.params).length > 0) {
-            html += '<div class="card mb-3">';
-            html += '<div class="card-header"><h6 class="mb-0"><?= __('参数配置') ?></h6></div>';
-            html += '<div class="card-body">';
-            
-            // 语言选择
-            if (data.locales && data.locales.length > 0) {
-                html += '<div class="mb-3">';
-                html += '<label class="form-label"><?= __('语言') ?></label>';
-                html += '<select class="form-select" id="metaConfigLocale" name="locale">';
-                data.locales.forEach(locale => {
-                    const selected = locale.code === data.locale ? ' selected' : '';
-                    html += '<option value="' + locale.code + '"' + selected + '>' + locale.name + '</option>';
-                });
-                html += '</select>';
-                html += '</div>';
-            }
-            
-            // 参数输入框
-            for (const [key, param] of Object.entries(data.params)) {
-                const paramValue = data.theme_config[key] || param.default || '';
-                html += '<div class="mb-3">';
-                html += '<label class="form-label">' + (param.name || key) + '</label>';
-                if (param.description) {
-                    html += '<small class="form-text text-muted d-block mb-1">' + param.description + '</small>';
-                }
-                
-                if (param.type === 'textarea' || (param.default && typeof param.default === 'string' && param.default.length > 50)) {
-                    html += '<textarea class="form-control" name="config[' + key + ']" rows="3">' + (paramValue || '') + '</textarea>';
-                } else {
-                    html += '<input type="text" class="form-control" name="config[' + key + ']" value="' + (paramValue || '') + '" placeholder="' + (param.default || '') + '">';
-                }
-                html += '</div>';
-            }
-            
-            html += '</div>';
-            html += '</div>';
-        } else {
-            html += '<div class="alert alert-info"><?= __('暂无参数配置') ?></div>';
-        }
-        
-        html += '</form>';
-        modalBody.innerHTML = html;
-    }
-    
-    // 保存Meta配置
-    document.getElementById('saveMetaConfigBtn').addEventListener('click', function() {
-        const form = document.getElementById('metaConfigForm');
-        if (!form) return;
-        
-        const formData = new FormData(form);
-        const config = {};
-        
-        // 收集配置数据
-        form.querySelectorAll('input[name^="config["], textarea[name^="config["]').forEach(input => {
-            const name = input.name.match(/\[(.+)\]/)[1];
-            config[name] = input.value;
-        });
-        
-        formData.append('config', JSON.stringify(config));
-        
-        // 禁用保存按钮
-        const saveBtn = document.getElementById('saveMetaConfigBtn');
-        saveBtn.disabled = true;
-        const originalText = saveBtn.textContent;
-        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __('保存中...') ?>';
-        
-        fetch('<?= $this->getUrl('theme/backend/index/save-meta-config') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // 关闭Modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('metaConfigModal'));
-                modal.hide();
-                
-                // 显示成功消息
-                if (typeof showMessage === 'function') {
-                    showMessage('success', data.message || '<?= __('配置保存成功') ?>');
-                } else {
-                    alert(data.message || '<?= __('配置保存成功') ?>');
-                }
-                
-                // 刷新预览（如果需要）
-                // TODO: 刷新预览iframe
-            } else {
-                alert(data.message || '<?= __('保存失败') ?>');
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('<?= __('保存失败') ?>: ' + error.message);
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalText;
-        });
-    });
 })();
 </script>
 

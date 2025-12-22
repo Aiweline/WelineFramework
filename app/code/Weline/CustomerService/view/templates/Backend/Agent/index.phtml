@@ -1,0 +1,191 @@
+<?php
+/**
+ * 客服人员管理页面
+ */
+$agents = $this->getData('agents') ?? [];
+$statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
+?>
+<link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
+<div class="customer-service-agent">
+    <div class="page-header">
+        <h1><?= __('客服人员管理') ?></h1>
+        <button class="btn btn-primary" onclick="showAddAgentModal()">
+            <?= __('添加客服') ?>
+        </button>
+    </div>
+    
+    <div class="agent-list">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th><?= __('ID') ?></th>
+                    <th><?= __('客服名称') ?></th>
+                    <th><?= __('邮箱') ?></th>
+                    <th><?= __('语言') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('最大会话数') ?></th>
+                    <th><?= __('总会话数') ?></th>
+                    <th><?= __('总消息数') ?></th>
+                    <th><?= __('平均响应时间') ?></th>
+                    <th><?= __('操作') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($agents)): ?>
+                    <tr>
+                        <td colspan="10" class="text-center"><?= __('暂无客服人员') ?></td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($agents as $agent): ?>
+                        <tr>
+                            <td><?= $agent['agent_id'] ?></td>
+                            <td><?= htmlspecialchars($agent['name']) ?></td>
+                            <td><?= htmlspecialchars($agent['email']) ?></td>
+                            <td><?= htmlspecialchars($agent['locale']) ?></td>
+                            <td>
+                                <?php if ($agent['is_active']): ?>
+                                    <span class="badge badge-success"><?= __('激活') ?></span>
+                                <?php else: ?>
+                                    <span class="badge badge-secondary"><?= __('禁用') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= $agent['max_sessions'] ?></td>
+                            <td><?= $agent['statistics']['total_sessions'] ?? 0 ?></td>
+                            <td><?= $agent['statistics']['total_messages'] ?? 0 ?></td>
+                            <td>
+                                <?php 
+                                    $avgTime = $agent['statistics']['avg_response_time'] ?? 0;
+                                    if ($avgTime > 0) {
+                                        echo $avgTime < 60 ? round($avgTime, 1) . __('秒') : round($avgTime / 60, 1) . __('分钟');
+                                    } else {
+                                        echo '-';
+                                    }
+                                ?>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewStatistics(<?= $agent['agent_id'] ?>)">
+                                    <?= __('查看统计') ?>
+                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="editAgent(<?= $agent['agent_id'] ?>)">
+                                    <?= __('编辑') ?>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAgent(<?= $agent['agent_id'] ?>)">
+                                    <?= __('删除') ?>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function showAddAgentModal() {
+    // TODO: 实现添加客服弹窗
+    alert('<?= __('添加客服功能待实现') ?>');
+}
+
+function editAgent(agentId) {
+    // TODO: 实现编辑客服功能
+    alert('<?= __('编辑客服功能待实现') ?>');
+}
+
+function deleteAgent(agentId) {
+    if (!confirm('<?= __('确定要删除此客服吗？') ?>')) {
+        return;
+    }
+    
+    fetch('<?= $this->getBackendUrl("customerservice/backend/agent/delete") ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            agent_id: agentId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?= __('删除成功') ?>');
+            location.reload();
+        } else {
+            alert(data.message || '<?= __('删除失败') ?>');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('<?= __('删除失败') ?>');
+    });
+}
+
+function viewStatistics(agentId) {
+    // 打开统计详情弹窗或跳转到统计页面
+    const url = '<?= $this->getBackendUrl("customerservice/backend/agent/getAgentStatistics") ?>?agent_id=' + agentId + '&period=all';
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 显示统计详情
+                showStatisticsModal(data.data);
+            } else {
+                alert(data.message || '<?= __('获取统计数据失败') ?>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('<?= __('获取统计数据失败') ?>');
+        });
+}
+
+function showStatisticsModal(statistics) {
+    // 创建并显示统计详情弹窗
+    const modal = document.createElement('div');
+    modal.className = 'statistics-modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><?= __('客服统计详情') ?></h3>
+                <button class="close-btn" onclick="this.closest('.statistics-modal').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="stat-detail-section">
+                    <h4><?= __('会话统计') ?></h4>
+                    <p><?= __('总会话数') ?>: ${statistics.sessions.total}</p>
+                    <p><?= __('已关闭') ?>: ${statistics.sessions.closed}</p>
+                    <p><?= __('进行中') ?>: ${statistics.sessions.active}</p>
+                </div>
+                <div class="stat-detail-section">
+                    <h4><?= __('消息统计') ?></h4>
+                    <p><?= __('总消息数') ?>: ${statistics.messages.total}</p>
+                </div>
+                <div class="stat-detail-section">
+                    <h4><?= __('响应时间') ?></h4>
+                    <p><?= __('平均') ?>: ${formatResponseTime(statistics.response_time.average)}</p>
+                    <p><?= __('最快') ?>: ${formatResponseTime(statistics.response_time.min)}</p>
+                    <p><?= __('最慢') ?>: ${formatResponseTime(statistics.response_time.max)}</p>
+                </div>
+                <div class="stat-detail-section">
+                    <h4><?= __('会话时长') ?></h4>
+                    <p><?= __('平均') ?>: ${statistics.session_duration.average} <?= __('分钟') ?></p>
+                    <p><?= __('最短') ?>: ${statistics.session_duration.min} <?= __('分钟') ?></p>
+                    <p><?= __('最长') ?>: ${statistics.session_duration.max} <?= __('分钟') ?></p>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function formatResponseTime(seconds) {
+    if (seconds < 60) {
+        return seconds.toFixed(1) + '<?= __('秒') ?>';
+    } else {
+        return (seconds / 60).toFixed(1) + '<?= __('分钟') ?>';
+    }
+}
+</script>
+

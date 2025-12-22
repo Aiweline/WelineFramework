@@ -192,20 +192,18 @@ class Install extends AbstractConsole
         try {
             // 扫描 app/design 目录
             $dirIterator = new \RecursiveDirectoryIterator($designPath, \RecursiveDirectoryIterator::SKIP_DOTS);
-            $filterIterator = new \RecursiveCallbackFilterIterator($dirIterator, function ($current, $key, $iterator) {
-                // 只扫描到主题目录级别（Vendor/ThemeName）
-                $depth = $iterator->getDepth();
-                return $depth <= 1;
-            });
-            $iterator = new \RecursiveIteratorIterator($filterIterator, \RecursiveIteratorIterator::SELF_FIRST);
+            $iterator = new \RecursiveIteratorIterator($dirIterator, \RecursiveIteratorIterator::SELF_FIRST);
 
             foreach ($iterator as $file) {
+                // 目录层级示例（以 app/design 为根）：
+                // depth 0: app/design/Vendor
+                // depth 1: app/design/Vendor/ThemeName  ← 主题目录 (包含 register.php)
+                // depth 2+: 主题内部文件/目录
                 if ($file->isDir() && $iterator->getDepth() === 1) {
-                    // 这是主题目录
                     $themePath = $file->getPathname();
                     $registerFile = $themePath . DS . 'register.php';
 
-                    if (file_exists($registerFile)) {
+                    if (is_file($registerFile)) {
                         // 尝试读取 register.php 获取主题信息
                         $themeInfo = $this->parseThemeRegister($registerFile);
                         if ($themeInfo) {

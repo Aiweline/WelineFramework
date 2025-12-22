@@ -1345,6 +1345,33 @@ if (empty($product['progress'])) {
     $(document).ready(function() {
         // 默认选中第一个分类
         $('#category_ids option:first').prop('selected', true);
+        
+        // 监听分类选择变化，自动应用默认属性集
+        $('#category_ids').on('change', function() {
+            let selectedCategoryIds = $(this).val();
+            if (selectedCategoryIds && selectedCategoryIds.length > 0) {
+                // 获取第一个选中分类的默认属性集
+                let firstCategoryId = selectedCategoryIds[0];
+                $.ajax({
+                    url: '@backend-url("*/backend/category/get-default-set")',
+                    data: { category_id: firstCategoryId },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.default_set_id && res.default_set_id > 0) {
+                            // 如果分类有默认属性集，自动选择该属性集
+                            let setSelect = $('#set_id');
+                            let currentSetId = setSelect.val();
+                            // 只有当用户还没有手动选择属性集时才自动应用
+                            if (!currentSetId || currentSetId === '') {
+                                setSelect.val(res.default_set_id);
+                                // 触发属性集变更事件加载属性
+                                setSelect.trigger('change');
+                            }
+                        }
+                    }
+                });
+            }
+        });
     });
 </script>
 </body>

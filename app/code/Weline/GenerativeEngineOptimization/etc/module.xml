@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+        xsi:noNamespaceSchemaLocation="urn:weline:framework:module:etc/module.xsd">
+    <module name="Weline_GenerativeEngineOptimization" setup_version="1.0.0">
+        <sequence>
+            <module name="Weline_Framework"/>
+            <module name="Weline_Backend"/>
+            <module name="Weline_I18n"/>
+        </sequence>
+    </module>
+</config>
+
