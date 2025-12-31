@@ -676,6 +676,68 @@ function handleMCPListTools(request, sendResponse) {
  *   meta: { taskId, iteration, origin }  // 元信息
  * }
  */
+/**
+ * 处理启动后台 WASM 任务
+ */
+async function handleWasmStartBackgroundTask(request, sendResponse) {
+    const { taskConfig, wasmPath } = request;
+    
+    console.log('[AutoLeadAgent Extension] 正在启动后台 WASM 任务:', taskConfig.taskId);
+
+    try {
+        if (typeof WasmBridge === 'undefined') {
+            throw new Error('WasmBridge not available in background script');
+        }
+
+        // 1. 加载 WASM 模块
+        await WasmBridge.loadWasmModule(wasmPath);
+
+        // 2. 启动任务
+        await WasmBridge.startTaskInWasm(taskConfig, {
+            onDecision: async (decision) => {
+                console.log('[AutoLeadAgent Extension] 后台 WASM 决策:', decision.type);
+                
+                if (decision.type === 'tool_call') {
+                    const { name, arguments: args } = decision;
+                    try {
+                        const toolFunc = (mcpTools || {})[name];
+                        if (!toolFunc) throw new Error('Tool not found: ' + name);
+                        
+                        const result = await toolFunc(args || {});
+                        WasmBridge.applyToolResult({
+                            name: name,
+                            result: result,
+                            status: 'success'
+                        });
+                    } catch (error) {
+                        console.error('[AutoLeadAgent Extension] 后台工具调用失败:', name, error);
+                        WasmBridge.applyToolResult({
+                            name: name,
+                            error: error.message,
+                            status: 'error'
+                        });
+                    }
+                }
+            },
+            onStatus: (status) => {
+                console.log('[AutoLeadAgent Extension] 后台 WASM 状态:', status.phase);
+            },
+            onComplete: (result) => {
+                console.log('[AutoLeadAgent Extension] 后台 WASM 任务完成:', result);
+            },
+            onError: (error) => {
+                console.error('[AutoLeadAgent Extension] 后台 WASM 任务出错:', error);
+            }
+        });
+
+        sendResponse({ success: true, message: 'Background task started' });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 启动后台 WASM 任务失败:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
 async function handleWasmExecuteTool(request, sendResponse) {
     const startTime = Date.now();
     const { id, name, arguments: args, meta } = request;
@@ -962,6 +1024,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 处理 WASM 智能体直接工具调用（不需要连接 ID）
     if (request.type === 'WASM_EXECUTE_TOOL') {
         handleWasmExecuteTool(request, sendResponse);
+        return true;
+    }
+
+    // 处理启动后台 WASM 任务
+    if (request.type === 'WASM_START_BACKGROUND_TASK') {
+        handleWasmStartBackgroundTask(request, sendResponse);
         return true;
     }
 
@@ -7515,17 +7583,24 @@ async function downloadHfModelViaPort(modelId, port) {
                 const fileSize = contentLength > 0 ? contentLength : (file.size || 0);
 
                 const reader = fileResponse.body.getReader();
-                const chunks = [];
                 let fileDownloadedSize = 0;
+
+                // 发送文件开始消息
+                port.postMessage({
+                    type: 'download-file-start',
+                    modelId: modelId,
+                    filename: filename,
+                    size: fileSize
+                });
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    chunks.push(value);
                     fileDownloadedSize += value.byteLength;
                     downloadedSize += value.byteLength;
 
+                    // 计算进度
                     let progress = 0;
                     if (actualTotalSize > 0) {
                         progress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
@@ -7534,80 +7609,37 @@ async function downloadHfModelViaPort(modelId, port) {
                     }
                     
                     sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, progress);
-                }
 
-                // 文件下载完成
-                let fileProgress = 0;
-                if (actualTotalSize > 0) {
-                    fileProgress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
-                } else if (fileSize > 0) {
-                    fileProgress = Math.min(100, (downloadedSize / fileSize) * 100);
-                }
-                sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, fileProgress);
-
-                // 合并 chunks 为 ArrayBuffer
-                const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                const arrayBuffer = new ArrayBuffer(totalLength);
-                const uint8Array = new Uint8Array(arrayBuffer);
-                let offset = 0;
-                for (const chunk of chunks) {
-                    uint8Array.set(chunk, offset);
-                    offset += chunk.length;
-                }
-                
-                downloadedFiles.push({
-                    filename: filename,
-                    size: arrayBuffer.byteLength,
-                    data: arrayBuffer,
-                    type: 'application/octet-stream'
-                });
-
-                // 将文件数据发送到前端，由前端保存到本地文件系统
-                // 对于大文件，分块发送以避免消息大小限制
-                const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB 每块
-                
-                if (arrayBuffer.byteLength <= CHUNK_SIZE) {
-                    // 小文件：直接发送
+                    // 立即将数据块发送到前端，不再在后台进行 ArrayBuffer 合并
                     port.postMessage({
-                        type: 'download-file-data',
+                        type: 'download-file-chunk',
                         modelId: modelId,
                         filename: filename,
-                        size: arrayBuffer.byteLength,
-                        data: arrayBuffer,
-                        isComplete: true
-                    });
-                } else {
-                    // 大文件：分块发送
-                    console.log('[AutoLeadAgent Extension] 大文件，分块发送:', filename, (arrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
-                    const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
-                    
-                    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-                        const start = chunkIndex * CHUNK_SIZE;
-                        const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
-                        const chunk = arrayBuffer.slice(start, end);
-                        
-                        port.postMessage({
-                            type: 'download-file-data',
-                            modelId: modelId,
-                            filename: filename,
-                            size: arrayBuffer.byteLength,
-                            chunkIndex: chunkIndex,
-                            totalChunks: totalChunks,
-                            data: chunk,
-                            isComplete: (chunkIndex === totalChunks - 1)
-                        });
-                    }
+                        data: value.buffer, // 使用 ArrayBuffer
+                        offset: fileDownloadedSize - value.byteLength,
+                        isComplete: false
+                    }, [value.buffer]); // 使用 transferable
                 }
+
+                // 通知前端文件分块发送完成
+                port.postMessage({
+                    type: 'download-file-chunk',
+                    modelId: modelId,
+                    filename: filename,
+                    data: new ArrayBuffer(0),
+                    offset: fileDownloadedSize,
+                    isComplete: true
+                });
 
                 // 通知前端文件下载完成
                 port.postMessage({
                     type: 'download-file-complete',
                     modelId: modelId,
                     filename: filename,
-                    size: arrayBuffer.byteLength
+                    size: fileDownloadedSize
                 });
 
-                console.log('[AutoLeadAgent Extension] 文件下载完成:', filename);
+                console.log('[AutoLeadAgent Extension] 文件下载完成并分块发送:', filename);
             } catch (error) {
                 console.error('[AutoLeadAgent Extension] 下载文件异常:', filename, error);
             }
