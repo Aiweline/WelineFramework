@@ -11,6 +11,31 @@
 // 初始化日志 - 确认 background script 已加载
 console.log('[AutoLeadAgent Extension] Background script 已加载', new Date().toISOString());
 
+// 导入 MCP 工具集和 WASM 桥接层（如果文件存在）
+try {
+    importScripts('mcp-tools.js');
+    console.log('[AutoLeadAgent Extension] MCP tools loaded');
+} catch (e) {
+    console.warn('[AutoLeadAgent Extension] MCP tools not found:', e);
+}
+
+try {
+    importScripts('wasm-bridge.js');
+    console.log('[AutoLeadAgent Extension] WASM bridge loaded');
+} catch (e) {
+    console.warn('[AutoLeadAgent Extension] WASM bridge not found:', e);
+}
+
+// MCP 连接管理
+const mcpConnections = new Map(); // Map<connectionId, {tools, wasmBridge}>
+let wasmBridgeInstance = null;
+
+// MCP tools and schema (imported from mcp-tools.js)
+// These will be available after importScripts('mcp-tools.js')
+// Don't declare here - use the ones from mcp-tools.js directly
+let mcpTools;
+let MCP_TOOLS_SCHEMA;
+
 // 爬取任务队列
 const crawlQueue = [];
 let isProcessing = false;
@@ -450,6 +475,76 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         return true;
     }
 
+    // 处理 HuggingFace 模型下载（来自外部网页）
+    if (request.type === 'HF_DOWNLOAD_MODEL') {
+        console.log('[AutoLeadAgent Extension] 收到外部 HF_DOWNLOAD_MODEL 请求:', request);
+        handleHfDownloadModel(request, sendResponse);
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 处理 HuggingFace 登录检测（来自外部网页）
+    if (request.type === 'HF_CHECK_LOGIN') {
+        console.log('[AutoLeadAgent Extension] 收到外部 HF_CHECK_LOGIN 请求:', request);
+        handleHfCheckLogin(request, sendResponse);
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 处理 HuggingFace 模型搜索（来自外部网页）
+    if (request.type === 'HF_SEARCH_MODELS') {
+        console.log('[AutoLeadAgent Extension] 收到外部 HF_SEARCH_MODELS 请求:', request);
+        handleHfSearchModels(request, sendResponse);
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 处理 HuggingFace 获取模型信息（来自外部网页）
+    if (request.type === 'HF_GET_MODEL_INFO') {
+        console.log('[AutoLeadAgent Extension] 收到外部 HF_GET_MODEL_INFO 请求:', request);
+        handleHfGetModelInfo(request, sendResponse);
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 处理 HuggingFace 获取文件大小（来自外部网页）
+    if (request.type === 'HF_GET_FILE_SIZE') {
+        console.log('[AutoLeadAgent Extension] 收到外部 HF_GET_FILE_SIZE 请求:', request);
+        // 添加请求去重机制
+        const requestId = request.requestId || 'hf_filesize_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const dedupKey = `hf_filesize_${request.modelId}_${request.filename}`;
+        
+        if (processingRequests.has(dedupKey)) {
+            const startTime = processingRequests.get(dedupKey);
+            const elapsed = Date.now() - startTime;
+            console.warn('[AutoLeadAgent Extension] 检测到重复的 HF_GET_FILE_SIZE 请求，已处理时间:', Math.floor(elapsed / 1000) + '秒');
+            sendResponse({
+                success: false,
+                error: '该文件大小正在获取中，请勿重复提交',
+                errorType: 'duplicate_request',
+                requestId: requestId
+            });
+            return true;
+        }
+        processingRequests.set(dedupKey, Date.now());
+        
+        // 包装 sendResponse 以确保清理
+        const originalSendResponse = sendResponse;
+        const wrappedSendResponse = (response) => {
+            processingRequests.delete(dedupKey);
+            originalSendResponse(response);
+        };
+        
+        // 处理异步函数，确保错误也被捕获
+        handleHfGetFileSize(request, wrappedSendResponse).catch(error => {
+            console.error('[AutoLeadAgent Extension] HF_GET_FILE_SIZE 处理异常:', error);
+            if (processingRequests.has(dedupKey)) {
+                wrappedSendResponse({
+                    success: false,
+                    error: '获取文件大小失败: ' + (error.message || '未知错误')
+                });
+            }
+        });
+        
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
     if (request.action === 'crawl') {
         // 外部消息监听器：只处理来自外部网页的直接消息
         // 如果消息来自内容脚本转发，应该由 onMessage 处理，这里不处理以避免重复
@@ -481,6 +576,357 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return false;
 });
 
+// 初始化 WASM 桥接层
+async function initWasmBridge() {
+    try {
+        if (typeof WasmBridge !== 'undefined') {
+            wasmBridgeInstance = WasmBridge;
+            console.log('[AutoLeadAgent Extension] WASM bridge initialized');
+        }
+    } catch (error) {
+        console.warn('[AutoLeadAgent Extension] WASM bridge initialization failed:', error);
+    }
+}
+
+// 初始化 MCP 工具（在 importScripts 之后调用）
+function initMCPTools() {
+    try {
+        // In Service Worker context, importScripts makes variables available in global scope
+        // Check if mcpTools is available (from mcp-tools.js)
+        if (typeof mcpTools !== 'undefined' && mcpTools) {
+            // Use the mcpTools from mcp-tools.js directly
+            console.log('[AutoLeadAgent Extension] MCP tools found in global scope');
+        } else if (typeof self !== 'undefined' && self.mcpTools) {
+            // Service Worker context - check self
+            mcpTools = self.mcpTools;
+            MCP_TOOLS_SCHEMA = self.MCP_TOOLS_SCHEMA || {};
+            console.log('[AutoLeadAgent Extension] MCP tools found in self scope');
+        } else if (typeof window !== 'undefined' && window.mcpTools) {
+            // Window context
+            mcpTools = window.mcpTools;
+            MCP_TOOLS_SCHEMA = window.MCP_TOOLS_SCHEMA || {};
+            console.log('[AutoLeadAgent Extension] MCP tools found in window scope');
+        } else {
+            console.warn('[AutoLeadAgent Extension] mcpTools not found, using empty object');
+            mcpTools = {};
+            MCP_TOOLS_SCHEMA = {};
+        }
+        console.log('[AutoLeadAgent Extension] MCP tools initialized, available tools:', Object.keys(mcpTools || {}).length);
+    } catch (error) {
+        console.warn('[AutoLeadAgent Extension] MCP tools initialization failed:', error);
+        mcpTools = {};
+        MCP_TOOLS_SCHEMA = {};
+    }
+}
+
+// 处理 MCP 连接请求
+async function handleMCPConnect(request, sendResponse) {
+    try {
+        const connectionId = 'mcp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const tools = Object.keys(mcpTools || {}).map(toolName => {
+            const schema = (MCP_TOOLS_SCHEMA || {})[toolName];
+            return schema || { name: toolName };
+        });
+        mcpConnections.set(connectionId, { tools: tools, wasmBridge: wasmBridgeInstance, createdAt: Date.now() });
+        sendResponse({ success: true, connectionId: connectionId, tools: tools });
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] MCP connect failed:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+// 处理 MCP 工具调用
+async function handleMCPCallTool(request, sendResponse) {
+    try {
+        const { connectionId, tool, arguments: args } = request;
+        if (!connectionId || !tool) throw new Error('Connection ID and tool name are required');
+        const toolFunc = (mcpTools || {})[tool];
+        if (!toolFunc) throw new Error('Tool not found: ' + tool);
+        const result = await toolFunc(args || {});
+        sendResponse({ success: true, result: result });
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] MCP tool call failed:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+// 处理 MCP 工具列表请求
+function handleMCPListTools(request, sendResponse) {
+    try {
+        const { connectionId } = request;
+        const connection = mcpConnections.get(connectionId);
+        if (!connection) throw new Error('Connection not found');
+        sendResponse({ success: true, tools: connection.tools });
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] MCP list tools failed:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+/**
+ * 处理 WASM 智能体直接工具调用
+ * 不需要 MCP 连接 ID，直接执行工具
+ * 
+ * 请求格式：
+ * {
+ *   type: 'WASM_EXECUTE_TOOL',
+ *   id: 'tc_xxx',           // 工具调用 ID
+ *   name: 'browser_navigate', // 工具名称
+ *   arguments: { ... },      // 工具参数
+ *   meta: { taskId, iteration, origin }  // 元信息
+ * }
+ */
+async function handleWasmExecuteTool(request, sendResponse) {
+    const startTime = Date.now();
+    const { id, name, arguments: args, meta } = request;
+
+    console.log('[AutoLeadAgent Extension] WASM 工具调用:', name, 'ID:', id);
+
+    try {
+        if (!name) {
+            throw new Error('Tool name is required');
+        }
+
+        // 获取工具函数
+        const toolFunc = (mcpTools || {})[name];
+        if (!toolFunc) {
+            throw new Error('Tool not found: ' + name);
+        }
+
+        // 执行工具
+        const result = await toolFunc(args || {});
+
+        const duration = Date.now() - startTime;
+        console.log('[AutoLeadAgent Extension] WASM 工具执行完成:', name, '耗时:', duration + 'ms');
+
+        sendResponse({
+            success: true,
+            id: id,
+            name: name,
+            result: result,
+            meta: {
+                ...meta,
+                duration: duration
+            }
+        });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] WASM 工具执行失败:', name, error);
+
+        sendResponse({
+            success: false,
+            id: id,
+            name: name,
+            error: {
+                code: 'TOOL_EXECUTION_ERROR',
+                message: error.message
+            },
+            meta: meta
+        });
+    }
+}
+
+/**
+ * 处理 WASM 批量工具调用
+ * 用于一次性执行多个工具（顺序执行）
+ * 
+ * 请求格式：
+ * {
+ *   type: 'WASM_EXECUTE_TOOLS_BATCH',
+ *   calls: [
+ *     { id: 'tc_1', name: 'browser_navigate', arguments: { ... } },
+ *     { id: 'tc_2', name: 'browser_snapshot', arguments: { ... } }
+ *   ],
+ *   meta: { taskId, iteration }
+ * }
+ */
+async function handleWasmExecuteToolsBatch(request, sendResponse) {
+    const { calls, meta } = request;
+    const results = [];
+
+    console.log('[AutoLeadAgent Extension] WASM 批量工具调用, 数量:', calls.length);
+
+    for (const call of calls) {
+        const { id, name, arguments: args } = call;
+
+        try {
+            const toolFunc = (mcpTools || {})[name];
+            if (!toolFunc) {
+                results.push({
+                    success: false,
+                    id: id,
+                    name: name,
+                    error: { code: 'TOOL_NOT_FOUND', message: 'Tool not found: ' + name }
+                });
+                continue;
+            }
+
+            const result = await toolFunc(args || {});
+            results.push({
+                success: true,
+                id: id,
+                name: name,
+                result: result
+            });
+
+        } catch (error) {
+            results.push({
+                success: false,
+                id: id,
+                name: name,
+                error: { code: 'TOOL_EXECUTION_ERROR', message: error.message }
+            });
+        }
+    }
+
+    console.log('[AutoLeadAgent Extension] WASM 批量工具调用完成, 成功:', 
+        results.filter(r => r.success).length, '/', results.length);
+
+    sendResponse({
+        success: true,
+        results: results,
+        meta: meta
+    });
+}
+
+// 初始化
+initWasmBridge();
+initMCPTools();
+
+// ==================== Port 连接处理（用于长时间操作，如下载） ====================
+
+// 监听 Port 连接建立
+chrome.runtime.onConnect.addListener((port) => {
+    console.log('[AutoLeadAgent Extension] 收到 Port 连接请求:', port.name);
+    
+    if (port.name === 'hf-download') {
+        let currentModelId = null;
+        
+        // 监听 Port 消息
+        port.onMessage.addListener((request) => {
+            console.log('[AutoLeadAgent Extension] 收到 Port 消息:', request);
+            
+            if (request.type === 'start-download') {
+                const { modelId } = request;
+                if (!modelId) {
+                    port.postMessage({
+                        type: 'download-error',
+                        error: '模型ID不能为空'
+                    });
+                    return;
+                }
+                
+                currentModelId = modelId;
+                console.log('[AutoLeadAgent Extension] 通过 Port 开始下载:', modelId);
+                
+                // 保存 Port 连接
+                downloadPorts.set(modelId, port);
+                
+                // 先检查登录状态
+                checkLoginAndStartDownload(modelId, port).catch(error => {
+                    console.error('[AutoLeadAgent Extension] Port 下载失败:', error);
+                    port.postMessage({
+                        type: 'download-error',
+                        modelId: modelId,
+                        error: error.message || '下载失败'
+                    });
+                    downloadPorts.delete(modelId);
+                });
+                
+            } else if (request.type === 'cancel-download') {
+                const { modelId } = request;
+                console.log('[AutoLeadAgent Extension] 取消下载:', modelId);
+                
+                // 清理 Port 连接
+                downloadPorts.delete(modelId);
+                
+                // 发送取消确认
+                port.postMessage({
+                    type: 'download-cancelled',
+                    modelId: modelId
+                });
+                
+                // 断开连接
+                port.disconnect();
+                
+            } else if (request.type === 'check-status') {
+                const { modelId } = request;
+                const portExists = downloadPorts.has(modelId);
+                port.postMessage({
+                    type: 'download-status',
+                    modelId: modelId,
+                    isDownloading: portExists
+                });
+            }
+        });
+        
+        // 处理 Port 断开
+        port.onDisconnect.addListener(() => {
+            console.log('[AutoLeadAgent Extension] Port 连接断开:', currentModelId);
+            
+            if (currentModelId) {
+                downloadPorts.delete(currentModelId);
+            }
+            
+            // 清理所有相关连接
+            for (const [modelId, p] of downloadPorts.entries()) {
+                if (p === port) {
+                    downloadPorts.delete(modelId);
+                    break;
+                }
+            }
+        });
+    }
+});
+
+/**
+ * 检查登录状态并开始下载（用于 Port 连接）
+ */
+async function checkLoginAndStartDownload(modelId, port) {
+    // 1. 检查登录状态
+    const loginCheck = await fetch('https://huggingface.co/api/whoami-v2', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Accept': 'application/json'
+        }
+    });
+
+    if (!loginCheck.ok) {
+        // 未登录，打开登录页面
+        console.log('[AutoLeadAgent Extension] 未登录，打开登录页面');
+        const loginTab = await chrome.tabs.create({
+            url: 'https://huggingface.co/login',
+            active: true
+        });
+
+        // 开始监听登录页面的登录状态
+        startLoginDetection(loginTab.id, modelId);
+
+        port.postMessage({
+            type: 'download-need-login',
+            modelId: modelId,
+            loginTabId: loginTab.id,
+            message: '需要登录 HuggingFace，已打开登录页面'
+        });
+        
+        return; // 等待登录成功后再继续
+    }
+
+    // 2. 已登录，开始下载模型
+    console.log('[AutoLeadAgent Extension] 已登录，通过 Port 开始下载模型');
+    
+    // 发送下载开始消息
+    port.postMessage({
+        type: 'download-started',
+        modelId: modelId,
+        message: '下载已开始'
+    });
+    
+    // 执行下载
+    await downloadHfModelViaPort(modelId, port);
+}
+
 // 监听来自内容脚本的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AutoLeadAgent Extension] ===== 收到消息 =====');
@@ -488,6 +934,178 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AutoLeadAgent Extension] Message action:', request.action);
     console.log('[AutoLeadAgent Extension] Sender:', sender);
     console.log('[AutoLeadAgent Extension] Timestamp:', new Date().toISOString());
+
+    // 处理 MCP 相关消息
+    if (request.type === 'MCP_CONNECT') {
+        handleMCPConnect(request, sendResponse);
+        return true;
+    }
+    if (request.type === 'MCP_CALL_TOOL') {
+        handleMCPCallTool(request, sendResponse);
+        return true;
+    }
+    if (request.type === 'MCP_LIST_TOOLS') {
+        handleMCPListTools(request, sendResponse);
+        return true;
+    }
+    if (request.type === 'MCP_PING') {
+        sendResponse({ success: true, message: 'MCP is available' });
+        return false;
+    }
+    if (request.type === 'MCP_DISCONNECT') {
+        const { connectionId } = request;
+        if (connectionId) mcpConnections.delete(connectionId);
+        sendResponse({ success: true });
+        return false;
+    }
+
+    // 处理 WASM 智能体直接工具调用（不需要连接 ID）
+    if (request.type === 'WASM_EXECUTE_TOOL') {
+        handleWasmExecuteTool(request, sendResponse);
+        return true;
+    }
+
+    // 处理 WASM 批量工具调用
+    if (request.type === 'WASM_EXECUTE_TOOLS_BATCH') {
+        handleWasmExecuteToolsBatch(request, sendResponse);
+        return true;
+    }
+
+    // 处理 HuggingFace 模型下载
+    if (request.type === 'HF_DOWNLOAD_MODEL') {
+        handleHfDownloadModel(request, sendResponse);
+        return true;
+    }
+
+    // 处理 HuggingFace 登录检测
+    if (request.type === 'HF_CHECK_LOGIN') {
+        handleHfCheckLogin(request, sendResponse);
+        return true;
+    }
+
+    // 处理 HuggingFace 模型搜索
+    if (request.type === 'HF_SEARCH_MODELS') {
+        // 添加请求去重机制
+        const requestId = request.requestId || 'hf_search_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        if (processingRequests.has(requestId)) {
+            const startTime = processingRequests.get(requestId);
+            const elapsed = Date.now() - startTime;
+            console.warn('[AutoLeadAgent Extension] 检测到重复的 HF_SEARCH_MODELS 请求，requestId:', requestId, '已处理时间:', Math.floor(elapsed / 1000) + '秒');
+            sendResponse({
+                success: false,
+                error: '该请求正在处理中，请勿重复提交',
+                errorType: 'duplicate_request',
+                requestId: requestId,
+                processingSince: startTime
+            });
+            return true;
+        }
+        processingRequests.set(requestId, Date.now());
+        
+        // 包装 sendResponse 以确保清理和错误处理
+        let hasResponded = false;
+        const originalSendResponse = sendResponse;
+        const wrappedSendResponse = (response) => {
+            if (hasResponded) {
+                console.warn('[AutoLeadAgent Extension] 尝试重复发送 HF_SEARCH_MODELS 响应，已忽略');
+                return;
+            }
+            hasResponded = true;
+            processingRequests.delete(requestId);
+            try {
+                originalSendResponse(response);
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 发送 HF_SEARCH_MODELS 响应失败:', e);
+            }
+        };
+        
+        // 处理异步函数，确保错误也被捕获
+        handleHfSearchModels(request, wrappedSendResponse).catch(error => {
+            console.error('[AutoLeadAgent Extension] HF_SEARCH_MODELS 处理异常:', error);
+            if (!hasResponded) {
+                wrappedSendResponse({
+                    success: false,
+                    error: '搜索模型失败: ' + (error.message || '未知错误')
+                });
+            }
+        });
+        
+        return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 处理 HuggingFace 获取模型信息
+    if (request.type === 'HF_GET_MODEL_INFO') {
+        // 添加请求去重机制（基于 modelId + requestId）
+        const modelId = request.modelId || '';
+        const requestId = request.requestId || 'hf_info_' + modelId + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const dedupKey = modelId ? `hf_info_${modelId}` : requestId;
+        
+        if (processingRequests.has(dedupKey)) {
+            const startTime = processingRequests.get(dedupKey);
+            const elapsed = Date.now() - startTime;
+            console.warn('[AutoLeadAgent Extension] 检测到重复的 HF_GET_MODEL_INFO 请求，modelId:', modelId, '已处理时间:', Math.floor(elapsed / 1000) + '秒');
+            sendResponse({
+                success: false,
+                error: '该模型信息正在获取中，请勿重复提交',
+                errorType: 'duplicate_request',
+                requestId: requestId,
+                modelId: modelId,
+                processingSince: startTime
+            });
+            return true;
+        }
+        processingRequests.set(dedupKey, Date.now());
+        // 包装 sendResponse 以确保清理
+        const originalSendResponse = sendResponse;
+        const wrappedSendResponse = (response) => {
+            processingRequests.delete(dedupKey);
+            originalSendResponse(response);
+        };
+        handleHfGetModelInfo(request, wrappedSendResponse);
+        return true;
+    }
+
+    // 处理 HuggingFace 获取文件大小（来自 content script）
+    if (request.type === 'HF_GET_FILE_SIZE') {
+        console.log('[AutoLeadAgent Extension] 收到 HF_GET_FILE_SIZE 请求（来自 content script）:', request);
+        // 添加请求去重机制
+        const requestId = request.requestId || 'hf_filesize_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const dedupKey = `hf_filesize_${request.modelId}_${request.filename}`;
+        
+        if (processingRequests.has(dedupKey)) {
+            const startTime = processingRequests.get(dedupKey);
+            const elapsed = Date.now() - startTime;
+            console.warn('[AutoLeadAgent Extension] 检测到重复的 HF_GET_FILE_SIZE 请求，已处理时间:', Math.floor(elapsed / 1000) + '秒');
+            sendResponse({
+                success: false,
+                error: '该文件大小正在获取中，请勿重复提交',
+                errorType: 'duplicate_request',
+                requestId: requestId
+            });
+            return true;
+        }
+        processingRequests.set(dedupKey, Date.now());
+        
+        // 包装 sendResponse 以确保清理
+        const originalSendResponse = sendResponse;
+        const wrappedSendResponse = (response) => {
+            processingRequests.delete(dedupKey);
+            originalSendResponse(response);
+        };
+        
+        // 处理异步函数，确保错误也被捕获
+        handleHfGetFileSize(request, wrappedSendResponse).catch(error => {
+            console.error('[AutoLeadAgent Extension] HF_GET_FILE_SIZE 处理异常:', error);
+            if (processingRequests.has(dedupKey)) {
+                wrappedSendResponse({
+                    success: false,
+                    error: '获取文件大小失败: ' + (error.message || '未知错误')
+                });
+            }
+        });
+        
+        return true; // 保持消息通道开放以支持异步响应
+    }
 
     if (request.action === 'extractedData') {
         // 处理内容脚本提取的数据
@@ -744,6 +1362,124 @@ function sendLogToFrontend(type, message) {
 /**
  * 在单个搜索引擎中搜索，只提取URL列表（不关闭标签页，用于分页）
  */
+/**
+ * 获取模型API URL
+ * 通过查找任务管理页面（包含 auto-lead-agent 的页面）来获取API基础URL
+ */
+async function getModelApiUrl() {
+    console.log('[AutoLeadAgent Extension] 开始获取模型API URL...');
+    console.log('[AutoLeadAgent Extension] logTargetTabId:', logTargetTabId);
+
+    // 首先尝试从 logTargetTabId 获取
+    if (logTargetTabId) {
+        try {
+            const targetTab = await chrome.tabs.get(logTargetTabId);
+            console.log('[AutoLeadAgent Extension] 从logTargetTabId获取标签页:', targetTab?.url);
+            if (targetTab && targetTab.url) {
+                const urlObj = new URL(targetTab.url);
+                const pathParts = urlObj.pathname.split('/').filter(p => p);
+                const autoLeadIndex = pathParts.indexOf('auto-lead-agent');
+                if (autoLeadIndex >= 0) {
+                    const basePath = '/' + pathParts.slice(0, autoLeadIndex + 1).join('/');
+                    const apiUrl = urlObj.origin + basePath + '/ai/api/v1/chat/completions';
+                    console.log('[AutoLeadAgent Extension] 从logTargetTabId获取API URL:', apiUrl);
+                    return apiUrl;
+                } else {
+                    const apiUrl = urlObj.origin + '/ai/api/v1/chat/completions';
+                    console.log('[AutoLeadAgent Extension] 从logTargetTabId使用默认API路径:', apiUrl);
+                    return apiUrl;
+                }
+            }
+        } catch (e) {
+            console.warn('[AutoLeadAgent Extension] 无法从logTargetTabId获取URL:', e);
+        }
+    }
+
+    // 如果无法从 logTargetTabId 获取，查询所有标签页查找任务管理页面
+    try {
+        const tabs = await chrome.tabs.query({});
+        console.log('[AutoLeadAgent Extension] 查询到', tabs?.length || 0, '个标签页');
+
+        if (tabs && tabs.length > 0) {
+            // 打印所有标签页URL用于调试
+            console.log('[AutoLeadAgent Extension] 所有标签页URL:');
+            tabs.forEach((tab, index) => {
+                if (tab.url) {
+                    console.log(`  [${index}] ${tab.url}`);
+                }
+            });
+
+            // 查找包含 auto-lead-agent 的页面（使用更灵活的匹配）
+            const taskManagementTab = tabs.find(tab => {
+                if (!tab.url || tab.url.startsWith('chrome-extension://')) {
+                    return false;
+                }
+                // 更灵活的匹配：不区分大小写，支持多种格式
+                const urlLower = tab.url.toLowerCase();
+                return urlLower.includes('auto-lead-agent') ||
+                    urlLower.includes('autoleadagent') ||
+                    urlLower.includes('auto_lead_agent') ||
+                    urlLower.includes('autolead-agent');
+            });
+
+            if (taskManagementTab && taskManagementTab.url) {
+                console.log('[AutoLeadAgent Extension] 找到任务管理页面:', taskManagementTab.url);
+                const urlObj = new URL(taskManagementTab.url);
+
+                // 方法1: 从路径部分提取
+                const pathParts = urlObj.pathname.split('/').filter(p => p);
+                const autoLeadIndex = pathParts.indexOf('auto-lead-agent');
+                if (autoLeadIndex >= 0) {
+                    const basePath = '/' + pathParts.slice(0, autoLeadIndex + 1).join('/');
+                    const apiUrl = urlObj.origin + basePath + '/ai/api/v1/chat/completions';
+                    console.log('[AutoLeadAgent Extension] 从任务管理页面获取API URL (方法1):', apiUrl);
+                    return apiUrl;
+                }
+
+                // 方法2: 使用正则表达式从完整URL中提取
+                // 匹配格式: http://domain/.../auto-lead-agent/... 或 http://domain/.../auto-lead-agent
+                const urlLower = taskManagementTab.url.toLowerCase();
+                if (urlLower.includes('auto-lead-agent')) {
+                    // 提取到 auto-lead-agent 及其之前的所有路径
+                    // 支持格式: /path/to/auto-lead-agent 或 /path/to/auto-lead-agent/backend/index
+                    const match = taskManagementTab.url.match(/(.*\/auto-lead-agent[^\/]*)/i);
+                    if (match && match[1]) {
+                        // 确保路径以 / 开头
+                        let basePath = match[1];
+                        if (!basePath.startsWith('/')) {
+                            basePath = '/' + basePath;
+                        }
+                        // 如果basePath已经是完整URL，直接使用
+                        if (basePath.startsWith('http://') || basePath.startsWith('https://')) {
+                            const apiUrl = basePath + '/ai/api/v1/chat/completions';
+                            console.log('[AutoLeadAgent Extension] 从URL匹配获取API URL (方法2-完整URL):', apiUrl);
+                            return apiUrl;
+                        } else {
+                            const apiUrl = urlObj.origin + basePath + '/ai/api/v1/chat/completions';
+                            console.log('[AutoLeadAgent Extension] 从URL匹配获取API URL (方法2):', apiUrl);
+                            return apiUrl;
+                        }
+                    }
+                }
+
+                // 方法3: 使用默认路径
+                const apiUrl = urlObj.origin + '/ai/api/v1/chat/completions';
+                console.log('[AutoLeadAgent Extension] 使用默认API路径:', apiUrl);
+                return apiUrl;
+            } else {
+                console.warn('[AutoLeadAgent Extension] 未找到任务管理页面（包含 auto-lead-agent 的标签页）');
+                console.warn('[AutoLeadAgent Extension] 请确保任务管理页面已打开，且URL包含 "auto-lead-agent"');
+            }
+        }
+    } catch (e) {
+        console.error('[AutoLeadAgent Extension] 查询标签页失败:', e);
+    }
+
+    // 如果都失败了，返回null
+    console.error('[AutoLeadAgent Extension] 无法确定模型API URL，所有方法都失败');
+    return null;
+}
+
 async function searchInEngine(engine, query, maxResults, tabId = null, openedTabs = null) {
     const searchUrl = engine.url + encodeURIComponent(query) + (engine.name === 'Baidu' ? '&rn=' + maxResults : '');
 
@@ -887,43 +1623,8 @@ async function searchInEngine(engine, query, maxResults, tabId = null, openedTab
                 // 调用后端API使用模型提取URL
                 sendLogToFrontend('crawl', '  → 调用模型API提取搜索结果URL...');
 
-                // 构建API请求URL（从logTargetTabId获取基础URL）
-                let modelApiUrl = '';
-                if (logTargetTabId) {
-                    try {
-                        const targetTab = await chrome.tabs.get(logTargetTabId);
-                        if (targetTab && targetTab.url) {
-                            const urlObj = new URL(targetTab.url);
-                            // 提取基础路径（去掉最后的路径部分）
-                            const pathParts = urlObj.pathname.split('/').filter(p => p);
-                            // 找到 auto-lead-agent 的位置
-                            const autoLeadIndex = pathParts.indexOf('auto-lead-agent');
-                            if (autoLeadIndex >= 0) {
-                                const basePath = '/' + pathParts.slice(0, autoLeadIndex + 1).join('/');
-                                modelApiUrl = urlObj.origin + basePath + '/ai/api/v1/chat';
-                            } else {
-                                // 如果没有找到，使用默认路径
-                                modelApiUrl = urlObj.origin + '/ai/api/v1/chat';
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('[AutoLeadAgent Extension] 无法获取目标标签页URL:', e);
-                    }
-                }
-
-                // 如果无法获取，尝试从当前搜索标签页获取（但这是Google页面，可能不适用）
-                if (!modelApiUrl) {
-                    try {
-                        const currentTab = await chrome.tabs.get(tab.id);
-                        if (currentTab && currentTab.url) {
-                            // 从referrer或其他方式获取，这里暂时使用默认
-                            console.warn('[AutoLeadAgent Extension] 无法从logTargetTabId获取API URL，使用默认路径');
-                        }
-                    } catch (e) {
-                        console.warn('[AutoLeadAgent Extension] 无法获取当前标签页:', e);
-                    }
-                }
-
+                // 获取模型API URL
+                const modelApiUrl = await getModelApiUrl();
                 if (!modelApiUrl) {
                     throw new Error('无法确定模型API URL，请确保在任务管理页面中运行');
                 }
@@ -948,18 +1649,26 @@ ${pageHtml.substring(0, 50000)}${pageHtml.length > 50000 ? '...(已截断)' : ''
   ...
 ]`;
 
-                // 调用模型API
+                // 调用模型API（兼容 /ai/api/v1/chat/completions 接口）
                 const modelResponse = await fetch(modelApiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        prompt: prompt,
-                        model_code: 'gpt-4o-mini', // 使用默认模型
-                        scenario_code: 'extract_search_results',
-                        max_tokens: 2000,
-                        temperature: 0.3
+                        model: 'gpt-4o-mini', // 默认模型代码（后端会做映射）
+                        messages: [
+                            {
+                                role: 'system',
+                                content: '你是一个擅长解析搜索引擎结果页面HTML的助手，负责从HTML中提取搜索结果项的URL、标题和摘要。只返回JSON数组，不要返回多余说明。'
+                            },
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 2000
                     })
                 });
 
@@ -970,9 +1679,12 @@ ${pageHtml.substring(0, 50000)}${pageHtml.length > 50000 ? '...(已截断)' : ''
                 const modelData = await modelResponse.json();
                 console.log('[AutoLeadAgent Extension] 模型API完整响应:', JSON.stringify(modelData, null, 2));
 
-                // 解析模型返回的结果
+                // 解析模型返回的结果（兼容 OpenAI 风格）
                 let modelContent = '';
-                if (modelData && modelData.content) {
+                if (modelData && Array.isArray(modelData.choices) && modelData.choices.length > 0 &&
+                    modelData.choices[0].message && typeof modelData.choices[0].message.content === 'string') {
+                    modelContent = modelData.choices[0].message.content;
+                } else if (modelData && modelData.content) {
                     modelContent = modelData.content;
                 } else if (modelData && modelData.data && modelData.data.content) {
                     modelContent = modelData.data.content;
@@ -1881,26 +2593,191 @@ async function handleCrawlRequest(request, sendResponse) {
                             if (urlList.length > 3) {
                                 sendLogToFrontend('crawl', `     ... 还有 ${urlList.length - 3} 个结果`);
                             }
-                        } else {
+                        }
+
+                        // 如果urlList仍然为空（包括模型提取后），记录日志
+                        if (urlList.length === 0) {
+                            console.log('[AutoLeadAgent Extension] 分页循环：最终urlList为空，准备停止或继续');
                             sendLogToFrontend('crawl', '  ⚠️ [' + engine.name + '] 第' + currentPage + '页未提取到任何结果URL');
 
-                            // 如果第一页未能提取到任何结果，直接停止
+                            // 如果第一页未能提取到任何结果，尝试使用模型推理提取
                             if (currentPage === 1) {
-                                sendLogToFrontend('crawl', '  ⚠️ 第一页未能提取到任何结果，直接停止该搜索引擎的搜索');
-                                sendLogToFrontend('crawl', '  → 可能原因：1. 页面结构变化 2. 模型识别失败 3. 页面需要验证码 4. 搜索结果为空');
+                                sendLogToFrontend('crawl', '  → 标准方法未提取到结果，尝试使用模型推理提取...');
+                                console.log('[AutoLeadAgent Extension] 分页循环：标准方法提取失败，尝试使用模型推理提取...');
 
-                                // 关闭当前页标签页
-                                if (searchTabId) {
-                                    try {
-                                        await chrome.tabs.remove(searchTabId);
-                                        openedTabs.delete(searchTabId); // 从跟踪列表移除
-                                        sendLogToFrontend('crawl', '  ✓ [' + engine.name + '] 第' + currentPage + '页标签页已关闭');
-                                    } catch (e) {
-                                        console.warn('[AutoLeadAgent Extension] 关闭标签页失败:', e.message);
-                                        openedTabs.delete(searchTabId); // 即使关闭失败，也从跟踪列表移除
+                                try {
+                                    // 获取页面HTML
+                                    const htmlResult = await chrome.scripting.executeScript({
+                                        target: { tabId: searchTabId },
+                                        func: () => {
+                                            return {
+                                                html: document.documentElement.outerHTML,
+                                                url: window.location.href,
+                                                title: document.title
+                                            };
+                                        }
+                                    });
+
+                                    const pageData = htmlResult[0]?.result || {};
+                                    const pageHtml = pageData.html || '';
+                                    const pageUrl = pageData.url || '';
+
+                                    console.log('[AutoLeadAgent Extension] 分页循环：获取到页面HTML，长度:', pageHtml.length);
+                                    console.log('[AutoLeadAgent Extension] 分页循环：页面URL:', pageUrl);
+                                    console.log('[AutoLeadAgent Extension] 分页循环：页面标题:', pageData.title);
+
+                                    // 打印HTML的前5000个字符用于调试
+                                    console.log('[AutoLeadAgent Extension] ===== 分页循环 HTML内容（前5000字符） =====');
+                                    console.log(pageHtml.substring(0, 5000));
+                                    console.log('[AutoLeadAgent Extension] ===== HTML内容结束 =====');
+
+                                    // 调用后端API使用模型提取URL
+                                    sendLogToFrontend('crawl', '  → 调用模型API提取搜索结果URL...');
+
+                                    // 获取模型API URL
+                                    const modelApiUrl = await getModelApiUrl();
+                                    if (!modelApiUrl) {
+                                        throw new Error('无法确定模型API URL，请确保在任务管理页面中运行');
                                     }
+
+                                    console.log('[AutoLeadAgent Extension] 分页循环：模型API URL:', modelApiUrl);
+
+                                    // 构建提示词
+                                    const prompt = `请从以下Google搜索结果页面的HTML中提取所有搜索结果项的URL。
+
+要求：
+1. 只提取搜索结果项的URL，不要提取Google自己的链接（如google.com/search、google.com/url等）
+2. 提取的URL应该是外部网站的链接（特别是facebook.com的链接）
+3. 返回JSON格式，包含url、title、snippet字段
+4. 最多提取${maxResults}个结果
+
+HTML内容：
+${pageHtml.substring(0, 50000)}${pageHtml.length > 50000 ? '...(已截断)' : ''}
+
+请返回JSON数组格式，例如：
+[
+  {"url": "https://www.facebook.com/example", "title": "页面标题", "snippet": "页面摘要"},
+  ...
+]`;
+
+                                    // 调用模型API（兼容 /ai/api/v1/chat/completions 接口）
+                                    const modelResponse = await fetch(modelApiUrl, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            model: 'gpt-4o-mini',
+                                            messages: [
+                                                {
+                                                    role: 'system',
+                                                    content: '你是一个擅长解析搜索引擎结果页面HTML的助手，负责从HTML中提取搜索结果项的URL、标题和摘要。只返回JSON数组，不要返回多余说明。'
+                                                },
+                                                {
+                                                    role: 'user',
+                                                    content: prompt
+                                                }
+                                            ],
+                                            temperature: 0.3,
+                                            max_tokens: 2000
+                                        })
+                                    });
+
+                                    if (!modelResponse.ok) {
+                                        throw new Error(`模型API调用失败: ${modelResponse.status} ${modelResponse.statusText}`);
+                                    }
+
+                                    const modelData = await modelResponse.json();
+                                    console.log('[AutoLeadAgent Extension] 分页循环：模型API完整响应:', JSON.stringify(modelData, null, 2));
+
+                                    // 解析模型返回的结果（兼容 OpenAI 风格）
+                                    let modelContent = '';
+                                    if (modelData && Array.isArray(modelData.choices) && modelData.choices.length > 0 &&
+                                        modelData.choices[0].message && typeof modelData.choices[0].message.content === 'string') {
+                                        modelContent = modelData.choices[0].message.content;
+                                    } else if (modelData && modelData.content) {
+                                        modelContent = modelData.content;
+                                    } else if (modelData && modelData.data && modelData.data.content) {
+                                        modelContent = modelData.data.content;
+                                    } else if (modelData && modelData.response) {
+                                        modelContent = modelData.response;
+                                    }
+
+                                    console.log('[AutoLeadAgent Extension] 分页循环：模型返回的原始内容:', modelContent);
+
+                                    if (modelContent) {
+                                        try {
+                                            // 尝试从内容中提取JSON
+                                            let jsonStr = modelContent.trim();
+                                            if (jsonStr.startsWith('```json')) {
+                                                jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+                                            } else if (jsonStr.startsWith('```')) {
+                                                jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
+                                            }
+                                            const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
+                                            if (jsonMatch) {
+                                                jsonStr = jsonMatch[0];
+                                            }
+
+                                            const extractedUrls = JSON.parse(jsonStr);
+                                            if (Array.isArray(extractedUrls) && extractedUrls.length > 0) {
+                                                urlList = extractedUrls;
+                                                console.log('[AutoLeadAgent Extension] 分页循环：模型提取成功，找到', urlList.length, '个URL');
+                                                console.log('[AutoLeadAgent Extension] 分页循环：重新提取到的URL列表:', JSON.stringify(urlList, null, 2));
+                                                sendLogToFrontend('crawl', '  ✓ 模型提取成功，找到 ' + urlList.length + ' 个结果URL');
+
+                                                // 显示提取到的URL列表
+                                                urlList.slice(0, 5).forEach((item, idx) => {
+                                                    console.log(`[AutoLeadAgent Extension] 分页循环：URL ${idx + 1}:`, item.url, item.title || '无标题');
+                                                    sendLogToFrontend('crawl', `     ${idx + 1}. ${item.title || '无标题'} - ${item.url || '无URL'}`);
+                                                });
+                                                if (urlList.length > 5) {
+                                                    sendLogToFrontend('crawl', `     ... 还有 ${urlList.length - 5} 个结果`);
+                                                }
+                                            } else {
+                                                console.warn('[AutoLeadAgent Extension] 分页循环：模型返回的结果不是有效数组或为空');
+                                            }
+                                        } catch (parseError) {
+                                            console.error('[AutoLeadAgent Extension] 分页循环：解析模型返回结果失败:', parseError);
+                                            console.error('[AutoLeadAgent Extension] 分页循环：模型返回内容:', modelContent);
+                                        }
+                                    }
+
+                                    // 如果模型提取也失败，继续执行停止逻辑
+                                    if (urlList.length === 0) {
+                                        sendLogToFrontend('crawl', '  ⚠️ 模型推理提取也失败，停止该搜索引擎的搜索');
+                                        sendLogToFrontend('crawl', '  → 可能原因：1. 页面结构变化 2. 模型识别失败 3. 页面需要验证码 4. 搜索结果为空');
+
+                                        // 关闭当前页标签页
+                                        if (searchTabId) {
+                                            try {
+                                                await chrome.tabs.remove(searchTabId);
+                                                openedTabs.delete(searchTabId);
+                                                sendLogToFrontend('crawl', '  ✓ [' + engine.name + '] 第' + currentPage + '页标签页已关闭');
+                                            } catch (e) {
+                                                console.warn('[AutoLeadAgent Extension] 关闭标签页失败:', e.message);
+                                                openedTabs.delete(searchTabId);
+                                            }
+                                        }
+                                        break; // 直接停止该搜索引擎的分页循环
+                                    }
+                                } catch (modelError) {
+                                    console.error('[AutoLeadAgent Extension] 分页循环：模型推理提取失败:', modelError);
+                                    sendLogToFrontend('crawl', '  ⚠️ 模型推理提取失败: ' + modelError.message);
+
+                                    // 关闭当前页标签页
+                                    if (searchTabId) {
+                                        try {
+                                            await chrome.tabs.remove(searchTabId);
+                                            openedTabs.delete(searchTabId);
+                                            sendLogToFrontend('crawl', '  ✓ [' + engine.name + '] 第' + currentPage + '页标签页已关闭');
+                                        } catch (e) {
+                                            console.warn('[AutoLeadAgent Extension] 关闭标签页失败:', e.message);
+                                            openedTabs.delete(searchTabId);
+                                        }
+                                    }
+                                    break; // 直接停止该搜索引擎的分页循环
                                 }
-                                break; // 直接停止该搜索引擎的分页循环
                             } else {
                                 // 非第一页，继续尝试
                                 sendLogToFrontend('crawl', '  → 可能原因：1. 页面结构变化 2. 模型识别失败 3. 页面需要验证码');
@@ -5591,4 +6468,1363 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.action.onClicked.addListener((tab) => {
     console.log('[AutoLeadAgent Extension] Icon clicked');
 });
+
+// ==================== HuggingFace 模型下载功能 ====================
+
+// 存储下载进度监听器
+const hfDownloadProgressListeners = new Map(); // Map<modelId, {port, tabId}>
+
+// 存储 Port 连接（用于长时间下载操作，不受超时限制）
+const downloadPorts = new Map(); // Map<modelId, Port>
+
+/**
+ * 检查 HuggingFace 登录状态
+ */
+async function handleHfCheckLogin(request, sendResponse) {
+    try {
+        console.log('[AutoLeadAgent Extension] 检查 HuggingFace 登录状态');
+        
+        // 尝试访问 whoami API 检查登录状态
+        const response = await fetch('https://huggingface.co/api/whoami-v2', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const userInfo = await response.json();
+            console.log('[AutoLeadAgent Extension] HuggingFace 已登录:', userInfo.name || userInfo.username);
+            const result = {
+                success: true,
+                loggedIn: true,
+                user: userInfo.name || userInfo.username || 'Unknown'
+            };
+            console.log('[AutoLeadAgent Extension] 发送登录检查响应:', result);
+            sendResponse(result);
+        } else {
+            console.log('[AutoLeadAgent Extension] HuggingFace 未登录，状态码:', response.status);
+            const result = {
+                success: true,
+                loggedIn: false
+            };
+            console.log('[AutoLeadAgent Extension] 发送登录检查响应:', result);
+            sendResponse(result);
+        }
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 检查登录状态失败:', error);
+        const result = {
+            success: false,
+            error: error.message || '检查登录状态失败'
+        };
+        console.log('[AutoLeadAgent Extension] 发送登录检查错误响应:', result);
+        sendResponse(result);
+    }
+}
+
+/**
+ * 处理 HuggingFace 模型下载请求
+ */
+async function handleHfDownloadModel(request, sendResponse) {
+    const { modelId } = request;
+    
+    if (!modelId) {
+        sendResponse({
+            success: false,
+            error: '模型ID不能为空'
+        });
+        return;
+    }
+
+    console.log('[AutoLeadAgent Extension] 开始下载模型:', modelId);
+
+    // 使用安全响应包装，防止重复响应
+    let hasResponded = false;
+    const safeSendResponse = (response) => {
+        if (hasResponded) {
+            console.warn('[AutoLeadAgent Extension] 尝试重复发送下载响应，已忽略');
+            return;
+        }
+        hasResponded = true;
+        try {
+            sendResponse(response);
+        } catch (e) {
+            console.error('[AutoLeadAgent Extension] 发送下载响应失败:', e);
+        }
+    };
+
+    try {
+        // 1. 先检查登录状态
+        const loginCheck = await fetch('https://huggingface.co/api/whoami-v2', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!loginCheck.ok) {
+            // 未登录，打开登录页面
+            console.log('[AutoLeadAgent Extension] 未登录，打开登录页面');
+            const loginTab = await chrome.tabs.create({
+                url: 'https://huggingface.co/login',
+                active: true
+            });
+
+            // 开始监听登录页面的登录状态
+            startLoginDetection(loginTab.id, modelId);
+
+            safeSendResponse({
+                success: false,
+                needLogin: true,
+                loginTabId: loginTab.id,
+                message: '需要登录 HuggingFace，已打开登录页面'
+            });
+            return;
+        }
+
+        // 2. 已登录，开始下载模型（异步执行，不阻塞其他消息）
+        console.log('[AutoLeadAgent Extension] 已登录，开始下载模型');
+        
+        // 立即返回"已开始下载"的响应，实际下载在后台进行
+        // 下载进度通过 HF_DOWNLOAD_PROGRESS 消息实时更新
+        safeSendResponse({
+            success: true,
+            started: true,
+            modelId: modelId,
+            message: '模型下载已开始，请查看进度更新'
+        });
+        
+        // 在后台异步执行下载（不阻塞消息通道）
+        downloadHfModel(modelId, (response) => {
+            // 下载完成或失败时，通过进度消息通知（而不是通过 sendResponse，因为已经响应过了）
+            console.log('[AutoLeadAgent Extension] 模型下载完成:', response);
+            // 最终状态通过 HF_DOWNLOAD_PROGRESS 消息的 100% 进度来通知
+        }).catch(error => {
+            console.error('[AutoLeadAgent Extension] 下载模型后台执行失败:', error);
+            // 错误通过进度消息通知
+        });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 下载模型失败:', error);
+        safeSendResponse({
+            success: false,
+            error: error.message || '下载模型失败'
+        });
+    }
+}
+
+/**
+ * 开始监听登录状态（用于下载模型）
+ */
+function startLoginDetection(loginTabId, modelId) {
+    console.log('[AutoLeadAgent Extension] 开始监听登录状态，tabId:', loginTabId);
+
+    const checkInterval = setInterval(async () => {
+        try {
+            const response = await fetch('https://huggingface.co/api/whoami-v2', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                // 登录成功
+                console.log('[AutoLeadAgent Extension] 检测到登录成功');
+                clearInterval(checkInterval);
+
+                // 通知所有配置页面登录成功
+                const loginOkMessage = {
+                    type: 'HF_LOGIN_OK',
+                    modelId: modelId
+                };
+                
+                // 发送到所有标签页的 content script
+                chrome.tabs.query({}, function (tabs) {
+                    tabs.forEach(function (tab) {
+                        try {
+                            chrome.tabs.sendMessage(tab.id, loginOkMessage).catch(() => {
+                                // 忽略错误
+                            });
+                        } catch (e) {
+                            // 忽略错误
+                        }
+                    });
+                });
+
+                // 可选：关闭登录标签页
+                try {
+                    await chrome.tabs.remove(loginTabId);
+                } catch (e) {
+                    // 忽略关闭失败
+                }
+            }
+        } catch (error) {
+            // 继续等待
+        }
+    }, 2000); // 每2秒检查一次
+
+    // 30分钟后停止检查
+    setTimeout(() => {
+        clearInterval(checkInterval);
+    }, 30 * 60 * 1000);
+}
+
+/**
+ * 开始监听登录状态（用于获取模型信息）
+ */
+function startLoginDetectionForModelInfo(loginTabId, modelId) {
+    console.log('[AutoLeadAgent Extension] 开始监听登录状态（获取模型信息），tabId:', loginTabId);
+
+    const checkInterval = setInterval(async () => {
+        try {
+            const response = await fetch('https://huggingface.co/api/whoami-v2', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                // 登录成功
+                console.log('[AutoLeadAgent Extension] 检测到登录成功（获取模型信息）');
+                clearInterval(checkInterval);
+
+                // 通知所有配置页面登录成功（用于获取模型信息）
+                const loginOkMessage = {
+                    type: 'HF_LOGIN_OK_FOR_MODEL_INFO',
+                    modelId: modelId
+                };
+                
+                // 发送到所有标签页的 content script
+                chrome.tabs.query({}, function (tabs) {
+                    tabs.forEach(function (tab) {
+                        try {
+                            chrome.tabs.sendMessage(tab.id, loginOkMessage).catch(() => {
+                                // 忽略错误
+                            });
+                        } catch (e) {
+                            // 忽略错误
+                        }
+                    });
+                });
+
+                // 可选：关闭登录标签页
+                try {
+                    await chrome.tabs.remove(loginTabId);
+                } catch (e) {
+                    // 忽略关闭失败
+                }
+            }
+        } catch (error) {
+            // 继续等待
+        }
+    }, 2000); // 每2秒检查一次
+
+    // 30分钟后停止检查
+    setTimeout(() => {
+        clearInterval(checkInterval);
+    }, 30 * 60 * 1000);
+}
+
+/**
+ * 正确编码模型ID（保留斜杠，只编码每个部分）
+ * 注意：模型名称中的斜杠不应该被编码，直接使用即可
+ * encodeURIComponent 会将斜杠编码为 %2F，导致 API 返回 400 错误 "repo name includes an url-encoded slash"
+ */
+function encodeModelId(modelId) {
+    if (!modelId) return '';
+    // 将模型ID按斜杠分割，分别编码每个部分，然后重新组合
+    return modelId.split('/').map(part => encodeURIComponent(part)).join('/');
+}
+
+/**
+ * 已废弃：不再使用 IndexedDB 存储，改为本地文件系统存储
+ * 文件现在通过 Port 发送到前端，由前端使用 LocalFileStorage 保存到本地文件系统
+ */
+
+/**
+ * 下载 HuggingFace 模型
+ */
+async function downloadHfModel(modelId, onComplete) {
+    try {
+        console.log('[AutoLeadAgent Extension] 开始下载模型文件:', modelId);
+
+        // 1. 获取模型文件列表
+        const modelInfoUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}`;
+        const modelInfoResponse = await fetch(modelInfoUrl, {
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!modelInfoResponse.ok) {
+            throw new Error(`获取模型信息失败: ${modelInfoResponse.status}`);
+        }
+
+        const modelInfo = await modelInfoResponse.json();
+        console.log('[AutoLeadAgent Extension] 模型信息:', modelInfo);
+
+        // 2. 获取文件列表（优先使用 siblings API，如果失败则从 modelInfo 中获取）
+        let siblings = [];
+        const siblingsUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}/siblings`;
+        
+        try {
+            const siblingsResponse = await fetch(siblingsUrl, {
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (siblingsResponse.ok) {
+                siblings = await siblingsResponse.json();
+                console.log('[AutoLeadAgent Extension] 从 siblings API 获取文件列表:', siblings);
+            } else {
+                // siblings API 失败（可能是 404），尝试从 modelInfo 中获取
+                console.warn('[AutoLeadAgent Extension] siblings API 返回', siblingsResponse.status, '，尝试从 modelInfo 中获取文件列表');
+                
+                if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
+                    siblings = modelInfo.siblings;
+                    console.log('[AutoLeadAgent Extension] 从 modelInfo 获取文件列表:', siblings);
+                } else {
+                    // 如果都没有，抛出错误
+                    throw new Error(`获取文件列表失败: siblings API 返回 ${siblingsResponse.status}，且 modelInfo 中无 siblings 数据`);
+                }
+            }
+        } catch (error) {
+            // 如果 fetch 失败或解析失败，尝试从 modelInfo 中获取
+            console.warn('[AutoLeadAgent Extension] 获取 siblings API 失败:', error.message);
+            
+            if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
+                siblings = modelInfo.siblings;
+                console.log('[AutoLeadAgent Extension] 从 modelInfo 获取文件列表（fallback）:', siblings);
+            } else {
+                // 如果都没有，抛出错误
+                throw new Error(`获取文件列表失败: ${error.message}`);
+            }
+        }
+        
+        if (!siblings || siblings.length === 0) {
+            throw new Error('模型文件列表为空，无法下载');
+        }
+
+        // 3. 筛选需要下载的文件（模型权重、tokenizer等）
+        const importantFiles = siblings.filter(file => {
+            const name = file.rfilename || file.filename || '';
+            return name.endsWith('.safetensors') ||
+                   name.endsWith('.bin') ||
+                   name.endsWith('.json') ||
+                   name === 'tokenizer.json' ||
+                   name === 'config.json' ||
+                   name.startsWith('tokenizer_config.json');
+        });
+
+        console.log('[AutoLeadAgent Extension] 需要下载的文件:', importantFiles.length);
+
+        // 4. 计算总大小（先尝试从文件信息获取，如果失败则通过 HEAD 请求获取实际大小）
+        let totalSize = 0;
+        for (const file of importantFiles) {
+            totalSize += file.size || 0;
+        }
+
+        console.log('[AutoLeadAgent Extension] 从文件信息计算的总大小:', totalSize, '字节');
+
+        // 如果总大小为0，通过 HEAD 请求获取所有文件的实际大小
+        if (totalSize === 0) {
+            console.log('[AutoLeadAgent Extension] 文件信息中没有大小，通过 HEAD 请求获取实际大小...');
+            for (const file of importantFiles) {
+                const filename = file.rfilename || file.filename;
+                const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
+                
+                try {
+                    const headResponse = await fetch(fileUrl, {
+                        method: 'HEAD',
+                        credentials: 'include'
+                    });
+                    
+                    if (headResponse.ok) {
+                        const contentLength = parseInt(headResponse.headers.get('content-length') || '0', 10);
+                        if (contentLength > 0) {
+                            file.size = contentLength;
+                            totalSize += contentLength;
+                            console.log('[AutoLeadAgent Extension] 获取文件大小:', filename, contentLength, '字节');
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[AutoLeadAgent Extension] 获取文件大小失败:', filename, error.message);
+                    // 继续处理其他文件
+                }
+            }
+            
+            console.log('[AutoLeadAgent Extension] 通过 HEAD 请求获取的总大小:', totalSize, '字节');
+        }
+
+        // 如果仍然为0，使用估算值（基于文件数量）
+        if (totalSize === 0) {
+            console.warn('[AutoLeadAgent Extension] 无法获取文件大小，使用估算值');
+            // 估算：每个文件平均 100MB（保守估计）
+            totalSize = importantFiles.length * 100 * 1024 * 1024;
+            console.log('[AutoLeadAgent Extension] 使用估算总大小:', totalSize, '字节（', importantFiles.length, '个文件 × 100MB）');
+        }
+
+        // 5. 开始下载文件
+        let downloadedSize = 0;
+        const actualTotalSize = totalSize; // 使用计算出的总大小
+        const downloadedFiles = [];
+        let lastProgressUpdate = 0; // 上次进度更新时间（用于节流）
+        const PROGRESS_UPDATE_INTERVAL = 200; // 每200ms更新一次进度
+
+        // 发送初始进度（0%）
+        const sendProgressUpdate = (filename, downloaded, total, progress) => {
+            const now = Date.now();
+            // 节流：避免过于频繁的更新
+            if (now - lastProgressUpdate < PROGRESS_UPDATE_INTERVAL && progress < 100) {
+                return;
+            }
+            lastProgressUpdate = now;
+
+            const progressMessage = {
+                type: 'HF_DOWNLOAD_PROGRESS',
+                modelId: modelId,
+                filename: filename,
+                downloaded: downloaded,
+                total: total,
+                progress: progress
+            };
+            
+            // 发送到所有标签页的 content script，由 content script 转发到页面
+            chrome.tabs.query({}, function (tabs) {
+                tabs.forEach(function (tab) {
+                    try {
+                        chrome.tabs.sendMessage(tab.id, progressMessage).catch(() => {
+                            // 忽略错误，可能没有 content script 或不是配置页面
+                        });
+                    } catch (e) {
+                        // 忽略错误
+                    }
+                });
+            });
+        };
+
+        // 发送初始进度（确保总大小不为0）
+        console.log('[AutoLeadAgent Extension] 开始下载，总大小:', actualTotalSize, '字节');
+        sendProgressUpdate('准备下载...', 0, actualTotalSize, 0);
+
+        for (const file of importantFiles) {
+            const filename = file.rfilename || file.filename;
+            const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
+            
+            console.log('[AutoLeadAgent Extension] 下载文件:', filename, '大小:', file.size || '未知');
+
+            try {
+                const fileResponse = await fetch(fileUrl, {
+                    credentials: 'include'
+                });
+
+                if (!fileResponse.ok) {
+                    console.warn('[AutoLeadAgent Extension] 下载文件失败:', filename, fileResponse.status);
+                    continue;
+                }
+
+                // 获取实际文件大小（优先使用 content-length，其次使用文件信息中的 size）
+                const contentLength = parseInt(fileResponse.headers.get('content-length') || '0', 10);
+                const fileSize = contentLength > 0 ? contentLength : (file.size || 0);
+                
+                // 如果文件大小与预期不符，更新文件信息（但不改变总大小，因为已经在开始前计算好了）
+                if (fileSize > 0 && file.size !== fileSize) {
+                    console.log('[AutoLeadAgent Extension] 文件实际大小与预期不同:', filename, '预期:', file.size, '实际:', fileSize);
+                    file.size = fileSize;
+                }
+
+                const reader = fileResponse.body.getReader();
+                const chunks = [];
+                let fileDownloadedSize = 0; // 当前文件已下载大小
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    chunks.push(value);
+                    fileDownloadedSize += value.byteLength;
+                    downloadedSize += value.byteLength;
+
+                    // 计算进度（确保总大小不为0）
+                    let progress = 0;
+                    if (actualTotalSize > 0) {
+                        progress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
+                    } else {
+                        // 如果总大小仍然为0（不应该发生），使用文件大小估算
+                        console.warn('[AutoLeadAgent Extension] 总大小为0，使用文件大小估算进度');
+                        progress = fileSize > 0 ? Math.min(100, (downloadedSize / fileSize) * 100) : 0;
+                    }
+                    
+                    // 发送进度更新（节流）
+                    sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, progress);
+                }
+
+                // 文件下载完成，发送完成进度
+                let fileProgress = 0;
+                if (actualTotalSize > 0) {
+                    fileProgress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
+                } else if (fileSize > 0) {
+                    fileProgress = Math.min(100, (downloadedSize / fileSize) * 100);
+                }
+                sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, fileProgress);
+
+                // 合并 chunks 为 ArrayBuffer
+                const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                const arrayBuffer = new ArrayBuffer(totalLength);
+                const uint8Array = new Uint8Array(arrayBuffer);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    uint8Array.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                
+                // 保存到 IndexedDB（通过消息通知前端保存）
+                downloadedFiles.push({
+                    filename: filename,
+                    size: arrayBuffer.byteLength,
+                    type: 'application/octet-stream'
+                });
+
+                // 通知前端文件下载完成
+                // 注意：大文件不能直接通过消息传递，需要通过 IndexedDB 或其他方式
+                // 这里先通知前端，然后通过 chrome.storage 临时存储文件元数据
+                const fileDownloadedMessage = {
+                    type: 'HF_FILE_DOWNLOADED',
+                    modelId: modelId,
+                    filename: filename,
+                    size: arrayBuffer.byteLength
+                };
+                
+                // 发送到所有标签页的 content script
+                chrome.tabs.query({}, function (tabs) {
+                    tabs.forEach(function (tab) {
+                        try {
+                            chrome.tabs.sendMessage(tab.id, fileDownloadedMessage).catch(() => {
+                                // 忽略错误
+                            });
+                        } catch (e) {
+                            // 忽略错误
+                        }
+                    });
+                });
+
+                // 将文件数据保存到 chrome.storage（临时方案，大文件可能有问题）
+                // 注意：chrome.storage.local 有 10MB 限制，大文件需要使用 IndexedDB
+                // 这里只保存小文件（< 5MB），大文件需要前端通过其他方式处理
+                if (arrayBuffer.byteLength < 5 * 1024 * 1024) {
+                    const key = `hf_model_${modelId}_${filename}`;
+                    chrome.storage.local.set({
+                        [key]: {
+                            data: Array.from(uint8Array), // 转换为普通数组以便存储
+                            modelId: modelId,
+                            filename: filename,
+                            size: arrayBuffer.byteLength
+                        }
+                    }).catch(err => {
+                        console.error('[AutoLeadAgent Extension] 保存文件到 storage 失败:', err);
+                    });
+                } else {
+                    console.warn('[AutoLeadAgent Extension] 文件过大，跳过 chrome.storage 保存，需要使用 IndexedDB:', filename, arrayBuffer.byteLength);
+                }
+
+                console.log('[AutoLeadAgent Extension] 文件下载完成:', filename, '大小:', blob.size);
+            } catch (error) {
+                console.error('[AutoLeadAgent Extension] 下载文件异常:', filename, error);
+            }
+        }
+
+        // 6. 下载完成
+        const finalTotalSize = actualTotalSize || totalSize || downloadedSize;
+        console.log('[AutoLeadAgent Extension] 模型下载完成:', modelId, '总大小:', finalTotalSize, '字节，已下载:', downloadedSize, '字节');
+        
+        // 发送最终进度（100%）
+        sendProgressUpdate('下载完成', downloadedSize, finalTotalSize, 100);
+        
+        // 调用完成回调（如果提供）
+        if (onComplete) {
+            onComplete({
+                success: true,
+                modelId: modelId,
+                downloadedFiles: downloadedFiles.length,
+                totalSize: finalTotalSize,
+                downloadedSize: downloadedSize
+            });
+        }
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 下载模型文件失败:', error);
+        
+        // 发送错误进度消息
+        const errorMessage = {
+            type: 'HF_DOWNLOAD_PROGRESS',
+            modelId: modelId,
+            filename: '下载失败',
+            downloaded: 0,
+            total: 0,
+            progress: -1, // 使用 -1 表示错误
+            error: error.message || '下载模型失败'
+        };
+        
+        chrome.tabs.query({}, function (tabs) {
+            tabs.forEach(function (tab) {
+                try {
+                    chrome.tabs.sendMessage(tab.id, errorMessage).catch(() => {});
+                } catch (e) {}
+            });
+        });
+        
+        // 调用完成回调（如果提供）
+        if (onComplete) {
+            onComplete({
+                success: false,
+                error: error.message || '下载模型失败'
+            });
+        }
+    }
+}
+
+/**
+ * 通过 Port 下载 HuggingFace 模型（使用 port.postMessage 发送进度）
+ */
+async function downloadHfModelViaPort(modelId, port) {
+    try {
+        console.log('[AutoLeadAgent Extension] 开始通过 Port 下载模型文件:', modelId);
+
+        // 1. 获取模型文件列表
+        const modelInfoUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}`;
+        const modelInfoResponse = await fetch(modelInfoUrl, {
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!modelInfoResponse.ok) {
+            throw new Error(`获取模型信息失败: ${modelInfoResponse.status}`);
+        }
+
+        const modelInfo = await modelInfoResponse.json();
+        console.log('[AutoLeadAgent Extension] 模型信息:', modelInfo);
+
+        // 2. 获取文件列表
+        let siblings = [];
+        const siblingsUrl = `https://huggingface.co/api/models/${encodeModelId(modelId)}/siblings`;
+        
+        try {
+            const siblingsResponse = await fetch(siblingsUrl, {
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (siblingsResponse.ok) {
+                siblings = await siblingsResponse.json();
+            } else {
+                if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
+                    siblings = modelInfo.siblings;
+                } else {
+                    throw new Error(`获取文件列表失败: siblings API 返回 ${siblingsResponse.status}`);
+                }
+            }
+        } catch (error) {
+            if (modelInfo.siblings && Array.isArray(modelInfo.siblings)) {
+                siblings = modelInfo.siblings;
+            } else {
+                throw new Error(`获取文件列表失败: ${error.message}`);
+            }
+        }
+        
+        if (!siblings || siblings.length === 0) {
+            throw new Error('模型文件列表为空，无法下载');
+        }
+
+        // 3. 筛选需要下载的文件
+        const importantFiles = siblings.filter(file => {
+            const name = file.rfilename || file.filename || '';
+            return name.endsWith('.safetensors') ||
+                   name.endsWith('.bin') ||
+                   name.endsWith('.json') ||
+                   name === 'tokenizer.json' ||
+                   name === 'config.json' ||
+                   name.startsWith('tokenizer_config.json');
+        });
+
+        console.log('[AutoLeadAgent Extension] 需要下载的文件:', importantFiles.length);
+
+        // 4. 计算总大小
+        let totalSize = 0;
+        for (const file of importantFiles) {
+            totalSize += file.size || 0;
+        }
+
+        if (totalSize === 0) {
+            // 通过 HEAD 请求获取实际大小
+            for (const file of importantFiles) {
+                const filename = file.rfilename || file.filename;
+                const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
+                
+                try {
+                    const headResponse = await fetch(fileUrl, {
+                        method: 'HEAD',
+                        credentials: 'include'
+                    });
+                    
+                    if (headResponse.ok) {
+                        const contentLength = parseInt(headResponse.headers.get('content-length') || '0', 10);
+                        if (contentLength > 0) {
+                            file.size = contentLength;
+                            totalSize += contentLength;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[AutoLeadAgent Extension] 获取文件大小失败:', filename);
+                }
+            }
+        }
+
+        if (totalSize === 0) {
+            totalSize = importantFiles.length * 100 * 1024 * 1024; // 估算值
+        }
+
+        // 5. 开始下载文件
+        let downloadedSize = 0;
+        const actualTotalSize = totalSize;
+        const downloadedFiles = [];
+        let lastProgressUpdate = 0;
+        const PROGRESS_UPDATE_INTERVAL = 200;
+
+        // 通过 Port 发送进度更新
+        const sendProgressUpdate = (filename, downloaded, total, progress) => {
+            const now = Date.now();
+            if (now - lastProgressUpdate < PROGRESS_UPDATE_INTERVAL && progress < 100) {
+                return;
+            }
+            lastProgressUpdate = now;
+
+            port.postMessage({
+                type: 'download-progress',
+                modelId: modelId,
+                filename: filename,
+                downloaded: downloaded,
+                total: total,
+                progress: progress
+            });
+        };
+
+        // 发送初始进度
+        sendProgressUpdate('准备下载...', 0, actualTotalSize, 0);
+
+        for (const file of importantFiles) {
+            const filename = file.rfilename || file.filename;
+            const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
+            
+            console.log('[AutoLeadAgent Extension] 下载文件:', filename);
+
+            try {
+                const fileResponse = await fetch(fileUrl, {
+                    credentials: 'include'
+                });
+
+                if (!fileResponse.ok) {
+                    console.warn('[AutoLeadAgent Extension] 下载文件失败:', filename, fileResponse.status);
+                    continue;
+                }
+
+                const contentLength = parseInt(fileResponse.headers.get('content-length') || '0', 10);
+                const fileSize = contentLength > 0 ? contentLength : (file.size || 0);
+
+                const reader = fileResponse.body.getReader();
+                const chunks = [];
+                let fileDownloadedSize = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    chunks.push(value);
+                    fileDownloadedSize += value.byteLength;
+                    downloadedSize += value.byteLength;
+
+                    let progress = 0;
+                    if (actualTotalSize > 0) {
+                        progress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
+                    } else if (fileSize > 0) {
+                        progress = Math.min(100, (downloadedSize / fileSize) * 100);
+                    }
+                    
+                    sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, progress);
+                }
+
+                // 文件下载完成
+                let fileProgress = 0;
+                if (actualTotalSize > 0) {
+                    fileProgress = Math.min(100, (downloadedSize / actualTotalSize) * 100);
+                } else if (fileSize > 0) {
+                    fileProgress = Math.min(100, (downloadedSize / fileSize) * 100);
+                }
+                sendProgressUpdate(filename, downloadedSize, actualTotalSize || fileSize, fileProgress);
+
+                // 合并 chunks 为 ArrayBuffer
+                const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                const arrayBuffer = new ArrayBuffer(totalLength);
+                const uint8Array = new Uint8Array(arrayBuffer);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    uint8Array.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                
+                downloadedFiles.push({
+                    filename: filename,
+                    size: arrayBuffer.byteLength,
+                    data: arrayBuffer,
+                    type: 'application/octet-stream'
+                });
+
+                // 将文件数据发送到前端，由前端保存到本地文件系统
+                // 对于大文件，分块发送以避免消息大小限制
+                const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB 每块
+                
+                if (arrayBuffer.byteLength <= CHUNK_SIZE) {
+                    // 小文件：直接发送
+                    port.postMessage({
+                        type: 'download-file-data',
+                        modelId: modelId,
+                        filename: filename,
+                        size: arrayBuffer.byteLength,
+                        data: arrayBuffer,
+                        isComplete: true
+                    });
+                } else {
+                    // 大文件：分块发送
+                    console.log('[AutoLeadAgent Extension] 大文件，分块发送:', filename, (arrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
+                    const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
+                    
+                    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                        const start = chunkIndex * CHUNK_SIZE;
+                        const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+                        const chunk = arrayBuffer.slice(start, end);
+                        
+                        port.postMessage({
+                            type: 'download-file-data',
+                            modelId: modelId,
+                            filename: filename,
+                            size: arrayBuffer.byteLength,
+                            chunkIndex: chunkIndex,
+                            totalChunks: totalChunks,
+                            data: chunk,
+                            isComplete: (chunkIndex === totalChunks - 1)
+                        });
+                    }
+                }
+
+                // 通知前端文件下载完成
+                port.postMessage({
+                    type: 'download-file-complete',
+                    modelId: modelId,
+                    filename: filename,
+                    size: arrayBuffer.byteLength
+                });
+
+                console.log('[AutoLeadAgent Extension] 文件下载完成:', filename);
+            } catch (error) {
+                console.error('[AutoLeadAgent Extension] 下载文件异常:', filename, error);
+            }
+        }
+
+        // 6. 下载完成
+        const finalTotalSize = actualTotalSize || totalSize || downloadedSize;
+        console.log('[AutoLeadAgent Extension] 模型下载完成:', modelId, '总大小:', finalTotalSize);
+        
+        // 发送最终进度（100%）
+        sendProgressUpdate('下载完成', downloadedSize, finalTotalSize, 100);
+        
+        // 发送完成消息
+        port.postMessage({
+            type: 'download-complete',
+            modelId: modelId,
+            downloadedFiles: downloadedFiles.length,
+            totalSize: finalTotalSize,
+            downloadedSize: downloadedSize
+        });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] Port 下载模型失败:', error);
+        
+        port.postMessage({
+            type: 'download-error',
+            modelId: modelId,
+            error: error.message || '下载模型失败'
+        });
+        
+        throw error;
+    } finally {
+        // 清理 Port 连接
+        downloadPorts.delete(modelId);
+    }
+}
+
+/**
+ * 处理 HuggingFace 模型搜索请求
+ */
+async function handleHfSearchModels(request, sendResponse) {
+    try {
+        const { query = '', task = 'text-generation', limit = 50 } = request;
+        
+        console.log('[AutoLeadAgent Extension] 搜索模型:', { query, task, limit });
+
+        // 构建搜索 URL
+        const params = new URLSearchParams({
+            limit: String(limit),
+            sort: 'downloads',
+            direction: '-1'
+        });
+        
+        if (query) {
+            params.append('search', query);
+        }
+        if (task) {
+            params.append('task', task);
+        }
+
+        const url = `https://huggingface.co/api/models?${params.toString()}`;
+        console.log('[AutoLeadAgent Extension] 搜索 URL:', url);
+
+        // 添加超时控制
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'WelineFramework-AutoLeadAgent/1.0'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            
+            // 提供更详细的错误信息
+            let errorMessage = '网络请求失败';
+            if (fetchError.name === 'AbortError') {
+                errorMessage = '请求超时（30秒），请检查网络连接';
+            } else if (fetchError.message) {
+                errorMessage = '网络错误: ' + fetchError.message;
+            } else if (fetchError.toString) {
+                errorMessage = '网络错误: ' + fetchError.toString();
+            }
+            
+            console.error('[AutoLeadAgent Extension] Fetch 失败:', fetchError);
+            console.error('[AutoLeadAgent Extension] 错误类型:', fetchError.name);
+            console.error('[AutoLeadAgent Extension] 错误消息:', fetchError.message);
+            
+            throw new Error(errorMessage);
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            console.error('[AutoLeadAgent Extension] 搜索模型失败:', response.status, response.statusText, errorText);
+            throw new Error(`搜索失败: ${response.status} ${response.statusText}${errorText ? ' - ' + errorText : ''}`);
+        }
+
+        const models = await response.json();
+        if (!Array.isArray(models)) {
+            console.error('[AutoLeadAgent Extension] API 返回格式错误，不是数组:', typeof models, models);
+            throw new Error('API 返回格式错误');
+        }
+        
+        console.log('[AutoLeadAgent Extension] 搜索返回', models.length, '个模型（过滤前）');
+
+        // 过滤和格式化模型数据（只保留更适合浏览器端 / WASM 的「无限制公开模型」）
+        const formattedModels = [];
+        for (const model of models) {
+            // 基础字段检查
+            if (!model.modelId) {
+                continue;
+            }
+
+            // 1) 只保留文本生成 / 指令对话任务
+            const pipelineTag = model.pipeline_tag || '';
+            if (!['text-generation', 'text2text-generation'].includes(pipelineTag)) {
+                continue;
+            }
+
+            // 2) 只保留 transformers 模型（适配 @xenova/transformers）
+            const library = model.library_name || model.libraryName || '';
+            if (library && library !== 'transformers') {
+                continue;
+            }
+
+            // 3) 必须有 safetensors 标签
+            const tags = model.tags || [];
+            const hasSafeTensors = Array.isArray(tags) && tags.includes('safetensors');
+            if (!hasSafeTensors) {
+                continue;
+            }
+
+            // 4) 过滤掉有限制 / 受控访问的模型
+            const isPrivate = model.private === true;
+            const isGated = model.gated === true;
+            const hasLlamaLicense = Array.isArray(tags) && tags.some(tag => 
+                typeof tag === 'string' && tag.startsWith('license:llama')
+            );
+            const isMetaLlama = model.modelId.startsWith('meta-llama/');
+
+            if (isPrivate || isGated || hasLlamaLicense || isMetaLlama) {
+                continue;
+            }
+
+            formattedModels.push({
+                id: model.modelId,
+                name: model.modelId,
+                author: model.author || '',
+                downloads: model.downloads || 0,
+                likes: model.likes || 0,
+                pipeline_tag: pipelineTag,
+                tags: tags,
+                library_name: library || null,
+                model_index: model.model_index || null
+            });
+        }
+
+        console.log('[AutoLeadAgent Extension] 搜索完成，找到', formattedModels.length, '个模型（过滤后）');
+        
+        const result = {
+            success: true,
+            data: formattedModels,
+            total: formattedModels.length
+        };
+        console.log('[AutoLeadAgent Extension] 发送搜索响应:', result);
+        
+        // 确保 sendResponse 被调用
+        if (sendResponse) {
+            try {
+                sendResponse(result);
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 发送响应失败:', e);
+            }
+        }
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 搜索模型失败:', error);
+        console.error('[AutoLeadAgent Extension] 错误堆栈:', error.stack);
+        
+        // 提供更友好的错误信息
+        let errorMessage = error.message || '搜索模型失败';
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('network')) {
+            errorMessage = '网络连接失败，请检查：\n1. 网络连接是否正常\n2. 是否可以访问 huggingface.co\n3. 防火墙或代理设置';
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
+            errorMessage = '请求超时，请检查网络连接或稍后重试';
+        }
+        
+        const errorResult = {
+            success: false,
+            error: errorMessage,
+            errorType: error.name || 'NetworkError',
+            originalError: error.message || 'Unknown error'
+        };
+        console.log('[AutoLeadAgent Extension] 发送错误响应:', errorResult);
+        
+        // 确保 sendResponse 被调用
+        if (sendResponse) {
+            try {
+                sendResponse(errorResult);
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 发送错误响应失败:', e);
+            }
+        }
+    }
+}
+
+/**
+ * 处理 HuggingFace 获取模型信息请求
+ */
+async function handleHfGetModelInfo(request, sendResponse) {
+    let hasResponded = false;
+    const safeSendResponse = (response) => {
+        if (!hasResponded) {
+            hasResponded = true;
+            try {
+                sendResponse(response);
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 发送响应失败:', e);
+            }
+        } else {
+            console.warn('[AutoLeadAgent Extension] 尝试重复发送响应，已忽略');
+        }
+    };
+
+    try {
+        const { modelId } = request;
+        
+        if (!modelId) {
+            safeSendResponse({
+                success: false,
+                error: '模型ID不能为空'
+            });
+            return;
+        }
+
+        console.log('[AutoLeadAgent Extension] 获取模型信息:', modelId);
+
+        // 调用 Hugging Face API 获取模型信息
+        // 注意：模型名称中的斜杠不应该被编码，直接使用即可
+        // encodeURIComponent 会将斜杠编码为 %2F，导致 API 返回 400 错误 "repo name includes an url-encoded slash"
+        // 只编码特殊字符，但保留斜杠
+        const url = `https://huggingface.co/api/models/${encodeModelId(modelId)}`;
+        console.log('[AutoLeadAgent Extension] 模型信息 URL:', url);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'WelineFramework-AutoLeadAgent/1.0'
+            }
+        });
+
+        if (!response.ok) {
+            // 如果是400或401错误，先读取错误信息（response 只能读取一次）
+            if (response.status === 400 || response.status === 401) {
+                // 先读取错误信息（response.text() 只能调用一次）
+                let errorText = '';
+                try {
+                    errorText = await response.text();
+                    console.log('[AutoLeadAgent Extension] 400/401 错误信息:', errorText);
+                } catch (e) {
+                    console.warn('[AutoLeadAgent Extension] 读取错误信息失败:', e);
+                }
+                
+                // 检查是否是明确的编码错误（如 "Invalid repo name" 且包含 "url-encoded"）
+                const isEncodingError = errorText && (
+                    errorText.includes('Invalid repo name') && 
+                    errorText.includes('url-encoded')
+                );
+                
+                // 如果不是明确的编码错误，先检查登录状态
+                if (!isEncodingError) {
+                    let isLoggedIn = false;
+                    try {
+                        const loginCheck = await fetch('https://huggingface.co/api/whoami-v2', {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+                        isLoggedIn = loginCheck.ok;
+                        console.log('[AutoLeadAgent Extension] 登录状态检查结果:', isLoggedIn);
+                    } catch (e) {
+                        // 检查登录状态失败，假设未登录
+                        console.warn('[AutoLeadAgent Extension] 检查登录状态失败:', e);
+                    }
+                    
+                    // 如果未登录，打开登录页面
+                    if (!isLoggedIn) {
+                        console.log('[AutoLeadAgent Extension] 获取模型信息需要登录，打开登录页面');
+                        const loginTab = await chrome.tabs.create({
+                            url: 'https://huggingface.co/login',
+                            active: true
+                        });
+
+                        // 开始监听登录页面的登录状态
+                        startLoginDetectionForModelInfo(loginTab.id, modelId);
+
+                        safeSendResponse({
+                            success: false,
+                            needLogin: true,
+                            loginTabId: loginTab.id,
+                            message: '获取模型信息需要登录 HuggingFace，已打开登录页面'
+                        });
+                        return;
+                    }
+                    
+                    // 如果已登录但仍然是400/401，检查错误信息是否表明需要更多权限
+                    const needsMoreAccess = errorText && (
+                        errorText.includes('gated') || 
+                        errorText.includes('access') ||
+                        errorText.includes('permission') ||
+                        errorText.includes('private') ||
+                        errorText.includes('unauthorized') ||
+                        errorText.includes('forbidden')
+                    );
+                    
+                    if (needsMoreAccess) {
+                        console.log('[AutoLeadAgent Extension] 模型可能需要更多权限，打开登录页面');
+                        const loginTab = await chrome.tabs.create({
+                            url: 'https://huggingface.co/login',
+                            active: true
+                        });
+
+                        // 开始监听登录页面的登录状态
+                        startLoginDetectionForModelInfo(loginTab.id, modelId);
+
+                        safeSendResponse({
+                            success: false,
+                            needLogin: true,
+                            loginTabId: loginTab.id,
+                            message: '该模型可能需要登录或申请访问权限，已打开登录页面'
+                        });
+                        return;
+                    }
+                }
+                
+                // 如果是编码错误或已登录但仍然是400，返回错误信息
+                safeSendResponse({
+                    success: false,
+                    error: `获取模型信息失败: ${response.status} ${response.statusText}` + (errorText ? ' - ' + errorText : '')
+                });
+                return;
+            }
+            
+            // 其他状态码的错误
+            let errorMessage = `获取模型信息失败: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.text();
+                if (errorData) {
+                    errorMessage += ' - ' + errorData;
+                }
+            } catch (e) {
+                // 忽略读取错误
+            }
+            safeSendResponse({
+                success: false,
+                error: errorMessage
+            });
+            return;
+        }
+
+        const modelInfo = await response.json();
+        if (!modelInfo || typeof modelInfo !== 'object') {
+            throw new Error('API 返回格式错误');
+        }
+
+        // 估算模型大小（从 siblings 中计算）
+        let totalSize = 0;
+        let estimatedSizeMB = 0;
+        if (Array.isArray(modelInfo.siblings)) {
+            for (const sibling of modelInfo.siblings) {
+                if (sibling.size) {
+                    totalSize += parseInt(sibling.size, 10);
+                }
+            }
+            estimatedSizeMB = Math.round(totalSize / 1024 / 1024);
+        }
+
+        // 格式化模型信息
+        const formattedInfo = {
+            id: modelInfo.id || modelId,
+            name: modelInfo.modelId || modelId,
+            author: modelInfo.author || '',
+            downloads: modelInfo.downloads || 0,
+            likes: modelInfo.likes || 0,
+            pipeline_tag: modelInfo.pipeline_tag || '',
+            tags: modelInfo.tags || [],
+            library_name: modelInfo.library_name || null,
+            model_index: modelInfo.model_index || null,
+            siblings: modelInfo.siblings || [],
+            config: modelInfo.config || null,
+            card_data: modelInfo.cardData || null,
+            estimated_size: totalSize, // 字节
+            estimated_size_mb: estimatedSizeMB // MB
+        };
+
+        console.log('[AutoLeadAgent Extension] 模型信息获取成功:', formattedInfo.name);
+        safeSendResponse({
+            success: true,
+            data: formattedInfo
+        });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 获取模型信息失败:', error);
+        safeSendResponse({
+            success: false,
+            error: error.message || '获取模型信息失败'
+        });
+    }
+}
+
+/**
+ * 处理 HuggingFace 获取文件大小请求
+ */
+async function handleHfGetFileSize(request, sendResponse) {
+    let hasResponded = false;
+    const safeSendResponse = (response) => {
+        if (!hasResponded) {
+            hasResponded = true;
+            try {
+                sendResponse(response);
+            } catch (e) {
+                console.error('[AutoLeadAgent Extension] 发送响应失败:', e);
+            }
+        } else {
+            console.warn('[AutoLeadAgent Extension] 尝试重复发送响应，已忽略');
+        }
+    };
+
+    try {
+        const { modelId, filename } = request;
+        
+        if (!modelId || !filename) {
+            safeSendResponse({
+                success: false,
+                error: '模型ID和文件名不能为空'
+            });
+            return;
+        }
+
+        console.log('[AutoLeadAgent Extension] 获取文件大小:', modelId, filename);
+
+        // 构建文件 URL
+        const fileUrl = `https://huggingface.co/${encodeModelId(modelId)}/resolve/main/${encodeURIComponent(filename)}`;
+        
+        // 使用 HEAD 请求获取文件大小（扩展不受 CORS 限制）
+        const response = await fetch(fileUrl, {
+            method: 'HEAD',
+            credentials: 'include',
+            headers: {
+                'User-Agent': 'WelineFramework-AutoLeadAgent/1.0'
+            }
+        });
+
+        if (!response.ok) {
+            safeSendResponse({
+                success: false,
+                error: `获取文件大小失败: ${response.status} ${response.statusText}`,
+                status: response.status
+            });
+            return;
+        }
+
+        const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+        
+        safeSendResponse({
+            success: true,
+            size: contentLength,
+            filename: filename
+        });
+
+    } catch (error) {
+        console.error('[AutoLeadAgent Extension] 获取文件大小失败:', error);
+        safeSendResponse({
+            success: false,
+            error: error.message || '获取文件大小失败'
+        });
+    }
+}
 

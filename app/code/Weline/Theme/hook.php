@@ -34,6 +34,16 @@ return [
         'description' => __('在渲染页脚主要内容之后触发，允许其他模块在页脚内容结束处注入内容。'),
         'doc' => 'frontend/partials/footer/content-after.md',
     ],
+    'Weline_Theme::frontend::partials::footer::links' => [
+        'name' => __('页脚链接内容'),
+        'description' => __('覆盖页脚链接内容，允许其他模块完全替换页脚的链接区域。'),
+        'doc' => 'frontend/partials/footer/links.md',
+    ],
+    'Weline_Theme::frontend::partials::footer::social-media' => [
+        'name' => __('页脚社交媒体内容'),
+        'description' => __('覆盖页脚社交媒体内容，允许其他模块完全替换页脚的社交媒体区域。'),
+        'doc' => 'frontend/partials/footer/social-media.md',
+    ],
     'Weline_Theme::frontend::partials::footer::social-media-before' => [
         'name' => __('页脚社交媒体之前'),
         'description' => __('在渲染页脚社交媒体链接之前触发，允许其他模块在社交媒体区域开始处注入内容。'),
@@ -309,6 +319,31 @@ return [
         'name' => __('首页合作伙伴区块之后'),
         'description' => __('在渲染首页布局的合作伙伴区块之后触发，允许其他模块在合作伙伴区块结束处注入内容。'),
         'doc' => 'frontend/layouts/homepage/partners-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::main-before' => [
+        'name' => __('首页主要内容区块之前'),
+        'description' => __('在渲染首页布局的主要内容区块（main元素）之前触发，允许其他模块在主要内容区块开始处注入内容。'),
+        'doc' => 'frontend/layouts/homepage/main-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::main-content-before' => [
+        'name' => __('首页主要内容内容之前'),
+        'description' => __('在渲染首页布局的主要内容区块内的内容之前触发，允许其他模块在主要内容开始处注入内容。'),
+        'doc' => 'frontend/layouts/homepage/main-content-before.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::main-content' => [
+        'name' => __('首页主要内容'),
+        'description' => __('覆盖首页布局的主要内容区块内容，允许其他模块完全替换主要内容区域。如果没有提供内容，将显示默认的欢迎内容和功能预览。'),
+        'doc' => 'frontend/layouts/homepage/main-content.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::main-content-after' => [
+        'name' => __('首页主要内容内容之后'),
+        'description' => __('在渲染首页布局的主要内容区块内的内容之后触发，允许其他模块在主要内容结束处注入内容。'),
+        'doc' => 'frontend/layouts/homepage/main-content-after.md',
+    ],
+    'Weline_Theme::frontend::layouts::homepage::main-after' => [
+        'name' => __('首页主要内容区块之后'),
+        'description' => __('在渲染首页布局的主要内容区块（main元素）之后触发，允许其他模块在主要内容区块结束处注入内容。'),
+        'doc' => 'frontend/layouts/homepage/main-after.md',
     ],
     
     // ==================== Theme Frontend Layouts - Default ====================

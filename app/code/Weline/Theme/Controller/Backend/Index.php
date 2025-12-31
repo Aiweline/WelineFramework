@@ -182,7 +182,7 @@ class Index extends BackendController
         
         if ($area === 'backend') {
             // 后端预览：重定向到后台首页
-            $previewUrl = $url->getBackendUrl('admin/index/index', ['preview_theme' => $themeId]);
+            $previewUrl = $url->getBackendUrl('admin', ['preview_theme' => $themeId]);
             $this->request->getResponse()->redirect($previewUrl);
             return '';
         } else {
