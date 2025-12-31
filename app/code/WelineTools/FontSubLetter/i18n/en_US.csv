@@ -1,0 +1,164 @@
+记录ID不能为空,"Record ID cannot be empty"
+记录不存在,"Record does not exist"
+记录删除成功,"Record deleted successfully"
+文件不存在,"File does not exist"
+字符提取成功,"Character extraction successful"
+字符数据格式错误,字符数据格式错误
+请选择要包含的字符,"Please select characters to include"
+子集字体生成成功,"Subset font generated successfully"
+在线字体压缩工具,"Online Font Subset Tool"
+"Font Subset Tool","Font Subset Tool"
+字体处理记录,"Font Processing Records"
+删除成功,删除成功
+请求方法错误,"Request method error"
+请选择字体文件,"Please select a font file"
+字体文件上传成功,"Font file uploaded successfully"
+"文件上传失败: %1","文件上传失败: %1"
+没有接收到文件数据,没有接收到文件数据
+无法解析文件数据,无法解析文件数据
+文件数据解析失败,文件数据解析失败
+已上传,Uploaded
+处理中,Processing
+已完成,Completed
+失败,Failed
+文件上传失败，无法移动到目标位置,"File upload failed, unable to move to target location"
+文件写入失败,文件写入失败
+原始字体文件不存在,"Original font file does not exist"
+无法加载字体文件,"Cannot load font file"
+"文件大小超过限制 (最大: %1 MB)","文件大小超过限制 (最大: %1 MB)"
+"不支持的字体格式: %1 (支持的格式: %2)","不支持的字体格式: %1 (支持的格式: %2)"
+文件名不能为空,文件名不能为空
+文件内容不能为空,文件内容不能为空
+OpenType子集创建失败,OpenType子集创建失败
+无法读取原始字体文件,无法读取原始字体文件
+无法写入OpenType子集文件,无法写入OpenType子集文件
+TrueType子集创建失败,TrueType子集创建失败
+无法写入TrueType子集文件,无法写入TrueType子集文件
+字体子集创建失败,字体子集创建失败
+处理记录,"Processing Records"
+上传字体文件,"Upload Font File"
+拖拽字体文件到此处或点击选择文件,"Drag font files here or click to select"
+支持格式,"Supported Formats"
+"TTF, OTF, WOFF, WOFF2","TTF, OTF, WOFF, WOFF2"
+最大文件大小,"Maximum File Size"
+100MB,100MB
+上传中...,Uploading...
+文件名,文件名
+格式,格式
+大小,大小
+提取字符,"Extract Characters"
+选择字符,"Select Characters"
+检测到本地存储数据,检测到本地存储数据
+加载,加载
+保存,保存
+清理,清理
+全选,"Select All"
+取消全选,"Deselect All"
+添加到自定义,添加到自定义
+已选择,已选择
+个字符,个字符
+自定义字符,"Custom Characters"
+清空,清空
+"请输入要包含的字符，或从上方选择字符后点击""添加到自定义""","请输入要包含的字符，或从上方选择字符后点击""添加到自定义"""
+自定义字符会与选中的字符合并生成字体子集,自定义字符会与选中的字符合并生成字体子集
+生成字体,"Generate Font"
+使用说明,"Usage Instructions"
+"1. 上传字体文件","1. Upload font file"
+"2. 提取字体中的字符","2. Extract characters from font"
+"3. 选择需要的字符","3. Select required characters"
+"4. 生成子集字体并下载","4. Generate subset font and download"
+本地存储功能,本地存储功能
+自动保存自定义字符,自动保存自定义字符
+记住选中的字符子集,记住选中的字符子集
+下次访问自动恢复,下次访问自动恢复
+支持手动保存和清理,支持手动保存和清理
+数据仅存储在浏览器中,数据仅存储在浏览器中
+功能特性,功能特性
+支持多种字体格式,支持多种字体格式
+智能字符提取,智能字符提取
+可视化字符选择,可视化字符选择
+高效字体压缩,高效字体压缩
+一键下载,一键下载
+上传失败,"Upload failed"
+请先上传字体文件,"Please upload a font file first"
+提取字符中...,"Extracting characters..."
+提取失败,"Extraction failed"
+没有可显示的字符,没有可显示的字符
+没有有效的字符可以显示,没有有效的字符可以显示
+请先选择字符,请先选择字符
+确定要清空自定义字符吗？,确定要清空自定义字符吗？
+确定要清理本地存储数据吗？此操作不可恢复。,确定要清理本地存储数据吗？此操作不可恢复。
+请选择要包含的字符或输入自定义字符,"Please select characters to include or enter custom characters"
+生成字体中...,"Generating font..."
+生成失败,"Generation failed"
+新建处理,新建处理
+处理记录列表,处理记录列表
+暂无处理记录,"No processing records"
+开始处理字体,"Start Font Processing"
+ID,ID
+原始文件名,"Original Filename"
+字体格式,"Font Format"
+文件大小,"File Size"
+状态,Status
+创建时间,"Created At"
+操作,Actions
+处理后,Processed
+下载,Download
+删除,Delete
+上一页,上一页
+下一页,下一页
+确定要提取字符吗？,"Are you sure you want to extract characters?"
+确定要删除这条记录吗？,"Are you sure you want to delete this record?"
+删除失败,"Delete failed"
+字体记录管理,字体记录管理
+前往前端上传,前往前端上传
+搜索文件名...,搜索文件名...
+所有状态,所有状态
+搜索,搜索
+暂无数据,暂无数据
+查看详情,查看详情
+下载子集字体,下载子集字体
+字体记录详情,字体记录详情
+返回列表,返回列表
+基本信息,基本信息
+记录ID,记录ID
+更新时间,更新时间
+文件信息,文件信息
+原始文件路径,原始文件路径
+文件存在,文件存在
+处理后文件路径,处理后文件路径
+处理后文件名,"Processed Filename"
+提取的字符,提取的字符
+错误信息,错误信息
+上传新字体,上传新字体
+专业的在线字体压缩工具，支持多种字体格式，智能字符提取，高效字体压缩,"Professional online font compression tool, supporting multiple font formats, intelligent character extraction, and efficient font compression"
+10MB,10MB
+上传后可以重新上传新文件，失败后可以继续尝试,上传后可以重新上传新文件，失败后可以继续尝试
+提示：失败后请重新选择文件，即使选择相同文件也可以,提示：失败后请重新选择文件，即使选择相同文件也可以
+请输入要包含的字符,"Please enter characters to include"
+技术优势,技术优势
+压缩率高达80%,压缩率高达80%
+处理速度快,处理速度快
+安全可靠,安全可靠
+在线处理,在线处理
+请选择有效的文件,请选择有效的文件
+字体字符提取与压缩工具模块,"Font Character Extraction and Compression Tool Module"
+不支持的字体格式,"Unsupported font format"
+文件上传失败,"File upload failed"
+文件大小超过限制,"File size exceeds limit"
+无法创建子集字体文件,"Unable to create subset font file"
+生成子集字体,"Generate Subset Font"
+下载字体文件,"Download Font File"
+删除记录,"Delete Record"
+返回,Back
+字符数量,"Character Count"
+压缩比例,"Compression Ratio"
+字体压缩工具,"Font Compression Tool"
+在线压缩字体,"Online Font Compression"
+字体提取,"Font Extraction"
+字符选择,"Character Selection"
+子集生成,"Subset Generation"
+文件下载,"File Download"
+字体子集生成失败,"Font subset generation failed"
+GD扩展未安装，无法处理字体,"GD extension not installed, cannot process fonts"
+无法创建图像资源,"Cannot create image resource"

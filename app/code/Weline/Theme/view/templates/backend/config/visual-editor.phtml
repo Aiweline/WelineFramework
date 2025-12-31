@@ -1,0 +1,356 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Theme\Model\WelineTheme|null $theme */
+/** @var string $area */
+/** @var string $scope */
+/** @var array $scopeOptions */
+
+$area = $area ?: 'frontend';
+$scope = $scope ?: 'default';
+
+// API URLs
+$optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
+$saveSelectionUrl = $this->getUrl('theme/backend/config/themeConfig/saveSelection');
+$fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
+$saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
+?>
+<!DOCTYPE html>
+<html lang="<?= \Weline\Framework\App\Env::getInstance()->getLocale() ?>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= __('主题可视化编辑器') ?> - <?= __('Weline Admin') ?></title>
+    @template(Weline_Admin::common/head.phtml)
+    <link rel="stylesheet" href="@static(Weline_Theme::css/visual-editor.css)">
+    <!-- Aggressive sidebar hide styles - must be inline for immediate effect -->
+    <style>
+        /* Hide typical admin layout elements that interfere with full-screen editor */
+        .page-sidebar,
+        .left-side-menu,
+        .sidebar-menu,
+        .vertical-menu,
+        .navbar-menu,
+        .navbar-header,
+        .footer,
+        .main-header {
+            display: none !important;
+        }
+        
+        /* Ensure the visual editor container takes full viewport */
+        .visual-editor-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 9999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            background: var(--ve-bg-color, #f0f2f5);
+        }
+        
+        /* Make main content area full width */
+        .page-content,
+        .main-content,
+        .content-page,
+        .content-wrapper,
+        #main-content,
+        main {
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* Visual editor takes full viewport */
+        .visual-editor-body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .visual-editor-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 9999 !important;
+        }
+    </style>
+</head>
+<body class="visual-editor-body">
+
+<div class="visual-editor-container">
+    <!-- Top Toolbar -->
+    <header class="editor-toolbar">
+        <div class="toolbar-left">
+            <div class="theme-info">
+                <span class="theme-name"><?= $theme ? $theme->getName() : __('未选择主题') ?></span>
+                <span class="theme-badge"><?= $area ?></span>
+            </div>
+            
+            <div class="area-switcher btn-group btn-group-sm">
+                <a href="<?= $theme ? $this->getUrl('*/*/*', ['area' => 'frontend', 'theme_id' => $theme->getId()]) : '#' ?>" 
+                   class="btn <?= $area === 'frontend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
+                   <i class="mdi mdi-web"></i> <?= __('前端') ?>
+                </a>
+                <a href="<?= $theme ? $this->getUrl('*/*/*', ['area' => 'backend', 'theme_id' => $theme->getId()]) : '#' ?>" 
+                   class="btn <?= $area === 'backend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
+                   <i class="mdi mdi-cog"></i> <?= __('后端') ?>
+                </a>
+            </div>
+        </div>
+        
+        <div class="toolbar-center">
+            <div class="device-switcher btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary active" data-device="desktop" title="<?= __('桌面端') ?>">
+                    <i class="mdi mdi-monitor"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-device="tablet" title="<?= __('平板') ?>">
+                    <i class="mdi mdi-tablet"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-device="mobile" title="<?= __('手机') ?>">
+                    <i class="mdi mdi-cellphone"></i>
+                </button>
+            </div>
+            
+            <div class="theme-mode-switcher ms-3">
+                 <button type="button" class="btn btn-sm btn-outline-secondary" id="theme-mode-toggle" title="<?= __('切换亮色/暗色模式') ?>">
+                    <i class="mdi mdi-weather-sunny"></i>
+                </button>
+            </div>
+            
+            <?php 
+            // Get available locales
+            $locales = [
+                'zh_Hans_CN' => '简体中文',
+                'en_US' => 'English',
+                'zh_Hant_TW' => '繁體中文'
+            ];
+            $currentLocale = \Weline\Framework\App\Env::getInstance()->getLocale();
+            ?>
+            <div class="locale-switcher ms-3">
+                <select class="form-select form-select-sm" id="locale-selector" title="<?= __('选择语言') ?>">
+                    <?php foreach ($locales as $code => $name): ?>
+                        <option value="<?= $code ?>" <?= $code === $currentLocale ? 'selected' : '' ?>><?= $name ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        
+        <div class="toolbar-right">
+            <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-sm btn-outline-secondary me-2">
+                <?= __('退出') ?>
+            </a>
+            <button type="button" class="btn btn-sm btn-primary" id="global-save-btn">
+                <i class="mdi mdi-content-save"></i> <?= __('保存更改') ?>
+            </button>
+        </div>
+    </header>
+
+    <div class="editor-workspace">
+        <!-- Left Panel: Structure Map -->
+        <aside class="structure-panel" id="structure-panel">
+            <div class="panel-header">
+                <h5><i class="mdi mdi-sitemap"></i> <?= __('结构视图') ?></h5>
+                <button type="button" class="btn btn-sm btn-icon panel-toggle-btn" id="collapse-left-btn" title="<?= __('收起') ?>">
+                    <i class="mdi mdi-chevron-left"></i>
+                </button>
+            </div>
+            
+            <div class="panel-content custom-scrollbar">
+                <!-- Layout Switcher Accordion -->
+                <div class="accordion-item expanded" id="layout-switcher-accordion">
+                    <div class="accordion-header">
+                        <i class="mdi mdi-view-dashboard-outline"></i>
+                        <span><?= __('页面布局') ?></span>
+                        <i class="mdi mdi-chevron-down accordion-icon"></i>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="layout-search-wrapper">
+                            <i class="mdi mdi-magnify"></i>
+                            <input type="text" id="layout-search" placeholder="<?= __('搜索布局...') ?>" class="form-control form-control-sm">
+                        </div>
+                        <div class="layout-switcher-container" id="layout-switcher-container">
+                            <!-- Layout cards will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Structure Map Accordion -->
+                <div class="accordion-item expanded" id="structure-map-accordion">
+                    <div class="accordion-header">
+                        <i class="mdi mdi-layers-outline"></i>
+                        <span><?= __('页面结构') ?></span>
+                        <i class="mdi mdi-chevron-down accordion-icon"></i>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="structure-map" id="structure-map">
+                            <!-- Structure zones will be rendered here by JS -->
+                            <div class="zone-wrapper zone-header" data-zone="header" data-type="partials" data-category="header">
+                                <div class="zone-label"><?= __('页头 (Header)') ?></div>
+                            </div>
+                            
+                            <div class="middle-section">
+                                <div class="zone-wrapper zone-sidebar-left" data-zone="sidebar_left" data-type="partials" data-category="sidebar">
+                                     <div class="zone-label"><?= __('左侧栏') ?></div>
+                                </div>
+                                <div class="zone-wrapper zone-body" data-zone="content" data-type="layouts" data-category="default">
+                                    <div class="zone-label"><?= __('主体内容 (Body)') ?></div>
+                                </div>
+                                 <div class="zone-wrapper zone-sidebar-right" data-zone="sidebar_right" data-type="partials" data-category="sidebar_right">
+                                     <div class="zone-label"><?= __('右侧栏') ?></div>
+                                </div>
+                            </div>
+                            
+                            <div class="zone-wrapper zone-footer" data-zone="footer" data-type="partials" data-category="footer">
+                                <div class="zone-label"><?= __('页脚 (Footer)') ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Settings Accordion -->
+                <div class="accordion-item expanded" id="global-settings-accordion">
+                    <div class="accordion-header">
+                        <i class="mdi mdi-cog-outline"></i>
+                        <span><?= __('全局设置') ?></span>
+                        <i class="mdi mdi-chevron-down accordion-icon"></i>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="global-settings">
+                            <div class="list-group">
+                                <button class="list-group-item list-group-item-action" data-action="global-colors">
+                                    <i class="mdi mdi-palette text-primary"></i> <?= __('全局配色') ?>
+                                </button>
+                                <button class="list-group-item list-group-item-action" data-action="global-variables">
+                                    <i class="mdi mdi-code-braces text-success"></i> <?= __('全局变量') ?>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Hidden toggle button for collapsed state -->
+            <button type="button" class="btn btn-primary btn-sm expand-panel-btn expand-left-btn" id="expand-left-btn">
+                <i class="mdi mdi-chevron-right"></i>
+            </button>
+        </aside>
+        
+        <!-- Center Panel: Live Preview -->
+        <main class="preview-panel">
+            <div class="preview-container desktop" id="preview-container">
+                <iframe src="<?= $theme ? $this->getUrl('theme/backend/index/preview', ['theme_id' => $theme->getId(), 'area' => $area]) : 'about:blank' ?>" 
+                        frameborder="0" id="preview-iframe" title="<?= __('预览') ?>"></iframe>
+                <div class="preview-loading" id="preview-loading">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Right Panel: Properties -->
+        <aside class="properties-panel" id="properties-panel">
+            <div class="panel-header">
+                <h5 id="properties-title"><?= __('属性配置') ?></h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-icon panel-toggle-btn" id="collapse-right-btn" title="<?= __('收起') ?>">
+                        <i class="mdi mdi-chevron-right"></i>
+                    </button>
+                    <button type="button" class="btn-close" aria-label="Close" id="close-properties"></button>
+                </div>
+            </div>
+            
+            <div class="panel-content custom-scrollbar py-3">
+                <div class="empty-state text-center py-5" id="properties-empty">
+                    <i class="mdi mdi-cursor-default-click fs-1 text-muted"></i>
+                    <p class="text-muted mt-2"><?= __('请在左侧点击一个区域进行配置') ?></p>
+                </div>
+                
+                <div class="properties-content" id="properties-content" style="display: none;">
+                    <ul class="nav nav-tabs nav-fill" id="properties-tabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-layout" type="button">
+                                <?= __('布局') ?>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-settings" type="button">
+                                <?= __('设置') ?>
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content pt-3">
+                        <!-- Layout Selection Tab -->
+                        <div class="tab-pane fade show active" id="tab-layout">
+                            <div class="layout-selector" id="layout-options-container">
+                                <!-- Layout options rendered by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Params Settings Tab -->
+                        <div class="tab-pane fade" id="tab-settings">
+                            <form id="properties-form">
+                                <!-- Params form rendered by JS -->
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-footer" id="properties-footer" style="display: none;">
+                <button type="button" class="btn btn-primary w-100" id="save-properties-btn">
+                    <?= __('应用更改') ?>
+                </button>
+            </div>
+
+            <!-- Hidden toggle button for collapsed state -->
+            <button type="button" class="btn btn-primary btn-sm expand-panel-btn expand-right-btn" id="expand-right-btn">
+                <i class="mdi mdi-chevron-left"></i>
+            </button>
+        </aside>
+    </div>
+</div>
+
+<!-- Data Passing -->
+<script>
+    window.ThemeEditorConfig = {
+        themeId: '<?= $theme ? $theme->getId() : 0 ?>',
+        area: '<?= $area ?>',
+        scope: '<?= $scope ?>',
+        locale: '<?= $currentLocale ?>',
+        availableLocales: <?= json_encode($locales) ?>,
+        urls: {
+            options: '<?= $optionsUrl ?>',
+            saveSelection: '<?= $saveSelectionUrl ?>',
+            fileParams: '<?= $fileParamsUrl ?>',
+            saveFileParams: '<?= $saveFileParamsUrl ?>',
+            upload: '<?= $this->getUrl('theme/backend/config/layout/upload') ?>',
+            syncThemeMode: '<?= $this->getUrl('theme/backend/config/themeConfig/syncThemeMode') ?>'
+        },
+        translations: {
+            loading: '<?= __('加载中...') ?>',
+            saveSuccess: '<?= __('保存成功') ?>',
+            saveFailed: '<?= __('保存失败') ?>',
+            selectLayout: '<?= __('选择布局') ?>',
+            recentColors: '<?= __('最近使用') ?>',
+            copySuccess: '<?= __('已复制') ?>'
+        },
+        themeMode: '<?= $themeMode ?? 'light' ?>'
+    };
+    // Workaround for frontend JS dependency
+    <?php
+    $isDev = defined('DEV') && DEV;
+    if ($isDev) {
+        $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
+    } else {
+        $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
+    }
+    ?>
+    window.modulesConfigUrl = '<?= $modulesConfigUrl ?>';
+</script>
+
+<script src="@static(Weline_Theme::js/visual-editor.js)"></script>
+</body>
+</html>

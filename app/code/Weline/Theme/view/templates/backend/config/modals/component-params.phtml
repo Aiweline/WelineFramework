@@ -167,11 +167,9 @@ $params = $component['params'] ?? [];
     const resetAllBtn = document.getElementById('reset-all-params-btn');
     if (resetAllBtn) {
         resetAllBtn.addEventListener('click', function() {
-            if (confirm('<?= __('确定要重置所有参数为默认值吗？') ?>')) {
-                modal.querySelectorAll('.reset-to-default').forEach(function(btn) {
-                    btn.click();
-                });
-            }
+            modal.querySelectorAll('.reset-to-default').forEach(function(btn) {
+                btn.click();
+            });
         });
     }
     

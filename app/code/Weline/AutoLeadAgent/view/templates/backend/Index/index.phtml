@@ -66,11 +66,27 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                                 <i class="mdi mdi-robot text-info me-1"></i>
                                                 <?= __('模型状态') ?>
                                             </h5>
-                                            <p class="mb-0" id="model-status-indicator">
+                                            <p class="mb-1" id="model-status-indicator">
                                                 <span class="badge bg-secondary">
                                                     <i class="mdi mdi-sleep"></i> <?= __('待机') ?>
                                                 </span>
                                             </p>
+                                            <p class="mb-2 small text-muted" id="model-config-summary">
+                                                <?= __('正在检测端侧模型配置...') ?>
+                                            </p>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <a href="@backend-url('auto-lead-agent/backend/config')"
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="mdi mdi-cog-outline"></i>
+                                                    <?= __('配置模型') ?>
+                                                </a>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                        id="reload-model-status-btn">
+                                                    <i class="mdi mdi-refresh"></i>
+                                                    <?= __('重新检测') ?>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -108,6 +124,7 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                 <div class="flex-grow-1">
                                     <strong id="extension-warning-title"><?= __('浏览器扩展未检测到') ?></strong>
                                     <p class="mb-0 small" id="extension-warning-desc"><?= __('请安装 AutoLeadAgent 浏览器扩展以启用真实社交媒体爬取功能。未安装扩展时将使用模拟数据。') ?></p>
+                                    <p class="mb-0 small text-muted mt-1" id="browser-mcp-status-text"></p>
                                 </div>
                                 <a href="javascript:;" class="btn btn-sm btn-warning ms-3" id="show-extension-install-guide">
                                     <i class="mdi mdi-download me-1"></i><span id="extension-install-btn-text"><?= __('安装扩展') ?></span>
@@ -347,17 +364,23 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
     </div>
 </div>
 
+<js>Weline_AutoLeadAgent::js/browser-detector.js</js>
+<js>Weline_AutoLeadAgent::js/mcp-client.js</js>
 <js>Weline_AutoLeadAgent::js/task-runner.js</js>
 <js>Weline_AutoLeadAgent::js/backend-task-manager.js</js>
 
 <script>
-// 模型性能监控和日志面板
+// 模型性能监控、配置状态与日志面板
 (function() {
     'use strict';
+    
+    var CONFIG_GET_URL = '<?= $this->getBackendUrl('auto-lead-agent/backend/config/getConfig') ?>';
     
     var modelStatusEl = document.getElementById('model-status-indicator');
     var inferenceTimeEl = document.getElementById('inference-time-indicator');
     var memoryUsageEl = document.getElementById('memory-usage-indicator');
+    var modelConfigSummaryEl = document.getElementById('model-config-summary');
+    var reloadModelStatusBtn = document.getElementById('reload-model-status-btn');
     
     // 日志面板元素
     var taskRunningPanel = document.getElementById('task-running-panel');
@@ -417,6 +440,162 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
             memoryUsageEl.innerHTML = '<span class="fw-bold ' + memoryClass + '">' + memoryText + '</span>';
         }
     };
+
+    // 从后端获取模型配置并更新摘要
+    function refreshModelConfigSummary() {
+        if (!CONFIG_GET_URL || !modelConfigSummaryEl) {
+            return;
+        }
+
+        modelConfigSummaryEl.textContent = '<?= __('正在检测端侧模型配置...') ?>';
+
+        fetch(CONFIG_GET_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+            .then(function (res) {
+                return res.json();
+            })
+            .then(function (data) {
+                if (!data || data.success !== true || !data.data) {
+                    modelConfigSummaryEl.textContent = (data && data.message) || '<?= __('无法获取模型配置，请稍后重试。') ?>';
+                    return;
+                }
+
+                var cfg = data.data || {};
+                var modelId = cfg.hf_model_id || '';
+                var enabled = !!cfg.hf_model_enabled;
+                var cacheSize = parseInt(cfg.hf_model_cache_size || '0', 10);
+
+                if (!modelId) {
+                    modelConfigSummaryEl.innerHTML =
+                        '<span class="text-danger">' +
+                        '<?= __('未配置端侧模型，任务启动前需要先在“配置管理”中选择 Hugging Face 模型。') ?>' +
+                        '</span>';
+                    return;
+                }
+
+                var statusText = '';
+                if (!enabled) {
+                    statusText =
+                        '<?= __('当前模型：') ?>' + modelId +
+                        '（<span class="text-warning"><?= __('未启用') ?></span>）' +
+                        '，<?= __('请在配置页启用后再启动任务。') ?>';
+                } else {
+                    var cachePart = cacheSize > 0
+                        ? '，<?= __('缓存上限：') ?>' + cacheSize + ' MB'
+                        : '';
+                    statusText =
+                        '<?= __('当前已启用端侧模型：') ?>' + modelId + cachePart;
+                }
+
+                modelConfigSummaryEl.innerHTML = statusText;
+            })
+            .catch(function (err) {
+                console.error('[AutoLeadAgent] Failed to load model config:', err);
+                modelConfigSummaryEl.textContent = '<?= __('获取模型配置失败，请检查网络或稍后重试。') ?>';
+            });
+    }
+
+    if (reloadModelStatusBtn) {
+        reloadModelStatusBtn.addEventListener('click', function () {
+            refreshModelConfigSummary();
+        });
+    }
+
+    // 页面加载后自动检测一次
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', refreshModelConfigSummary);
+    } else {
+        refreshModelConfigSummary();
+    }
+
+    // ========== 浏览器 & MCP 扩展状态 ==========
+    var browserMcpStatusText = document.getElementById('browser-mcp-status-text');
+
+    function initBrowserAndMCPStatus() {
+        var browserName = 'Unknown';
+        var browserVersion = '';
+        var isChrome = false;
+
+        if (typeof BrowserDetector !== 'undefined' && BrowserDetector && typeof BrowserDetector.getBrowserInfo === 'function') {
+            try {
+                var info = BrowserDetector.getBrowserInfo();
+                browserName = info.name || browserName;
+                browserVersion = info.version || browserVersion;
+                isChrome = !!info.isChrome;
+            } catch (e) {
+                console.warn('[AutoLeadAgent] BrowserDetector.getBrowserInfo failed:', e);
+            }
+        } else if (typeof navigator !== 'undefined') {
+            var ua = navigator.userAgent || '';
+            if (ua.indexOf('Chrome') !== -1 && ua.indexOf('Edg') === -1 && ua.indexOf('OPR') === -1) {
+                browserName = 'Chrome';
+                isChrome = true;
+            } else if (ua.indexOf('Edg') !== -1) {
+                browserName = 'Edge';
+            } else if (ua.indexOf('Firefox') !== -1) {
+                browserName = 'Firefox';
+            }
+        }
+
+        var baseText = '<?= __('当前浏览器：') ?>' + browserName + (browserVersion ? (' ' + browserVersion) : '');
+
+        if (browserMcpStatusText) {
+            browserMcpStatusText.textContent = baseText + '，<?= __('正在检测 Browser MCP 扩展状态...') ?>';
+        }
+
+        var hasMCPClient = typeof MCPClient !== 'undefined' &&
+                           MCPClient &&
+                           typeof MCPClient.isMCPAvailable === 'function';
+
+        if (hasMCPClient) {
+            MCPClient.isMCPAvailable()
+                .then(function (available) {
+                    if (!browserMcpStatusText) return;
+                    if (available) {
+                        browserMcpStatusText.textContent =
+                            baseText + '，<?= __('已检测到 Browser MCP 扩展，可使用 AI 浏览器工具。') ?>';
+                    } else {
+                        browserMcpStatusText.textContent =
+                            baseText + '，<?= __('未检测到 Browser MCP 扩展，将无法使用 AI 浏览器工具自动操作页面。') ?>';
+                    }
+                })
+                .catch(function (err) {
+                    console.warn('[AutoLeadAgent] MCP availability check failed:', err);
+                    if (browserMcpStatusText) {
+                        browserMcpStatusText.textContent =
+                            baseText + '，<?= __('检测 Browser MCP 扩展状态失败。') ?>';
+                    }
+                });
+        } else if (browserMcpStatusText) {
+            browserMcpStatusText.textContent =
+                baseText + '，<?= __('当前环境不支持 Browser MCP 状态检测。') ?>';
+        }
+
+        // 非 Chrome 时给出一次性兼容性提示（不阻塞后续逻辑）
+        if (!isChrome &&
+            typeof BrowserDetector !== 'undefined' &&
+            BrowserDetector &&
+            typeof BrowserDetector.showIncompatibleDialog === 'function') {
+            try {
+                BrowserDetector.showIncompatibleDialog({
+                    title: '<?= __('浏览器不兼容提示') ?>',
+                    message: '<?= __('自动寻客功能推荐在 Chrome 浏览器中运行，以获得最佳的端侧模型与 MCP 工具支持。') ?>'
+                });
+            } catch (e) {
+                console.warn('[AutoLeadAgent] showIncompatibleDialog failed:', e);
+            }
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBrowserAndMCPStatus);
+    } else {
+        initBrowserAndMCPStatus();
+    }
     
     // 添加日志条目
     function addLogEntry(container, countEl, entry, type) {
