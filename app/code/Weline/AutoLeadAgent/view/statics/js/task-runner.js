@@ -1023,6 +1023,12 @@ var AutoLeadAgentTaskRunner = (function () {
             emitLog('inference', '模型加载完成，耗时: ' + loadTime.toFixed(0) + 'ms');
 
             updateModelStatus('idle', loadTime, getMemoryUsage());
+            
+            // 同步更新 ModelLifecycle 状态
+            if (typeof ModelLifecycle !== 'undefined') {
+                ModelLifecycle.updateUI('loaded');
+            }
+            
             return true;
 
         } catch (error) {

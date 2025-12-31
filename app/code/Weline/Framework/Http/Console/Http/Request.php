@@ -631,8 +631,16 @@ class Request extends CommandAbstract
         
         // 解析响应头
         $responseHeaders = [];
-        if (isset($http_response_header)) {
-            foreach ($http_response_header as $header) {
+        // PHP 8.4+ 优先使用 http_get_last_response_headers，避免使用已弃用的 $http_response_header
+        $headers_source = [];
+        if (function_exists('http_get_last_response_headers')) {
+            $headers_source = http_get_last_response_headers() ?: [];
+        }
+        // 注意：PHP 8.4+ 中 $http_response_header 已被弃用，不再使用
+        // 如果 http_get_last_response_headers 不存在，说明 http 扩展可能未安装，返回空数组
+
+        if ($headers_source) {
+            foreach ($headers_source as $header) {
                 if (strpos($header, ':') !== false) {
                     list($key, $value) = explode(':', $header, 2);
                     $responseHeaders[strtolower(trim($key))] = trim($value);
@@ -642,8 +650,8 @@ class Request extends CommandAbstract
         
         // 获取状态码
         $statusCode = 200;
-        if (isset($http_response_header[0])) {
-            preg_match('/HTTP\/\d\.\d\s+(\d+)/', $http_response_header[0], $matches);
+        if (isset($headers_source[0])) {
+            preg_match('/HTTP\/\d\.\d\s+(\d+)/', $headers_source[0], $matches);
             if (isset($matches[1])) {
                 $statusCode = (int)$matches[1];
             }

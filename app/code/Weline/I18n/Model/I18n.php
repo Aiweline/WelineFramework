@@ -1,12 +1,5 @@
 <?php
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\I18n\Model;
 
 use Symfony\Component\Intl\Countries;
@@ -14,10 +7,8 @@ use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\CacheInterface;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Data\File;
-use Weline\Framework\System\File\Scan;
 use Weline\I18n\Cache\I18NCache;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Observer\ParserWordsRegister;
@@ -26,42 +17,18 @@ use Weline\I18n\Service\TranslationCollector;
 
 class I18n
 {
-
     private static array $local_words = [];
-    /**
-     * @var Reader
-     */
     private Reader $reader;
-
     public CacheInterface $i18nCache;
 
-    /**
-     * I18n 初始函数...
-     *
-     * @param Reader $reader
-     * @param array $data
-     */
     public function __construct(
         Reader    $reader,
         I18NCache $i18nCache
-    )
-    {
+    ) {
         $this->reader = $reader;
         $this->i18nCache = $i18nCache->create();
     }
 
-    /**
-     * @DESC          # 返回Local代码
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/6/24 23:01
-     * 参数区：
-     *
-     * @param string $locale_code
-     *
-     * @return string
-     */
     public function getLocalByCode(string $locale_code): string
     {
         if ($data = $this->i18nCache->get($locale_code)) {
@@ -78,17 +45,6 @@ class I18n
         return 'zh_Hans_CN';
     }
 
-    /**
-     * @DESC         |获取当地码
-     *
-     * 参数区：
-     *
-     * @param string $lang_code
-     *
-     * @return string[]
-     * @throws Exception
-     * @throws \ReflectionException
-     */
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
         $cache_key = 'getLocals' . $lang_code;
@@ -109,122 +65,122 @@ class I18n
         return $name;
     }
 
-    public function getLocalesWithFlags(int $width = 42, int $height = 0, string $lang_code = 'zh_Hans_CN', bool $installed = true)
+    public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
     {
         $cache_key = 'getLocalesWithFlags' . $lang_code . $width . $height . (string)$installed;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
+        
+        $install_packs = [];
         if ($installed) {
-            # 排除非启用的语言包
-            /**@var Scan $scan */
             $install_packs_path = glob(Env::path_LANGUAGE_PACK . '*' . DS . '*', GLOB_ONLYDIR);
-            $install_packs = [];
             foreach ($install_packs_path as $path) {
                 $path_arr = explode(DS, $path);
                 $install_packs[] = array_pop($path_arr);
             }
         }
-        $no_scale = false;
-        if ($width == 0 && $height == 0) {
-            $no_scale = true;
-        }
+
         $locals = [];
         $lang_locals = $this->getLocals($lang_code);
-        foreach (countries() as $code => $country) {
-            $country = country($code);
-            foreach ($country->getLocales() as $locale) {
-                if ($installed && !in_array($locale, $install_packs)) {
-                    continue;
-                }
-                $svg = $country->getFlag();
-                $svg_xml = simplexml_load_string($svg);
-                $o_width = $svg_xml->attributes()->width ?? 42;
-                $o_height = $svg_xml->attributes()->height ?? 32;
-                if (!$no_scale) {
-                    if ($width === 0) {
-                        $scale = intval($o_height) / $height;
-                        $width = intval($o_width) / $scale;
-                    }
-                    if ($height === 0) {
-                        $scale = intval($o_width) / $width;
-                        $height = intval($o_height) / $scale;
-                    }
-                }
+        $allLocales = Locales::getLocales();
+        
+        foreach ($allLocales as $locale) {
+            if ($installed && !in_array($locale, $install_packs)) {
+                continue;
+            }
+            if (!isset($lang_locals[$locale])) {
+                continue;
+            }
 
-                $svg_xml->attributes()->width = $width;
-                $svg_xml->attributes()->height = $height;
-                $svg = $svg_xml->asXML();
-                if (isset($lang_locals[$locale])) {
-                    $locals[$locale] = ['name' => $lang_locals[$locale], 'flag' => $svg];
-                }
+            $countryCode = $this->getCountryCodeFromLocale($locale);
+            if (!$countryCode) continue;
+
+            $svg = $this->getCountryFlag($countryCode, $width, $height);
+            if ($svg) {
+                $locals[$locale] = ['name' => $lang_locals[$locale], 'flag' => $svg];
             }
         }
+        
         $this->i18nCache->set($cache_key, $locals, 0);
         return $locals;
     }
 
-    public function getLocalesWithFlagsDisplaySelf(string $display_locale_code = 'zh_Hans_CN', int $width = 42, int $height = 0, bool $installed = true)
+    public function getLocalesWithFlagsDisplaySelf(string $display_locale_code = 'zh_Hans_CN', int $width = 24, int $height = 18, bool $installed = true, bool $autoSize = false)
     {
-        $cache_key = 'getLocalesWithFlags' . $width . $height . (string)$installed . $display_locale_code;
+        $default_width = 24;
+        $default_height = 18;
+        
+        // 如果width或height为0，使用默认值
+        if ($width <= 0) $width = $default_width;
+        if ($height <= 0) $height = $default_height;
+        
+        $cache_key = 'getLocalesWithFlagsDisplaySelf' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
+
+        $install_packs = [];
         if ($installed) {
-            # 排除非启用的语言包
-            /**@var Scan $scan */
             $install_packs_path = glob(Env::path_LANGUAGE_PACK . '*' . DS . '*', GLOB_ONLYDIR);
-            $install_packs = [];
             foreach ($install_packs_path as $path) {
                 $path_arr = explode(DS, $path);
                 $install_packs[] = array_pop($path_arr);
             }
         }
-        $no_scale = false;
-        if ($width == 0 && $height == 0) {
-            $no_scale = true;
-        }
+
         $locals = [];
         $lang_locals = $this->getLocals();
-        foreach (countries() as $code => $country) {
-            $country = country($code);
-            foreach ($country->getLocales() as $locale) {
-                if ($installed && !in_array($locale, $install_packs)) {
-                    continue;
-                }
-                $svg = $country->getFlag();
-                $svg_xml = simplexml_load_string($svg);
-                $o_width = $svg_xml->attributes()->width ?? 42;
-                $o_height = $svg_xml->attributes()->height ?? 32;
-                if (!$no_scale) {
-                    if ($width === 0) {
-                        $scale = intval($o_height) / $height;
-                        $width = intval($o_width) / $scale;
-                    }
-                    if ($height === 0) {
-                        $scale = intval($o_width) / $width;
-                        $height = intval($o_height) / $scale;
-                    }
-                }
+        $allLocales = Locales::getLocales();
+        
+        // 收集所有需要获取的国家代码
+        $countryCodes = [];
+        $localeToCountryMap = [];
+        foreach ($allLocales as $locale) {
+            if ($installed && !in_array($locale, $install_packs)) {
+                continue;
+            }
+            if (!isset($lang_locals[$locale])) {
+                continue;
+            }
 
-                $svg_xml->attributes()->width = $width;
-                $svg_xml->attributes()->height = $height;
-                $svg = $svg_xml->asXML();
-                if (isset($lang_locals[$locale])) {
-                    if ($display_locale_code === $locale) {
-                        $name = $this->getLocaleName($locale, $locale);
-                    } else {
-                        $name = $this->getLocaleName($locale, $display_locale_code) . "({$this->getLocaleName($locale, $locale)})";
-                    }
-                    $locals[$locale] = ['name' => $name, 'flag' => $svg];
+            $countryCode = $this->getCountryCodeFromLocale($locale);
+            if (!$countryCode) continue;
+            
+            $countryCodes[] = $countryCode;
+            $localeToCountryMap[$locale] = $countryCode;
+        }
+        
+        // 批量获取国旗SVG
+        $flags = $this->getCountryFlagsBatch(array_unique($countryCodes), $width, $height, $autoSize);
+
+        // 组装结果
+        foreach ($allLocales as $locale) {
+            if ($installed && !in_array($locale, $install_packs)) {
+                continue;
+            }
+            if (!isset($lang_locals[$locale])) {
+                continue;
+            }
+
+            $countryCode = $localeToCountryMap[$locale] ?? null;
+            if (!$countryCode) continue;
+
+            $svg = $flags[$countryCode] ?? '';
+            if ($svg) {
+                if ($display_locale_code === $locale) {
+                    $name = $this->getLocaleName($locale, $locale);
+                } else {
+                    $name = $this->getLocaleName($locale, $display_locale_code) . "({$this->getLocaleName($locale, $locale)})";
                 }
+                $locals[$locale] = ['name' => $name, 'flag' => $svg];
             }
         }
         $this->i18nCache->set($cache_key, $locals, 0);
         return $locals;
     }
 
-    public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 42, int $height = 0): array
+    public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 24, int $height = 18): array
     {
         $cache_key = 'getCountryFlagWithLocal' . $local_code . $width . $height;
         if ($data = $this->i18nCache->get($cache_key)) {
@@ -232,87 +188,212 @@ class I18n
                 return $data;
             }
         }
-        $no_scale = false;
-        if ($width == 0 && $height == 0) {
-            $no_scale = true;
-        }
-        $lang_locals = $this->getLocals($local_code);
-        foreach (countries() as $code => $country) {
-            $country = country($code);
-            foreach ($country->getLocales() as $locale) {
-                if ($locale === $local_code) {
-                    $svg = $country->getFlag();
-                    $svg_xml = simplexml_load_string($svg);
-                    $o_width = $svg_xml->attributes()->width ?? 42;
-                    $o_height = $svg_xml->attributes()->height ?? 32;
-                    if (!$no_scale) {
-                        if ($width === 0) {
-                            $scale = intval($o_height) / $height;
-                            $width = intval($o_width) / $scale;
-                        }
-                        if ($height === 0) {
-                            $scale = intval($o_width) / $width;
-                            $height = intval($o_height) / $scale;
-                        }
-                    }
 
-                    $svg_xml->attributes()->width = $width;
-                    $svg_xml->attributes()->height = $height;
-                    $svg = $svg_xml->asXML();
-                    $local = ['name' => $lang_locals[$locale], 'flag' => $svg];
-                    $this->i18nCache->set($cache_key, $local, 0);
-                    return $local;
-                }
+        $lang_locals = $this->getLocals($local_code);
+        $countryCode = $this->getCountryCodeFromLocale($local_code);
+        
+        if ($countryCode) {
+            $svg = $this->getCountryFlag($countryCode, $width, $height);
+            if ($svg) {
+                $local = ['name' => $lang_locals[$local_code] ?? $local_code, 'flag' => $svg];
+                $this->i18nCache->set($cache_key, $local, 0);
+                return $local;
             }
         }
+
         $this->i18nCache->set($cache_key, [], 0);
         return [];
     }
 
     /**
-     * @DESC          # 获取国家旗帜
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/12/22 15:52
-     * 参数区：
-     *
-     * @param string $country_code
-     * @param int $width
-     * @param int $height
-     *
-     * @return mixed
+     * 批量获取多个国家的国旗SVG
+     * 
+     * @param array $country_codes 国家代码数组
+     * @param int $width 宽度，0表示使用默认值
+     * @param int $height 高度，0表示使用默认值
+     * @param bool $autoSize 是否自适应
+     * @return array 返回 ['country_code' => 'svg_content'] 格式的数组
      */
-    public function getCountryFlag(string $country_code = 'CN', int $width = 42, int $height = 0): mixed
+    public function getCountryFlagsBatch(array $country_codes, int $width = 24, int $height = 18, bool $autoSize = false): array
     {
-        $country = country($country_code);
-        $svg = $country->getFlag();
-        $svg_xml = simplexml_load_string($svg);
-        $o_width = $svg_xml->attributes()->width ?? 42;
-        $o_height = $svg_xml->attributes()->height ?? 32;
-        $no_scale = false;
-        if ($width == 0 && $height == 0) {
-            $no_scale = true;
-        }
-        if (!$no_scale) {
-            if ($width === 0) {
-                $scale = intval($o_height) / $height;
-                $width = intval($o_width) / $scale;
+        $default_width = 24;
+        $default_height = 18;
+        
+        // 如果width或height为0，使用默认值
+        if ($width <= 0) $width = $default_width;
+        if ($height <= 0) $height = $default_height;
+        
+        $results = [];
+        $cache_prefix = 'flag_' . $width . '_' . $height . '_' . ($autoSize ? 'auto' : 'fixed') . '_';
+        
+        // 批量检查缓存
+        $uncached_codes = [];
+        foreach ($country_codes as $code) {
+            $cache_key = $cache_prefix . strtolower($code);
+            $cached = $this->i18nCache->get($cache_key);
+            if ($cached !== false && $cached !== null) {
+                $results[$code] = $cached;
+            } else {
+                $uncached_codes[] = $code;
             }
-            if ($height === 0) {
-                $scale = intval($o_width) / $width;
-                $height = intval($o_height) / $scale;
+        }
+        
+        // 批量处理未缓存的
+        if (!empty($uncached_codes)) {
+            foreach ($uncached_codes as $code) {
+                $flag = $this->getCountryFlag($code, $width, $height, $autoSize);
+                $results[$code] = $flag;
+                // 缓存结果
+                $cache_key = $cache_prefix . strtolower($code);
+                $this->i18nCache->set($cache_key, $flag, 3600);
             }
         }
-
-        $svg_xml->attributes()->width = $width;
-        $svg_xml->attributes()->height = $height;
-        return $svg_xml->asXML();
+        
+        return $results;
     }
 
-    public function getCountry(string $country_code = 'CN'): \Rinvex\Country\Country|array
+    public function getCountryFlag(string $country_code = 'CN', int $width = 24, int $height = 18, bool $autoSize = false): string
     {
-        return country($country_code);
+        $default_width = 24;
+        $default_height = 18;
+        
+        // 如果width或height为0，使用默认值
+        if ($width <= 0) $width = $default_width;
+        if ($height <= 0) $height = $default_height;
+        
+        $country_code = strtolower($country_code);
+        $cache_key = 'flag_' . $country_code . '_' . $width . '_' . $height . '_' . ($autoSize ? 'auto' : 'fixed');
+        
+        // 检查缓存
+        if ($cached = $this->i18nCache->get($cache_key)) {
+            return $cached;
+        }
+        
+        $flag_path = BP . 'vendor/lipis/flag-icons/flags/4x3/' . $country_code . '.svg';
+        
+        if (!file_exists($flag_path)) {
+            return '';
+        }
+
+        $svg = file_get_contents($flag_path);
+        if (!$svg) return '';
+
+        $svg_xml = @simplexml_load_string($svg);
+        if (!$svg_xml) {
+            // 如果无法解析为XML，直接返回原始SVG
+            return $svg;
+        }
+
+        $o_width = (float)($svg_xml->attributes()->width ?? 0);
+        $o_height = (float)($svg_xml->attributes()->height ?? 0);
+
+        if ($autoSize) {
+            // 自适应模式：直接修改XML字符串，移除固定尺寸，添加样式使其自适应容器
+            $svg = $svg_xml->asXML();
+            // 先移除可能存在的style属性
+            $svg = preg_replace('/\s+style\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            // 移除width和height属性（处理单引号和双引号，以及可能的空格）
+            $svg = preg_replace('/\s+width\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            $svg = preg_replace('/\s+height\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            // 在<svg标签中添加完整的style属性
+            $styleAttr = 'style="width: auto; height: 1.2em; max-height: 20px; vertical-align: middle; display: inline-block;"';
+            $svg = preg_replace('/(<svg)([^>]*)(>)/i', '$1$2 ' . $styleAttr . '$3', $svg, 1);
+            // 缓存结果
+            $this->i18nCache->set($cache_key, $svg, 3600);
+            return $svg;
+        } else {
+            // 固定尺寸模式：按照指定的宽高调整，移除style属性
+            // 直接修改XML字符串，确保属性正确设置
+            $svg = $svg_xml->asXML();
+            
+            // 计算实际要设置的宽高
+            $final_width = $width;
+            $final_height = $height;
+            
+            // 如果原始SVG没有width/height，但有viewBox，从viewBox计算比例
+            if ($o_width <= 0 || $o_height <= 0) {
+                // 尝试从viewBox获取尺寸
+                $viewBox = (string)($svg_xml->attributes()->viewBox ?? '');
+                if ($viewBox && preg_match('/\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$/', $viewBox, $matches)) {
+                    $o_width = (float)$matches[1];
+                    $o_height = (float)$matches[2];
+                }
+            }
+            
+            // 根据参数计算最终尺寸
+            if ($width > 0 && $height > 0) {
+                // 两个参数都有值，直接使用
+                $final_width = $width;
+                $final_height = $height;
+            } elseif ($width > 0 && $o_width > 0 && $o_height > 0) {
+                // 只有width，按比例计算height
+                $scale = $width / $o_width;
+                $final_width = $width;
+                $final_height = (int)($o_height * $scale);
+            } elseif ($height > 0 && $o_width > 0 && $o_height > 0) {
+                // 只有height，按比例计算width
+                $scale = $height / $o_height;
+                $final_width = (int)($o_width * $scale);
+                $final_height = $height;
+            }
+            
+            // 移除可能存在的style属性
+            $svg = preg_replace('/\s+style\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            // 移除可能存在的width和height属性
+            $svg = preg_replace('/\s+width\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            $svg = preg_replace('/\s+height\s*=\s*["\'][^"\']*["\']/i', '', $svg);
+            
+            // 添加width和height属性
+            if ($final_width > 0 && $final_height > 0) {
+                $sizeAttr = 'width="' . $final_width . '" height="' . $final_height . '"';
+                $svg = preg_replace('/(<svg)([^>]*)(>)/i', '$1$2 ' . $sizeAttr . '$3', $svg, 1);
+            } elseif ($final_width > 0) {
+                $svg = preg_replace('/(<svg)([^>]*)(>)/i', '$1$2 width="' . $final_width . '"$3', $svg, 1);
+            } elseif ($final_height > 0) {
+                $svg = preg_replace('/(<svg)([^>]*)(>)/i', '$1$2 height="' . $final_height . '"$3', $svg, 1);
+            }
+            
+            // 缓存结果
+            $this->i18nCache->set($cache_key, $svg, 3600);
+            return $svg;
+        }
+    }
+
+    public function getCountry(string $country_code = 'CN'): array
+    {
+        if (!Countries::exists($country_code)) {
+            return [];
+        }
+
+        return [
+            'code' => $country_code,
+            'name' => Countries::getName($country_code),
+            'locales' => $this->getLocalesForCountry($country_code)
+        ];
+    }
+
+    private function getLocalesForCountry(string $countryCode): array
+    {
+        $locales = Locales::getLocales();
+        $countryLocales = [];
+        $countryCode = strtoupper($countryCode);
+        
+        foreach ($locales as $locale) {
+            if (str_ends_with($locale, '_' . $countryCode)) {
+                $countryLocales[] = $locale;
+            }
+        }
+        return $countryLocales;
+    }
+
+    private function getCountryCodeFromLocale(string $locale): ?string
+    {
+        $parts = explode('_', $locale);
+        $lastPart = end($parts);
+        if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
+            return $lastPart;
+        }
+        return null;
     }
 
     public function localeExists(string $locale_code): bool
@@ -320,23 +401,12 @@ class I18n
         return Locales::exists($locale_code);
     }
 
-    /**
-     * @DESC         |获取所有翻译
-     *
-     * 参数区：
-     *
-     * @param bool $cache
-     * @param string|null $moduleName 指定模块名，如果为null则收集所有模块
-     * @return array
-     * @throws Exception
-     */
     public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
     {
         if (self::$local_words and $cache) {
             return self::$local_words;
         }
         $all_locals_words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-        // 获取翻译模式
         $translate_mode = Env::get('translation.mode', 'default');
         
         if ($cache) {
@@ -347,55 +417,40 @@ class I18n
             }
             $all_locals_words = (array)(include $all_locals_words_file);
             if (!empty($all_locals_words)) {
-                // 在 online 模式下，即使使用缓存，也需要合并数据库翻译
                 if ($translate_mode === 'online') {
-                    // 合并数据库翻译（见后面的逻辑）
-                    // 这里先设置 locals_words，后面会合并数据库翻译
                     $locals_words = $all_locals_words;
                 } else {
-                    // 非 online 模式，直接返回缓存
                     self::$local_words = $all_locals_words;
                     return $all_locals_words;
                 }
             }
         }
         
-        // 所有语言
         $locals_names = Locales::getNames();
-        // 所有语言对应存在的翻译词（如果使用缓存且是 online 模式，已经在上面的 if 中设置了）
         if (!isset($locals_words)) {
             $locals_words = [];
         }
         $error_count = 0;
         $first_error = true;
         
-        // 模块翻译覆盖语言包翻译
-        // 用于记录每个词的模块名，用于总词典中标记重复词
-        $word_modules = []; // [locale][word] => [modules]
-        // 用于记录每个词的翻译来源模块（用于优先使用当前模块的词）
-        $word_translate_modules = []; // [locale][word] => module_name
-        // 用于记录每个词在每个模块中的翻译（用于生成CSV时每个模块一行）
-        $word_module_translations = []; // [locale][word][module] => translate
+        $word_modules = [];
+        $word_translate_modules = [];
+        $word_module_translations = [];
         $all_i18ns = $this->reader->getAllI18ns();
         foreach ($all_i18ns as $module_name => $i18n_files) {
-            // 获取完整的模块名（如 Weline_I18n）
             $full_module_name = $this->getFullModuleName($module_name);
-            /**@var $i18n_file File */
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
-                    // 自动注册 locale（确保 is_install = 1）
                     $this->ensureLocaleInstalled($local);
                     
                     $handle = @fopen($i18n_file, 'r');
                     if ($handle === false) {
-                        // 输出表格头（仅第一次）
                         if ($first_error && php_sapi_name() === 'cli') {
                             echo "\n" . str_repeat("=", 80) . "\n";
                             echo "i18n 文件格式问题\n";
                             echo str_repeat("=", 80) . "\n";
                             $first_error = false;
                         }
-                        // 使用相对路径，去掉开头的斜杠
                         $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
                         if (php_sapi_name() === 'cli') {
                             echo $relative_path . "  【无法打开文件】\n";
@@ -407,20 +462,16 @@ class I18n
                     }
                     $is_utf8 = false;
                     $line = 1;
-                    // 使用相对路径，去掉开头的斜杠
                     $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
                     
                     while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                        // 格式错误的行直接跳过，不抛出异常
                         if (!isset($data[0]) || empty(trim($data[0]))) {
-                            // 输出表格头（仅第一次）
                             if ($first_error && php_sapi_name() === 'cli') {
                                 echo "\n" . str_repeat("=", 80) . "\n";
                                 echo "i18n 文件格式问题\n";
                                 echo str_repeat("=", 80) . "\n";
                                 $first_error = false;
                             }
-                            // 记录警告日志
                             if (php_sapi_name() === 'cli') {
                                 echo $relative_path . ":" . $line . "  【没有翻译原文】\n";
                             } else {
@@ -434,14 +485,12 @@ class I18n
                         $data[0] = trim($data[0]);
                         
                         if (!isset($data[1])) {
-                            // 输出表格头（仅第一次）
                             if ($first_error && php_sapi_name() === 'cli') {
                                 echo "\n" . str_repeat("=", 80) . "\n";
                                 echo "i18n 文件格式问题\n";
                                 echo str_repeat("=", 80) . "\n";
                                 $first_error = false;
                             }
-                            // 记录警告日志，跳过该行
                             if (php_sapi_name() === 'cli') {
                                 echo $relative_path . ":" . $line . "  【没有翻译内容】\n";
                             } else {
@@ -453,21 +502,18 @@ class I18n
                         }
                         
                         $data[1] = trim($data[1]);
-                        // 第三列是模块名（可选），如果存在则使用，否则使用当前完整模块名
                         $word_module = isset($data[2]) && !empty(trim($data[2])) ? trim($data[2]) : $full_module_name;
                         
                         if (!$is_utf8) {
                             if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
                                 $is_utf8 = true;
                             } else {
-                                // 输出表格头（仅第一次）
                                 if ($first_error && php_sapi_name() === 'cli') {
                                     echo "\n" . str_repeat("=", 80) . "\n";
                                     echo "i18n 文件格式问题\n";
                                     echo str_repeat("=", 80) . "\n";
                                     $first_error = false;
                                 }
-                                // 记录警告日志，跳过该行
                                 if (php_sapi_name() === 'cli') {
                                     echo $relative_path . ":" . $line . "  【编码不是UTF-8】\n";
                                 } else {
@@ -479,7 +525,6 @@ class I18n
                             }
                         }
                         
-                        // 记录词的模块信息（使用完整模块名）
                         if (!isset($word_modules[$local])) {
                             $word_modules[$local] = [];
                         }
@@ -490,7 +535,6 @@ class I18n
                             $word_modules[$local][$data[0]][] = $word_module;
                         }
                         
-                        // 记录每个词在每个模块中的翻译（用于生成CSV时每个模块一行）
                         if (!isset($word_module_translations[$local])) {
                             $word_module_translations[$local] = [];
                         }
@@ -499,44 +543,32 @@ class I18n
                         }
                         $word_module_translations[$local][$data[0]][$word_module] = $data[1];
                         
-                        // 存储翻译（当前模块优先：如果词已存在，优先使用当前模块的词）
-                        // 如果词不存在，直接添加
-                        // 如果词已存在，检查是否来自当前模块，如果是则覆盖（确保当前模块的词优先）
                         if (!isset($locals_words[$local][$data[0]])) {
-                            // 词不存在，直接添加
                             $locals_words[$local][$data[0]] = $data[1];
-                            // 记录翻译来源模块
                             if (!isset($word_translate_modules[$local])) {
                                 $word_translate_modules[$local] = [];
                             }
                             $word_translate_modules[$local][$data[0]] = $word_module;
                         } else {
-                            // 词已存在，检查是否来自当前模块
-                            // 如果当前模块在模块列表中，使用当前模块的词（覆盖）
                             if (in_array($word_module, $word_modules[$local][$data[0]])) {
                                 $locals_words[$local][$data[0]] = $data[1];
-                                // 更新翻译来源模块
                                 if (!isset($word_translate_modules[$local])) {
                                     $word_translate_modules[$local] = [];
                                 }
                                 $word_translate_modules[$local][$data[0]] = $word_module;
                             }
-                            // 如果当前模块不在模块列表中，保留原有翻译（不覆盖）
                         }
                         $line += 1;
                     }
 
                     fclose($handle);
                 } else {
-                    // 输出表格头（仅第一次）
                     if ($first_error && php_sapi_name() === 'cli') {
                         echo "\n" . str_repeat("=", 80) . "\n";
                         echo "i18n 文件格式问题\n";
                         echo str_repeat("=", 80) . "\n";
                         $first_error = false;
                     }
-                    // locale代码无效，记录警告并跳过
-                    // 使用相对路径，去掉开头的斜杠
                     $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
                     if (php_sapi_name() === 'cli') {
                         echo $relative_path . "  【语言代码 " . $local . " 无效】\n";
@@ -548,58 +580,36 @@ class I18n
             }
         }
         
-        // 输出统计信息
         if ($error_count > 0 && php_sapi_name() === 'cli') {
             echo str_repeat("=", 80) . "\n";
             echo "共发现 " . $error_count . " 个问题\n";
             echo str_repeat("=", 80) . "\n\n";
         }
         
-        # 收集项目下的所有被__()函数包裹的翻译词
-        # --1 检索目录
-        // 定义要搜索的目录
-//        $directories = [
-//            BP . 'app',
-//            BP . 'vendor',
-//        ];
         $directories = [];
-        Env::getInstance()->getActiveModules();
         foreach (Env::getInstance()->getActiveModules() as $module) {
-            // 如果指定了模块名，只收集该模块
             if ($moduleName !== null && $module['name'] !== $moduleName) {
                 continue;
             }
             $directories[$module['name']] = $module['base_path'];
         }
-        // 初始化翻译词数组
         $translations = [];
-        // 使用统一的翻译收集服务
         $collector = ObjectManager::getInstance(TranslationCollector::class);
         
-        // 遍历目录
         foreach ($directories as $module => $directory) {
-            // 获取完整的模块名（如 Weline_I18n）
             $full_module_name = $this->getFullModuleName($module);
-            
-            // 使用统一的翻译收集服务收集模块的翻译字符串
             $collectedStrings = $collector->collect($directory, $module);
             
             $module_words = [];
             foreach ($collectedStrings as $original => $info) {
                 $translations[$original] = $original;
                 $module_words[$original] = $original;
-                // 注意：收集到的词还没有翻译，不需要为所有语言创建记录
-                // 模块信息会在读取CSV文件时记录（CSV文件中才有实际的翻译）
             }
-            // 遍历模组i8n目录中的csv翻译文件
             $i18n_dir = $directory . '/i18n';
             if (is_dir($i18n_dir)) {
                 $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($i18n_dir));
                 foreach ($iterator as $file) {
-                    // 如果是CSV文件
                     if ($file->isFile() && $file->getExtension() === 'csv') {
-                        // 读取csv文件内容，如果翻译词不存在翻译文件中则添加到文件中，
-                        //文件形式：第一列为翻译词，第二列为翻译
                         $file_words = [];
                         $handle = @fopen($file->getPathname(), 'r');
                         if ($handle !== false) {
@@ -611,10 +621,8 @@ class I18n
                             fclose($handle);
                         }
 
-                        // 将翻译词写入csv翻译文件
                         $file_translations = array_merge($module_words, $file_words);
                         $file_translations = array_unique($file_translations);
-                        // 将翻译词写入csv文件
                         $csv_file = @fopen($file->getPathname(), 'w+');
                         if ($csv_file !== false) {
                             foreach ($file_translations as $key => $value) {
@@ -627,10 +635,9 @@ class I18n
             }
         }
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
-            $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
+            $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
             $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
             
-            // 确保目录存在
             $dir = dirname($default_local_file);
             if (!is_dir($dir)) {
                 mkdir($dir, 0755, true);
@@ -649,22 +656,18 @@ class I18n
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
         
-        // 在线翻译模式：从数据库读取翻译并合并到CSV翻译中
         $translate_mode = Env::get('translation.mode', 'default');
         if ($translate_mode === 'online') {
             try {
-                /**@var LocaleDictionary $localeDictionary */
                 $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
                 foreach ($locals_names as $local_code => $local_name) {
                     if (!isset($locals_words[$local_code])) {
                         $locals_words[$local_code] = [];
                     }
-                    // 从数据库读取该语言的翻译
                     $db_translations = $localeDictionary->reset()
                         ->where(LocaleDictionary::fields_LOCALE_CODE, $local_code)
                         ->select()
                         ->fetchArray();
-                    // 合并数据库翻译（数据库翻译优先级高于CSV）
                     foreach ($db_translations as $db_trans) {
                         $word = $db_trans[LocaleDictionary::fields_WORD] ?? '';
                         $translate = $db_trans[LocaleDictionary::fields_TRANSLATE] ?? '';
@@ -674,59 +677,46 @@ class I18n
                     }
                 }
             } catch (\Exception $e) {
-                // 数据库读取失败时静默处理，继续使用CSV翻译
-                // 注意：这里不能使用 __() 函数，因为可能会在翻译加载过程中触发循环调用
                 error_log("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage());
             }
         }
         
         if ($locals_words) {
-            // 确保目录存在
             $words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
             $dir = dirname($words_file);
             if (!is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
             
-            // 生成总词典，按模块组织，提升性能
-            // 格式：['all_words' => [...], 'locale' => ['Weline_I18n' => [...], 'Weline_Cdn' => [...]]]
             $words_by_module = [
-                'all_words' => []  // 全局唯一词（所有语言共享，没有模块标记的词）
+                'all_words' => []
             ];
-            $all_words_global = [];  // 收集所有语言的唯一词
+            $all_words_global = [];
             
             foreach ($locals_words as $locale => $words) {
                 $words_by_module[$locale] = [];
-                
-                // 按模块组织词
                 foreach ($words as $word => $translate) {
-                    // 过滤掉代码片段
-                    if (!self::isValidTranslationString($word)) {
+                    $collector = ObjectManager::getInstance(TranslationCollector::class);
+                    if (!$collector->isValidTranslationString($word)) {
                         continue;
                     }
                     
                     $modules = $word_modules[$locale][$word] ?? [];
-                    
                     if (count($modules) > 1) {
-                        // 多个模块重复，为每个模块单独记录
                         foreach ($modules as $module_name) {
                             if (!isset($words_by_module[$locale][$module_name])) {
                                 $words_by_module[$locale][$module_name] = [];
                             }
-                            // 获取该模块的翻译
                             $module_translate = $word_module_translations[$locale][$word][$module_name] ?? $translate;
                             $words_by_module[$locale][$module_name][$word] = $module_translate;
                         }
                     } elseif (count($modules) === 1) {
-                        // 只有一个模块，记录到该模块下
                         $module_name = $modules[0];
                         if (!isset($words_by_module[$locale][$module_name])) {
                             $words_by_module[$locale][$module_name] = [];
                         }
                         $words_by_module[$locale][$module_name][$word] = $translate;
                     } else {
-                        // 没有模块信息，记录到全局 all_words（唯一词）
-                        // 使用第一个语言的翻译作为全局翻译（通常所有语言的唯一词翻译相同）
                         if (!isset($all_words_global[$word])) {
                             $all_words_global[$word] = $translate;
                         }
@@ -734,24 +724,19 @@ class I18n
                 }
             }
             
-            // 将全局唯一词放到顶层
             $words_by_module['all_words'] = $all_words_global;
-            
             $text = '<?php return ' . w_var_export($words_by_module, true) . ';';
             $result = @file_put_contents($words_file, $text);
             if ($result === false) {
                 error_log(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]));
             }
             
-            // 同时生成每个语言的PHP文件（按模块组织，不包含 all_words）
             foreach ($words_by_module as $locale => $module_words_data) {
-                // 跳过顶层的 all_words
                 if ($locale === 'all_words') {
                     continue;
                 }
                 
                 $words_filename = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
-                // 确保目录存在
                 $words_dir = dirname($words_filename);
                 if (!is_dir($words_dir)) {
                     mkdir($words_dir, 0755, true);
@@ -768,11 +753,7 @@ class I18n
                 $file->close();
             }
             
-            // 同时生成CSV格式的总库文件（每个语言一个文件）
-            // 格式：原文,译文,模块名
-            // 如果词在多个模块中重复，每个模块单独一行
             foreach ($words_by_module as $locale => $module_words_data) {
-                // 跳过顶层的 all_words
                 if ($locale === 'all_words') {
                     continue;
                 }
@@ -780,18 +761,13 @@ class I18n
                 $csv_file_path = dirname($words_file) . DS . $locale . '_total.csv';
                 $csv_handle = @fopen($csv_file_path, 'w+');
                 if ($csv_handle !== false) {
-                    // 写入CSV文件，格式：原文,译文,模块名
-                    // 先写入全局唯一词（all_words）
                     if (isset($words_by_module['all_words'])) {
                         foreach ($words_by_module['all_words'] as $word => $translate) {
-                            // CSV格式：原文,译文,模块名（唯一词模块名为空）
                             fputcsv($csv_handle, [$word, $translate, ''], ',', '"', '\\');
                         }
                     }
-                    // 再写入各模块的词
                     foreach ($module_words_data as $module_name => $words) {
                         foreach ($words as $word => $translate) {
-                            // CSV格式：原文,译文,模块名
                             fputcsv($csv_handle, [$word, $translate, $module_name], ',', '"', '\\');
                         }
                     }
@@ -803,16 +779,6 @@ class I18n
         return $locals_words;
     }
 
-    /**
-     * @DESC         |默认汉语
-     *
-     * 参数区：
-     *
-     * @param string $local_code
-     *
-     * @return array
-     * @throws Exception
-     */
     public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {
         $words = [];
@@ -824,103 +790,35 @@ class I18n
         return $words;
     }
 
-    /**
-     * @DESC         |将翻译词组写入翻译文件
-     *
-     * 参数区：
-     *
-     * @throws Exception
-     */
     public function convertToLanguageFile(bool $cache = true, ?string $moduleName = null): void
     {
-        // 调用 getLocalsWords 会生成总词典和语言文件，这里只需要确保生成即可
-        // getLocalsWords 已经会生成按模块组织的结构
         $this->getLocalsWords($cache, $moduleName);
-        
-        // 如果需要单独生成语言文件，可以从总词典读取并转换格式
-        // 但通常 getLocalsWords 已经处理了，这里主要是为了兼容性
     }
 
-    /**
-     * @DESC          # 获取所有收集词
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/12/29 21:49
-     * 参数区：
-     * @return array
-     * @throws \ReflectionException
-     * @throws \Weline\Framework\App\Exception
-     */
-    function getCollectedWords(): array
+    public function getCollectedWords(): array
     {
         return ObjectManager::getInstance(ParserWordsRegister::class)->getWords();
     }
     
-    /**
-     * 获取完整的模块名（如 Weline_I18n）
-     * 
-     * @param string $module_name 模块名（如 I18n）
-     * @return string 完整模块名（如 Weline_I18n）
-     */
     private function getFullModuleName(string $module_name): string
     {
-        // 如果已经是完整格式，直接返回
-        if (strpos($module_name, 'Weline_') === 0) {
+        if (str_starts_with($module_name, 'Weline_')) {
             return $module_name;
         }
-        
-        // 尝试从模块信息获取完整名称
         try {
             $module_info = Env::getInstance()->getModuleInfo($module_name);
             if ($module_info && isset($module_info['name'])) {
                 return $module_info['name'];
             }
-        } catch (\Exception $e) {
-            // 忽略错误
-        }
-        
-        // 默认格式：Weline_模块名
+        } catch (\Exception $e) {}
         return 'Weline_' . $module_name;
     }
-    
-    /**
-     * 验证是否是有效的翻译字符串
-     * 过滤掉代码片段、变量、函数调用等
-     * 
-     * @param string $str
-     * @return bool
-     * @deprecated 使用 TranslationCollector::isValidTranslationString() 代替
-     */
-    private static function isValidTranslationString(string $str): bool
-    {
-        // 使用统一的收集服务进行验证
-        $collector = ObjectManager::getInstance(TranslationCollector::class);
-        return $collector->isValidTranslationString($str);
-    }
 
-    /**
-     * @DESC          # 获取国家
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/12/22 14:38
-     * 参数区：
-     */
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array
     {
         return Countries::getNames($display_local_code);
     }
 
-    /**
-     * @DESC          # 获取安装模型
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2023/7/4 23:41
-     * 参数区：
-     * @return \Weline\I18n\Model\Locals
-     */
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
     {
         $cache_key = __FUNCTION__.'_'.$target_local;
@@ -928,45 +826,22 @@ class I18n
         if ($locals) {
             return $locals;
         }
-        /**@var Locals $LocalsModel */
         $LocalsModel = ObjectManager::getInstance(Locals::class)->where('target_code', $target_local);
         $this->i18nCache->set($cache_key,$LocalsModel);
         return $LocalsModel;
     }
 
-    /**
-     * 确保 locale 已安装并激活
-     * 在收集语言包时自动注册并激活对应的 locale 和国家
-     *
-     * @param string $localeCode locale 代码，如 zh_Hans_CN
-     * @return void
-     */
     public function ensureLocaleInstalled(string $localeCode): void
     {
         static $installedLocales = [];
-        
-        // 已处理过的 locale 跳过
         if (isset($installedLocales[$localeCode])) {
             return;
         }
         $installedLocales[$localeCode] = true;
 
         try {
-            // 从 locale 代码提取国家代码
-            // 格式可能是 zh_CN, zh_Hans_CN, en_US 等
-            $parts = explode('_', $localeCode);
-            $countryCode = '';
-            if (count($parts) >= 2) {
-                // 最后一个部分通常是国家代码（如果是2个大写字母）
-                $lastPart = end($parts);
-                if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
-                    $countryCode = $lastPart;
-                }
-            }
-
-            // 确保国家已安装并激活
+            $countryCode = $this->getCountryCodeFromLocale($localeCode);
             if ($countryCode && Countries::exists($countryCode)) {
-                /** @var \Weline\I18n\Model\Countries $countriesModel */
                 $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
                 $country = $countriesModel->reset()
                     ->where(\Weline\I18n\Model\Countries::fields_CODE, $countryCode)
@@ -974,15 +849,7 @@ class I18n
                     ->fetch();
                 
                 if (!$country->getId()) {
-                    // 国家不存在，创建并激活
-                    // 尝试获取国旗
-                    $flag = '';
-                    try {
-                        $flag = (string)$this->getCountryFlag($countryCode);
-                    } catch (\Exception $e) {
-                        // 忽略国旗获取失败
-                    }
-                    
+                    $flag = (string)$this->getCountryFlag($countryCode);
                     $countriesModel->reset()
                         ->setData([
                             \Weline\I18n\Model\Countries::fields_CODE => $countryCode,
@@ -995,7 +862,6 @@ class I18n
                         echo "  [+] 自动注册并激活国家: {$countryCode}\n";
                     }
                 } else {
-                    // 国家存在，检查是否需要更新安装/激活状态
                     $needUpdate = false;
                     if (!$country->getData(\Weline\I18n\Model\Countries::fields_IS_INSTALL)) {
                         $country->setData(\Weline\I18n\Model\Countries::fields_IS_INSTALL, 1);
@@ -1014,8 +880,6 @@ class I18n
                 }
             }
 
-            // 确保 locale 已安装并激活
-            /** @var Locale $localeModel */
             $localeModel = ObjectManager::getInstance(Locale::class);
             $locale = $localeModel->reset()
                 ->where(Locale::fields_CODE, $localeCode)
@@ -1023,17 +887,10 @@ class I18n
                 ->fetch();
             
             if (!$locale->getId()) {
-                // locale 不存在，创建并激活
-                // 尝试获取国旗
                 $flag = '';
                 if ($countryCode) {
-                    try {
-                        $flag = (string)$this->getCountryFlag($countryCode);
-                    } catch (\Exception $e) {
-                        // 忽略国旗获取失败
-                    }
+                    $flag = (string)$this->getCountryFlag($countryCode);
                 }
-                
                 $localeModel->reset()
                     ->setData([
                         Locale::fields_CODE => $localeCode,
@@ -1047,7 +904,6 @@ class I18n
                     echo "  [+] 自动注册并激活语言: {$localeCode}\n";
                 }
             } else {
-                // locale 存在，检查是否需要更新安装/激活状态
                 $needUpdate = false;
                 if (!$locale->getData(Locale::fields_IS_INSTALL)) {
                     $locale->setData(Locale::fields_IS_INSTALL, 1);
@@ -1065,11 +921,9 @@ class I18n
                 }
             }
         } catch (\Throwable $e) {
-            // 忽略错误，不影响语言包收集
             if (php_sapi_name() === 'cli') {
                 echo "  [!] 注册语言 {$localeCode} 失败: " . $e->getMessage() . "\n";
             }
         }
     }
 }
-

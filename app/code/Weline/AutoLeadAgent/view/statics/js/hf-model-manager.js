@@ -14,6 +14,7 @@ var HFModelManager = (function () {
         model: null,
         session: null,
         error: null,
+        pipelineTask: null, // 当前 pipeline 任务类型
     };
 
     // 配置
@@ -141,6 +142,65 @@ var HFModelManager = (function () {
     }
 
     /**
+     * 根据模型 ID 推断 pipeline 任务类型
+     * @param {string} modelId 模型 ID
+     * @returns {string} 任务类型
+     */
+    function inferPipelineTask(modelId) {
+        if (!modelId) return 'text-generation';
+        
+        var lowerModelId = modelId.toLowerCase();
+        
+        // sentence-transformers 模型使用 feature-extraction
+        if (lowerModelId.includes('sentence-transformer') || 
+            lowerModelId.includes('all-minilm') ||
+            lowerModelId.includes('all-mpnet') ||
+            lowerModelId.includes('paraphrase') ||
+            lowerModelId.includes('msmarco') ||
+            lowerModelId.includes('multi-qa')) {
+            return 'feature-extraction';
+        }
+        
+        // BERT/RoBERTa 等编码器模型
+        if (lowerModelId.includes('bert') && !lowerModelId.includes('gpt')) {
+            // 检查是否是分类模型
+            if (lowerModelId.includes('classification') || 
+                lowerModelId.includes('sentiment') ||
+                lowerModelId.includes('ner') ||
+                lowerModelId.includes('qa')) {
+                return 'text-classification';
+            }
+            return 'feature-extraction';
+        }
+        
+        // T5/FLAN 等 seq2seq 模型
+        if (lowerModelId.includes('t5') || 
+            lowerModelId.includes('flan') ||
+            lowerModelId.includes('bart') ||
+            lowerModelId.includes('pegasus')) {
+            return 'text2text-generation';
+        }
+        
+        // 问答模型
+        if (lowerModelId.includes('qa') || lowerModelId.includes('question-answering')) {
+            return 'question-answering';
+        }
+        
+        // 翻译模型
+        if (lowerModelId.includes('translation') || lowerModelId.includes('opus-mt')) {
+            return 'translation';
+        }
+        
+        // 摘要模型
+        if (lowerModelId.includes('summarization') || lowerModelId.includes('summary')) {
+            return 'summarization';
+        }
+        
+        // 默认使用 text-generation（适用于 GPT, Llama, Qwen 等）
+        return 'text-generation';
+    }
+
+    /**
      * 加载 WebLLM 模型（@xenova/transformers）
      * @returns {Promise<Object>} 模型对象
      */
@@ -192,10 +252,14 @@ var HFModelManager = (function () {
             
             console.log('[HFModelManager] Loading model:', config.modelId);
             
+            // 根据模型 ID 推断任务类型
+            var taskType = inferPipelineTask(config.modelId);
+            console.log('[HFModelManager] 推断的任务类型:', taskType);
+            
             // 尝试加载模型，如果失败则提供更友好的错误信息
             let model;
             try {
-                model = await pipeline('text-generation', config.modelId, {
+                model = await pipeline(taskType, config.modelId, {
                     device: 'webgpu', // 优先使用 WebGPU
                     dtype: 'q8', // 量化以节省内存
                 });
@@ -203,7 +267,7 @@ var HFModelManager = (function () {
                 // 如果 WebGPU 失败，尝试使用 CPU
                 console.warn('[HFModelManager] WebGPU failed, trying CPU:', error);
                 try {
-                    model = await pipeline('text-generation', config.modelId, {
+                    model = await pipeline(taskType, config.modelId, {
                         device: 'cpu',
                     });
                 } catch (cpuError) {
@@ -264,6 +328,7 @@ var HFModelManager = (function () {
                                     modelState.loaded = true;
                                     modelState.loading = false;
                                     modelState.error = null;
+                                    modelState.pipelineTask = taskType;
                                     console.log('[HFModelManager] WebLLM model loaded successfully after auto-download');
                                     return model;
                                 } catch (downloadError) {
@@ -321,8 +386,9 @@ var HFModelManager = (function () {
             modelState.loaded = true;
             modelState.loading = false;
             modelState.error = null;
+            modelState.pipelineTask = taskType;
 
-            console.log('[HFModelManager] WebLLM model loaded successfully');
+            console.log('[HFModelManager] WebLLM model loaded successfully, task:', taskType);
             return model;
         } catch (error) {
             console.error('[HFModelManager] Failed to load WebLLM:', error);
@@ -602,7 +668,7 @@ var HFModelManager = (function () {
      * 生成文本（统一接口）
      * @param {string} prompt 提示词
      * @param {Object} options 选项
-     * @returns {Promise<string>} 生成的文本
+     * @returns {Promise<string>} 生成的文本或嵌入结果描述
      */
     async function generate(prompt, options) {
         options = options || {};
@@ -617,7 +683,41 @@ var HFModelManager = (function () {
                 const response = await modelState.session.prompt(prompt);
                 return response || '';
             } else if (modelState.type === 'webllm') {
-                // 使用 WebLLM
+                // 根据 pipeline 任务类型使用不同的推理逻辑
+                const task = modelState.pipelineTask || 'text-generation';
+                
+                if (task === 'feature-extraction') {
+                    // 嵌入模型：返回向量信息
+                    const result = await modelState.model(prompt, { pooling: 'mean', normalize: true });
+                    if (result && result.data) {
+                        var dims = result.dims || [result.data.length];
+                        return '✓ 嵌入生成成功\n维度: ' + dims.join('x') + '\n前5个值: [' + 
+                               Array.from(result.data).slice(0, 5).map(v => v.toFixed(4)).join(', ') + ', ...]';
+                    }
+                    return '嵌入生成完成（无数据返回）';
+                }
+                
+                if (task === 'text-classification') {
+                    // 分类模型
+                    const result = await modelState.model(prompt);
+                    if (Array.isArray(result) && result.length > 0) {
+                        return '分类结果: ' + result[0].label + ' (置信度: ' + (result[0].score * 100).toFixed(1) + '%)';
+                    }
+                    return JSON.stringify(result);
+                }
+                
+                if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
+                    // Seq2Seq 模型
+                    const result = await modelState.model(prompt, {
+                        max_new_tokens: options.maxTokens || 256,
+                    });
+                    if (Array.isArray(result) && result.length > 0) {
+                        return result[0].generated_text || result[0].translation_text || result[0].summary_text || '';
+                    }
+                    return '';
+                }
+                
+                // 默认：text-generation
                 const result = await modelState.model(prompt, {
                     max_new_tokens: options.maxTokens || 512,
                     temperature: options.temperature || 0.7,
@@ -633,6 +733,29 @@ var HFModelManager = (function () {
             }
         } catch (error) {
             console.error('[HFModelManager] Generation failed:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 获取文本嵌入向量
+     * @param {string} text 输入文本
+     * @returns {Promise<Float32Array>} 嵌入向量
+     */
+    async function getEmbedding(text) {
+        if (!modelState.loaded) {
+            await loadModel();
+        }
+        
+        if (modelState.type !== 'webllm' || modelState.pipelineTask !== 'feature-extraction') {
+            throw new Error('当前模型不支持嵌入提取，请选择 sentence-transformers 类型的模型');
+        }
+        
+        try {
+            const result = await modelState.model(text, { pooling: 'mean', normalize: true });
+            return result.data;
+        } catch (error) {
+            console.error('[HFModelManager] Embedding failed:', error);
             throw error;
         }
     }
@@ -718,6 +841,7 @@ var HFModelManager = (function () {
         modelState.loaded = false;
         modelState.loading = false;
         modelState.error = null;
+        modelState.pipelineTask = null;
 
         console.log('[HFModelManager] Model unloaded');
     }
@@ -729,9 +853,11 @@ var HFModelManager = (function () {
         loadModel: loadModel,
         generate: generate,
         generateStream: generateStream,
+        getEmbedding: getEmbedding,
         getState: getState,
         isLoaded: isLoaded,
         unload: unload,
+        inferPipelineTask: inferPipelineTask,
     };
 
 })();

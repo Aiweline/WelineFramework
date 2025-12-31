@@ -228,8 +228,9 @@ trait SqlTrait
                     $field = '`' . str_replace('.', '`.`', $field) . '`';
                 }
                 if (str_contains($field, '``')) {
-                    return str_replace('``', '`', $field);
+                    $field = str_replace('``', '`', $field);
                 }
+                $field = str_replace('`*`', '*', $field);
                 return $field;
             }
             $field = preg_replace('/\s+/', ' ', $field);
