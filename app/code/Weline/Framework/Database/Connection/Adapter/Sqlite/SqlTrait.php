@@ -197,6 +197,9 @@ trait SqlTrait
 //        }
 
 
+        // 转换 TRUNCATE 语句，支持带反引号、双引号和不带引号的表名
+        $mysqlSql = preg_replace('/TRUNCATE\s+TABLE\s+[`"]?(\w+)[`"]?/i', 'DELETE FROM "$1"', $mysqlSql);
+
         $statements = Tool::extract_sql_statements($mysqlSql);
         $convertedStatements = [];
 
@@ -240,12 +243,6 @@ trait SqlTrait
             $statement = preg_replace('/CONSTRAINT\s+`?(\w+)`?\s+FOREIGN\s+KEY/i', 'FOREIGN KEY', $statement);
             $statement = preg_replace('/REFERENCES\s+`?(\w+)`?\s*\([^)]+\)\s*(ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?/i',
                 'REFERENCES $1 $2', $statement);
-
-            // 转换 TRUNCATE 语句，支持带反引号和不带反引号的表名，并保持反引号
-            if (preg_match('/^TRUNCATE\s+TABLE\s+`?(\w+)`?/i', $statement, $matches)) {
-                // 将 TRUNCATE TABLE `menu` 或 TRUNCATE TABLE menu 转换为 DELETE FROM `menu`
-                $statement = 'DELETE FROM `' . $matches[1] . '`';
-            }
 
             // 转换 ORDER BY 中的关键字 order
             $statement = preg_replace('/ORDER\s+BY\s+(order)\b/i', 'ORDER BY `$1`', $statement);
@@ -307,17 +304,6 @@ trait SqlTrait
         // 处理字符串值中的单引号转义
 //        $result = str_replace("\'", "\''", $result);
         $sql = str_replace("\\'", "''", $result);
-        if (str_contains($sql, 'truncate')) {
-            $truncate_check_sqls = explode($sql, ';');
-            foreach ($truncate_check_sqls as $truncate_check_sql_key => $truncate_check_sql) {
-                if (str_contains($truncate_check_sql, 'truncate')) {
-                    # 修改成sqlite支持的delete形式
-                    $sql = str_replace('truncate', ' delete from ', $sql);
-                    $truncate_check_sqls[$truncate_check_sql_key] = $sql;
-                }
-            }
-            $sql = implode(';', $truncate_check_sqls);
-        }
         if (str_contains($sql, 'curdate()-1')) {
             $sql = str_replace('curdate()-1', '\'now\', \'-1 day\'', $sql);
         }

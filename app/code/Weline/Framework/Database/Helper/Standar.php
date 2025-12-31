@@ -274,8 +274,8 @@ class Standar
 
     public static function getIndexName(string $table, string $index): string
     {
-        // 处理表名
-        $table = str_replace('`', '', $table);
+        // 处理表名：去除反引号和双引号
+        $table = str_replace(['`', '"'], '', $table);
         if (str_contains($table, '.')) {
             list($schema, $table) = explode('.', $table);
         } else {

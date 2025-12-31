@@ -31,6 +31,16 @@ class Create extends AbstractTable implements CreateInterface
 
     public function addColumn(string $field_name, string $type, int|string|null $length, string $options, string $comment): CreateInterface
     {
+        // SQLite 不支持 ON UPDATE 语法，需要移除
+        if (str_contains(strtolower($options), 'on update')) {
+            $options = preg_replace('/on update\s+[^\s,)]+/i', '', $options);
+        }
+
+        // SQLite 不支持 unsigned，需要移除
+        if (str_contains(strtolower($options), 'unsigned')) {
+            $options = str_ireplace('unsigned', '', $options);
+        }
+
         if (str_contains(strtolower($options), 'auto_increment')) {
             $options = str_replace('auto_increment', '', strtolower($options));
             if (!str_contains(strtolower($options), 'primary key')) {
@@ -84,6 +94,7 @@ class Create extends AbstractTable implements CreateInterface
             case self::index_type_FULLTEXT:
             case self::index_type_SPATIAL:
             case self::index_type_KEY:
+            case 'INDEX':
                 $this->index_outs[] = [
                     'name' => $name,
                     'column' => $column_str,
@@ -169,34 +180,53 @@ class Create extends AbstractTable implements CreateInterface
         if ($this->constraints) {
             $foreign_key_str .= ',';
         }
-        # 没有additional_for_sqlite时默认配置default charset utf8mb4 collate utf8mb4_general_ci
+        # 没有additional_for_sqlite时默认配置为空
         if (!empty($this->additional_for_sqlite)) {
             $this->additional_for_sqlite = str_replace(';', '', $this->additional_for_sqlite);
-            $this->additional_for_sqlite .= ';';
+            $this->additional_for_sqlite = ' ' . trim($this->additional_for_sqlite);
         } else {
-            $this->additional_for_sqlite = ";";
+            $this->additional_for_sqlite = "";
         }
 
         # 外置索引
         $index_outs = '';
         if (!empty($this->index_outs)) {
             foreach ($this->index_outs as $key => $value) {
-                $index_outs .= "CREATE INDEX {$value['name']} ON {$this->table} ({$value['column']}) {$value['method']};\n";
+                // 确保索引名被引号包裹，避免特殊字符导致语法错误
+                $index_outs .= "CREATE INDEX IF NOT EXISTS `{$value['name']}` ON {$this->table} ({$value['column']}) {$value['method']};\n";
             }
         }
 
+        // 检查表是否已存在
+        $tableExists = $this->getConnector()->tableExist($this->table);
+        if ($tableExists) {
+            // 表已存在，直接执行外置索引（如果有），避免重复创建表
+            if (!empty($index_outs)) {
+                try {
+                    $this->query($index_outs)->fetch();
+                } catch (\Exception $e) {
+                    // 忽略索引已存在的错误
+                }
+            }
+            return true;
+        }
+
         $sql = <<<createSQL
-CREATE TABLE {$this->table}(
+CREATE TABLE IF NOT EXISTS {$this->table}(
  {$fields_str}
  {$indexes_str}
  {$foreign_key_str}
  {$this->constraints}                 
-) {$this->additional_for_sqlite};
+){$this->additional_for_sqlite};
 $index_outs
 createSQL;
         try {
             $result = $this->query($sql)->fetch();
         } catch (\Exception $exception) {
+            // 如果错误是表已存在，忽略该错误（可能是并发创建导致的）
+            if (str_contains($exception->getMessage(), 'already exists')) {
+                return true;
+            }
             throw new Exception(__('创建表失败，' . PHP_EOL . PHP_EOL . 'SQL：%{1} ' . PHP_EOL . PHP_EOL . 'ERROR：%{2}', [$sql, $exception->getMessage()]));
         }
         return $result;
