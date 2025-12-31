@@ -39,15 +39,10 @@ var AutoLeadAgentTaskManager = (function () {
         // 首先检测中断任务（优先级最高）
         checkAndMarkInterruptedTasks();
         
-        // 然后加载任务列表
+        // 然后加载任务列表并在首次加载完成后决定是否展示引导/继续任务弹窗
         loadTaskList().then(function() {
             maybeShowGuideModal();
         });
-        
-        // 已使用SSE连接，不需要轮询
-        // 只在初始化时执行一次
-        checkAndMarkInterruptedTasks();
-        loadTaskList();
         
         // 初始化TaskRunner
         if (typeof AutoLeadAgentTaskRunner !== 'undefined') {
@@ -1099,6 +1094,10 @@ var AutoLeadAgentTaskManager = (function () {
                     // 显示任务面板并启动AI模型执行任务
                     showTaskPanel();
                     runTaskWithModel(taskId, storeId, sourceTypeProfile || storeProfile);
+                    // 短暂延迟后刷新任务列表，确保状态与最新任务保持一致
+                    setTimeout(function () {
+                        loadTaskList();
+                    }, 1500);
                 } else {
                     alert(result.message || '任务创建成功，但无法获取任务ID');
                     window.location.reload();
@@ -1238,6 +1237,9 @@ var AutoLeadAgentTaskManager = (function () {
                 // 显示任务面板并启动AI模型执行任务
                 showTaskPanel();
                 runTaskWithModel(taskId, storeId, sourceTypeProfile || storeProfile);
+                
+                // 刷新任务列表，立即反映任务状态的变化（如从 pending → running）
+                loadTaskList();
             } else {
                 alert((result && result.message) ? result.message : '继续任务失败');
             }
