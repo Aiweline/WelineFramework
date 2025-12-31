@@ -78,6 +78,25 @@ if ($previewThemeId && $previewThemeArea === 'backend') {
 <?php if (DEV): ?>
     <!--        <script src="@static(Weline_Backend::/backend/lib/jquery/3.6.0/jquery.map)"></script>-->
 <?php endif; ?>
+<!-- Live Preview postMessage listener for Visual Editor -->
+<script data-no-extract="true">
+(function() {
+    'use strict';
+    // 监听来自Visual Editor的postMessage (Live Preview支持)
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
+            var cssVars = event.data.cssVars || {};
+            var root = document.documentElement;
+            for (var varName in cssVars) {
+                if (cssVars.hasOwnProperty(varName)) {
+                    root.style.setProperty(varName, cssVars[varName]);
+                }
+            }
+            console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
+        }
+    });
+})();
+</script>
 <!--加载配置页头-->
 <?php
 echo $this->getHeader()->getHtml();
