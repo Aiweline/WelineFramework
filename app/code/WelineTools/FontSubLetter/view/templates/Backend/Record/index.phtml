@@ -1,0 +1,159 @@
+<?php
+/** @var \WelineTools\FontSubLetter\Model\FontRecord[] $records */
+/** @var string $search */
+/** @var string $status */
+/** @var array $statusOptions */
+?>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><?= __('字体记录管理') ?></h3>
+                    <div class="card-tools">
+                        <a href="<?= $this->getUrl('fontsubletter/frontend/index/index') ?>" class="btn btn-primary btn-sm" target="_blank">
+                            <i class="fas fa-plus"></i> <?= __('前往前端上传') ?>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 搜索表单 -->
+                    <form method="GET" class="mb-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" 
+                                           placeholder="<?= __('搜索文件名...') ?>">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="submit">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-control" name="status">
+                                    <option value=""><?= __('所有状态') ?></option>
+                                    <?php foreach ($statusOptions as $value => $label): ?>
+                                        <option value="<?= $value ?>" <?= $status === $value ? 'selected' : '' ?>>
+                                            <?= $label ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- 记录列表 -->
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th><?= __('文件名') ?></th>
+                                    <th><?= __('格式') ?></th>
+                                    <th><?= __('大小') ?></th>
+                                    <th><?= __('状态') ?></th>
+                                    <th><?= __('创建时间') ?></th>
+                                    <th><?= __('操作') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($records)): ?>
+                                    <tr>
+                                        <td colspan="7" class="text-center"><?= __('暂无数据') ?></td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($records as $record): ?>
+                                        <tr>
+                                            <td><?= $record->getId() ?></td>
+                                            <td>
+                                                <strong><?= htmlspecialchars($record->getData('original_filename')) ?></strong>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-info"><?= strtoupper($record->getData('font_format')) ?></span>
+                                            </td>
+                                            <td><?= $record->getFileSizeFormatted() ?></td>
+                                            <td>
+                                                <?php
+                                                $statusClass = 'badge badge-secondary';
+                                                switch ($record->getData('status')) {
+                                                    case 'uploaded':
+                                                        $statusClass = 'badge badge-primary';
+                                                        break;
+                                                    case 'processing':
+                                                        $statusClass = 'badge badge-warning';
+                                                        break;
+                                                    case 'completed':
+                                                        $statusClass = 'badge badge-success';
+                                                        break;
+                                                    case 'failed':
+                                                        $statusClass = 'badge badge-danger';
+                                                        break;
+                                                }
+                                                ?>
+                                                <span class="<?= $statusClass ?>"><?= $record->getStatusText() ?></span>
+                                            </td>
+                                            <td><?= date('Y-m-d H:i:s', $record->getData('created_at')) ?></td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <a href="<?= $this->getUrl('fontsubletter/backend/record/view', ['id' => $record->getId()]) ?>" 
+                                                       class="btn btn-info" title="<?= __('查看详情') ?>">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <?php if ($record->getData('processed_path')): ?>
+                                                        <a href="<?= $this->getUrl('fontsubletter/frontend/download', ['record_id' => $record->getId()]) ?>" 
+                                                           class="btn btn-success" title="<?= __('下载子集字体') ?>" target="_blank">
+                                                            <i class="fas fa-download"></i>
+                                                        </a>
+                                                    <?php endif; ?>
+                                                    <button type="button" class="btn btn-danger" 
+                                                            onclick="deleteRecord(<?= $record->getId() ?>)" 
+                                                            title="<?= __('删除') ?>">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <?php if (isset($records['pagination'])): ?>
+                        <div class="d-flex justify-content-center">
+                            <?= $records['pagination'] ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteRecord(id) {
+    if (confirm('<?= __('确定要删除这条记录吗？') ?>')) {
+        fetch('<?= $this->getUrl("fontsubletter/backend/record/delete") ?>?id=' + id, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.code === 200) {
+                alert(data.msg);
+                location.reload();
+            } else {
+                alert('<?= __('删除失败') ?>: ' + data.msg);
+            }
+        })
+        .catch(error => {
+            alert('<?= __('删除失败') ?>: ' + error.message);
+        });
+    }
+}
+</script>

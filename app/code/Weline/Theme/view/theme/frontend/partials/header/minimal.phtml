@@ -23,13 +23,12 @@ $navItems = $this->getData("meta.navItems") ?? [];
 $class = $this->getData("meta.class") ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 ?>
 <header class="weline-header minimal-header <?= htmlspecialchars($class) ?>">
     <div class="header-container">
         <!-- Logo -->
         <div class="header-logo">
-            <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
+            <a href="/" title="<?= __('首页') ?>">
                 <?php if ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
                 <?php else: ?>
