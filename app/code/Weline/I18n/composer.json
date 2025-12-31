@@ -5,8 +5,7 @@
   "type": "weline-module",
   "require": {
     "php": "^8.0",
-    "symfony/intl": "^5.2",
-    "rinvex/countries": "^8"
+    "symfony/intl": "^5.2"
   },
   "authors": [
     {
