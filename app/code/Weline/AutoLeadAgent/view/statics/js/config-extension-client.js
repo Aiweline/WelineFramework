@@ -17,6 +17,8 @@ var ConfigExtensionClient = (function () {
             extensionReady = true;
             extensionVersion = event.data.version;
             console.log('[ExtensionClient] 扩展已就绪，版本:', extensionVersion);
+            // 触发自定义事件，通知其他组件
+            window.dispatchEvent(new CustomEvent('autoleadagent-ready', { detail: event.data }));
         }
     });
 
@@ -157,7 +159,8 @@ var ConfigExtensionClient = (function () {
     return {
         sendMessage: sendMessage,
         isReady: function() { return extensionReady; },
-        getVersion: function() { return extensionVersion; }
+        getVersion: function() { return extensionVersion; },
+        getExtensionId: function() { return detectExtensionId(); }
     };
 })();
 
