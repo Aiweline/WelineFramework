@@ -433,21 +433,27 @@ abstract class AbstractModel extends DataObject
     public function getQuery(bool $keep_condition = true): QueryInterface
     {
         $query = null;
+        // 构建表名，如果设置了别名则一起传入（table() 方法支持 "table_name alias" 格式）
+        $tableName = $this->getOriginTableName();
+        if ($this->alias) {
+            $tableName .= ' ' . $this->alias;
+        }
+        
         # 如果绑定了查询
         if ($this->_bind_query) {
             if (!$keep_condition) {
                 $this->_bind_query->clearQuery();
             }
-            $query = $this->_bind_query->table($this->getOriginTableName())->identity($this->_primary_key);
+            $query = $this->_bind_query->table($tableName)->identity($this->_primary_key);
         } else {
             if ($this->current_query) {
                 if (!$keep_condition) {
                     $this->current_query->clearQuery();
                 }
-                $query = $this->current_query->table($this->getOriginTableName())->identity($this->_primary_key);
+                $query = $this->current_query->table($tableName)->identity($this->_primary_key);
             } else {
                 # 区分是否保持查询
-                $this->current_query = clone $this->getConnection()->getConnector()->clearQuery()->table($this->getOriginTableName())->identity($this->_primary_key);
+                $this->current_query = clone $this->getConnection()->getConnector()->clearQuery()->table($tableName)->identity($this->_primary_key);
                 $query = $this->current_query;
             }
         }
@@ -1649,11 +1655,9 @@ PAGINATION;
                 $model_fields .= ',' . (implode(',', $this->_bind_model_fields));
             }
 
-            $query->fields(($query->fields !== '*') ? $query->fields . ',' . $model_fields : $model_fields);
             $query->fields($query->fields . ',' . $model_fields);
         } else {
             $this->bindModelFields(explode(',', $fields), $alias);
-            //            $query->fields(($query->fields !== '*') ? $query->fields . ',' . $fields : $fields);
             $query->fields($query->fields . ',' . $fields);
         }
         $query->join($model_table . ($alias ? " `{$alias}`" : ''), $condition, $type);

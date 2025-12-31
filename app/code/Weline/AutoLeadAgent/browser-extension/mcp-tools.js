@@ -3,6 +3,11 @@
  * 在扩展中注册工具
  */
 
+// 防止重复加载导致的 SyntaxError
+if (typeof MCP_TOOLS_SCHEMA !== 'undefined' && typeof mcpTools !== 'undefined') {
+    console.log('[MCP Tools] Already loaded, skipping...');
+} else {
+
 // MCP 工具 Schema 定义
 // Use var to make it available in global scope for Service Worker
 var MCP_TOOLS_SCHEMA = {
@@ -463,3 +468,4 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = { MCP_TOOLS_SCHEMA, mcpTools };
 }
 
+} // End of else block to prevent duplicate loading

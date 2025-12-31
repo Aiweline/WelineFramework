@@ -22,6 +22,18 @@ var LocalFileStorage = (function () {
     const METADATA_KEY = 'autoleadagent_model_metadata';
 
     /**
+     * 清理模型ID，使其可以作为文件系统目录名
+     * @param {string} modelId 原始模型ID（如 "sentence-transformers/all-MiniLM-L6-v2"）
+     * @returns {string} 清理后的目录名（如 "sentence-transformers_all-MiniLM-L6-v2"）
+     */
+    function sanitizeModelIdForPath(modelId) {
+        if (!modelId) return '';
+        // 替换文件系统不允许的字符：/ \ : * ? " < > |
+        // 将 / 替换为 _，其他非法字符也替换为 _
+        return modelId.replace(/[\/\\:*?"<>|]/g, '_');
+    }
+
+    /**
      * 检查是否支持 File System Access API
      */
     function supportsFileSystemAccess() {
@@ -204,9 +216,11 @@ var LocalFileStorage = (function () {
             }
 
             // 在 models 目录中创建模型子目录
-            const modelDirHandle = await modelsDirHandle.getDirectoryHandle(modelId, { create: true });
+            // 清理模型ID，将特殊字符（如 /）替换为安全的字符
+            const sanitizedModelId = sanitizeModelIdForPath(modelId);
+            const modelDirHandle = await modelsDirHandle.getDirectoryHandle(sanitizedModelId, { create: true });
             
-            // 缓存目录句柄
+            // 缓存目录句柄（使用原始 modelId 作为键，以便后续查找）
             modelDirectories.set(modelId, modelDirHandle);
             
             // 保存目录句柄（使用 Storage API）
@@ -231,7 +245,7 @@ var LocalFileStorage = (function () {
     /**
      * 保存模型文件块（用于流式下载）
      * @param {string} modelId 模型ID
-     * @param {string} filename 文件名
+     * @param {string} filename 文件名（可能包含子目录，如 "1_Pooling/config.json"）
      * @param {ArrayBuffer} data 数据块
      * @param {number} offset 偏移量
      * @param {boolean} isComplete 是否是最后一块
@@ -245,8 +259,27 @@ var LocalFileStorage = (function () {
                 if (!supportsFileSystemAccess()) {
                     throw new Error('当前浏览器不支持流式写入文件系统');
                 }
-                const directoryHandle = await getModelDirectory(modelId, false);
-                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                
+                // 获取模型目录句柄（使用 true 以允许在需要时请求权限）
+                const modelDirHandle = await getModelDirectory(modelId, true);
+                
+                // 处理带子目录的文件名（如 "1_Pooling/config.json"）
+                let targetDirHandle = modelDirHandle;
+                let actualFilename = filename;
+                
+                if (filename.includes('/')) {
+                    const parts = filename.split('/');
+                    actualFilename = parts.pop(); // 最后一个是文件名
+                    
+                    // 递归创建子目录
+                    for (const dirName of parts) {
+                        if (dirName) {
+                            targetDirHandle = await targetDirHandle.getDirectoryHandle(dirName, { create: true });
+                        }
+                    }
+                }
+                
+                const fileHandle = await targetDirHandle.getFileHandle(actualFilename, { create: true });
                 writable = await fileHandle.createWritable();
                 activeWritables.set(cacheKey, writable);
                 console.log('[LocalFileStorage] 创建文件写入流:', filename);
@@ -736,6 +769,78 @@ var LocalFileStorage = (function () {
         
         return models;
     }
+    
+    /**
+     * 检查模型是否已下载（通过元数据快速检查，不需要文件系统权限）
+     * @param {string} modelId 模型ID
+     * @returns {Object} 检查结果 { downloaded: boolean, fileCount: number, totalSize: number }
+     */
+    function checkModelDownloadedByMetadata(modelId) {
+        if (!modelId) {
+            return { downloaded: false, fileCount: 0, totalSize: 0 };
+        }
+        
+        const metadata = getModelMetadata();
+        // 尝试原始 modelId 和清理后的 modelId
+        const sanitizedId = sanitizeModelIdForPath(modelId);
+        const modelData = metadata[modelId] || metadata[sanitizedId];
+        
+        if (!modelData || !modelData.files || modelData.files.length === 0) {
+            return { downloaded: false, fileCount: 0, totalSize: 0 };
+        }
+        
+        // 检查是否有关键文件（config.json 或 model.safetensors/pytorch_model.bin）
+        const hasConfigFile = modelData.files.some(f => 
+            f.filename === 'config.json' || 
+            f.filename.endsWith('/config.json')
+        );
+        const hasModelFile = modelData.files.some(f => 
+            f.filename.includes('.safetensors') || 
+            f.filename.includes('.bin') ||
+            f.filename.includes('.onnx')
+        );
+        
+        return {
+            downloaded: hasConfigFile && hasModelFile,
+            fileCount: modelData.fileCount || modelData.files.length,
+            totalSize: modelData.totalSize || 0,
+            files: modelData.files
+        };
+    }
+    
+    /**
+     * 保存选择的目录路径（用于提示用户下次选择同一目录）
+     * @param {string} directoryPath 目录路径描述
+     */
+    function saveSelectedDirectoryPath(directoryPath) {
+        try {
+            localStorage.setItem('autoleadagent_model_directory_path', directoryPath);
+        } catch (e) {
+            console.warn('[LocalFileStorage] 保存目录路径失败:', e);
+        }
+    }
+    
+    /**
+     * 获取保存的目录路径
+     * @returns {string|null} 目录路径
+     */
+    function getSelectedDirectoryPath() {
+        try {
+            return localStorage.getItem('autoleadagent_model_directory_path');
+        } catch (e) {
+            return null;
+        }
+    }
+    
+    /**
+     * 检查是否有有效的目录权限（用于判断是否需要重新选择目录）
+     * @param {string} modelId 模型ID
+     * @returns {boolean} 是否有权限
+     */
+    function hasValidDirectoryPermission(modelId) {
+        const sanitizedId = sanitizeModelIdForPath(modelId);
+        return modelDirectories.has(modelId) || modelDirectories.has(sanitizedId);
+    }
 
     /**
      * 预先请求文件系统权限（必须在用户手势上下文中调用）
@@ -764,7 +869,12 @@ var LocalFileStorage = (function () {
         collectModelFiles: collectModelFiles,
         updateModelMetadata: updateModelMetadata,
         getFileSize: getFileSize,
-        checkFileIntegrity: checkFileIntegrity
+        checkFileIntegrity: checkFileIntegrity,
+        checkModelDownloadedByMetadata: checkModelDownloadedByMetadata,
+        saveSelectedDirectoryPath: saveSelectedDirectoryPath,
+        getSelectedDirectoryPath: getSelectedDirectoryPath,
+        hasValidDirectoryPermission: hasValidDirectoryPermission,
+        sanitizeModelIdForPath: sanitizeModelIdForPath
     };
 
 })();
