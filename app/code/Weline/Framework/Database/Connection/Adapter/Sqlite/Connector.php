@@ -49,7 +49,7 @@ final class Connector extends Query implements ConnectorInterface
 
     static function processName(string $name): string
     {
-        return str_replace('`', '', $name);
+        return str_replace(['`', '"'], '', $name);
     }
 
     public function create(): static
