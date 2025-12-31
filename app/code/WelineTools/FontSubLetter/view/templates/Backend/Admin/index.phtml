@@ -1,0 +1,405 @@
+<?php
+/**
+ * 字体子集管理后台主页
+ */
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字体子集管理后台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stats-card h3 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .stats-card p {
+            margin-bottom: 0;
+            opacity: 0.9;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .table-responsive {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .search-form {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .format-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <!-- 页面标题 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-fonts"></i> 字体子集管理后台
+                </h1>
+                <p class="text-muted">查看字体上传记录和字符提取统计</p>
+            </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3><?= number_format($stats['total_records']) ?></h3>
+                    <p><i class="bi bi-file-earmark-text"></i> 总记录数</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <h3><?= number_format($stats['today_records']) ?></h3>
+                    <p><i class="bi bi-calendar-day"></i> 今日上传</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <h3><?= number_format($stats['week_records']) ?></h3>
+                    <p><i class="bi bi-calendar-week"></i> 本周上传</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <h3><?= $this->formatFileSize($stats['total_file_size']) ?></h3>
+                    <p><i class="bi bi-hdd"></i> 总文件大小</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5><i class="bi bi-graph-up"></i> 每日上传趋势</h5>
+                    <canvas id="dailyChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5><i class="bi bi-pie-chart"></i> 字体格式分布</h5>
+                    <canvas id="formatChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 搜索表单 -->
+        <div class="search-form">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">文件名搜索</label>
+                    <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="输入文件名...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">状态</label>
+                    <select class="form-select" name="status">
+                        <option value="">全部状态</option>
+                        <?php foreach ($statusOptions as $value => $label): ?>
+                            <option value="<?= $value ?>" <?= $status === $value ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">格式</label>
+                    <select class="form-select" name="format">
+                        <option value="">全部格式</option>
+                        <?php foreach ($formatOptions as $value => $label): ?>
+                            <option value="<?= $value ?>" <?= $format === $value ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">日期范围</label>
+                    <input type="text" class="form-control" id="dateRange" name="date_range" value="<?= htmlspecialchars($dateRange) ?>" placeholder="选择日期范围...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> 搜索
+                        </button>
+                        <a href="?" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> 重置
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="btn-group" role="group">
+                    <a href="<?= $this->getUrl('fontsubletter/backend/admin/charStats') ?>" class="btn btn-info">
+                        <i class="bi bi-bar-chart"></i> 字符统计
+                    </a>
+                    <a href="<?= $this->getUrl('fontsubletter/backend/admin/userStats') ?>" class="btn btn-warning">
+                        <i class="bi bi-people"></i> 用户统计
+                    </a>
+                    <a href="<?= $this->getUrl('fontsubletter/backend/admin/export') ?>" class="btn btn-success">
+                        <i class="bi bi-download"></i> 导出数据
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>用户ID</th>
+                        <th>文件名</th>
+                        <th>格式</th>
+                        <th>大小</th>
+                        <th>状态</th>
+                        <th>提取字符</th>
+                        <th>自定义字符</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($records['items'])): ?>
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> 暂无数据
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($records['items'] as $record): ?>
+                            <tr>
+                                <td><?= $record['id'] ?></td>
+                                <td><?= $record['user_id'] ?></td>
+                                <td>
+                                    <div class="fw-bold"><?= htmlspecialchars($record['original_filename']) ?></div>
+                                    <?php if ($record['processed_filename']): ?>
+                                        <small class="text-muted"><?= htmlspecialchars($record['processed_filename']) ?></small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary format-badge"><?= strtoupper($record['font_format']) ?></span>
+                                </td>
+                                <td><?= $this->formatFileSize($record['file_size']) ?></td>
+                                <td>
+                                    <?php
+                                    $statusClass = match($record['status']) {
+                                        'completed' => 'bg-success',
+                                        'processing' => 'bg-warning',
+                                        'failed' => 'bg-danger',
+                                        default => 'bg-secondary'
+                                    };
+                                    ?>
+                                    <span class="badge <?= $statusClass ?> status-badge">
+                                        <?= $record->getStatusText() ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php
+                                    $extractedChars = json_decode($record['extracted_chars'], true) ?: [];
+                                    $extractedCount = count($extractedChars);
+                                    ?>
+                                    <span class="badge bg-info"><?= $extractedCount ?></span>
+                                    <?php if ($extractedCount > 0): ?>
+                                        <small class="text-muted d-block">
+                                            <?= htmlspecialchars(implode('', array_slice($extractedChars, 0, 10))) ?>
+                                            <?= $extractedCount > 10 ? '...' : '' ?>
+                                        </small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php
+                                    $customChars = json_decode($record['custom_chars'], true) ?: [];
+                                    $customCount = count($customChars);
+                                    ?>
+                                    <span class="badge bg-primary"><?= $customCount ?></span>
+                                    <?php if ($customCount > 0): ?>
+                                        <small class="text-muted d-block">
+                                            <?= htmlspecialchars(implode('', array_slice($customChars, 0, 10))) ?>
+                                            <?= $customCount > 10 ? '...' : '' ?>
+                                        </small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div><?= date('Y-m-d', $record['created_at']) ?></div>
+                                    <small class="text-muted"><?= date('H:i:s', $record['created_at']) ?></small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="<?= $this->getUrl('fontsubletter/backend/record/view', ['id' => $record['id']]) ?>" 
+                                           class="btn btn-outline-primary" title="查看详情">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <?php if ($record['processed_path']): ?>
+                                            <a href="<?= $this->getUrl('fontsubletter/backend/download/index', ['id' => $record['id']]) ?>" 
+                                               class="btn btn-outline-success" title="下载子集">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        <button type="button" class="btn btn-outline-danger" 
+                                                onclick="deleteRecord(<?= $record['id'] ?>)" title="删除">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        <?php if ($records['total_pages'] > 1): ?>
+            <nav aria-label="分页导航">
+                <ul class="pagination justify-content-center">
+                    <?php for ($i = 1; $i <= $records['total_pages']; $i++): ?>
+                        <li class="page-item <?= $i == $records['current_page'] ? 'active' : '' ?>">
+                            <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>&format=<?= urlencode($format) ?>&date_range=<?= urlencode($dateRange) ?>">
+                                <?= $i ?>
+                            </a>
+                        </li>
+                    <?php endfor; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+
+    <script>
+        // 初始化日期选择器
+        $('#dateRange').daterangepicker({
+            locale: {
+                format: 'YYYY-MM-DD',
+                applyLabel: '确定',
+                cancelLabel: '取消',
+                fromLabel: '从',
+                toLabel: '到',
+                customRangeLabel: '自定义',
+                daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+                monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
+            }
+        });
+
+        // 加载图表数据
+        function loadChartData() {
+            // 每日上传趋势图
+            fetch('<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "daily"]) ?>')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        const ctx = document.getElementById('dailyChart').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: data.data.labels,
+                                datasets: [{
+                                    label: '上传数量',
+                                    data: data.data.data,
+                                    borderColor: 'rgb(75, 192, 192)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    tension: 0.1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false
+                            }
+                        });
+                    }
+                });
+
+            // 格式分布图
+            fetch('<?= $this->getUrl("fontsubletter/backend/admin/getChartData", ["type" => "format"]) ?>')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        const ctx = document.getElementById('formatChart').getContext('2d');
+                        new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: data.data.labels,
+                                datasets: [{
+                                    data: data.data.data,
+                                    backgroundColor: [
+                                        '#FF6384',
+                                        '#36A2EB',
+                                        '#FFCE56',
+                                        '#4BC0C0'
+                                    ]
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false
+                            }
+                        });
+                    }
+                });
+        }
+
+        // 删除记录
+        function deleteRecord(id) {
+            if (confirm('确定要删除这条记录吗？')) {
+                fetch('<?= $this->getUrl("fontsubletter/backend/record/delete") ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'id=' + id
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        alert('删除成功');
+                        location.reload();
+                    } else {
+                        alert('删除失败: ' + data.msg);
+                    }
+                });
+            }
+        }
+
+        // 页面加载完成后初始化图表
+        document.addEventListener('DOMContentLoaded', function() {
+            loadChartData();
+        });
+    </script>
+</body>
+</html>
