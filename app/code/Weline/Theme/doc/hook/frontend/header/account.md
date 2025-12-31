@@ -27,20 +27,19 @@ use Weline\Customer\Session\CustomerSession;
 use Weline\Framework\Manager\ObjectManager;
 
 $session = ObjectManager::getInstance(CustomerSession::class);
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 $isLoggedIn = $session->isLogin();
 
 if ($isLoggedIn) {
     $customer = $session->getLoginUser();
     ?>
-    <a href="<?= $frontendUrl ?>customer/account/index" class="action-link">
+    <a href="/customer/account/index" class="action-link">
         <span class="action-line-1"><?= __('您好, %{1}', [$customer->getUsername()]) ?></span>
         <span class="action-line-2"><?= __('我的账户') ?></span>
     </a>
     <?php
 } else {
     ?>
-    <a href="<?= $frontendUrl ?>customer/account/login" class="action-link">
+    <a href="/customer/account/login" class="action-link">
         <span class="action-line-1"><?= __('您好, 登录') ?></span>
         <span class="action-line-2"><?= __('账户及心愿单') ?></span>
     </a>
@@ -48,6 +47,8 @@ if ($isLoggedIn) {
 }
 ?>
 ```
+
+**注意**：由于 Theme 模块的 head partial 已经设置了 `<base>` 标签，所有相对路径都会基于 frontend 基础 URL。因此可以直接使用相对路径（如 `/customer/account/index`），无需使用 `$frontendUrl` 变量。
 
 ## CSS 类说明
 

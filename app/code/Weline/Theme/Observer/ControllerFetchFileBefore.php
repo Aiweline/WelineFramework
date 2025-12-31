@@ -160,6 +160,11 @@ class ControllerFetchFileBefore implements ObserverInterface
             ];
             $template->setData('theme', $themeData);
             
+            // 性能极客模式：在事件中统一读取所有CSS颜色变量，转换为colors数组，供所有模板直接使用
+            // 避免每个模板都重复读取和处理，提升性能
+            $colors = self::loadThemeColors($area, $scope, $theme);
+            $template->setData('colors', $colors);
+            
             // 构建布局模板路径
             $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
             // 检查布局模板是否存在（支持主题继承）
@@ -269,9 +274,110 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'theme' => $theme, // 主题对象本身，供模板直接使用
             ];
             $template->setData('theme', $themeData);
+            
+            // 性能极客模式：在事件中统一读取所有CSS颜色变量，转换为colors数组，供所有模板直接使用
+            $colors = self::loadThemeColors($area, $scope, $theme);
+            $template->setData('colors', $colors);
+            
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    /**
+     * 加载主题颜色变量并转换为colors数组（性能极客模式）
+     * 在事件中统一处理，避免每个模板都重复读取
+     * 
+     * @param string $area 区域（frontend/backend）
+     * @param string $scope 作用域
+     * @param WelineTheme|null $theme 主题对象
+     * @return array colors数组，格式：['primary' => '#ff9900', 'bgTeriary' => '#e7e7e7', ...]
+     */
+    private static function loadThemeColors(string $area, string $scope, ?WelineTheme $theme): array
+    {
+        $colors = [];
+        
+        try {
+            // 设置当前主题和区域（ThemeData会自动初始化）
+            if ($theme && $theme->getId()) {
+                ThemeData::setCurrentTheme($theme);
+            }
+            ThemeData::setCurrentArea($area);
+            
+            // 1. 从变量配置读取
+            $configList = ThemeData::getConfigList($area, 'variables', $scope);
+            foreach ($configList as $configKey => $configValue) {
+                // configKey格式: {variableFile}.{variableName}.value（getConfigList已移除variables前缀）
+                // 例如: colors.color-primary.value -> variableName = color-primary
+                if (preg_match('/^([^.]+)\.([^.]+)\.value$/', $configKey, $matches)) {
+                    $variableFile = $matches[1];
+                    $variableName = $matches[2];
+                    
+                    // 只处理颜色相关的变量（以color-开头）
+                    if (strpos($variableName, 'color-') === 0) {
+                        // 移除color-前缀，转换为驼峰命名
+                        // color-primary -> primary
+                        // color-bg-tertiary -> bgTeriary
+                        // color-text-primary -> textPrimary
+                        $colorKey = self::cssVarToCamelCase($variableName);
+                        
+                        // 处理配置值（可能是字符串或数组）
+                        $value = is_array($configValue) ? json_encode($configValue) : (string)$configValue;
+                        $colors[$colorKey] = $value;
+                    }
+                }
+            }
+            
+            // 2. 从色盘配置读取变量值（覆盖变量配置）
+            $colorConfig = ThemeData::getColorConfig($area, $scope);
+            if ($colorConfig) {
+                $paletteMeta = ThemeData::getMeta("theme.{$area}.colors.{$colorConfig}");
+                if ($paletteMeta && isset($paletteMeta['meta_data']['variables'])) {
+                    $paletteVars = $paletteMeta['meta_data']['variables'];
+                    foreach ($paletteVars as $varName => $varValue) {
+                        // 处理CSS变量名格式（可能是--color-primary或color-primary）
+                        $normalizedVarName = str_replace('--', '', $varName);
+                        if (strpos($normalizedVarName, 'color-') === 0) {
+                            $colorKey = self::cssVarToCamelCase($normalizedVarName);
+                            $colors[$colorKey] = (string)$varValue;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // 如果获取失败，返回空数组（模板中使用默认值）
+        }
+        
+        return $colors;
+    }
+    
+    /**
+     * 将CSS变量名转换为驼峰命名
+     * --color-primary -> primary
+     * --color-bg-tertiary -> bgTeriary
+     * --color-text-primary -> textPrimary
+     * 
+     * @param string $cssVarName CSS变量名（如color-primary或--color-primary）
+     * @return string 驼峰命名的键名
+     */
+    private static function cssVarToCamelCase(string $cssVarName): string
+    {
+        // 移除--前缀和color-前缀
+        $name = str_replace('--', '', $cssVarName);
+        if (strpos($name, 'color-') === 0) {
+            $name = substr($name, 6); // 移除color-前缀
+        }
+        
+        // 将连字符分隔的字符串转换为驼峰命名
+        // bg-tertiary -> bgTeriary
+        // text-primary -> textPrimary
+        $parts = explode('-', $name);
+        $camelCase = $parts[0]; // 第一部分保持小写
+        for ($i = 1; $i < count($parts); $i++) {
+            $camelCase .= ucfirst($parts[$i]);
+        }
+        
+        return $camelCase;
     }
 
 }

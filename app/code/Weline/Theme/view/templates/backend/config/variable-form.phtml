@@ -480,10 +480,6 @@ $fileName = $data['name'] ?? ucfirst($file);
         
         // 重置为默认值
         function resetToDefaults() {
-            if (!confirm('确定要重置所有变量为默认值吗？')) {
-                return;
-            }
-            
             document.querySelectorAll('[data-meta-identify]').forEach(input => {
                 const defaultValue = input.closest('.variable-item').querySelector('.default-value').textContent.replace('默认：', '').trim();
                 if (input.type === 'color') {

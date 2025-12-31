@@ -2793,6 +2793,13 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                 return;
             }
             
+            // 先隐藏该area的所有loading divs（避免多个loading同时显示）
+            const allLoadings = container.querySelectorAll('.iframe-loading');
+            allLoadings.forEach(loading => {
+                loading.style.display = 'none';
+                loading.style.opacity = '1';
+            });
+            
             previewFrames.forEach(frame => {
                 const loadingId = frame.getAttribute('data-loading-id');
                 const loadingDiv = loadingId ? document.getElementById(loadingId) : null;

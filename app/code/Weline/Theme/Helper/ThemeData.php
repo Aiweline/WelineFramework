@@ -349,7 +349,34 @@ class ThemeData
             }
 
             $configIdentify = "{$identify}.param.{$paramName}.value";
-            self::set($configIdentify, (string)$value, $scope, null);
+            self::set($configIdentify, (string)$value, $scope, $locale);
+        }
+    }
+
+    /**
+     * 删除参数值（恢复默认）
+     */
+    public static function deleteParamValue(string $identify, string $paramName, string $scope = 'default', ?string $locale = null): void
+    {
+        self::ensureInitialized();
+        $identify = self::normalizeIdentify($identify);
+        $definitions = self::getParamDefinitions($identify);
+        $definition = $definitions[$paramName] ?? null;
+        $isTranslatable = $definition && !empty($definition['translate']);
+
+        if ($isTranslatable) {
+            self::deleteParamTranslation($identify, $paramName, $scope, $locale);
+            return;
+        }
+
+        [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}.value");
+        $themeId = self::$currentTheme?->getId();
+
+        if ($themeId) {
+            /** @var MetaConfig $metaConfig */
+            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+            $metaConfig->deleteConfig($themeId, $namespace, $configKey, $scope, $locale);
+            self::clearCache();
         }
     }
 
@@ -420,6 +447,36 @@ class ThemeData
 
         // 清除性能缓存中与该 meta 相关的翻译缓存（如果以后有需要，可以在此扩展）
         return true;
+    }
+
+    /**
+     * 删除参数翻译（恢复默认）
+     */
+    public static function deleteParamTranslation(string $identify, string $paramName, string $scope = 'default', ?string $locale = null): bool
+    {
+        self::ensureInitialized();
+        $identify = self::normalizeIdentify($identify);
+
+        if ($locale === null) {
+            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        }
+
+        $metaKey = "{$identify}.param.{$paramName}.value";
+        $translationKey = '@meta::' . $metaKey;
+        if ($scope !== 'default') {
+            $translationKey .= '|scope:' . $scope;
+        }
+
+        /** @var Dictionary $dict */
+        $dict = ObjectManager::getInstance(Dictionary::class);
+        $md5 = Dictionary::generateMd5($translationKey, $locale);
+        $dict->load(Dictionary::fields_MD5, $md5);
+
+        if ($dict->getId()) {
+            $dict->delete();
+            return true;
+        }
+        return false;
     }
 
     /**

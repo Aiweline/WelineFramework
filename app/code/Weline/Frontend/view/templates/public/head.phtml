@@ -76,6 +76,8 @@ $themeConfigPayload = [
             window.__WelineThemeConfig = {};
         }
         Object.assign(window.__WelineThemeConfig, <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>);
+        // Expose modulesConfigUrl globally to support theme.js direct access
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
     })();
 </script>
 <!-- 注意：Theme JS 和初始化由 Theme 模块的 head partial 负责，不在此处加载 -->
