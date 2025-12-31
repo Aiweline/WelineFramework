@@ -147,9 +147,9 @@ class Data extends AbstractHelper
                         # 删除index后缀
                         $rule_router = strtolower($baseRouter . '/' . $rule_method);
                         $rule_rule_arr = explode('/', trim($rule_router, '/'));
-                        $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
+                        $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
                         while ('index' === array_pop($rule_rule_arr)) {
-                            $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
+                            $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
                             continue;
                         }
                         $rule_router = implode('/', $rule_rule_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
@@ -361,9 +361,9 @@ class Data extends AbstractHelper
                         # 删除index后缀
                         $rule_router = strtolower($baseRouter . '/' . $rule_method);
                         $rule_rule_arr = explode('/', trim($rule_router, '/'));
-                        $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
+                        $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
                         while ('index' === array_pop($rule_rule_arr)) {
-                            $last_rule_value = $rule_rule_arr[array_key_last($rule_rule_arr)] ?? '';
+                            $last_rule_value = empty($rule_rule_arr) ? '' : ($rule_rule_arr[array_key_last($rule_rule_arr)] ?? '');
                             continue;
                         }
 
