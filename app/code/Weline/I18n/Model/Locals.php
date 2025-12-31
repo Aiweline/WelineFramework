@@ -82,23 +82,29 @@ class Locals extends \Weline\Framework\Database\Model
             $allLocales = \Symfony\Component\Intl\Locales::getLocales();
             $insertData = [];
             
+            /** @var I18n $i18nModel */
+            $i18nModel = \Weline\Framework\Manager\ObjectManager::getInstance(I18n::class);
+            
             foreach ($allLocales as $locale) {
                 // 获取语言名称（使用英语作为显示语言）
                 $localeName = \Symfony\Component\Intl\Locales::getName($locale, 'en');
                 
-                // 获取对应的国家代码
-                $countryCode = substr($locale, -2);
+                // 从 locale 提取国家代码
+                $countryCode = '';
+                $parts = explode('_', $locale);
+                $lastPart = end($parts);
+                if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
+                    $countryCode = $lastPart;
+                }
                 
                 // 获取国旗SVG
                 $flagSvg = '';
-                try {
-                    $country = country($countryCode);
-                    if ($country) {
-                        $flagSvg = $country->getFlag();
+                if ($countryCode) {
+                    try {
+                        $flagSvg = $i18nModel->getCountryFlag($countryCode, 24, 18);
+                    } catch (\Exception $e) {
+                        $flagSvg = '';
                     }
-                } catch (\Exception $e) {
-                    // 如果获取国旗失败，使用默认值
-                    $flagSvg = '';
                 }
                 
                 $insertData[] = [

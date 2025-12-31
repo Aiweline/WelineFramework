@@ -32,9 +32,9 @@ let wasmBridgeInstance = null;
 
 // MCP tools and schema (imported from mcp-tools.js)
 // These will be available after importScripts('mcp-tools.js')
-// Don't declare here - use the ones from mcp-tools.js directly
-let mcpTools;
-let MCP_TOOLS_SCHEMA;
+// Don't declare here if using importScripts as it will cause SyntaxError: Identifier already declared
+// if (typeof MCP_TOOLS_SCHEMA === 'undefined') var MCP_TOOLS_SCHEMA;
+// if (typeof mcpTools === 'undefined') var mcpTools;
 
 // 爬取任务队列
 const crawlQueue = [];
@@ -7693,6 +7693,13 @@ async function handleHfSearchModels(request, sendResponse) {
             direction: '-1'
         });
         
+        // 添加扩展字段以获取模型权重大小（safetensors 信息）
+        params.append('expand', 'safetensors');
+        params.append('expand', 'downloads');
+        params.append('expand', 'author');
+        params.append('expand', 'likes');
+        params.append('expand', 'siblings');
+        
         if (query) {
             params.append('search', query);
         }
@@ -7700,6 +7707,7 @@ async function handleHfSearchModels(request, sendResponse) {
             params.append('task', task);
         }
 
+        // 使用 expand 参数获取完整数据
         const url = `https://huggingface.co/api/models?${params.toString()}`;
         console.log('[AutoLeadAgent Extension] 搜索 URL:', url);
 
@@ -7753,55 +7761,71 @@ async function handleHfSearchModels(request, sendResponse) {
         
         console.log('[AutoLeadAgent Extension] 搜索返回', models.length, '个模型（过滤前）');
 
-        // 过滤和格式化模型数据（只保留更适合浏览器端 / WASM 的「无限制公开模型」）
+        // 过滤和格式化模型数据
         const formattedModels = [];
         for (const model of models) {
-            // 基础字段检查
-            if (!model.modelId) {
+            // 基础字段检查：API 可能返回 id 或 modelId
+            const modelId = model.id || model.modelId;
+            if (!modelId) {
                 continue;
             }
 
-            // 1) 只保留文本生成 / 指令对话任务
-            const pipelineTag = model.pipeline_tag || '';
-            if (!['text-generation', 'text2text-generation'].includes(pipelineTag)) {
-                continue;
-            }
-
-            // 2) 只保留 transformers 模型（适配 @xenova/transformers）
+            // 1) 检查任务类型
+            const pipelineTag = model.pipeline_tag || model.pipelineTag || '';
+            // 如果用户指定了任务类型，API 已经过滤了，但我们这里可以做二次校验
+            
+            // 2) 检查库类型
             const library = model.library_name || model.libraryName || '';
-            if (library && library !== 'transformers') {
-                continue;
-            }
-
-            // 3) 必须有 safetensors 标签
+            
+            // 3) 标签检查
             const tags = model.tags || [];
-            const hasSafeTensors = Array.isArray(tags) && tags.includes('safetensors');
-            if (!hasSafeTensors) {
-                continue;
-            }
 
-            // 4) 过滤掉有限制 / 受控访问的模型
+            // 过滤掉有限制 / 受控访问的模型
             const isPrivate = model.private === true;
             const isGated = model.gated === true;
-            const hasLlamaLicense = Array.isArray(tags) && tags.some(tag => 
-                typeof tag === 'string' && tag.startsWith('license:llama')
-            );
-            const isMetaLlama = model.modelId.startsWith('meta-llama/');
+            const isMetaLlama = modelId.startsWith('meta-llama/');
 
-            if (isPrivate || isGated || hasLlamaLicense || isMetaLlama) {
+            if (isPrivate || isGated || isMetaLlama) {
                 continue;
+            }
+
+            // 估算模型大小
+            let totalSize = 0;
+            // 优先检查顶层 size (有些 API 返回会直接带上)
+            if (model.size) {
+                totalSize = parseInt(model.size, 10);
+            }
+            // 其次从 safetensors 权重信息中获取（expand=safetensors）
+            else if (model.safetensors && model.safetensors.total) {
+                totalSize = parseInt(model.safetensors.total, 10);
+            } 
+            // 再次尝试从文件列表累加（需要 expand=siblings 或 full=true）
+            else if (Array.isArray(model.siblings)) {
+                for (const sibling of model.siblings) {
+                    if (sibling.size) {
+                        totalSize += parseInt(sibling.size, 10);
+                    }
+                }
+            }
+            
+            // 针对某些模型，即使没有 safetensors 也有 downloads 信息，这里记录一下
+            const estimatedSizeMB = totalSize > 0 ? Math.round(totalSize / 1024 / 1024) : 0;
+            
+            if (estimatedSizeMB === 0) {
+                console.log('[AutoLeadAgent Extension] 模型大小为 0:', modelId, 'safetensors:', !!model.safetensors, 'siblings:', model.siblings ? model.siblings.length : 0);
             }
 
             formattedModels.push({
-                id: model.modelId,
-                name: model.modelId,
+                id: modelId,
+                name: modelId,
                 author: model.author || '',
                 downloads: model.downloads || 0,
                 likes: model.likes || 0,
                 pipeline_tag: pipelineTag,
                 tags: tags,
                 library_name: library || null,
-                model_index: model.model_index || null
+                model_index: model.model_index || null,
+                estimated_size_mb: estimatedSizeMB
             });
         }
 
@@ -7886,10 +7910,8 @@ async function handleHfGetModelInfo(request, sendResponse) {
         console.log('[AutoLeadAgent Extension] 获取模型信息:', modelId);
 
         // 调用 Hugging Face API 获取模型信息
-        // 注意：模型名称中的斜杠不应该被编码，直接使用即可
-        // encodeURIComponent 会将斜杠编码为 %2F，导致 API 返回 400 错误 "repo name includes an url-encoded slash"
-        // 只编码特殊字符，但保留斜杠
-        const url = `https://huggingface.co/api/models/${encodeModelId(modelId)}`;
+        // 增加 expand=safetensors 以获取准确的权重体积
+        const url = `https://huggingface.co/api/models/${encodeModelId(modelId)}?expand=safetensors`;
         console.log('[AutoLeadAgent Extension] 模型信息 URL:', url);
 
         const response = await fetch(url, {
@@ -8017,17 +8039,21 @@ async function handleHfGetModelInfo(request, sendResponse) {
             throw new Error('API 返回格式错误');
         }
 
-        // 估算模型大小（从 siblings 中计算）
+        // 估算模型大小
         let totalSize = 0;
-        let estimatedSizeMB = 0;
-        if (Array.isArray(modelInfo.siblings)) {
+        // 优先从 safetensors 权重信息中获取
+        if (modelInfo.safetensors && modelInfo.safetensors.total) {
+            totalSize = parseInt(modelInfo.safetensors.total, 10);
+        } 
+        // 其次尝试从文件列表累加
+        else if (Array.isArray(modelInfo.siblings)) {
             for (const sibling of modelInfo.siblings) {
                 if (sibling.size) {
                     totalSize += parseInt(sibling.size, 10);
                 }
             }
-            estimatedSizeMB = Math.round(totalSize / 1024 / 1024);
         }
+        const estimatedSizeMB = totalSize > 0 ? Math.round(totalSize / 1024 / 1024) : 0;
 
         // 格式化模型信息
         const formattedInfo = {
@@ -8036,9 +8062,9 @@ async function handleHfGetModelInfo(request, sendResponse) {
             author: modelInfo.author || '',
             downloads: modelInfo.downloads || 0,
             likes: modelInfo.likes || 0,
-            pipeline_tag: modelInfo.pipeline_tag || '',
+            pipeline_tag: modelInfo.pipeline_tag || modelInfo.pipelineTag || '',
             tags: modelInfo.tags || [],
-            library_name: modelInfo.library_name || null,
+            library_name: modelInfo.library_name || modelInfo.libraryName || null,
             model_index: modelInfo.model_index || null,
             siblings: modelInfo.siblings || [],
             config: modelInfo.config || null,

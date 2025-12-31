@@ -318,4 +318,111 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         usleep($delay * 1000); // 转换为微秒
     }
+
+    /**
+     * 归档数据 - SQLite 兼容版本
+     *
+     * @param string $period ['all'=>'全部','today'=>'今天','yesterday'=>'昨天','current_week'=>'这周','near_week'=>'最近一周','last_week'=>'上周','near_month'=>'近三十天','current_month'=>'本月','last_month'=>'上一月','quarter'=>'本季度','last_quarter'=>'上个季度','current_year'=>'今年','last_year'=>'上一年']
+     * @param string $field [默认按照'create_time'字段归档，可指定归档字段]
+     *
+     * @return $this
+     * @throws Exception
+     */
+    public function period(string $period, string $field = 'create_time'): static
+    {
+        # 提取$period中包含的数字
+        $period_number = preg_replace('/\D/', '', $period);
+        if ($period_number) {
+            $period = str_replace($period_number, '{number}', $period);
+        }
+        $period_number = intval($period_number);
+
+        if (!is_int(strpos($field, '.'))) {
+            $field = $this->table_alias . '.' . $field;
+        }
+        
+        switch ($period) {
+            case 'all':
+                break;
+            case 'today':
+                #今天
+                $this->where("date({$field}) = date('now')");
+                break;
+            case 'yesterday':
+            case 'last_day':
+                #昨天
+                $this->where("date({$field}) = date('now', '-1 day')");
+                break;
+            case 'the_day_{number}_days_ago':
+                #提取数字指定几天前的那一天
+                $this->where("date({$field}) = date('now', '-{$period_number} day')");
+                break;
+            case 'current_week':
+                #查询当前这周的数据
+                $this->where("strftime('%Y%W', {$field}) = strftime('%Y%W', 'now')");
+                break;
+            case 'near_week':
+                #近7天
+                $this->where("date('now', '-7 day') <= date({$field})");
+                break;
+            case 'last_week':
+                #查询上周的数据
+                $this->where("strftime('%Y%W', {$field}) = strftime('%Y%W', date('now', '-7 day'))");
+                break;
+            case 'the_week_{number}_weeks_ago':
+                #提取数字指定几周之前的那个周
+                $daysAgo = $period_number * 7;
+                $this->where("strftime('%Y%W', {$field}) = strftime('%Y%W', date('now', '-{$daysAgo} day'))");
+                break;
+            case 'near_month':
+                #近30天
+                $this->where("date('now', '-30 day') <= date({$field})");
+                break;
+            case 'current_month':
+                # 本月
+                $this->where("strftime('%Y%m', {$field}) = strftime('%Y%m', 'now')");
+                break;
+            case 'last_month':
+                #上一月
+                $this->where("strftime('%Y%m', {$field}) = strftime('%Y%m', date('now', 'start of month', '-1 month'))");
+                break;
+            case 'the_month_{number}_months_ago':
+                #提取数字指定几个月份之前的月份
+                $this->where("strftime('%Y%m', {$field}) = strftime('%Y%m', date('now', 'start of month', '-{$period_number} month'))");
+                break;
+            case 'quarter':
+                #查询本季度数据
+                $currentMonth = "CAST(strftime('%m', 'now') AS INTEGER)";
+                $quarterStart = "(({$currentMonth} - 1) / 3 * 3 + 1)";
+                $this->where("CAST(strftime('%m', {$field}) AS INTEGER) >= {$quarterStart} AND CAST(strftime('%m', {$field}) AS INTEGER) < ({$quarterStart} + 3) AND strftime('%Y', {$field}) = strftime('%Y', 'now')");
+                break;
+            case 'last_quarter':
+                #查询上季度数据
+                $lastQuarterMonth = "CAST(strftime('%m', date('now', '-3 month')) AS INTEGER)";
+                $quarterStart = "(({$lastQuarterMonth} - 1) / 3 * 3 + 1)";
+                $this->where("CAST(strftime('%m', {$field}) AS INTEGER) >= {$quarterStart} AND CAST(strftime('%m', {$field}) AS INTEGER) < ({$quarterStart} + 3) AND strftime('%Y', {$field}) = strftime('%Y', date('now', '-3 month'))");
+                break;
+            case 'the_quarter_{number}_quarters_ago':
+                #提取数字指定几个季度前那个季度
+                $monthsAgo = $period_number * 3;
+                $targetMonth = "CAST(strftime('%m', date('now', '-{$monthsAgo} month')) AS INTEGER)";
+                $quarterStart = "(({$targetMonth} - 1) / 3 * 3 + 1)";
+                $this->where("CAST(strftime('%m', {$field}) AS INTEGER) >= {$quarterStart} AND CAST(strftime('%m', {$field}) AS INTEGER) < ({$quarterStart} + 3) AND strftime('%Y', {$field}) = strftime('%Y', date('now', '-{$monthsAgo} month'))");
+                break;
+            case 'current_year':
+                #查询本年数据
+                $this->where("strftime('%Y', {$field}) = strftime('%Y', 'now')");
+                break;
+            case 'last_year':
+                #查询上年数据
+                $this->where("strftime('%Y', {$field}) = strftime('%Y', date('now', '-1 year'))");
+                break;
+            case 'the_year_{number}_years_ago':
+                #提取数字指定几年前的那年
+                $this->where("strftime('%Y', {$field}) = strftime('%Y', date('now', '-{$period_number} year'))");
+                break;
+            default:
+        }
+        return $this;
+    }
 }

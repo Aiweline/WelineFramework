@@ -86,6 +86,14 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
                                                     <i class="mdi mdi-refresh"></i>
                                                     <?= __('重新检测') ?>
                                                 </button>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-warning"
+                                                        id="task-model-unload-btn"
+                                                        style="display: none;"
+                                                        title="<?= __('卸载模型以释放内存') ?>">
+                                                    <i class="mdi mdi-stop"></i>
+                                                    <?= __('卸载模型') ?>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -366,8 +374,58 @@ $backendBase = $this->getBackendUrl('auto-lead-agent/backend/index/index');
 
 <js>Weline_AutoLeadAgent::js/browser-detector.js</js>
 <js>Weline_AutoLeadAgent::js/mcp-client.js</js>
+<js>Weline_AutoLeadAgent::js/hf-model-manager.js</js>
+<js>Weline_AutoLeadAgent::js/model-lifecycle.js</js>
 <js>Weline_AutoLeadAgent::js/task-runner.js</js>
 <js>Weline_AutoLeadAgent::js/backend-task-manager.js</js>
+<script>
+// 初始化任务页模型生命周期管理
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof ModelLifecycle !== 'undefined') {
+        ModelLifecycle.init({
+            onStatusChange: function(state) {
+                console.log('[TaskPage] 模型状态变化:', state);
+                // 更新模型状态显示
+                var statusIndicator = document.getElementById('model-status-indicator');
+                var unloadBtn = document.getElementById('task-model-unload-btn');
+                
+                if (statusIndicator) {
+                    if (state.loaded) {
+                        var typeLabel = state.modelType === 'chrome_ai' ? 'Chrome AI' : 'WebLLM';
+                        statusIndicator.innerHTML = '<span class="badge bg-success"><i class="mdi mdi-check-circle"></i> 已加载 (' + typeLabel + ')</span>';
+                    } else if (state.loading) {
+                        statusIndicator.innerHTML = '<span class="badge bg-warning"><span class="spinner-border spinner-border-sm"></span> 加载中</span>';
+                    } else {
+                        statusIndicator.innerHTML = '<span class="badge bg-secondary"><i class="mdi mdi-sleep"></i> <?= __('待机') ?></span>';
+                    }
+                }
+                
+                if (unloadBtn) {
+                    unloadBtn.style.display = state.loaded ? 'inline-block' : 'none';
+                }
+            },
+            onUnload: function() {
+                console.log('[TaskPage] 模型已卸载');
+                // 更新内存显示
+                var memoryIndicator = document.getElementById('memory-usage-indicator');
+                if (memoryIndicator) {
+                    memoryIndicator.innerHTML = '<span class="text-muted">-- MB</span>';
+                }
+            }
+        });
+        
+        // 绑定卸载按钮
+        var unloadBtn = document.getElementById('task-model-unload-btn');
+        if (unloadBtn) {
+            unloadBtn.addEventListener('click', function() {
+                if (confirm('<?= __('确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能执行任务。') ?>')) {
+                    ModelLifecycle.unloadModel();
+                }
+            });
+        }
+    }
+});
+</script>
 
 <script>
 // 模型性能监控、配置状态与日志面板
