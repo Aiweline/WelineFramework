@@ -102,6 +102,18 @@ if (is_array($targetSites)) {
         .hf-model-row:hover {
             cursor: pointer;
         }
+        .steps-container .badge {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        .alert-soft-warning {
+            background-color: rgba(255, 193, 7, 0.15);
+            color: #856404;
+        }
     </style>
 </head>
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
@@ -178,6 +190,50 @@ if (is_array($targetSites)) {
                                         </select>
                                         <div class="form-text text-muted">
                                             <?= __('选择搜索关键词的生成方式') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 浏览器扩展状态与安装 -->
+                            <div class="card config-card" id="extension-status-card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="mdi mdi-puzzle-outline section-icon"></i>
+                                        <?= __('浏览器扩展状态') ?>
+                                    </div>
+                                    <span id="extension-status-badge" class="badge bg-danger"><?= __('未检测到') ?></span>
+                                </div>
+                                <div class="card-body">
+                                    <!-- 已安装状态 -->
+                                    <div id="extension-installed-info" style="display: none;">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="d-flex align-items-center text-success">
+                                                <i class="mdi mdi-check-circle-outline me-2 fs-4"></i>
+                                                <span class="fw-bold"><?= __('扩展已就绪') ?></span>
+                                                <span class="ms-2 text-muted small" id="extension-version-display"></span>
+                                            </div>
+                                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" data-bs-toggle="modal" data-bs-target="#extensionInstallModal">
+                                                <i class="mdi mdi-help-circle-outline me-1"></i><?= __('重新安装 / 查看步骤') ?>
+                                            </button>
+                                        </div>
+                                        <p class="text-muted small mb-0"><?= __('您可以正常使用端侧推理、自动化爬取和模型下载功能。') ?></p>
+                                    </div>
+
+                                    <!-- 未安装状态 -->
+                                    <div id="extension-install-guide">
+                                        <div class="alert alert-soft-warning border-0 mb-0">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="mdi mdi-information-outline text-warning me-2 fs-4"></i>
+                                                    <div class="small">
+                                                        <?= __('端侧推理和智能爬取功能需要配合浏览器扩展使用。') ?>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#extensionInstallModal">
+                                                    <i class="mdi mdi-download me-1"></i><?= __('查看安装步骤') ?>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -308,7 +364,7 @@ if (is_array($targetSites)) {
                                         </div>
                                     </div>
 
-                                    <div class="mb-0">
+                                    <div class="mt-3">
                                         <label for="wasm_inference_timeout" class="form-label">
                                             <?= __('推理超时时间') ?>
                                         </label>
@@ -349,6 +405,32 @@ if (is_array($targetSites)) {
                                     </span>
                                 </div>
                                 <div class="card-body">
+                                    <!-- 模型运行时状态 -->
+                                    <div class="alert alert-light border mb-3" id="hf-model-runtime-status">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div>
+                                                <strong>
+                                                    <i class="mdi mdi-circle-medium me-1" id="hf-runtime-status-icon" style="color: #6c757d;"></i>
+                                                    <?= __('模型状态') ?>:
+                                                </strong>
+                                                <span id="hf-runtime-status-text" class="ms-2"><?= __('未加载') ?></span>
+                                                <span id="hf-runtime-model-type" class="badge bg-secondary ms-2" style="display: none;"></span>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="button" class="btn btn-sm btn-success" id="hf-model-load-btn" style="display: none;">
+                                                    <i class="mdi mdi-play me-1"></i><?= __('加载模型') ?>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-warning" id="hf-model-unload-btn" style="display: none;">
+                                                    <i class="mdi mdi-stop me-1"></i><?= __('卸载模型') ?>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 small text-muted" id="hf-runtime-memory-info" style="display: none;">
+                                            <i class="mdi mdi-memory me-1"></i>
+                                            <?= __('内存使用') ?>: <span id="hf-runtime-memory-value">--</span>
+                                        </div>
+                                    </div>
+                                    
                                     <!-- 状态与缓存设置 -->
                                     <div class="row mb-3">
                                         <div class="col-md-6">
@@ -436,7 +518,7 @@ if (is_array($targetSites)) {
                                                 <table class="table table-sm table-hover align-middle mb-0">
                                                     <thead class="table-light">
                                                     <tr>
-                                                        <th><?= __('模型名称') ?></th>
+                                                        <th style="width: 20%;"><?= __('模型名称') ?></th>
                                                         <th style="width: 100px;" class="text-end"><?= __('大小') ?></th>
                                                         <th style="width: 80px;" class="text-end"><?= __('下载量') ?></th>
                                                         <th style="width: 80px;" class="text-center"><?= __('操作') ?></th>
@@ -579,6 +661,68 @@ if (is_array($targetSites)) {
         </div>
 
         @template(Weline_Admin::common/footer.phtml)
+    </div>
+</div>
+
+<!-- 浏览器扩展安装指南模态框 -->
+<div class="modal fade" id="extensionInstallModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-puzzle-outline text-primary me-2"></i>
+                    <?= __('安装浏览器扩展') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3"><?= __('请按照以下步骤手动安装 AutoLeadAgent 扩展：') ?></p>
+                
+                <div class="steps-container">
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-primary rounded-circle me-2">1</span>
+                            <span class="fw-bold small"><?= __('打开扩展管理') ?></span>
+                        </div>
+                        <div class="ms-4 small text-muted">
+                            <?= __('在 Chrome 地址栏输入：') ?> <code class="user-select-all">chrome://extensions/</code>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-primary rounded-circle me-2">2</span>
+                            <span class="fw-bold small"><?= __('开启开发者模式') ?></span>
+                        </div>
+                        <div class="ms-4 small text-muted">
+                            <?= __('在页面右上角找到并开启') ?> <strong><?= __('“开发者模式”') ?></strong> <?= __('开关。') ?>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-primary rounded-circle me-2">3</span>
+                            <span class="fw-bold small"><?= __('加载扩展程序') ?></span>
+                        </div>
+                        <div class="ms-4 small text-muted">
+                            <?= __('点击') ?> <strong><?= __('“加载已解压的扩展程序”') ?></strong> <?= __('按钮，并选择以下目录：') ?>
+                            <div class="mt-2 p-2 bg-light rounded border border-dashed text-break user-select-all font-monospace" style="font-size: 0.75rem;">
+                                <?= str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (defined('BP') ? BP : getcwd().DIRECTORY_SEPARATOR) . 'app/code/Weline/AutoLeadAgent/browser-extension') ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info border-0 small mt-3 mb-0">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('安装成功后，请刷新配置页面以激活功能。') ?>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+                <button type="button" class="btn btn-primary" onclick="window.location.reload()">
+                    <i class="mdi mdi-refresh me-1"></i><?= __('刷新页面') ?>
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -752,7 +896,11 @@ if (is_array($targetSites)) {
                 </div>
             </div>
             <div class="modal-footer">
-                <p class="text-muted small mb-0 w-100 text-center">
+                <button type="button" class="btn btn-danger" id="hf-download-cancel-btn">
+                    <i class="mdi mdi-close-circle me-1"></i>
+                    <?= __('取消下载') ?>
+                </button>
+                <p class="text-muted small mb-0 ms-auto text-center">
                     <?= __('下载过程中请勿关闭此窗口，模型文件较大，可能需要较长时间。') ?>
                 </p>
             </div>
@@ -816,14 +964,29 @@ function saveConfig() {
     var saveUrl = basePath + '/save';
     console.log('[Config] 保存 URL:', saveUrl, '当前路径:', currentPath, '基础路径:', basePath);
     
+    // 打印表单数据便于调试
+    for (var pair of formData.entries()) {
+        console.log('[Config] 表单数据:', pair[0], '=', pair[1]);
+    }
+    
     fetch(saveUrl, {
         method: 'POST',
         body: formData
     })
     .then(function(response) {
-        return response.json();
+        console.log('[Config] 响应状态:', response.status, response.statusText);
+        return response.text().then(function(text) {
+            console.log('[Config] 响应内容:', text);
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('[Config] JSON 解析失败:', e);
+                throw new Error('服务器响应格式错误: ' + text.substring(0, 200));
+            }
+        });
     })
     .then(function(result) {
+        console.log('[Config] 解析结果:', result);
         if (result.success) {
             showToast('success', result.message || '<?= __('配置保存成功') ?>');
         } else {
@@ -831,8 +994,8 @@ function saveConfig() {
         }
     })
     .catch(function(error) {
-        console.error('Save config error:', error);
-        showToast('error', '<?= __('配置保存失败') ?>');
+        console.error('[Config] 保存配置错误:', error);
+        showToast('error', '<?= __('配置保存失败') ?>: ' + error.message);
     })
     .finally(function() {
         btn.disabled = false;
@@ -918,7 +1081,119 @@ function showToast(type, message) {
 <js>Weline_AutoLeadAgent::js/prompts.js</js>
 <js>Weline_AutoLeadAgent::js/mcp-client.js</js>
 <js>Weline_AutoLeadAgent::js/react-agent.js</js>
+<js>Weline_AutoLeadAgent::js/model-lifecycle.js</js>
 <js>Weline_AutoLeadAgent::js/config-models.js</js>
+<script>
+// 初始化模型生命周期管理
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof ModelLifecycle !== 'undefined') {
+        ModelLifecycle.init({
+            onStatusChange: function(state) {
+                console.log('[Config] 模型状态变化:', state);
+            },
+            onLoadComplete: function(info) {
+                console.log('[Config] 模型加载完成:', info);
+            },
+            onUnload: function() {
+                console.log('[Config] 模型已卸载');
+            }
+        });
+    }
+    
+    // 智能体测试功能
+    var testBtn = document.getElementById('hf_agent_test_btn');
+    var testInput = document.getElementById('hf_agent_test_input');
+    var testClearBtn = document.getElementById('hf_agent_test_clear_btn');
+    var testResult = document.getElementById('hf_agent_test_result');
+    var testLoading = document.getElementById('hf_agent_test_loading');
+    var testOutput = document.getElementById('hf_agent_test_output');
+    var testInputDisplay = document.getElementById('hf_agent_test_input_display');
+    var testTime = document.getElementById('hf_agent_test_time');
+    var testError = document.getElementById('hf_agent_test_error');
+    var testSteps = document.getElementById('hf_agent_test_steps');
+    var testStepsContent = document.getElementById('hf_agent_test_steps_content');
+    
+    if (testBtn) {
+        testBtn.addEventListener('click', async function() {
+            var input = testInput ? testInput.value.trim() : '';
+            if (!input) {
+                if (typeof showToast === 'function') {
+                    showToast('warning', '<?= __('请输入测试指令') ?>');
+                }
+                return;
+            }
+            
+            // 检查模型是否已加载
+            if (typeof ModelLifecycle !== 'undefined' && !ModelLifecycle.isLoaded()) {
+                if (typeof showToast === 'function') {
+                    showToast('warning', '<?= __('请先加载模型') ?>');
+                }
+                return;
+            }
+            
+            // 显示加载状态
+            if (testLoading) testLoading.style.display = 'block';
+            if (testResult) testResult.style.display = 'none';
+            testBtn.disabled = true;
+            
+            var startTime = performance.now();
+            
+            try {
+                var response = '';
+                
+                // 使用 HFModelManager 进行推理
+                if (typeof HFModelManager !== 'undefined' && HFModelManager.isLoaded()) {
+                    response = await HFModelManager.generate(input, {
+                        maxTokens: 256,
+                        temperature: 0.7
+                    });
+                } else if (typeof ReactAgent !== 'undefined') {
+                    // 使用 ReactAgent（如果可用）
+                    var result = await ReactAgent.run(input);
+                    response = result.response || result.output || JSON.stringify(result);
+                } else {
+                    throw new Error('<?= __('模型未加载或不可用') ?>');
+                }
+                
+                var endTime = performance.now();
+                var duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                // 显示结果
+                if (testLoading) testLoading.style.display = 'none';
+                if (testResult) testResult.style.display = 'block';
+                if (testInputDisplay) testInputDisplay.textContent = input;
+                if (testOutput) testOutput.textContent = response;
+                if (testTime) testTime.textContent = duration + ' <?= __('秒') ?>';
+                if (testError) testError.style.display = 'none';
+                
+            } catch (error) {
+                console.error('[Config] 智能体测试失败:', error);
+                
+                if (testLoading) testLoading.style.display = 'none';
+                if (testResult) testResult.style.display = 'block';
+                if (testInputDisplay) testInputDisplay.textContent = input;
+                if (testOutput) testOutput.textContent = '';
+                if (testError) {
+                    testError.style.display = 'block';
+                    testError.textContent = '<?= __('测试失败') ?>: ' + error.message;
+                }
+            } finally {
+                testBtn.disabled = false;
+            }
+        });
+    }
+    
+    if (testClearBtn) {
+        testClearBtn.addEventListener('click', function() {
+            if (testResult) testResult.style.display = 'none';
+            if (testInput) testInput.value = '';
+            if (testOutput) testOutput.textContent = '';
+            if (testError) testError.style.display = 'none';
+            if (testSteps) testSteps.style.display = 'none';
+        });
+    }
+});
+</script>
 
 @template(Weline_Admin::common/vendor-scripts.phtml)
 </body>
