@@ -45,6 +45,56 @@ class ConfigService
             if ($configModel->getId()) {
                 $value = $configModel->getData(AgentConfig::fields_CONFIG_VALUE);
                 
+                // 对于 default_target_sites，确保始终返回数组
+                if ($key === AgentConfig::CONFIG_DEFAULT_TARGET_SITES) {
+                    // 如果已经是数组，直接返回
+                    if (is_array($value)) {
+                        return array_values(array_filter(array_map('trim', $value)));
+                    }
+                    
+                    // 如果是数字类型（错误的数据），返回默认值
+                    if (is_numeric($value)) {
+                        $defaults = AgentConfig::getDefaultConfigs();
+                        return $defaults[AgentConfig::CONFIG_DEFAULT_TARGET_SITES] ?? [];
+                    }
+                    
+                    // 如果是字符串
+                    if (is_string($value)) {
+                        // 先检查是否是 JSON 数组格式（兼容历史数据）
+                        $trimmed = trim($value);
+                        if (preg_match('/^\[.*\]$/s', $trimmed)) {
+                            $decoded = json_decode($trimmed, true);
+                            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                return array_values(array_filter(array_map('trim', $decoded)));
+                            }
+                        }
+                        // 如果不是 JSON 格式，当作每行一个的文本处理
+                        $sites = array_filter(array_map('trim', explode("\n", $value)));
+                        return array_values($sites);
+                    }
+                    
+                    // 如果是布尔值或其他类型，返回默认值
+                    $defaults = AgentConfig::getDefaultConfigs();
+                    return $defaults[AgentConfig::CONFIG_DEFAULT_TARGET_SITES] ?? [];
+                }
+                
+                // 对于 hf_model_cache_size，确保返回整数
+                if ($key === AgentConfig::CONFIG_HF_MODEL_CACHE_SIZE) {
+                    if (is_numeric($value)) {
+                        $intValue = (int)$value;
+                        if ($intValue > 0) {
+                            return $intValue;
+                        }
+                    }
+                    // 如果不是数字，尝试转换为整数
+                    $intValue = (int)$value;
+                    if ($intValue > 0) {
+                        return $intValue;
+                    }
+                    // 如果转换失败，返回默认值
+                    return 10240;
+                }
+                
                 // 尝试 JSON 解码
                 $decoded = json_decode($value, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
@@ -114,7 +164,7 @@ class ConfigService
                 ->fetch();
 
             // 处理值的序列化
-            $storedValue = $this->serializeValue($value);
+            $storedValue = $this->serializeValue($value, $key);
 
             if ($configModel->getId()) {
                 // 更新现有配置
@@ -254,10 +304,16 @@ class ConfigService
      * 序列化值用于存储
      * 
      * @param mixed $value
+     * @param string $key 配置键（用于特殊处理）
      * @return string
      */
-    private function serializeValue(mixed $value): string
+    private function serializeValue(mixed $value, string $key = ''): string
     {
+        // 对于 default_target_sites，保存为每行一个的文本格式，而不是 JSON 数组
+        if ($key === AgentConfig::CONFIG_DEFAULT_TARGET_SITES && is_array($value)) {
+            return implode("\n", array_filter(array_map('trim', $value)));
+        }
+        
         if (is_array($value)) {
             return json_encode($value, JSON_UNESCAPED_UNICODE);
         }

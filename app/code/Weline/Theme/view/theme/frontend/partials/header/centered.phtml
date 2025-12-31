@@ -26,13 +26,12 @@ $showSearch = $this->getData("meta.showSearch") ?? true;
 $class = $this->getData("meta.class") ?? '';
 
 $baseUrl = $this->request->getBaseUrl();
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 ?>
 <header class="weline-header centered-header <?= htmlspecialchars($class) ?>">
     <div class="header-container">
         <!-- Logo 居中 -->
         <div class="header-logo-centered">
-            <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
+            <a href="/" title="<?= __('首页') ?>">
                 <?php if ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
                 <?php else: ?>
@@ -45,7 +44,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
         <!-- 搜索框（Logo下方） -->
         <?php if ($showSearch): ?>
             <div class="header-search-centered">
-                <form action="<?= $frontendUrl ?>search" method="get" class="search-form">
+                <form action="/search" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
                     <button type="submit" class="search-button" title="<?= __('搜索') ?>">
                         <i class="fas fa-search"></i>
@@ -89,7 +88,7 @@ $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 
             <!-- 购物车 Hook -->
             <div class="header-action-item" data-hook="header-cart">
-                <w:hook>header-cart<else/><a href="<?= $frontendUrl ?>cart" class="cart-link" title="<?= __('购物车') ?>">
+                <w:hook>header-cart<else/><a href="/cart" class="cart-link" title="<?= __('购物车') ?>">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-text"><?= __('购物车') ?></span>
                     <span class="cart-count">0</span>
