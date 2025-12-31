@@ -12,6 +12,8 @@
  * @param sidebar {default="",name="侧边栏内容（相关产品推荐等）",description="侧边栏内容（相关产品推荐等），用于设置侧边栏内容"}
  * @param breadcrumb {default="",name="面包屑导航",description="面包屑导航，用于设置面包屑导航"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=1,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  *
  * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中

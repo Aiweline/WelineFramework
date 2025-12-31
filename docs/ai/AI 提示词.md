@@ -140,6 +140,64 @@
 ### 主题和前端
 - 主题开发和继承
 - 静态资源管理
+- **禁止内联样式规范（强制）**：
+  - **绝对禁止使用内联样式**：开发过程中**严格禁止**在任何HTML元素上使用 `style` 属性设置内联样式
+  - **适用范围**：包括但不限于：
+    - ❌ HTML标签：`<div style="color: red;">`、`<span style="background: blue;">` 等
+    - ❌ PHP模板：`<div style="<?= $color ?>">`、`<button style="display: none;">` 等
+    - ❌ JavaScript动态设置：`element.style.color = 'red'`、`element.setAttribute('style', '...')` 等
+    - ❌ 任何形式的HTML内联样式属性
+  - **必须使用的方式**：
+    - ✅ **CSS类**：所有样式必须通过CSS类实现，在独立的CSS/SCSS文件中定义
+    - ✅ **CSS变量**：动态样式值必须使用CSS变量，通过JavaScript修改CSS变量值
+    - ✅ **外部样式表**：所有样式规则必须写在外部CSS/SCSS文件中，通过 `<css>` 标签引入
+  - **正确示例**：
+    ```html
+    <!-- ✅ 正确：使用CSS类 -->
+    <div class="my-component">
+        <button class="btn btn-primary">按钮</button>
+    </div>
+    
+    <!-- ✅ 正确：使用CSS变量（通过JavaScript动态修改） -->
+    <div class="dynamic-color" style="--custom-color: var(--primary-color);">
+        <style>
+        .dynamic-color {
+            color: var(--custom-color);
+        }
+        </style>
+    </div>
+    
+    <!-- ✅ 正确：JavaScript修改CSS变量 -->
+    <script>
+    document.documentElement.style.setProperty('--custom-color', '#0bb197');
+    </script>
+    ```
+  - **错误示例**：
+    ```html
+    <!-- ❌ 错误：HTML内联样式 -->
+    <div style="color: red; background: blue;">内容</div>
+    <button style="display: none; width: 100px;">按钮</button>
+    
+    <!-- ❌ 错误：PHP模板内联样式 -->
+    <div style="color: <?= $color ?>;">内容</div>
+    <span style="background: <?= $bgColor ?>;">文本</span>
+    
+    <!-- ❌ 错误：JavaScript直接设置style属性 -->
+    <script>
+    element.style.color = 'red';
+    element.style.display = 'none';
+    element.setAttribute('style', 'color: blue;');
+    </script>
+    ```
+  - **特殊情况处理**：
+    - **CSS变量动态设置**：如果需要动态设置样式值，必须使用CSS变量，通过JavaScript修改CSS变量值，而不是直接设置style属性
+    - **框架组件**：如果框架组件需要内联样式，必须在组件内部通过CSS类实现，而不是在模板中使用style属性
+    - **第三方库**：如果第三方库需要内联样式，必须在组件封装时将其转换为CSS类
+  - **检查清单**：
+    - ✅ 检查所有HTML模板文件中是否包含 `style="` 属性
+    - ✅ 检查所有JavaScript代码中是否使用 `element.style.xxx` 或 `element.setAttribute('style', ...)`
+    - ✅ 检查所有动态生成的HTML是否包含内联样式
+    - ✅ 确保所有样式都通过CSS类或CSS变量实现
 
 ### 自定义标签系统 (Taglib)
 - 自定义标签创建：实现TaglibInterface接口
@@ -924,11 +982,25 @@ return [
 5. **文档更新**: 当框架更新时，及时更新相关建议
 6. **学以致用**: 学习新知识后，要主动运用去检查和修复相关问题，不能只学不用
 7. **边开发边验证**: 开发过程中要持续测试和验证，参考`AI 测试.md`中的测试方法
-8. **代码修改限制**: 
+8. **禁止内联样式规范（强制）**：
+   - **绝对禁止使用内联样式**：开发过程中**严格禁止**在任何HTML元素上使用 `style` 属性设置内联样式
+   - **适用范围**：包括HTML标签、PHP模板、JavaScript动态设置等所有形式的内联样式
+   - **必须使用的方式**：
+     - ✅ 所有样式必须通过CSS类实现，在独立的CSS/SCSS文件中定义
+     - ✅ 动态样式值必须使用CSS变量，通过JavaScript修改CSS变量值
+     - ✅ 所有样式规则必须写在外部CSS/SCSS文件中，通过 `<css>` 标签引入
+   - **检查清单**：
+     - ✅ 检查所有HTML模板文件中是否包含 `style="` 属性
+     - ✅ 检查所有JavaScript代码中是否使用 `element.style.xxx` 或 `element.setAttribute('style', ...)`
+     - ✅ 检查所有动态生成的HTML是否包含内联样式
+     - ✅ 确保所有样式都通过CSS类或CSS变量实现
+     - ❌ 禁止任何形式的HTML内联样式（`<div style="...">`）
+     - ❌ 禁止JavaScript直接设置style属性（`element.style.color = 'red'`）
+9. **代码修改限制**: 
    - 禁止对app/code/Weline目录进行修改，除非用户明确指定
    - 禁止对app/code/目录以外的代码进行修改，除非用户明确提到需要修改的文件，如果必要修改可以提醒用户
-9. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
-10. **Git工作流程规则**: 
+10. **使用框架命令**: 框架提供了完整的命令行工具，更新路由、删除缓存等操作都应使用相应的命令行工具，不要直接操作文件系统
+11. **Git工作流程规则**: 
     - **核心原则**: 绝对禁止直接使用 `git push --force` 强推！
     - **标准推送流程**: 
       1. 先执行 `git pull origin <branch-name>` 拉取远程最新代码

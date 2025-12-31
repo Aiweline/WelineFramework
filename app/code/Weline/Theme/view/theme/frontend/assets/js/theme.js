@@ -430,6 +430,11 @@
                 return runtimeConfig.modulesConfigUrl;
             }
 
+            // 尝试从全局变量读取 (兼容性处理)
+            if (window.modulesConfigUrl) {
+                return window.modulesConfigUrl;
+            }
+
             // 如果未配置，抛出错误提示
             throw new Error('[Weline.ModuleConfigManager] modulesConfigUrl 未配置，请在 Frontend 模块的 head 模板中配置 modulesConfigUrl');
         }

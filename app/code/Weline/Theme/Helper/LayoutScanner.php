@@ -214,6 +214,7 @@ class LayoutScanner
             'icon' => '',
             'version' => '',
             'author' => '',
+            'preview_url' => '',
             'params' => []
         ];
         
@@ -228,6 +229,13 @@ class LayoutScanner
             $meta['name'] = trim($matches[1]);
         } elseif (preg_match('/@meta\.name\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
             $meta['name'] = trim($matches[1]);
+        }
+
+        // 提取 @meta.preview_url 格式的meta信息
+        if (preg_match('/@meta\.preview_url\s*\{[^}]*default=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['preview_url'] = trim($matches[1]);
+        } elseif (preg_match('/@meta\.preview_url\s*\{[^}]*name=["\']([^"\']+)["\']/', $content, $matches)) {
+            $meta['preview_url'] = trim($matches[1]);
         }
         
         // 提取 @meta.description 格式的meta信息

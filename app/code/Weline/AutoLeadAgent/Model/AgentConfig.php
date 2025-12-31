@@ -43,6 +43,11 @@ class AgentConfig extends AbstractModel
     public const CONFIG_WASM_MODEL_ENABLED = 'wasm_model_enabled';
     public const CONFIG_WASM_INFERENCE_TIMEOUT = 'wasm_inference_timeout';
     public const CONFIG_DEFAULT_TARGET_SITES = 'default_target_sites';
+    
+    // Hugging Face 模型配置
+    public const CONFIG_HF_MODEL_ID = 'hf_model_id';
+    public const CONFIG_HF_MODEL_ENABLED = 'hf_model_enabled';
+    public const CONFIG_HF_MODEL_CACHE_SIZE = 'hf_model_cache_size';
 
     // 关键词生成策略
     public const KEYWORD_STRATEGY_AUTO = 'auto';
@@ -77,16 +82,19 @@ class AgentConfig extends AbstractModel
             self::CONFIG_SCORE_THRESHOLD => 60,
             self::CONFIG_KEYWORD_STRATEGY => self::KEYWORD_STRATEGY_AUTO,
             self::CONFIG_API_RATE_LIMIT => 100,
-            self::CONFIG_MAX_CONCURRENT_TASKS => 3,
+            self::CONFIG_MAX_CONCURRENT_TASKS => 1,
             self::CONFIG_WASM_MODEL_ENABLED => true,
-            self::CONFIG_WASM_INFERENCE_TIMEOUT => 30000,
-            self::CONFIG_DEFAULT_TARGET_SITES => json_encode([
+            self::CONFIG_WASM_INFERENCE_TIMEOUT => 3000, // 3秒
+            self::CONFIG_DEFAULT_TARGET_SITES => [
                 'linkedin.com',
                 'twitter.com',
                 'facebook.com',
                 'instagram.com',
                 'youtube.com',
-            ], JSON_UNESCAPED_UNICODE),
+            ],
+            self::CONFIG_HF_MODEL_ID => '',
+            self::CONFIG_HF_MODEL_ENABLED => false,
+            self::CONFIG_HF_MODEL_CACHE_SIZE => 10240, // MB (最大默认值)
         ];
     }
 
